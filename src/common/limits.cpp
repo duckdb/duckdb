@@ -95,49 +95,49 @@ hugeint_t NumericLimits<hugeint_t>::Maximum() {
 
 // we offset the minimum value by 1 to account for the NULL value in the
 // hashtables
-static int64_t MinimumValue(TypeId type) {
+static int64_t MinimumValue(PhysicalType type) {
 	switch (type) {
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return NumericLimits<int8_t>::Minimum();
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return NumericLimits<int16_t>::Minimum();
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return NumericLimits<int32_t>::Minimum();
-	case TypeId::INT64:
-	case TypeId::INT128:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
 		return NumericLimits<int64_t>::Minimum();
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires integral type");
 	}
 }
 
-static uint64_t MaximumValue(TypeId type) {
+static uint64_t MaximumValue(PhysicalType type) {
 	switch (type) {
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return NumericLimits<int8_t>::Maximum();
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return NumericLimits<int16_t>::Maximum();
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return NumericLimits<int32_t>::Maximum();
-	case TypeId::INT64:
-	case TypeId::INT128:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
 		return NumericLimits<int64_t>::Maximum();
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires integral type");
 	}
 }
 
-TypeId MinimalType(int64_t value) {
-	if (value >= MinimumValue(TypeId::INT8) && (uint64_t)value <= MaximumValue(TypeId::INT8)) {
-		return TypeId::INT8;
+PhysicalType MinimalType(int64_t value) {
+	if (value >= MinimumValue(PhysicalType::INT8) && (uint64_t)value <= MaximumValue(PhysicalType::INT8)) {
+		return PhysicalType::INT8;
 	}
-	if (value >= MinimumValue(TypeId::INT16) && (uint64_t)value <= MaximumValue(TypeId::INT16)) {
-		return TypeId::INT16;
+	if (value >= MinimumValue(PhysicalType::INT16) && (uint64_t)value <= MaximumValue(PhysicalType::INT16)) {
+		return PhysicalType::INT16;
 	}
-	if (value >= MinimumValue(TypeId::INT32) && (uint64_t)value <= MaximumValue(TypeId::INT32)) {
-		return TypeId::INT32;
+	if (value >= MinimumValue(PhysicalType::INT32) && (uint64_t)value <= MaximumValue(PhysicalType::INT32)) {
+		return PhysicalType::INT32;
 	}
-	return TypeId::INT64;
+	return PhysicalType::INT64;
 }
 
 } // namespace duckdb

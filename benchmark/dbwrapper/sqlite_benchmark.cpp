@@ -24,7 +24,7 @@ unique_ptr<BenchmarkState> SQLiteBenchmark::Initialize() {
 	if (!duckdb_result->success) {
 		return nullptr;
 	}
-	sqlite_state->types = duckdb_result->sql_types;
+	sqlite_state->types = duckdb_result->types;
 	return move(sqlite_state);
 }
 

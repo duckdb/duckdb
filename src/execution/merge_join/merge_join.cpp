@@ -7,25 +7,25 @@ using namespace std;
 namespace duckdb {
 
 template <class MJ, class L_ARG, class R_ARG> static idx_t merge_join(L_ARG &l, R_ARG &r) {
-	switch (l.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (l.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return MJ::template Operation<int8_t>(l, r);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return MJ::template Operation<int16_t>(l, r);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return MJ::template Operation<int32_t>(l, r);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return MJ::template Operation<int64_t>(l, r);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return MJ::template Operation<hugeint_t>(l, r);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return MJ::template Operation<float>(l, r);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return MJ::template Operation<double>(l, r);
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return MJ::template Operation<interval_t>(l, r);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return MJ::template Operation<string_t>(l, r);
 	default:
 		throw NotImplementedException("Type not implemented for merge join!");
@@ -70,4 +70,4 @@ idx_t MergeJoinSimple::Perform(MergeInfo &l, MergeInfo &r, ExpressionType compar
 	return perform_merge_join<MergeJoinSimple, ScalarMergeInfo, ChunkMergeInfo>(left, right, comparison_type);
 }
 
-}
+} // namespace duckdb

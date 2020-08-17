@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <algorithm>
 
@@ -48,7 +49,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	}
 	auto type_count = source.Read<uint32_t>();
 	for (uint32_t i = 0; i < type_count; i++) {
-		info->types.push_back(SQLType::Deserialize(source));
+		info->types.push_back(LogicalType::Deserialize(source));
 	}
 	return info;
 }

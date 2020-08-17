@@ -16,7 +16,7 @@ static IndexType StringToIndexType(const string &str) {
 	} else if (upper_str == "ART") {
 		return IndexType::ART;
 	} else {
-		throw ConversionException(StringUtil::Format("No IndexType conversion from string '%s'", upper_str.c_str()));
+		throw ConversionException("No IndexType conversion from string '%s'", upper_str);
 	}
 	return IndexType::INVALID;
 }

@@ -1,0 +1,48 @@
+# name: test/optimizer/arithmetic_simplification.test
+# description: Arithmetic simplification test
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(X INTEGER);
+
+statement ok
+PRAGMA explain_output='optimized';
+
+# verify that nop arithmetic is flattened
+query I nosort xnorm
+EXPLAIN SELECT X FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT X+0 FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT 0+X FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT X-0 FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT X*1 FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT 1*X FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT X/1 FROM test
+----
+
+# division by zero results in a NULL
+query I nosort xnull
+EXPLAIN SELECT NULL FROM test
+----
+
+query I nosort xnull
+EXPLAIN SELECT X/0 FROM test
+----
+

@@ -73,63 +73,64 @@ template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t c
 	}
 }
 
+static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
+	Vector cast_vector(LogicalType::VARCHAR);
+	Vector *result_vector;
+	if (v.type.id() != LogicalTypeId::VARCHAR) {
+		VectorOperations::Cast(v, cast_vector, count);
+		result_vector = &cast_vector;
+	} else {
+		result_vector = &v;
+	}
+	result_vector->Normalify(count);
+	auto data_ptr = FlatVector::GetData<string_t>(*result_vector);
+	auto &nullmask = FlatVector::Nullmask(*result_vector);
+	for (idx_t i = 0; i < count; i++) {
+		if (!nullmask[i]) {
+			j["data"][col_idx] += data_ptr[i].GetData();
+
+		} else {
+			j["data"][col_idx] += nullptr;
+		}
+	}
+}
+
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	assert(res);
-	Vector v2(TypeId::VARCHAR);
 	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
-		Vector *v = &chunk->data[col_idx];
-		switch (res->sql_types[col_idx].id) {
-		case SQLTypeId::DATE:
-		case SQLTypeId::TIME:
-		case SQLTypeId::TIMESTAMP:
-		case SQLTypeId::INTERVAL:
-		case SQLTypeId::HUGEINT: {
-			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR, chunk->size());
-			v = &v2;
+		Vector &v = chunk->data[col_idx];
+		switch (v.type.id()) {
+		case LogicalTypeId::BOOLEAN:
+			assign_json_loop<bool, int64_t>(v, col_idx, chunk->size(), j);
 			break;
-		}
+		case LogicalTypeId::TINYINT:
+			assign_json_loop<int8_t, int64_t>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::SMALLINT:
+			assign_json_loop<int16_t, int64_t>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::INTEGER:
+			assign_json_loop<int32_t, int64_t>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::BIGINT:
+			assign_json_loop<int64_t, int64_t>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::FLOAT:
+			assign_json_loop<float, double>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::DOUBLE:
+			assign_json_loop<double, double>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::INTERVAL:
+		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::BLOB:
+		case LogicalTypeId::VARCHAR:
 		default:
+			assign_json_string_loop(v, col_idx, chunk->size(), j);
 			break;
-		}
-		v->Normalify(chunk->size());
-		assert(v);
-		switch (v->type) {
-		case TypeId::BOOL:
-			assign_json_loop<bool, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::INT8:
-			assign_json_loop<int8_t, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::INT16:
-			assign_json_loop<int16_t, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::INT32:
-			assign_json_loop<int32_t, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::INT64:
-			assign_json_loop<int64_t, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::FLOAT:
-			assign_json_loop<float, double>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::DOUBLE:
-			assign_json_loop<double, double>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::VARCHAR: {
-			auto data_ptr = FlatVector::GetData<string_t>(*v);
-			auto &nullmask = FlatVector::Nullmask(*v);
-			for (idx_t i = 0; i < chunk->size(); i++) {
-				if (!nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i].GetData();
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			}
-			break;
-		}
-		default:
-			throw std::runtime_error("Unsupported Type");
 		}
 	}
 }
@@ -363,11 +364,11 @@ int main(int argc, char **argv) {
 			     {"sql_types", json::array()},
 			     {"data", json::array()}};
 
-			for (auto &sql_type : state.res->sql_types) {
-				j["sql_types"] += SQLTypeToString(sql_type);
+			for (auto &sql_type : state.res->types) {
+				j["sql_types"] += sql_type.ToString();
 			}
 			for (auto &type : state.res->types) {
-				j["types"] += TypeIdToString(type);
+				j["types"] += TypeIdToString(type.InternalType());
 			}
 
 			// make it easier to get col data by name

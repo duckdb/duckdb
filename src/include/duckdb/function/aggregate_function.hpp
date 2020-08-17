@@ -27,7 +27,7 @@ typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count
 typedef void (*aggregate_finalize_t)(Vector &state, Vector &result, idx_t count);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BoundAggregateExpression &expr, ClientContext &context,
-                                                              SQLType &return_type);
+                                                              LogicalType &return_type);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
 typedef void (*aggregate_destructor_t)(Vector &state, idx_t count);
 
@@ -36,7 +36,7 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], idx_t input_count, da
 
 class AggregateFunction : public BaseScalarFunction {
 public:
-	AggregateFunction(string name, vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size,
+	AggregateFunction(string name, vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
@@ -45,7 +45,7 @@ public:
 	      destructor(destructor) {
 	}
 
-	AggregateFunction(vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size,
+	AggregateFunction(vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
@@ -81,28 +81,30 @@ public:
 
 public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static AggregateFunction UnaryAggregate(SQLType input_type, SQLType return_type) {
+	static AggregateFunction UnaryAggregate(LogicalType input_type, LogicalType return_type) {
 		return AggregateFunction(
 		    {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
 		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 		    AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
-	};
+	}
+
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static AggregateFunction UnaryAggregateDestructor(SQLType input_type, SQLType return_type) {
+	static AggregateFunction UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
 		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP>(input_type, return_type);
 		aggregate.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 		return aggregate;
-	};
+	}
+
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP>
-	static AggregateFunction BinaryAggregate(SQLType a_type, SQLType b_type, SQLType return_type) {
+	static AggregateFunction BinaryAggregate(LogicalType a_type, LogicalType b_type, LogicalType return_type) {
 		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
 		                         AggregateFunction::StateCombine<STATE, OP>,
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 		                         AggregateFunction::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>);
-	};
+	}
 
 public:
 	template <class STATE> static idx_t StateSize() {

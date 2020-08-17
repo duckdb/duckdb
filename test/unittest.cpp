@@ -7,6 +7,7 @@
 using namespace duckdb;
 
 int main(int argc, char *argv[]) {
+	TestChangeDirectory(DUCKDB_ROOT_DIRECTORY);
 	// delete the testing directory if it exists
 	auto dir = TestCreatePath("");
 	try {

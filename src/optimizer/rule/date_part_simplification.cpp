@@ -89,7 +89,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 		return nullptr;
 	}
 	// found a replacement function: bind it
-	vector<SQLType> arguments{date_part.function.arguments[1]};
+	vector<LogicalType> arguments{date_part.function.arguments[1]};
 	vector<unique_ptr<Expression>> children;
 	children.push_back(move(date_part.children[1]));
 

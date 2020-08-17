@@ -66,7 +66,7 @@ TEST_CASE("Check transfer from DuckDB to sqlite database", "[dbtransfer]") {
 }
 
 TEST_CASE("Pass pointer to sqlite3 as nullptr to QueryDatabase", "[dbtransfer]") {
-	duckdb::vector<duckdb::SQLType> result_types = {duckdb::SQLTypeId::VARCHAR, duckdb::SQLTypeId::INTEGER};
+	duckdb::vector<duckdb::LogicalType> result_types = {duckdb::LogicalTypeId::VARCHAR, duckdb::LogicalTypeId::INTEGER};
 	std::string query = "SELECT * from items";
 	int interrupt = 0;
 	REQUIRE_FALSE(sqlite::QueryDatabase(result_types, nullptr, std::move(query), interrupt));
@@ -105,7 +105,7 @@ TEST_CASE("Check getting query from sqlite database", "[dbtransfer]") {
 		}
 	}
 
-	duckdb::vector<duckdb::SQLType> result_types = {duckdb::SQLTypeId::VARCHAR, duckdb::SQLTypeId::INTEGER};
+	duckdb::vector<duckdb::LogicalType> result_types = {duckdb::LogicalTypeId::VARCHAR, duckdb::LogicalTypeId::INTEGER};
 	std::string query = "SELECT * from items";
 	int interrupt = 0;
 	auto result = sqlite::QueryDatabase(result_types, source_db, std::move(query), interrupt);

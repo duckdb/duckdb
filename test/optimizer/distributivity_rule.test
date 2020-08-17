@@ -1,0 +1,65 @@
+# name: test/optimizer/distributivity_rule.test
+# description: Constant folding test
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(A BOOLEAN, B BOOLEAN, C BOOLEAN, D BOOLEAN, X BOOLEAN, Y BOOLEAN, Z BOOLEAN);
+
+statement ok
+PRAGMA explain_output='optimized';
+
+
+query I nosort distributivity1
+EXPLAIN SELECT (X AND A AND B) OR (A AND X AND C) OR (X AND B AND D) FROM test
+----
+
+query I nosort distributivity1
+EXPLAIN SELECT X AND ((A AND B) OR (A AND C) OR (B AND D)) FROM test
+----
+
+# (X AND B) OR (X AND C) => X AND (B OR C)
+query I nosort distributivity2
+EXPLAIN SELECT (X AND B) OR (X AND C) FROM test
+----
+
+query I nosort distributivity2
+EXPLAIN SELECT X AND (B OR C) FROM test
+----
+
+# X OR X = X
+query I nosort distributivity3
+EXPLAIN SELECT X OR X FROM test
+----
+
+query I nosort distributivity3
+EXPLAIN SELECT X FROM test
+----
+
+query I nosort distributivity3
+EXPLAIN SELECT X OR X OR X OR X FROM test
+----
+
+query I nosort distributivity3
+EXPLAIN SELECT X OR (X OR (X OR X)) FROM test
+----
+
+# X OR (X AND A) => X AND A
+query I nosort distributivity4
+EXPLAIN SELECT X OR (X AND A) FROM test
+----
+
+query I nosort distributivity4
+EXPLAIN SELECT X AND A FROM test
+----
+
+statement ok
+CREATE TABLE test2(X INTEGER, Y INTEGER, Z INTEGER);
+
+query I nosort distributivity5
+EXPLAIN SELECT (X=1 AND Y=1) OR (X=1 AND Z=1) FROM test2
+----
+
+query I nosort distributivity5
+EXPLAIN SELECT X=1 AND (Y=1 OR Z=1) FROM test2
+----
+

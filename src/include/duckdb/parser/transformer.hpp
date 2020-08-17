@@ -184,7 +184,7 @@ private:
 	unique_ptr<TableRef> TransformValuesList(duckdb_libpgquery::PGList *list);
 
 	//! Transform a Postgres TypeName string into a SQLType
-	SQLType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
+	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(duckdb_libpgquery::PGList *group, vector<unique_ptr<ParsedExpression>> &result);

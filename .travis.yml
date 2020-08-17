@@ -2,6 +2,7 @@ env:
   global:
     - CIBW_TEST_REQUIRES='pytest'
     - CIBW_BEFORE_BUILD='pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+    - CIBW_BEFORE_TEST='pip install --prefer-binary "pandas>=0.24"'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
     - SETUPTOOLS_SCM_NO_LOCAL=yes
     - TWINE_USERNAME=hfmuehleisen
@@ -417,35 +418,6 @@ matrix:
 
 
     - os: linux
-      name: Python 3.7 Package
-      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
-
-      dist: bionic
-      language: python
-      cache: pip
-      env:
-        - CIBW_BUILD='cp37-*'
-      python: 3.7
-
-      install:
-        - pip install cibuildwheel==0.10.2 twine
-
-      script:
-        - sudo python3 --version
-        - cd tools/pythonpkg
-        - python setup.py sdist
-        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        - cibuildwheel --output-dir wheelhouse duckdb_tarball
-        - cd ../..
-
-        - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
-        - |
-          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
-            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-          fi
-
-
-    - os: linux
       name: Python 3.6 Package
       if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
@@ -489,6 +461,36 @@ matrix:
 
 
     - os: linux
+      name: Python Package
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
+
+      dist: bionic
+      language: python
+      cache: pip
+      env:
+        - CIBW_BUILD='cp37-* cp38-*'
+      python: 3.7
+
+      install:
+        - pip install cibuildwheel==1.5.5 twine
+
+      script:
+        - sudo python3 --version
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+        - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
+
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+          fi
+
+
+
+    - os: linux
       name: Python 2.7 Package
       if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
@@ -507,11 +509,12 @@ matrix:
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
-        - cd ../..
-        - |
-          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
-            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-          fi
+        # - cd ../..
+        # - |
+        #   if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+        #     python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+        #   fi
+
 
     - os: osx
       name: Python Package
@@ -521,12 +524,12 @@ matrix:
       osx_image: xcode11.5
 
       env:
-        - CIBW_BUILD='cp37-* cp27-*'
+        - CIBW_BUILD='cp37-* cp38-*'
 
       install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install cibuildwheel==0.10.2 twine
+        - python3 -m pip install cibuildwheel==1.5.5 twine
 
       script:
         - cd tools/pythonpkg
@@ -548,29 +551,22 @@ matrix:
       filter_secrets: false
       # no python 27 because no C++11 support in its windows toolchain
       env:
-        - CIBW_BUILD='cp37-*'
+        - CIBW_BUILD='cp36-* cp37-* cp38-*'
 
       install:
-        - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
-        - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
-        # - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
-        # - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
-        - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
-        - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
-        - choco install curl -y --force
-        - C:/Python37-x64/python.exe -m pip install --upgrade pip
-        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" "twine"
-        - C:/Python37-x64/python.exe -m pip install "pandas>=0.24" "pytest>=4.3"
+        - choco install python --version 3.8.0
+        - export PATH="/c/Python38:/c/Python38/Scripts:$PATH"
+        - python -m pip install "cibuildwheel==1.5.5" "twine"
 
       script:
         - cd tools/pythonpkg
-        - C:/Python37-x64/python.exe setup.py sdist
+        - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
+        - python -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
         - cd ../..
         - |
           if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
-            C:/Python37-x64/python.exe -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
           fi
 
 

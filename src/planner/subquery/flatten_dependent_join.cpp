@@ -136,7 +136,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto bound = (BoundAggregateExpression *)&*aggr.expressions[i];
-				vector<SQLType> arguments;
+				vector<LogicalType> arguments;
 				if (bound->function == CountFun::GetFunction() || bound->function == CountStarFun::GetFunction()) {
 					// have to replace this ColumnBinding with the CASE expression
 					replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
@@ -310,7 +310,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		throw ParserException("ORDER BY not supported in correlated subquery");
 	default:
 		throw NotImplementedException("Logical operator type \"%s\" for dependent join",
-		                              LogicalOperatorToString(plan->type).c_str());
+		                              LogicalOperatorToString(plan->type));
 	}
 }
 

@@ -4,6 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -47,7 +48,7 @@ unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientConte
 
 void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    ScalarFunction("setseed", {SQLType::DOUBLE}, SQLType::SQLNULL, setseed_function, true, setseed_bind));
+	    ScalarFunction("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, setseed_function, true, setseed_bind));
 }
 
 } // namespace duckdb

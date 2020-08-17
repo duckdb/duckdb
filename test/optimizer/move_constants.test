@@ -1,0 +1,127 @@
+# name: test/optimizer/move_constants.test
+# description: Test move constants
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(X INTEGER);
+
+statement ok
+PRAGMA explain_output='optimized';
+
+# addition
+query I nosort add_left
+EXPLAIN SELECT X+1=10 FROM test
+----
+
+query I nosort add_left
+EXPLAIN SELECT 1+X=10 FROM test
+----
+
+query I nosort add_left
+EXPLAIN SELECT X=9 FROM test
+----
+
+query I nosort add_right
+EXPLAIN SELECT 10=X+1 FROM test
+----
+
+query I nosort add_right
+EXPLAIN SELECT 10=1+X FROM test
+----
+
+query I nosort add_right
+EXPLAIN SELECT 9=X FROM test
+----
+
+# subtraction
+query I nosort subtract_left_right
+EXPLAIN SELECT X-1=10 FROM test
+----
+
+query I nosort subtract_left_right
+EXPLAIN SELECT X=11 FROM test
+----
+
+query I nosort subtract_left_left
+EXPLAIN SELECT 10-X=5 FROM test
+----
+
+query I nosort subtract_left_left
+EXPLAIN SELECT X=5 FROM test
+----
+
+# non-equality comparisons get flipped get flipped
+query I nosort subtract_flipped_lt
+EXPLAIN SELECT 10-X<5 FROM test
+----
+
+query I nosort subtract_flipped_lt
+EXPLAIN SELECT X>5 FROM test
+----
+
+query I nosort subtract_flipped_gte
+EXPLAIN SELECT 10-X>=5 FROM test
+----
+
+query I nosort subtract_flipped_gte
+EXPLAIN SELECT X<=5 FROM test
+----
+
+# multiplication
+query I nosort mult_left
+EXPLAIN SELECT X*3=6 FROM test
+----
+
+query I nosort mult_left
+EXPLAIN SELECT 3*X=6 FROM test
+----
+
+query I nosort mult_left
+EXPLAIN SELECT X=2 FROM test
+----
+
+# gt
+query I nosort mult_left_gt
+EXPLAIN SELECT X*3>3 FROM test
+----
+
+query I nosort mult_left_gt
+EXPLAIN SELECT X>1 FROM test
+----
+
+# negative values
+query I nosort mult_left_negative
+EXPLAIN SELECT -1*X=-5 FROM test
+----
+
+query I nosort mult_left_negative
+EXPLAIN SELECT X=5 FROM test
+----
+
+query I nosort mult_left_negative_flip
+EXPLAIN SELECT -1*X<-5 FROM test
+----
+
+query I nosort mult_left_negative_flip
+EXPLAIN SELECT X>5 FROM test
+----
+
+mode skip
+
+# FIXME
+# negation
+query I nosort negation
+EXPLAIN SELECT -X=-5 FROM test
+----
+
+query I nosort negation
+EXPLAIN SELECT X=5 FROM test
+----
+
+query I nosort negation_flip
+EXPLAIN SELECT -X<-5 FROM test
+----
+
+query I nosort negation_flip
+EXPLAIN SELECT X>5 FROM test
+----

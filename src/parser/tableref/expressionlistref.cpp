@@ -67,7 +67,7 @@ unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &source) {
 	}
 	auto type_count = source.Read<idx_t>();
 	for (idx_t i = 0; i < type_count; i++) {
-		result->expected_types.push_back(SQLType::Deserialize(source));
+		result->expected_types.push_back(LogicalType::Deserialize(source));
 	}
 	idx_t value_list_size = source.Read<idx_t>();
 	for (idx_t i = 0; i < value_list_size; i++) {

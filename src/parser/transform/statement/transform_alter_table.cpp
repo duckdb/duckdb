@@ -52,18 +52,17 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 		}
 		case PG_AT_AlterColumnType: {
 			auto cdef = (PGColumnDef *)command->def;
-			SQLType target_type = TransformTypeName(cdef->typeName);
-			target_type.collation = TransformCollation(cdef->collClause);
+			auto column_definition = TransformColumnDefinition(cdef);
 
 			unique_ptr<ParsedExpression> expr;
 			if (cdef->raw_default) {
 				expr = TransformExpression(cdef->raw_default);
 			} else {
 				auto colref = make_unique<ColumnRefExpression>(command->name);
-				expr = make_unique<CastExpression>(target_type, move(colref));
+				expr = make_unique<CastExpression>(column_definition.type, move(colref));
 			}
 			result->info = make_unique<ChangeColumnTypeInfo>(basetable.schema_name, basetable.table_name, command->name,
-			                                                 target_type, move(expr));
+			                                                 column_definition.type, move(expr));
 			break;
 		}
 		case PG_AT_DropConstraint:

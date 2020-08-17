@@ -10,7 +10,7 @@ PreparedStatement::PreparedStatement(ClientContext *context, string name, string
                                      idx_t n_param)
     : context(context), name(name), query(query), success(true), is_invalidated(false), n_param(n_param) {
 	this->type = data.statement_type;
-	this->types = data.sql_types;
+	this->types = data.types;
 	this->names = data.names;
 }
 

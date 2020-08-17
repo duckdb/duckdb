@@ -14,22 +14,23 @@ struct RangeFunctionData : public TableFunctionData {
 	idx_t current_idx;
 };
 
-static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                              vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionData>();
 	if (inputs.size() < 2) {
 		// single argument: only the end is specified
 		result->start = Value::BIGINT(0);
-		result->end = inputs[0].CastAs(TypeId::INT64);
+		result->end = inputs[0].CastAs(LogicalType::BIGINT);
 	} else {
 		// two arguments: first two arguments are start and end
-		result->start = inputs[0].CastAs(TypeId::INT64);
-		result->end = inputs[1].CastAs(TypeId::INT64);
+		result->start = inputs[0].CastAs(LogicalType::BIGINT);
+		result->end = inputs[1].CastAs(LogicalType::BIGINT);
 	}
 	if (inputs.size() < 3) {
 		result->increment = Value::BIGINT(1);
 	} else {
-		result->increment = inputs[2].CastAs(TypeId::INT64);
+		result->increment = inputs[2].CastAs(LogicalType::BIGINT);
 	}
 	if (result->increment == 0) {
 		throw BinderException("interval cannot be 0!");
@@ -40,7 +41,7 @@ static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vect
 		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
 	}
 	result->current_idx = 0;
-	return_types.push_back(SQLType::BIGINT);
+	return_types.push_back(LogicalType::BIGINT);
 	names.push_back("range");
 	return move(result);
 }
@@ -49,7 +50,7 @@ static void range_function(ClientContext &context, vector<Value> &input, DataChu
 	auto &data = ((RangeFunctionData &)*dataptr);
 	auto increment = data.increment.value_.bigint;
 	auto end = data.end.value_.bigint;
-	int64_t current_value = data.start.value_.bigint + (int64_t) increment * data.current_idx;
+	int64_t current_value = data.start.value_.bigint + (int64_t)increment * data.current_idx;
 	// set the result vector as a sequence vector
 	output.data[0].Sequence(current_value, increment);
 	idx_t remaining = min<int64_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
@@ -62,11 +63,14 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet range("range");
 
 	// single argument range: (end) - implicit start = 0 and increment = 1
-	range.AddFunction(TableFunction({SQLType::BIGINT}, range_function_bind, range_function));
+	range.AddFunction(TableFunction({LogicalType::BIGINT}, range_function_bind, range_function));
 	// two arguments range: (start, end) - implicit increment = 1
-	range.AddFunction(TableFunction({SQLType::BIGINT, SQLType::BIGINT}, range_function_bind, range_function));
+	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, range_function_bind, range_function));
 	// three arguments range: (start, end, increment)
-	range.AddFunction(TableFunction({SQLType::BIGINT, SQLType::BIGINT, SQLType::BIGINT}, range_function_bind, range_function));
+	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
+	                                range_function_bind, range_function));
+	set.AddFunction(range);
+	range.name = "generate_series";
 	set.AddFunction(range);
 }
 

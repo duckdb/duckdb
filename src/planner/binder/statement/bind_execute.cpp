@@ -35,7 +35,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	result.plan = make_unique<LogicalExecute>(prepared);
 	result.names = prepared->names;
-	result.types = prepared->sql_types;
+	result.types = prepared->types;
 
 	return result;
 }

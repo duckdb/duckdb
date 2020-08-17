@@ -1,0 +1,60 @@
+# name: test/optimizer/like_optimizer.test
+# description: Test Like Optimization Rules
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(S VARCHAR);
+
+statement ok
+PRAGMA explain_output='optimized';
+
+mode skip
+# no special symbols optimization: aaa -> S=a
+query I nosort nosymbols
+EXPLAIN SELECT S LIKE 'aaa' FROM test
+----
+
+query I nosort nosymbols
+EXPLAIN SELECT S='aaa' FROM test
+----
+
+mode unskip
+
+# prefix optimization: aaa% -> prefix(aaa)
+query I nosort prefix
+EXPLAIN SELECT S LIKE 'aaa%' FROM test
+----
+
+query I nosort prefix
+EXPLAIN SELECT prefix(S, 'aaa') FROM test
+----
+
+query I nosort prefix
+EXPLAIN SELECT S LIKE 'aaa%%%%' FROM test
+----
+
+# suffix optimization: %aaa -> suffix(aaa)
+query I nosort suffix
+EXPLAIN SELECT S LIKE '%aaa' FROM test
+----
+
+query I nosort suffix
+EXPLAIN SELECT suffix(S, 'aaa') FROM test
+----
+
+query I nosort suffix
+EXPLAIN SELECT S LIKE '%%%%aaa' FROM test
+----
+
+# contains optimization: %aaa% -> contains(aaa)
+query I nosort contains
+EXPLAIN SELECT S LIKE '%aaa%' FROM test
+----
+
+query I nosort contains
+EXPLAIN SELECT contains(S, 'aaa') FROM test
+----
+
+query I nosort contains
+EXPLAIN SELECT S LIKE '%%%%aaa%%' FROM test
+----

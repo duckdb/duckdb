@@ -90,9 +90,9 @@ template <class T> idx_t MergeJoinSimple::LessThanEquals::Operation(ScalarMergeI
 	return merge_join_simple_lt<T, duckdb::LessThanEquals>(l, r);
 }
 
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, LessThan, ScalarMergeInfo, ChunkMergeInfo);
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, LessThanEquals, ScalarMergeInfo, ChunkMergeInfo);
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, GreaterThan, ScalarMergeInfo, ChunkMergeInfo);
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, GreaterThanEquals, ScalarMergeInfo, ChunkMergeInfo);
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, LessThan, ScalarMergeInfo, ChunkMergeInfo)
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, LessThanEquals, ScalarMergeInfo, ChunkMergeInfo)
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, GreaterThan, ScalarMergeInfo, ChunkMergeInfo)
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, GreaterThanEquals, ScalarMergeInfo, ChunkMergeInfo)
 
 }

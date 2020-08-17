@@ -25,31 +25,32 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
                                                      bool &changes_made) {
 	auto root = (BoundFunctionExpression *)bindings[0];
 	assert(root->children.size() == 2);
+	(void)root;
 	auto prefix_expr = bindings[2];
 
 	// the constant_expr is a scalar expression that we have to fold
 	if (!prefix_expr->IsFoldable()) {
 		return nullptr;
 	}
-	assert(root->return_type == TypeId::BOOL);
+	assert(root->return_type.id() == LogicalTypeId::BOOLEAN);
 
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(*prefix_expr);
 
 	if (prefix_value.is_null) {
-		return make_unique<BoundConstantExpression>(Value(TypeId::BOOL));
+		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 
-	assert(prefix_value.type == prefix_expr->return_type);
+	assert(prefix_value.type() == prefix_expr->return_type);
 	string needle_string = string(((string_t)prefix_value.str_value).GetData());
 
 	/* PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to (CASE WHEN x IS NOT NULL THEN
 	 * TRUE ELSE NULL END) */
 	if (needle_string.empty()) {
-		auto if_ = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOL);
+		auto if_ = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 		if_->children.push_back(bindings[1]->Copy());
 		auto case_ =
 		    make_unique<BoundCaseExpression>(move(if_), make_unique<BoundConstantExpression>(Value::BOOLEAN(true)),
-		                                     make_unique<BoundConstantExpression>(Value(TypeId::BOOL)));
+		                                     make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN)));
 		return move(case_);
 	}
 

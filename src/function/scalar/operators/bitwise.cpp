@@ -4,22 +4,22 @@
 namespace duckdb {
 using namespace std;
 
-template <class OP> static scalar_function_t GetScalarIntegerUnaryFunction(SQLType type) {
+template <class OP> static scalar_function_t GetScalarIntegerUnaryFunction(LogicalType type) {
 	scalar_function_t function;
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
 		function = &ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
 		break;
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		function = &ScalarFunction::UnaryFunction<int16_t, int16_t, OP>;
 		break;
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::INTEGER:
 		function = &ScalarFunction::UnaryFunction<int32_t, int32_t, OP>;
 		break;
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
 		function = &ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
 		break;
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		function = &ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, OP>;
 		break;
 	default:
@@ -28,22 +28,22 @@ template <class OP> static scalar_function_t GetScalarIntegerUnaryFunction(SQLTy
 	return function;
 }
 
-template <class OP> static scalar_function_t GetScalarIntegerBinaryFunction(SQLType type) {
+template <class OP> static scalar_function_t GetScalarIntegerBinaryFunction(LogicalType type) {
 	scalar_function_t function;
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
 		function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
 		break;
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
 		break;
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::INTEGER:
 		function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
 		break;
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		break;
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
 		break;
 	default:
@@ -63,7 +63,7 @@ struct BitwiseANDOperator {
 
 void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("&");
-	for (auto &type : SQLType::INTEGRAL) {
+	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
@@ -81,7 +81,7 @@ struct BitwiseOROperator {
 
 void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("|");
-	for (auto &type : SQLType::INTEGRAL) {
+	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
 	}
@@ -99,7 +99,7 @@ struct BitwiseXOROperator {
 
 void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("#");
-	for (auto &type : SQLType::INTEGRAL) {
+	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
 	}
@@ -121,7 +121,7 @@ struct BitwiseShiftLeftOperator {
 
 void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("<<");
-	for (auto &type : SQLType::INTEGRAL) {
+	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftLeftOperator>(type)));
 	}
@@ -139,7 +139,7 @@ struct BitwiseShiftRightOperator {
 
 void RightShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions(">>");
-	for (auto &type : SQLType::INTEGRAL) {
+	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftRightOperator>(type)));
 	}
@@ -157,7 +157,7 @@ struct BitwiseNotOperator {
 
 void BitwiseNotFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("~");
-	for (auto &type : SQLType::INTEGRAL) {
+	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));
 	}
 	set.AddFunction(functions);

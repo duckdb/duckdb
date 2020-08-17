@@ -128,7 +128,7 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path.c_str(),
+		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path,
 		                  strerror(errno));
 	}
 }
@@ -137,7 +137,7 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	int64_t bytes_read = read(fd, buffer, nr_bytes);
 	if (bytes_read == -1) {
-		throw IOException("Could not read from file \"%s\": %s", handle.path.c_str(), strerror(errno));
+		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
 	}
 	return bytes_read;
 }
@@ -146,7 +146,7 @@ int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	int64_t bytes_written = write(fd, buffer, nr_bytes);
 	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), strerror(errno));
+		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
 	}
 	return bytes_written;
 }
@@ -163,7 +163,7 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	if (ftruncate(fd, new_size) != 0) {
-		throw IOException("Could not truncate file \"%s\": %s", handle.path.c_str(), strerror(errno));
+		throw IOException("Could not truncate file \"%s\": %s", handle.path, strerror(errno));
 	}
 }
 
@@ -199,10 +199,10 @@ void FileSystem::CreateDirectory(const string &directory) {
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed to create directory \"%s\"!", directory.c_str());
+			throw IOException("Failed to create directory \"%s\"!", directory);
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!", directory.c_str());
+		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!", directory);
 	}
 }
 
@@ -252,7 +252,7 @@ void FileSystem::RemoveDirectory(const string &directory) {
 
 void FileSystem::RemoveFile(const string &filename) {
 	if (std::remove(filename.c_str()) != 0) {
-		throw IOException("Could not remove file \"%s\": %s", filename.c_str(), strerror(errno));
+		throw IOException("Could not remove file \"%s\": %s", filename, strerror(errno));
 	}
 }
 
@@ -305,6 +305,12 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(source.c_str(), target.c_str()) != 0) {
 		throw IOException("Could not rename file!");
+	}
+}
+
+void FileSystem::SetWorkingDirectory(string path) {
+	if (chdir(path.c_str()) != 0) {
+		throw IOException("Could not change working directory!");
 	}
 }
 
@@ -389,7 +395,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	    CreateFileA(path, desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Cannot open file \"%s\": %s", path, error.c_str());
+		throw IOException("Cannot open file \"%s\": %s", path, error);
 	}
 	auto handle = make_unique<WindowsFileHandle>(*this, path, hFile);
 	if (flags & FileFlags::FILE_FLAGS_APPEND) {
@@ -405,8 +411,7 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	auto rc = SetFilePointerEx(hFile, loc, NULL, FILE_BEGIN);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path.c_str(),
-		                  error.c_str());
+		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path, error);
 	}
 }
 
@@ -416,7 +421,7 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
+		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
 	return bytes_read;
 }
@@ -427,7 +432,7 @@ int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
+		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
 	return bytes_read;
 }
@@ -448,7 +453,7 @@ void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	// now set the end of file position
 	if (!SetEndOfFile(hFile)) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path.c_str(), error.c_str());
+		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path, error);
 	}
 }
 
@@ -567,6 +572,12 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 		throw IOException("Could not move file");
 	}
 }
+
+void FileSystem::SetWorkingDirectory(string path) {
+	if (!SetCurrentDirectory(path.c_str())) {
+		throw IOException("Could not change working directory!");
+	}
+}
 #endif
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -575,7 +586,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	// now read from the location
 	int64_t bytes_read = Read(handle, buffer, nr_bytes);
 	if (bytes_read != nr_bytes) {
-		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path.c_str());
+		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path);
 	}
 }
 
@@ -585,7 +596,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 	// now write to the location
 	int64_t bytes_written = Write(handle, buffer, nr_bytes);
 	if (bytes_written != nr_bytes) {
-		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
+		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path);
 	}
 }
 

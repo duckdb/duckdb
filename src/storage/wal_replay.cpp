@@ -278,9 +278,9 @@ void ReplayState::ReplayDelete() {
 	DataChunk chunk;
 	chunk.Deserialize(source);
 
-	assert(chunk.column_count() == 1 && chunk.data[0].type == ROW_TYPE);
+	assert(chunk.column_count() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
 	row_t row_ids[1];
-	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_ids);
+	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_ids);
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table

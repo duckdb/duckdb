@@ -1,15 +1,11 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "fmt/format.h"
+#include "fmt/printf.h"
 
 namespace duckdb {
 using namespace std;
-
-#define FORMAT_CONSTRUCTOR(msg)                                                                                        \
-	va_list ap;                                                                                                        \
-	va_start(ap, msg);                                                                                                 \
-	Format(ap);                                                                                                        \
-	va_end(ap);
 
 Exception::Exception(string message) : std::exception(), type(ExceptionType::INVALID) {
 	exception_message_ = message;
@@ -23,8 +19,45 @@ const char *Exception::what() const noexcept {
 	return exception_message_.c_str();
 }
 
-void Exception::Format(va_list ap) {
-	exception_message_ = StringUtil::VFormat(exception_message_, ap);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value) {
+	return ExceptionFormatValue(TypeIdToString(value));
+}
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value) {
+	return ExceptionFormatValue(value.ToString());
+}
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value) {
+	return ExceptionFormatValue(double(value));
+}
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value) {
+	return ExceptionFormatValue(double(value));
+}
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
+	return ExceptionFormatValue(string(value));
+}
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) {
+	return ExceptionFormatValue(string(value));
+}
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value) {
+	return ExceptionFormatValue(string(value));
+}
+
+string Exception::ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values) {
+	std::vector<duckdb_fmt::basic_format_arg<duckdb_fmt::printf_context>> format_args;
+	for (auto &val : values) {
+		switch (val.type) {
+		case ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE:
+			format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.dbl_val));
+			break;
+		case ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER:
+			format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.int_val));
+			break;
+		case ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING:
+			format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.str_val));
+			break;
+		}
+	}
+	return duckdb_fmt::vsprintf(msg, duckdb_fmt::basic_format_args<duckdb_fmt::printf_context>(
+	                                     format_args.data(), static_cast<int>(format_args.size())));
 }
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
@@ -94,12 +127,17 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-CastException::CastException(const TypeId origType, const TypeId newType)
+CastException::CastException(const PhysicalType origType, const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION,
                 "Type " + TypeIdToString(origType) + " can't be cast as " + TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType)
+CastException::CastException(const LogicalType origType, const LogicalType newType)
+    : Exception(ExceptionType::CONVERSION, "Type " + origType.ToString() + " can't be cast as " + newType.ToString()) {
+}
+
+ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType origType,
+                                                   const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
                                                std::to_string((intmax_t)value) +
                                                " can't be cast because the value is out of range "
@@ -107,87 +145,83 @@ ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const Ty
                                                TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType)
+ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType origType,
+                                                   const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + std::to_string(value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
                                                TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const TypeId varType, const idx_t length)
+ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType varType, const idx_t length)
     : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) + "(" +
-                                                 std::to_string(length) + ")"){};
-
-ConversionException::ConversionException(string msg, ...) : Exception(ExceptionType::CONVERSION, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+                                                 std::to_string(length) + ")") {
 }
 
-InvalidTypeException::InvalidTypeException(TypeId type, string msg)
+ConversionException::ConversionException(string msg) : Exception(ExceptionType::CONVERSION, msg) {
+}
+
+InvalidTypeException::InvalidTypeException(PhysicalType type, string msg)
     : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
 }
 
-TypeMismatchException::TypeMismatchException(const TypeId type_1, const TypeId type_2, string msg)
+InvalidTypeException::InvalidTypeException(LogicalType type, string msg)
+    : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + type.ToString() + "]: " + msg) {
+}
+
+TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
                 "Type " + TypeIdToString(type_1) + " does not match with " + TypeIdToString(type_2) + ". " + msg) {
 }
 
-TransactionException::TransactionException(string msg, ...) : Exception(ExceptionType::TRANSACTION, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+TypeMismatchException::TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg)
+    : Exception(ExceptionType::MISMATCH_TYPE,
+                "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
 }
 
-NotImplementedException::NotImplementedException(string msg, ...) : Exception(ExceptionType::NOT_IMPLEMENTED, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+TransactionException::TransactionException(string msg) : Exception(ExceptionType::TRANSACTION, msg) {
 }
 
-OutOfRangeException::OutOfRangeException(string msg, ...) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+NotImplementedException::NotImplementedException(string msg) : Exception(ExceptionType::NOT_IMPLEMENTED, msg) {
 }
 
-CatalogException::CatalogException(string msg, ...) : StandardException(ExceptionType::CATALOG, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+OutOfRangeException::OutOfRangeException(string msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
-ParserException::ParserException(string msg, ...) : StandardException(ExceptionType::PARSER, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+CatalogException::CatalogException(string msg) : StandardException(ExceptionType::CATALOG, msg) {
 }
 
-SyntaxException::SyntaxException(string msg, ...) : Exception(ExceptionType::SYNTAX, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+ParserException::ParserException(string msg) : StandardException(ExceptionType::PARSER, msg) {
 }
 
-ConstraintException::ConstraintException(string msg, ...) : Exception(ExceptionType::CONSTRAINT, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+SyntaxException::SyntaxException(string msg) : Exception(ExceptionType::SYNTAX, msg) {
 }
 
-BinderException::BinderException(string msg, ...) : StandardException(ExceptionType::BINDER, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+ConstraintException::ConstraintException(string msg) : Exception(ExceptionType::CONSTRAINT, msg) {
 }
 
-IOException::IOException(string msg, ...) : Exception(ExceptionType::IO, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+BinderException::BinderException(string msg) : StandardException(ExceptionType::BINDER, msg) {
 }
 
-SerializationException::SerializationException(string msg, ...) : Exception(ExceptionType::SERIALIZATION, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+IOException::IOException(string msg) : Exception(ExceptionType::IO, msg) {
 }
 
-SequenceException::SequenceException(string msg, ...) : Exception(ExceptionType::SERIALIZATION, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+SerializationException::SerializationException(string msg) : Exception(ExceptionType::SERIALIZATION, msg) {
+}
+
+SequenceException::SequenceException(string msg) : Exception(ExceptionType::SERIALIZATION, msg) {
 }
 
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
 }
 
-FatalException::FatalException(string msg, ...) : Exception(ExceptionType::FATAL, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+FatalException::FatalException(string msg) : Exception(ExceptionType::FATAL, msg) {
 }
 
-InternalException::InternalException(string msg, ...) : Exception(ExceptionType::INTERNAL, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+InternalException::InternalException(string msg) : Exception(ExceptionType::INTERNAL, msg) {
 }
 
-InvalidInputException::InvalidInputException(string msg, ...) : Exception(ExceptionType::INVALID_INPUT, msg) {
-	FORMAT_CONSTRUCTOR(msg);
+InvalidInputException::InvalidInputException(string msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
 }
 
 } // namespace duckdb

@@ -116,7 +116,7 @@ void ChangeColumnTypeInfo::Serialize(Serializer &serializer) {
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &source, string schema, string table) {
 	auto column_name = source.Read<string>();
-	auto target_type = SQLType::Deserialize(source);
+	auto target_type = LogicalType::Deserialize(source);
 	auto expression = source.ReadOptional<ParsedExpression>();
 	return make_unique<ChangeColumnTypeInfo>(schema, table, move(column_name), move(target_type), move(expression));
 }

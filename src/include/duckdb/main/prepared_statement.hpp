@@ -42,7 +42,7 @@ public:
 	//! The amount of bound parameters
 	idx_t n_param;
 	//! The result SQL types of the prepared statement
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	//! The result names of the prepared statement
 	vector<string> names;
 

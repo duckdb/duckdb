@@ -82,33 +82,33 @@ template <class NLTYPE, class OP>
 static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t left_size, idx_t right_size,
                                              idx_t &lpos, idx_t &rpos, SelectionVector &lvector,
                                              SelectionVector &rvector, idx_t current_match_count) {
-	switch (left.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (left.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return NLTYPE::template Operation<int8_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                              current_match_count);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return NLTYPE::template Operation<int16_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                               current_match_count);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return NLTYPE::template Operation<int32_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                               current_match_count);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return NLTYPE::template Operation<int64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                               current_match_count);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return NLTYPE::template Operation<hugeint_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                 rvector, current_match_count);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return NLTYPE::template Operation<float, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                             current_match_count);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return NLTYPE::template Operation<double, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                              current_match_count);
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return NLTYPE::template Operation<interval_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                  rvector, current_match_count);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return NLTYPE::template Operation<string_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                rvector, current_match_count);
 	default:

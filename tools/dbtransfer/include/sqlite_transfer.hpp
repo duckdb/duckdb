@@ -8,7 +8,7 @@ bool TransferDatabase(duckdb::Connection &con, sqlite3 *sqlite);
 
 //! Fires a query to a SQLite database, returning a QueryResult object. Interrupt should be initially set to 0. If
 //! interrupt becomes 1 at any point query execution is cancelled.
-duckdb::unique_ptr<duckdb::QueryResult> QueryDatabase(duckdb::vector<duckdb::SQLType> result_types, sqlite3 *sqlite,
+duckdb::unique_ptr<duckdb::QueryResult> QueryDatabase(duckdb::vector<duckdb::LogicalType> result_types, sqlite3 *sqlite,
                                                       std::string query, volatile int &interrupt);
 
 }; // namespace sqlite
