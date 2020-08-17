@@ -104,4 +104,4 @@ private:
 	} value_;
 };
 
-}; // namespace duckdb
+} // namespace duckdb

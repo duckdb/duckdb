@@ -30,4 +30,4 @@ private:
 	idx_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);
 };
 
-}; // namespace duckdb
+} // namespace duckdb
