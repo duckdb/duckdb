@@ -1,0 +1,180 @@
+# name: test/sql/types/decimal/decimal_arithmetic.test
+# description: Test basic decimals
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+# negate
+query II
+SELECT -('0.1'::DECIMAL), -('-0.1'::DECIMAL)
+----
+-0.1	0.1
+
+# unary +
+query II
+SELECT +('0.1'::DECIMAL), +('-0.1'::DECIMAL)
+----
+0.1	-0.1
+
+
+
+# addition
+query I
+SELECT '0.1'::DECIMAL + '0.1'::DECIMAL
+----
+0.2
+
+# addition with non-decimal
+query I
+SELECT '0.1'::DECIMAL + 1::INTEGER
+----
+1.1
+
+# addition that would overflow the base types
+query I
+SELECT '0.5'::DECIMAL(4,4) + '0.5'::DECIMAL(4,4)
+----
+1.0
+
+# addition between different decimal types
+query I
+SELECT '0.5'::DECIMAL(1,1) + '100.0'::DECIMAL(3,0)
+----
+100.5
+
+# test decimals and integers with big decimals
+query IIIIII
+SELECT ('0.5'::DECIMAL(1,1) + 10000)::VARCHAR,
+       ('0.54321'::DECIMAL(5,5) + 10000)::VARCHAR,
+       ('0.5432154321'::DECIMAL(10,10) + 10000)::VARCHAR,
+       ('0.543215432154321'::DECIMAL(15,15) + 10000)::VARCHAR,
+       ('0.54321543215432154321'::DECIMAL(20,20) + 10000)::VARCHAR,
+       ('0.5432154321543215432154321'::DECIMAL(25,25) + 10000)::VARCHAR
+----
+10000.5
+10000.54321
+10000.5432154321
+10000.543215432154321
+10000.54321543215432154321
+10000.5432154321543215432154321
+
+# out of range
+statement error
+SELECT ('0.54321543215432154321543215432154321'::DECIMAL(35,35) + 10000)::VARCHAR
+
+# different types
+query IIIII
+SELECT '0.5'::DECIMAL(1,1) + 1::TINYINT,
+       '0.5'::DECIMAL(1,1) + 1::SMALLINT,
+       '0.5'::DECIMAL(1,1) + 1::INTEGER,
+       '0.5'::DECIMAL(1,1) + 1::BIGINT,
+       '0.5'::DECIMAL(1,1) + 1::HUGEINT
+----
+1.5	1.5	1.5	1.5	1.5
+
+# negative numbers
+query IIIII
+SELECT '0.5'::DECIMAL(1,1) + -1::TINYINT,
+       '0.5'::DECIMAL(1,1) + -1::SMALLINT,
+       '0.5'::DECIMAL(1,1) + -1::INTEGER,
+       '0.5'::DECIMAL(1,1) + -1::BIGINT,
+       '0.5'::DECIMAL(1,1) + -1::HUGEINT
+----
+-0.5	-0.5	-0.5	-0.5	-0.5
+
+# subtract
+query IIIII
+SELECT '0.5'::DECIMAL(1,1) - 1::TINYINT,
+       '0.5'::DECIMAL(1,1) - 1::SMALLINT,
+       '0.5'::DECIMAL(1,1) - 1::INTEGER,
+       '0.5'::DECIMAL(1,1) - 1::BIGINT,
+       '0.5'::DECIMAL(1,1) - 1::HUGEINT
+----
+-0.5	-0.5	-0.5	-0.5	-0.5
+
+# negative numbers
+query IIIII
+SELECT '0.5'::DECIMAL(1,1) - -1::TINYINT,
+       '0.5'::DECIMAL(1,1) - -1::SMALLINT,
+       '0.5'::DECIMAL(1,1) - -1::INTEGER,
+       '0.5'::DECIMAL(1,1) - -1::BIGINT,
+       '0.5'::DECIMAL(1,1) - -1::HUGEINT
+----
+1.5	1.5	1.5	1.5	1.5
+
+# now with a table
+statement ok
+CREATE TABLE decimals(d DECIMAL(3, 2));
+
+statement ok
+INSERT INTO decimals VALUES ('0.1'), ('0.2');
+
+query II
+SELECT d + '0.1'::DECIMAL, d + 10000 FROM decimals;
+----
+0.2	10000.1
+0.3	10000.2
+
+# multiplication
+query I
+SELECT '0.1'::DECIMAL * '10.0'::DECIMAL
+----
+1.0
+
+query I
+SELECT typeof('0.1'::DECIMAL(2,1) * '10.0'::DECIMAL(3,1))
+----
+DECIMAL(5,2)
+
+query I
+SELECT '0.1'::DECIMAL * '0.1'::DECIMAL
+----
+0.01
+
+# multiplication with non-decimal
+query I
+SELECT '0.1'::DECIMAL * 10::INTEGER
+----
+1.0
+
+# multiplication that would overflow the base types
+query I
+SELECT '5.0'::DECIMAL(4,3) * '5.0'::DECIMAL(4,3)
+----
+25.0
+
+# negative multiplication
+query I
+SELECT '-5.0'::DECIMAL(4,3) * '5.0'::DECIMAL(4,3)
+----
+-25.0
+
+# no precision is lost
+query I
+SELECT ('18.25'::DECIMAL(4,2) * '17.25'::DECIMAL(4,2))::VARCHAR
+----
+314.8125
+
+# different types
+query IIIII
+SELECT '0.001'::DECIMAL * 100::TINYINT,
+       '0.001'::DECIMAL * 10000::SMALLINT,
+       '0.001'::DECIMAL * 1000000::INTEGER,
+       '0.001'::DECIMAL * 100000000::BIGINT,
+       '0.001'::DECIMAL * 10000000000::HUGEINT
+----
+0.100
+10.000
+1000.000
+100000.000
+10000000.000
+
+# multiplication could not be performed exactly: throw error
+statement error
+SELECT '0.000000000000000000000000000001'::DECIMAL(38,30) * '0.000000000000000000000000000001'::DECIMAL(38,30)
+
+# query I
+# SELECT SUM(d) FROM decimals
+# ----
+# 0.3

@@ -95,6 +95,8 @@ static void from_decimal_cast(Vector &source, Vector &result, idx_t count) {
 
 template<class T>
 static void decimal_decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
+	source.type.Verify();
+	result.type.Verify();
 
 	// we need to either multiply or divide by the difference in scales
 	if (result.type.scale() >= source.type.scale()) {

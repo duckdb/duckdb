@@ -98,7 +98,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		// found a matching function!
 		auto &bound_function = func->functions[best_function];
 		// check if we need to add casts to the children
-		bound_function.CastToFunctionArguments(children, types);
+		bound_function.CastToFunctionArguments(children);
 		// create the aggregate
 		aggregate = make_unique<AggregateFunction>(func->functions[best_function]);
 		sql_type = aggregate->return_type;

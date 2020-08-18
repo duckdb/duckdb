@@ -1,6 +1,5 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/common/limits.hpp"
 #include "fmt/format.h"
 #include "fmt/printf.h"
@@ -25,9 +24,9 @@ struct FMTFormat {
 	}
 };
 
-unique_ptr<FunctionData> bind_printf_function(BoundFunctionExpression &expr, ClientContext &context) {
-	for(idx_t i = 1; i < expr.children.size(); i++) {
-		switch(expr.children[i]->return_type.id()) {
+unique_ptr<FunctionData> bind_printf_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+	for(idx_t i = 1; i < arguments.size(); i++) {
+		switch(arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
@@ -37,14 +36,15 @@ unique_ptr<FunctionData> bind_printf_function(BoundFunctionExpression &expr, Cli
 		case LogicalTypeId::DOUBLE:
 		case LogicalTypeId::VARCHAR:
 			// these types are natively supported
+			bound_function.arguments.push_back(arguments[i]->return_type);
 			break;
 		case LogicalTypeId::DECIMAL:
 			// decimal type: add cast to double
-			expr.children[i] = BoundCastExpression::AddCastToType(move(expr.children[i]), LogicalType::DOUBLE);
+			bound_function.arguments.push_back(LogicalType::DOUBLE);
 			break;
 		default:
 			// all other types: add cast to string
-			expr.children[i] = BoundCastExpression::AddCastToType(move(expr.children[i]), LogicalType::VARCHAR);
+			bound_function.arguments.push_back(LogicalType::VARCHAR);
 			break;
 		}
 	}

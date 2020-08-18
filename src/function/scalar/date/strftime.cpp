@@ -544,11 +544,11 @@ struct StrfTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> strftime_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
-	if (!expr.children[1]->IsScalar()) {
+static unique_ptr<FunctionData> strftime_bind_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+	if (!arguments[1]->IsScalar()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
+	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	StrfTimeFormat format;
 	if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
 		auto format_string = options_str.GetValue<string>();
@@ -940,11 +940,11 @@ struct StrpTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> strptime_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
-	if (!expr.children[1]->IsScalar()) {
+static unique_ptr<FunctionData> strptime_bind_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+	if (!arguments[1]->IsScalar()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
+	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	StrpTimeFormat format;
 	if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
 		string format_string = options_str.ToString();

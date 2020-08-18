@@ -44,19 +44,16 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> list_value_bind(BoundFunctionExpression &expr, ClientContext &context) {
-
+static unique_ptr<FunctionData> list_value_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
-	assert(expr.arguments.size() == expr.children.size());
-
 	child_list_t<LogicalType> child_types;
-	if (expr.children.size() > 0) {
-		child_types.push_back(make_pair("", expr.arguments[0]));
+	if (arguments.size() > 0) {
+		child_types.push_back(make_pair("", arguments[0]->return_type));
 	}
 
 	// this is more for completeness reasons
-	expr.return_type = LogicalType(LogicalTypeId::LIST, move(child_types));
-	return make_unique<VariableReturnBindData>(expr.return_type);
+	bound_function.return_type = LogicalType(LogicalTypeId::LIST, move(child_types));
+	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {

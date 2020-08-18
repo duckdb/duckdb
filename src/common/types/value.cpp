@@ -156,10 +156,17 @@ Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
-	assert(width >= Decimal::MAX_WIDTH_INT32 &&
-	       width <= Decimal::MAX_WIDTH_INT64);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
-	result.value_.bigint = value;
+	if (width <= Decimal::MAX_WIDTH_INT16) {
+		result.value_.smallint = value;
+	} else if (width <= Decimal::MAX_WIDTH_INT32) {
+		result.value_.integer = value;
+	} else if (width <= Decimal::MAX_WIDTH_INT64) {
+		result.value_.bigint = value;
+	} else {
+		result.value_.hugeint = value;
+	}
+	result.type_.Verify();
 	result.is_null = false;
 	return result;
 }
@@ -417,6 +424,8 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 		return Value::BIGINT(value);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
+	case LogicalTypeId::DECIMAL:
+		return Value::DECIMAL(value, type.width(), type.scale());
 	case LogicalTypeId::FLOAT:
 		return Value((float)value);
 	case LogicalTypeId::DOUBLE:

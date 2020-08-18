@@ -88,19 +88,19 @@ struct AbsOperator {
 };
 
 template<class OP>
-unique_ptr<FunctionData> decimal_unary_op_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	auto decimal_type = expr.children[0]->return_type;
+unique_ptr<FunctionData> decimal_unary_op_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
 	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
-		expr.function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::SMALLINT);
+		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::SMALLINT);
 	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
-		expr.function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::INTEGER);
+		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::INTEGER);
 	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
-		expr.function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::BIGINT);
+		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::BIGINT);
 	} else {
 		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
-		expr.function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT);
+		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT);
 	}
-	expr.return_type = decimal_type;
+	bound_function.return_type = decimal_type;
 	return nullptr;
 }
 
@@ -186,23 +186,23 @@ static void generic_round_function_decimal(DataChunk &input, ExpressionState &st
 };
 
 template<class OP>
-unique_ptr<FunctionData> bind_generic_round_function_decimal(BoundFunctionExpression &expr, ClientContext &context) {
+unique_ptr<FunctionData> bind_generic_round_function_decimal(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
 	// ceil essentially removes the scale
-	auto decimal_type = expr.children[0]->return_type;
+	auto decimal_type = arguments[0]->return_type;
 	if (decimal_type.scale() == 0) {
 		// round with scale 0 is a nop
-		expr.function.function = ScalarFunction::NopFunction;
+		bound_function.function = ScalarFunction::NopFunction;
 	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
-		expr.function.function = generic_round_function_decimal<int16_t, NumericHelper, OP>;
+		bound_function.function = generic_round_function_decimal<int16_t, NumericHelper, OP>;
 	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
-		expr.function.function = generic_round_function_decimal<int32_t, NumericHelper, OP>;
+		bound_function.function = generic_round_function_decimal<int32_t, NumericHelper, OP>;
 	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
-		expr.function.function = generic_round_function_decimal<int64_t, NumericHelper, OP>;
+		bound_function.function = generic_round_function_decimal<int64_t, NumericHelper, OP>;
 	} else {
 		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
-		expr.function.function = generic_round_function_decimal<hugeint_t, Hugeint, OP>;
+		bound_function.function = generic_round_function_decimal<hugeint_t, Hugeint, OP>;
 	}
-	expr.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), 0);
+	bound_function.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), 0);
 	return nullptr;
 }
 
@@ -405,12 +405,12 @@ static void decimal_round_positive_precision_function(DataChunk &input, Expressi
 	});
 };
 
-unique_ptr<FunctionData> bind_decimal_round_precision(BoundFunctionExpression &expr, ClientContext &context) {
-	auto decimal_type = expr.children[0]->return_type;
-	if (!expr.children[1]->IsFoldable()) {
+unique_ptr<FunctionData> bind_decimal_round_precision(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}
-	Value val = ExpressionExecutor::EvaluateScalar(*expr.children[1]).CastAs(LogicalType::INTEGER);
+	Value val = ExpressionExecutor::EvaluateScalar(*arguments[1]).CastAs(LogicalType::INTEGER);
 	if (val.is_null) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) expected a numeric precision field");
 	}
@@ -424,35 +424,35 @@ unique_ptr<FunctionData> bind_decimal_round_precision(BoundFunctionExpression &e
 	if (round_value < 0) {
 		target_scale = 0;
 		if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
-			expr.function.function = decimal_round_negative_precision_function<int16_t, NumericHelper>;
+			bound_function.function = decimal_round_negative_precision_function<int16_t, NumericHelper>;
 		} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
-			expr.function.function = decimal_round_negative_precision_function<int32_t, NumericHelper>;
+			bound_function.function = decimal_round_negative_precision_function<int32_t, NumericHelper>;
 		} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
-			expr.function.function = decimal_round_negative_precision_function<int64_t, NumericHelper>;
+			bound_function.function = decimal_round_negative_precision_function<int64_t, NumericHelper>;
 		} else {
 			assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
-			expr.function.function = decimal_round_negative_precision_function<hugeint_t, Hugeint>;
+			bound_function.function = decimal_round_negative_precision_function<hugeint_t, Hugeint>;
 		}
 	} else {
 		if (round_value >= (int32_t) decimal_type.scale()) {
 			// if round_value is bigger than or equal to scale we do nothing
-			expr.function.function = ScalarFunction::NopFunction;
+			bound_function.function = ScalarFunction::NopFunction;
 			target_scale = decimal_type.scale();
 		} else {
 			target_scale = round_value;
 			if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
-				expr.function.function = decimal_round_positive_precision_function<int16_t, NumericHelper>;
+				bound_function.function = decimal_round_positive_precision_function<int16_t, NumericHelper>;
 			} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
-				expr.function.function = decimal_round_positive_precision_function<int32_t, NumericHelper>;
+				bound_function.function = decimal_round_positive_precision_function<int32_t, NumericHelper>;
 			} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
-				expr.function.function = decimal_round_positive_precision_function<int64_t, NumericHelper>;
+				bound_function.function = decimal_round_positive_precision_function<int64_t, NumericHelper>;
 			} else {
 				assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
-				expr.function.function = decimal_round_positive_precision_function<hugeint_t, Hugeint>;
+				bound_function.function = decimal_round_positive_precision_function<hugeint_t, Hugeint>;
 			}
 		}
 	}
-	expr.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), target_scale);
+	bound_function.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), target_scale);
 	return make_unique<RoundPrecisionFunctionData>(round_value);
 }
 

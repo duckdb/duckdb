@@ -228,48 +228,76 @@ idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vect
 	return BindFunctionFromArguments(name, functions, arguments);
 }
 
-void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<LogicalType> &types) {
-	for (idx_t i = 0; i < types.size(); i++) {
+vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
+	vector<LogicalType> types;
+	for(auto &argument : arguments) {
+		types.push_back(argument->return_type);
+	}
+	return types;
+
+}
+
+idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments) {
+	auto types = GetLogicalTypesFromExpressions(arguments);
+	return Function::BindFunction(name, functions, types);
+}
+
+idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<unique_ptr<Expression>> &arguments) {
+	auto types = GetLogicalTypesFromExpressions(arguments);
+	return Function::BindFunction(name, functions, types);
+}
+
+idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments) {
+	auto types = GetLogicalTypesFromExpressions(arguments);
+	return Function::BindFunction(name, functions, types);
+}
+
+void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children) {
+	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
-		if (target_type.id() != LogicalTypeId::ANY && types[i].id() != target_type.id()) {
+		target_type.Verify();
+		if (target_type.id() != LogicalTypeId::ANY && children[i]->return_type != target_type) {
 			// type of child does not match type of function argument: add a cast
 			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
-			types[i] = target_type;
 		}
 	}
 }
 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, string schema,
-                                                                       string name, vector<LogicalType> &arguments,
+                                                                       string name,
                                                                        vector<unique_ptr<Expression>> children,
                                                                        bool is_operator) {
 	// bind the function
 	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, schema, name);
 	assert(function && function->type == CatalogType::SCALAR_FUNCTION);
-	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, arguments,
+	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function,
 	                                          move(children), is_operator);
 }
 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
                                                                        ScalarFunctionCatalogEntry &func,
-                                                                       vector<LogicalType> &arguments,
                                                                        vector<unique_ptr<Expression>> children,
                                                                        bool is_operator) {
 	// bind the function
-	idx_t best_function = Function::BindFunction(func.name, func.functions, arguments);
+	idx_t best_function = Function::BindFunction(func.name, func.functions, children);
 	// found a matching function!
 	auto &bound_function = func.functions[best_function];
+	return ScalarFunction::BindScalarFunction(context, bound_function, move(children), is_operator);
+}
+
+unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
+                                                                       ScalarFunction bound_function,
+                                                                       vector<unique_ptr<Expression>> children,
+                                                                       bool is_operator) {
+	unique_ptr<FunctionData> bind_info;
+	if (bound_function.bind) {
+		bind_info = bound_function.bind(context, bound_function, children);
+	}
 	// check if we need to add casts to the children
-	bound_function.CastToFunctionArguments(children, arguments);
+	bound_function.CastToFunctionArguments(children);
 
 	// now create the function
-	auto result =
-	    make_unique<BoundFunctionExpression>(bound_function.return_type, bound_function, move(arguments), is_operator);
-	result->children = move(children);
-	if (bound_function.bind) {
-		result->bind_info = bound_function.bind(*result, context);
-	}
-	return result;
+	return make_unique<BoundFunctionExpression>(bound_function.return_type, move(bound_function), move(children), move(bind_info), is_operator);
 }
 
 } // namespace duckdb

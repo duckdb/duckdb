@@ -45,12 +45,9 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		if (equality_only && collation_entry->not_required_for_equality) {
 			continue;
 		}
-		auto function =
-		    make_unique<BoundFunctionExpression>(collation_entry->function.return_type, collation_entry->function);
-		function->children.push_back(move(source));
-		if (collation_entry->function.bind) {
-			function->bind_info = collation_entry->function.bind(*function, context);
-		}
+		vector<unique_ptr<Expression>> children;
+		children.push_back(move(source));
+		auto function =ScalarFunction::BindScalarFunction(context, collation_entry->function, move(children));
 		source = move(function);
 	}
 	return source;

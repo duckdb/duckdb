@@ -42,7 +42,7 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	ConstantVector::SetNull(result, true);
 }
 
-unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientContext &context) {
+unique_ptr<FunctionData> setseed_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<SetseedBindData>(context);
 }
 

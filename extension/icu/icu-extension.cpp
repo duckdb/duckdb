@@ -57,8 +57,8 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 	});
 }
 
-static unique_ptr<FunctionData> icu_collate_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	auto splits = StringUtil::Split(expr.function.name, "_");
+static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+	auto splits = StringUtil::Split(bound_function.name, "_");
 	if (splits.size() == 1) {
 		return make_unique<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {

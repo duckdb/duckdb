@@ -562,6 +562,15 @@ LogicalType MaxLogicalType(LogicalType left, LogicalType right) {
 	}
 }
 
+void LogicalType::Verify() const {
+#ifdef DEBUG
+	if (id_ == LogicalTypeId::DECIMAL) {
+		assert(width_ >= 1 && width_ <= Decimal::MAX_WIDTH_DECIMAL);
+		assert(scale_ >= 0 && scale_ <= width_);
+	}
+#endif
+}
+
 bool ApproxEqual(float ldecimal, float rdecimal) {
 	float epsilon = fabs(rdecimal) * 0.01;
 	return fabs(ldecimal - rdecimal) <= epsilon;
