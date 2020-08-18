@@ -2,6 +2,7 @@
 //#include "duckdb/common/arrow_cdata.hpp"
 #include "arrow/c/bridge.h"
 #include "arrow/api.h"
+#include "parquet/arrow/reader.h"
 
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -43,10 +44,20 @@ private:
 		int col_idx = 0;
 		for (auto &schema : res->table->schemas) {
 			auto format = string(schema->format);
-			if (format == "l") {
-				return_types.push_back(duckdb::LogicalType::BIGINT);
-			} else if (format == "u") {
-				return_types.push_back(duckdb::LogicalType::VARCHAR);
+			if (format == "c") {
+				return_types.push_back(duckdb::LogicalType::TINYINT);
+			} else if (format == "s") {
+				return_types.push_back(duckdb::LogicalType::SMALLINT);
+            } else if (format == "i") {
+                return_types.push_back(duckdb::LogicalType::INTEGER);
+            } else if (format == "l") {
+                return_types.push_back(duckdb::LogicalType::BIGINT);
+            } else if (format == "f") {
+                return_types.push_back(duckdb::LogicalType::FLOAT);
+            } else if (format == "g") {
+                return_types.push_back(duckdb::LogicalType::DOUBLE);
+            } else if (format == "u") {
+                return_types.push_back(duckdb::LogicalType::VARCHAR);
 			} else {
 				throw duckdb::NotImplementedException("Invalid Arrow type %s", format);
 			}
@@ -70,25 +81,39 @@ private:
 			return;
 		}
 
+		auto nrow = data.table->columns[0]->length;
+
 		// FIXME support scanning with offsets
-		// FIXME handle NULLs
-		assert(data.table->columns[0]->length < STANDARD_VECTOR_SIZE);
+		assert(nrow < STANDARD_VECTOR_SIZE);
 
 		output.SetCardinality(data.table->columns[0]->length);
 		for (duckdb::idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
-			switch (output.data[col_idx].type.id()) {
-			case duckdb::LogicalTypeId::BIGINT:
+            auto array = data.table->columns[col_idx];
+            assert(nrow == array->length);
 
+            // just memcpy nullmask
+            auto n_bitmask_bytes = (nrow + 8 - 1) / 8;
+			duckdb::nullmask_t new_nullmask;
+			memcpy(&new_nullmask, array->buffers[0], n_bitmask_bytes);
+            duckdb::FlatVector::SetNullmask(output.data[col_idx], new_nullmask.flip());
+
+			switch (output.data[col_idx].type.id()) {
+            case duckdb::LogicalTypeId::TINYINT:
+            case duckdb::LogicalTypeId::SMALLINT:
+            case duckdb::LogicalTypeId::INTEGER:
+            case duckdb::LogicalTypeId::FLOAT:
+            case duckdb::LogicalTypeId::DOUBLE:
+            case duckdb::LogicalTypeId::BIGINT:
 				duckdb::FlatVector::SetData(output.data[col_idx],
-				                            (duckdb::data_ptr_t)data.table->columns[col_idx]->buffers[1]);
+				                            (duckdb::data_ptr_t)array->buffers[1]);
 				break;
 
 			case duckdb::LogicalTypeId::VARCHAR: {
-				auto &array = data.table->columns[col_idx];
 				auto offsets = (uint32_t *)array->buffers[1];
 				auto cdata = (char *)array->buffers[2];
 
-				for (int i = 0; i < array->length; i++) {
+				for (int i = 0; i < nrow; i++) {
+					// TODO this copies the string data for now :/
 					duckdb::FlatVector::GetData<duckdb::string_t>(output.data[col_idx])[i] =
 					    duckdb::StringVector::AddString(output.data[col_idx], cdata + offsets[i],
 					                                    offsets[i + 1] - offsets[i]);
@@ -99,7 +124,10 @@ private:
 			default:
 				throw runtime_error("Unsupported type " + output.data[col_idx].type.ToString());
 			}
+
+
 		}
+		output.Verify();
 		data.finished = true;
 	}
 };
@@ -200,6 +228,25 @@ int main(int argc, char *argv[]) {
 
 	c_sschema.release(&c_sschema);
 	c_sarray.release(&c_sarray);
+
+
+    //arrow::Status st;
+    arrow::MemoryPool* pool = arrow::default_memory_pool();
+    std::shared_ptr<arrow::io::RandomAccessFile> input = ...;
+
+    // Open Parquet file reader
+    std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
+    st = parquet::arrow::OpenFile(input, pool, &arrow_reader);
+    if (!st.ok()) {
+        // Handle error instantiating file reader...
+    }
+
+    // Read entire file as a single Arrow table
+    std::shared_ptr<arrow::Table> table;
+    st = arrow_reader->ReadTable(&table);
+    if (!st.ok()) {
+        // Handle error reading Parquet data...
+    }
 
 	return 0;
 }
