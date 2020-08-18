@@ -2,6 +2,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/planner/expression.hpp"
 
 using namespace std;
 
@@ -135,10 +137,30 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	}
 }
 
+unique_ptr<FunctionData> bind_decimal_first(ClientContext &context, AggregateFunction &function, vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
+		function = FirstFun::GetFunction(LogicalType::SMALLINT);
+	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
+		function = FirstFun::GetFunction(LogicalType::INTEGER);
+	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
+		function = FirstFun::GetFunction(LogicalType::BIGINT);
+	} else {
+		function = FirstFun::GetFunction(LogicalType::HUGEINT);
+	}
+	function.arguments[0] = decimal_type;
+	function.return_type = decimal_type;
+	return nullptr;
+}
+
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
 	for (auto type : LogicalType::ALL_TYPES) {
-		first.AddFunction(FirstFun::GetFunction(type));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			first.AddFunction(AggregateFunction({ type }, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, bind_decimal_first));
+		} else {
+			first.AddFunction(FirstFun::GetFunction(type));
+		}
 	}
 	set.AddFunction(first);
 }

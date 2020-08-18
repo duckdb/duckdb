@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -298,6 +299,18 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 
 	// now create the function
 	return make_unique<BoundFunctionExpression>(bound_function.return_type, move(bound_function), move(children), move(bind_info), is_operator);
+}
+
+unique_ptr<BoundAggregateExpression>
+AggregateFunction::BindAggregateFunction(ClientContext &context, AggregateFunction bound_function, vector<unique_ptr<Expression>> children, bool is_distinct) {
+	unique_ptr<FunctionData> bind_info;
+	if (bound_function.bind) {
+		bind_info = bound_function.bind(context, bound_function, children);
+	}
+	// check if we need to add casts to the children
+	bound_function.CastToFunctionArguments(children);
+
+	return make_unique<BoundAggregateExpression>(bound_function, move(children), move(bind_info), is_distinct);
 }
 
 } // namespace duckdb

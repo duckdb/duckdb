@@ -245,3 +245,9 @@ query I
 SELECT printf('%.2f', '0.12345'::DECIMAL(30,10))
 ----
 0.12
+
+# use decimal in subquery
+query I
+SELECT (SELECT '1.0'::DECIMAL(2,1));
+----
+1.0

@@ -54,19 +54,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	idx_t best_function = Function::BindFunction(func->name, func->functions, types);
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
-	// check if we need to add casts to the children
-	bound_function.CastToFunctionArguments(children);
 
-	auto return_type = bound_function.return_type;
-
-	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(return_type, bound_function, aggr.distinct);
-	aggregate->children = move(children);
-	aggregate->arguments = arguments;
-
-	if (bound_function.bind) {
-		aggregate->bind_info = bound_function.bind(*aggregate, context, return_type);
-	}
+	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children), aggr.distinct);
+	auto return_type = aggregate->return_type;
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;

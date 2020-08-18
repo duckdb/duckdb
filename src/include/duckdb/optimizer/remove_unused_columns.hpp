@@ -18,7 +18,7 @@ class BoundColumnRefExpression;
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public LogicalOperatorVisitor {
 public:
-	RemoveUnusedColumns(bool is_root = false) : everything_referenced(is_root) {
+	RemoveUnusedColumns(ClientContext &context, bool is_root = false) : context(context), everything_referenced(is_root) {
 	}
 
 	void VisitOperator(LogicalOperator &op) override;
@@ -28,6 +28,7 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 private:
+	ClientContext &context;
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;

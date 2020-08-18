@@ -26,8 +26,7 @@ typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, Vector &result, idx_t count);
 //! Binds the scalar function and creates the function data
-typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BoundAggregateExpression &expr, ClientContext &context,
-                                                              LogicalType &return_type);
+typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function, vector<unique_ptr<Expression>> &arguments);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
 typedef void (*aggregate_destructor_t)(Vector &state, idx_t count);
 
@@ -79,6 +78,9 @@ public:
 		return !(*this == rhs);
 	}
 
+	static unique_ptr<BoundAggregateExpression> BindAggregateFunction(ClientContext &context, AggregateFunction bound_function,
+                                                                  vector<unique_ptr<Expression>> children,
+	                                                              bool is_distinct = false);
 public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction UnaryAggregate(LogicalType input_type, LogicalType return_type) {

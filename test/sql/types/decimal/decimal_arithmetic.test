@@ -173,8 +173,3 @@ SELECT '0.001'::DECIMAL * 100::TINYINT,
 # multiplication could not be performed exactly: throw error
 statement error
 SELECT '0.000000000000000000000000000001'::DECIMAL(38,30) * '0.000000000000000000000000000001'::DECIMAL(38,30)
-
-# query I
-# SELECT SUM(d) FROM decimals
-# ----
-# 0.3

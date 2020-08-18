@@ -61,12 +61,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
 				aggr.expressions.push_back(
-				    make_unique<BoundAggregateExpression>(count_star_fun.return_type, count_star_fun, false));
+					AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, false));
 			}
 		}
 
 		// then recurse into the children of the aggregate
-		RemoveUnusedColumns remove;
+		RemoveUnusedColumns remove(context);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
 		return;
@@ -114,7 +114,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
 		// encounter a UNION node that is not preceded by a DISTINCT)
 		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(true);
+			RemoveUnusedColumns remove(context, true);
 			remove.VisitOperator(*child);
 		}
 		return;
@@ -131,7 +131,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		// then recurse into the children of this projection
-		RemoveUnusedColumns remove;
+		RemoveUnusedColumns remove(context);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
 		return;

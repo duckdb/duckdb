@@ -86,12 +86,12 @@ static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
 	ListVector::SetEntry(result, move(list_child));
 }
 
-unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context, LogicalType &return_type) {
-	assert(expr.children.size() == 1);
+unique_ptr<FunctionData> list_bind(ClientContext &context, AggregateFunction &function, vector<unique_ptr<Expression>> &arguments) {
+	assert(arguments.size() == 1);
 	child_list_t<LogicalType> children;
-	children.push_back(make_pair("", expr.arguments[0]));
+	children.push_back(make_pair("", arguments[0]->return_type));
 
-	return_type = LogicalType(LogicalTypeId::LIST, move(children));
+	function.return_type = LogicalType(LogicalTypeId::LIST, move(children));
 	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all
 	                                    // except for sanity checking
 }
