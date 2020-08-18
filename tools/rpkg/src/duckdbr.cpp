@@ -127,6 +127,7 @@ static SEXP cstr_to_charsexp(const char *s) {
 		Rf_error("cpp_str_to_charsexp: Memory allocation failed");
 		UNPROTECT(1);
 	}
+	UNPROTECT(1);
 	return retsexp;
 }
 
@@ -142,8 +143,8 @@ static SEXP cpp_str_to_strsexp(vector<string> s) {
 	}
 	for (idx_t i = 0; i < s.size(); i++) {
 		SET_STRING_ELT(retsexp, i, cpp_str_to_charsexp(s[i]));
-		UNPROTECT(1);
 	}
+	UNPROTECT(1);
 	return retsexp;
 }
 
@@ -214,17 +215,17 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 	auto stmtholder = new RStatement();
 	stmtholder->stmt = move(stmt);
 
+	SEXP retlist = PROTECT(NEW_LIST(6));
+	if (!retlist) {
+		UNPROTECT(1); // retlist
+		Rf_error("duckdb_prepare_R: Memory allocation failed");
+	}
+
 	SEXP stmtsexp = PROTECT(R_MakeExternalPtr(stmtholder, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(stmtsexp, (void (*)(SEXP))duckdb_finalize_statement_R);
 
-	SEXP retlist = PROTECT(NEW_LIST(6));
-	if (!retlist) {
-		UNPROTECT(2); // retlist, stmtsexp
-		Rf_error("duckdb_prepare_R: Memory allocation failed");
-	}
 	SEXP ret_names = cpp_str_to_strsexp({"str", "ref", "type", "names", "rtypes", "n_param"});
 	SET_NAMES(retlist, ret_names);
-	UNPROTECT(1); // ret_names
 
 	SET_VECTOR_ELT(retlist, 0, querysexp);
 	SET_VECTOR_ELT(retlist, 1, stmtsexp);
@@ -232,11 +233,9 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 
 	SEXP stmt_type = cpp_str_to_strsexp({StatementTypeToString(stmtholder->stmt->type)});
 	SET_VECTOR_ELT(retlist, 2, stmt_type);
-	UNPROTECT(1); // stmt_type
 
 	SEXP col_names = cpp_str_to_strsexp(stmtholder->stmt->names);
 	SET_VECTOR_ELT(retlist, 3, col_names);
-	UNPROTECT(1); // col_names
 
 	vector<string> rtypes;
 
@@ -280,7 +279,6 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 
 	SEXP rtypessexp = cpp_str_to_strsexp(rtypes);
 	SET_VECTOR_ELT(retlist, 4, rtypessexp);
-	UNPROTECT(1); // rtypessexp
 
 	SET_VECTOR_ELT(retlist, 5, ScalarInteger(stmtholder->stmt->n_param));
 
@@ -401,7 +399,6 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 			Rf_error("duckdb_execute_R: Memory allocation failed");
 		}
 		SET_NAMES(retlist, cpp_str_to_strsexp(result->names));
-		UNPROTECT(1); // names
 
 		for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 			SEXP varvalue = NULL;
