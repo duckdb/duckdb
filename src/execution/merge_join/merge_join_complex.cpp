@@ -57,7 +57,7 @@ template <class T> idx_t MergeJoinComplex::LessThanEquals::Operation(ScalarMerge
     return merge_join_complex_lt<T, duckdb::LessThanEquals>(l, r);
 }
 
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinComplex, LessThan, ScalarMergeInfo, ScalarMergeInfo);
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinComplex, LessThanEquals, ScalarMergeInfo, ScalarMergeInfo);
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinComplex, LessThan, ScalarMergeInfo, ScalarMergeInfo)
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinComplex, LessThanEquals, ScalarMergeInfo, ScalarMergeInfo)
 
 }

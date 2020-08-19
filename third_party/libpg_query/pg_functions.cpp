@@ -224,4 +224,10 @@ unsigned char *unicode_to_utf8(pg_wchar c, unsigned char *utf8string) {
 	throw std::runtime_error("unicode_to_utf8 NOT IMPLEMENTED");
 }
 
+// this replaces a brain damaged macro in nodes.hpp
+PGNode *newNode(size_t size, PGNodeTag type) {
+	auto result = (PGNode *)palloc0fast(size);
+	result->type = type;
+	return result;
+}
 }

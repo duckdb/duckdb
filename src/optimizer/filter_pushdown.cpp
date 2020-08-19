@@ -67,6 +67,7 @@ void FilterPushdown::PushFilters() {
 	for (auto &f : filters) {
 		auto result = combiner.AddFilter(move(f->filter));
 		assert(result == FilterResult::SUCCESS);
+		(void)result;
 	}
 	filters.clear();
 }
