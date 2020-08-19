@@ -173,5 +173,5 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement);
 
 #ifdef __cplusplus
-};
+}
 #endif

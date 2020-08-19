@@ -56,7 +56,7 @@ template <class T>
 void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                  int64_t increment) {
 	assert(result.type.IsNumeric());
-	if (start > numeric_limits<T>::max() || increment > numeric_limits<T>::max()) {
+	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
 	result.vector_type = VectorType::FLAT_VECTOR;

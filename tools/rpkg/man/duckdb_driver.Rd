@@ -11,7 +11,6 @@
 \alias{dbIsValid,duckdb_driver-method}
 \alias{dbGetInfo,duckdb_driver-method}
 \alias{duckdb_shutdown}
-\alias{src_duckdb}
 \title{DuckDB Driver}
 \usage{
 duckdb(dbdir = DBDIR_MEMORY, read_only = FALSE)
@@ -33,8 +32,6 @@ duckdb(dbdir = DBDIR_MEMORY, read_only = FALSE)
 \S4method{dbGetInfo}{duckdb_driver}(dbObj, ...)
 
 duckdb_shutdown(drv)
-
-src_duckdb(path = ":memory:", create = FALSE, read_only = FALSE)
 }
 \arguments{
 \item{dbdir}{The file in which the DuckDB database should be stored}
@@ -57,10 +54,6 @@ For details see the appropriate \code{DBIDriver}.}
 or \linkS4class{DBIConnection}}
 
 \item{obj}{An R object whose SQL type we want to determine.}
-
-\item{path}{The file in which the DuckDB database should be stored}
-
-\item{create}{Create a new database if none is present in `path`}
 }
 \description{
 A DuckDB database instance.

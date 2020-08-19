@@ -117,6 +117,7 @@ setMethod(
 
 #' @rdname duckdb_driver
 #' @inheritParams DBI::dbIsValid
+#' @importFrom DBI dbConnect
 #' @export
 setMethod(
   "dbIsValid", "duckdb_driver",
@@ -163,19 +164,4 @@ duckdb_shutdown <- function(drv) {
 
 is_installed <- function(pkg) {
   as.logical(requireNamespace(pkg, quietly = TRUE)) == TRUE
-}
-
-
-#' @importFrom DBI dbConnect
-#' @param path The file in which the DuckDB database should be stored
-#' @param create Create a new database if none is present in `path`
-#' @rdname duckdb_driver
-#' @export
-src_duckdb <- function(path = ":memory:", create = FALSE, read_only = FALSE) {
-  requireNamespace("dbplyr", quietly = TRUE)
-  if (path != ":memory:" && !create && !file.exists(path)) {
-    stop("`path` '", path, "' must already exist, unless `create` = TRUE")
-  }
-  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = read_only)
-  dbplyr::src_dbi(con, auto_disconnect = TRUE)
 }

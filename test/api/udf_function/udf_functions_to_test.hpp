@@ -414,4 +414,4 @@ struct UDFCovarPopOperation : public UDFCovarOperation {
 	}
 };
 
-}; // namespace duckdb
+} // namespace duckdb

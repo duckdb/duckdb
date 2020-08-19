@@ -70,6 +70,8 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                range_function_bind, range_function));
 	set.AddFunction(range);
+	range.name = "generate_series";
+	set.AddFunction(range);
 }
 
 void BuiltinFunctions::RegisterTableFunctions() {

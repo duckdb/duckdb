@@ -36,4 +36,4 @@ public:
 	virtual idx_t GetRootIndex() = 0;
 };
 
-}; // namespace duckdb
+} // namespace duckdb

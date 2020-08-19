@@ -25,6 +25,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	auto root = (BoundFunctionExpression *)bindings[0];
 	auto constant_expr = (BoundConstantExpression *)bindings[1];
 	assert(root->children.size() == 2);
+
 	if (constant_expr->value.is_null) {
 		return make_unique<BoundConstantExpression>(Value(root->return_type));
 	}

@@ -89,13 +89,15 @@ public:
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
 		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 		    AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
-	};
+	}
+
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
 		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP>(input_type, return_type);
 		aggregate.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 		return aggregate;
-	};
+	}
+
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction BinaryAggregate(LogicalType a_type, LogicalType b_type, LogicalType return_type) {
 		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
@@ -104,7 +106,7 @@ public:
 		                         AggregateFunction::StateCombine<STATE, OP>,
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 		                         AggregateFunction::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>);
-	};
+	}
 
 public:
 	template <class STATE> static idx_t StateSize() {

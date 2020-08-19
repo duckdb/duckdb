@@ -143,7 +143,7 @@ namespace duckdb_re2 {
 // the memory footprint.)
 struct OneState {
   uint32_t matchcond;   // conditions to match right now.
-  uint32_t action[];
+  uint32_t action[1];
 };
 
 // The uint32_t conditions in the action are a combination of

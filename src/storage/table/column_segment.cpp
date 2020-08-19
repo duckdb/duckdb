@@ -1,4 +1,6 @@
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/limits.hpp"
+
 #include <cstring>
 
 namespace duckdb {
