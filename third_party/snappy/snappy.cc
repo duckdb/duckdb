@@ -547,7 +547,7 @@ char* CompressFragment(const char* input,
   assert(input_size <= kBlockSize);
   assert((table_size & (table_size - 1)) == 0);  // table must be power of two
   const int shift = 32 - Bits::Log2Floor(table_size);
-  assert(static_cast<int>(kuint32max >> shift) == table_size - 1);
+  // assert(static_cast<int>(kuint32max >> shift) == table_size - 1);
   const char* ip_end = input + input_size;
   const char* base_ip = ip;
   // Bytes in [next_emit, ip) will be emitted as literal bytes.  Or
