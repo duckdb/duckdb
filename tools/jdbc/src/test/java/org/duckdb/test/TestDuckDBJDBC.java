@@ -6,8 +6,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
+import java.sql.Driver;
 import java.sql.DriverManager;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -15,6 +16,8 @@ import java.sql.Statement;
 import java.util.Properties;
 
 import org.duckdb.DuckDBConnection;
+import org.duckdb.DuckDBDriver;
+
 
 public class TestDuckDBJDBC {
 
@@ -685,6 +688,11 @@ public class TestDuckDBJDBC {
 		rs.close();
 		stmt.close();
 		conn.close();
+	}
+
+	public static void test_connect_wrong_url_bug848() throws Exception {
+		Driver d = new DuckDBDriver();
+		assertNull(d.connect("jdbc:h2:", null));
 	}
 
 	public static void main(String[] args) throws Exception {

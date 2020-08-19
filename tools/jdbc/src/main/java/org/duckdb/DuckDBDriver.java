@@ -21,6 +21,9 @@ public class DuckDBDriver implements java.sql.Driver {
 	}
 
 	public Connection connect(String url, Properties info) throws SQLException {
+		if (!acceptsURL(url)) {
+			return null;
+		}
 		boolean read_only = false;
 		if (info != null) {
 			String prop_val = info.getProperty(DUCKDB_READONLY_PROPERTY);
