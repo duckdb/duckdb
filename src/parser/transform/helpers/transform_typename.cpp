@@ -38,6 +38,8 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 		if (modifier_idx > 1) {
 			throw ParserException("VARCHAR only supports a single modifier");
 		}
+		// FIXME: create CHECK constraint based on varchar width
+		width = 0;
 		break;
 	case LogicalTypeId::DECIMAL:
 		if (modifier_idx == 1) {

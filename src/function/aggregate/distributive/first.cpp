@@ -105,6 +105,19 @@ template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalTy
 	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction>(type, type);
 }
 
+AggregateFunction GetDecimalFirstFunction(LogicalType type) {
+	assert(type.id() == LogicalTypeId::DECIMAL);
+	if (type.width() <= Decimal::MAX_WIDTH_INT16) {
+		return FirstFun::GetFunction(LogicalType::SMALLINT);
+	} else if (type.width() <= Decimal::MAX_WIDTH_INT32) {
+		return FirstFun::GetFunction(LogicalType::INTEGER);
+	} else if (type.width() <= Decimal::MAX_WIDTH_INT64) {
+		return FirstFun::GetFunction(LogicalType::BIGINT);
+	} else {
+		return FirstFun::GetFunction(LogicalType::HUGEINT);
+	}
+}
+
 AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -132,6 +145,13 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	case LogicalTypeId::BLOB:
 		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
 		                                                   FirstFunctionString>(type, type);
+	case LogicalTypeId::DECIMAL: {
+		type.Verify();
+		AggregateFunction function = GetDecimalFirstFunction(type);
+		function.arguments[0] = type;
+		function.return_type = type;
+		return function;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for FIRST aggregate");
 	}
@@ -139,17 +159,7 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 
 unique_ptr<FunctionData> bind_decimal_first(ClientContext &context, AggregateFunction &function, vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
-		function = FirstFun::GetFunction(LogicalType::SMALLINT);
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
-		function = FirstFun::GetFunction(LogicalType::INTEGER);
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
-		function = FirstFun::GetFunction(LogicalType::BIGINT);
-	} else {
-		function = FirstFun::GetFunction(LogicalType::HUGEINT);
-	}
-	function.arguments[0] = decimal_type;
-	function.return_type = decimal_type;
+	function = FirstFun::GetFunction(decimal_type);
 	return nullptr;
 }
 

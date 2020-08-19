@@ -84,7 +84,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		vector<unique_ptr<Expression>> first_children;
 		first_children.push_back(move(bound));
 		auto first_agg = AggregateFunction::BindAggregateFunction(binder.context, FirstFun::GetFunction(expr.return_type), move(first_children), false);
-		first_agg->children.push_back(move(bound));
+
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();
 		auto aggr = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, move(expressions));
