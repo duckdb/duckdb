@@ -19,10 +19,6 @@ struct ReadCSVFunctionData : public TableFunctionData {
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,
                                               unordered_map<string, Value> &named_parameters,
                                               vector<LogicalType> &return_types, vector<string> &names) {
-
-	if (!context.db.config.enable_copy) {
-		throw Exception("read_csv is disabled by configuration");
-	}
 	auto result = make_unique<ReadCSVFunctionData>();
 
 	BufferedCSVReaderOptions options;
