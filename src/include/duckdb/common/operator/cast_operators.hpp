@@ -213,6 +213,17 @@ struct CastFromDecimal {
 	}
 };
 
+// BOOLEAN
+template<> int16_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
+template<> int32_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
+template<> int64_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
+template<> hugeint_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
+
+template<> bool CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template<> bool CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template<> bool CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template<> bool CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
 // TINYINT
 template<> int16_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
 template<> int32_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);

@@ -311,13 +311,19 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct RoundOperatorPrecision {
 	template <class TA, class TB, class TR> static inline TR Operation(TA input, TB precision) {
+		double rounded_value;
 		if (precision < 0) {
-			precision = 0;
-		}
-		double modifier = pow(10, precision);
-		double rounded_value = (round(input * modifier)) / modifier;
-		if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
-			return input;
+			double modifier = pow(10, -precision);
+			rounded_value = (round(input / modifier)) * modifier;
+			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
+				return 0;
+			}
+		} else {
+			double modifier = pow(10, precision);
+			rounded_value = (round(input * modifier)) / modifier;
+			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
+				return input;
+			}
 		}
 		return rounded_value;
 	}

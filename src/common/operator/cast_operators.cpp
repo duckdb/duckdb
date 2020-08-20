@@ -1266,6 +1266,38 @@ template<> string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t wi
 	return HugeintToStringCast::FormatDecimal(input, scale, result);
 }
 
+template<> int16_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<bool, int16_t>(input);
+}
+
+template<> int32_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<bool, int32_t>(input);
+}
+
+template<> int64_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<bool, int64_t>(input);
+}
+
+template<> hugeint_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<bool, hugeint_t>(input);
+}
+
+template<> bool CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<int16_t, bool>(input);
+}
+
+template<> bool CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<int32_t, bool>(input);
+}
+
+template<> bool CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<int64_t, bool>(input);
+}
+
+template<> bool CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<hugeint_t, bool>(input);
+}
+
 //===--------------------------------------------------------------------===//
 // Numeric -> Decimal Cast
 //===--------------------------------------------------------------------===//
@@ -1387,30 +1419,11 @@ template<> hugeint_t CastToDecimal::Operation(hugeint_t input, uint8_t width, ui
 
 template<class SRC, class DST>
 DST DoubleToDecimalCast(SRC input, uint8_t width, uint8_t scale) {
-	// to have better conversion for small numbers, we cast two parts separately
-	// first cast the part before the decimal
-	int64_t integral_input = Cast::Operation<SRC, int64_t>(input);
-	int64_t hinput = (int64_t) CastToDecimal::Operation<int64_t, DST>(integral_input, width, scale);
-	// now we truncate
-	hinput += Cast::Operation<SRC, int64_t>(NumericHelper::DoublePowersOfTen[scale] * (input - SRC(integral_input)));
-	if (hinput <= -NumericHelper::PowersOfTen[width] || hinput >= NumericHelper::PowersOfTen[width]) {
-		throw OutOfRangeException("Could not cast value %d to DECIMAL(%d,%d)", hinput, width, scale);
+	double value = input * NumericHelper::DoublePowersOfTen[scale];
+	if (value <= -NumericHelper::DoublePowersOfTen[width] || value >= NumericHelper::DoublePowersOfTen[width]) {
+		throw OutOfRangeException("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
 	}
-	return DST(hinput);
-}
-
-template<class SRC>
-hugeint_t DoubleToHugeDecimalCast(SRC input, uint8_t width, uint8_t scale) {
-	// to have better conversion for small numbers, we cast two parts separately
-	// first cast the part before the decimal
-	hugeint_t integral_input = Cast::Operation<double, hugeint_t>(input);
-	hugeint_t hinput = CastToDecimal::Operation<hugeint_t, hugeint_t>(integral_input, width, scale);
-	// now we truncate
-	hinput += Cast::Operation<double, hugeint_t>(NumericHelper::DoublePowersOfTen[scale] * (input - Hugeint::Cast<double>(integral_input)));
-	if (hinput <= -Hugeint::PowersOfTen[width] || hinput >= Hugeint::PowersOfTen[width]) {
-		throw OutOfRangeException("Could not cast value %s to DECIMAL(%d,%d)", hinput.ToString(), width, scale);
-	}
-	return hinput;
+	return Cast::Operation<SRC, DST>(value);
 }
 
 // FLOAT -> DECIMAL
@@ -1427,7 +1440,7 @@ template<> int64_t CastToDecimal::Operation(float input, uint8_t width, uint8_t 
 }
 
 template<> hugeint_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale) {
-	return DoubleToHugeDecimalCast<float>(input, width, scale);
+	return DoubleToDecimalCast<float, hugeint_t>(input, width, scale);
 }
 
 // DOUBLE -> DECIMAL
@@ -1444,7 +1457,7 @@ template<> int64_t CastToDecimal::Operation(double input, uint8_t width, uint8_t
 }
 
 template<> hugeint_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale) {
-	return DoubleToHugeDecimalCast<double>(input, width, scale);
+	return DoubleToDecimalCast<double, hugeint_t>(input, width, scale);
 }
 
 //===--------------------------------------------------------------------===//
