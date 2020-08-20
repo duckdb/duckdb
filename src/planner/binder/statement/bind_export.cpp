@@ -52,9 +52,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->options = stmt.info->options;
 		// set up the file name for the COPY TO
 		if (table->schema->name == DEFAULT_SCHEMA) {
-			info->file_path = fs.JoinPath(stmt.info->file_path, StringUtil::Format("%s.csv", table->name));
+			info->file_path = fs.JoinPath(stmt.info->file_path, StringUtil::Format("%s.%s", table->name, copy_function->function.extension));
 		} else {
-			info->file_path = fs.JoinPath(stmt.info->file_path, StringUtil::Format("%s.%s.csv", table->schema->name, table->name));
+			info->file_path = fs.JoinPath(stmt.info->file_path, StringUtil::Format("%s.%s.%s", table->schema->name, table->name, copy_function->function.extension));
 		}
 		info->is_from = false;
 		info->schema = table->schema->name;

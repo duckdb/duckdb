@@ -34,18 +34,32 @@ static void WriteValueAsSQL(stringstream &ss, Value &val) {
 	}
 }
 
-static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEntry *table, CopyInfo &info) {
+static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEntry *table, CopyInfo &info, CopyFunction &function) {
 	string table_file_path;
 	ss << "COPY ";
 	if (table->schema->name != DEFAULT_SCHEMA) {
-		table_file_path = fs.JoinPath(info.file_path, StringUtil::Format("%s.%s.csv", table->schema->name, table->name));
+		table_file_path = fs.JoinPath(info.file_path, StringUtil::Format("%s.%s.%s", table->schema->name, table->name, function.extension));
 		ss << table->schema->name << ".";
 	} else {
-		table_file_path = fs.JoinPath(info.file_path, StringUtil::Format("%s.csv", table->name));
+		table_file_path = fs.JoinPath(info.file_path, StringUtil::Format("%s.%s", table->name, function.extension));
 	}
 	ss << table->name << " FROM '" << table_file_path << "' (";
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
+	if (info.format == "csv") {
+		// insert default csv options, if not specified
+		if (info.options.find("header") == info.options.end()) {
+			info.options["header"].push_back(Value::INTEGER(0));
+		}
+		if (info.options.find("delimiter") == info.options.end() &&
+			info.options.find("sep") == info.options.end() &&
+			info.options.find("delim") == info.options.end()) {
+			info.options["delimiter"].push_back(Value(","));
+		}
+		if (info.options.find("quote") == info.options.end()) {
+			info.options["quote"].push_back(Value("\""));
+		}
+	}
 	for(auto &info : info.options) {
 		ss << ", " << info.first << " ";
 		if (info.second.size() == 1) {
@@ -107,7 +121,7 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
 	for(auto &table : tables) {
-		WriteCopyStatement(fs, load_ss, (TableCatalogEntry *) table, *info);
+		WriteCopyStatement(fs, load_ss, (TableCatalogEntry *) table, *info, function);
 	}
 	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state->finished = true;

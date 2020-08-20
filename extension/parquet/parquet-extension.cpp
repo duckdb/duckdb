@@ -1339,6 +1339,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_sink = parquet_write_sink;
 	function.copy_to_combine = parquet_write_combine;
 	function.copy_to_finalize = parquet_write_finalize;
+	function.extension = "parquet";
 	CreateCopyFunctionInfo info(function);
 
 	Connection conn(db);

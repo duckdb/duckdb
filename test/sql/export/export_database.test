@@ -34,6 +34,41 @@ SELECT nextval('seq')
 ----
 1
 
+query II
+SELECT * FROM v2 ORDER BY 1
+----
+1	3
+
+# check data
+query II
+SELECT * FROM integers ORDER BY 1
+----
+NULL	1
+1	3
+4	2
+
+query II
+SELECT * FROM strings ORDER BY 1
+----
+NULL	1993-01-01
+NULL	1992-01-01
+
+query II
+SELECT * FROM v1 ORDER BY 1
+----
+4	2
+
+query II
+SELECT * FROM v2 ORDER BY 1
+----
+1	3
+
+query II
+SELECT * FROM v3 ORDER BY 1
+----
+NULL	1
+
+# now export the db
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT CSV)
 
@@ -54,8 +89,8 @@ NULL	1
 query II
 SELECT * FROM strings ORDER BY 1
 ----
-NULL	1992-01-01
 NULL	1993-01-01
+NULL	1992-01-01
 
 query II
 SELECT * FROM v1 ORDER BY 1

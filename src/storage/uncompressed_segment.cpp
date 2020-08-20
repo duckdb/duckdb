@@ -151,7 +151,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 	// the inplace loops take the result as the last parameter
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, Equals, false, true, true, true, false>(
 			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
@@ -161,7 +161,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 		break;
 	}
 	case ExpressionType::COMPARE_LESSTHAN: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, LessThan, false, true, true, true, false>(
 			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
@@ -171,7 +171,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHAN: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, GreaterThan, false, true, true, true, false>(
 			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
@@ -181,7 +181,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 		break;
 	}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, LessThanEquals, false, true, true, true, false>(
 			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
@@ -192,7 +192,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count =
 			    BinaryExecutor::SelectFlatLoop<T, T, GreaterThanEquals, false, true, true, true, false>(
 			        vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);

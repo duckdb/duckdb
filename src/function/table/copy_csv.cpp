@@ -604,6 +604,8 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_from_initialize = read_csv_initialize;
 	info.copy_from_get_chunk = read_csv_get_chunk;
 
+	info.extension = "csv";
+
 	set.AddFunction(info);
 }
 

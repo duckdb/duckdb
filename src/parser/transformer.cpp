@@ -3,6 +3,9 @@
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/pragma_handler.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -14,6 +17,20 @@ bool Transformer::TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatemen
 		if (!stmt) {
 			statements.clear();
 			return false;
+		}
+		if (stmt->type == StatementType::PRAGMA_STATEMENT) {
+			PragmaHandler handler;
+			auto new_query = handler.HandlePragma(*((PragmaStatement&) *stmt).info);
+			if (!new_query.empty()) {
+				// this PRAGMA statement gets replaced by a new query string
+				// push the new query string through the parser again and add it to the transformer
+				Parser parser;
+				parser.ParseQuery(new_query);
+				for(auto &stmt : parser.statements) {
+					statements.push_back(move(stmt));
+				}
+				continue;
+			}
 		}
 		statements.push_back(move(stmt));
 	}
