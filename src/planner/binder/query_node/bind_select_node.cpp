@@ -22,10 +22,7 @@ namespace duckdb {
 static int64_t BindConstant(Binder &binder, ClientContext &context, string clause, unique_ptr<ParsedExpression> &expr) {
 	ConstantBinder constant_binder(binder, context, clause);
 	auto bound_expr = constant_binder.Bind(expr);
-	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
-	if (!value.type().IsNumeric()) {
-		throw BinderException("LIMIT clause can only contain numeric constants!");
-	}
+	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr).CastAs(LogicalType::BIGINT);
 	int64_t limit_value = value.GetValue<int64_t>();
 	if (limit_value < 0) {
 		throw BinderException("LIMIT must not be negative");

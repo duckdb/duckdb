@@ -27,8 +27,9 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 				try_cast_as_integer = false;
 				decimal_position = i;
 			}
-			if (val.val.str[i] == 'e') {
+			if (val.val.str[i] == 'e' || val.val.str[i] == 'E') {
 				// found exponent, cast as double
+				try_cast_as_integer = false;
 				try_cast_as_decimal = false;
 			}
 		}

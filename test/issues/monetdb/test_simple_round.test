@@ -14,7 +14,7 @@ insert into test values (2.887);
 query R
 select round(col1, -1) from test;
 ----
-3.000000
+0
 
 query R
 select round(col1, 0) from test;

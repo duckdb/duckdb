@@ -20,8 +20,6 @@ SELECT * FROM test_num_data ORDER BY id
 1	0.000000
 2	-34338492.215397047
 
-mode skip
-
 query IIR
 SELECT t1.id, t2.id, t1.val * t2.val FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;
 ----
@@ -34,7 +32,7 @@ SELECT t1.id, t2.id, t1.val * t2.val FROM test_num_data t1, test_num_data t2 ORD
 query IIR
 SELECT t1.id, t2.id, round(t1.val * t2.val, 30) FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;
 ----
-1 1 0
-1 2 0
-2 1 0
-2 2 1179132047626883.596862135856320209000000000000
+1	1	0
+1	2	0
+2	1	0
+2	2	1179132047626883.596862135856320209000000000000
