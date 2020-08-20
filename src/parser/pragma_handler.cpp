@@ -17,7 +17,7 @@ string PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		if (pragma.parameters.size() != 1) {
 			throw ParserException("Invalid PRAGMA table_info: table_info takes exactly one argument");
 		}
-		return "SELECT * FROM pragma_table_info()";
+		return StringUtil::Format("SELECT * FROM pragma_table_info('%s')", pragma.parameters[0].ToString());
 	} else if (keyword == "show_tables") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {
 			throw ParserException("Invalid PRAGMA show_tables: cannot be called");

@@ -53,6 +53,12 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 			throw ParserException("Scale cannot be bigger than width");
 		}
 		break;
+	case LogicalTypeId::INTERVAL:
+		if (modifier_idx > 1) {
+			throw ParserException("INTERVAL only supports a single modifier");
+		}
+		width = 0;
+		break;
 	default:
 		if (modifier_idx > 0) {
 			throw ParserException("Type %s does not support any modifiers!", base_type.ToString());

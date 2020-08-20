@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -47,10 +48,14 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		}
 		vector<unique_ptr<Expression>> children;
 		children.push_back(move(source));
-		auto function =ScalarFunction::BindScalarFunction(context, collation_entry->function, move(children));
+		auto function = ScalarFunction::BindScalarFunction(context, collation_entry->function, move(children));
 		source = move(function);
 	}
 	return source;
+}
+
+void ExpressionBinder::TestCollation(ClientContext &context, string collation) {
+	PushCollation(context, make_unique<BoundConstantExpression>(Value("")), collation);
 }
 
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {

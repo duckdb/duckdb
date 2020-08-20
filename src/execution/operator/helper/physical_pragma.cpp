@@ -79,7 +79,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		}
 		auto collation_param = StringUtil::Lower(pragma.parameters[0].ToString());
 		// bind the collation to verify that it exists
-		ExpressionBinder::PushCollation(client, nullptr, collation_param);
+		ExpressionBinder::TestCollation(client, collation_param);
 		auto &config = DBConfig::GetConfig(client);
 		config.collation = collation_param;
 	} else if (keyword == "null_order" || keyword == "default_null_order") {

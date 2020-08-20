@@ -34,7 +34,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 				throw ParserException("Interval post-fix requires a number!");
 			}
 
-			int mask = ((PGAConst *)root->typeName->typmods->head->data.ptr_value)->val.val.ival;
+			int mask =  ((PGAConst *)root->typeName->typmods->head->data.ptr_value)->val.val.ival;
 			// these seemingly random constants are from datetime.hpp
 			// they are copied here to avoid having to include this header
 			// the bitshift is from the function INTERVAL_MASK in the parser

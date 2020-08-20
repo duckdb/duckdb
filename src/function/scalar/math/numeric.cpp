@@ -100,6 +100,7 @@ unique_ptr<FunctionData> decimal_unary_op_bind(ClientContext &context, ScalarFun
 		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT);
 	}
+	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = decimal_type;
 	return nullptr;
 }
@@ -202,6 +203,7 @@ unique_ptr<FunctionData> bind_generic_round_function_decimal(ClientContext &cont
 		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
 		bound_function.function = generic_round_function_decimal<hugeint_t, Hugeint, OP>;
 	}
+	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), 0);
 	return nullptr;
 }
@@ -452,6 +454,7 @@ unique_ptr<FunctionData> bind_decimal_round_precision(ClientContext &context, Sc
 			}
 		}
 	}
+	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), target_scale);
 	return make_unique<RoundPrecisionFunctionData>(round_value);
 }
