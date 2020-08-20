@@ -8,7 +8,14 @@ using namespace std;
 namespace duckdb {
 
 string UniqueConstraint::ToString() const {
-	return is_primary_key ? "PRIMARY KEY constraint" : "UNIQUE Constraint";
+	string base = is_primary_key ? "PRIMARY KEY(" : "UNIQUE(";
+	for(idx_t i = 0; i < columns.size(); i++) {
+		if (i > 0) {
+			base += ", ";
+		}
+		base += columns[i];
+	}
+	return base + ")";
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() {

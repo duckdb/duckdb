@@ -27,7 +27,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			}
 		}
 		dependencies.insert(op.table);
-		return make_unique<PhysicalTableScan>(op, *op.table, *op.table->storage, op.column_ids, move(op.expressions),
+		return make_unique<PhysicalTableScan>(op.types, *op.table, *op.table->storage, op.column_ids, move(op.expressions),
 		                                      move(table_filter_umap));
 	}
 }

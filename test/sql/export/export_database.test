@@ -1,0 +1,86 @@
+# name: test/sql/export/export_database.test
+# description: Test export database
+# group: [export]
+
+# create a bunch of tables with data and views
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, CHECK(i+j<10))
+
+statement ok
+CREATE TABLE strings(v VARCHAR, d DATE, PRIMARY KEY(d))
+
+statement ok
+INSERT INTO integers VALUES (1, 3), (4, 2), (NULL, 1)
+
+statement ok
+INSERT INTO strings VALUES ('NULL', DATE '1992-01-01'), (NULL, DATE '1993-01-01');
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM integers WHERE i>3; --
+CREATE VIEW v2 AS SELECT * FROM integers WHERE i < 3;
+
+statement ok
+CREATE VIEW v3 AS SELECT * FROM integers WHERE i IS NULL --
+
+statement ok
+CREATE SEQUENCE seq
+
+query I
+SELECT nextval('seq')
+----
+1
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT CSV)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_test'
+
+# check data
+query II
+SELECT * FROM integers ORDER BY 1
+----
+NULL	1
+1	3
+4	2
+
+query II
+SELECT * FROM strings ORDER BY 1
+----
+NULL	1992-01-01
+NULL	1993-01-01
+
+query II
+SELECT * FROM v1 ORDER BY 1
+----
+4	2
+
+query II
+SELECT * FROM v2 ORDER BY 1
+----
+1	3
+
+query II
+SELECT * FROM v3 ORDER BY 1
+----
+NULL	1
+
+# sequence is not reset to base value, but keeps the value it had
+query I
+SELECT nextval('seq')
+----
+2
+
+# verify that constraints are still there
+statement error
+INSERT INTO integers VALUES (5, 6)
+
+statement error
+INSERT INTO strings VALUES(NULL, NULL)

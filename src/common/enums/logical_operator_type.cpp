@@ -99,6 +99,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "PRAGMA";
 	case LogicalOperatorType::TRANSACTION:
 		return "TRANSACTION";
+	case LogicalOperatorType::EXPORT:
+		return "EXPORT";
 	}
 	return "UNDEFINED";
 }

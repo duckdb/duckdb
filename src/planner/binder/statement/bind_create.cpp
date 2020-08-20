@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -51,6 +52,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	case CatalogType::VIEW: {
 		auto &base = (CreateViewInfo &)*stmt.info;
+		// extract the SQL from the query, if any
+		if (stmt.stmt_location + stmt.stmt_length <= context.query.size()) {
+			base.sql = context.query.substr(stmt.stmt_location, stmt.stmt_length);
+		}
 		// bind the schema
 		auto schema = BindSchema(*stmt.info);
 

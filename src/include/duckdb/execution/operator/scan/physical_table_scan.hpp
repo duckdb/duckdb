@@ -16,7 +16,7 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
 public:
-	PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, vector<column_t> column_ids,
+	PhysicalTableScan(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table, vector<column_t> column_ids,
 	                  vector<unique_ptr<Expression>> filter, unordered_map<idx_t, vector<TableFilter>> table_filters);
 
 	//! The table to scan

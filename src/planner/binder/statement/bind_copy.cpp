@@ -9,6 +9,11 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -101,10 +106,28 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 }
 
 BoundStatement Binder::Bind(CopyStatement &stmt) {
-	if (stmt.select_statement) {
-		return BindCopyTo(stmt);
-	} else {
+	if (!stmt.info->is_from && !stmt.select_statement) {
+		// copy table into file without a query
+		// generate SELECT * FROM table;
+		auto ref = make_unique<BaseTableRef>();
+		ref->schema_name = stmt.info->schema;
+		ref->table_name = stmt.info->table;
+
+		auto statement = make_unique<SelectNode>();
+		statement->from_table = move(ref);
+		if (stmt.info->select_list.size() > 0) {
+			for(auto &name : stmt.info->select_list) {
+				statement->select_list.push_back(make_unique<ColumnRefExpression>(name));
+			}
+		} else {
+			statement->select_list.push_back(make_unique<StarExpression>());
+		}
+		stmt.select_statement = move(statement);
+	}
+	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt);
+	} else {
+		return BindCopyTo(stmt);
 	}
 }
 

@@ -13,6 +13,8 @@ DeleteStmt
 DropStmt
 ExecuteStmt
 ExplainStmt
+ExportStmt
+ImportStmt
 IndexStmt
 InsertStmt
 LoadStmt

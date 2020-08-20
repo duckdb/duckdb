@@ -57,6 +57,7 @@ public:
 	vector<LogicalType> GetTypes();
 	//! Returns a list of types of the specified columns of the table
 	vector<LogicalType> GetTypes(const vector<column_t> &column_ids);
+	string ToSQL() override;
 
 	//! Add lower case aliases to a name map (e.g. "Hello" -> "hello" is also acceptable)
 	static void AddLowerCaseAliases(unordered_map<string, column_t> &name_map);

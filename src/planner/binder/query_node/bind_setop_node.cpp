@@ -99,7 +99,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	// now both sides have been bound we can resolve types
 	if (result->left->types.size() != result->right->types.size()) {
-		throw Exception("Set operations can only apply to expressions with the "
+		throw BinderException("Set operations can only apply to expressions with the "
 		                "same number of result columns");
 	}
 

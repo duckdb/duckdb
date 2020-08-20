@@ -6,6 +6,7 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 namespace duckdb {
 using namespace std;
@@ -41,6 +42,18 @@ unique_ptr<CreateSequenceInfo> SequenceCatalogEntry::Deserialize(Deserializer &s
 	info->start_value = source.Read<int64_t>();
 	info->cycle = source.Read<bool>();
 	return info;
+}
+
+string SequenceCatalogEntry::ToSQL() {
+	stringstream ss;
+	ss << "CREATE SEQUENCE ";
+	ss << name;
+	ss << " INCREMENT BY " << increment;
+	ss << " MINVALUE " << min_value;
+	ss << " MAXVALUE " << max_value;
+	ss << " START " << counter;
+	ss << " " << (cycle ? "CYCLE" : "NO CYCLE") << ";";
+	return ss.str();
 }
 
 } // namespace duckdb

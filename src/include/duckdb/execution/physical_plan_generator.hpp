@@ -53,6 +53,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDistinct &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalEmptyResult &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExpressionGet &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalExport &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalFilter &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimit &op);

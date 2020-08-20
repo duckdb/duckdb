@@ -21,6 +21,8 @@ struct CreateViewInfo : public CreateInfo {
 
 	//! Table name to insert to
 	string view_name;
+	//! The SQL query (if any)
+	string sql;
 	//! Aliases of the view
 	vector<string> aliases;
 	//! Return types

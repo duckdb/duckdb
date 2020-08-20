@@ -1,29 +1,31 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_copy_to_file.hpp
+// duckdb/planner/operator/logical_export.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
 
 namespace duckdb {
 
-class LogicalCopyToFile : public LogicalOperator {
+class LogicalExport : public LogicalOperator {
 public:
-	LogicalCopyToFile(CopyFunction function, unique_ptr<FunctionData> bind_data)
-	    : LogicalOperator(LogicalOperatorType::COPY_TO_FILE), function(function), bind_data(move(bind_data)) {
+	LogicalExport(CopyFunction function, unique_ptr<CopyInfo> copy_info)
+	    : LogicalOperator(LogicalOperatorType::EXPORT), function(function), copy_info(move(copy_info)) {
 	}
 	CopyFunction function;
-	unique_ptr<FunctionData> bind_data;
+	unique_ptr<CopyInfo> copy_info;
 
 protected:
 	void ResolveTypes() override {
-		types.push_back(LogicalType::BIGINT);
+		types.push_back(LogicalType::BOOLEAN);
 	}
 };
+
 } // namespace duckdb

@@ -25,6 +25,7 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 namespace duckdb {
 using namespace std;
@@ -205,6 +206,12 @@ unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &sourc
 	auto info = make_unique<CreateSchemaInfo>();
 	info->schema = source.Read<string>();
 	return info;
+}
+
+string SchemaCatalogEntry::ToSQL() {
+	stringstream ss;
+	ss << "CREATE SCHEMA " << name << ";";
+	return ss.str();
 }
 
 CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {

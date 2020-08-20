@@ -16,6 +16,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	this->aliases = info->aliases;
 	this->types = info->types;
 	this->temporary = info->temporary;
+	this->sql = info->sql;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
@@ -26,6 +27,7 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
+	serializer.WriteString(sql);
 	query->Serialize(serializer);
 	assert(aliases.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)aliases.size());
@@ -42,6 +44,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	auto info = make_unique<CreateViewInfo>();
 	info->schema = source.Read<string>();
 	info->view_name = source.Read<string>();
+	info->sql = source.Read<string>();
 	info->query = QueryNode::Deserialize(source);
 	auto alias_count = source.Read<uint32_t>();
 	for (uint32_t i = 0; i < alias_count; i++) {
@@ -52,6 +55,13 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 		info->types.push_back(LogicalType::Deserialize(source));
 	}
 	return info;
+}
+
+string ViewCatalogEntry::ToSQL() {
+	if (sql.size() == 0) {
+		throw NotImplementedException("Cannot convert VIEW to SQL because it was not created with a SQL statement");
+	}
+	return sql + "\n;";
 }
 
 } // namespace duckdb

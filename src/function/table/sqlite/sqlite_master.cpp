@@ -7,7 +7,6 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
-#include <sstream>
 
 using namespace std;
 
@@ -21,29 +20,6 @@ struct SQLiteMasterData : public TableFunctionData {
 	vector<CatalogEntry *> entries;
 	idx_t offset;
 };
-
-string GenerateQuery(CatalogEntry *entry) {
-	// generate a query from a catalog entry
-	if (entry->type == CatalogType::TABLE) {
-		// FIXME: constraints
-		stringstream ss;
-		auto table = (TableCatalogEntry *)entry;
-		ss << "CREATE TABLE " << table->name << "(";
-
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			auto &column = table->columns[i];
-			ss << column.name << " " << column.type.ToString();
-			if (i + 1 < table->columns.size()) {
-				ss << ", ";
-			}
-		}
-
-		ss << ");";
-		return ss.str();
-	} else {
-		return "[Unknown]";
-	}
-}
 
 static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs,
                                                    unordered_map<string, Value> &named_parameters,
@@ -120,7 +96,7 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 		// "rootpage", PhysicalType::INT32
 		output.SetValue(3, index, Value::INTEGER(0));
 		// "sql", PhysicalType::VARCHAR
-		output.SetValue(4, index, Value(GenerateQuery(entry)));
+		output.SetValue(4, index, Value(entry->ToSQL()));
 	}
 	data.offset = next;
 }
