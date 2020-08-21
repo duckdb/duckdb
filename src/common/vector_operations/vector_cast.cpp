@@ -104,22 +104,22 @@ static void decimal_decimal_cast_switch(Vector &source, Vector &result, idx_t co
 		int64_t multiply_factor = NumericHelper::PowersOfTen[result.type.scale() - source.type.scale()];
 		switch(result.type.InternalType()) {
 		case PhysicalType::INT16:
-			UnaryExecutor::Execute<T, int16_t>(source, result, count, [&](T input) {
+			UnaryExecutor::Execute<T, int16_t, true>(source, result, count, [&](T input) {
 				return Cast::Operation<T, int16_t>(input * multiply_factor);
 			});
 			break;
 		case PhysicalType::INT32:
-			UnaryExecutor::Execute<T, int32_t>(source, result, count, [&](T input) {
+			UnaryExecutor::Execute<T, int32_t, true>(source, result, count, [&](T input) {
 				return Cast::Operation<T, int32_t>(input * multiply_factor);
 			});
 			break;
 		case PhysicalType::INT64:
-			UnaryExecutor::Execute<T, int64_t>(source, result, count, [&](T input) {
+			UnaryExecutor::Execute<T, int64_t, true>(source, result, count, [&](T input) {
 				return Cast::Operation<T, int64_t>(input * multiply_factor);
 			});
 			break;
 		case PhysicalType::INT128:
-			UnaryExecutor::Execute<T, hugeint_t>(source, result, count, [&](T input) {
+			UnaryExecutor::Execute<T, hugeint_t, true>(source, result, count, [&](T input) {
 				return Cast::Operation<T, hugeint_t>(input * multiply_factor);
 			});
 			break;
@@ -131,22 +131,22 @@ static void decimal_decimal_cast_switch(Vector &source, Vector &result, idx_t co
 		int64_t divide_factor = NumericHelper::PowersOfTen[source.type.scale() - result.type.scale()];
 		switch(result.type.InternalType()) {
 		case PhysicalType::INT16:
-			UnaryExecutor::Execute<T, int16_t>(source, result, count, [&](T input) {
+			UnaryExecutor::Execute<T, int16_t, true>(source, result, count, [&](T input) {
 				return Cast::Operation<T, int16_t>(input / divide_factor);
 			});
 			break;
 		case PhysicalType::INT32:
-			UnaryExecutor::Execute<T, int32_t>(source, result, count, [&](T input) {
+			UnaryExecutor::Execute<T, int32_t, true>(source, result, count, [&](T input) {
 				return Cast::Operation<T, int32_t>(input / divide_factor);
 			});
 			break;
 		case PhysicalType::INT64:
-			UnaryExecutor::Execute<T, int64_t>(source, result, count, [&](T input) {
+			UnaryExecutor::Execute<T, int64_t, true>(source, result, count, [&](T input) {
 				return Cast::Operation<T, int64_t>(input / divide_factor);
 			});
 			break;
 		case PhysicalType::INT128:
-			UnaryExecutor::Execute<T, hugeint_t>(source, result, count, [&](T input) {
+			UnaryExecutor::Execute<T, hugeint_t, true>(source, result, count, [&](T input) {
 				return Cast::Operation<T, hugeint_t>(input / divide_factor);
 			});
 			break;

@@ -47,6 +47,7 @@ string StatementTypeToString(StatementType type) {
 	case StatementType::INVALID_STATEMENT:
 		return "INVALID";
 	}
+	return "INVALID";
 }
 
 } // namespace duckdb
