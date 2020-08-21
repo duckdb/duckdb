@@ -205,11 +205,10 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	sum.AddFunction(GetSumAggregate(LogicalType::BIGINT));
 	sum.AddFunction(GetSumAggregate(LogicalType::HUGEINT));
 	// float sums to float
+	// FIXME: implement http://ic.ese.upenn.edu/pdf/parallel_fpaccum_tc2016.pdf for parallel FP sums
 	sum.AddFunction(AggregateFunction::UnaryAggregate<numeric_sum_state_t, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
-	// for now disable combine on all FP sums (FIXME: implement http://ic.ese.upenn.edu/pdf/parallel_fpaccum_tc2016.pdf)
-	sum.functions[2].combine = nullptr;
 
 	set.AddFunction(sum);
 }
