@@ -165,7 +165,8 @@ ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const 
 
 ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType varType, const idx_t length)
     : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) + "(" +
-                                                 std::to_string(length) + ")"){};
+                                                 std::to_string(length) + ")") {
+}
 
 ConversionException::ConversionException(string msg) : Exception(ExceptionType::CONVERSION, msg) {
 }

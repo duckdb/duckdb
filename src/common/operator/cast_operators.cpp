@@ -945,8 +945,7 @@ void CastFromBlob::FromHexToBytes(string_t input, string_t &output) {
 	in_size -= 2;
 
 	auto out_data = output.GetData();
-	idx_t out_size = output.GetSize();
-	assert(out_size == (in_size / 2));
+	assert(output.GetSize() == (in_size / 2));
 	idx_t out_idx = 0;
 
 	idx_t num_hex_per_byte = 2;

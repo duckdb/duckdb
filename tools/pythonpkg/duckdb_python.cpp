@@ -79,8 +79,7 @@ template <class T> static py::array fetch_column_regular(string numpy_type, Chun
 	return fetch_column<T, T, RegularConvert>(numpy_type, collection, column);
 }
 
-}; // namespace duckdb_py_convert
-// namespace duckdb_py_convert
+} // namespace duckdb_py_convert
 
 namespace random_string {
 static std::random_device rd;

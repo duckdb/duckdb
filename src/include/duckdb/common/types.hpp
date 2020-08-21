@@ -410,4 +410,4 @@ template <class T> bool IsIntegerType() {
 bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
 
-}; // namespace duckdb
+} // namespace duckdb

@@ -41,4 +41,4 @@ public:
 	}
 };
 
-}; // namespace duckdb
+} // namespace duckdb

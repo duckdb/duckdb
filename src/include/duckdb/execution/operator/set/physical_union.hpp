@@ -20,4 +20,4 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-}; // namespace duckdb
+} // namespace duckdb

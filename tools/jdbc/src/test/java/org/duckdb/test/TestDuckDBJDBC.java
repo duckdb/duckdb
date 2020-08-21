@@ -8,7 +8,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Date;
+import java.sql.Driver;
 import java.sql.DriverManager;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -18,6 +20,8 @@ import java.sql.Timestamp;
 import java.util.Properties;
 
 import org.duckdb.DuckDBConnection;
+import org.duckdb.DuckDBDriver;
+
 
 public class TestDuckDBJDBC {
 
@@ -689,7 +693,7 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
-	
+
 	public static void test_exotic_types() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
@@ -704,7 +708,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getDate("dt"), Date.valueOf("2019-11-26"));
 
 		assertEquals(rs.getObject("iv"), "5 days");
-		
+
 		assertEquals(rs.getObject("te"), Time.valueOf("21:11:00"));
 		assertEquals(rs.getTime("te"), Time.valueOf("21:11:00"));
 
@@ -713,6 +717,11 @@ public class TestDuckDBJDBC {
 		rs.close();
 		stmt.close();
 		conn.close();
+	}
+
+	public static void test_connect_wrong_url_bug848() throws Exception {
+		Driver d = new DuckDBDriver();
+		assertNull(d.connect("jdbc:h2:", null));
 	}
 
 	public static void main(String[] args) throws Exception {

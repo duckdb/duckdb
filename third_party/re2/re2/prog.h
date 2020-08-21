@@ -84,10 +84,10 @@ class Prog {
     int out()       { return out_opcode_>>4; }
     int out1()      { DCHECK(opcode() == kInstAlt || opcode() == kInstAltMatch); return out1_; }
     int cap()       { DCHECK_EQ(opcode(), kInstCapture); return cap_; }
-    int lo()        { DCHECK_EQ(opcode(), kInstByteRange); return lo_; }
-    int hi()        { DCHECK_EQ(opcode(), kInstByteRange); return hi_; }
-    int foldcase()  { DCHECK_EQ(opcode(), kInstByteRange); return hint_foldcase_&1; }
-    int hint()      { DCHECK_EQ(opcode(), kInstByteRange); return hint_foldcase_>>1; }
+    int lo()        { DCHECK_EQ(opcode(), kInstByteRange); return inst_byte_range_data_.lo_; }
+    int hi()        { DCHECK_EQ(opcode(), kInstByteRange); return inst_byte_range_data_.hi_; }
+    int foldcase()  { DCHECK_EQ(opcode(), kInstByteRange); return inst_byte_range_data_.hint_foldcase_&1; }
+    int hint()      { DCHECK_EQ(opcode(), kInstByteRange); return inst_byte_range_data_.hint_foldcase_>>1; }
     int match_id()  { DCHECK_EQ(opcode(), kInstMatch); return match_id_; }
     EmptyOp empty() { DCHECK_EQ(opcode(), kInstEmptyWidth); return empty_; }
 
@@ -103,7 +103,7 @@ class Prog {
       DCHECK_EQ(opcode(), kInstByteRange);
       if (foldcase() && 'A' <= c && c <= 'Z')
         c += 'a' - 'A';
-      return lo_ <= c && c <= hi_;
+      return inst_byte_range_data_.lo_ <= c && c <= inst_byte_range_data_.hi_;
     }
 
     // Returns string representation for debugging.
@@ -155,7 +155,7 @@ class Prog {
                            //   means there are no remaining possibilities,
                            //   which is most likely for character classes.
                            //   foldcase: A-Z -> a-z before checking range.
-      };
+      } inst_byte_range_data_;
 
       EmptyOp empty_;       // opcode == kInstEmptyWidth
                             //   empty_ is bitwise OR of kEmpty* flags above.

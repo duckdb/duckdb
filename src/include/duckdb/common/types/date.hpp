@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -20,6 +21,7 @@ public:
 	static string_t MonthNamesAbbreviated[12];
 	static string_t DayNames[7];
 	static string_t DayNamesAbbreviated[7];
+
 public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromString(string str, bool strict = false);
