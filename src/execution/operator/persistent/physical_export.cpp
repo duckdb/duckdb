@@ -61,10 +61,10 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 			info.options["quote"].push_back(Value("\""));
 		}
 	}
-	for (auto &info : info.options) {
-		ss << ", " << info.first << " ";
-		if (info.second.size() == 1) {
-			WriteValueAsSQL(ss, info.second[0]);
+	for (auto &copy_option : info.options) {
+		ss << ", " << copy_option.first << " ";
+		if (copy_option.second.size() == 1) {
+			WriteValueAsSQL(ss, copy_option.second[0]);
 		} else {
 			// FIXME handle multiple options
 			throw NotImplementedException("FIXME: serialize list of options");
