@@ -36,6 +36,10 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		// first fill in the new header
 		header_buffer.Clear();
 		MainHeader *main_header = (MainHeader *)header_buffer.buffer;
+		main_header->magic[0] = 'D';
+		main_header->magic[1] = 'U';
+		main_header->magic[2] = 'C';
+		main_header->magic[3] = 'K';
 		main_header->version_number = VERSION_NUMBER;
 		// now write the header to the file
 		header_buffer.Write(*handle, 0);
@@ -64,11 +68,20 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		// otherwise, we check the metadata of the file
 		header_buffer.Read(*handle, 0);
 		header = *((MainHeader *)header_buffer.buffer);
+		if (header.magic[0] != 'D' || header.magic[1] != 'U' || header.magic[2] != 'C' || header.magic[3] != 'K') {
+			throw IOException("The file is not a valid DuckDB database file!");
+
+		}
 		// check the version number
 		if (header.version_number != VERSION_NUMBER) {
 			throw IOException(
-			    "Trying to read a database file with version number %lld, but we can only read version %lld",
-			    header.version_number, VERSION_NUMBER);
+			    "Trying to read a database file with version number %lld, but we can only read version %lld.\n"
+				"The database file was created with an %s version of DuckDB.\n\n"
+				"The storage of DuckDB is not yet stable; newer versions of DuckDB cannot read old database files and vice versa.\n"
+				"The storage will be stabilized when version 1.0 releases.\n\n"
+				"For now, we recommend that you load the database file in a supported version of DuckDB, and use the EXPORT DATABASE command "
+				"followed by IMPORT DATABASE on the current version of DuckDB.",
+			    header.version_number, VERSION_NUMBER, VERSION_NUMBER > header.version_number ? "older" : "newer");
 		}
 		// read the database headers from disk
 		DatabaseHeader h1, h2;

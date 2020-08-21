@@ -1270,17 +1270,23 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				fprintf(stderr, "%s:%d: load cannot be called in a loop\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
+			bool readonly = string(sScript.azToken[2]) == "readonly";
 			dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
 			if (dbpath.empty() || dbpath == ":memory:") {
 				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n",
 				        zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			// delete the target database file, if it exists
-			DeleteDatabase(dbpath);
-
+			if (!readonly) {
+				// delete the target database file, if it exists
+				DeleteDatabase(dbpath);
+			}
 			// set up the config file
 			config = GetTestConfig();
+			if (readonly) {
+				config->use_temporary_directory = false;
+				config->access_mode = AccessMode::READ_ONLY;
+			}
 			// now create the database file
 			LoadDatabase(dbpath);
 		} else if (strcmp(sScript.azToken[0], "restart") == 0) {

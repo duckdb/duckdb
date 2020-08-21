@@ -25,6 +25,9 @@ using block_id_t = int64_t;
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
 //! file.
 struct MainHeader {
+	// the magic bytes in front of the file
+	// should be "DUCK"
+	char magic[4];
 	//! The version of the database
 	uint64_t version_number;
 	//! The set of flags used by the database
