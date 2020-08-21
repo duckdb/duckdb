@@ -55,7 +55,8 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto &struct_children = arguments[0]->return_type.child_types();
 	if (struct_children.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");
@@ -63,8 +64,8 @@ static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, Scal
 
 	auto &key_child = arguments[1];
 
-	if (arguments[1]->return_type.id() != LogicalTypeId::VARCHAR || key_child->return_type.id() != LogicalTypeId::VARCHAR ||
-	    !key_child->IsFoldable()) {
+	if (arguments[1]->return_type.id() != LogicalTypeId::VARCHAR ||
+	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());

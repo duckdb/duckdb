@@ -321,6 +321,7 @@ struct ParquetScanFunctionData : public TableFunctionData {
 	static constexpr uint8_t GZIP_HEADER_MINSIZE = 10;
 	static constexpr uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
 	static constexpr unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
+
 public:
 	void ReadChunk(DataChunk &output);
 	void PrepareChunkBuffer(idx_t col_idx);
@@ -353,6 +354,7 @@ public:
 			}
 		}
 	}
+
 public:
 	int64_t current_group;
 	int64_t group_offset;
@@ -380,8 +382,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 		throw runtime_error("Ran out of bytes to read header from. File corrupt?");
 	}
 	PageHeader page_hdr;
-	thrift_unpack((const uint8_t *)col_data.buf.ptr + col_data.chunk_offset, (uint32_t *)&page_header_len,
-					&page_hdr);
+	thrift_unpack((const uint8_t *)col_data.buf.ptr + col_data.chunk_offset, (uint32_t *)&page_header_len, &page_hdr);
 
 	// the payload starts behind the header, obvsl.
 	col_data.buf.inc(page_header_len);
@@ -397,7 +398,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 	case CompressionCodec::SNAPPY: {
 		col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
 		auto res =
-			snappy::RawUncompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr);
+		    snappy::RawUncompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr);
 		if (!res) {
 			throw runtime_error("Decompression failure");
 		}
@@ -428,7 +429,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 		auto gzip_hdr = (const unsigned char *)col_data.buf.ptr;
 
 		if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B || gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE ||
-			gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
+		    gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
 			throw Exception("Input is invalid/unsupported GZIP stream");
 		}
 
@@ -491,7 +492,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 			// immediately convert timestamps to duckdb format, potentially fewer conversions
 			for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
 				((timestamp_t *)col_data.dict.ptr)[dict_index] =
-					impala_timestamp_to_timestamp_t(((Int96 *)col_data.payload.ptr)[dict_index]);
+				    impala_timestamp_to_timestamp_t(((Int96 *)col_data.payload.ptr)[dict_index]);
 			}
 
 			break;
@@ -520,13 +521,13 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 				switch (utf_type) {
 				case UnicodeType::ASCII:
 					FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-						StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
+					    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
 					break;
 				case UnicodeType::UNICODE:
 					// this regrettably copies to normalize
 					FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-						StringVector::AddString(append_chunk->data[0],
-												Utf8Proc::Normalize(string(col_data.payload.ptr, str_len)));
+					    StringVector::AddString(append_chunk->data[0],
+					                            Utf8Proc::Normalize(string(col_data.payload.ptr, str_len)));
 
 					break;
 				case UnicodeType::INVALID:
@@ -567,8 +568,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 			// read length of define payload, always
 			uint32_t def_length = col_data.payload.read<uint32_t>();
 			col_data.payload.available(def_length);
-			col_data.defined_decoder =
-				make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
+			col_data.defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
 			col_data.payload.inc(def_length);
 		} break;
 		default:
@@ -580,7 +580,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 		case Encoding::PLAIN_DICTIONARY: {
 			auto enc_length = col_data.payload.read<uint8_t>();
 			col_data.dict_decoder =
-				make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, col_data.payload.len, enc_length);
+			    make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, col_data.payload.len, enc_length);
 			break;
 		}
 		case Encoding::PLAIN:
@@ -629,15 +629,13 @@ void ParquetScanFunctionData::PrepareChunkBuffer(idx_t col_idx) {
 	}
 }
 
-
 void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 	if (finished) {
 		return;
 	}
 
 	// see if we have to switch to the next row group in the parquet file
-	if (current_group < 0 ||
-		group_offset >= file_meta_data.row_groups[current_group].num_rows) {
+	if (current_group < 0 || group_offset >= file_meta_data.row_groups[current_group].num_rows) {
 
 		current_group++;
 		group_offset = 0;
@@ -692,7 +690,7 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 			}
 
 			auto current_batch_size =
-				std::min(col_data.page_value_count - col_data.page_offset, output.size() - output_offset);
+			    std::min(col_data.page_value_count - col_data.page_offset, output.size() - output_offset);
 
 			assert(current_batch_size > 0);
 
@@ -732,8 +730,7 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 					_fill_from_dict<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
 				case LogicalTypeId::TIMESTAMP:
-					_fill_from_dict<timestamp_t>(col_data, current_batch_size, output.data[out_col_idx],
-													output_offset);
+					_fill_from_dict<timestamp_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
 				case LogicalTypeId::VARCHAR: {
 					if (!col_data.string_collection) {
@@ -756,7 +753,7 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 							auto &vec = chunk->data[0];
 
 							out_data_ptr[i + output_offset] =
-								FlatVector::GetData<string_t>(vec)[offset % STANDARD_VECTOR_SIZE];
+							    FlatVector::GetData<string_t>(vec)[offset % STANDARD_VECTOR_SIZE];
 						} else {
 							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 						}
@@ -791,12 +788,10 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 					break;
 				}
 				case LogicalTypeId::INTEGER:
-					_fill_from_plain<int32_t>(col_data, current_batch_size, output.data[out_col_idx],
-												output_offset);
+					_fill_from_plain<int32_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
 				case LogicalTypeId::BIGINT:
-					_fill_from_plain<int64_t>(col_data, current_batch_size, output.data[out_col_idx],
-												output_offset);
+					_fill_from_plain<int64_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
 				case LogicalTypeId::FLOAT:
 					_fill_from_plain<float>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
@@ -808,7 +803,7 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 					for (idx_t i = 0; i < current_batch_size; i++) {
 						if (col_data.defined_buf.ptr[i]) {
 							((timestamp_t *)FlatVector::GetData(output.data[out_col_idx]))[i + output_offset] =
-								impala_timestamp_to_timestamp_t(col_data.payload.read<Int96>());
+							    impala_timestamp_to_timestamp_t(col_data.payload.read<Int96>());
 						} else {
 							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 						}
@@ -822,7 +817,7 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 							uint32_t str_len = col_data.payload.read<uint32_t>();
 							col_data.payload.available(str_len);
 							FlatVector::GetData<string_t>(output.data[out_col_idx])[i + output_offset] =
-								StringVector::AddString(output.data[out_col_idx], col_data.payload.ptr, str_len);
+							    StringVector::AddString(output.data[out_col_idx], col_data.payload.ptr, str_len);
 							col_data.payload.inc(str_len);
 						} else {
 							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
@@ -854,7 +849,8 @@ public:
 		supports_projection = true;
 	}
 
-	static unique_ptr<FunctionData> ReadParquetHeader(string file_name, vector<LogicalType> &return_types, vector<string> &names) {
+	static unique_ptr<FunctionData> ReadParquetHeader(string file_name, vector<LogicalType> &return_types,
+	                                                  vector<string> &names) {
 		auto res = make_unique<ParquetScanFunctionData>();
 
 		auto &pfile = res->pfile;
@@ -953,7 +949,8 @@ public:
 			}
 			if (has_expected_types) {
 				if (return_types[col_idx - 1] != type) {
-					throw NotImplementedException("PARQUET file contains type %s, could not auto cast to type %s", type.ToString(), return_types[col_idx - 1].ToString());
+					throw NotImplementedException("PARQUET file contains type %s, could not auto cast to type %s",
+					                              type.ToString(), return_types[col_idx - 1].ToString());
 				}
 			} else {
 				names.push_back(s_ele.name);
@@ -969,15 +966,16 @@ public:
 		return move(res);
 	}
 
-	static unique_ptr<FunctionData> parquet_read_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-												vector<LogicalType> &expected_types) {
+	static unique_ptr<FunctionData> parquet_read_bind(ClientContext &context, CopyInfo &info,
+	                                                  vector<string> &expected_names,
+	                                                  vector<LogicalType> &expected_types) {
 		for (auto &option : info.options) {
 			throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 		}
 		auto data = ReadParquetHeader(info.file_path, expected_types, expected_names);
 		// FIXME: hacky
 		auto &pdata = (ParquetScanFunctionData &)*data;
-		for(idx_t i = 0; i < expected_types.size(); i++) {
+		for (idx_t i = 0; i < expected_types.size(); i++) {
 			pdata.column_ids.push_back(i);
 		}
 		return data;
@@ -994,7 +992,8 @@ public:
 		return make_unique<GlobalFunctionData>();
 	}
 
-	static void parquet_read_function(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data, DataChunk &output) {
+	static void parquet_read_function(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data,
+	                                  DataChunk &output) {
 		auto &data = (ParquetScanFunctionData &)bind_data;
 		data.ReadChunk(output);
 	}

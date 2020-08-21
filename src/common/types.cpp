@@ -132,7 +132,7 @@ const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
                                                   LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
-                                                  LogicalType::DOUBLE, LogicalType::DECIMAL};
+                                                  LogicalType::DOUBLE,  LogicalType::DECIMAL};
 
 const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
                                                    LogicalType::BIGINT, LogicalType::HUGEINT};
@@ -140,7 +140,7 @@ const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, Logical
 const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BOOLEAN, LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
     LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
-    LogicalType::BLOB,    LogicalType::INTERVAL,  LogicalType::HUGEINT, LogicalType::DECIMAL};
+    LogicalType::BLOB,    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL};
 // TODO add LIST/STRUCT here
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
@@ -553,7 +553,8 @@ LogicalType MaxLogicalType(LogicalType left, LogicalType right) {
 			}
 		} else if (left.id() == LogicalTypeId::DECIMAL) {
 			// use max width/scale of the two types
-			return LogicalType(LogicalTypeId::DECIMAL, max<uint8_t>(left.width(), right.width()), max<uint8_t>(left.scale(), right.scale()));
+			return LogicalType(LogicalTypeId::DECIMAL, max<uint8_t>(left.width(), right.width()),
+			                   max<uint8_t>(left.scale(), right.scale()));
 		} else {
 			// types are equal but no extra specifier: just return the type
 			// FIXME: LIST and STRUCT?

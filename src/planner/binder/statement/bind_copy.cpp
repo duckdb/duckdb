@@ -116,7 +116,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		auto statement = make_unique<SelectNode>();
 		statement->from_table = move(ref);
 		if (stmt.info->select_list.size() > 0) {
-			for(auto &name : stmt.info->select_list) {
+			for (auto &name : stmt.info->select_list) {
 				statement->select_list.push_back(make_unique<ColumnRefExpression>(name));
 			}
 		} else {

@@ -166,21 +166,26 @@ struct HugeintSumOperation : public BaseSumOperation {
 
 AggregateFunction GetSumAggregate(LogicalType type) {
 	// all integers sum to hugeint (FIXME: statistics for overflow prevention?)
-	switch(type.id()) {
+	switch (type.id()) {
 	case LogicalTypeId::SMALLINT:
-		return AggregateFunction::UnaryAggregate<sum_state_t, int16_t, hugeint_t, IntegerSumOperation>(LogicalType::SMALLINT, LogicalType::HUGEINT);
+		return AggregateFunction::UnaryAggregate<sum_state_t, int16_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::SMALLINT, LogicalType::HUGEINT);
 	case LogicalTypeId::INTEGER:
-		return AggregateFunction::UnaryAggregate<sum_state_t, int32_t, hugeint_t, IntegerSumOperation>(LogicalType::INTEGER, LogicalType::HUGEINT);
+		return AggregateFunction::UnaryAggregate<sum_state_t, int32_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::INTEGER, LogicalType::HUGEINT);
 	case LogicalTypeId::BIGINT:
-		return AggregateFunction::UnaryAggregate<sum_state_t, int64_t, hugeint_t, IntegerSumOperation>(LogicalType::BIGINT, LogicalType::HUGEINT);
+		return AggregateFunction::UnaryAggregate<sum_state_t, int64_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::BIGINT, LogicalType::HUGEINT);
 	case LogicalTypeId::HUGEINT:
-		return AggregateFunction::UnaryAggregate<hugeint_sum_state_t, hugeint_t, hugeint_t, HugeintSumOperation>(LogicalType::HUGEINT, LogicalType::HUGEINT);
+		return AggregateFunction::UnaryAggregate<hugeint_sum_state_t, hugeint_t, hugeint_t, HugeintSumOperation>(
+		    LogicalType::HUGEINT, LogicalType::HUGEINT);
 	default:
 		throw NotImplementedException("Unimplemented sum aggregate");
 	}
 }
 
-unique_ptr<FunctionData> bind_decimal_sum(ClientContext &context, AggregateFunction &function, vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> bind_decimal_sum(ClientContext &context, AggregateFunction &function,
+                                          vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
 		function = GetSumAggregate(LogicalType::SMALLINT);
@@ -199,7 +204,8 @@ unique_ptr<FunctionData> bind_decimal_sum(ClientContext &context, AggregateFunct
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// decimal
-	sum.AddFunction(AggregateFunction({ LogicalType::DECIMAL }, LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, bind_decimal_sum));
+	sum.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+	                                  nullptr, nullptr, bind_decimal_sum));
 	sum.AddFunction(GetSumAggregate(LogicalType::SMALLINT));
 	sum.AddFunction(GetSumAggregate(LogicalType::INTEGER));
 	sum.AddFunction(GetSumAggregate(LogicalType::BIGINT));
@@ -208,7 +214,6 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	// FIXME: implement http://ic.ese.upenn.edu/pdf/parallel_fpaccum_tc2016.pdf for parallel FP sums
 	sum.AddFunction(AggregateFunction::UnaryAggregate<numeric_sum_state_t, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-
 
 	set.AddFunction(sum);
 }

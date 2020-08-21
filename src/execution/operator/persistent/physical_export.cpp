@@ -11,19 +11,19 @@
 namespace duckdb {
 using namespace std;
 
-static void WriteCatalogEntries(stringstream& ss, vector<CatalogEntry*> &entries) {
-	for(auto &entry : entries) {
+static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entries) {
+	for (auto &entry : entries) {
 		ss << entry->ToSQL() << std::endl;
 	}
 	ss << std::endl;
 }
 
-static void WriteStringStreamToFile(FileSystem &fs, stringstream& ss, string path) {
+static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, string path) {
 	auto ss_string = ss.str();
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, FileLockType::WRITE_LOCK);
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
+	                          FileLockType::WRITE_LOCK);
 	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
 	handle.reset();
-
 }
 
 static void WriteValueAsSQL(stringstream &ss, Value &val) {
@@ -34,11 +34,13 @@ static void WriteValueAsSQL(stringstream &ss, Value &val) {
 	}
 }
 
-static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEntry *table, CopyInfo &info, CopyFunction &function) {
+static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEntry *table, CopyInfo &info,
+                               CopyFunction &function) {
 	string table_file_path;
 	ss << "COPY ";
 	if (table->schema->name != DEFAULT_SCHEMA) {
-		table_file_path = fs.JoinPath(info.file_path, StringUtil::Format("%s.%s.%s", table->schema->name, table->name, function.extension));
+		table_file_path = fs.JoinPath(
+		    info.file_path, StringUtil::Format("%s.%s.%s", table->schema->name, table->name, function.extension));
 		ss << table->schema->name << ".";
 	} else {
 		table_file_path = fs.JoinPath(info.file_path, StringUtil::Format("%s.%s", table->name, function.extension));
@@ -51,16 +53,15 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 		if (info.options.find("header") == info.options.end()) {
 			info.options["header"].push_back(Value::INTEGER(0));
 		}
-		if (info.options.find("delimiter") == info.options.end() &&
-			info.options.find("sep") == info.options.end() &&
-			info.options.find("delim") == info.options.end()) {
+		if (info.options.find("delimiter") == info.options.end() && info.options.find("sep") == info.options.end() &&
+		    info.options.find("delim") == info.options.end()) {
 			info.options["delimiter"].push_back(Value(","));
 		}
 		if (info.options.find("quote") == info.options.end()) {
 			info.options["quote"].push_back(Value("\""));
 		}
 	}
-	for(auto &info : info.options) {
+	for (auto &info : info.options) {
 		ss << ", " << info.first << " ";
 		if (info.second.size() == 1) {
 			WriteValueAsSQL(ss, info.second[0]);
@@ -77,11 +78,11 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 
 	// gather all catalog types to export
-	vector<CatalogEntry*> schemas;
-	vector<CatalogEntry*> sequences;
-	vector<CatalogEntry*> tables;
-	vector<CatalogEntry*> views;
-	vector<CatalogEntry*> indexes;
+	vector<CatalogEntry *> schemas;
+	vector<CatalogEntry *> sequences;
+	vector<CatalogEntry *> tables;
+	vector<CatalogEntry *> views;
+	vector<CatalogEntry *> indexes;
 
 	auto &transaction = Transaction::GetTransaction(ccontext);
 	Catalog::GetCatalog(ccontext).schemas->Scan(transaction, [&](CatalogEntry *entry) {
@@ -97,12 +98,8 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 				views.push_back(entry);
 			}
 		});
-		schema->sequences.Scan(transaction, [&](CatalogEntry *entry) {
-			sequences.push_back(entry);
-		});
-		schema->indexes.Scan(transaction, [&](CatalogEntry *entry) {
-			indexes.push_back(entry);
-		});
+		schema->sequences.Scan(transaction, [&](CatalogEntry *entry) { sequences.push_back(entry); });
+		schema->indexes.Scan(transaction, [&](CatalogEntry *entry) { indexes.push_back(entry); });
 	});
 
 	// write the schema.sql file
@@ -120,8 +117,8 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	for(auto &table : tables) {
-		WriteCopyStatement(fs, load_ss, (TableCatalogEntry *) table, *info, function);
+	for (auto &table : tables) {
+		WriteCopyStatement(fs, load_ss, (TableCatalogEntry *)table, *info, function);
 	}
 	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state->finished = true;

@@ -1,6 +1,6 @@
 # name: test/sql/export/parquet_export.test
 # description: Test EXPORT/IMPORT database with parquet
-# group: [parquet]
+# group: [export]
 
 require parquet
 

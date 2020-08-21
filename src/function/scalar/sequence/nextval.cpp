@@ -88,7 +88,8 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
-static unique_ptr<FunctionData> nextval_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> nextval_bind(ClientContext &context, ScalarFunction &bound_function,
+                                             vector<unique_ptr<Expression>> &arguments) {
 	SequenceCatalogEntry *sequence = nullptr;
 	if (arguments[0]->IsFoldable()) {
 		string schema, seq;

@@ -89,6 +89,7 @@ public:
 	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &source);
 
 	string ToSQL() override;
+
 private:
 	//! Add a catalog entry to this schema
 	CatalogEntry *AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict);

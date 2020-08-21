@@ -231,19 +231,20 @@ idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vect
 
 vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
 	vector<LogicalType> types;
-	for(auto &argument : arguments) {
+	for (auto &argument : arguments) {
 		types.push_back(argument->return_type);
 	}
 	return types;
-
 }
 
-idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments) {
+idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions,
+                             vector<unique_ptr<Expression>> &arguments) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types);
 }
 
-idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<unique_ptr<Expression>> &arguments) {
+idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions,
+                             vector<unique_ptr<Expression>> &arguments) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types);
 }
@@ -271,8 +272,8 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	// bind the function
 	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, schema, name);
 	assert(function && function->type == CatalogType::SCALAR_FUNCTION);
-	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function,
-	                                          move(children), is_operator);
+	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, move(children),
+	                                          is_operator);
 }
 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
@@ -298,11 +299,14 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	bound_function.CastToFunctionArguments(children);
 
 	// now create the function
-	return make_unique<BoundFunctionExpression>(bound_function.return_type, move(bound_function), move(children), move(bind_info), is_operator);
+	return make_unique<BoundFunctionExpression>(bound_function.return_type, move(bound_function), move(children),
+	                                            move(bind_info), is_operator);
 }
 
-unique_ptr<BoundAggregateExpression>
-AggregateFunction::BindAggregateFunction(ClientContext &context, AggregateFunction bound_function, vector<unique_ptr<Expression>> children, bool is_distinct) {
+unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(ClientContext &context,
+                                                                              AggregateFunction bound_function,
+                                                                              vector<unique_ptr<Expression>> children,
+                                                                              bool is_distinct) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);

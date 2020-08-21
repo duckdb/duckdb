@@ -21,7 +21,7 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 		bool try_cast_as_integer = true;
 		bool try_cast_as_decimal = true;
 		int decimal_position = -1;
-		for(idx_t i = 0; i < str_val.GetSize(); i++) {
+		for (idx_t i = 0; i < str_val.GetSize(); i++) {
 			if (val.val.str[i] == '.') {
 				// decimal point: cast as either decimal or double
 				try_cast_as_integer = false;

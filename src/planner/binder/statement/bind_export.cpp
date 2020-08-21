@@ -37,7 +37,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		auto schema = (SchemaCatalogEntry *)entry;
 		schema->tables.Scan(transaction, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE) {
-				tables.push_back((TableCatalogEntry *) entry);
+				tables.push_back((TableCatalogEntry *)entry);
 			}
 		});
 	});
@@ -45,16 +45,19 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
 	unique_ptr<LogicalOperator> child_operator;
-	for(auto &table : tables) {
+	for (auto &table : tables) {
 		auto info = make_unique<CopyInfo>();
 		// we copy the options supplied to the EXPORT
 		info->format = stmt.info->format;
 		info->options = stmt.info->options;
 		// set up the file name for the COPY TO
 		if (table->schema->name == DEFAULT_SCHEMA) {
-			info->file_path = fs.JoinPath(stmt.info->file_path, StringUtil::Format("%s.%s", table->name, copy_function->function.extension));
+			info->file_path = fs.JoinPath(stmt.info->file_path,
+			                              StringUtil::Format("%s.%s", table->name, copy_function->function.extension));
 		} else {
-			info->file_path = fs.JoinPath(stmt.info->file_path, StringUtil::Format("%s.%s.%s", table->schema->name, table->name, copy_function->function.extension));
+			info->file_path =
+			    fs.JoinPath(stmt.info->file_path, StringUtil::Format("%s.%s.%s", table->schema->name, table->name,
+			                                                         copy_function->function.extension));
 		}
 		info->is_from = false;
 		info->schema = table->schema->name;
@@ -68,7 +71,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		auto bound_statement = copy_binder.Bind(copy_stmt);
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union = make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator), move(bound_statement.plan), LogicalOperatorType::UNION);
+			auto copy_union = make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
+			                                                   move(bound_statement.plan), LogicalOperatorType::UNION);
 			child_operator = move(copy_union);
 		} else {
 			child_operator = move(bound_statement.plan);

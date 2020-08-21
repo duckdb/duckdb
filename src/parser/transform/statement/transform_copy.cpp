@@ -53,7 +53,6 @@ void Transformer::TransformCopyOptions(CopyInfo &info, PGList *options) {
 			break;
 		}
 	}
-
 }
 
 unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {

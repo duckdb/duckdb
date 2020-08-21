@@ -22,6 +22,7 @@ class NumericHelper {
 public:
 	static int64_t PowersOfTen[20];
 	static double DoublePowersOfTen[40];
+
 public:
 	template <class T> static int UnsignedLength(T value);
 	template <class SIGNED, class UNSIGNED> static int SignedLength(SIGNED value) {
@@ -73,8 +74,7 @@ template <> int NumericHelper::UnsignedLength(uint32_t value);
 template <> int NumericHelper::UnsignedLength(uint64_t value);
 
 struct DecimalToString {
-	template<class SIGNED, class UNSIGNED>
-	static int DecimalLength(SIGNED value, uint8_t scale) {
+	template <class SIGNED, class UNSIGNED> static int DecimalLength(SIGNED value, uint8_t scale) {
 		if (scale == 0) {
 			// scale is 0: regular number
 			return NumericHelper::SignedLength<SIGNED, UNSIGNED>(value);
@@ -89,7 +89,7 @@ struct DecimalToString {
 		return std::max(scale + 2 + (value < 0 ? 1 : 0), NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
 	}
 
-	template<class SIGNED, class UNSIGNED>
+	template <class SIGNED, class UNSIGNED>
 	static void FormatDecimal(SIGNED value, uint8_t scale, char *dst, idx_t len) {
 		char *end = dst + len;
 		if (value < 0) {
@@ -103,12 +103,12 @@ struct DecimalToString {
 		// we write two numbers:
 		// the numbers BEFORE the decimal (major)
 		// and the numbers AFTER the decimal (minor)
-		UNSIGNED minor = value % (UNSIGNED) NumericHelper::PowersOfTen[scale];
-		UNSIGNED major = value / (UNSIGNED) NumericHelper::PowersOfTen[scale];
+		UNSIGNED minor = value % (UNSIGNED)NumericHelper::PowersOfTen[scale];
+		UNSIGNED major = value / (UNSIGNED)NumericHelper::PowersOfTen[scale];
 		// write the number after the decimal
 		dst = NumericHelper::FormatUnsigned<UNSIGNED>(minor, end);
 		// (optionally) pad with zeros and add the decimal point
-		while(dst > (end - scale)) {
+		while (dst > (end - scale)) {
 			*--dst = '0';
 		}
 		*--dst = '.';
@@ -124,7 +124,6 @@ struct DecimalToString {
 		return result;
 	}
 };
-
 
 struct HugeintToStringCast {
 	static int UnsignedLength(hugeint_t value) {
@@ -289,7 +288,7 @@ struct HugeintToStringCast {
 		// write the number after the decimal
 		dst = FormatUnsigned(minor, endptr);
 		// (optionally) pad with zeros and add the decimal point
-		while(dst > (endptr - scale)) {
+		while (dst > (endptr - scale)) {
 			*--dst = '0';
 		}
 		*--dst = '.';
@@ -310,4 +309,4 @@ struct HugeintToStringCast {
 	}
 };
 
-}
+} // namespace duckdb

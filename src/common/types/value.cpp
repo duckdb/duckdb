@@ -147,8 +147,7 @@ Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
-	assert(width >= Decimal::MAX_WIDTH_INT16 &&
-	       width <= Decimal::MAX_WIDTH_INT32);
+	assert(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
 	result.value_.integer = value;
 	result.is_null = false;
@@ -172,8 +171,7 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
-	assert(width >= Decimal::MAX_WIDTH_INT64 &&
-	       width <= Decimal::MAX_WIDTH_INT128);
+	assert(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
 	result.value_.hugeint = value;
 	result.is_null = false;

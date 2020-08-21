@@ -20,6 +20,7 @@ public:
 	static constexpr uint8_t MAX_WIDTH_INT64 = 18;
 	static constexpr uint8_t MAX_WIDTH_INT128 = 38;
 	static constexpr uint8_t MAX_WIDTH_DECIMAL = MAX_WIDTH_INT128;
+
 public:
 	static string ToString(int16_t value, uint8_t scale);
 	static string ToString(int32_t value, uint8_t scale);

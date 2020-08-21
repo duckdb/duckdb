@@ -22,7 +22,8 @@ class ScalarFunctionCatalogEntry;
 //! The type used for scalar functions
 typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_function_t;
 //! Binds the scalar function and creates the function data
-typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments);
+typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function,
+                                                           vector<unique_ptr<Expression>> &arguments);
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
@@ -51,13 +52,13 @@ public:
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
 	                                                              vector<unique_ptr<Expression>> children,
 	                                                              bool is_operator = false);
-	static unique_ptr<BoundFunctionExpression>
-	BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &function,
-	                   vector<unique_ptr<Expression>> children, bool is_operator = false);
-
+	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
+	                                                              ScalarFunctionCatalogEntry &function,
+	                                                              vector<unique_ptr<Expression>> children,
+	                                                              bool is_operator = false);
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, ScalarFunction bound_function,
-                                                                  vector<unique_ptr<Expression>> children,
+	                                                              vector<unique_ptr<Expression>> children,
 	                                                              bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {

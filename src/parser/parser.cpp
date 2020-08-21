@@ -42,17 +42,17 @@ void Parser::ParseQuery(string query) {
 	}
 
 	// check if there are any PragmaStatements that we need to handle
-	for(idx_t i = 0; i < transformed_statements.size(); i++) {
+	for (idx_t i = 0; i < transformed_statements.size(); i++) {
 		if (transformed_statements[i]->type == StatementType::PRAGMA_STATEMENT) {
 			// PRAGMA statement: check if we need to replace it by a new set of statements
 			PragmaHandler handler;
-			auto new_query = handler.HandlePragma(*((PragmaStatement&) *transformed_statements[i]).info);
+			auto new_query = handler.HandlePragma(*((PragmaStatement &)*transformed_statements[i]).info);
 			if (!new_query.empty()) {
 				// this PRAGMA statement gets replaced by a new query string
 				// push the new query string through the parser again and add it to the transformer
 				Parser parser;
 				parser.ParseQuery(new_query);
-				for(auto &stmt : parser.statements) {
+				for (auto &stmt : parser.statements) {
 					statements.push_back(move(stmt));
 				}
 				continue;

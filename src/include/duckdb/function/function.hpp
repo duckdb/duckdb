@@ -65,11 +65,13 @@ public:
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! or throws an exception if none could be found.
 	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments);
-	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions,
+	                          vector<unique_ptr<Expression>> &arguments);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
 	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments);
-	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<unique_ptr<Expression>> &arguments);
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions,
+	                          vector<unique_ptr<Expression>> &arguments);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
 	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments);

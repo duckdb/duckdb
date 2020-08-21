@@ -432,14 +432,14 @@ string TableCatalogEntry::ToSQL() {
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	unordered_set<idx_t> not_null_columns;
 	unordered_set<string> pk_columns;
-	for(auto &constraint : constraints) {
+	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {
-			auto &not_null = (NotNullConstraint&) *constraint;
+			auto &not_null = (NotNullConstraint &)*constraint;
 			not_null_columns.insert(not_null.index);
 		} else if (constraint->type == ConstraintType::UNIQUE) {
-			auto &pk = (UniqueConstraint&) *constraint;
+			auto &pk = (UniqueConstraint &)*constraint;
 			if (pk.is_primary_key) {
-				for(auto &col : pk.columns) {
+				for (auto &col : pk.columns) {
 					pk_columns.insert(col);
 				}
 			}
@@ -453,12 +453,12 @@ string TableCatalogEntry::ToSQL() {
 		auto &column = columns[i];
 		ss << column.name << " " << column.type.ToString();
 		if (not_null_columns.find(column.oid) != not_null_columns.end() &&
-			pk_columns.find(column.name) == pk_columns.end()) {
+		    pk_columns.find(column.name) == pk_columns.end()) {
 			// NOT NULL but not a priamry key column
 			ss << " NOT NULL";
 		}
 	}
-	for(idx_t i = 0; i < constraints.size(); i++) {
+	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &constraint = constraints[i];
 		if (constraint->type == ConstraintType::NOT_NULL) {
 			// handled above

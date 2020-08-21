@@ -9,7 +9,7 @@ namespace duckdb {
 
 string UniqueConstraint::ToString() const {
 	string base = is_primary_key ? "PRIMARY KEY(" : "UNIQUE(";
-	for(idx_t i = 0; i < columns.size(); i++) {
+	for (idx_t i = 0; i < columns.size(); i++) {
 		if (i > 0) {
 			base += ", ";
 		}
@@ -57,4 +57,4 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &source) {
 	}
 }
 
-}
+} // namespace duckdb

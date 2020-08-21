@@ -92,7 +92,8 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	vector<unique_ptr<Expression>> children;
 	children.push_back(move(date_part.children[1]));
 
-	return ScalarFunction::BindScalarFunction(rewriter.context, DEFAULT_SCHEMA, new_function_name, move(children), false);
+	return ScalarFunction::BindScalarFunction(rewriter.context, DEFAULT_SCHEMA, new_function_name, move(children),
+	                                          false);
 }
 
 } // namespace duckdb

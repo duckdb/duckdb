@@ -54,7 +54,8 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 		fs.CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
 	}
 	Connection con(db);
-	auto result = con.Query(StringUtil::Format("EXPORT DATABASE '%s' (FORMAT CSV)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
+	auto result = con.Query(
+	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT CSV)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
 	if (!result->success) {
 		throw Exception("Failed to save database: " + result->error);
 	}

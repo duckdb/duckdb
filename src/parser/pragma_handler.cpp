@@ -44,8 +44,10 @@ string PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 			throw ParserException("Invalid PRAGMA show_tables: show_tables does not take any arguments");
 		}
 		// PRAGMA table_info but with some aliases
-		return StringUtil::Format("SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
-		    "NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info('%s')", pragma.parameters[0].ToString());
+		return StringUtil::Format(
+		    "SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
+		    "NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info('%s')",
+		    pragma.parameters[0].ToString());
 	} else if (keyword == "version") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {
 			throw ParserException("Invalid PRAGMA version: cannot be called");
@@ -68,8 +70,8 @@ string PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		FileSystem fs;
 		string query;
 		// read the "shema.sql" and "load.sql" files
-		vector<string> files = { "schema.sql", "load.sql" };
-		for(auto &file : files) {
+		vector<string> files = {"schema.sql", "load.sql"};
+		for (auto &file : files) {
 			auto file_path = fs.JoinPath(pragma.parameters[0].ToString(), file);
 			auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
 			auto fsize = fs.GetFileSize(*handle);

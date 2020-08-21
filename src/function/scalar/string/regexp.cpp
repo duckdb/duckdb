@@ -107,7 +107,8 @@ template <class OP> static void regexp_matches_function(DataChunk &args, Express
 	}
 }
 
-static unique_ptr<FunctionData> regexp_matches_get_bind_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> regexp_matches_get_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                                 vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	assert(arguments.size() == 2 || arguments.size() == 3);
 	RE2::Options options;
@@ -166,7 +167,8 @@ unique_ptr<FunctionData> RegexpReplaceBindData::Copy() {
 	return move(copy);
 }
 
-static unique_ptr<FunctionData> regexp_replace_bind_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> regexp_replace_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                             vector<unique_ptr<Expression>> &arguments) {
 	auto data = make_unique<RegexpReplaceBindData>();
 	data->options.set_log_errors(false);
 	if (arguments.size() == 4) {

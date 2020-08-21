@@ -1,4 +1,4 @@
-# name: test/sql/types/decimal/test_decimal_numeric_cast.test
+# name: test/sql/types/decimal/cast_to_decimal.test
 # description: Test casting from numeric to decimal
 # group: [decimal]
 

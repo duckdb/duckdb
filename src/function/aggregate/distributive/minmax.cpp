@@ -187,8 +187,9 @@ struct MaxOperationString : public StringMinMaxBase {
 	}
 };
 
-template<class OP>
-unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateFunction &function, vector<unique_ptr<Expression>> &arguments) {
+template <class OP>
+unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateFunction &function,
+                                              vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
 		function = GetUnaryAggregate<OP>(LogicalType::SMALLINT);
@@ -211,7 +212,8 @@ template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunc
 			    AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
 			        type.id(), type.id()));
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
-			set.AddFunction(AggregateFunction({ type }, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, bind_decimal_min_max<OP>));
+			set.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+			                                  bind_decimal_min_max<OP>));
 		} else {
 			set.AddFunction(GetUnaryAggregate<OP>(type));
 		}

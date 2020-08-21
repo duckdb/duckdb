@@ -16,7 +16,7 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 	int modifier_idx = 0;
 	if (type_name->typmods) {
 		for (auto node = type_name->typmods->head; node; node = node->next) {
-			auto &const_val = *((PGAConst*)node->data.ptr_value);
+			auto &const_val = *((PGAConst *)node->data.ptr_value);
 			if (const_val.type != T_PGAConst || const_val.val.type != T_PGInteger) {
 				throw ParserException("Expected an integer constant as type modifier");
 			}
@@ -33,7 +33,7 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 			modifier_idx++;
 		}
 	}
-	switch(base_type.id()) {
+	switch (base_type.id()) {
 	case LogicalTypeId::VARCHAR:
 		if (modifier_idx > 1) {
 			throw ParserException("VARCHAR only supports a single modifier");
@@ -47,7 +47,7 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 			scale = 0;
 		}
 		if (width <= 0 || width > Decimal::MAX_WIDTH_DECIMAL) {
-			throw ParserException("Width must be between 1 and %d!", (int) Decimal::MAX_WIDTH_DECIMAL);
+			throw ParserException("Width must be between 1 and %d!", (int)Decimal::MAX_WIDTH_DECIMAL);
 		}
 		if (scale > width) {
 			throw ParserException("Scale cannot be bigger than width");

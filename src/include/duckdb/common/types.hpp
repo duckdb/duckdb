@@ -309,6 +309,7 @@ struct LogicalType {
 	int NumericTypeOrder() const;
 
 	void Verify() const;
+
 private:
 	LogicalTypeId id_;
 	uint8_t width_;

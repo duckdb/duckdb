@@ -544,7 +544,8 @@ struct StrfTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> strftime_bind_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> strftime_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
@@ -940,7 +941,8 @@ struct StrpTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> strptime_bind_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> strptime_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}

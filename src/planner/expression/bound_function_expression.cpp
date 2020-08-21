@@ -9,7 +9,7 @@ using namespace std;
 
 BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
-												 unique_ptr<FunctionData> bind_info, bool is_operator)
+                                                 unique_ptr<FunctionData> bind_info, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
       function(bound_function), children(move(arguments)), bind_info(move(bind_info)), is_operator(is_operator) {
 }
@@ -58,7 +58,8 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	}
 	unique_ptr<FunctionData> new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, move(new_children), move(new_bind_info), is_operator);
+	auto copy = make_unique<BoundFunctionExpression>(return_type, function, move(new_children), move(new_bind_info),
+	                                                 is_operator);
 	copy->CopyProperties(*this);
 	return move(copy);
 }

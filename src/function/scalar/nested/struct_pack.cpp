@@ -32,7 +32,8 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
 	set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type

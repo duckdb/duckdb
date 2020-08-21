@@ -44,7 +44,8 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> list_value_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> list_value_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	child_list_t<LogicalType> child_types;
 	if (arguments.size() > 0) {

@@ -32,7 +32,8 @@ static void random_function(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-unique_ptr<FunctionData> random_bind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> random_bind(ClientContext &context, ScalarFunction &bound_function,
+                                     vector<unique_ptr<Expression>> &arguments) {
 	uniform_real_distribution<double> dist(0, 1);
 	return make_unique<RandomBindData>(context, move(dist));
 }

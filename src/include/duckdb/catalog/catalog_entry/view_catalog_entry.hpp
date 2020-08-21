@@ -41,6 +41,7 @@ public:
 	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &source);
 
 	string ToSQL() override;
+
 private:
 	void Initialize(CreateViewInfo *info);
 };

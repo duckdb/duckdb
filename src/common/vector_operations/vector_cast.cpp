@@ -37,9 +37,8 @@ static void null_cast(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template<class T>
-static void to_decimal_cast(Vector &source, Vector &result, idx_t count) {
-	switch(result.type.InternalType()) {
+template <class T> static void to_decimal_cast(Vector &source, Vector &result, idx_t count) {
+	switch (result.type.InternalType()) {
 	case PhysicalType::INT16:
 		UnaryExecutor::Execute<T, int16_t, true>(source, result, count, [&](T input) {
 			return CastToDecimal::Operation<T, int16_t>(input, result.type.width(), result.type.scale());
@@ -65,9 +64,8 @@ static void to_decimal_cast(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template<class T>
-static void from_decimal_cast(Vector &source, Vector &result, idx_t count) {
-	switch(source.type.InternalType()) {
+template <class T> static void from_decimal_cast(Vector &source, Vector &result, idx_t count) {
+	switch (source.type.InternalType()) {
 	case PhysicalType::INT16:
 		UnaryExecutor::Execute<int16_t, T, true>(source, result, count, [&](int16_t input) {
 			return CastFromDecimal::Operation<int16_t, T>(input, source.type.width(), source.type.scale());
@@ -93,8 +91,7 @@ static void from_decimal_cast(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template<class T>
-static void decimal_decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
+template <class T> static void decimal_decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
 	source.type.Verify();
 	result.type.Verify();
 
@@ -102,26 +99,22 @@ static void decimal_decimal_cast_switch(Vector &source, Vector &result, idx_t co
 	if (result.type.scale() >= source.type.scale()) {
 		// multiply
 		int64_t multiply_factor = NumericHelper::PowersOfTen[result.type.scale() - source.type.scale()];
-		switch(result.type.InternalType()) {
+		switch (result.type.InternalType()) {
 		case PhysicalType::INT16:
-			UnaryExecutor::Execute<T, int16_t, true>(source, result, count, [&](T input) {
-				return Cast::Operation<T, int16_t>(input * multiply_factor);
-			});
+			UnaryExecutor::Execute<T, int16_t, true>(
+			    source, result, count, [&](T input) { return Cast::Operation<T, int16_t>(input * multiply_factor); });
 			break;
 		case PhysicalType::INT32:
-			UnaryExecutor::Execute<T, int32_t, true>(source, result, count, [&](T input) {
-				return Cast::Operation<T, int32_t>(input * multiply_factor);
-			});
+			UnaryExecutor::Execute<T, int32_t, true>(
+			    source, result, count, [&](T input) { return Cast::Operation<T, int32_t>(input * multiply_factor); });
 			break;
 		case PhysicalType::INT64:
-			UnaryExecutor::Execute<T, int64_t, true>(source, result, count, [&](T input) {
-				return Cast::Operation<T, int64_t>(input * multiply_factor);
-			});
+			UnaryExecutor::Execute<T, int64_t, true>(
+			    source, result, count, [&](T input) { return Cast::Operation<T, int64_t>(input * multiply_factor); });
 			break;
 		case PhysicalType::INT128:
-			UnaryExecutor::Execute<T, hugeint_t, true>(source, result, count, [&](T input) {
-				return Cast::Operation<T, hugeint_t>(input * multiply_factor);
-			});
+			UnaryExecutor::Execute<T, hugeint_t, true>(
+			    source, result, count, [&](T input) { return Cast::Operation<T, hugeint_t>(input * multiply_factor); });
 			break;
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal");
@@ -129,26 +122,22 @@ static void decimal_decimal_cast_switch(Vector &source, Vector &result, idx_t co
 	} else {
 		// divide
 		int64_t divide_factor = NumericHelper::PowersOfTen[source.type.scale() - result.type.scale()];
-		switch(result.type.InternalType()) {
+		switch (result.type.InternalType()) {
 		case PhysicalType::INT16:
-			UnaryExecutor::Execute<T, int16_t, true>(source, result, count, [&](T input) {
-				return Cast::Operation<T, int16_t>(input / divide_factor);
-			});
+			UnaryExecutor::Execute<T, int16_t, true>(
+			    source, result, count, [&](T input) { return Cast::Operation<T, int16_t>(input / divide_factor); });
 			break;
 		case PhysicalType::INT32:
-			UnaryExecutor::Execute<T, int32_t, true>(source, result, count, [&](T input) {
-				return Cast::Operation<T, int32_t>(input / divide_factor);
-			});
+			UnaryExecutor::Execute<T, int32_t, true>(
+			    source, result, count, [&](T input) { return Cast::Operation<T, int32_t>(input / divide_factor); });
 			break;
 		case PhysicalType::INT64:
-			UnaryExecutor::Execute<T, int64_t, true>(source, result, count, [&](T input) {
-				return Cast::Operation<T, int64_t>(input / divide_factor);
-			});
+			UnaryExecutor::Execute<T, int64_t, true>(
+			    source, result, count, [&](T input) { return Cast::Operation<T, int64_t>(input / divide_factor); });
 			break;
 		case PhysicalType::INT128:
-			UnaryExecutor::Execute<T, hugeint_t, true>(source, result, count, [&](T input) {
-				return Cast::Operation<T, hugeint_t>(input / divide_factor);
-			});
+			UnaryExecutor::Execute<T, hugeint_t, true>(
+			    source, result, count, [&](T input) { return Cast::Operation<T, hugeint_t>(input / divide_factor); });
 			break;
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal");
@@ -180,7 +169,7 @@ static void decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
 	case LogicalTypeId::DECIMAL: {
 		// decimal to decimal cast
 		// first we need to figure out the source and target internal types
-		switch(source.type.InternalType()) {
+		switch (source.type.InternalType()) {
 		case PhysicalType::INT16:
 			decimal_decimal_cast_switch<int16_t>(source, result, count);
 			break;
@@ -205,25 +194,29 @@ static void decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
 		from_decimal_cast<double>(source, result, count);
 		break;
 	case LogicalTypeId::VARCHAR: {
-		switch(source.type.InternalType()) {
+		switch (source.type.InternalType()) {
 		case PhysicalType::INT16:
 			UnaryExecutor::Execute<int16_t, string_t, true>(source, result, count, [&](int16_t input) {
-				return StringCastFromDecimal::Operation<int16_t>(input, source.type.width(), source.type.scale(), result);
+				return StringCastFromDecimal::Operation<int16_t>(input, source.type.width(), source.type.scale(),
+				                                                 result);
 			});
 			break;
 		case PhysicalType::INT32:
 			UnaryExecutor::Execute<int32_t, string_t, true>(source, result, count, [&](int32_t input) {
-				return StringCastFromDecimal::Operation<int32_t>(input, source.type.width(), source.type.scale(), result);
+				return StringCastFromDecimal::Operation<int32_t>(input, source.type.width(), source.type.scale(),
+				                                                 result);
 			});
 			break;
 		case PhysicalType::INT64:
 			UnaryExecutor::Execute<int64_t, string_t, true>(source, result, count, [&](int64_t input) {
-				return StringCastFromDecimal::Operation<int64_t>(input, source.type.width(), source.type.scale(), result);
+				return StringCastFromDecimal::Operation<int64_t>(input, source.type.width(), source.type.scale(),
+				                                                 result);
 			});
 			break;
 		case PhysicalType::INT128:
 			UnaryExecutor::Execute<hugeint_t, string_t, true>(source, result, count, [&](hugeint_t input) {
-				return StringCastFromDecimal::Operation<hugeint_t>(input, source.type.width(), source.type.scale(), result);
+				return StringCastFromDecimal::Operation<hugeint_t>(input, source.type.width(), source.type.scale(),
+				                                                   result);
 			});
 			break;
 		default:
@@ -283,8 +276,7 @@ template <class SRC> static void numeric_cast_switch(Vector &source, Vector &res
 	}
 }
 
-template <class OP>
-static void string_cast_numeric_switch(Vector &source, Vector &result, idx_t count) {
+template <class OP> static void string_cast_numeric_switch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.type.id()) {
 	case LogicalTypeId::BOOLEAN:

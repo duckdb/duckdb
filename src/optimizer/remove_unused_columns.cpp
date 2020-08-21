@@ -61,7 +61,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
 				aggr.expressions.push_back(
-					AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, false));
+				    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, false));
 			}
 		}
 

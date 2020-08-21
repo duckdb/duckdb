@@ -1,4 +1,4 @@
-# name: test/sql/storage_version/storage_version.test
+# name: test/sql/storage_version/storage_version.test_slow
 # description: Storage version test checks whether or not the storage version needs to be incremented. If this test fails, re-generate the database file
 # group: [storage_version]
 
