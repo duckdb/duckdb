@@ -1,6 +1,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
+#include <arrow/python/pyarrow.h>
+#include <arrow/status.h>
+#include <arrow/c/bridge.h>
+#include <arrow/table.h>
+
 #include <unordered_map>
 #include <vector>
 
@@ -649,6 +654,44 @@ struct DuckDBPyConnection {
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 	}
 
+	unique_ptr<DuckDBPyRelation> from_arrow_table(py::object table) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		};
+		if (!arrow::py::is_table(table.ptr())) {
+			throw runtime_error("Only arrow tables supported");
+		}
+		// TODO .ValueOrDie() is a bit extreme
+		auto arrow_table = arrow::py::unwrap_table(table.ptr()).ValueOrDie();
+
+		duckdb::idx_t col_idx = 0;
+		auto my_arrow_table = new duckdb::DuckDBArrowTable(arrow_table->num_columns());
+
+		for (auto &col : arrow_table->columns()) {
+			auto st = arrow::ExportField(*arrow_table->schema()->field(col_idx), &my_arrow_table->schemas[col_idx]);
+			if (!st.ok()) {
+				throw duckdb::InternalException("arrow schema export failed: ", st.message());
+			}
+			my_arrow_table->columns[col_idx].resize(col->num_chunks());
+			duckdb::idx_t chunk_idx = 0;
+			for (auto &chunk : col->chunks()) {
+				st = arrow::ExportArray(*chunk, &my_arrow_table->columns[col_idx][chunk_idx]);
+				if (!st.ok()) {
+					throw duckdb::InternalException("arrow array export failed: ", st.message());
+				}
+				chunk_idx++;
+			}
+			col_idx++;
+		}
+
+		void *table_ptr = my_arrow_table;
+		string name = "arrow_table_" + ptr_to_string(table_ptr);
+
+		// TODO we leak my_arrow_table atm
+		return make_unique<DuckDBPyRelation>(
+		    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)table_ptr)})->Alias(name));
+	}
+
 	DuckDBPyConnection *unregister_df(string name) {
 		registered_dfs[name] = py::none();
 		return this;
@@ -808,6 +851,10 @@ struct DuckDBPyRelation {
 
 	static unique_ptr<DuckDBPyRelation> from_parquet(string filename) {
 		return default_connection()->from_parquet(filename);
+	}
+
+	static unique_ptr<DuckDBPyRelation> from_arrow_table(py::object table) {
+		return default_connection()->from_arrow_table(table);
 	}
 
 	unique_ptr<DuckDBPyRelation> project(string expr) {
@@ -1018,6 +1065,8 @@ PYBIND11_MODULE(duckdb, m) {
 	             py::arg("parameters") = py::list())
 	        .def("from_df", &DuckDBPyConnection::from_df, "Create a relation object from the Data.Frame in df",
 	             py::arg("df"))
+	        .def("from_arrow_table", &DuckDBPyConnection::from_arrow_table,
+	             "Create a relation object from an Arrow table", py::arg("table"))
 	        .def("df", &DuckDBPyConnection::from_df,
 	             "Create a relation object from the Data.Frame in df (alias of from_df)", py::arg("df"))
 	        .def("from_csv_auto", &DuckDBPyConnection::from_csv_auto,
@@ -1087,6 +1136,9 @@ PYBIND11_MODULE(duckdb, m) {
 	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"));
 	m.def("df", &DuckDBPyRelation::from_df, "Create a relation object from the Data.Frame df", py::arg("df"));
 	m.def("from_df", &DuckDBPyRelation::from_df, "Create a relation object from the Data.Frame df", py::arg("df"));
+	m.def("from_arrow_table", &DuckDBPyRelation::from_arrow_table, "Create a relation object from an Arrow table",
+	      py::arg("tab;e"));
+
 	m.def("filter", &DuckDBPyRelation::filter_df, "Filter the Data.Frame df by the filter in filter_expr",
 	      py::arg("df"), py::arg("filter_expr"));
 	m.def("project", &DuckDBPyRelation::project_df, "Project the Data.Frame df by the projection in project_expr",

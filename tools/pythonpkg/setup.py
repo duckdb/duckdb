@@ -62,10 +62,16 @@ class get_numpy_include(object):
         return numpy.get_include()
 
 
+class get_pyarrow_include(object):
+    def __str__(self):
+        import pyarrow
+        return pyarrow.get_include()
+
+
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
     libduckdb = Extension('duckdb',
-        include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
+        include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True), get_pyarrow_include()],
         sources=['duckdb_python.cpp', 'duckdb.cpp', 'parquet-extension.cpp'],
         extra_compile_args=toolchain_args,
         extra_link_args=toolchain_args,
@@ -78,7 +84,7 @@ else:
     libs += ['-L' + os.path.join(existing_duckdb_dir, 'extension', 'icu'), '-licu_extension']
 
     libduckdb = Extension('duckdb',
-        include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
+        include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True), get_pyarrow_include()],
         sources=['duckdb_python.cpp'],
         extra_compile_args=toolchain_args,
         extra_link_args=toolchain_args + libs,
