@@ -487,43 +487,61 @@ struct DuckDBPyResult {
 		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy());
 	}
 
+	static void release_duckdb_arrow_schema(ArrowSchema *schema) {
+	}
+
+	static void release_duckdb_arrow_array(ArrowArray *array) {
+	}
+
 	py::object fetch_arrow_table() {
 		if (!result) {
 			throw runtime_error("result closed");
 		}
 
 		auto rb_class = py::module::import("pyarrow").attr("lib").attr("RecordBatch");
+
 		ArrowSchema schema;
 		auto schema_children = (ArrowSchema *)malloc(result->column_count() * sizeof(ArrowSchema));
 
 		schema.format = "+s"; // struct apparently
 		schema.n_children = result->column_count();
-		schema.release = nullptr; // TODO ??
+		schema.release = release_duckdb_arrow_schema;
+		schema.flags = 0;
+		schema.metadata = nullptr;
+		schema.name = "duckdb_query_result";
+		schema.dictionary = nullptr;
 
 		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
 			auto &child = schema_children[col_idx];
 			child.name = result->names[col_idx].c_str();
+			child.n_children = 0;
+			child.children = nullptr;
+			child.flags = 0;
+			child.metadata = nullptr;
+			child.release = release_duckdb_arrow_schema;
+			child.dictionary = nullptr;
+
 			switch (result->types[col_idx].id()) {
 			case LogicalTypeId::TINYINT:
-				schema.format = "c";
+				child.format = "c";
 				break;
 			case LogicalTypeId::SMALLINT:
-				schema.format = "s";
+				child.format = "s";
 				break;
 			case LogicalTypeId::INTEGER:
-				schema.format = "i";
+				child.format = "i";
 				break;
 			case LogicalTypeId::BIGINT:
-				schema.format = "l";
+				child.format = "l";
 				break;
 			case LogicalTypeId::FLOAT:
-				schema.format = "f";
+				child.format = "f";
 				break;
 			case LogicalTypeId::DOUBLE:
-				schema.format = "g";
+				child.format = "g";
 				break;
 			case LogicalTypeId::VARCHAR:
-				schema.format = "u";
+				child.format = "u";
 				break;
 			default:
 				throw runtime_error("Unsupported type " + result->types[col_idx].ToString());
@@ -538,12 +556,25 @@ struct DuckDBPyResult {
 		data.offset = 0;
 		data.length = data_chunk->size();
 		data.n_children = result->column_count();
-		data.release = nullptr; // TODO ??
+		data.null_count = -1;
+		data.dictionary = nullptr;
+		data.release = release_duckdb_arrow_array;
+		data.n_buffers = 1;
+		nullmask_t data_nullmask;
+		data_nullmask.all();
+		data.buffers[0] = &data_nullmask;
 
 		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
 			auto &child = data_children[col_idx];
-			child.buffers = (const void **)malloc(sizeof(void *) * 3);
+			child.buffers = (const void **)malloc(sizeof(void *) * 2); // FIXME for strings
+			child.n_buffers = 2;                                       // FIXME
+			child.n_children = 0;
 			child.length = data_chunk->size();
+			child.null_count = -1;
+			child.offset = 0;
+			child.dictionary = nullptr;
+			data.release = release_duckdb_arrow_array;
+
 			auto &vector = data_chunk->data[col_idx];
 			switch (vector.vector_type) {
 				// TODO support other vector types
@@ -570,7 +601,8 @@ struct DuckDBPyResult {
 			data.children[col_idx] = &child;
 		}
 
-		return rb_class.attr("_import_from_c")(&data, &schema);
+		auto res = rb_class.attr("_import_from_c")((uint64_t)&data, (uint64_t)&schema);
+		return py::none();
 	}
 
 	py::list description() {
