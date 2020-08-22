@@ -658,7 +658,7 @@ struct DuckDBPyConnection {
 		if (!connection) {
 			throw runtime_error("connection closed");
 		};
-		if (!arrow::py::is_table(table.ptr())) {
+		if (table.is_none() || !arrow::py::is_table(table.ptr())) {
 			throw runtime_error("Only arrow tables supported");
 		}
 		// TODO .ValueOrDie() is a bit extreme
