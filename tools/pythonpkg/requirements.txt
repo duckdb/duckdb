@@ -1,3 +1,2 @@
 numpy>=1.14
 pybind11>=2.4
-pyarrow>=1.0.0

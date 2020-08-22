@@ -60,21 +60,14 @@ struct ArrowArray {
 
 namespace duckdb {
 struct DuckDBArrowTable {
-	const char *tag = "THIS_IS_SPARTAA";
 
-	DuckDBArrowTable(duckdb::idx_t ncol) {
-		schemas.resize(ncol);
-		columns.resize(ncol);
-	}
 	~DuckDBArrowTable() {
-		for (duckdb::idx_t col_idx = 0; col_idx < schemas.size(); col_idx++) {
-			schemas[col_idx].release(&schemas[col_idx]);
-			for (duckdb::idx_t chunk_idx = 0; chunk_idx < columns[col_idx].size(); chunk_idx++) {
-				columns[col_idx][chunk_idx].release(&columns[col_idx][chunk_idx]);
-			}
+		schema.release(&schema);
+		for (duckdb::idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
+			chunks[chunk_idx].release(&chunks[chunk_idx]);
 		}
 	}
-	std::vector<ArrowSchema> schemas;
-	std::vector<std::vector<ArrowArray>> columns; // with chunks
+	ArrowSchema schema;
+	std::vector<ArrowArray> chunks; // with chunks
 };
 } // namespace duckdb

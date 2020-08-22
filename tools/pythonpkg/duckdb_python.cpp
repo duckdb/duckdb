@@ -1,11 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
-#include <arrow/python/pyarrow.h>
-#include <arrow/status.h>
-#include <arrow/c/bridge.h>
-#include <arrow/table.h>
-
 #include <unordered_map>
 #include <vector>
 
@@ -492,6 +487,92 @@ struct DuckDBPyResult {
 		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy());
 	}
 
+	py::object fetch_arrow_table() {
+		if (!result) {
+			throw runtime_error("result closed");
+		}
+
+		auto rb_class = py::module::import("pyarrow").attr("lib").attr("RecordBatch");
+		ArrowSchema schema;
+		auto schema_children = (ArrowSchema *)malloc(result->column_count() * sizeof(ArrowSchema));
+
+		schema.format = "+s"; // struct apparently
+		schema.n_children = result->column_count();
+		schema.release = nullptr; // TODO ??
+
+		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
+			auto &child = schema_children[col_idx];
+			child.name = result->names[col_idx].c_str();
+			switch (result->types[col_idx].id()) {
+			case LogicalTypeId::TINYINT:
+				schema.format = "c";
+				break;
+			case LogicalTypeId::SMALLINT:
+				schema.format = "s";
+				break;
+			case LogicalTypeId::INTEGER:
+				schema.format = "i";
+				break;
+			case LogicalTypeId::BIGINT:
+				schema.format = "l";
+				break;
+			case LogicalTypeId::FLOAT:
+				schema.format = "f";
+				break;
+			case LogicalTypeId::DOUBLE:
+				schema.format = "g";
+				break;
+			case LogicalTypeId::VARCHAR:
+				schema.format = "u";
+				break;
+			default:
+				throw runtime_error("Unsupported type " + result->types[col_idx].ToString());
+			}
+			schema.children[col_idx] = &child;
+		}
+
+		auto data_chunk = result->Fetch();
+		ArrowArray data;
+		auto data_children = (ArrowArray *)malloc(result->column_count() * sizeof(ArrowArray));
+
+		data.offset = 0;
+		data.length = data_chunk->size();
+		data.n_children = result->column_count();
+		data.release = nullptr; // TODO ??
+
+		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
+			auto &child = data_children[col_idx];
+			child.buffers = (const void **)malloc(sizeof(void *) * 3);
+			child.length = data_chunk->size();
+			auto &vector = data_chunk->data[col_idx];
+			switch (vector.vector_type) {
+				// TODO support other vector types
+			case VectorType::FLAT_VECTOR:
+				child.null_count = FlatVector::Nullmask(vector).count();
+				child.buffers[0] = (void *)&FlatVector::Nullmask(vector).flip();
+				switch (result->types[col_idx].id()) {
+					// TODO support other data types
+				case LogicalTypeId::TINYINT:
+				case LogicalTypeId::SMALLINT:
+				case LogicalTypeId::INTEGER:
+				case LogicalTypeId::BIGINT:
+				case LogicalTypeId::FLOAT:
+				case LogicalTypeId::DOUBLE:
+					child.buffers[1] = (void *)FlatVector::GetData(vector);
+					break;
+				default:
+					throw runtime_error("Unsupported type " + result->types[col_idx].ToString());
+				}
+				break;
+			default:
+				throw NotImplementedException(VectorTypeToString(vector.vector_type));
+			}
+			data.children[col_idx] = &child;
+		}
+
+		return rb_class.attr("_import_from_c")(&data, &schema);
+	}
+
 	py::list description() {
 		py::list desc(result->names.size());
 		for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
@@ -658,36 +739,24 @@ struct DuckDBPyConnection {
 		if (!connection) {
 			throw runtime_error("connection closed");
 		};
-		if (table.is_none() || !arrow::py::is_table(table.ptr())) {
+
+		// the following is a careful dance around having to depend on pyarrow
+		if (table.is_none() || string(py::str(table.get_type().attr("__name__"))) != "Table") {
 			throw runtime_error("Only arrow tables supported");
 		}
-		// TODO .ValueOrDie() is a bit extreme
-		auto arrow_table = arrow::py::unwrap_table(table.ptr()).ValueOrDie();
 
-		duckdb::idx_t col_idx = 0;
-		auto my_arrow_table = new duckdb::DuckDBArrowTable(arrow_table->num_columns());
+		auto my_arrow_table = new duckdb::DuckDBArrowTable();
+		table.attr("schema").attr("_export_to_c")((uint64_t)&my_arrow_table->schema);
 
-		for (auto &col : arrow_table->columns()) {
-			auto st = arrow::ExportField(*arrow_table->schema()->field(col_idx), &my_arrow_table->schemas[col_idx]);
-			if (!st.ok()) {
-				throw duckdb::InternalException("arrow schema export failed: ", st.message());
-			}
-			my_arrow_table->columns[col_idx].resize(col->num_chunks());
-			duckdb::idx_t chunk_idx = 0;
-			for (auto &chunk : col->chunks()) {
-				st = arrow::ExportArray(*chunk, &my_arrow_table->columns[col_idx][chunk_idx]);
-				if (!st.ok()) {
-					throw duckdb::InternalException("arrow array export failed: ", st.message());
-				}
-				chunk_idx++;
-			}
-			col_idx++;
+		for (auto &batch : table.attr("to_batches")()) {
+			ArrowArray array;
+			batch.attr("_export_to_c")((uint64_t)&array);
+			my_arrow_table->chunks.push_back(array);
 		}
 
 		void *table_ptr = my_arrow_table;
 		string name = "arrow_table_" + ptr_to_string(table_ptr);
 
-		// TODO we leak my_arrow_table atm
 		return make_unique<DuckDBPyRelation>(
 		    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)table_ptr)})->Alias(name));
 	}
@@ -925,6 +994,15 @@ struct DuckDBPyRelation {
 		return res->fetchdf();
 	}
 
+	py::object to_arrow_table() {
+		auto res = make_unique<DuckDBPyResult>();
+		res->result = rel->Execute();
+		if (!res->result->success) {
+			throw runtime_error(res->result->error);
+		}
+		return res->fetch_arrow_table();
+	}
+
 	unique_ptr<DuckDBPyRelation> union_(DuckDBPyRelation *other) {
 		return make_unique<DuckDBPyRelation>(rel->Union(other->rel));
 	}
@@ -1082,6 +1160,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchnumpy", &DuckDBPyResult::fetchnumpy)
 	    .def("fetchdf", &DuckDBPyResult::fetchdf)
 	    .def("fetch_df", &DuckDBPyResult::fetchdf)
+	    .def("fetch_arrow_table", &DuckDBPyResult::fetch_arrow_table)
 	    .def("df", &DuckDBPyResult::fetchdf);
 
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
@@ -1124,6 +1203,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("create_view", &DuckDBPyRelation::create_view,
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
+	    .def("to_arrow_table", &DuckDBPyRelation::to_arrow_table, "Transforms the relation object into a Arrow table")
 	    .def("to_df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
 	    .def("df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
 	    .def("__str__", &DuckDBPyRelation::print)
