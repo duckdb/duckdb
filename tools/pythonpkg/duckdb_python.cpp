@@ -589,8 +589,6 @@ struct DuckDBPyResult {
 
 		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
 			auto &child = data_children[col_idx];
-			child.buffers = (const void **)malloc(sizeof(void *) * 2); // FIXME for strings
-			child.n_buffers = 2;                                       // FIXME
 			child.n_children = 0;
 			child.length = data_chunk->size();
 			child.null_count = -1;
@@ -607,8 +605,7 @@ struct DuckDBPyResult {
 			switch (vector.vector_type) {
 				// TODO support other vector types
 			case VectorType::FLAT_VECTOR:
-				child.null_count = FlatVector::Nullmask(vector).count();
-				child.buffers[0] = (void *)&FlatVector::Nullmask(vector).flip();
+
 				switch (result->types[col_idx].id()) {
 					// TODO support other data types
 				case LogicalTypeId::TINYINT:
@@ -617,11 +614,17 @@ struct DuckDBPyResult {
 				case LogicalTypeId::BIGINT:
 				case LogicalTypeId::FLOAT:
 				case LogicalTypeId::DOUBLE:
+					child.n_buffers = 2;
+					child.buffers = (const void **)malloc(sizeof(void *) * 2); // FIXME for strings
 					child.buffers[1] = (void *)FlatVector::GetData(vector);
 					break;
 				default:
 					throw runtime_error("Unsupported type " + result->types[col_idx].ToString());
 				}
+
+				child.null_count = FlatVector::Nullmask(vector).count();
+				child.buffers[0] = (void *)&FlatVector::Nullmask(vector).flip();
+
 				break;
 			default:
 				throw NotImplementedException(VectorTypeToString(vector.vector_type));
@@ -1274,6 +1277,7 @@ PYBIND11_MODULE(duckdb, m) {
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
 	    .def("to_arrow_table", &DuckDBPyRelation::to_arrow_table, "Transforms the relation object into a Arrow table")
+	    .def("arrow", &DuckDBPyRelation::to_arrow_table, "Transforms the relation object into a Arrow table")
 	    .def("to_df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
 	    .def("df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
 	    .def("__str__", &DuckDBPyRelation::print)
