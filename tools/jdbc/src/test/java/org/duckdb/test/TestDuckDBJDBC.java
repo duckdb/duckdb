@@ -719,6 +719,31 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	
+	public static void test_exotic_nulls() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT NULL::timestamp ts, NULL::date dt, NULL::time te");
+		assertTrue(rs.next());
+		assertNull(rs.getObject("ts"));
+		assertNull(rs.getTimestamp("ts"));
+
+		assertNull(rs.getObject("dt"));
+		assertNull(rs.getDate("dt"));
+		
+		assertNull(rs.getObject("te"));
+		assertNull(rs.getTime("te"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	
+	
 	public static void test_connect_wrong_url_bug848() throws Exception {
 		Driver d = new DuckDBDriver();
 		assertNull(d.connect("jdbc:h2:", null));

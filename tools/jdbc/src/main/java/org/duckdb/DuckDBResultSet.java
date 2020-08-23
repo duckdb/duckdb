@@ -361,14 +361,26 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Date getDate(int columnIndex) throws SQLException {
-		return Date.valueOf(getLazyString(columnIndex));
+		String string_value = getLazyString(columnIndex);
+		if (string_value == null) {
+			return null;
+		}
+		return Date.valueOf(string_value);
 	}
 
 	public Time getTime(int columnIndex) throws SQLException {
+		String string_value = getLazyString(columnIndex);
+		if (string_value == null) {
+			return null;
+		}
 		return Time.valueOf(getLazyString(columnIndex));
 	}
 
 	public Timestamp getTimestamp(int columnIndex) throws SQLException {
+		String string_value = getLazyString(columnIndex);
+		if (string_value == null) {
+			return null;
+		}
 		return Timestamp.valueOf(getLazyString(columnIndex));
 	}
 
