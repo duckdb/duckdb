@@ -11,6 +11,8 @@
 #include "duckdb/common/constants.hpp"
 
 namespace duckdb {
+class Serializer;
+class Deserializer;
 
 //! The version number of the database storage format
 extern const uint64_t VERSION_NUMBER;
@@ -25,13 +27,18 @@ using block_id_t = int64_t;
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
 //! file.
 struct MainHeader {
+	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
+	static constexpr idx_t FLAG_COUNT = 4;
 	// the magic bytes in front of the file
 	// should be "DUCK"
-	char magic[4];
+	static const char MAGIC_BYTES[];
 	//! The version of the database
 	uint64_t version_number;
 	//! The set of flags used by the database
-	uint64_t flags[4];
+	uint64_t flags[FLAG_COUNT];
+
+	void Serialize(Serializer &ser);
+	static MainHeader Deserialize(Deserializer &source);
 };
 
 //! The DatabaseHeader contains information about the current state of the database. Every storage file has two
@@ -48,6 +55,9 @@ struct DatabaseHeader {
 	//! The number of blocks that is in the file as of this database header. If the file is larger than BLOCK_SIZE *
 	//! block_count any blocks appearing AFTER block_count are implicitly part of the free_list.
 	uint64_t block_count;
+
+	void Serialize(Serializer &ser);
+	static DatabaseHeader Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb
