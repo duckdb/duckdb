@@ -491,7 +491,31 @@ struct DuckDBPyResult {
 	}
 
 	static void release_duckdb_arrow_array(ArrowArray *array) {
+		if (!array || !array->release || !array->private_data) {
+			return;
+		}
+		auto holder = (DuckDBArrowArrayHolder *)array->private_data;
+		delete holder;
+		free(array->buffers);
+		array->release = nullptr;
+		array->private_data = nullptr;
 	}
+
+	static void release_duckdb_arrow_array_root(ArrowArray *array) {
+		if (!array || !array->release || !array->buffers) {
+			return;
+		}
+		free(array->buffers);
+		array->buffers = nullptr;
+		array->release = nullptr;
+	}
+
+	struct DuckDBArrowArrayHolder {
+		DuckDBArrowArrayHolder() {
+			vector = make_unique<Vector>();
+		}
+		unique_ptr<Vector> vector;
+	};
 
 	py::object fetch_arrow_table() {
 		if (!result) {
@@ -558,13 +582,10 @@ struct DuckDBPyResult {
 		data.n_children = result->column_count();
 		data.null_count = 0;
 		data.dictionary = nullptr;
-		data.release = release_duckdb_arrow_array;
+		data.release = release_duckdb_arrow_array_root;
 		data.n_buffers = 1;
-		nullmask_t data_nullmask;
-		data_nullmask.all();
 		data.buffers = (const void **)malloc(sizeof(void *) * 1);
-
-		data.buffers[0] = &data_nullmask;
+		data.buffers[0] = nullptr;
 
 		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
 			auto &child = data_children[col_idx];
@@ -577,7 +598,12 @@ struct DuckDBPyResult {
 			child.dictionary = nullptr;
 			child.release = release_duckdb_arrow_array;
 
-			auto &vector = data_chunk->data[col_idx];
+			auto holder = new DuckDBArrowArrayHolder();
+			holder->vector->Reference(data_chunk->data[col_idx]);
+			child.private_data = holder;
+
+			auto &vector = *holder->vector;
+
 			switch (vector.vector_type) {
 				// TODO support other vector types
 			case VectorType::FLAT_VECTOR:
@@ -612,7 +638,6 @@ struct DuckDBPyResult {
 
 		py::list batches(1); // FIXME
 		batches[0] = record_batch;
-
 		auto res = from_batches_func(batches);
 		return res;
 	}
