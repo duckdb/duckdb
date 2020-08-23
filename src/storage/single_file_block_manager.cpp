@@ -119,6 +119,7 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		h2.meta_block = INVALID_BLOCK;
 		h2.free_list = INVALID_BLOCK;
 		h2.block_count = 0;
+		SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
 		header_buffer.Write(*handle, Storage::FILE_HEADER_SIZE * 2);
 		// ensure that writing to disk is completed before returning
 		handle->Sync();
