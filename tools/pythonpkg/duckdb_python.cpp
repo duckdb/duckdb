@@ -498,7 +498,7 @@ struct DuckDBPyResult {
 			throw runtime_error("result closed");
 		}
 
-		auto rb_class = py::module::import("pyarrow").attr("lib").attr("RecordBatch");
+		auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
 		ArrowSchema schema;
 		auto schema_children = (ArrowSchema *)malloc(result->column_count() * sizeof(ArrowSchema));
@@ -556,12 +556,14 @@ struct DuckDBPyResult {
 		data.offset = 0;
 		data.length = data_chunk->size();
 		data.n_children = result->column_count();
-		data.null_count = -1;
+		data.null_count = 0;
 		data.dictionary = nullptr;
 		data.release = release_duckdb_arrow_array;
 		data.n_buffers = 1;
 		nullmask_t data_nullmask;
 		data_nullmask.all();
+		data.buffers = (const void **)malloc(sizeof(void *) * 1);
+
 		data.buffers[0] = &data_nullmask;
 
 		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
@@ -573,7 +575,7 @@ struct DuckDBPyResult {
 			child.null_count = -1;
 			child.offset = 0;
 			child.dictionary = nullptr;
-			data.release = release_duckdb_arrow_array;
+			child.release = release_duckdb_arrow_array;
 
 			auto &vector = data_chunk->data[col_idx];
 			switch (vector.vector_type) {
@@ -601,8 +603,18 @@ struct DuckDBPyResult {
 			data.children[col_idx] = &child;
 		}
 
-		auto res = rb_class.attr("_import_from_c")((uint64_t)&data, (uint64_t)&schema);
-		return py::none();
+		auto record_batch_class = pyarrow_lib_module.attr("RecordBatch");
+		auto import_func = record_batch_class.attr("_import_from_c");
+		auto record_batch = import_func((uint64_t)&data, (uint64_t)&schema);
+
+		auto table_class = pyarrow_lib_module.attr("Table");
+		auto from_batches_func = table_class.attr("from_batches");
+
+		py::list batches(1); // FIXME
+		batches[0] = record_batch;
+
+		auto res = from_batches_func(batches);
+		return res;
 	}
 
 	py::list description() {
@@ -1193,6 +1205,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchdf", &DuckDBPyResult::fetchdf)
 	    .def("fetch_df", &DuckDBPyResult::fetchdf)
 	    .def("fetch_arrow_table", &DuckDBPyResult::fetch_arrow_table)
+	    .def("arrow", &DuckDBPyResult::fetch_arrow_table)
 	    .def("df", &DuckDBPyResult::fetchdf);
 
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
@@ -1249,8 +1262,9 @@ PYBIND11_MODULE(duckdb, m) {
 	m.def("df", &DuckDBPyRelation::from_df, "Create a relation object from the Data.Frame df", py::arg("df"));
 	m.def("from_df", &DuckDBPyRelation::from_df, "Create a relation object from the Data.Frame df", py::arg("df"));
 	m.def("from_arrow_table", &DuckDBPyRelation::from_arrow_table, "Create a relation object from an Arrow table",
-	      py::arg("tab;e"));
-
+	      py::arg("table"));
+	m.def("arrow", &DuckDBPyRelation::from_arrow_table, "Create a relation object from an Arrow table",
+	      py::arg("table"));
 	m.def("filter", &DuckDBPyRelation::filter_df, "Filter the Data.Frame df by the filter in filter_expr",
 	      py::arg("df"), py::arg("filter_expr"));
 	m.def("project", &DuckDBPyRelation::project_df, "Project the Data.Frame df by the projection in project_expr",

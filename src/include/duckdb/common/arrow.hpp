@@ -8,13 +8,12 @@
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
+#include <stdint.h>
 
-#ifndef ARROW_FLAG_DICTIONARY_ORDERED
-// see // see https://github.com/apache/arrow/blob/master/docs/source/format/CDataInterface.rst
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 #define ARROW_FLAG_DICTIONARY_ORDERED 1
 #define ARROW_FLAG_NULLABLE 2
 #define ARROW_FLAG_MAP_KEYS_SORTED 4
@@ -55,8 +54,10 @@ struct ArrowArray {
 #ifdef __cplusplus
 }
 #endif
-#endif
+
 // see also https://arrow.apache.org/docs/format/Columnar.html
+
+#include "duckdb/common/constants.hpp"
 
 namespace duckdb {
 struct DuckDBArrowTable {
