@@ -176,13 +176,13 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		int width, scale;
 		get_decimal_properties(arguments[i]->return_type, width, scale);
-		max_width = std::max<int>(width, max_width);
-		max_scale = std::max<int>(scale, max_scale);
-		max_width_over_scale = std::max<int>(width - scale, max_width_over_scale);
+		max_width = MaxValue<int>(width, max_width);
+		max_scale = MaxValue<int>(scale, max_scale);
+		max_width_over_scale = MaxValue<int>(width - scale, max_width_over_scale);
 	}
 	// for addition/subtraction, we add 1 to the width to ensure we don't overflow
 	// FIXME: use statistics to determine this
-	max_width = std::max(max_scale + max_width_over_scale, max_width) + 1;
+	max_width = MaxValue(max_scale + max_width_over_scale, max_width) + 1;
 	if (max_width > Decimal::MAX_WIDTH_DECIMAL) {
 		// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
 		max_width = Decimal::MAX_WIDTH_DECIMAL;
