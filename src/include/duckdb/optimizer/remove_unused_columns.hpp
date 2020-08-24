@@ -14,6 +14,7 @@
 
 namespace duckdb {
 class BoundColumnRefExpression;
+class ClientContext;
 
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public LogicalOperatorVisitor {

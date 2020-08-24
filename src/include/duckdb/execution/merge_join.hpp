@@ -95,8 +95,10 @@ struct MergeJoinSimple {
 	template idx_t MJCLASS::OPNAME::Operation<int16_t>(L & l, R & r);                                                  \
 	template idx_t MJCLASS::OPNAME::Operation<int32_t>(L & l, R & r);                                                  \
 	template idx_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                                  \
+	template idx_t MJCLASS::OPNAME::Operation<hugeint_t>(L & l, R & r);                                                \
 	template idx_t MJCLASS::OPNAME::Operation<float>(L & l, R & r);                                                    \
 	template idx_t MJCLASS::OPNAME::Operation<double>(L & l, R & r);                                                   \
+	template idx_t MJCLASS::OPNAME::Operation<interval_t>(L & l, R & r);                                               \
 	template idx_t MJCLASS::OPNAME::Operation<string_t>(L & l, R & r);
 
 } // namespace duckdb

@@ -36,7 +36,7 @@ matrix:
       script:
         - mkdir -p build/release
         - python3 scripts/amalgamation.py
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DDISABLE_UNITY=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
 
         - build/release/test/unittest "*"
         - python3.7 tools/shell/shell-test.py build/release/duckdb
@@ -61,7 +61,7 @@ matrix:
       script:
         - mkdir -p build/release
         - python3 scripts/amalgamation.py
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && travis_wait 30 cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DDISABLE_UNITY=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && travis_wait 30 cmake --build .)
 
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb
@@ -86,7 +86,7 @@ matrix:
 
       script:
         - C:/Python37-x64/python.exe scripts/amalgamation.py
-        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DAMALGAMATION_BUILD=1
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DDISABLE_UNITY=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release

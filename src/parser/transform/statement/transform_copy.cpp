@@ -3,6 +3,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 #include <cstring>
 
