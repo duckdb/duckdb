@@ -66,10 +66,6 @@ using namespace std;
 
 enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
 
-static bool CharIsSpace(char c) {
-	return c == ' ' || c == ' \t' || c == '\n' || c == '\v'  || c ==  '\f'  || c == '\r';
-}
-
 struct SQLLogicTestRunner {
 public:
 	void ExecuteFile(string script);
@@ -149,7 +145,7 @@ static int nextLine(Script *p) {
 		}
 
 		/* If the line consists of all spaces, make it an empty line */
-		for (i = i - 1; i >= p->iCur && CharIsSpace(p->zScript[i]); i--) {
+		for (i = i - 1; i >= p->iCur && StringUtil::CharacterIsSpace(p->zScript[i]); i--) {
 		}
 		if (i < p->iCur) {
 			p->zLine[0] = 0;
@@ -177,7 +173,7 @@ static int nextIsBlank(Script *p) {
 	int i = p->iNext;
 	if (i >= p->iEnd)
 		return 1;
-	while (i < p->iEnd && CharIsSpace(p->zScript[i])) {
+	while (i < p->iEnd && StringUtil::CharacterIsSpace(p->zScript[i])) {
 		if (p->zScript[i] == '\n')
 			return 1;
 		i++;
@@ -219,10 +215,10 @@ static int findStartOfNextRecord(Script *p) {
 static void findToken(const char *z, int *piStart, int *pLen) {
 	int i;
 	int iStart;
-	for (i = 0; CharIsSpace(z[i]); i++) {
+	for (i = 0; StringUtil::CharacterIsSpace(z[i]); i++) {
 	}
 	*piStart = iStart = i;
-	while (z[i] && !CharIsSpace(z[i])) {
+	while (z[i] && !StringUtil::CharacterIsSpace(z[i])) {
 		i++;
 	}
 	*pLen = i - iStart;

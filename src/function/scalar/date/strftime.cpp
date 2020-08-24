@@ -702,7 +702,7 @@ bool StrpTimeFormat::Parse(string_t str, int32_t result_data[], string &error_me
 	auto data = str.GetData();
 	idx_t size = str.GetSize();
 	// skip leading spaces
-	while (std::isspace(*data)) {
+	while (StringUtil::CharacterIsSpace(*data)) {
 		data++;
 		size--;
 	}
@@ -905,7 +905,7 @@ bool StrpTimeFormat::Parse(string_t str, int32_t result_data[], string &error_me
 		}
 	}
 	// skip trailing spaces
-	while (std::isspace(data[pos])) {
+	while (StringUtil::CharacterIsSpace(data[pos])) {
 		pos++;
 	}
 	if (pos != size) {

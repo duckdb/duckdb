@@ -10,6 +10,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "fmt/format.h"
 
 #include <cctype>
@@ -246,10 +247,10 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				// i.e. we accept "1." and ".1" as valid numbers, but not "."
 				return number_before_period || pos > start_digit;
 			}
-			if (std::isspace((unsigned char)buf[pos])) {
+			if (StringUtil::CharacterIsSpace(buf[pos])) {
 				// skip any trailing spaces
 				while (++pos < len) {
-					if (!std::isspace((unsigned char)buf[pos])) {
+					if (!StringUtil::CharacterIsSpace(buf[pos])) {
 						return false;
 					}
 				}
@@ -288,7 +289,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 template <class T, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation, bool ZERO_INITIALIZE = true>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
-	while (len > 0 && std::isspace(*buf)) {
+	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
 		buf++;
 		len--;
 	}
@@ -390,10 +391,10 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 				decimal_factor = 1;
 				pos++;
 				continue;
-			} else if (std::isspace((unsigned char)buf[pos])) {
+			} else if (StringUtil::CharacterIsSpace(buf[pos])) {
 				// skip any trailing spaces
 				while (++pos < len) {
-					if (!std::isspace((unsigned char)buf[pos])) {
+					if (!StringUtil::CharacterIsSpace(buf[pos])) {
 						return false;
 					}
 				}
@@ -442,7 +443,7 @@ template <> bool CheckDoubleValidity(double value) {
 
 template <class T> static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
-	while (len > 0 && std::isspace(*buf)) {
+	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
 		buf++;
 		len--;
 	}
