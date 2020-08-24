@@ -83,16 +83,23 @@ def cleanup_file(text):
 # recursively get all includes and write them
 written_files = {}
 
+def need_to_write_file(current_file, ignore_excluded = False):
+    if amal_dir in current_file:
+        return False
+    if current_file in always_excluded:
+        return False
+    if current_file.split(os.sep)[-1] in excluded_files and not ignore_excluded:
+        # file is in ignored files set
+        return False
+    if current_file in written_files:
+        # file is already written
+        return False
+    return True
+
 def write_file(current_file, ignore_excluded = False):
     global linenumbers
     global written_files
-    if current_file in always_excluded:
-        return ""
-    if current_file.split(os.sep)[-1] in excluded_files and not ignore_excluded:
-        # file is in ignored files set
-        return ""
-    if current_file in written_files:
-        # file is already written
+    if not need_to_write_file(current_file, ignore_excluded):
         return ""
     written_files[current_file] = True
 
@@ -121,17 +128,19 @@ def write_file(current_file, ignore_excluded = False):
     # now read the header and write it
     return cleanup_file(text)
 
-def write_dir(dir, sfile):
+def write_dir(dir):
     files = os.listdir(dir)
     files.sort()
+    text = ""
     for fname in files:
         if fname in excluded_files:
             continue
         fpath = os.path.join(dir, fname)
         if os.path.isdir(fpath):
-            write_dir(fpath, sfile)
+            text += write_dir(fpath)
         elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
-            sfile.write(write_file(fpath))
+            text += write_file(fpath)
+    return text
 
 def copy_if_different(src, dest):
     if os.path.isfile(dest):
@@ -149,19 +158,25 @@ def copy_if_different(src, dest):
 def git_commit_hash():
     return subprocess.check_output(['git','log','-1','--format=%h']).strip()
 
-def generate_amalgamation(source_file, header_file):
-    # now construct duckdb.hpp from these headers
+def write_license(hfile):
+    hfile.write("// See https://raw.githubusercontent.com/cwida/duckdb/master/LICENSE for licensing information\n\n")
+
+
+def generate_duckdb_hpp(header_file):
     print("-----------------------")
     print("-- Writing " + header_file + " --")
     print("-----------------------")
     with open(temp_header, 'w+') as hfile:
-        hfile.write("// See https://raw.githubusercontent.com/cwida/duckdb/master/LICENSE for licensing information\n\n")
+        write_license(hfile)
         hfile.write("#pragma once\n")
         hfile.write("#define DUCKDB_AMALGAMATION 1\n")
         hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
 
+def generate_amalgamation(source_file, header_file):
+    # construct duckdb.hpp from these headers
+    generate_duckdb_hpp(header_file)
 
     # now construct duckdb.cpp
     print("------------------------")
@@ -171,12 +186,12 @@ def generate_amalgamation(source_file, header_file):
     # scan all the .cpp files
     with open(temp_source, 'w+') as sfile:
         header_file_name = header_file.split(os.sep)[-1]
-        sfile.write("// See https://raw.githubusercontent.com/cwida/duckdb/master/LICENSE for licensing information\n\n")
+        write_license(sfile)
         sfile.write('#include "' + header_file_name + '"\n\n')
         sfile.write("#ifndef DUCKDB_AMALGAMATION\n#error header mismatch\n#endif\n\n")
 
         for compile_dir in compile_directories:
-            write_dir(compile_dir, sfile)
+            sfile.write(write_dir(compile_dir))
         # for windows we write file_system.cpp last
         # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
         sfile.write(write_file(os.path.join('src', 'common', 'file_system.cpp'), True))
@@ -190,8 +205,158 @@ def generate_amalgamation(source_file, header_file):
         pass
 
 
+def gather_file(current_file, source_files, header_files):
+    global linenumbers
+    global written_files
+    if not need_to_write_file(current_file, False):
+        return ""
+    written_files[current_file] = True
+
+    # first read this file
+    with open(current_file, 'r') as f:
+        text = f.read()
+
+    (statements, includes) = get_includes(current_file, text)
+    # find the linenr of the final #include statement we parsed
+    if len(statements) > 0:
+        index = text.find(statements[-1])
+        linenr = len(text[:index].split('\n'))
+
+        # now write all the dependencies of this header first
+        for i in range(len(includes)):
+            # source file inclusions are inlined into the main text
+            include_text = write_file(includes[i])
+            if linenumbers and i == len(includes) - 1:
+                # for the last include statement, we also include a #line directive
+                include_text += '\n#line %d "%s"\n' % (linenr, current_file)
+            if includes[i].endswith('.cpp') or includes[i].endswith('.cc') or includes[i].endswith('.c'):
+                # source file inclusions are inlined into the main text
+                text = text.replace(statements[i], include_text)
+            else:
+                text = text.replace(statements[i], '')
+                header_files.append(include_text)
+
+    # add the initial line here
+    if linenumbers:
+        text = '\n#line 1 "%s"\n' % (current_file,) + text
+    source_files.append(cleanup_file(text))
+
+
+
+def gather_files(dir, source_files, header_files):
+    files = os.listdir(dir)
+    files.sort()
+    for fname in files:
+        if fname in excluded_files:
+            continue
+        fpath = os.path.join(dir, fname)
+        if os.path.isdir(fpath):
+            gather_files(fpath, source_files, header_files)
+        elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
+            gather_file(fpath, source_files, header_files)
+
+
+def generate_amalgamation_splits(source_file, header_file, nsplits):
+    # construct duckdb.hpp from these headers
+    generate_duckdb_hpp(header_file)
+
+    # gather all files to read and write
+    source_files = []
+    header_files = []
+    for compile_dir in compile_directories:
+        if compile_dir != src_dir:
+            continue
+        gather_files(compile_dir, source_files, header_files)
+
+    # for windows we write file_system.cpp last
+    # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
+    source_files.append(write_file(os.path.join('src', 'common', 'file_system.cpp'), True))
+
+    # write duckdb-internal.hpp
+    if '.hpp' in header_file:
+        internal_header_file = header_file.replace('.hpp', '-internal.hpp')
+    elif '.h' in header_file:
+        internal_header_file = header_file.replace('.h', '-internal.h')
+    else:
+        raise "Unknown extension of header file"
+
+    temp_internal_header = internal_header_file + '.tmp'
+
+    with open(temp_internal_header, 'w+') as f:
+        write_license(f)
+        for hfile in header_files:
+            f.write(hfile)
+
+    # count the total amount of bytes in the source files
+    total_bytes = 0
+    for sfile in source_files:
+        total_bytes += len(sfile)
+
+    # now write the individual splits
+    # we approximate the splitting up by making every file have roughly the same amount of bytes
+    split_bytes = total_bytes / nsplits
+    current_bytes = 0
+    partitions = []
+    partition_names = []
+    current_partition = []
+    current_partition_idx = 1
+    for sfile in source_files:
+        current_partition.append(sfile)
+        current_bytes += len(sfile)
+        if current_bytes >= split_bytes:
+            partition_names.append(str(current_partition_idx))
+            partitions.append(current_partition)
+            current_partition = []
+            current_bytes = 0
+            current_partition_idx += 1
+    if len(current_partition) > 0:
+        partition_names.append(str(current_partition_idx))
+        partitions.append(current_partition)
+        current_partition = []
+        current_bytes = 0
+    # generate partitions from the third party libraries
+    for compile_dir in compile_directories:
+        if compile_dir != src_dir:
+            partition_names.append(compile_dir.split(os.sep)[-1])
+            partitions.append(write_dir(compile_dir))
+
+    header_file_name = header_file.split(os.sep)[-1]
+    internal_header_file_name = internal_header_file.split(os.sep)[-1]
+
+    partition_fnames = []
+    current_partition = 0
+    for partition in partitions:
+        partition_name = source_file.replace('.cpp', '-%s.cpp' % (partition_names[current_partition],))
+        temp_partition_name = partition_name + '.tmp'
+        partition_fnames.append([partition_name, temp_partition_name])
+        with open(temp_partition_name, 'w+') as f:
+            write_license(f)
+            f.write('#include "%s"\n#include "%s"' % (header_file_name, internal_header_file_name))
+            f.write('''
+#ifndef DUCKDB_AMALGAMATION
+#error header mismatch
+#endif
+''')
+            for sfile in partition:
+                f.write(sfile)
+        current_partition += 1
+
+    copy_if_different(temp_header, header_file)
+    copy_if_different(temp_internal_header, internal_header_file)
+    try:
+        os.remove(temp_header)
+        os.remove(temp_internal_header)
+    except:
+        pass
+    for p in partition_fnames:
+        copy_if_different(p[1], p[0])
+        try:
+            os.remove(p[1])
+        except:
+            pass
 
 if __name__ == "__main__":
+    nsplits = 1
     for arg in sys.argv:
         if arg == '--linenumbers':
             linenumbers = True
@@ -201,7 +366,13 @@ if __name__ == "__main__":
             header_file = os.path.join(*arg.split('=', 1)[1].split('/'))
         elif arg.startswith('--source='):
             source_file = os.path.join(*arg.split('=', 1)[1].split('/'))
+        elif arg.startswith('--splits='):
+            nsplits = int(arg.split('=', 1)[1])
     if not os.path.exists(amal_dir):
         os.makedirs(amal_dir)
 
-    generate_amalgamation(source_file, header_file)
+    if nsplits > 1:
+        generate_amalgamation_splits(source_file, header_file, nsplits)
+    else:
+        generate_amalgamation(source_file, header_file)
+
