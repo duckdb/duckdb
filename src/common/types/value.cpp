@@ -155,15 +155,21 @@ Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
-	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
-	if (width <= Decimal::MAX_WIDTH_INT16) {
+	LogicalType decimal_type(LogicalTypeId::DECIMAL, width, scale);
+	Value result(decimal_type);
+	switch(decimal_type.InternalType()) {
+	case PhysicalType::INT16:
 		result.value_.smallint = value;
-	} else if (width <= Decimal::MAX_WIDTH_INT32) {
+		break;
+	case PhysicalType::INT32:
 		result.value_.integer = value;
-	} else if (width <= Decimal::MAX_WIDTH_INT64) {
+		break;
+	case PhysicalType::INT64:
 		result.value_.bigint = value;
-	} else {
+		break;
+	default:
 		result.value_.hugeint = value;
+		break;
 	}
 	result.type_.Verify();
 	result.is_null = false;
@@ -468,14 +474,15 @@ string Value::ToString() const {
 	case LogicalTypeId::DOUBLE:
 		return to_string(value_.double_);
 	case LogicalTypeId::DECIMAL: {
-		if (type_.width() <= Decimal::MAX_WIDTH_INT16) {
+		auto internal_type = type_.InternalType();
+		if (internal_type == PhysicalType::INT16) {
 			return Decimal::ToString(value_.smallint, type_.scale());
-		} else if (type_.width() <= Decimal::MAX_WIDTH_INT32) {
+		} else if (internal_type == PhysicalType::INT32) {
 			return Decimal::ToString(value_.integer, type_.scale());
-		} else if (type_.width() <= Decimal::MAX_WIDTH_INT64) {
+		} else if (internal_type == PhysicalType::INT64) {
 			return Decimal::ToString(value_.bigint, type_.scale());
 		} else {
-			assert(type_.width() <= Decimal::MAX_WIDTH_DECIMAL);
+			assert(internal_type == PhysicalType::INT128);
 			return Decimal::ToString(value_.hugeint, type_.scale());
 		}
 	}

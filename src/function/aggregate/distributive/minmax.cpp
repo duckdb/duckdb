@@ -191,14 +191,19 @@ template <class OP>
 unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateFunction &function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
+	switch(decimal_type.InternalType()) {
+	case PhysicalType::INT16:
 		function = GetUnaryAggregate<OP>(LogicalType::SMALLINT);
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
+		break;
+	case PhysicalType::INT32:
 		function = GetUnaryAggregate<OP>(LogicalType::INTEGER);
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
+		break;
+	case PhysicalType::INT64:
 		function = GetUnaryAggregate<OP>(LogicalType::BIGINT);
-	} else {
+		break;
+	default:
 		function = GetUnaryAggregate<OP>(LogicalType::HUGEINT);
+		break;
 	}
 	function.arguments[0] = decimal_type;
 	function.return_type = decimal_type;

@@ -1,7 +1,6 @@
 #include "duckdb/function/scalar/math_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
-#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/numeric_helper.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -91,15 +90,19 @@ template <class OP>
 unique_ptr<FunctionData> decimal_unary_op_bind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
+	switch(decimal_type.InternalType()) {
+	case PhysicalType::INT16:
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::SMALLINT);
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
+		break;
+	case PhysicalType::INT32:
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::INTEGER);
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
+		break;
+	case PhysicalType::INT64:
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::BIGINT);
-	} else {
-		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
+		break;
+	default:
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT);
+		break;
 	}
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = decimal_type;
@@ -194,17 +197,22 @@ unique_ptr<FunctionData> bind_generic_round_function_decimal(ClientContext &cont
 	// ceil essentially removes the scale
 	auto decimal_type = arguments[0]->return_type;
 	if (decimal_type.scale() == 0) {
-		// round with scale 0 is a nop
 		bound_function.function = ScalarFunction::NopFunction;
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
-		bound_function.function = generic_round_function_decimal<int16_t, NumericHelper, OP>;
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
-		bound_function.function = generic_round_function_decimal<int32_t, NumericHelper, OP>;
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
-		bound_function.function = generic_round_function_decimal<int64_t, NumericHelper, OP>;
 	} else {
-		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
-		bound_function.function = generic_round_function_decimal<hugeint_t, Hugeint, OP>;
+		switch(decimal_type.InternalType()) {
+		case PhysicalType::INT16:
+			bound_function.function = generic_round_function_decimal<int16_t, NumericHelper, OP>;
+			break;
+		case PhysicalType::INT32:
+			bound_function.function = generic_round_function_decimal<int32_t, NumericHelper, OP>;
+			break;
+		case PhysicalType::INT64:
+			bound_function.function = generic_round_function_decimal<int64_t, NumericHelper, OP>;
+			break;
+		default:
+			bound_function.function = generic_round_function_decimal<hugeint_t, Hugeint, OP>;
+			break;
+		}
 	}
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), 0);
@@ -433,15 +441,19 @@ unique_ptr<FunctionData> bind_decimal_round_precision(ClientContext &context, Sc
 	uint8_t target_scale;
 	if (round_value < 0) {
 		target_scale = 0;
-		if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
+		switch(decimal_type.InternalType()) {
+		case PhysicalType::INT16:
 			bound_function.function = decimal_round_negative_precision_function<int16_t, NumericHelper>;
-		} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
+			break;
+		case PhysicalType::INT32:
 			bound_function.function = decimal_round_negative_precision_function<int32_t, NumericHelper>;
-		} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
+			break;
+		case PhysicalType::INT64:
 			bound_function.function = decimal_round_negative_precision_function<int64_t, NumericHelper>;
-		} else {
-			assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
+			break;
+		default:
 			bound_function.function = decimal_round_negative_precision_function<hugeint_t, Hugeint>;
+			break;
 		}
 	} else {
 		if (round_value >= (int32_t)decimal_type.scale()) {
@@ -450,15 +462,19 @@ unique_ptr<FunctionData> bind_decimal_round_precision(ClientContext &context, Sc
 			target_scale = decimal_type.scale();
 		} else {
 			target_scale = round_value;
-			if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
+			switch(decimal_type.InternalType()) {
+			case PhysicalType::INT16:
 				bound_function.function = decimal_round_positive_precision_function<int16_t, NumericHelper>;
-			} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
+				break;
+			case PhysicalType::INT32:
 				bound_function.function = decimal_round_positive_precision_function<int32_t, NumericHelper>;
-			} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
+				break;
+			case PhysicalType::INT64:
 				bound_function.function = decimal_round_positive_precision_function<int64_t, NumericHelper>;
-			} else {
-				assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
+				break;
+			default:
 				bound_function.function = decimal_round_positive_precision_function<hugeint_t, Hugeint>;
+				break;
 			}
 		}
 	}

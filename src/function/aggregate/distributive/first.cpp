@@ -2,7 +2,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/expression.hpp"
 
 using namespace std;
@@ -107,13 +106,14 @@ template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalTy
 
 AggregateFunction GetDecimalFirstFunction(LogicalType type) {
 	assert(type.id() == LogicalTypeId::DECIMAL);
-	if (type.width() <= Decimal::MAX_WIDTH_INT16) {
+	switch(type.InternalType()) {
+	case PhysicalType::INT16:
 		return FirstFun::GetFunction(LogicalType::SMALLINT);
-	} else if (type.width() <= Decimal::MAX_WIDTH_INT32) {
+	case PhysicalType::INT32:
 		return FirstFun::GetFunction(LogicalType::INTEGER);
-	} else if (type.width() <= Decimal::MAX_WIDTH_INT64) {
+	case PhysicalType::INT64:
 		return FirstFun::GetFunction(LogicalType::BIGINT);
-	} else {
+	default:
 		return FirstFun::GetFunction(LogicalType::HUGEINT);
 	}
 }
