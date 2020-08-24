@@ -270,8 +270,8 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
                                                                        vector<unique_ptr<Expression>> children,
                                                                        bool is_operator) {
 	// bind the function
-	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, schema, name);
-	assert(function && function->type == CatalogType::SCALAR_FUNCTION);
+	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
+	assert(function && function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, move(children),
 	                                          is_operator);
 }

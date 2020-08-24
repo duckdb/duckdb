@@ -73,16 +73,16 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 		// "type", PhysicalType::VARCHAR
 		const char *type_str;
 		switch (entry->type) {
-		case CatalogType::TABLE:
+		case CatalogType::TABLE_ENTRY:
 			type_str = "table";
 			break;
-		case CatalogType::SCHEMA:
+		case CatalogType::SCHEMA_ENTRY:
 			type_str = "schema";
 			break;
-		case CatalogType::TABLE_FUNCTION:
+		case CatalogType::TABLE_FUNCTION_ENTRY:
 			type_str = "function";
 			break;
-		case CatalogType::VIEW:
+		case CatalogType::VIEW_ENTRY:
 			type_str = "view";
 			break;
 		default:

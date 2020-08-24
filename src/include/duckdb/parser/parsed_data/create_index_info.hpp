@@ -17,7 +17,7 @@
 namespace duckdb {
 
 struct CreateIndexInfo : public CreateInfo {
-	CreateIndexInfo() : CreateInfo(CatalogType::INDEX) {
+	CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY) {
 	}
 
 	//! Index Type (e.g., B+-tree, Skip-List, ...)

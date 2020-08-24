@@ -37,7 +37,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
 		schema->tables.Scan(transaction, [&](CatalogEntry *entry) {
-			if (entry->type == CatalogType::TABLE) {
+			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back((TableCatalogEntry *)entry);
 			}
 		});

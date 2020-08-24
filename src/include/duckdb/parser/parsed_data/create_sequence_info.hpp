@@ -15,7 +15,7 @@ namespace duckdb {
 
 struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo()
-	    : CreateInfo(CatalogType::SEQUENCE), name(string()), usage_count(0), increment(1), min_value(1),
+	    : CreateInfo(CatalogType::SEQUENCE_ENTRY), name(string()), usage_count(0), increment(1), min_value(1),
 	      max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false) {
 	}
 

@@ -91,7 +91,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto func =
 		    (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
 		        context, window.schema, window.function_name);
-		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
+		if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			throw BinderException("Unknown windowed aggregate");
 		}
 		// bind the aggregate

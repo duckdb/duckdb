@@ -92,7 +92,7 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			schemas.push_back(schema);
 		}
 		schema->tables.Scan(transaction, [&](CatalogEntry *entry) {
-			if (entry->type == CatalogType::TABLE) {
+			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back(entry);
 			} else {
 				views.push_back(entry);

@@ -152,7 +152,7 @@ vector<ColumnDefinition> Parser::ParseColumnList(string column_list) {
 		throw ParserException("Expected a single CREATE statement");
 	}
 	auto &create = (CreateStatement &)*parser.statements[0];
-	if (create.info->type != CatalogType::TABLE) {
+	if (create.info->type != CatalogType::TABLE_ENTRY) {
 		throw ParserException("Expected a single CREATE TABLE statement");
 	}
 	auto &info = ((CreateTableInfo &)*create.info);

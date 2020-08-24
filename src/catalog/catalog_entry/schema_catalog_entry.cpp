@@ -31,7 +31,7 @@ namespace duckdb {
 using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
-    : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
+    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), functions(*catalog), sequences(*catalog), collations(*catalog) {
 }
 
@@ -116,12 +116,12 @@ CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(ClientContext &context, Cre
 
 CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
 	unique_ptr<StandardEntry> function;
-	if (info->type == CatalogType::SCALAR_FUNCTION) {
+	if (info->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
 		// create a scalar function
 		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,
 		                                                                       (CreateScalarFunctionInfo *)info);
 	} else {
-		assert(info->type == CatalogType::AGGREGATE_FUNCTION);
+		assert(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 		// create an aggregate function
 		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
 		                                                                          (CreateAggregateFunctionInfo *)info);
@@ -158,7 +158,7 @@ void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info
 		if (entry == nullptr) {
 			throw CatalogException("Table \"%s\" doesn't exist!", info->table);
 		}
-		assert(entry->type == CatalogType::TABLE);
+		assert(entry->type == CatalogType::TABLE_ENTRY);
 
 		auto copied_entry = entry->Copy(context);
 
@@ -216,21 +216,21 @@ string SchemaCatalogEntry::ToSQL() {
 
 CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	switch (type) {
-	case CatalogType::VIEW:
-	case CatalogType::TABLE:
+	case CatalogType::VIEW_ENTRY:
+	case CatalogType::TABLE_ENTRY:
 		return tables;
-	case CatalogType::INDEX:
+	case CatalogType::INDEX_ENTRY:
 		return indexes;
-	case CatalogType::TABLE_FUNCTION:
+	case CatalogType::TABLE_FUNCTION_ENTRY:
 		return table_functions;
 	case CatalogType::COPY_FUNCTION:
 		return copy_functions;
-	case CatalogType::AGGREGATE_FUNCTION:
-	case CatalogType::SCALAR_FUNCTION:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		return functions;
-	case CatalogType::SEQUENCE:
+	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;
-	case CatalogType::COLLATION:
+	case CatalogType::COLLATION_ENTRY:
 		return collations;
 	default:
 		throw CatalogException("Unsupported catalog type in schema");

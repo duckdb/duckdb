@@ -42,9 +42,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// not a CTE
 	// extract a table or view from the catalog
 	auto table_or_view =
-	    Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE, ref.schema_name, ref.table_name);
+	    Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name);
 	switch (table_or_view->type) {
-	case CatalogType::TABLE: {
+	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto table = (TableCatalogEntry *)table_or_view;
@@ -54,7 +54,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		bind_context.AddBaseTable(table_index, alias, *table, *logical_get);
 		return make_unique_base<BoundTableRef, BoundBaseTableRef>(move(logical_get));
 	}
-	case CatalogType::VIEW: {
+	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
 		SubqueryRef subquery(view_catalog_entry->query->Copy());

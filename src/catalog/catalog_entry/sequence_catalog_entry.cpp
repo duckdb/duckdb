@@ -12,7 +12,7 @@ namespace duckdb {
 using namespace std;
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info)
-    : StandardEntry(CatalogType::SEQUENCE, schema, catalog, info->name), usage_count(info->usage_count),
+    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info->name), usage_count(info->usage_count),
       counter(info->start_value), increment(info->increment), start_value(info->start_value),
       min_value(info->min_value), max_value(info->max_value), cycle(info->cycle) {
 	this->temporary = info->temporary;

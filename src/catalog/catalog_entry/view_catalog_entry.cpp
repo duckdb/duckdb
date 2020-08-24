@@ -20,7 +20,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
-    : StandardEntry(CatalogType::VIEW, schema, catalog, info->view_name) {
+    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info->view_name) {
 	Initialize(info);
 }
 

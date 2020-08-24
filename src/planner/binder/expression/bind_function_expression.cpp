@@ -20,9 +20,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindUnnest(function, depth);
 	}
 
-	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, function.schema,
+	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema,
 	                                                  function.function_name);
-	if (func->type == CatalogType::SCALAR_FUNCTION) {
+	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	} else {

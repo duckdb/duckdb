@@ -52,7 +52,7 @@ void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &nam
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : StandardEntry(CatalogType::TABLE, schema, catalog, info->Base().table), storage(inherited_storage),
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(inherited_storage),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
 	this->temporary = info->Base().temporary;

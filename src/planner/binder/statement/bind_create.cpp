@@ -35,7 +35,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	}
 	// fetch the schema in which we want to create the object
 	auto schema_obj = Catalog::GetCatalog(context).GetSchema(context, info.schema);
-	assert(schema_obj->type == CatalogType::SCHEMA);
+	assert(schema_obj->type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj->name;
 	return schema_obj;
 }
@@ -47,10 +47,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
-	case CatalogType::SCHEMA:
+	case CatalogType::SCHEMA_ENTRY:
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SCHEMA, move(stmt.info));
 		break;
-	case CatalogType::VIEW: {
+	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
 		// extract the SQL from the query, if any
 		if (stmt.stmt_location + stmt.stmt_length <= context.query.size()) {
@@ -74,12 +74,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_VIEW, move(stmt.info), schema);
 		break;
 	}
-	case CatalogType::SEQUENCE: {
+	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SEQUENCE, move(stmt.info), schema);
 		break;
 	}
-	case CatalogType::INDEX: {
+	case CatalogType::INDEX_ENTRY: {
 		auto &base = (CreateIndexInfo &)*stmt.info;
 
 		// visit the table reference
@@ -111,7 +111,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		                                              unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
 		break;
 	}
-	case CatalogType::TABLE: {
+	case CatalogType::TABLE_ENTRY: {
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);
 

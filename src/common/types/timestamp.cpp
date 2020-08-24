@@ -3,9 +3,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <chrono>  // chrono::system_clock
-#include <string>  // string
 #include <ctime>
 
 using namespace std;

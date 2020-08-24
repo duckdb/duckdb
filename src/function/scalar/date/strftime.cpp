@@ -7,6 +7,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/numeric_helper.hpp"
 
+#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/function/scalar/strftime.hpp"
 
 #include "duckdb/common/vector_operations/unary_executor.hpp"
