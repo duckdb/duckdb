@@ -548,16 +548,22 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					auto &src_vec = chunk->data[col_idx];
 					auto &decimal_type = result->types[col_idx];
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					auto dec_width = decimal_type.width();
 					auto dec_scale = decimal_type.scale();
-					if (dec_width <= Decimal::MAX_WIDTH_INT16) {
+					switch(decimal_type.InternalType()) {
+					case PhysicalType::INT16:
 						RDecimalCastLoop<int16_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
-					} else if (dec_width <= Decimal::MAX_WIDTH_INT32) {
+						break;
+					case PhysicalType::INT32:
 						RDecimalCastLoop<int32_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
-					} else if (dec_width <= Decimal::MAX_WIDTH_INT64) {
+						break;
+					case PhysicalType::INT64:
 						RDecimalCastLoop<int64_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
-					} else {
+						break;
+					case PhysicalType::INT128:
 						RDecimalCastLoop<hugeint_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					default:
+						throw NotImplementedException("Unimplemented internal type for DECIMAL");
 					}
 					break;
 				}

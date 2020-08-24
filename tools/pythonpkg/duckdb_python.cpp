@@ -46,13 +46,18 @@ struct StringConvert {
 	}
 };
 
-struct HugeIntConvert {
-	template <class DUCKDB_T, class NUMPY_T> static double convert_value(hugeint_t val) {
-		double result;
-		Hugeint::TryCast(val, result);
-		return result;
+struct IntegralConvert {
+	template <class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(DUCKDB_T val) {
+		return NUMPY_T(val);
 	}
 };
+
+template <>
+double IntegralConvert::convert_value(hugeint_t val) {
+	double result;
+	Hugeint::TryCast(val, result);
+	return result;
+}
 
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static py::array fetch_column(string numpy_type, ChunkCollection &collection, idx_t column) {
@@ -77,6 +82,48 @@ static py::array fetch_column(string numpy_type, ChunkCollection &collection, id
 
 template <class T> static py::array fetch_column_regular(string numpy_type, ChunkCollection &collection, idx_t column) {
 	return fetch_column<T, T, RegularConvert>(numpy_type, collection, column);
+}
+
+template<class DUCKDB_T>
+static void decimal_convert_internal(ChunkCollection &collection, idx_t column, double *out_ptr, double division) {
+	idx_t out_offset = 0;
+	for (auto &data_chunk : collection.chunks) {
+		auto &src = data_chunk->data[column];
+		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
+		auto &nullmask = FlatVector::Nullmask(src);
+		for (idx_t i = 0; i < data_chunk->size(); i++) {
+			if (nullmask[i]) {
+				continue;
+			}
+			out_ptr[i + out_offset] = IntegralConvert::convert_value<DUCKDB_T, double>(src_ptr[i]) / division;
+		}
+		out_offset += data_chunk->size();
+	}
+}
+
+static py::array fetch_column_decimal(string numpy_type, ChunkCollection &collection, idx_t column, LogicalType &decimal_type) {
+	auto out = py::array(py::dtype(numpy_type), collection.count);
+	auto out_ptr = (double *)out.mutable_data();
+
+	auto dec_scale = decimal_type.scale();
+	double division = pow(10, dec_scale);
+	switch(decimal_type.InternalType()) {
+	case PhysicalType::INT16:
+		decimal_convert_internal<int16_t>(collection, column, out_ptr, division);
+		break;
+	case PhysicalType::INT32:
+		decimal_convert_internal<int32_t>(collection, column, out_ptr, division);
+		break;
+	case PhysicalType::INT64:
+		decimal_convert_internal<int64_t>(collection, column, out_ptr, division);
+		break;
+	case PhysicalType::INT128:
+		decimal_convert_internal<hugeint_t>(collection, column, out_ptr, division);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented internal type for DECIMAL");
+	}
+	return out;
 }
 
 } // namespace duckdb_py_convert
@@ -345,6 +392,9 @@ struct DuckDBPyResult {
 			case LogicalTypeId::DOUBLE:
 				res[col_idx] = val.GetValue<double>();
 				break;
+			case LogicalTypeId::DECIMAL:
+				res[col_idx] = val.CastAs(LogicalType::DOUBLE).GetValue<double>();
+				break;
 			case LogicalTypeId::VARCHAR:
 				res[col_idx] = val.GetValue<string>();
 				break;
@@ -435,7 +485,7 @@ struct DuckDBPyResult {
 				col_res = duckdb_py_convert::fetch_column_regular<int64_t>("int64", mres->collection, col_idx);
 				break;
 			case LogicalTypeId::HUGEINT:
-				col_res = duckdb_py_convert::fetch_column<hugeint_t, double, duckdb_py_convert::HugeIntConvert>(
+				col_res = duckdb_py_convert::fetch_column<hugeint_t, double, duckdb_py_convert::IntegralConvert>(
 				    "float64", mres->collection, col_idx);
 				break;
 			case LogicalTypeId::FLOAT:
@@ -443,6 +493,9 @@ struct DuckDBPyResult {
 				break;
 			case LogicalTypeId::DOUBLE:
 				col_res = duckdb_py_convert::fetch_column_regular<double>("float64", mres->collection, col_idx);
+				break;
+			case LogicalTypeId::DECIMAL:
+				col_res = duckdb_py_convert::fetch_column_decimal("float64", mres->collection, col_idx, mres->types[col_idx]);
 				break;
 			case LogicalTypeId::TIMESTAMP:
 				col_res = duckdb_py_convert::fetch_column<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
