@@ -553,8 +553,8 @@ LogicalType MaxLogicalType(LogicalType left, LogicalType right) {
 			}
 		} else if (left.id() == LogicalTypeId::DECIMAL) {
 			// use max width/scale of the two types
-			return LogicalType(LogicalTypeId::DECIMAL, max<uint8_t>(left.width(), right.width()),
-			                   max<uint8_t>(left.scale(), right.scale()));
+			return LogicalType(LogicalTypeId::DECIMAL, MaxValue<uint8_t>(left.width(), right.width()),
+			                   MaxValue<uint8_t>(left.scale(), right.scale()));
 		} else {
 			// types are equal but no extra specifier: just return the type
 			// FIXME: LIST and STRUCT?
