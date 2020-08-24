@@ -365,7 +365,11 @@ public class DuckDBResultSet implements ResultSet {
 		if (string_value == null) {
 			return null;
 		}
-		return Date.valueOf(string_value);
+		try {
+			return Date.valueOf(string_value);
+		} catch(Exception e) {
+			throw new SQLException("Unparseable date " + string_value);
+		}
 	}
 
 	public Time getTime(int columnIndex) throws SQLException {
