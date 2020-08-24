@@ -203,9 +203,12 @@ static void release_duckdb_arrow_array(ArrowArray *array) {
 	}
 	auto holder = (DuckDBArrowArrayHolder *)array->private_data;
 	delete holder;
+	if (array->n_buffers == 3) { // string
+		free((void *)array->buffers[1]);
+		free((void *)array->buffers[2]);
+	}
 	free(array->buffers);
 	array->release = nullptr;
-	array->private_data = nullptr;
 }
 
 static void release_duckdb_arrow_array_root(ArrowArray *array) {
@@ -246,6 +249,7 @@ void DataChunk::ToArrow(ArrowArray *out_array) {
 		child.offset = 0;
 		child.dictionary = nullptr;
 		child.release = release_duckdb_arrow_array;
+		child.buffers = (const void **)malloc(sizeof(void *) * 3); // max three buffers
 
 		child.length = size();
 
@@ -262,9 +266,42 @@ void DataChunk::ToArrow(ArrowArray *out_array) {
 			case LogicalTypeId::FLOAT:
 			case LogicalTypeId::DOUBLE:
 				child.n_buffers = 2;
-				child.buffers = (const void **)malloc(sizeof(void *) * 2); // FIXME for strings
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				break;
+
+			case LogicalTypeId::VARCHAR: {
+				child.n_buffers = 3;
+
+				child.buffers[1] = malloc(sizeof(uint32_t) * (size() + 1));
+
+				// step 1: figure out total string length:
+				idx_t total_string_length = 0;
+				auto string_t_ptr = FlatVector::GetData<string_t>(vector);
+				auto is_null = FlatVector::Nullmask(vector);
+				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+					if (is_null[row_idx]) {
+						continue;
+					}
+					total_string_length += string_t_ptr[row_idx].GetSize();
+				}
+				// step 2: allocate this much
+				child.buffers[2] = malloc(total_string_length);
+				// step 3: assign buffers
+				idx_t current_heap_offset = 0;
+				auto target_ptr = (uint32_t *)child.buffers[1];
+
+				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+					target_ptr[row_idx] = current_heap_offset;
+					if (is_null[row_idx]) {
+						continue;
+					}
+					auto &str = string_t_ptr[row_idx];
+					memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetData(), str.GetSize());
+					current_heap_offset += str.GetSize();
+				}
+				target_ptr[size()] = current_heap_offset; // need to terminate last string!
+				break;
+			}
 			default:
 				throw runtime_error("Unsupported type " + GetTypes()[col_idx].ToString());
 			}
