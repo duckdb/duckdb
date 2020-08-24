@@ -8,6 +8,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/common/arrow.hpp"
 
 using namespace std;
 
@@ -189,6 +190,94 @@ void DataChunk::Verify() {
 
 void DataChunk::Print() {
 	Printer::Print(ToString());
+}
+
+struct DuckDBArrowArrayHolder {
+	Vector vector;
+	ArrowArray array;
+};
+
+static void release_duckdb_arrow_array(ArrowArray *array) {
+	if (!array || !array->release || !array->private_data) {
+		return;
+	}
+	auto holder = (DuckDBArrowArrayHolder *)array->private_data;
+	delete holder;
+	free(array->buffers);
+	array->release = nullptr;
+	array->private_data = nullptr;
+}
+
+static void release_duckdb_arrow_array_root(ArrowArray *array) {
+	if (!array || !array->release) {
+		return;
+	}
+	free(array->buffers);
+	free(array->children);
+	array->release = nullptr;
+}
+
+void DataChunk::ToArrow(ArrowArray *out_array) {
+	assert(out_array);
+
+	out_array->children = (ArrowArray **)malloc(sizeof(ArrowArray *) * column_count());
+	out_array->length = size();
+	out_array->n_children = column_count();
+	out_array->release = release_duckdb_arrow_array_root;
+	out_array->n_buffers = 1;
+	out_array->buffers = (const void **)malloc(sizeof(void *) * 1);
+	out_array->buffers[0] = nullptr; // there is no actual buffer there since we don't have NULLs
+
+	out_array->offset = 0;
+	out_array->null_count = 0; // needs to be 0
+	out_array->dictionary = nullptr;
+
+	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+		auto holder = new DuckDBArrowArrayHolder();
+		holder->vector.Reference(data[col_idx]);
+
+		auto &child = holder->array;
+		auto &vector = holder->vector;
+
+		child.private_data = holder;
+
+		child.n_children = 0;
+		child.null_count = -1; // unknown
+		child.offset = 0;
+		child.dictionary = nullptr;
+		child.release = release_duckdb_arrow_array;
+
+		child.length = size();
+
+		switch (vector.vector_type) {
+			// TODO support other vector types
+		case VectorType::FLAT_VECTOR:
+
+			switch (GetTypes()[col_idx].id()) {
+				// TODO support other data types
+			case LogicalTypeId::TINYINT:
+			case LogicalTypeId::SMALLINT:
+			case LogicalTypeId::INTEGER:
+			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::FLOAT:
+			case LogicalTypeId::DOUBLE:
+				child.n_buffers = 2;
+				child.buffers = (const void **)malloc(sizeof(void *) * 2); // FIXME for strings
+				child.buffers[1] = (void *)FlatVector::GetData(vector);
+				break;
+			default:
+				throw runtime_error("Unsupported type " + GetTypes()[col_idx].ToString());
+			}
+
+			child.null_count = FlatVector::Nullmask(vector).count();
+			child.buffers[0] = (void *)&FlatVector::Nullmask(vector).flip();
+
+			break;
+		default:
+			throw NotImplementedException(VectorTypeToString(vector.vector_type));
+		}
+		out_array->children[col_idx] = &child;
+	}
 }
 
 } // namespace duckdb

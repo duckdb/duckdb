@@ -490,45 +490,18 @@ struct DuckDBPyResult {
 	static void release_duckdb_arrow_schema(ArrowSchema *schema) {
 	}
 
-	static void release_duckdb_arrow_array(ArrowArray *array) {
-		if (!array || !array->release || !array->private_data) {
-			return;
-		}
-		auto holder = (DuckDBArrowArrayHolder *)array->private_data;
-		delete holder;
-		free(array->buffers);
-		array->release = nullptr;
-		array->private_data = nullptr;
-	}
-
-	static void release_duckdb_arrow_array_root(ArrowArray *array) {
-		if (!array || !array->release || !array->buffers) {
-			return;
-		}
-		free(array->buffers);
-		array->buffers = nullptr;
-		array->release = nullptr;
-	}
-
-	struct DuckDBArrowArrayHolder {
-		DuckDBArrowArrayHolder() {
-			vector = make_unique<Vector>();
-		}
-		unique_ptr<Vector> vector;
-	};
-
 	py::object fetch_arrow_table() {
 		if (!result) {
 			throw runtime_error("result closed");
 		}
-
-		auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
 		ArrowSchema schema;
 		auto schema_children = (ArrowSchema *)malloc(result->column_count() * sizeof(ArrowSchema));
 
 		schema.format = "+s"; // struct apparently
 		schema.n_children = result->column_count();
+		schema.children = (ArrowSchema **)malloc(sizeof(ArrowSchema *) * result->column_count());
+
 		schema.release = release_duckdb_arrow_schema;
 		schema.flags = 0;
 		schema.metadata = nullptr;
@@ -575,69 +548,14 @@ struct DuckDBPyResult {
 
 		auto data_chunk = result->Fetch();
 		ArrowArray data;
-		auto data_children = (ArrowArray *)malloc(result->column_count() * sizeof(ArrowArray));
 
-		data.offset = 0;
-		data.length = data_chunk->size();
-		data.n_children = result->column_count();
-		data.null_count = 0;
-		data.dictionary = nullptr;
-		data.release = release_duckdb_arrow_array_root;
-		data.n_buffers = 1;
-		data.buffers = (const void **)malloc(sizeof(void *) * 1);
-		data.buffers[0] = nullptr;
+		data_chunk->ToArrow(&data);
 
-		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
-			auto &child = data_children[col_idx];
-			child.n_children = 0;
-			child.length = data_chunk->size();
-			child.null_count = -1;
-			child.offset = 0;
-			child.dictionary = nullptr;
-			child.release = release_duckdb_arrow_array;
+		auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+		auto import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
+		auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
 
-			auto holder = new DuckDBArrowArrayHolder();
-			holder->vector->Reference(data_chunk->data[col_idx]);
-			child.private_data = holder;
-
-			auto &vector = *holder->vector;
-
-			switch (vector.vector_type) {
-				// TODO support other vector types
-			case VectorType::FLAT_VECTOR:
-
-				switch (result->types[col_idx].id()) {
-					// TODO support other data types
-				case LogicalTypeId::TINYINT:
-				case LogicalTypeId::SMALLINT:
-				case LogicalTypeId::INTEGER:
-				case LogicalTypeId::BIGINT:
-				case LogicalTypeId::FLOAT:
-				case LogicalTypeId::DOUBLE:
-					child.n_buffers = 2;
-					child.buffers = (const void **)malloc(sizeof(void *) * 2); // FIXME for strings
-					child.buffers[1] = (void *)FlatVector::GetData(vector);
-					break;
-				default:
-					throw runtime_error("Unsupported type " + result->types[col_idx].ToString());
-				}
-
-				child.null_count = FlatVector::Nullmask(vector).count();
-				child.buffers[0] = (void *)&FlatVector::Nullmask(vector).flip();
-
-				break;
-			default:
-				throw NotImplementedException(VectorTypeToString(vector.vector_type));
-			}
-			data.children[col_idx] = &child;
-		}
-
-		auto record_batch_class = pyarrow_lib_module.attr("RecordBatch");
-		auto import_func = record_batch_class.attr("_import_from_c");
 		auto record_batch = import_func((uint64_t)&data, (uint64_t)&schema);
-
-		auto table_class = pyarrow_lib_module.attr("Table");
-		auto from_batches_func = table_class.attr("from_batches");
 
 		py::list batches(1); // FIXME
 		batches[0] = record_batch;
