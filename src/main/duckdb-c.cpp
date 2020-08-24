@@ -546,6 +546,13 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 	}
 }
 
+const char *duckdb_column_name(duckdb_result *result, idx_t col) {
+	if (!result || col >= result->column_count) {
+		return NULL;
+	}
+	return result->columns[col].name;
+}
+
 bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {
 	Value val = GetCValue(result, col, row);
 	if (val.is_null) {
