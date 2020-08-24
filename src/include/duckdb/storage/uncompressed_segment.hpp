@@ -92,7 +92,7 @@ public:
 	idx_t GetVectorCount(idx_t vector_index) {
 		assert(vector_index < max_vector_count);
 		assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
-		return std::min((idx_t)STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
+		return MinValue<idx_t>(STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
 	}
 
 	virtual void Verify(Transaction &transaction);

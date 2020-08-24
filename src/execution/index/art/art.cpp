@@ -788,7 +788,7 @@ void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &
 
 	// create a vector pointing to the current set of row ids
 	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
-	idx_t scan_count = std::min((idx_t)STANDARD_VECTOR_SIZE, (idx_t)state->result_ids.size() - state->result_index);
+	idx_t scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state->result_ids.size() - state->result_index);
 
 	// fetch the actual values from the base table
 	table.Fetch(transaction, result, state->column_ids, row_identifiers, scan_count, table_state);

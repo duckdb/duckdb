@@ -86,7 +86,7 @@ struct DecimalToString {
 		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
 		// integer length + 1 happens when the number is outside of that range
 		// in that case we print the integer number, but with one extra character ('.')
-		return std::max(scale + 2 + (value < 0 ? 1 : 0), NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
+		return MaxValue(scale + 2 + (value < 0 ? 1 : 0), NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
 	}
 
 	template <class SIGNED, class UNSIGNED>
@@ -261,7 +261,7 @@ struct HugeintToStringCast {
 		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
 		// integer length + 1 happens when the number is outside of that range
 		// in that case we print the integer number, but with one extra character ('.')
-		return std::max(scale + 2, UnsignedLength(value) + 1) + negative;
+		return MaxValue(scale + 2, UnsignedLength(value) + 1) + negative;
 	}
 
 	static void FormatDecimal(hugeint_t value, uint8_t scale, char *dst, int len) {
