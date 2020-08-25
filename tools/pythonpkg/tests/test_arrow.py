@@ -1,11 +1,14 @@
 import duckdb
 import pyarrow
 import pyarrow.parquet
+import urllib.request
 
 class TestArrow(object):
     def test_arrow(self, duckdb_cursor):
 
-        parquet_filename = '../../test/sql/copy/parquet/data/userdata1.parquet'
+        parquet_filename = 'userdata1.parquet'
+        urllib.request.urlretrieve('https://github.com/cwida/duckdb-data/releases/download/v1.0/userdata1.parquet', parquet_filename)
+
         cols = 'id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments'
 
         # TODO timestamp

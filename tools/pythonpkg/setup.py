@@ -75,7 +75,7 @@ else:
     # 'duckdb.cpp', 'parquet-extension.cpp'
     libs = ['-L' + os.path.join(existing_duckdb_dir, 'src'), '-lduckdb_static']
     libs += ['-L' + os.path.join(existing_duckdb_dir, 'extension', 'parquet'), '-lparquet_extension']
-    #libs += ['-L' + os.path.join(existing_duckdb_dir, 'extension', 'icu'), '-licu_extension']
+    libs += ['-L' + os.path.join(existing_duckdb_dir, 'extension', 'icu'), '-licu_extension']
 
     libduckdb = Extension('duckdb',
         include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],

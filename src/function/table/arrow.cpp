@@ -130,7 +130,7 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 				memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
 
 				temp_nullmask >>= (bit_offset % 8); // why this has to be a right shift is a mystery to me
-				memcpy(&nullmask, &temp_nullmask, n_bitmask_bytes);
+				memcpy(&nullmask, (data_ptr_t) &temp_nullmask, n_bitmask_bytes);
 			}
 			nullmask.flip(); // arrow uses inverse nullmask logic
 		}
