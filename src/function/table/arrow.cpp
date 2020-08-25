@@ -37,7 +37,9 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 	for (idx_t col_idx = 0; col_idx < (idx_t)res->table->schema.n_children; col_idx++) {
 		auto &schema = *res->table->schema.children[col_idx];
 		auto format = string(schema.format);
-		if (format == "c") {
+		if (format == "b") {
+			return_types.push_back(LogicalType::TINYINT);
+		} else if (format == "c") {
 			return_types.push_back(LogicalType::TINYINT);
 		} else if (format == "s") {
 			return_types.push_back(LogicalType::SMALLINT);
@@ -49,6 +51,8 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 			return_types.push_back(LogicalType::FLOAT);
 		} else if (format == "g") {
 			return_types.push_back(LogicalType::DOUBLE);
+		} else if (format == "d:38,0") { // decimal128
+			return_types.push_back(LogicalType::HUGEINT);
 		} else if (format == "u") {
 			return_types.push_back(LogicalType::VARCHAR);
 		} else if (format == "tsn:") {
@@ -98,12 +102,14 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 		}
 
 		switch (output.data[col_idx].type.id()) {
+		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
 		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT:
 			FlatVector::SetData(output.data[col_idx],
 			                    (data_ptr_t)array.buffers[1] +
 			                        GetTypeIdSize(output.data[col_idx].type.InternalType()) * data.chunk_offset);

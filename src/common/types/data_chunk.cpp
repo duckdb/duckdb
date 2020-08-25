@@ -220,7 +220,7 @@ static void release_duckdb_arrow_array_root(ArrowArray *array) {
 	array->release = nullptr;
 }
 
-void DataChunk::ToArrow(ArrowArray *out_array) {
+void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	assert(out_array);
 
 	out_array->children = (ArrowArray **)malloc(sizeof(ArrowArray *) * column_count());
@@ -259,12 +259,14 @@ void DataChunk::ToArrow(ArrowArray *out_array) {
 
 			switch (GetTypes()[col_idx].id()) {
 				// TODO support other data types
+			case LogicalTypeId::BOOLEAN:
 			case LogicalTypeId::TINYINT:
 			case LogicalTypeId::SMALLINT:
 			case LogicalTypeId::INTEGER:
 			case LogicalTypeId::BIGINT:
 			case LogicalTypeId::FLOAT:
 			case LogicalTypeId::DOUBLE:
+			case LogicalTypeId::HUGEINT:
 				child.n_buffers = 2;
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				break;

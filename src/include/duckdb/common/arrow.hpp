@@ -63,9 +63,20 @@ namespace duckdb {
 struct DuckDBArrowTable {
 
 	~DuckDBArrowTable() {
-		schema.release(&schema);
+		if (schema.release) {
+			schema.release(&schema);
+		}
 		for (duckdb::idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
-			chunks[chunk_idx].release(&chunks[chunk_idx]);
+			auto &chunk = chunks[chunk_idx];
+			for (idx_t child_idx = 0; child_idx < (idx_t)chunk.n_children; child_idx++) {
+				auto &child = chunk.children[child_idx];
+				if (child->release) {
+					child->release(child);
+				}
+			}
+			if (chunk.release) {
+				chunk.release(&chunk);
+			}
 		}
 	}
 	ArrowSchema schema;

@@ -114,7 +114,7 @@ public:
 	void Verify();
 
 	//! export data chunk as a arrow struct array that can be imported as arrow record batch
-	void ToArrow(ArrowArray *out_array);
+	void ToArrowArray(ArrowArray *out_array);
 
 private:
 	idx_t count;

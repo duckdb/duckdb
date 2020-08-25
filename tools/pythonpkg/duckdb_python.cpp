@@ -487,69 +487,18 @@ struct DuckDBPyResult {
 		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy());
 	}
 
-	static void release_duckdb_arrow_schema(ArrowSchema *schema) {
-	}
-
 	py::object fetch_arrow_table() {
 		if (!result) {
 			throw runtime_error("result closed");
 		}
 
 		ArrowSchema schema;
-		auto schema_children = (ArrowSchema *)malloc(result->column_count() * sizeof(ArrowSchema));
+        ArrowArray data;
 
-		schema.format = "+s"; // struct apparently
-		schema.n_children = result->column_count();
-		schema.children = (ArrowSchema **)malloc(sizeof(ArrowSchema *) * result->column_count());
-
-		schema.release = release_duckdb_arrow_schema;
-		schema.flags = 0;
-		schema.metadata = nullptr;
-		schema.name = "duckdb_query_result";
-		schema.dictionary = nullptr;
-
-		for (idx_t col_idx = 0; col_idx < result->column_count(); col_idx++) {
-			auto &child = schema_children[col_idx];
-			child.name = result->names[col_idx].c_str();
-			child.n_children = 0;
-			child.children = nullptr;
-			child.flags = 0;
-			child.metadata = nullptr;
-			child.release = release_duckdb_arrow_schema;
-			child.dictionary = nullptr;
-
-			switch (result->types[col_idx].id()) {
-			case LogicalTypeId::TINYINT:
-				child.format = "c";
-				break;
-			case LogicalTypeId::SMALLINT:
-				child.format = "s";
-				break;
-			case LogicalTypeId::INTEGER:
-				child.format = "i";
-				break;
-			case LogicalTypeId::BIGINT:
-				child.format = "l";
-				break;
-			case LogicalTypeId::FLOAT:
-				child.format = "f";
-				break;
-			case LogicalTypeId::DOUBLE:
-				child.format = "g";
-				break;
-			case LogicalTypeId::VARCHAR:
-				child.format = "u";
-				break;
-			default:
-				throw runtime_error("Unsupported type " + result->types[col_idx].ToString());
-			}
-			schema.children[col_idx] = &child;
-		}
-
+        result->ToArrowSchema(&schema);
 		auto data_chunk = result->Fetch();
-		ArrowArray data;
 
-		data_chunk->ToArrow(&data);
+		data_chunk->ToArrowArray(&data);
 
 		auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 		auto import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
