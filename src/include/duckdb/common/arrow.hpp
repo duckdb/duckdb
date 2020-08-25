@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#pragma once
+#ifndef ARROW_FLAG_DICTIONARY_ORDERED
 
 #include <stdint.h>
 
@@ -83,3 +83,5 @@ struct DuckDBArrowTable {
 	std::vector<ArrowArray> chunks; // with chunks
 };
 } // namespace duckdb
+
+#endif

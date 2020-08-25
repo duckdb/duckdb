@@ -493,23 +493,23 @@ struct DuckDBPyResult {
 		}
 
 		ArrowSchema schema;
-        ArrowArray data;
-
-        result->ToArrowSchema(&schema);
-		auto data_chunk = result->Fetch();
-
-		data_chunk->ToArrowArray(&data);
+		result->ToArrowSchema(&schema);
 
 		auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 		auto import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
 		auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
 
-		auto record_batch = import_func((uint64_t)&data, (uint64_t)&schema);
-
-		py::list batches(1); // FIXME
-		batches[0] = record_batch;
-		auto res = from_batches_func(batches);
-		return res;
+		py::list batches;
+		while (true) {
+			ArrowArray data;
+			auto data_chunk = result->Fetch();
+			if (data_chunk->size() == 0) {
+				break;
+			}
+			data_chunk->ToArrowArray(&data);
+			batches.append(import_func((uint64_t)&data, (uint64_t)&schema));
+		}
+		return from_batches_func(batches);
 	}
 
 	py::list description() {
@@ -772,6 +772,12 @@ struct DuckDBPyConnection {
 			throw runtime_error("no open result set");
 		}
 		return result->fetchdf();
+	}
+	py::object fetcharrow() {
+		if (!result) {
+			throw runtime_error("no open result set");
+		}
+		return result->fetch_arrow_table();
 	}
 
 	static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
@@ -1063,6 +1069,10 @@ PYBIND11_MODULE(duckdb, m) {
 	        .def("fetchnumpy", &DuckDBPyConnection::fetchnumpy,
 	             "Fetch a result as list of NumPy arrays following execute")
 	        .def("fetchdf", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("df", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("fetch_arrow_table", &DuckDBPyConnection::fetcharrow,
+	             "Fetch a result as Arrow table following execute()")
+	        .def("arrow", &DuckDBPyConnection::fetcharrow, "Fetch a result as Arrow table following execute()")
 	        .def("begin", &DuckDBPyConnection::begin, "Start a new transaction")
 	        .def("commit", &DuckDBPyConnection::commit, "Commit changes performed within a transaction")
 	        .def("rollback", &DuckDBPyConnection::rollback, "Roll back changes performed within a transaction")
@@ -1183,7 +1193,7 @@ PYBIND11_MODULE(duckdb, m) {
 	      py::arg("df"), py::arg("file_name"));
 
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
-	auto clean_default_connection = []() { default_connection_ = nullptr; };
+	auto clean_default_connection = []() { default_connection_.reset(); };
 	m.add_object("_clean_default_connection", py::capsule(clean_default_connection));
 	PyDateTime_IMPORT;
 }
