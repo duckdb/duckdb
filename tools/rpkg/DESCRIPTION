@@ -3,9 +3,9 @@ Title: DBI Package for the DuckDB Database Management System
 Version: 0.2.1
 Authors@R: 
     c(person(given = "Hannes",
-             family = "M\u00fchleisen",
+             family = "Mühleisen",
              role = c("aut", "cre"),
-             email = "hannes@cwi.nl",
+             email = "pat-s@mailbox.org",
              comment = c(ORCID = "0000-0001-8552-0029")),
       person(given = "Mark",
              family = "Raasveldt",
@@ -16,7 +16,7 @@ Authors@R:
              role = "aut"))
 Description: The DuckDB project is an embedded analytical data
     management system with SQL support. This package includes all of
-    DuckDB as well as R DBI & 'dplyr' connectors.
+    DuckDB and R DBI connectors.
 License: MPL
 URL: https://duckdb.org/, https://github.com/cwida/duckdb
 BugReports: https://github.com/cwida/duckdb/issues
