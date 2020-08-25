@@ -28,5 +28,4 @@ TEST_CASE("Test Arrow API round trip", "[arrow]") {
 	auto result2 = con.TableFunction("arrow_scan", {Value::POINTER((uintptr_t)&dat)})->Execute();
 	REQUIRE(!result->Equals(*result2));
 }
-
 // TODO timestamp date time interval decimal

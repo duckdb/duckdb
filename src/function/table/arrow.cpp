@@ -45,6 +45,9 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
+		if (schema.dictionary) {
+			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
+		}
 		auto format = string(schema.format);
 		if (format == "b") {
 			return_types.push_back(LogicalType::TINYINT);
@@ -113,14 +116,27 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 		if (array.length != current_arrow_chunk.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
-		// just memcpy nullmask
+		if (array.dictionary) {
+			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
+		}
 		if (array.null_count != 0 && array.buffers[0]) {
-			auto n_bitmask_bytes = (output.size() + 8 - 1) / 8;
-			auto bytes_to_skip = (data.chunk_offset + array.offset + 8 - 1) / 8;
+			auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
 
-			nullmask_t new_nullmask;
-			memcpy(&new_nullmask, (uint8_t *)array.buffers[0] + bytes_to_skip, n_bitmask_bytes);
-			FlatVector::SetNullmask(output.data[col_idx], new_nullmask.flip());
+			auto bit_offset = data.chunk_offset + array.offset;
+			auto n_bitmask_bytes = (output.size() + 8 - 1) / 8;
+
+			if (bit_offset % 8 == 0) {
+				// just memcpy nullmask
+				memcpy(&nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
+			} else {
+				// need to re-align nullmask :/
+				bitset<STANDARD_VECTOR_SIZE + 8> temp_nullmask;
+				memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
+
+				temp_nullmask >>= (bit_offset % 8); // why this has to be a right shift is a mystery to me
+				memcpy(&nullmask, &temp_nullmask, n_bitmask_bytes);
+			}
+			nullmask.flip(); // arrow uses inverse nullmask logic
 		}
 
 		switch (output.data[col_idx].type.id()) {
