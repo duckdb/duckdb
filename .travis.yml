@@ -597,7 +597,7 @@ matrix:
         - R -q -e 'tic::before_script()'
       script:
         - ./configure
-        - sh build-linux
+        - travis_wait 30 sh build-linux
         - sh deploy-linux
 
     - os: osx
@@ -628,7 +628,7 @@ matrix:
         - R -q -e 'tic::before_script()'
       script:
         - ./configure
-        - sh build-mac
+        - travis_wait 30 sh build-mac
         - sh deploy-mac
 
     - os: windows
@@ -645,5 +645,5 @@ matrix:
         - choco install curl -y --force
         - cd tools/rpkg
         - sh configure
-        - sh build-win
+        - travis_wait 30 sh build-win
         - sh deploy-win
