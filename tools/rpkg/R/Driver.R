@@ -31,10 +31,6 @@ check_flag <- function(x) {
   }
 }
 
-#' @rdname duckdb_driver
-#' @export
-setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "externalptr", dbdir = "character", read_only = "logical"))
-
 extptr_str <- function(e, n = 5) {
   x <- .Call(duckdb_ptr_to_str, e)
   substr(x, nchar(x) - n + 1, nchar(x))
