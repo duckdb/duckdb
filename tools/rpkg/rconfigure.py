@@ -62,14 +62,50 @@ def file_is_excluded(fname):
 			return True
 	return False
 
+def generate_unity_builds(source_list):
+	directory_files = {}
+	for entry in source_list:
+		directory = entry.rsplit(os.path.sep, 1)[0]
+		if directory not in directory_files:
+			directory_files[directory] = []
+		directory_files[directory].append(os.path.join('duckdb', entry))
+	new_source_files = []
+	for directory in directory_files.keys():
+		# check if we should use a unity build here
+		use_unity_build = True
+		cmake_file = os.path.join(directory, 'CMakeLists.txt')
+		if not os.path.isfile(cmake_file):
+			continue
+		with open(cmake_file, 'r') as f:
+			text = f.read()
+			if 'add_library_unity' not in text:
+				use_unity_build = False
+		entries = directory_files[directory]
+		if len(entries) <= 1:
+			use_unity_build = False
+		if not use_unity_build:
+			for entry in entries:
+				new_source_files.append(entry)
+		else:
+			ub_file = os.path.join(target_dir, directory, 'unity_build.cpp')
+			with open(ub_file, 'w+') as f:
+				for entry in entries:
+					f.write('#line 0 "{}"\n'.format(entry))
+					f.write('#include "{}"\n\n'.format(entry))
+			new_source_files.append(ub_file)
+
+	return new_source_files
 
 def convert_backslashes(x):
 	return '/'.join(x.split(os.path.sep))
 
+source_list = generate_unity_builds(source_list)
+
 # object list
-object_list = ' '.join([os.path.join('duckdb', x.rsplit('.', 1)[0] + '.o') for x in source_list if not file_is_excluded(x)])
+object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in source_list if not file_is_excluded(x)])
 # include list
 include_list = ' '.join(['-I' + os.path.join('duckdb', x) for x in include_list])
+include_list += ' -Iduckdb'
 
 os.chdir(prev_wd)
 
