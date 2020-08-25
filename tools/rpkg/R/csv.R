@@ -1,7 +1,10 @@
+#' Reads a CSV file into DuckDB
+#'
 #' Directly reads a CSV file into DuckDB, tries to detect and create the correct schema for it.
-#' @rdname duckdb_connection
+#' This usually is much faster than reading the data into R and writing it to DuckDB.
+#'
+#' @inheritParams duckdb_register
 #' @param files One or more CSV file names, should all have the same structure though
-#' @param tablename The database table the files should be read into
 #' @param header Whether or not the CSV files have a separate header in the first line
 #' @param na.strings Which strings in the CSV files should be considered to be NULL
 #' @param nrow.check How many rows should be read from the CSV file to figure out data types
@@ -11,9 +14,23 @@
 #' @param lower.case.names Transform column names to lower case
 #' @param sep Alias for delim for compatibility
 #' @param transaction Should a transaction be used for the entire operation
+#' @param ... Passed on to [read.csv()]
+#' @return The number of rows in the resulted table, invisibly.
 #' @export
-read_csv_duckdb <- duckdb.read.csv <- function(conn, files, tablename, header = TRUE, na.strings = "", nrow.check = 500,
-                                               delim = ",", quote = "\"", col.names = NULL, lower.case.names = FALSE, sep = delim, transaction = TRUE, ...) {
+#' @examples
+#' con <- dbConnect(duckdb())
+#'
+#' data <- data.frame(a = 1:3, b = letters[1:3])
+#' path <- tempfile(fileext = ".csv")
+#'
+#' write.csv(data, path, row.names = FALSE)
+#'
+#' duckdb_read_csv(con, "data", path)
+#' dbReadTable(con, "data")
+#'
+#' dbDisconnect(con)
+duckdb_read_csv <- function(conn, name, files, header = TRUE, na.strings = "", nrow.check = 500,
+                            delim = ",", quote = "\"", col.names = NULL, lower.case.names = FALSE, sep = delim, transaction = TRUE, ...) {
 
   if (length(na.strings) > 1) stop("na.strings must be of length 1")
   if (!missing(sep)) delim <- sep
@@ -33,7 +50,7 @@ read_csv_duckdb <- duckdb.read.csv <- function(conn, files, tablename, header = 
     on.exit(tryCatch(dbRollback(conn), error = function(e) {}))
   }
 
-  tablename <- dbQuoteIdentifier(conn, tablename)
+  tablename <- dbQuoteIdentifier(conn, name)
 
   if (!dbExistsTable(conn, tablename)) {
     if (lower.case.names) names(headers[[1]]) <- tolower(names(headers[[1]]))
@@ -54,13 +71,32 @@ read_csv_duckdb <- duckdb.read.csv <- function(conn, files, tablename, header = 
   }
 
   for (i in seq_along(files)) {
-    thefile <- dbQuoteString(conn, encodeString(normalizePath(files[i])))
+    thefile <- dbQuoteString(conn, enc2native(normalizePath(files[i])))
     dbExecute(conn, sprintf("COPY %s FROM %s (DELIMITER %s, QUOTE %s, HEADER %s, NULL %s)", tablename, thefile, dbQuoteString(conn, delim), dbQuoteString(conn, quote), tolower(header), dbQuoteString(conn, na.strings[1])))
   }
-  dbGetQuery(conn, paste("SELECT COUNT(*) FROM", tablename))[[1]]
+  out <- dbGetQuery(conn, paste("SELECT COUNT(*) FROM", tablename))[[1]]
 
   if (transaction) {
     dbCommit(conn)
     on.exit(NULL)
   }
+
+  invisible(out)
+}
+
+#' Deprecated functions
+#'
+#' `read_csv_duckdb()` has been superseded by `duckdb_read_csv()`.
+#' The order of the arguments has changed.
+#'
+#' @rdname deprecated
+#' @export
+#' @keywords internal
+read_csv_duckdb <- function(conn, files, tablename, ...) {
+  .Deprecated(
+    "duckdb_read_csv", old = "read_csv_duckdb",
+    msg = "Use 'duckdb_read_csv' instead, with changed order of arguments."
+  )
+  # Different order of arguments!
+  duckdb_read_csv(conn, tablename, files, ...)
 }
