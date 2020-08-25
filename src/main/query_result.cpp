@@ -75,18 +75,33 @@ string QueryResult::HeaderToString() {
 	return result;
 }
 
+struct DuckDBArrowSchemaHolder {
+	// unused in root
+	ArrowSchema schema;
+	// unused in children
+	unique_ptr<ArrowSchema *[]> children; // just space for the *pointers* to children, not the children themselves
+};
+
 static void release_duckdb_arrow_schema(ArrowSchema *schema) {
-	// TODO
+	if (!schema || !schema->release) {
+		return;
+	}
+	schema->release = nullptr;
+	auto holder = (DuckDBArrowSchemaHolder *)schema->private_data;
+	delete holder;
 }
 
 void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 	assert(out_schema);
 
-	auto schema_children = (ArrowSchema *)malloc(column_count() * sizeof(ArrowSchema));
+	auto root_holder = new DuckDBArrowSchemaHolder();
+
+	root_holder->children = unique_ptr<ArrowSchema *[]>(new ArrowSchema *[column_count()]);
+	out_schema->private_data = root_holder;
+	out_schema->children = root_holder->children.get();
 
 	out_schema->format = "+s"; // struct apparently
 	out_schema->n_children = column_count();
-	out_schema->children = (ArrowSchema **)malloc(sizeof(ArrowSchema *) * column_count());
 
 	out_schema->release = release_duckdb_arrow_schema;
 	out_schema->flags = 0;
@@ -95,7 +110,10 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 	out_schema->dictionary = nullptr;
 
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		auto &child = schema_children[col_idx];
+
+		auto holder = new DuckDBArrowSchemaHolder();
+		auto &child = holder->schema;
+
 		child.name = names[col_idx].c_str();
 		child.n_children = 0;
 		child.children = nullptr;

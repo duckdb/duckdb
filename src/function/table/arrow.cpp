@@ -18,10 +18,6 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	DuckDBArrowTable *table;
 	idx_t chunk_idx = 0;
 	idx_t chunk_offset = 0;
-
-	~ArrowScanFunctionData() {
-		// delete table; // FIXME this somehow crashes shit
-	}
 };
 
 static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<Value> &inputs,

@@ -9,8 +9,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/arrow.hpp"
-
-using namespace std;
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -193,44 +192,37 @@ void DataChunk::Print() {
 }
 
 struct DuckDBArrowArrayHolder {
-	Vector vector;
 	ArrowArray array;
+	const void *buffers[3];              // need max three pointers for strings
+	unique_ptr<ArrowArray *[]> children; // just space for the *pointers* to children, not the children themselves
+
+	Vector vector;
+	unique_ptr<data_t[]> string_offsets;
+	unique_ptr<data_t[]> string_data;
 };
 
 static void release_duckdb_arrow_array(ArrowArray *array) {
-	if (!array || !array->release || !array->private_data) {
-		return;
-	}
-	auto holder = (DuckDBArrowArrayHolder *)array->private_data;
-	delete holder;
-	if (array->n_buffers == 3) { // string
-		free((void *)array->buffers[1]);
-		free((void *)array->buffers[2]);
-	}
-	free(array->buffers);
-	array->release = nullptr;
-}
-
-static void release_duckdb_arrow_array_root(ArrowArray *array) {
 	if (!array || !array->release) {
 		return;
 	}
-	free(array->buffers);
-	free(array->children);
 	array->release = nullptr;
+	auto holder = (DuckDBArrowArrayHolder *)array->private_data;
+	delete holder;
 }
 
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	assert(out_array);
 
-	out_array->children = (ArrowArray **)malloc(sizeof(ArrowArray *) * column_count());
+	auto root_holder = new DuckDBArrowArrayHolder();
+	root_holder->children = unique_ptr<ArrowArray *[]>(new ArrowArray *[column_count()]);
+	out_array->private_data = root_holder;
+	out_array->children = root_holder->children.get();
 	out_array->length = size();
 	out_array->n_children = column_count();
-	out_array->release = release_duckdb_arrow_array_root;
+	out_array->release = release_duckdb_arrow_array;
 	out_array->n_buffers = 1;
-	out_array->buffers = (const void **)malloc(sizeof(void *) * 1);
+	out_array->buffers = root_holder->buffers;
 	out_array->buffers[0] = nullptr; // there is no actual buffer there since we don't have NULLs
-
 	out_array->offset = 0;
 	out_array->null_count = 0; // needs to be 0
 	out_array->dictionary = nullptr;
@@ -243,13 +235,12 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 		auto &vector = holder->vector;
 
 		child.private_data = holder;
-
 		child.n_children = 0;
 		child.null_count = -1; // unknown
 		child.offset = 0;
 		child.dictionary = nullptr;
 		child.release = release_duckdb_arrow_array;
-		child.buffers = (const void **)malloc(sizeof(void *) * 3); // max three buffers
+		child.buffers = holder->buffers;
 
 		child.length = size();
 
@@ -273,9 +264,9 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 
 			case LogicalTypeId::VARCHAR: {
 				child.n_buffers = 3;
-
-				child.buffers[1] = malloc(sizeof(uint32_t) * (size() + 1));
-
+				holder->string_offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
+				child.buffers[1] = holder->string_offsets.get();
+				assert(child.buffers[1]);
 				// step 1: figure out total string length:
 				idx_t total_string_length = 0;
 				auto string_t_ptr = FlatVector::GetData<string_t>(vector);
@@ -287,7 +278,9 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 					total_string_length += string_t_ptr[row_idx].GetSize();
 				}
 				// step 2: allocate this much
-				child.buffers[2] = malloc(total_string_length);
+				holder->string_data = unique_ptr<data_t[]>(new data_t[total_string_length]);
+				child.buffers[2] = holder->string_data.get();
+				assert(child.buffers[2]);
 				// step 3: assign buffers
 				idx_t current_heap_offset = 0;
 				auto target_ptr = (uint32_t *)child.buffers[1];
