@@ -89,7 +89,7 @@ or a \linkS4class{DBIResult}}
 
 \item{...}{Other arguments to methods.}
 
-\item{conn}{A DuckDB connection, created by `dbConnect()`.}
+\item{conn}{A DuckDB connection, created by \code{dbConnect()}.}
 
 \item{shutdown}{Shut down the DuckDB database instance that this connection refers to.}
 
@@ -97,7 +97,7 @@ or a \linkS4class{DBIResult}}
 
 \item{obj}{An R object whose SQL type we want to determine.}
 
-\item{name}{The name for the virtual table previously registered using `duckdb_register()`.}
+\item{name}{The name for the virtual table previously registered using \code{duckdb_register()}.}
 
 \item{value}{a \link{data.frame} (or coercible to data.frame).}
 
@@ -133,7 +133,7 @@ or a \linkS4class{DBIResult}}
 
 \item{transaction}{Should a transaction be used for the entire operation}
 
-\item{df}{A `data.frame` with the data for the virtual table}
+\item{df}{A \code{data.frame} with the data for the virtual table}
 }
 \description{
 DuckDB connection class
