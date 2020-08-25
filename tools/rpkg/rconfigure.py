@@ -62,12 +62,14 @@ def file_is_excluded(fname):
 			return True
 	return False
 
+
+def convert_backslashes(x):
+	return '/'.join(x.split(os.path.sep))
+
 # object list
 object_list = ' '.join([os.path.join('duckdb', x.rsplit('.', 1)[0] + '.o') for x in source_list if not file_is_excluded(x)])
 # include list
 include_list = ' '.join(['-I' + os.path.join('duckdb', x) for x in include_list])
-# add source id define
-include_list += ' -DDUCKDB_SOURCE_ID=\\"{}\\"'.format(githash.decode('utf8'))
 
 os.chdir(prev_wd)
 
@@ -75,8 +77,8 @@ os.chdir(prev_wd)
 with open(os.path.join('src', 'Makevars.in'), 'r') as f:
 	text = f.read()
 
-text = text.replace('{{ SOURCES }}', object_list)
-text = text.replace('{{ INCLUDES }}', include_list)
+text = text.replace('{{ SOURCES }}', convert_backslashes(object_list))
+text = text.replace('{{ INCLUDES }}', convert_backslashes(include_list) + ' -DDUCKDB_SOURCE_ID=\\"{}\\"'.format(githash.decode('utf8')))
 
 # now write it to the output Makevars
 with open(os.path.join('src', 'Makevars'), 'w+') as f:
