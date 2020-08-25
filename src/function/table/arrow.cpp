@@ -33,9 +33,18 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 	if (!res->table) {
 		throw InvalidInputException("arrow_scan: NULL pointer passed");
 	}
+	if (!res->table->schema.release) {
+		throw InvalidInputException("arrow_scan: released schema passed");
+	}
+	if (res->table->schema.n_children < 1) {
+		throw InvalidInputException("arrow_scan: empty schema passed");
+	}
 
 	for (idx_t col_idx = 0; col_idx < (idx_t)res->table->schema.n_children; col_idx++) {
 		auto &schema = *res->table->schema.children[col_idx];
+		if (!schema.release) {
+			throw InvalidInputException("arrow_scan: released schema passed");
+		}
 		auto format = string(schema.format);
 		if (format == "b") {
 			return_types.push_back(LogicalType::TINYINT);
@@ -75,7 +84,7 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 	auto &data = *((ArrowScanFunctionData *)dataptr);
 
 	// have we run out of data on the current chunk? move to next one
-	if (data.chunk_offset >= (idx_t)data.table->chunks[data.chunk_idx].children[0]->length) {
+	if (data.chunk_offset >= (idx_t)data.table->chunks[data.chunk_idx].length) {
 		data.chunk_idx++;
 		data.chunk_offset = 0;
 	}
@@ -84,17 +93,30 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 	if (data.chunk_idx >= data.table->chunks.size()) {
 		return;
 	}
+	auto &current_arrow_chunk = data.table->chunks[data.chunk_idx];
+
+	if (!current_arrow_chunk.release) {
+		throw InvalidInputException("arrow_scan: released array passed");
+	}
+	if ((idx_t)current_arrow_chunk.n_children != output.column_count()) {
+		throw InvalidInputException("arrow_scan: array column count mismatch");
+	}
 
 	output.SetCardinality(
-	    std::min((int64_t)STANDARD_VECTOR_SIZE,
-	             (int64_t)(data.table->chunks[data.chunk_idx].children[0]->length - data.chunk_offset)));
-	for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
-		auto &array = *data.table->chunks[data.chunk_idx].children[col_idx];
+	    std::min((int64_t)STANDARD_VECTOR_SIZE, (int64_t)(current_arrow_chunk.length - data.chunk_offset)));
 
+	for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
+		auto &array = *current_arrow_chunk.children[col_idx];
+		if (!array.release) {
+			throw InvalidInputException("arrow_scan: released array passed");
+		}
+		if (array.length != current_arrow_chunk.length) {
+			throw InvalidInputException("arrow_scan: array length mismatch");
+		}
 		// just memcpy nullmask
-		if (array.buffers[0]) {
+		if (array.null_count != 0 && array.buffers[0]) {
 			auto n_bitmask_bytes = (output.size() + 8 - 1) / 8;
-			auto bytes_to_skip = (data.chunk_offset + 8 - 1) / 8;
+			auto bytes_to_skip = (data.chunk_offset + array.offset + 8 - 1) / 8;
 
 			nullmask_t new_nullmask;
 			memcpy(&new_nullmask, (uint8_t *)array.buffers[0] + bytes_to_skip, n_bitmask_bytes);
@@ -111,27 +133,30 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
 			FlatVector::SetData(output.data[col_idx],
-			                    (data_ptr_t)array.buffers[1] +
-			                        GetTypeIdSize(output.data[col_idx].type.InternalType()) * data.chunk_offset);
+			                    (data_ptr_t)array.buffers[1] + GetTypeIdSize(output.data[col_idx].type.InternalType()) *
+			                                                       (data.chunk_offset + array.offset));
 			break;
 
 		case LogicalTypeId::VARCHAR: {
-			auto offsets = (uint32_t *)array.buffers[1] + data.chunk_offset;
+			auto offsets = (uint32_t *)array.buffers[1] + array.offset + data.chunk_offset;
 			auto cdata = (char *)array.buffers[2];
 
-			for (idx_t i = 0; i < output.size(); i++) {
-				auto cptr = cdata + offsets[i];
-				auto str_len = offsets[i + 1] - offsets[i];
+			for (idx_t row_idx = 0; row_idx < output.size(); row_idx++) {
+				if (FlatVector::Nullmask(output.data[col_idx])[row_idx]) {
+					continue;
+				}
+				auto cptr = cdata + offsets[row_idx];
+				auto str_len = offsets[row_idx + 1] - offsets[row_idx];
 
 				auto utf_type = Utf8Proc::Analyze(cptr, str_len);
 				switch (utf_type) {
 				case UnicodeType::ASCII:
-					FlatVector::GetData<string_t>(output.data[col_idx])[i] =
+					FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
 					    StringVector::AddString(output.data[col_idx], cptr, str_len);
 					break;
 				case UnicodeType::UNICODE:
 					// this regrettably copies to normalize
-					FlatVector::GetData<string_t>(output.data[col_idx])[i] =
+					FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
 					    StringVector::AddString(output.data[col_idx], Utf8Proc::Normalize(string(cptr, str_len)));
 
 					break;
