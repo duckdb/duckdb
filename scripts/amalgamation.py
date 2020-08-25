@@ -49,7 +49,7 @@ compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, utf8proc_dir, pg_qu
 # files always excluded
 always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-extension.cpp', 'src/amalgamation/parquet-extension.hpp']
 # files excluded from the amalgamation
-excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'utf8proc_data.cpp']
+excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp']
 # files excluded from individual file compilation during test_compile
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
 

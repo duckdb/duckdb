@@ -3,6 +3,8 @@ import sys
 import shutil
 import subprocess
 
+excluded_objects = ['utf8proc_data.cpp']
+
 if not os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
 	print("Could not find amalgamation script! This script needs to be launched from the subdirectory tools/rpkg")
 	exit(1)
@@ -54,8 +56,14 @@ for src in source_list:
 for inc in include_files:
 	copy_file(inc, target_dir)
 
+def file_is_excluded(fname):
+	for entry in excluded_objects:
+		if entry in fname:
+			return True
+	return False
+
 # object list
-object_list = ' '.join([os.path.join('duckdb', x.rsplit('.', 1)[0] + '.o') for x in source_list])
+object_list = ' '.join([os.path.join('duckdb', x.rsplit('.', 1)[0] + '.o') for x in source_list if not file_is_excluded(x)])
 # include list
 include_list = ' '.join(['-I' + os.path.join('duckdb', x) for x in include_list])
 # add source id define
