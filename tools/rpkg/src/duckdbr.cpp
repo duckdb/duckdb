@@ -7,7 +7,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "parquet-extension.h"
+#include "parquet-extension.hpp"
 
 #include <Rdefines.h>
 #include <algorithm>
