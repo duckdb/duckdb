@@ -49,7 +49,7 @@ compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, utf8proc_dir, pg_qu
 # files always excluded
 always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-extension.cpp', 'src/amalgamation/parquet-extension.hpp']
 # files excluded from the amalgamation
-excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
+excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'utf8proc_data.cpp']
 # files excluded from individual file compilation during test_compile
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
 
@@ -183,9 +183,6 @@ def generate_amalgamation(source_file, header_file):
 
         for compile_dir in compile_directories:
             write_dir(compile_dir, sfile)
-        # for windows we write file_system.cpp last
-        # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
-        sfile.write(write_file(os.path.join('src', 'common', 'file_system.cpp'), True))
 
     copy_if_different(temp_header, header_file)
     copy_if_different(temp_source, source_file)
@@ -223,7 +220,7 @@ def list_include_files_recursive(dname, file_list):
         fpath = os.path.join(dname, fname)
         if os.path.isdir(fpath):
             list_include_files_recursive(fpath, file_list)
-        elif fname.endswith('.hpp') or fname.endswith('.h') or fname.endswith('.hh'):
+        elif fname.endswith('.hpp') or fname.endswith('.h') or fname.endswith('.hh') or fname.endswith('.tcc'):
             file_list.append(fpath)
 
 def list_includes_files(include_dirs):
