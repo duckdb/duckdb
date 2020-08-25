@@ -51,24 +51,6 @@ setMethod(
 )
 
 #' @rdname duckdb_connection
-#' @param shutdown Shut down the DuckDB database instance that this connection refers to.
-#' @export
-setMethod(
-  "dbDisconnect", "duckdb_connection",
-  function(conn, ..., shutdown = FALSE) {
-    if (!dbIsValid(conn)) {
-      warning("Connection already closed.", call. = FALSE)
-    }
-    .Call(duckdb_disconnect_R, conn@conn_ref)
-    if (shutdown) {
-      duckdb_shutdown(conn@driver)
-    }
-
-    invisible(TRUE)
-  }
-)
-
-#' @rdname duckdb_connection
 #' @inheritParams DBI::dbSendQuery
 #' @export
 setMethod(

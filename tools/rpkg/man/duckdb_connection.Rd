@@ -5,7 +5,6 @@
 \alias{duckdb_connection-class}
 \alias{show,duckdb_connection-method}
 \alias{dbIsValid,duckdb_connection-method}
-\alias{dbDisconnect,duckdb_connection-method}
 \alias{dbSendQuery,duckdb_connection,character-method}
 \alias{dbDataType,duckdb_connection-method}
 \alias{dbWriteTable,duckdb_connection,character,data.frame-method}
@@ -22,8 +21,6 @@
 \S4method{show}{duckdb_connection}(object)
 
 \S4method{dbIsValid}{duckdb_connection}(dbObj, ...)
-
-\S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
 
 \S4method{dbSendQuery}{duckdb_connection,character}(conn, statement, ...)
 
@@ -68,8 +65,6 @@ or a \linkS4class{DBIResult}}
 
 \item{conn}{A \linkS4class{DBIConnection} object, as returned by
 \code{\link[DBI:dbConnect]{dbConnect()}}.}
-
-\item{shutdown}{Shut down the DuckDB database instance that this connection refers to.}
 
 \item{statement}{a character string containing SQL.}
 
