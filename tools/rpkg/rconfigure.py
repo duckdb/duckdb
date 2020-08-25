@@ -71,16 +71,27 @@ def generate_unity_build(entries, idx):
 	return ub_file
 
 def generate_unity_builds(source_list, nsplits):
+	source_list.sort()
+
 	files_per_split = len(source_list) / nsplits
 	new_source_files = []
 	current_files = []
 	idx = 1
 	for entry in source_list:
+		if not entry.startswith('src'):
+			new_source_files.append(os.path.join('duckdb', entry))
+			continue
+
 		current_files.append(entry)
-		if len(current_files) > files_per_split or entry == source_list[-1]:
+		if len(current_files) > files_per_split:
 			new_source_files.append(generate_unity_build(current_files, idx))
 			current_files = []
 			idx += 1
+	if len(current_files) > 0:
+		new_source_files.append(generate_unity_build(current_files, idx))
+		current_files = []
+		idx += 1
+
 	return new_source_files
 
 def convert_backslashes(x):
