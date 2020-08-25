@@ -50,7 +50,7 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 		}
 		auto format = string(schema.format);
 		if (format == "b") {
-			return_types.push_back(LogicalType::TINYINT);
+			return_types.push_back(LogicalType::BOOLEAN);
 		} else if (format == "c") {
 			return_types.push_back(LogicalType::TINYINT);
 		} else if (format == "s") {
