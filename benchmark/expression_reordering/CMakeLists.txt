@@ -1,4 +1,3 @@
-include_directories(../../third_party/dbgen/include)
 include_directories(../../third_party/sqlite/include)
 add_library(duckdb_benchmark_expression_reordering OBJECT
             benchmark_expressions.cpp

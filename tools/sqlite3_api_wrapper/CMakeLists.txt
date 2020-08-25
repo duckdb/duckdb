@@ -8,6 +8,11 @@ if(${BUILD_PARQUET_EXTENSION})
   add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
 endif()
 
+if(${BUILD_TPCH_EXTENSION})
+  add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
+endif()
+
+
 add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp printf.c)
 target_link_libraries(sqlite3_api_wrapper duckdb Threads::Threads)
 
@@ -24,6 +29,12 @@ if(${BUILD_ICU_EXTENSION})
   include_directories(../../extension/icu/include)
   target_link_libraries(sqlite3_api_wrapper icu_extension)
   target_link_libraries(sqlite3_api_wrapper_static icu_extension)
+endif()
+
+if(${BUILD_TPCH_EXTENSION})
+  include_directories(../../extension/tpch/include)
+  target_link_libraries(sqlite3_api_wrapper tpch_extension)
+  target_link_libraries(sqlite3_api_wrapper_static tpch_extension)
 endif()
 
 include_directories(../../third_party/catch)

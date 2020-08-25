@@ -34,6 +34,7 @@ enum class StatementType : uint8_t {
 	DROP_STATEMENT,         // DROP statement type
 	PRAGMA_STATEMENT,       // PRAGMA statement type
 	VACUUM_STATEMENT,       // VACUUM statement type
+	CALL_STATEMENT,         // CALL statement type
 	RELATION_STATEMENT
 };
 

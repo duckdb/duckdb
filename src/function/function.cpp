@@ -107,6 +107,17 @@ string Function::CallToString(string name, vector<LogicalType> arguments) {
 	return result + ")";
 }
 
+string TableFunction::ToString() {
+	vector<string> input_arguments;
+	for(auto &arg : arguments) {
+		input_arguments.push_back(arg.ToString());
+	}
+	for(auto &kv : named_parameters) {
+		input_arguments.push_back(StringUtil::Format("%s : %s", kv.first, kv.second.ToString()));
+	}
+	return StringUtil::Format("%s(%s)", name, StringUtil::Join(input_arguments, ", "));
+}
+
 string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
 	string result = CallToString(name, arguments);
 	result += " -> " + return_type.ToString();

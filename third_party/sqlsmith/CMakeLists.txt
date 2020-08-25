@@ -1,4 +1,3 @@
-include_directories(../dbgen/include)
 include_directories(include)
 
 add_executable(sqlsmith
@@ -13,7 +12,7 @@ add_executable(sqlsmith
                relmodel.cc
                schema.cc
                sqlsmith.cc)
-target_link_libraries(sqlsmith duckdb dbgen)
+target_link_libraries(sqlsmith duckdb tpch_extension)
 TARGET_LINK_LIBRARIES(sqlsmith Threads::Threads)
 
 

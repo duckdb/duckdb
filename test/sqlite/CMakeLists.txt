@@ -8,6 +8,11 @@ if(${BUILD_PARQUET_EXTENSION})
   include_directories(../../extension/parquet/include)
 endif()
 
+if(${BUILD_TPCH_EXTENSION})
+  add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
+  include_directories(../../extension/tpch/include)
+endif()
+
 add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 
 add_library_unity(test_sqlite

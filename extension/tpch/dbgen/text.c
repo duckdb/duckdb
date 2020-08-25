@@ -430,17 +430,17 @@ int main() {
 
 	verbose = 1;
 
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "nouns", &nouns);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "verbs", &verbs);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "adjectives", &adjectives);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "adverbs", &adverbs);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "auxillaries", &auxillaries);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "terminators", &terminators);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "articles", &articles);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "prepositions", &prepositions);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "grammar", &grammar);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "np", &np);
-	read_dist(env_config(DIST_TAG, DIST_DFLT), "vp", &vp);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "nouns", &nouns);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "verbs", &verbs);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "adjectives", &adjectives);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "adverbs", &adverbs);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "auxillaries", &auxillaries);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "terminators", &terminators);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "articles", &articles);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "prepositions", &prepositions);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "grammar", &grammar);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "np", &np);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "vp", &vp);
 
 	while (1) {
 		dbg_text(&prattle[0], 300, 400, 0);

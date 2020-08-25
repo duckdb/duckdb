@@ -25,7 +25,7 @@ extern adhoc_t adhocs[];
 		DSS_HUGE tot_scnt = tdefs[SUPP].base * scale;                                                                  \
 		tgt = (p + s * (tot_scnt / SUPP_PER_PART + (long)((p - 1) / tot_scnt))) % tot_scnt + 1;                        \
 	}
-#define V_STR(avg, sd, tgt) a_rnd((int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd, tgt)
+#define V_STR(avg, sd, tgt) tpch_a_rnd((int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd, tgt)
 #define TEXT(avg, sd, tgt) dbg_text(tgt, (int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd)
 static void gen_phone PROTO((DSS_HUGE ind, char *target, long seed));
 

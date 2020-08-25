@@ -50,6 +50,10 @@
 #include "parquet-extension.hpp"
 #endif
 
+#ifdef BUILD_TPCH_EXTENSION
+#include "tpch-extension.hpp"
+#endif
+
 #include "test_helpers.hpp"
 
 #include <algorithm>
@@ -903,6 +907,13 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(string extension) {
 	} else if (extension == "icu") {
 #ifdef BUILD_ICU_EXTENSION
 		db->LoadExtension<ICUExtension>();
+#else
+		// icu extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "tpch") {
+#ifdef BUILD_TPCH_EXTENSION
+		db->LoadExtension<TPCHExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;

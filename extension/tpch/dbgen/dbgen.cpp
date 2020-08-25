@@ -5,7 +5,13 @@
 #include "dbgen_gunk.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "tpch_constants.hpp"
-#include "duckdb/main/appender.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #define DECLARER /* EXTERN references get defined here */
 
@@ -34,24 +40,71 @@ tdef tdefs[] = {
 
 namespace tpch {
 
+struct UnsafeAppender {
+	UnsafeAppender(ClientContext &context, TableCatalogEntry *tbl) :
+		context(context), tbl(tbl), col(0) {
+		vector<LogicalType> types;
+		for(idx_t i = 0; i < tbl->columns.size(); i++) {
+			types.push_back(tbl->columns[i].type);
+		}
+		chunk.Initialize(types);
+	}
+
+	void BeginRow() {
+		col = 0;
+	}
+
+	void EndRow() {
+		assert(col == chunk.column_count());
+		chunk.SetCardinality(chunk.size() + 1);
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+			Flush();
+		}
+	}
+
+	void Flush() {
+		if (chunk.size() == 0) {
+			return;
+		}
+		tbl->storage->Append(*tbl, context, chunk);
+		chunk.Reset();
+	}
+
+	template<class T>
+	void AppendValue(T value) {
+		assert(col < chunk.column_count());
+		FlatVector::GetData<T>(chunk.data[col])[chunk.size()] = value;
+		col++;
+	}
+
+	void AppendString(const char *value) {
+		AppendValue<string_t>(StringVector::AddString(chunk.data[col], value));
+	}
+private:
+	ClientContext &context;
+	TableCatalogEntry *tbl;
+	DataChunk chunk;
+	idx_t col;
+};
+
 struct tpch_append_information {
-	unique_ptr<Appender> appender;
+	unique_ptr<UnsafeAppender> appender;
 };
 
 void append_value(tpch_append_information &info, int32_t value) {
-	info.appender->Append<int32_t>(value);
+	info.appender->AppendValue<int32_t>(value);
 }
 
 void append_string(tpch_append_information &info, const char *value) {
-	info.appender->Append<Value>(Value(value));
+	info.appender->AppendString(value);
 }
 
 void append_decimal(tpch_append_information &info, int64_t value) {
-	info.appender->Append<double>(value / 100.0);
+	info.appender->AppendValue<double>(value / 100.0);
 }
 
 void append_date(tpch_append_information &info, string value) {
-	info.appender->Append<int32_t>(Date::FromString(value));
+	info.appender->AppendValue<int32_t>(Date::FromString(value));
 }
 
 void append_char(tpch_append_information &info, char value) {
@@ -320,127 +373,104 @@ string get_table_name(int num) {
 	}
 }
 
-static string RegionSchema(string schema, string suffix) {
-	return "CREATE TABLE " + schema + ".region" + suffix +
-	       " ("
-	       "r_regionkey INT NOT NULL,"
-	       "r_name VARCHAR(25) NOT NULL,"
-	       "r_comment VARCHAR(152) NOT NULL);";
+// FIXME; find replace: LogicalType(LogicalTypeId::DOUBLE) -> LogicalType(LogicalTypeId::DECIMAL, 15, 2)
+struct RegionInfo {
+	static constexpr char *Name = "region";
+	static constexpr char *Columns[] = { "r_regionkey", "r_name", "r_comment" };
+	static constexpr idx_t ColumnCount = 3;
+	static const LogicalType Types[];
+};
+const LogicalType RegionInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
+
+struct NationInfo {
+	static constexpr char *Name = "nation";
+	static constexpr char *Columns[] = { "n_nationkey", "n_name", "n_regionkey", "n_comment" };
+	static constexpr idx_t ColumnCount = 4;
+	static const LogicalType Types[];
+};
+const LogicalType NationInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR) };
+
+struct SupplierInfo {
+	static constexpr char *Name = "supplier";
+	static constexpr char *Columns[] = { "s_suppkey", "s_name", "s_address", "s_nationkey", "s_phone", "s_acctbal", "s_comment" };
+	static constexpr idx_t ColumnCount = 7;
+	static const LogicalType Types[];
+};
+const LogicalType SupplierInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR) };
+
+struct CustomerInfo {
+	static constexpr char *Name = "customer";
+	static constexpr char *Columns[] = { "c_custkey", "c_name", "c_address", "c_nationkey", "c_phone", "c_acctbal", "c_mktsegment", "c_comment" };
+	static constexpr idx_t ColumnCount = 8;
+	static const LogicalType Types[];
+};
+const LogicalType CustomerInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
+
+struct PartInfo {
+	static constexpr char *Name = "part";
+	static constexpr char *Columns[] = { "p_partkey", "p_name", "p_mfgr", "p_brand", "p_type", "p_size", "p_container", "p_retailprice", "p_comment" };
+	static constexpr idx_t ColumnCount = 9;
+	static const LogicalType Types[];
+};
+const LogicalType PartInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR) };
+
+struct PartsuppInfo {
+	static constexpr char *Name = "partsupp";
+	static constexpr char *Columns[] = { "ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment" };
+	static constexpr idx_t ColumnCount = 5;
+	static const LogicalType Types[];
+};
+const LogicalType PartsuppInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR) };
+
+struct OrdersInfo {
+	static constexpr char *Name = "orders";
+	static constexpr char *Columns[] = { "o_orderkey", "o_custkey", "o_orderstatus", "o_totalprice", "o_orderdate", "o_orderpriority", "o_clerk", "o_shippriority", "o_comment" };
+	static constexpr idx_t ColumnCount = 9;
+	static const LogicalType Types[];
+};
+const LogicalType OrdersInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR) };
+
+struct LineitemInfo {
+	static constexpr char *Name = "lineitem";
+	static constexpr char *Columns[] = { "l_orderkey", "l_partkey", "l_suppkey", "l_linenumber", "l_quantity", "l_extendedprice", "l_discount", "l_tax", "l_returnflag", "l_linestatus", "l_shipdate", "l_commitdate", "l_receiptdate", "l_shipinstruct", "l_shipmode", "l_comment" };
+	static constexpr idx_t ColumnCount = 16;
+	static const LogicalType Types[];
+};
+const LogicalType LineitemInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
+
+template<class T>
+static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
+	auto info = make_unique<CreateTableInfo>();
+	info->schema = schema;
+	info->table = T::Name + suffix;
+	info->on_conflict = OnCreateConflict::ERROR;
+	info->temporary = false;
+	for(idx_t i = 0; i < T::ColumnCount; i++) {
+		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
+		info->constraints.push_back(make_unique<NotNullConstraint>(i));
+	}
+	Binder binder(context);
+	auto bound_info = binder.BindCreateTableInfo(move(info));
+	auto &catalog = Catalog::GetCatalog(context);
+
+	catalog.CreateTable(context, bound_info.get());
 }
 
-static string NationSchema(string schema, string suffix) {
-	return "CREATE TABLE " + schema + ".nation" + suffix +
-	       " ("
-	       "n_nationkey INT NOT NULL,"
-	       "n_name VARCHAR(25) NOT NULL,"
-	       "n_regionkey INT NOT NULL,"
-	       "n_comment VARCHAR(152) NOT NULL);";
+void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, string suffix) {
+	CreateTPCHTable<RegionInfo>(context, schema, suffix);
+	CreateTPCHTable<NationInfo>(context, schema, suffix);
+	CreateTPCHTable<SupplierInfo>(context, schema, suffix);
+	CreateTPCHTable<CustomerInfo>(context, schema, suffix);
+	CreateTPCHTable<PartInfo>(context, schema, suffix);
+	CreateTPCHTable<PartsuppInfo>(context, schema, suffix);
+	CreateTPCHTable<OrdersInfo>(context, schema, suffix);
+	CreateTPCHTable<LineitemInfo>(context, schema, suffix);
 }
 
-static string SupplierSchema(string schema, string suffix) {
-	return "CREATE TABLE " + schema + ".supplier" + suffix +
-	       " ("
-	       "s_suppkey INT NOT NULL,"
-	       "s_name VARCHAR(25) NOT NULL,"
-	       "s_address VARCHAR(40) NOT NULL,"
-	       "s_nationkey INT NOT NULL,"
-	       "s_phone VARCHAR(15) NOT NULL,"
-	       "s_acctbal DECIMAL(15,2) NOT NULL,"
-	       "s_comment VARCHAR(101) NOT NULL);";
-}
-
-static string CustomerSchema(string schema, string suffix) {
-	return "CREATE TABLE " + schema + ".customer" + suffix +
-	       " ("
-	       "c_custkey INT NOT NULL,"
-	       "c_name VARCHAR(25) NOT NULL,"
-	       "c_address VARCHAR(40) NOT NULL,"
-	       "c_nationkey INT NOT NULL,"
-	       "c_phone VARCHAR(15) NOT NULL,"
-	       "c_acctbal DECIMAL(15,2) NOT NULL,"
-	       "c_mktsegment VARCHAR(10) NOT NULL,"
-	       "c_comment VARCHAR(117) NOT NULL);";
-}
-
-static string PartSchema(string schema, string suffix) {
-	return "CREATE TABLE " + schema + ".part" + suffix +
-	       " ("
-	       "p_partkey INT NOT NULL,"
-	       "p_name VARCHAR(55) NOT NULL,"
-	       "p_mfgr VARCHAR(25) NOT NULL,"
-	       "p_brand VARCHAR(10) NOT NULL,"
-	       "p_type VARCHAR(25) NOT NULL,"
-	       "p_size INT NOT NULL,"
-	       "p_container VARCHAR(10) NOT NULL,"
-	       "p_retailprice DECIMAL(15,2) NOT NULL,"
-	       "p_comment VARCHAR(23) NOT NULL);";
-}
-
-static string PartSuppSchema(string schema, string suffix) {
-	return "CREATE TABLE " + schema + ".partsupp" + suffix +
-	       " ("
-	       "ps_partkey INT NOT NULL,"
-	       "ps_suppkey INT NOT NULL,"
-	       "ps_availqty INT NOT NULL,"
-	       "ps_supplycost DECIMAL(15,2) NOT NULL,"
-	       "ps_comment VARCHAR(199) NOT NULL);";
-}
-
-static string OrdersSchema(string schema, string suffix) {
-	return "CREATE TABLE " + schema + ".orders" + suffix +
-	       " ("
-	       "o_orderkey INT NOT NULL,"
-	       "o_custkey INT NOT NULL,"
-	       "o_orderstatus VARCHAR(1) NOT NULL,"
-	       "o_totalprice DECIMAL(15,2) NOT NULL,"
-	       "o_orderdate DATE NOT NULL,"
-	       "o_orderpriority VARCHAR(15) NOT NULL,"
-	       "o_clerk VARCHAR(15) NOT NULL,"
-	       "o_shippriority INT NOT NULL,"
-	       "o_comment VARCHAR(79) NOT NULL);";
-}
-
-static string LineitemSchema(string schema, string suffix) {
-	return "CREATE TABLE " + schema + ".lineitem" + suffix +
-	       " ("
-	       "l_orderkey INT NOT NULL,"
-	       "l_partkey INT NOT NULL,"
-	       "l_suppkey INT NOT NULL,"
-	       "l_linenumber INT NOT NULL,"
-	       "l_quantity INTEGER NOT NULL,"
-	       "l_extendedprice DECIMAL(15,2) NOT NULL,"
-	       "l_discount DECIMAL(15,2) NOT NULL,"
-	       "l_tax DECIMAL(15,2) NOT NULL,"
-	       "l_returnflag VARCHAR(1) NOT NULL,"
-	       "l_linestatus VARCHAR(1) NOT NULL,"
-	       "l_shipdate DATE NOT NULL,"
-	       "l_commitdate DATE NOT NULL,"
-	       "l_receiptdate DATE NOT NULL,"
-	       "l_shipinstruct VARCHAR(25) NOT NULL,"
-	       "l_shipmode VARCHAR(10) NOT NULL,"
-	       "l_comment VARCHAR(44) NOT NULL)";
-}
-
-void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
-	unique_ptr<QueryResult> result;
-	Connection con(db);
-	con.Query("BEGIN TRANSACTION");
-
-	con.Query(RegionSchema(schema, suffix));
-	con.Query(NationSchema(schema, suffix));
-	con.Query(SupplierSchema(schema, suffix));
-	con.Query(CustomerSchema(schema, suffix));
-	con.Query(PartSchema(schema, suffix));
-	con.Query(PartSuppSchema(schema, suffix));
-	con.Query(OrdersSchema(schema, suffix));
-	con.Query(LineitemSchema(schema, suffix));
-
+void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix) {
 	if (flt_scale == 0) {
-		// schema only
-		con.Query("COMMIT");
 		return;
 	}
-
 	// generate the actual data
 	DSS_HUGE rowcnt = 0;
 	DSS_HUGE i;
@@ -488,8 +518,9 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		int_scale = (int)(1000 * flt_scale);
 		for (i = PART; i < REGION; i++) {
 			tdefs[i].base = (DSS_HUGE)(int_scale * tdefs[i].base) / 1000;
-			if (tdefs[i].base < 1)
+			if (tdefs[i].base < 1) {
 				tdefs[i].base = 1;
+			}
 		}
 	} else {
 		scale = (long)flt_scale;
@@ -501,12 +532,16 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
+	auto &catalog = Catalog::GetCatalog(context);
+
 	auto append_info = unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
 	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
-			append_info[i].appender = make_unique<Appender>(con, schema, string(tname) + string(suffix));
+			string full_tname = string(tname) + string(suffix);
+			auto tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
+			append_info[i].appender = make_unique<UnsafeAppender>(context, tbl_catalog);
 		}
 	}
 
@@ -530,17 +565,16 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	}
 
 	cleanup_dists();
-	con.Query("COMMIT");
 }
 
-string get_query(int query) {
+string DBGenWrapper::GetQuery(int query) {
 	if (query <= 0 || query > TPCH_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-H query number %d", query);
 	}
 	return TPCH_QUERIES[query - 1];
 }
 
-string get_answer(double sf, int query) {
+string DBGenWrapper::GetAnswer(double sf, int query) {
 	if (query <= 0 || query > TPCH_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-H query number %d", query);
 	}

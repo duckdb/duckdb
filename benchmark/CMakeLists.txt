@@ -17,7 +17,6 @@ add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp $
 target_link_libraries(
   benchmark_runner
   duckdb
-  dbgen
   dsdgen
   imdb
   test_helpers
@@ -29,4 +28,8 @@ endif()
 
 if(${BUILD_PARQUET_EXTENSION})
   target_link_libraries(benchmark_runner parquet_extension)
+endif()
+
+if(${BUILD_TPCH_EXTENSION})
+  target_link_libraries(benchmark_runner tpch_extension)
 endif()

@@ -2,9 +2,9 @@
  *
  * Various routines that handle distributions, value selections and
  * seed value management for the DSS benchmark. Current functions:
- * env_config -- set config vars with optional environment override
+ * tpch_env_config -- set config vars with optional environment override
  * yes_no -- ask simple yes/no question and return boolean result
- * a_rnd(min, max) -- random alphanumeric within length range
+ * tpch_a_rnd(min, max) -- random alphanumeric within length range
  * pick_str(size, set) -- select a string from the set of size
  * read_dist(file, name, distribution *) -- read named dist from file
  * tbl_open(path, mode) -- std fopen with lifenoise
@@ -83,10 +83,10 @@ long *permute_dist(distribution *d, long stream);
 extern seed_t Seed[];
 
 /*
- * env_config: look for a environmental variable setting and return its
+ * tpch_env_config: look for a environmental variable setting and return its
  * value; otherwise return the default supplied
  */
-const char *env_config(const char *var, const char *dflt) {
+const char *tpch_env_config(const char *var, const char *dflt) {
 	static char *evar;
 
 	if ((evar = getenv(var)) != NULL)
@@ -130,7 +130,7 @@ long yes_no(char *prompt) {
  * and using the characters in alphanum (currently includes a space
  * and comma)
  */
-void a_rnd(int min, int max, int column, char *dest) {
+void tpch_a_rnd(int min, int max, int column, char *dest) {
 	DSS_HUGE i, len, char_int;
 
 	RANDOM(len, min, max, column);
@@ -154,7 +154,7 @@ void e_str(distribution *d, int min, int max, int stream, char *dest) {
 	DSS_HUGE loc;
 	int len;
 
-	a_rnd(min, max, stream, dest);
+	tpch_a_rnd(min, max, stream, dest);
 	pick_str(d, stream, strtmp);
 	len = (int)strlen(strtmp);
 	RANDOM(loc, 0, ((int)strlen(dest) - 1 - len), stream);

@@ -1,21 +1,20 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// icu-extension.hpp
+// duckdb/parser/qualified_name.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 
-class ICUExtension : public Extension {
-public:
-	void Load(DuckDB &db) override;
+struct QualifiedName {
+	string schema;
+	string name;
 };
-
 
 } // namespace duckdb

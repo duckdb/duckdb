@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// icu-extension.hpp
+// tpch-extension.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-class ICUExtension : public Extension {
+class TPCHExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
 };

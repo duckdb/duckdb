@@ -133,9 +133,9 @@ typedef struct SEED_T {
 #define PROTO(s) s
 
 /* bm_utils.c */
-const char *env_config PROTO((const char *var, const char *dflt));
+const char *tpch_env_config PROTO((const char *var, const char *dflt));
 long yes_no PROTO((char *prompt));
-void a_rnd PROTO((int min, int max, int column, char *dest));
+void tpch_a_rnd PROTO((int min, int max, int column, char *dest));
 int tx_rnd PROTO((long min, long max, long column, char *tgt));
 long julian PROTO((long date));
 long unjulian PROTO((long date));

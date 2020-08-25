@@ -1,0 +1,17 @@
+# name: test/sql/tpch/tpch_sf0.test
+# description: Test TPC-H SF0
+# group: [tpch]
+
+require tpch
+
+mode output_result
+
+statement ok
+CALL dbgen(sf=0);
+
+loop i 1 23
+
+statement ok
+SELECT * FROM tpch_q${i}
+
+endloop

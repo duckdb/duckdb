@@ -73,6 +73,10 @@ int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
 #include "parquet-extension.hpp"
 #endif
 
+#ifdef BUILD_TPCH_EXTENSION
+#include "tpch-extension.hpp"
+#endif
+
 int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
                     sqlite3 **ppDb,       /* OUT: SQLite db handle */
                     int flags,            /* Flags */
@@ -101,6 +105,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 #endif
 #ifdef BUILD_PARQUET_EXTENSION
 		pDb->db->LoadExtension<ParquetExtension>();
+#endif
+#ifdef BUILD_TPCH_EXTENSION
+		pDb->db->LoadExtension<TPCHExtension>();
 #endif
 	} catch (std::exception &ex) {
 		if (pDb) {

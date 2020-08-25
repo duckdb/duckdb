@@ -77,8 +77,8 @@ void NthElement(DSS_HUGE N, DSS_HUGE *StartSeed) {
 	return;
 }
 
-/* updates Seed[column] using the a_rnd algorithm */
-void fake_a_rnd(int min, int max, int column) {
+/* updates Seed[column] using the tpch_a_rnd algorithm */
+void fake_tpch_a_rnd(int min, int max, int column) {
 	DSS_HUGE len;
 	DSS_HUGE itcount;
 

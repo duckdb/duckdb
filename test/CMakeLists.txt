@@ -1,5 +1,4 @@
 include_directories(../third_party/catch)
-include_directories(../third_party/dbgen/include)
 include_directories(../third_party/tpce-tool/include)
 include_directories(../third_party/sqlite/include)
 include_directories(../tools/dbtransfer/include)
@@ -31,7 +30,6 @@ add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 if(NOT WIN32 AND NOT SUN)
   target_link_libraries(unittest
                         duckdb
-                        dbgen
                         dsdgen
                         test_helpers
                         sqlite_transfer)
@@ -48,4 +46,8 @@ endif()
 
 if(${BUILD_ICU_EXTENSION})
   target_link_libraries(unittest icu_extension)
+endif()
+
+if(${BUILD_TPCH_EXTENSION})
+  target_link_libraries(unittest tpch_extension)
 endif()

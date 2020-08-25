@@ -1,4 +1,3 @@
-include_directories(../../third_party/dbgen/include)
 include_directories(../../third_party/sqlite/include)
 include_directories(../../extension/parquet/include)
 
