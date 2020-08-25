@@ -67,7 +67,7 @@ object_list = ' '.join([os.path.join('duckdb', x.rsplit('.', 1)[0] + '.o') for x
 # include list
 include_list = ' '.join(['-I' + os.path.join('duckdb', x) for x in include_list])
 # add source id define
-include_list += ' -DDUCKDB_SOURCE_ID=\\"{}\\"'.format(githash)
+include_list += ' -DDUCKDB_SOURCE_ID=\\"{}\\"'.format(githash.decode('utf8'))
 
 os.chdir(prev_wd)
 
