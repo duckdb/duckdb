@@ -62,44 +62,31 @@ def file_is_excluded(fname):
 			return True
 	return False
 
-def generate_unity_builds(source_list):
-	directory_files = {}
-	for entry in source_list:
-		directory = entry.rsplit(os.path.sep, 1)[0]
-		if directory not in directory_files:
-			directory_files[directory] = []
-		directory_files[directory].append(os.path.join('duckdb', entry))
-	new_source_files = []
-	for directory in directory_files.keys():
-		# check if we should use a unity build here
-		use_unity_build = True
-		cmake_file = os.path.join(directory, 'CMakeLists.txt')
-		if not os.path.isfile(cmake_file):
-			continue
-		with open(cmake_file, 'r') as f:
-			text = f.read()
-			if 'add_library_unity' not in text:
-				use_unity_build = False
-		entries = directory_files[directory]
-		if len(entries) <= 1:
-			use_unity_build = False
-		if not use_unity_build:
-			for entry in entries:
-				new_source_files.append(entry)
-		else:
-			ub_file = os.path.join(target_dir, directory, 'unity_build.cpp')
-			with open(ub_file, 'w+') as f:
-				for entry in entries:
-					f.write('#line 0 "{}"\n'.format(entry))
-					f.write('#include "{}"\n\n'.format(entry))
-			new_source_files.append(ub_file)
+def generate_unity_build(entries, idx):
+	ub_file = os.path.join(target_dir, 'amalgamation-{}.cpp'.format(str(idx)))
+	with open(ub_file, 'w+') as f:
+		for entry in entries:
+			f.write('#line 0 "{}"\n'.format(entry))
+			f.write('#include "{}"\n\n'.format(entry))
+	return ub_file
 
+def generate_unity_builds(source_list, nsplits):
+	files_per_split = len(source_list) / nsplits
+	new_source_files = []
+	current_files = []
+	idx = 1
+	for entry in source_list:
+		current_files.append(entry)
+		if len(current_files) > files_per_split or entry == source_list[-1]:
+			new_source_files.append(generate_unity_build(current_files, idx))
+			current_files = []
+			idx += 1
 	return new_source_files
 
 def convert_backslashes(x):
 	return '/'.join(x.split(os.path.sep))
 
-source_list = generate_unity_builds(source_list)
+source_list = generate_unity_builds(source_list, 8)
 
 # object list
 object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in source_list if not file_is_excluded(x)])
