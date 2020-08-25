@@ -35,6 +35,9 @@ endif
 ifeq (${BUILD_JDBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DJDBC_DRIVER=1
 endif
+ifeq (${BUILD_PYTHON}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1
+endif
 
 clean:
 	rm -rf build

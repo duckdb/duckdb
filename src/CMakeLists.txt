@@ -86,6 +86,29 @@ else()
 
 endif()
 
+
+if(BUILD_PYTHON)
+  function(build_python_package)
+  execute_process(COMMAND "python3 setup.py install --user")
+  endfunction()
+
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(PYTHON_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
+  elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(PYTHON_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+  elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(PYTHON_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+  else()
+    set(PYTHON_COMPILE_FLAGS "${CMAKE_CXX_FLAGS}")
+  endif()
+
+  get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
+
+  add_custom_command(TARGET duckdb POST_BUILD
+                    COMMAND python3 setup.py install --binary-dir=${CMAKE_BINARY_DIR} --compile-flags=${PYTHON_COMPILE_FLAGS} --libs="${duckdb_libs}"
+                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/pythonpkg)
+endif()
+
 install(TARGETS duckdb duckdb_static
         EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
