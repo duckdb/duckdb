@@ -98,28 +98,28 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 
 	root_holder->children = unique_ptr<ArrowSchema *[]>(new ArrowSchema *[column_count()]);
 	out_schema->private_data = root_holder;
+	out_schema->release = release_duckdb_arrow_schema;
+
 	out_schema->children = root_holder->children.get();
 
 	out_schema->format = "+s"; // struct apparently
 	out_schema->n_children = column_count();
-
-	out_schema->release = release_duckdb_arrow_schema;
 	out_schema->flags = 0;
 	out_schema->metadata = nullptr;
 	out_schema->name = "duckdb_query_result";
 	out_schema->dictionary = nullptr;
 
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
-
 		auto holder = new DuckDBArrowSchemaHolder();
 		auto &child = holder->schema;
+		child.private_data = holder;
+		child.release = release_duckdb_arrow_schema;
 
 		child.name = names[col_idx].c_str();
 		child.n_children = 0;
 		child.children = nullptr;
 		child.flags = 0;
 		child.metadata = nullptr;
-		child.release = release_duckdb_arrow_schema;
 		child.dictionary = nullptr;
 
 		switch (types[col_idx].id()) {

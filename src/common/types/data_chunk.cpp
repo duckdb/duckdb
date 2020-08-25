@@ -216,10 +216,11 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	auto root_holder = new DuckDBArrowArrayHolder();
 	root_holder->children = unique_ptr<ArrowArray *[]>(new ArrowArray *[column_count()]);
 	out_array->private_data = root_holder;
+	out_array->release = release_duckdb_arrow_array;
+
 	out_array->children = root_holder->children.get();
 	out_array->length = size();
 	out_array->n_children = column_count();
-	out_array->release = release_duckdb_arrow_array;
 	out_array->n_buffers = 1;
 	out_array->buffers = root_holder->buffers;
 	out_array->buffers[0] = nullptr; // there is no actual buffer there since we don't have NULLs
@@ -230,16 +231,15 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
 		auto holder = new DuckDBArrowArrayHolder();
 		holder->vector.Reference(data[col_idx]);
-
 		auto &child = holder->array;
 		auto &vector = holder->vector;
-
 		child.private_data = holder;
+		child.release = release_duckdb_arrow_array;
+
 		child.n_children = 0;
 		child.null_count = -1; // unknown
 		child.offset = 0;
 		child.dictionary = nullptr;
-		child.release = release_duckdb_arrow_array;
 		child.buffers = holder->buffers;
 
 		child.length = size();

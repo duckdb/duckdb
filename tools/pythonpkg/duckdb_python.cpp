@@ -492,22 +492,23 @@ struct DuckDBPyResult {
 			throw runtime_error("result closed");
 		}
 
-		ArrowSchema schema;
-		result->ToArrowSchema(&schema);
-
 		auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
-		auto import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
+		auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
 		auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
 
 		py::list batches;
 		while (true) {
-			ArrowArray data;
 			auto data_chunk = result->Fetch();
 			if (data_chunk->size() == 0) {
 				break;
 			}
+			ArrowSchema schema;
+			ArrowArray data;
+
+			result->ToArrowSchema(&schema);
 			data_chunk->ToArrowArray(&data);
-			batches.append(import_func((uint64_t)&data, (uint64_t)&schema));
+
+			batches.append(batch_import_func((uint64_t)&data, (uint64_t)&schema));
 		}
 		return from_batches_func(batches);
 	}
