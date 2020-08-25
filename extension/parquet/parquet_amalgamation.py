@@ -7,6 +7,8 @@ header_file = os.path.join(amal_dir, "parquet-extension.hpp")
 source_file = os.path.join(amal_dir, "parquet-extension.cpp")
 temp_source = 'parquet-extension.cpp.tmp'
 
+include_directories = ['extension/parquet/include', 'third_party/parquet', 'third_party/snappy', 'third_party/thrift']
+source_files = ['extension/parquet/parquet-extension.cpp', 'third_party/parquet/parquet_constants.cpp',  'third_party/parquet/parquet_types.cpp',  'third_party/thrift/protocol/TProtocol.cpp',  'third_party/thrift/transport/TTransportException.cpp',  'third_party/thrift/transport/TBufferTransports.cpp',  'third_party/snappy/snappy.cc',  'third_party/snappy/snappy-sinksource.cc']
 
 def generate_amalgamation(source_file, header_file):
     def copy_if_different(src, dest):
@@ -68,11 +70,11 @@ def generate_amalgamation(source_file, header_file):
         for f in files:
             rewrite("%s/%s" % (prefix, f), temp_source)
 
-    # the local and overall order of these rewrites matters. 
+    # the local and overall order of these rewrites matters.
     rewrite_prefix('third_party/thrift', ['transport/PlatformSocket.h','config.h','thrift-config.h','Thrift.h',
         'TLogging.h','transport/TTransportException.h','transport/TTransport.h','protocol/TProtocolException.h',
         'protocol/TProtocol.h','protocol/TVirtualProtocol.h','protocol/TCompactProtocol.h','protocol/TCompactProtocol.tcc',
-        'transport/TVirtualTransport.h','transport/TBufferTransports.h','TBase.h','TToString.h', 'protocol/TProtocol.cpp', 
+        'transport/TVirtualTransport.h','transport/TBufferTransports.h','TBase.h','TToString.h', 'protocol/TProtocol.cpp',
         'transport/TTransportException.cpp', 'transport/TBufferTransports.cpp'])
 
     rewrite_prefix('third_party/parquet', ['windows_compatibility.h', 'parquet_types.h', 'parquet_constants.h',

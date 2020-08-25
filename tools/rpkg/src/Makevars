@@ -1,2 +1,0 @@
-PKG_CXXFLAGS = -I. -DDUCKDB_DISABLE_PRINT
-OBJECTS=duckdbr.o parquet-extension.o duckdb.o

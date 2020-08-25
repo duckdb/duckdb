@@ -1,9 +1,17 @@
-#include "duckdb.h"
-#include <sstream>
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "parquet-extension.h"
 
 #include <Rdefines.h>
 #include <algorithm>
+#include <sstream>
 
 // motherfucker
 #undef error
