@@ -7,7 +7,15 @@
 #include "datetime.h" // from Python
 
 #include "duckdb.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "parquet-extension.hpp"
+
+#include <random>
 
 namespace py = pybind11;
 

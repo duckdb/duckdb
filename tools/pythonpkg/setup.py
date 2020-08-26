@@ -37,25 +37,6 @@ for i in range(len(sys.argv)):
         new_sys_args.append(sys.argv[i])
 sys.argv = new_sys_args
 
-# check if amalgamation exists
-if len(existing_duckdb_dir) == 0 and os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
-    prev_wd = os.getcwd()
-    target_header = os.path.join(prev_wd, 'duckdb.hpp')
-    target_source = os.path.join(prev_wd, 'duckdb.cpp')
-    os.chdir(os.path.join('..', '..'))
-    sys.path.append('scripts')
-    import amalgamation
-    amalgamation.generate_amalgamation(target_source, target_header)
-
-    sys.path.append('extension/parquet')
-    import parquet_amalgamation
-    ext_target_header = os.path.join(prev_wd, 'parquet-extension.hpp')
-    ext_target_source = os.path.join(prev_wd, 'parquet-extension.cpp')
-    parquet_amalgamation.generate_amalgamation(ext_target_source, ext_target_header)
-
-    os.chdir(prev_wd)
-
-
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
@@ -73,58 +54,46 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
-
+script_path = os.path.dirname(os.path.abspath(__file__))
+include_directories = ['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
 if len(existing_duckdb_dir) == 0:
+    source_files = ['duckdb_python.cpp']
+
+    # check if amalgamation exists
+    if os.path.isfile(os.path.join(script_path, '..', '..', 'scripts', 'amalgamation.py')):
+        sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
+        import package_build
+
+        (source_list, include_list, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
+
+        source_files += [x.replace(script_path + os.path.sep, '') for x in source_list]
+
+        duckdb_includes = [os.path.join('duckdb', x) for x in include_list]
+        duckdb_includes += ['duckdb']
+
+        include_directories = duckdb_includes + include_directories
+
+        toolchain_args += ['-DDUCKDB_SOURCE_ID="{}"'.format(githash)]
+
     # no existing library supplied: compile everything from source
     libduckdb = Extension('duckdb',
-        include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
-        sources=['duckdb_python.cpp', 'duckdb.cpp', 'parquet-extension.cpp'],
+        include_dirs=include_directories,
+        sources=source_files,
         extra_compile_args=toolchain_args,
         extra_link_args=toolchain_args,
         language='c++')
 else:
-    # existing lib provided: link to it
-    def find_library_recursive(search_dir, potential_libnames):
-        flist = os.listdir(search_dir)
-        for fname in flist:
-            fpath = os.path.join(search_dir, fname)
-            if os.path.isdir(fpath):
-                entry = find_library_recursive(fpath, potential_libnames)
-                if entry != None:
-                    return entry
-            elif os.path.isfile(fpath) and fname in potential_libnames:
-                return search_dir
-        return None
+    sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
+    import package_build
 
-    def find_library(search_dir, libname, libnames, library_dirs):
-        if libname == 'Threads::Threads':
-            libnames += ['pthread']
-            return
-        libextensions = ['.a', '.lib']
-        libprefixes = ['', 'lib']
-        potential_libnames = []
-        for ext in libextensions:
-            for prefix in libprefixes:
-                potential_libnames.append(prefix + libname + ext)
-        libdir = find_library_recursive(existing_duckdb_dir, potential_libnames)
+    toolchain_args += ['-I' + x for x in package_build.includes()]
 
-        libnames += [libname]
-        library_dirs += [libdir]
-
-    libnames = ['duckdb_static', 'parquet_extension', 'icu_extension']
-
-    library_dirs = []
-    library_dirs += [os.path.join(existing_duckdb_dir, 'src')]
-    library_dirs += [os.path.join(existing_duckdb_dir, 'extension', 'parquet')]
-    library_dirs += [os.path.join(existing_duckdb_dir, 'extension', 'icu')]
-
-    for libname in libraries:
-        find_library(existing_duckdb_dir, libname, libnames, library_dirs)
-
-    print(libnames, library_dirs)
+    result_libraries = package_build.get_libraries(existing_duckdb_dir, libraries)
+    library_dirs = [x[0] for x in result_libraries if x[0] is not None]
+    libnames = [x[1] for x in result_libraries if x[1] is not None]
 
     libduckdb = Extension('duckdb',
-        include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
+        include_dirs=include_directories,
         sources=['duckdb_python.cpp'],
         extra_compile_args=toolchain_args,
         extra_link_args=toolchain_args,

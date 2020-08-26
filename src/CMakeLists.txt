@@ -101,7 +101,7 @@ if(BUILD_PYTHON OR BUILD_R)
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
   if(BUILD_PYTHON)
-  add_custom_target(duckdb_python
+  add_custom_target(duckdb_python ALL
                     COMMAND python3 setup.py install --binary-dir=${CMAKE_BINARY_DIR} --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
                     DEPENDS duckdb
                     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/pythonpkg

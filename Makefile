@@ -63,6 +63,11 @@ cldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
+clreldebug:
+	mkdir -p build/clreldebug && \
+	cd build/clreldebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake --build .
 
 unittest: debug
 	build/debug/test/unittest
