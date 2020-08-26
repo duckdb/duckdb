@@ -19,6 +19,9 @@ endif
 ifeq (${DISABLE_UNITY}, 1)
 	DISABLE_UNITY_FLAG=-DDISABLE_UNITY=1
 endif
+ifeq (${DISABLE_SANITIZER}, 1)
+	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE
+endif
 EXTENSIONS=-DBUILD_PARQUET_EXTENSION=TRUE
 ifeq (${BUILD_BENCHMARK}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_BENCHMARKS=1
@@ -42,13 +45,13 @@ clean:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 release_expanded:
 	mkdir -p build/release_expanded && \
 	cd build/release_expanded && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 unittest: debug
@@ -69,13 +72,13 @@ release:
 	mkdir -p build/release && \
 	python scripts/amalgamation.py && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 ../.. && \
 	cmake --build .
 
 reldebug:
 	mkdir -p build/reldebug && \
 	cd build/reldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 amaldebug:

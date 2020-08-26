@@ -8,9 +8,9 @@ import shutil
 import platform
 
 
-import distutils.spawn
 from setuptools import setup, Extension
 from setuptools.command.sdist import sdist
+import distutils.spawn
 
 
 # make sure we are in the right directory

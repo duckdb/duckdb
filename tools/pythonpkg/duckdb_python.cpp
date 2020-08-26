@@ -487,6 +487,35 @@ struct DuckDBPyResult {
 		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy());
 	}
 
+	py::object fetch_arrow_table() {
+		if (!result) {
+			throw runtime_error("result closed");
+		}
+
+		auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+
+		auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
+		auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
+		auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
+		ArrowSchema schema;
+		result->ToArrowSchema(&schema);
+		auto schema_obj = schema_import_func((uint64_t)&schema);
+
+		py::list batches;
+		while (true) {
+			auto data_chunk = result->Fetch();
+			if (data_chunk->size() == 0) {
+				break;
+			}
+			ArrowArray data;
+			data_chunk->ToArrowArray(&data);
+			ArrowSchema schema;
+			result->ToArrowSchema(&schema);
+			batches.append(batch_import_func((uint64_t)&data, (uint64_t)&schema));
+		}
+		return from_batches_func(batches, schema_obj);
+	}
+
 	py::list description() {
 		py::list desc(result->names.size());
 		for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
@@ -649,6 +678,83 @@ struct DuckDBPyConnection {
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 	}
 
+	struct PythonTableArrowArrayStream {
+		PythonTableArrowArrayStream(py::object arrow_table) : arrow_table(arrow_table) {
+			stream.get_schema = PythonTableArrowArrayStream::my_stream_getschema;
+			stream.get_next = PythonTableArrowArrayStream::my_stream_getnext;
+			stream.release = PythonTableArrowArrayStream::my_stream_release;
+			stream.get_last_error = PythonTableArrowArrayStream::my_stream_getlasterror;
+			stream.private_data = this;
+
+			batches = arrow_table.attr("to_batches")();
+		}
+
+		static int my_stream_getschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			if (!stream->release) {
+				my_stream->last_error = "stream was released";
+				return -1;
+			}
+			my_stream->arrow_table.attr("schema").attr("_export_to_c")((uint64_t)out);
+			return 0;
+		}
+
+		static int my_stream_getnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			if (!stream->release) {
+				my_stream->last_error = "stream was released";
+				return -1;
+			}
+			if (my_stream->batch_idx >= py::len(my_stream->batches)) {
+				out->release = nullptr;
+				return 0;
+			}
+			my_stream->batches[my_stream->batch_idx++].attr("_export_to_c")((uint64_t)out);
+			return 0;
+		}
+
+		static void my_stream_release(struct ArrowArrayStream *stream) {
+			if (!stream->release) {
+				return;
+			}
+			stream->release = nullptr;
+			delete (PythonTableArrowArrayStream *)stream->private_data;
+		}
+
+		static const char *my_stream_getlasterror(struct ArrowArrayStream *stream) {
+			if (!stream->release) {
+				return "stream was released";
+			}
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			return my_stream->last_error.c_str();
+		}
+
+		ArrowArrayStream stream;
+		string last_error;
+		py::object arrow_table;
+		py::list batches;
+		idx_t batch_idx = 0;
+	};
+
+	unique_ptr<DuckDBPyRelation> from_arrow_table(py::object table) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		};
+
+		// the following is a careful dance around having to depend on pyarrow
+		if (table.is_none() || string(py::str(table.get_type().attr("__name__"))) != "Table") {
+			throw runtime_error("Only arrow tables supported");
+		}
+
+		auto my_arrow_table = new PythonTableArrowArrayStream(table);
+		string name = "arrow_table_" + ptr_to_string((void *)my_arrow_table);
+		return make_unique<DuckDBPyRelation>(
+		    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)my_arrow_table)})->Alias(name));
+	}
+
 	DuckDBPyConnection *unregister_df(string name) {
 		registered_dfs[name] = py::none();
 		return this;
@@ -721,6 +827,12 @@ struct DuckDBPyConnection {
 			throw runtime_error("no open result set");
 		}
 		return result->fetchdf();
+	}
+	py::object fetcharrow() {
+		if (!result) {
+			throw runtime_error("no open result set");
+		}
+		return result->fetch_arrow_table();
 	}
 
 	static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
@@ -802,12 +914,20 @@ struct DuckDBPyRelation {
 		return default_connection()->from_df(df);
 	}
 
+	static unique_ptr<DuckDBPyRelation> values(py::object values = py::list()) {
+		return default_connection()->values(values);
+	}
+
 	static unique_ptr<DuckDBPyRelation> from_csv_auto(string filename) {
 		return default_connection()->from_csv_auto(filename);
 	}
 
 	static unique_ptr<DuckDBPyRelation> from_parquet(string filename) {
 		return default_connection()->from_parquet(filename);
+	}
+
+	static unique_ptr<DuckDBPyRelation> from_arrow_table(py::object table) {
+		return default_connection()->from_arrow_table(table);
 	}
 
 	unique_ptr<DuckDBPyRelation> project(string expr) {
@@ -876,6 +996,15 @@ struct DuckDBPyRelation {
 			throw runtime_error(res->result->error);
 		}
 		return res->fetchdf();
+	}
+
+	py::object to_arrow_table() {
+		auto res = make_unique<DuckDBPyResult>();
+		res->result = rel->Execute();
+		if (!res->result->success) {
+			throw runtime_error(res->result->error);
+		}
+		return res->fetch_arrow_table();
 	}
 
 	unique_ptr<DuckDBPyRelation> union_(DuckDBPyRelation *other) {
@@ -999,6 +1128,10 @@ PYBIND11_MODULE(duckdb, m) {
 	        .def("fetchnumpy", &DuckDBPyConnection::fetchnumpy,
 	             "Fetch a result as list of NumPy arrays following execute")
 	        .def("fetchdf", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("df", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("fetch_arrow_table", &DuckDBPyConnection::fetcharrow,
+	             "Fetch a result as Arrow table following execute()")
+	        .def("arrow", &DuckDBPyConnection::fetcharrow, "Fetch a result as Arrow table following execute()")
 	        .def("begin", &DuckDBPyConnection::begin, "Start a new transaction")
 	        .def("commit", &DuckDBPyConnection::commit, "Commit changes performed within a transaction")
 	        .def("rollback", &DuckDBPyConnection::rollback, "Roll back changes performed within a transaction")
@@ -1018,6 +1151,8 @@ PYBIND11_MODULE(duckdb, m) {
 	             py::arg("parameters") = py::list())
 	        .def("from_df", &DuckDBPyConnection::from_df, "Create a relation object from the Data.Frame in df",
 	             py::arg("df"))
+	        .def("from_arrow_table", &DuckDBPyConnection::from_arrow_table,
+	             "Create a relation object from an Arrow table", py::arg("table"))
 	        .def("df", &DuckDBPyConnection::from_df,
 	             "Create a relation object from the Data.Frame in df (alias of from_df)", py::arg("df"))
 	        .def("from_csv_auto", &DuckDBPyConnection::from_csv_auto,
@@ -1033,6 +1168,8 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchnumpy", &DuckDBPyResult::fetchnumpy)
 	    .def("fetchdf", &DuckDBPyResult::fetchdf)
 	    .def("fetch_df", &DuckDBPyResult::fetchdf)
+	    .def("fetch_arrow_table", &DuckDBPyResult::fetch_arrow_table)
+	    .def("arrow", &DuckDBPyResult::fetch_arrow_table)
 	    .def("df", &DuckDBPyResult::fetchdf);
 
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
@@ -1075,18 +1212,25 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("create_view", &DuckDBPyRelation::create_view,
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
+	    .def("to_arrow_table", &DuckDBPyRelation::to_arrow_table, "Transforms the relation object into a Arrow table")
+	    .def("arrow", &DuckDBPyRelation::to_arrow_table, "Transforms the relation object into a Arrow table")
 	    .def("to_df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
 	    .def("df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
 	    .def("__str__", &DuckDBPyRelation::print)
 	    .def("__repr__", &DuckDBPyRelation::print)
 	    .def("__getattr__", &DuckDBPyRelation::getattr);
 
+	m.def("values", &DuckDBPyRelation::values, "Create a relation object from the passed values", py::arg("values"));
 	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "Creates a relation object from the CSV file in file_name",
 	      py::arg("file_name"));
 	m.def("from_parquet", &DuckDBPyRelation::from_parquet,
 	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"));
 	m.def("df", &DuckDBPyRelation::from_df, "Create a relation object from the Data.Frame df", py::arg("df"));
 	m.def("from_df", &DuckDBPyRelation::from_df, "Create a relation object from the Data.Frame df", py::arg("df"));
+	m.def("from_arrow_table", &DuckDBPyRelation::from_arrow_table, "Create a relation object from an Arrow table",
+	      py::arg("table"));
+	m.def("arrow", &DuckDBPyRelation::from_arrow_table, "Create a relation object from an Arrow table",
+	      py::arg("table"));
 	m.def("filter", &DuckDBPyRelation::filter_df, "Filter the Data.Frame df by the filter in filter_expr",
 	      py::arg("df"), py::arg("filter_expr"));
 	m.def("project", &DuckDBPyRelation::project_df, "Project the Data.Frame df by the projection in project_expr",
@@ -1109,7 +1253,7 @@ PYBIND11_MODULE(duckdb, m) {
 	      py::arg("df"), py::arg("file_name"));
 
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
-	auto clean_default_connection = []() { default_connection_ = nullptr; };
+	auto clean_default_connection = []() { default_connection_.reset(); };
 	m.add_object("_clean_default_connection", py::capsule(clean_default_connection));
 	PyDateTime_IMPORT;
 }
