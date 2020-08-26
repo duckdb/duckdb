@@ -1,17 +1,18 @@
 import duckdb
-import urllib.request
 
 try:
     import pyarrow
     import pyarrow.parquet
-    has_arrow = True
+    import urllib.request
+
+    can_run = True
 except:
-    has_arrow = False
+    can_run = False
 
 class TestArrow(object):
     def test_arrow(self, duckdb_cursor):
 
-        if not has_arrow:
+        if not can_run:
             return
 
         parquet_filename = 'userdata1.parquet'
