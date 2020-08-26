@@ -141,9 +141,11 @@ def build_package(target_dir):
 
         return new_source_files
 
+    original_sources = source_list
     source_list = generate_unity_builds(source_list, 8)
 
     os.chdir(prev_wd)
     return ([convert_backslashes(x) for x in source_list if not file_is_excluded(x)],
             [convert_backslashes(x) for x in include_list],
+            [convert_backslashes(x) for x in original_sources],
             githash)

@@ -45,7 +45,7 @@ if not os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
 
 target_dir = os.path.join(os.getcwd(), 'src', 'duckdb')
 
-(source_list, include_list, githash) = package_build.build_package(target_dir)
+(source_list, include_list, original_sources, githash) = package_build.build_package(target_dir)
 
 # object list
 object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in source_list])

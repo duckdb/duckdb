@@ -72,10 +72,12 @@ if len(existing_duckdb_dir) == 0:
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
 
-        (source_list, include_list, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
+        (source_list, include_list, original_sources, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
 
         duckdb_sources = [x.replace(script_path + os.path.sep, '') for x in source_list]
         duckdb_sources.sort()
+
+        original_sources = [os.path.join('duckdb', x) for x in original_sources]
 
         duckdb_includes = [os.path.join('duckdb', x) for x in include_list]
         duckdb_includes += ['duckdb']
@@ -96,7 +98,7 @@ if len(existing_duckdb_dir) == 0:
         with open('githash.list', 'w+') as f:
             f.write(githash + '\n')
 
-        extra_files = ['sources.list', 'includes.list', 'githash.list']
+        extra_files = ['sources.list', 'includes.list', 'githash.list'] + original_sources
     else:
         # if amalgamation does not exist, we are in a package distribution
         # read the include files, source list and include files from the supplied lists
