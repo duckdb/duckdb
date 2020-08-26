@@ -914,6 +914,10 @@ struct DuckDBPyRelation {
 		return default_connection()->from_df(df);
 	}
 
+	static unique_ptr<DuckDBPyRelation> values(py::object values = py::list()) {
+		return default_connection()->values(values);
+	}
+
 	static unique_ptr<DuckDBPyRelation> from_csv_auto(string filename) {
 		return default_connection()->from_csv_auto(filename);
 	}
@@ -1216,6 +1220,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("__repr__", &DuckDBPyRelation::print)
 	    .def("__getattr__", &DuckDBPyRelation::getattr);
 
+	m.def("values", &DuckDBPyRelation::values, "Create a relation object from the passed values", py::arg("values"));
 	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "Creates a relation object from the CSV file in file_name",
 	      py::arg("file_name"));
 	m.def("from_parquet", &DuckDBPyRelation::from_parquet,

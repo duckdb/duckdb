@@ -114,6 +114,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 		auto &child = holder->schema;
 		child.private_data = holder;
 		child.release = release_duckdb_arrow_schema;
+		child.flags = ARROW_FLAG_NULLABLE;
 
 		child.name = names[col_idx].c_str();
 		child.n_children = 0;
