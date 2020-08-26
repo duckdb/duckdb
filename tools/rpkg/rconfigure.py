@@ -58,7 +58,7 @@ with open(os.path.join('src', 'Makevars.in'), 'r') as f:
     text = f.read()
 
 text = text.replace('{{ SOURCES }}', object_list)
-text = text.replace('{{ INCLUDES }}', include_list + ' -DDUCKDB_SOURCE_ID=\\"{}\\"'.format(githash.decode('utf8')))
+text = text.replace('{{ INCLUDES }}', include_list + ' -DDUCKDB_SOURCE_ID=\\"{}\\"'.format(githash))
 text = text.replace('{{ LINK_FLAGS }}', '')
 
 # now write it to the output Makevars
