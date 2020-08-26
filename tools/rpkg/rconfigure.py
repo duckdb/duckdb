@@ -50,7 +50,7 @@ target_dir = os.path.join(os.getcwd(), 'src', 'duckdb')
 # object list
 object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in source_list])
 # include list
-include_list = ' '.join(['-I' + os.path.join('duckdb', x) for x in include_list])
+include_list = ' '.join(['-I' + 'duckdb/' + x for x in include_list])
 include_list += ' -Iduckdb'
 
 # read Makevars.in and replace the {{ SOURCES }} and {{ INCLUDES }} macros
@@ -59,7 +59,7 @@ with open(os.path.join('src', 'Makevars.in'), 'r') as f:
 
 text = text.replace('{{ SOURCES }}', object_list)
 text = text.replace('{{ INCLUDES }}', include_list + ' -DDUCKDB_SOURCE_ID=\\"{}\\"'.format(githash))
-text = text.replace('{{ LINK_FLAGS }}', '')
+text = text.replace('PKG_LIBS={{ LINK_FLAGS }}', '')
 
 # now write it to the output Makevars
 with open(os.path.join('src', 'Makevars'), 'w+') as f:
