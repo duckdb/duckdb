@@ -332,6 +332,7 @@ template <class T> T Value::GetValueInternal() const {
 		return Cast::Operation<float, T>(value_.float_);
 	case PhysicalType::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
+
 	case PhysicalType::VARCHAR:
 		return Cast::Operation<string_t, T>(str_value.c_str());
 	default:
@@ -366,6 +367,10 @@ template <> float Value::GetValue() const {
 template <> double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
+template <> uintptr_t Value::GetValue() const {
+	assert(type()== LogicalType::POINTER);
+    return value_.pointer;
+}
 Value Value::Numeric(LogicalType type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
@@ -389,6 +394,14 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 		return Value::HASH(value);
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(value);
+	case LogicalTypeId::DATE:
+		assert(value <= NumericLimits<int32_t>::Maximum());
+		return Value::DATE(value);
+	case LogicalTypeId::TIME:
+		assert(value <= NumericLimits<int32_t>::Maximum());
+		return Value::TIME(value);
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(value);
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}

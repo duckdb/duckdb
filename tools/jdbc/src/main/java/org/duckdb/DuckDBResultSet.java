@@ -133,8 +133,16 @@ public class DuckDBResultSet implements ResultSet {
 			return getDouble(columnIndex);
 		} else if (column_type.equals("VARCHAR")) {
 			return getString(columnIndex);
-		 } else {
-		 	throw new SQLException("Not implemented type: " + meta.column_types[columnIndex - 1]);
+		} else if (column_type.equals("TIME")) {
+			return getTime(columnIndex);
+		} else if (column_type.equals("DATE")) {
+			return getDate(columnIndex);
+		} else if (column_type.equals("TIMESTAMP")) {
+			return getTimestamp(columnIndex);
+		} else if (column_type.equals("INTERVAL")) {
+			return getLazyString(columnIndex);
+		} else {
+			throw new SQLException("Not implemented type: " + meta.column_types[columnIndex - 1]);
 		}
 	}
 
@@ -151,20 +159,33 @@ public class DuckDBResultSet implements ResultSet {
 		return was_null;
 	}
 
+	public String getLazyString(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
+	}
+
 	public String getString(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
+
 		if ("VARCHAR".equals(meta.column_types[columnIndex - 1])) {
 			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 		}
-		return getObject(columnIndex).toString();
+		Object res = getObject(columnIndex);
+		if (res == null) {
+			return null;
+		} else {
+			return res.toString();
+		}
 	}
 
 	private ByteBuffer getbuf(int columnIndex, int typeWidth) throws SQLException {
 		ByteBuffer buf = current_chunk[columnIndex - 1].constlen_data;
 		buf.order(ByteOrder.LITTLE_ENDIAN);
-		((Buffer)buf).position((chunk_idx - 1) * typeWidth);
+		((Buffer) buf).position((chunk_idx - 1) * typeWidth);
 		return buf;
 	}
 
@@ -238,7 +259,7 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		return Long.parseLong(o.toString());
 	}
-	
+
 	public BigInteger getHugeint(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
@@ -249,8 +270,8 @@ public class DuckDBResultSet implements ResultSet {
 
 			for (int i = 0; i < 8; i++) {
 				byte keep = buf[i];
-				buf[i] = buf[15-i];
-				buf[15-i] = keep;
+				buf[i] = buf[15 - i];
+				buf[15 - i] = keep;
 			}
 			return new BigInteger(buf);
 
@@ -344,15 +365,41 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Date getDate(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		String string_value = getLazyString(columnIndex);
+		if (string_value == null) {
+			return null;
+		}
+		try {
+			return Date.valueOf(string_value);
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	public Time getTime(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		String string_value = getLazyString(columnIndex);
+		if (string_value == null) {
+			return null;
+		}
+		try {
+
+			return Time.valueOf(getLazyString(columnIndex));
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	public Timestamp getTimestamp(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		String string_value = getLazyString(columnIndex);
+		if (string_value == null) {
+			return null;
+		}
+		try {
+
+			return Timestamp.valueOf(getLazyString(columnIndex));
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	public InputStream getAsciiStream(int columnIndex) throws SQLException {
@@ -376,15 +423,15 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Date getDate(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return getDate(findColumn(columnLabel));
 	}
 
 	public Time getTime(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return getTime(findColumn(columnLabel));
 	}
 
 	public Timestamp getTimestamp(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return getTimestamp(findColumn(columnLabel));
 	}
 
 	public InputStream getAsciiStream(String columnLabel) throws SQLException {

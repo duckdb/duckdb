@@ -14,11 +14,11 @@ Authors@R:
              comment = c(ORCID = "0000-0001-5005-6844")),
       person(given = "DuckDB Contributors",
              role = "aut"))
-Description: DuckDB is an embedded analytical data management
-    system with SQL support. This package includes all of DuckDB as well
-    as R DBI & dplyr connectors.
+Description: The DuckDB project is an embedded analytical data
+    management system with SQL support. This package includes all of
+    DuckDB and a DBI connector.
 License: MPL
-URL: https://www.duckdb.org, https://github.com/cwida/duckdb
+URL: https://duckdb.org/, https://github.com/cwida/duckdb
 BugReports: https://github.com/cwida/duckdb/issues
 Depends: 
     DBI,

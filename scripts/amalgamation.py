@@ -26,20 +26,21 @@ moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
 
 # files included in the amalgamated "duckdb.hpp" file
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
-	os.path.join(include_dir, 'duckdb.h'),
-	os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
-	os.path.join(include_dir, 'duckdb', 'common', 'types', 'hugeint.hpp'),
-	os.path.join(include_dir, 'duckdb', 'common', 'types', 'interval.hpp'),
-	os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'),
-	os.path.join(include_dir, 'duckdb', 'common', 'types', 'time.hpp'),
-	os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'buffered_file_writer.hpp'),
-	os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'buffered_serializer.hpp'),
-	os.path.join(include_dir, 'duckdb', 'main', 'appender.hpp'),
-	os.path.join(include_dir, 'duckdb', 'main', 'client_context.hpp'),
-	os.path.join(include_dir, 'duckdb', 'function', 'function.hpp'),
-	os.path.join(include_dir, 'duckdb', 'function', 'table_function.hpp'),
-	os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_table_function_info.hpp'),
-	os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_copy_function_info.hpp')]
+    os.path.join(include_dir, 'duckdb.h'),
+    os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'arrow.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'types', 'hugeint.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'types', 'interval.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'types', 'time.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'buffered_file_writer.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'buffered_serializer.hpp'),
+    os.path.join(include_dir, 'duckdb', 'main', 'appender.hpp'),
+    os.path.join(include_dir, 'duckdb', 'main', 'client_context.hpp'),
+    os.path.join(include_dir, 'duckdb', 'function', 'function.hpp'),
+    os.path.join(include_dir, 'duckdb', 'function', 'table_function.hpp'),
+    os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_table_function_info.hpp'),
+    os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_copy_function_info.hpp')]
 
 # include paths for where to search for include files during amalgamation
 include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir]
