@@ -1,10 +1,18 @@
 import duckdb
-import pyarrow
-import pyarrow.parquet
 import urllib.request
+
+try:
+    import pyarrow
+    import pyarrow.parquet
+    has_arrow = True
+except:
+    has_arrow = False
 
 class TestArrow(object):
     def test_arrow(self, duckdb_cursor):
+
+        if not has_arrow:
+            return
 
         parquet_filename = 'userdata1.parquet'
         urllib.request.urlretrieve('https://github.com/cwida/duckdb-data/releases/download/v1.0/userdata1.parquet', parquet_filename)
