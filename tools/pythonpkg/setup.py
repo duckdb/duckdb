@@ -18,6 +18,8 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 toolchain_args = ['-std=c++11', '-g0']
 if 'DUCKDEBUG' in os.environ:
     toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
+if 'DUCKDB_INSTALL_USER' in os.environ:
+    sys.argv.append('--user')
 
 existing_duckdb_dir = ''
 new_sys_args = []
