@@ -743,6 +743,22 @@ public class TestDuckDBJDBC {
 	}
 
 	
+	public static void test_evil_date() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT '513125-08-05 (BC)'::date d");
+	
+		assertTrue(rs.next());
+		assertNull(rs.getDate("d"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	
 	public static void test_connect_wrong_url_bug848() throws Exception {
 		Driver d = new DuckDBDriver();

@@ -141,8 +141,8 @@ public class DuckDBResultSet implements ResultSet {
 			return getTimestamp(columnIndex);
 		} else if (column_type.equals("INTERVAL")) {
 			return getLazyString(columnIndex);
-		 } else {
-		 	throw new SQLException("Not implemented type: " + meta.column_types[columnIndex - 1]);
+		} else {
+			throw new SQLException("Not implemented type: " + meta.column_types[columnIndex - 1]);
 		}
 	}
 
@@ -158,14 +158,13 @@ public class DuckDBResultSet implements ResultSet {
 		was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
 		return was_null;
 	}
-	
+
 	public String getLazyString(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
 		return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 	}
-
 
 	public String getString(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
@@ -175,13 +174,18 @@ public class DuckDBResultSet implements ResultSet {
 		if ("VARCHAR".equals(meta.column_types[columnIndex - 1])) {
 			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 		}
-		return getObject(columnIndex).toString();
+		Object res = getObject(columnIndex);
+		if (res == null) {
+			return null;
+		} else {
+			return res.toString();
+		}
 	}
 
 	private ByteBuffer getbuf(int columnIndex, int typeWidth) throws SQLException {
 		ByteBuffer buf = current_chunk[columnIndex - 1].constlen_data;
 		buf.order(ByteOrder.LITTLE_ENDIAN);
-		((Buffer)buf).position((chunk_idx - 1) * typeWidth);
+		((Buffer) buf).position((chunk_idx - 1) * typeWidth);
 		return buf;
 	}
 
@@ -255,7 +259,7 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		return Long.parseLong(o.toString());
 	}
-	
+
 	public BigInteger getHugeint(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
@@ -266,8 +270,8 @@ public class DuckDBResultSet implements ResultSet {
 
 			for (int i = 0; i < 8; i++) {
 				byte keep = buf[i];
-				buf[i] = buf[15-i];
-				buf[15-i] = keep;
+				buf[i] = buf[15 - i];
+				buf[15 - i] = keep;
 			}
 			return new BigInteger(buf);
 
@@ -367,8 +371,8 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		try {
 			return Date.valueOf(string_value);
-		} catch(Exception e) {
-			throw new SQLException("Unparseable date " + string_value);
+		} catch (Exception e) {
+			return null;
 		}
 	}
 
@@ -377,7 +381,12 @@ public class DuckDBResultSet implements ResultSet {
 		if (string_value == null) {
 			return null;
 		}
-		return Time.valueOf(getLazyString(columnIndex));
+		try {
+
+			return Time.valueOf(getLazyString(columnIndex));
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	public Timestamp getTimestamp(int columnIndex) throws SQLException {
@@ -385,7 +394,12 @@ public class DuckDBResultSet implements ResultSet {
 		if (string_value == null) {
 			return null;
 		}
-		return Timestamp.valueOf(getLazyString(columnIndex));
+		try {
+
+			return Timestamp.valueOf(getLazyString(columnIndex));
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	public InputStream getAsciiStream(int columnIndex) throws SQLException {
