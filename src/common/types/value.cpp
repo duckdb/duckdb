@@ -332,6 +332,7 @@ template <class T> T Value::GetValueInternal() const {
 		return Cast::Operation<float, T>(value_.float_);
 	case PhysicalType::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
+
 	case PhysicalType::VARCHAR:
 		return Cast::Operation<string_t, T>(str_value.c_str());
 	default:
@@ -365,6 +366,10 @@ template <> float Value::GetValue() const {
 }
 template <> double Value::GetValue() const {
 	return GetValueInternal<double>();
+}
+template <> uintptr_t Value::GetValue() const {
+	assert(type()== LogicalType::POINTER);
+    return value_.pointer;
 }
 Value Value::Numeric(LogicalType type, int64_t value) {
 	switch (type.id()) {
