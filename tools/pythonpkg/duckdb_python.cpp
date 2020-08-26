@@ -719,6 +719,7 @@ struct DuckDBPyConnection {
 			if (!stream->release) {
 				return;
 			}
+			stream->release = nullptr;
 			delete (PythonTableArrowArrayStream *)stream->private_data;
 		}
 

@@ -21,17 +21,7 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	idx_t chunk_idx = 0;
 	idx_t chunk_offset = 0;
 
-	~ArrowScanFunctionData() {
-		if (schema_root.release) {
-			for (idx_t child_idx = 0; child_idx < (idx_t)schema_root.n_children; child_idx++) {
-				auto &child = *schema_root.children[child_idx];
-				if (child.release) {
-					child.release(&child);
-				}
-			}
-			schema_root.release(&schema_root);
-		}
-
+	void ReleaseArray() {
 		if (current_chunk_root.release) {
 			for (idx_t child_idx = 0; child_idx < (idx_t)current_chunk_root.n_children; child_idx++) {
 				auto &child = *current_chunk_root.children[child_idx];
@@ -41,6 +31,23 @@ struct ArrowScanFunctionData : public TableFunctionData {
 			}
 			current_chunk_root.release(&current_chunk_root);
 		}
+	}
+
+	void ReleaseSchema() {
+		if (schema_root.release) {
+			for (idx_t child_idx = 0; child_idx < (idx_t)schema_root.n_children; child_idx++) {
+				auto &child = *schema_root.children[child_idx];
+				if (child.release) {
+					child.release(&child);
+				}
+			}
+			schema_root.release(&schema_root);
+		}
+	}
+
+	~ArrowScanFunctionData() {
+		ReleaseSchema();
+		ReleaseArray();
 	}
 };
 
@@ -107,6 +114,7 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 		}
 		names.push_back(name);
 	}
+	data.ReleaseSchema();
 	return move(res);
 }
 
@@ -121,6 +129,7 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 	// have we run out of data on the current chunk? move to next one
 	if (data.chunk_offset >= (idx_t)data.current_chunk_root.length) {
 		data.chunk_offset = 0;
+		data.ReleaseArray();
 		if (data.stream->get_next(data.stream, &data.current_chunk_root)) {
 			throw InvalidInputException("arrow_scan: get_next failed(): %s",
 			                            string(data.stream->get_last_error(data.stream)));
