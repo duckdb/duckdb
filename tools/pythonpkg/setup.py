@@ -61,21 +61,19 @@ include_directories = ['.', get_numpy_include(), get_pybind_include(), get_pybin
 if len(existing_duckdb_dir) == 0:
     source_files = ['duckdb_python.cpp']
 
-    # check if amalgamation exists
-    if os.path.isfile(os.path.join(script_path, '..', '..', 'scripts', 'amalgamation.py')):
-        sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
-        import package_build
+    sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
+    import package_build
 
-        (source_list, include_list, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
+    (source_list, include_list, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
 
-        source_files += [x.replace(script_path + os.path.sep, '') for x in source_list]
+    source_files += [x.replace(script_path + os.path.sep, '') for x in source_list]
 
-        duckdb_includes = [os.path.join('duckdb', x) for x in include_list]
-        duckdb_includes += ['duckdb']
+    duckdb_includes = [os.path.join('duckdb', x) for x in include_list]
+    duckdb_includes += ['duckdb']
 
-        include_directories = duckdb_includes + include_directories
+    include_directories = duckdb_includes + include_directories
 
-        toolchain_args += ['-DDUCKDB_SOURCE_ID="{}"'.format(githash)]
+    toolchain_args += ['-DDUCKDB_SOURCE_ID="{}"'.format(githash)]
 
     # no existing library supplied: compile everything from source
     libduckdb = Extension('duckdb',
