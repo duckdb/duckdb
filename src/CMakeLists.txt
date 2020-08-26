@@ -103,14 +103,14 @@ if(BUILD_PYTHON OR BUILD_R)
   if(BUILD_PYTHON)
   add_custom_target(duckdb_python ALL
                     COMMAND python3 setup.py install --binary-dir=${CMAKE_BINARY_DIR} --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-                    DEPENDS duckdb
+                    DEPENDS duckdb parquet_extension icu_extension
                     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/pythonpkg
                     COMMENT Build Python package)
   endif()
   if (BUILD_R)
     add_custom_target(duckdb_r ALL
                       COMMAND DUCKDB_R_BINDIR=${CMAKE_BINARY_DIR} DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\" DUCKDB_R_LIBS=\"${duckdb_libs}\" R CMD INSTALL .
-                      DEPENDS duckdb
+                      DEPENDS duckdb parquet_extension icu_extension
                       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/rpkg
                       COMMENT Build R package)
   endif()

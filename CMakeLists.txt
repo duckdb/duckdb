@@ -75,7 +75,7 @@ endif()
 
 option(ENABLE_SANITIZER "Enable sanitizer." TRUE)
 if(${ENABLE_SANITIZER})
-  if (BUILD_PYTHON)
+  if (BUILD_PYTHON OR BUILD_R)
     if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
       message(WARNING "Sanitizers are not supported for the Python build. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled")
     endif()
@@ -117,6 +117,11 @@ option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
+
+if (BUILD_PYTHON OR BUILD_R)
+set(BUILD_ICU_EXTENSION TRUE)
+set(BUILD_PARQUET_EXTENSION TRUE)
+endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
