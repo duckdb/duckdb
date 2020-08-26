@@ -15,9 +15,33 @@
 namespace duckdb {
 
 struct ArrowScanFunctionData : public TableFunctionData {
-	DuckDBArrowTable *table;
+	ArrowArrayStream *stream;
+	ArrowSchema schema_root;
+	ArrowArray current_chunk_root;
 	idx_t chunk_idx = 0;
 	idx_t chunk_offset = 0;
+
+	~ArrowScanFunctionData() {
+		if (schema_root.release) {
+			for (idx_t child_idx = 0; child_idx < (idx_t)schema_root.n_children; child_idx++) {
+				auto &child = *schema_root.children[child_idx];
+				if (child.release) {
+					child.release(&child);
+				}
+			}
+			schema_root.release(&schema_root);
+		}
+
+		if (current_chunk_root.release) {
+			for (idx_t child_idx = 0; child_idx < (idx_t)current_chunk_root.n_children; child_idx++) {
+				auto &child = *current_chunk_root.children[child_idx];
+				if (child.release) {
+					child.release(&child);
+				}
+			}
+			current_chunk_root.release(&current_chunk_root);
+		}
+	}
 };
 
 static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<Value> &inputs,
@@ -25,19 +49,28 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
                                                 vector<LogicalType> &return_types, vector<string> &names) {
 
 	auto res = make_unique<ArrowScanFunctionData>();
-	res->table = (DuckDBArrowTable *)inputs[0].GetValue<uintptr_t>();
-	if (!res->table) {
+	auto &data = *res;
+
+	data.stream = (ArrowArrayStream *)inputs[0].GetValue<uintptr_t>();
+	if (!data.stream) {
 		throw InvalidInputException("arrow_scan: NULL pointer passed");
 	}
-	if (!res->table->schema.release) {
+
+	if (data.stream->get_schema(data.stream, &data.schema_root)) {
+		throw InvalidInputException("arrow_scan: get_schema failed(): %s",
+		                            string(data.stream->get_last_error(data.stream)));
+	}
+
+	if (!data.schema_root.release) {
 		throw InvalidInputException("arrow_scan: released schema passed");
 	}
-	if (res->table->schema.n_children < 1) {
+
+	if (data.schema_root.n_children < 1) {
 		throw InvalidInputException("arrow_scan: empty schema passed");
 	}
 
-	for (idx_t col_idx = 0; col_idx < (idx_t)res->table->schema.n_children; col_idx++) {
-		auto &schema = *res->table->schema.children[col_idx];
+	for (idx_t col_idx = 0; col_idx < (idx_t)data.schema_root.n_children; col_idx++) {
+		auto &schema = *data.schema_root.children[col_idx];
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
@@ -74,7 +107,6 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 		}
 		names.push_back(name);
 	}
-
 	return move(res);
 }
 
@@ -83,33 +115,32 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 	auto &data = *((ArrowScanFunctionData *)dataptr);
 
 	// have we run out of data on the current chunk? move to next one
-	if (data.chunk_offset >= (idx_t)data.table->chunks[data.chunk_idx].length) {
-		data.chunk_idx++;
+	if (data.chunk_offset >= (idx_t)data.current_chunk_root.length) {
 		data.chunk_offset = 0;
+		if (data.stream->get_next(data.stream, &data.current_chunk_root)) {
+			throw InvalidInputException("arrow_scan: get_next failed(): %s",
+			                            string(data.stream->get_last_error(data.stream)));
+		}
 	}
 
 	// have we run out of chunks? we done
-	if (data.chunk_idx >= data.table->chunks.size()) {
+	if (!data.current_chunk_root.release) {
 		return;
 	}
-	auto &current_arrow_chunk = data.table->chunks[data.chunk_idx];
 
-	if (!current_arrow_chunk.release) {
-		throw InvalidInputException("arrow_scan: released array passed");
-	}
-	if ((idx_t)current_arrow_chunk.n_children != output.column_count()) {
+	if ((idx_t)data.current_chunk_root.n_children != output.column_count()) {
 		throw InvalidInputException("arrow_scan: array column count mismatch");
 	}
 
 	output.SetCardinality(
-	    std::min((int64_t)STANDARD_VECTOR_SIZE, (int64_t)(current_arrow_chunk.length - data.chunk_offset)));
+	    std::min((int64_t)STANDARD_VECTOR_SIZE, (int64_t)(data.current_chunk_root.length - data.chunk_offset)));
 
 	for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
-		auto &array = *current_arrow_chunk.children[col_idx];
+		auto &array = *data.current_chunk_root.children[col_idx];
 		if (!array.release) {
 			throw InvalidInputException("arrow_scan: released array passed");
 		}
-		if (array.length != current_arrow_chunk.length) {
+		if (array.length != data.current_chunk_root.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
 		if (array.dictionary) {
@@ -130,7 +161,7 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 				memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
 
 				temp_nullmask >>= (bit_offset % 8); // why this has to be a right shift is a mystery to me
-				memcpy(&nullmask, (data_ptr_t) &temp_nullmask, n_bitmask_bytes);
+				memcpy(&nullmask, (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
 			}
 			nullmask.flip(); // arrow uses inverse nullmask logic
 		}

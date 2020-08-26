@@ -675,6 +675,66 @@ struct DuckDBPyConnection {
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 	}
 
+	struct PythonTableArrowArrayStream {
+		PythonTableArrowArrayStream(py::object arrow_table) : arrow_table(arrow_table) {
+			stream.get_schema = PythonTableArrowArrayStream::my_stream_getschema;
+			stream.get_next = PythonTableArrowArrayStream::my_stream_getnext;
+			stream.release = PythonTableArrowArrayStream::my_stream_release;
+			stream.get_last_error = PythonTableArrowArrayStream::my_stream_getlasterror;
+			stream.private_data = this;
+
+			batches = arrow_table.attr("to_batches")();
+		}
+
+		static int my_stream_getschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			if (!stream->release) {
+				my_stream->last_error = "stream was released";
+				return -1;
+			}
+			my_stream->arrow_table.attr("schema").attr("_export_to_c")((uint64_t)out);
+			return 0;
+		}
+
+		static int my_stream_getnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			if (!stream->release) {
+				my_stream->last_error = "stream was released";
+				return -1;
+			}
+			if (my_stream->batch_idx >= py::len(my_stream->batches)) {
+				out->release = nullptr;
+				return 0;
+			}
+			my_stream->batches[my_stream->batch_idx++].attr("_export_to_c")((uint64_t)out);
+			return 0;
+		}
+
+		static void my_stream_release(struct ArrowArrayStream *stream) {
+			if (!stream->release) {
+				return;
+			}
+			delete (PythonTableArrowArrayStream *)stream->private_data;
+		}
+
+		static const char *my_stream_getlasterror(struct ArrowArrayStream *stream) {
+			if (!stream->release) {
+				return "stream was released";
+			}
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			return my_stream->last_error.c_str();
+		}
+
+		ArrowArrayStream stream;
+		string last_error;
+		py::object arrow_table;
+		py::list batches;
+		idx_t batch_idx = 0;
+	};
+
 	unique_ptr<DuckDBPyRelation> from_arrow_table(py::object table) {
 		if (!connection) {
 			throw runtime_error("connection closed");
@@ -685,20 +745,10 @@ struct DuckDBPyConnection {
 			throw runtime_error("Only arrow tables supported");
 		}
 
-		auto my_arrow_table = new duckdb::DuckDBArrowTable();
-		table.attr("schema").attr("_export_to_c")((uint64_t)&my_arrow_table->schema);
-
-		for (auto &batch : table.attr("to_batches")()) {
-			ArrowArray array;
-			batch.attr("_export_to_c")((uint64_t)&array);
-			my_arrow_table->chunks.push_back(array);
-		}
-
-		void *table_ptr = my_arrow_table;
-		string name = "arrow_table_" + ptr_to_string(table_ptr);
-
+		auto my_arrow_table = new PythonTableArrowArrayStream(table);
+		string name = "arrow_table_" + ptr_to_string((void *)my_arrow_table);
 		return make_unique<DuckDBPyRelation>(
-		    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)table_ptr)})->Alias(name));
+		    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)my_arrow_table)})->Alias(name));
 	}
 
 	DuckDBPyConnection *unregister_df(string name) {
