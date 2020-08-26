@@ -56,26 +56,63 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
+extra_files = []
+header_files = []
+
 script_path = os.path.dirname(os.path.abspath(__file__))
 include_directories = ['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
 if len(existing_duckdb_dir) == 0:
+    # no existing library supplied: compile everything from source
     source_files = ['duckdb_python.cpp']
 
-    sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
-    import package_build
+    # check if amalgamation exists
+    if os.path.isfile(os.path.join(script_path, '..', '..', 'scripts', 'amalgamation.py')):
+        # amalgamation exists: compiling from source directory
+        # copy all source files to the current directory
+        sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
+        import package_build
 
-    (source_list, include_list, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
+        (source_list, include_list, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
 
-    source_files += [x.replace(script_path + os.path.sep, '') for x in source_list]
+        duckdb_sources = [x.replace(script_path + os.path.sep, '') for x in source_list]
+        duckdb_sources.sort()
 
-    duckdb_includes = [os.path.join('duckdb', x) for x in include_list]
-    duckdb_includes += ['duckdb']
+        duckdb_includes = [os.path.join('duckdb', x) for x in include_list]
+        duckdb_includes += ['duckdb']
 
+        # gather the include files
+        import amalgamation
+        header_files = amalgamation.list_includes_files(duckdb_includes)
+
+        # write the source list, include list and git hash to separate files
+        with open('sources.list', 'w+') as f:
+            for source_file in duckdb_sources:
+                f.write(source_file + "\n")
+
+        with open('includes.list', 'w+') as f:
+            for include_file in duckdb_includes:
+                f.write(include_file + '\n')
+
+        with open('githash.list', 'w+') as f:
+            f.write(githash + '\n')
+
+        extra_files = ['sources.list', 'includes.list', 'githash.list']
+    else:
+        # if amalgamation does not exist, we are in a package distribution
+        # read the include files, source list and include files from the supplied lists
+        with open('sources.list', 'r') as f:
+            duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
+
+        with open('includes.list', 'r') as f:
+            duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
+
+        with open('githash.list', 'r') as f:
+            githash = f.read().strip()
+
+    source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
-
     toolchain_args += ['-DDUCKDB_SOURCE_ID="{}"'.format(githash)]
 
-    # no existing library supplied: compile everything from source
     libduckdb = Extension('duckdb',
         include_dirs=include_directories,
         sources=source_files,
@@ -120,6 +157,7 @@ setup(
     install_requires=[ # these version is still available for Python 2, newer ones aren't
          'numpy>=1.14'
     ],
+    data_files = extra_files + header_files,
     packages=['duckdb_query_graph'],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.4'],
