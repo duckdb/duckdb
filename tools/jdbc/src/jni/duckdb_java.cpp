@@ -259,32 +259,41 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		jobject constlen_data = nullptr;
 		jobjectArray varlen_data = nullptr;
 
-		switch (vec.type.InternalType()) {
-		case PhysicalType::BOOL:
+		switch (vec.type.id()) {
+		case LogicalTypeId::BOOLEAN:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
 			break;
-		case PhysicalType::INT8:
+		case LogicalTypeId::TINYINT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int8_t));
 			break;
-		case PhysicalType::INT16:
+		case LogicalTypeId::SMALLINT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
 			break;
-		case PhysicalType::INT32:
+		case LogicalTypeId::INTEGER:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
 			break;
-		case PhysicalType::INT64:
+		case LogicalTypeId::BIGINT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
 			break;
-		case PhysicalType::INT128:
+		case LogicalTypeId::HUGEINT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
-		case PhysicalType::FLOAT:
+		case LogicalTypeId::FLOAT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
 			break;
-		case PhysicalType::DOUBLE:
+		case LogicalTypeId::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 			break;
-		case PhysicalType::VARCHAR:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::INTERVAL: {
+			Vector string_vec(LogicalType::VARCHAR);
+			VectorOperations::Cast(vec, string_vec, row_count);
+			vec.Reference(string_vec);
+			// fall through on purpose
+		}
+		case LogicalTypeId::VARCHAR:
 			varlen_data = env->NewObjectArray(row_count, env->FindClass("java/lang/String"), nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 				if (FlatVector::Nullmask(vec)[row_idx]) {

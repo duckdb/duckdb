@@ -17,6 +17,7 @@
 namespace duckdb {
 enum class PhysicalType : uint8_t;
 struct LogicalType;
+struct hugeint_t;
 
 inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
                                      const char *fname, int linenr) {
@@ -308,6 +309,7 @@ public:
 class ValueOutOfRangeException : public Exception {
 public:
 	ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType);
+	ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
 	ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
 	ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
 };
