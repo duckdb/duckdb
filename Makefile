@@ -38,6 +38,9 @@ endif
 ifeq (${BUILD_PYTHON}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1
 endif
+ifeq (${BUILD_R}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
+endif
 
 clean:
 	rm -rf build
@@ -53,6 +56,13 @@ release_expanded:
 	cd build/release_expanded && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
+
+cldebug:
+	mkdir -p build/cldebug && \
+	cd build/cldebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build .
+
 
 unittest: debug
 	build/debug/test/unittest

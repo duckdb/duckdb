@@ -41,7 +41,7 @@ def generate_amalgamation(source_file, header_file):
         os.chdir(wd)
         return [f.replace('\\', '/') for f in files]
 
-    headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/*.h") + myglob("third_party", "thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h") + myglob("third_party/miniz", "*.hpp")
+    headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/thrift/*.h") + myglob("third_party", "thrift/thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h") + myglob("third_party/miniz", "*.hpp")
 
     def rewrite(file_in, file_out):
         # print(file_in)
@@ -71,7 +71,7 @@ def generate_amalgamation(source_file, header_file):
             rewrite("%s/%s" % (prefix, f), temp_source)
 
     # the local and overall order of these rewrites matters.
-    rewrite_prefix('third_party/thrift', ['transport/PlatformSocket.h','config.h','thrift-config.h','Thrift.h',
+    rewrite_prefix('third_party/thrift/thrift', ['transport/PlatformSocket.h','config.h','thrift-config.h','Thrift.h',
         'TLogging.h','transport/TTransportException.h','transport/TTransport.h','protocol/TProtocolException.h',
         'protocol/TProtocol.h','protocol/TVirtualProtocol.h','protocol/TCompactProtocol.h','protocol/TCompactProtocol.tcc',
         'transport/TVirtualTransport.h','transport/TBufferTransports.h','TBase.h','TToString.h', 'protocol/TProtocol.cpp',

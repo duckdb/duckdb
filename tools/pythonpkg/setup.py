@@ -38,7 +38,7 @@ for i in range(len(sys.argv)):
 sys.argv = new_sys_args
 
 # check if amalgamation exists
-if os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
+if len(existing_duckdb_dir) == 0 and os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
     prev_wd = os.getcwd()
     target_header = os.path.join(prev_wd, 'duckdb.hpp')
     target_source = os.path.join(prev_wd, 'duckdb.cpp')
