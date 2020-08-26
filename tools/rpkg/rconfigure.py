@@ -62,12 +62,15 @@ def file_is_excluded(fname):
 			return True
 	return False
 
+def convert_backslashes(x):
+	return '/'.join(x.split(os.path.sep))
+
 def generate_unity_build(entries, idx):
 	ub_file = os.path.join(target_dir, 'amalgamation-{}.cpp'.format(str(idx)))
 	with open(ub_file, 'w+') as f:
 		for entry in entries:
-			f.write('#line 0 "{}"\n'.format(entry))
-			f.write('#include "{}"\n\n'.format(entry))
+			f.write('#line 0 "{}"\n'.format(convert_backslashes(entry)))
+			f.write('#include "{}"\n\n'.format(convert_backslashes(entry)))
 	return ub_file
 
 def generate_unity_builds(source_list, nsplits):
@@ -93,9 +96,6 @@ def generate_unity_builds(source_list, nsplits):
 		idx += 1
 
 	return new_source_files
-
-def convert_backslashes(x):
-	return '/'.join(x.split(os.path.sep))
 
 source_list = generate_unity_builds(source_list, 8)
 
