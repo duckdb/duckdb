@@ -114,6 +114,10 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
                                 FunctionData *dataptr) {
 	auto &data = *((ArrowScanFunctionData *)dataptr);
 
+	if (!data.stream->release) { // no more chunks
+		return;
+	}
+
 	// have we run out of data on the current chunk? move to next one
 	if (data.chunk_offset >= (idx_t)data.current_chunk_root.length) {
 		data.chunk_offset = 0;
@@ -125,6 +129,7 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 
 	// have we run out of chunks? we done
 	if (!data.current_chunk_root.release) {
+		data.stream->release(data.stream);
 		return;
 	}
 

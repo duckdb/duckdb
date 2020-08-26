@@ -44,6 +44,7 @@ struct MyArrowArrayStream {
 		if (!stream->release) {
 			return;
 		}
+		stream->release = nullptr;
 		delete (MyArrowArrayStream *)stream->private_data;
 	}
 
