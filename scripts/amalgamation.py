@@ -49,10 +49,11 @@ compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, utf8proc_dir, pg_qu
 # files always excluded
 always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-extension.cpp', 'src/amalgamation/parquet-extension.hpp']
 # files excluded from the amalgamation
-excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp']
+excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
 # files excluded from individual file compilation during test_compile
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
 
+file_system_cpp = os.path.join('src', 'common', 'file_system.cpp')
 
 linenumbers = False
 
@@ -184,6 +185,10 @@ def generate_amalgamation(source_file, header_file):
         for compile_dir in compile_directories:
             write_dir(compile_dir, sfile)
 
+        # for windows we write file_system.cpp last
+        # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
+        sfile.write(write_file(file_system_cpp, True))
+
     copy_if_different(temp_header, header_file)
     copy_if_different(temp_source, source_file)
     try:
@@ -209,7 +214,7 @@ def list_sources():
     file_list = []
     for compile_dir in compile_directories:
         list_files(compile_dir, file_list)
-    return file_list
+    return file_list + [file_system_cpp]
 
 def list_include_files_recursive(dname, file_list):
     files = os.listdir(dname)
