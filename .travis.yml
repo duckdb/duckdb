@@ -219,7 +219,7 @@ matrix:
       script:
         - python3 scripts/amalgamation.py
         - mkdir -p build/release
-        - (cd build/release && cmake  -DAMALGAMATION_BUILD=1  -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - (cd build/release && cmake -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
         - zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so
