@@ -23,7 +23,7 @@ else:
     toolchain_args = ['-std=c++11', '-g0']
     if 'DUCKDEBUG' in os.environ:
         toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
-if 'DUCKDB_INSTALL_USER' in os.environ:
+if 'DUCKDB_INSTALL_USER' in os.environ and 'install' in sys.argv:
     sys.argv.append('--user')
 
 existing_duckdb_dir = ''
@@ -163,7 +163,7 @@ def setup_data_files(data_files):
             fname = splits[1]
         if directory not in directory_map:
             directory_map[directory] = []
-        directory_map[directory].append(fname)
+        directory_map[directory].append(normalized_fpath)
     new_data_files = []
     for kv in directory_map.keys():
         new_data_files.append((kv, directory_map[kv]))
