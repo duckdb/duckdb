@@ -59,11 +59,9 @@ def convert_backslashes(x):
 def get_relative_path(source_dir, target_file):
     source_dir = convert_backslashes(source_dir)
     target_file = convert_backslashes(target_file)
-    # check if we are dealing with an already relative path
-    if target_file[0] == '/':
-        # absolute path: try to convert
-        if source_dir not in target_file:
-            raise Exception("Failed to make path " + target_file + " relative to source directory " + source_dir)
+
+    # absolute path: try to convert
+    if source_dir in target_file:
         target_file = target_file.replace(source_dir, "").lstrip('/')
     return target_file
 
