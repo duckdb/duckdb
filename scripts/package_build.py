@@ -65,9 +65,7 @@ def get_relative_path(source_dir, target_file):
         if source_dir not in target_file:
             raise Exception("Failed to make path " + target_file + " relative to source directory " + source_dir)
         target_file = target_file.replace(source_dir, "").lstrip('/')
-    print(target_file)
-
-    return os.path.sep.join(target_file.split('/'))
+    return target_file
 
 def build_package(target_dir):
     if not os.path.isdir(target_dir):
