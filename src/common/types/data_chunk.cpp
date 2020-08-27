@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+using namespace std;
 
 DataChunk::DataChunk() : count(0) {
 }
