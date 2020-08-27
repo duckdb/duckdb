@@ -281,7 +281,7 @@ bool BufferedCSVReader::TryCastValue(Value value, LogicalType sql_type) {
 			value.CastAs(sql_type, true);
 		}
 		return true;
-	} catch (const Exception &e) {
+	} catch (...) {
 		return false;
 	}
 	return false;

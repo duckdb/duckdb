@@ -78,10 +78,6 @@ def build_package(target_dir):
     prev_wd = os.getcwd()
     os.chdir(os.path.join(scripts_dir, '..'))
 
-    # read the source id
-    proc = subprocess.Popen(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.path.join(scripts_dir, '..'))
-    githash = proc.stdout.read().strip().decode('utf8')
-
     # obtain the list of source files from the amalgamation
     source_list = amalgamation.list_sources()
     include_list = amalgamation.list_include_dirs()
@@ -95,7 +91,9 @@ def build_package(target_dir):
             current_path = os.path.join(current_path, full_path[i])
             if not os.path.isdir(current_path):
                 os.mkdir(current_path)
-        amalgamation.copy_if_different(src, os.path.join(current_path, full_path[-1]))
+        target_name = full_path[-1]
+        target_file = os.path.join(current_path, target_name)
+        amalgamation.copy_if_different(src, target_file)
 
 
     # now do the same for the parquet extension
@@ -111,6 +109,29 @@ def build_package(target_dir):
 
     for inc in include_files:
         copy_file(inc, target_dir)
+
+    # handle pragma_version.cpp: paste #define DUCKDB_SOURCE_ID there
+    # read the source id
+    proc = subprocess.Popen(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.path.join(scripts_dir, '..'))
+    githash = proc.stdout.read().strip().decode('utf8')
+    # open the file and read the current contents
+    fpath = os.path.join(target_dir, 'src', 'function', 'table', 'version', 'pragma_version.cpp')
+    with open(fpath, 'r') as f:
+        text = f.read()
+    # now add the DUCKDB_SOURCE_ID define, if it is not there already
+    found = False
+    lines = text.split('\n')
+    for i in range(len(lines)):
+        if '#define DUCKDB_SOURCE_ID ' in lines[i]:
+            lines[i] = '#define DUCKDB_SOURCE_ID "{}"'.format(githash)
+            found = True
+            break
+    if not found:
+        text = '#ifndef DUCKDB_SOURCE_ID\n#define DUCKDB_SOURCE_ID "{}"\n#endif\n'.format(githash) + text
+    else:
+        text = '\n'.join(text)
+    with open(fpath, 'w+') as f:
+        f.write(text)
 
     def file_is_excluded(fname):
         for entry in excluded_objects:
@@ -156,5 +177,4 @@ def build_package(target_dir):
     os.chdir(prev_wd)
     return ([convert_backslashes(x) for x in source_list if not file_is_excluded(x)],
             [convert_backslashes(x) for x in include_list],
-            [convert_backslashes(x) for x in original_sources],
-            githash)
+            [convert_backslashes(x) for x in original_sources])

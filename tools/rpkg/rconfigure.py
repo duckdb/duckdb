@@ -45,7 +45,7 @@ if not os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
 
 target_dir = os.path.join(os.getcwd(), 'src', 'duckdb')
 
-(source_list, include_list, original_sources, githash) = package_build.build_package(target_dir)
+(source_list, include_list, original_sources) = package_build.build_package(target_dir)
 
 # object list, relative paths
 script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\','/')
@@ -61,7 +61,7 @@ with open(os.path.join('src', 'Makevars.in'), 'r') as f:
     text = f.read()
 
 text = text.replace('{{ SOURCES }}', object_list)
-text = text.replace('{{ INCLUDES }}', include_list + ' -DDUCKDB_SOURCE_ID=\\"{}\\"'.format(githash))
+text = text.replace('{{ INCLUDES }}', include_list)
 text = text.replace('PKG_LIBS={{ LINK_FLAGS }}', '')
 
 # now write it to the output Makevars
