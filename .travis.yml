@@ -620,12 +620,11 @@ matrix:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
         - export R_VER=$(choco info r -r | grep -o "[0-9].[0-9].[0-9]")
-
-        - export "PATH=/c/Rtools40/usr/bin:$PATH:/c/Program\ Files/R/R-$R_VER/bin/"
+        - export "PATH=/c/Rtools40/usr/bin:$PATH:/c/Program Files/R/R-$R_VER/bin/"
         - cd tools/rpkg
 
       script:
-        - sh configure
+        - ./configure
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - (cd tests && R -f testthat.R)
