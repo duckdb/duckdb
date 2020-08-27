@@ -47,8 +47,11 @@ target_dir = os.path.join(os.getcwd(), 'src', 'duckdb')
 
 (source_list, include_list, original_sources, githash) = package_build.build_package(target_dir)
 
-# object list
-object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in source_list])
+# object list, relative paths
+script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\','/')
+duckdb_sources = [x.replace(script_path + '/src/', '') for x in source_list]
+object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in duckdb_sources])
+
 # include list
 include_list = ' '.join(['-I' + 'duckdb/' + x for x in include_list])
 include_list += ' -Iduckdb'
