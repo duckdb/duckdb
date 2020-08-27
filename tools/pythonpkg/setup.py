@@ -48,7 +48,6 @@ if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 class get_pybind_include(object):
-
     def __init__(self, user=False):
         self.user = user
 
@@ -148,6 +147,30 @@ setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
 if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
     setuptools_scm_conf['local_scheme'] = 'no-local-version'
 
+# data files need to be formatted as [(directory, [files...]), (directory2, [files...])]
+# no clue why the setup script can't do this automatically, but hey
+def setup_data_files(data_files):
+    directory_map = {}
+    for data_file in data_files:
+        normalized_fpath = os.path.sep.join(data_file.split('/'))
+        splits = normalized_fpath.rsplit(os.path.sep, 1)
+        if len(splits) == 1:
+            # no directory specified
+            directory = ""
+            fname = normalized_fpath
+        else:
+            directory = splits[0]
+            fname = splits[1]
+        if directory not in directory_map:
+            directory_map[directory] = []
+        directory_map[directory].append(fname)
+    new_data_files = []
+    for kv in directory_map.keys():
+        new_data_files.append((kv, directory_map[kv]))
+    return new_data_files
+
+data_files = setup_data_files(extra_files + header_files)
+
 setup(
     name = "duckdb",
     description = 'DuckDB embedded database',
@@ -157,7 +180,7 @@ setup(
     install_requires=[ # these version is still available for Python 2, newer ones aren't
          'numpy>=1.14'
     ],
-    data_files = extra_files + header_files,
+    data_files = data_files,
     packages=['duckdb_query_graph'],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.4'],
