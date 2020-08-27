@@ -49,7 +49,7 @@ target_dir = os.path.join(os.getcwd(), 'src', 'duckdb')
 
 # object list, relative paths
 script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\','/')
-duckdb_sources = [x.replace(script_path + '/src/', '') for x in source_list]
+duckdb_sources = [package_build.get_relative_path(os.path.join(script_path, 'src'), x) for x in source_list]
 object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in duckdb_sources])
 
 # include list
