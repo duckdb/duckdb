@@ -10,6 +10,9 @@ R_VER=$(choco info r -r | grep -o "[0-9].[0-9].[0-9]")
 export "PATH=/c/Rtools40/usr/bin:$PATH"
 R=C:/Program\ Files/R/R-$R_VER/bin/R.exe
 
+sh configure
+rm configure
+
 echo -e "options(Ncpus = 4, pkgType = 'binary', repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
 "${R}" -q -e 'if (!requireNamespace(\\\"remotes\\\")) install.packages(\\\"remotes\\\")'
 "${R}" -q -e 'remotes::install_github(\\\"ropensci/tic\\\", upgrade = \\\"always\\\"); print(tic::dsl_load()); tic::prepare_all_stages()'
