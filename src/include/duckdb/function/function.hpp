@@ -160,6 +160,7 @@ private:
 	void RegisterSQLiteFunctions();
 	void RegisterReadFunctions();
 	void RegisterTableFunctions();
+	void RegisterArrowFunctions();
 
 	// aggregates
 	void RegisterAlgebraicAggregates();

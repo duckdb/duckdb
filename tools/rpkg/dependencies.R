@@ -1,0 +1,1 @@
+install.packages(c("DBI", "callr", "DBItest", "dbplyr", "nycflights13", "testthat"), repos="https://cloud.r-project.org/")

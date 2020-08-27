@@ -153,6 +153,16 @@ ValueOutOfRangeException::ValueOutOfRangeException(const double value, const Phy
                                                TypeIdToString(newType)) {
 }
 
+ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType,
+                                                   const PhysicalType newType)
+    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
+                                               value.ToString() +
+                                               " can't be cast because the value is out of range "
+                                               "for the destination type " +
+                                               TypeIdToString(newType)) {
+}
+
+
 ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType varType, const idx_t length)
     : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) + "(" +
                                                  std::to_string(length) + ")") {

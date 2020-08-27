@@ -1113,8 +1113,7 @@ template <> bool Cast::Operation(hugeint_t input) {
 template <class T> static T hugeint_cast_to_numeric(hugeint_t input) {
 	T result;
 	if (!TryCast::Operation<hugeint_t, T>(input, result)) {
-		throw OutOfRangeException("Failed to cast value \"%s\" from HUGEINT -> %s: value is out of range",
-		                          input.ToString(), TypeIdToString(GetTypeId<T>()));
+		throw ValueOutOfRangeException(input, PhysicalType::INT128, GetTypeId<T>());
 	}
 	return result;
 }

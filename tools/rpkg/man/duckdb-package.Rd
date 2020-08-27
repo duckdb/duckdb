@@ -6,6 +6,9 @@
 \title{DuckDB client package for R}
 \description{
 R client package for DuckDB: an embeddable SQL OLAP Database Management System.
+}
+\seealso{
+\code{\link[=duckdb]{duckdb()}} for connection instructions.
 
-More information at at https://duckdb.org/.
+\url{https://duckdb.org/} for the project website.
 }

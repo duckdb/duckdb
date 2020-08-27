@@ -55,7 +55,7 @@ else()
   set(DUCKDB_LINK_LIBS
       fmt
       pg_query
-      re2
+      duckdb_re2
       miniz
       utf8proc
       Threads::Threads)
@@ -84,6 +84,36 @@ else()
                 "${CMAKE_SOURCE_DIR}/src/include/duckdb.h"
           DESTINATION "${INSTALL_INCLUDE_DIR}")
 
+endif()
+
+
+if(BUILD_PYTHON OR BUILD_R)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
+  elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+  elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+  else()
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS}")
+  endif()
+
+  get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
+
+  if(BUILD_PYTHON)
+  add_custom_target(duckdb_python ALL
+                    COMMAND python3 setup.py install --binary-dir=${CMAKE_BINARY_DIR} --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+                    DEPENDS duckdb parquet_extension icu_extension
+                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/pythonpkg
+                    COMMENT Build Python package)
+  endif()
+  if (BUILD_R)
+    add_custom_target(duckdb_r ALL
+                      COMMAND DUCKDB_R_BINDIR=${CMAKE_BINARY_DIR} DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\" DUCKDB_R_LIBS=\"${duckdb_libs}\" R CMD INSTALL .
+                      DEPENDS duckdb parquet_extension icu_extension
+                      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/rpkg
+                      COMMENT Build R package)
+  endif()
 endif()
 
 install(TARGETS duckdb duckdb_static
