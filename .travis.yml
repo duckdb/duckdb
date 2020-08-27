@@ -620,14 +620,13 @@ matrix:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
         - export R_VER=$(choco info r -r | grep -o "[0-9].[0-9].[0-9]")
-        - export "PATH=/c/Program Files/R/R-$R_VER/bin/:/c/Rtools40/usr/bin:/c/Python37-x64/bin:$PATH"
+        - export "PATH=$PATH:/c/Program Files/R/R-$R_VER/bin/:/c/Python37-x64/bin"
         - cd tools/rpkg
         - R -f dependencies.R
 
       script:
         - sh configure
-        - R CMD build .
-        - R CMD INSTALL --build duckdb_*.tar.gz
+        - sh build_win
         - (cd tests && R -f testthat.R)
         - python3 ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb-*.zip
 
