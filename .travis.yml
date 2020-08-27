@@ -576,60 +576,36 @@ matrix:
 
       dist: xenial
       language: r
-      cache:
-        - packages
-        - ccache
       r: devel
 
       before_install:
         - cd tools/rpkg
-        - echo -e "options(Ncpus = 4, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
-        - mkdir -p $HOME/.R && echo -e 'CC=ccache gcc\nCXX=ccache g++\nCXX11=ccache g++\nCXX14=ccache g++\nCXX17=ccache g++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
-        - mkdir -p $HOME/.ccache &&  echo -e 'max_size = 5.0G\nsloppiness = include_file_ctime\nhash_dir=false' > $HOME/.ccache/ccache.conf
-        - R -q -e 'if (!requireNamespace("remotes")) install.packages("remotes")'
-        - R -q -e 'if (getRversion() < "3.2" && !requireNamespace("curl")) install.packages("curl")'
-        - R -q -e 'remotes::install_github("ropensci/tic", upgrade = "always"); print(tic::dsl_load()); tic::prepare_all_stages()'
-        - R -q -e 'tic::before_install()'
 
-      install:
-        - R -q -e 'tic::install()'
-      before_script:
-        - R -q -e 'tic::before_script()'
       script:
         - ./configure
-        - sh build-linux
-        - sh deploy-linux
+        - R CMD build .
+        - R CMD INSTALL duckdb_*.tar.gz
+        - (cd tests && R -f testthat.R)
+        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb-*.tar.gz
+
 
     - os: osx
       osx_image: xcode11.5
       name: R Package
-      cache:
-        - packages
-        - $HOME/.ccache
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: r
 
       before_install:
         - cd tools/rpkg
-        - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then brew install ccache; fi
-        - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then export PATH="/usr/local/opt/ccache/libexec:$PATH"; fi
-        - echo -e "options(Ncpus = 4, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
-        - mkdir -p $HOME/.R && echo -e 'CC=ccache clang\nCXX=ccache clang++\nCXX11=ccache clang++\nCXX14=ccache clang++\nCXX17=ccache clang++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
-        - mkdir -p $HOME/.ccache &&  echo -e 'max_size = 5.0G\nsloppiness = include_file_ctime\nhash_dir=false' > $HOME/.ccache/ccache.conf
-        - R -q -e 'if (!requireNamespace("remotes")) install.packages("remotes")'
-        - R -q -e 'if (getRversion() < "3.2" && !requireNamespace("curl")) install.packages("curl")'
-        - R -q -e 'remotes::install_github("ropensci/tic", upgrade = "always"); print(tic::dsl_load()); tic::prepare_all_stages()'
-        - R -q -e 'tic::before_install()'
 
-      install:
-        - R -q -e 'tic::install()'
-      before_script:
-        - R -q -e 'tic::before_script()'
       script:
         - ./configure
-        - sh build-mac
-        - sh deploy-mac
+        - R CMD build .
+        - R CMD INSTALL --build duckdb_*.tar.gz
+        - (cd tests && R -f testthat.R)
+        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb-*.tgz
+
 
     - os: windows
       name: R Package
@@ -638,12 +614,18 @@ matrix:
 
       language: cpp
 
-      script:
+      before_install:
         - choco install r.project -y
         - choco install rtools -y
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-        - choco install curl -y --force
+        - export R_VER=$(choco info r -r | grep -o "[0-9].[0-9].[0-9]")
+        - export "PATH=$PATH:/c/Program Files/R/R-$R_VER/bin/"
         - cd tools/rpkg
+        - R -f dependencies.R
+
+      script:
         - sh configure
-        - sh build-win
-        - sh deploy-win
+        - sh build_win
+        - (cd tests && R -f testthat.R)
+        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb-*.zip
+
