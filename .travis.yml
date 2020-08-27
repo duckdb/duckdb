@@ -586,6 +586,7 @@ matrix:
         - R CMD build .
         - R CMD INSTALL duckdb_*.tar.gz
         - (cd tests && R -f testthat.R)
+        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb-*.tar.gz
 
 
     - os: osx
@@ -603,6 +604,7 @@ matrix:
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - (cd tests && R -f testthat.R)
+        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb-*.tgz
 
 
     - os: windows

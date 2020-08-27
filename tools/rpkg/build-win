@@ -13,3 +13,4 @@ R=C:/Program\ Files/R/R-$R_VER/bin/R.exe
 "${R}" -f dependencies.R
 "${R}" CMD build .
 "${R}" CMD INSTALL --build duckdb_*.tar.gz
+(cd tests && "${R}" -f testthat.R)
