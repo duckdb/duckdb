@@ -83,6 +83,7 @@ setMethod(
 #' `dbDisconnect()` closes a DuckDB database connection, optionally shutting down
 #' the associated instance.
 #'
+#' @param conn A `duckdb_connection` object
 #' @param shutdown Set to `TRUE` to shut down the DuckDB database instance that this connection refers to.
 #' @rdname duckdb
 #' @export
@@ -118,7 +119,7 @@ duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE) {
   )
 }
 
-#' @inheritParams DBI::dbDataType
+#' @rdname duckdb_driver-class
 #' @export
 setMethod(
   "dbDataType", "duckdb_driver",

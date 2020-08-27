@@ -34,6 +34,8 @@ data is kept in RAM}
 
 \item{read_only}{Set to \code{TRUE} for read-only operation}
 
+\item{conn}{A \code{duckdb_connection} object}
+
 \item{shutdown}{Set to \code{TRUE} to shut down the DuckDB database instance that this connection refers to.}
 }
 \value{

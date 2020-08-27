@@ -5,11 +5,14 @@
 \alias{duckdb_driver-class}
 \alias{duckdb_driver}
 \alias{show,duckdb_driver-method}
+\alias{dbDataType,duckdb_driver-method}
 \alias{dbIsValid,duckdb_driver-method}
 \alias{dbGetInfo,duckdb_driver-method}
 \title{DuckDB driver class}
 \usage{
 \S4method{show}{duckdb_driver}(object)
+
+\S4method{dbDataType}{duckdb_driver}(dbObj, obj, ...)
 
 \S4method{dbIsValid}{duckdb_driver}(dbObj, ...)
 
