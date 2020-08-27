@@ -4,6 +4,7 @@
 \alias{dbConnect,duckdb_driver-method}
 \alias{dbDisconnect,duckdb_connection-method}
 \alias{duckdb}
+\alias{duckdb_shutdown}
 \title{Connect to a DuckDB database instance}
 \usage{
 \S4method{dbConnect}{duckdb_driver}(
@@ -17,6 +18,8 @@
 \S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
 
 duckdb(dbdir = DBDIR_MEMORY, read_only = FALSE)
+
+duckdb_shutdown(drv)
 }
 \arguments{
 \item{drv}{Object returned by \code{duckdb()}}
@@ -34,11 +37,13 @@ data is kept in RAM}
 \item{shutdown}{Set to \code{TRUE} to shut down the DuckDB database instance that this connection refers to.}
 }
 \value{
-\code{dbConnect()} returns an object of class \linkS4class{DBIConnection}.
+\code{dbConnect()} returns an object of class
+\linkS4class{duckdb_connection}.
 
-\code{dbDisconnect()} is called for its side effect.
+\code{duckdb()} returns an object of class \linkS4class{duckdb_driver}.
 
-\code{duckdb()} returns an object of class \linkS4class{DBIDriver}.
+\code{dbDisconnect()} and \code{duckdb_shutdown()} are called for their
+side effect.
 }
 \description{
 \code{dbConnect()} connects to a database instance.
@@ -47,11 +52,20 @@ data is kept in RAM}
 the associated instance.
 
 \code{duckdb()} creates or reuses a database instance.
+
+\code{duckdb_shutdown()} shuts down a database instance.
 }
 \examples{
-con <- dbConnect(duckdb())
+drv <- duckdb()
+con <- dbConnect(drv)
 
 dbGetQuery(con, "SELECT 'Hello, world!'")
 
+dbDisconnect(con)
+duckdb_shutdown(drv)
+
+# Shorter:
+con <- dbConnect(duckdb())
+dbGetQuery(con, "SELECT 'Hello, world!'")
 dbDisconnect(con, shutdown = TRUE)
 }

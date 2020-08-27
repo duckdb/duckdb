@@ -3,6 +3,7 @@
 \docType{class}
 \name{duckdb_connection-class}
 \alias{duckdb_connection-class}
+\alias{duckdb_connection}
 \alias{show,duckdb_connection-method}
 \alias{dbIsValid,duckdb_connection-method}
 \alias{dbSendQuery,duckdb_connection,character-method}
@@ -86,5 +87,6 @@ or the result of a call to \code{\link[DBI:dbQuoteIdentifier]{dbQuoteIdentifier(
 \item{temporary}{Should the created table be temporary?}
 }
 \description{
-DuckDB connection class
+Implements \linkS4class{DBIConnection}.
 }
+\keyword{internal}

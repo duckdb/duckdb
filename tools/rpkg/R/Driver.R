@@ -18,7 +18,7 @@ drv_to_string <- function(drv) {
   sprintf("<duckdb_driver %s dbdir='%s' read_only=%s>", extptr_str(drv@database_ref), drv@dbdir, drv@read_only)
 }
 
-#' @rdname duckdb_driver
+#' @rdname duckdb_driver-class
 #' @inheritParams methods::show
 #' @export
 setMethod(
@@ -41,15 +41,23 @@ setMethod(
 #' @param debug Print additional debug information such as queries
 #' @param read_only Set to `TRUE` for read-only operation
 #'
-#' @return `dbConnect()` returns an object of class \linkS4class{DBIConnection}.
+#' @return `dbConnect()` returns an object of class
+#'   \linkS4class{duckdb_connection}.
 #'
 #' @rdname duckdb
 #' @export
 #' @examples
-#' con <- dbConnect(duckdb())
+#' drv <- duckdb()
+#' con <- dbConnect(drv)
 #'
 #' dbGetQuery(con, "SELECT 'Hello, world!'")
 #'
+#' dbDisconnect(con)
+#' duckdb_shutdown(drv)
+#'
+#' # Shorter:
+#' con <- dbConnect(duckdb())
+#' dbGetQuery(con, "SELECT 'Hello, world!'")
 #' dbDisconnect(con, shutdown = TRUE)
 setMethod(
   "dbConnect", "duckdb_driver",
@@ -76,7 +84,6 @@ setMethod(
 #' the associated instance.
 #'
 #' @param shutdown Set to `TRUE` to shut down the DuckDB database instance that this connection refers to.
-#' @return `dbDisconnect()` is called for its side effect.
 #' @rdname duckdb
 #' @export
 setMethod(
@@ -97,7 +104,7 @@ setMethod(
 #' @description
 #' `duckdb()` creates or reuses a database instance.
 #'
-#' @return `duckdb()` returns an object of class \linkS4class{DBIDriver}.
+#' @return `duckdb()` returns an object of class \linkS4class{duckdb_driver}.
 #'
 #' @import methods DBI
 #' @export
@@ -143,7 +150,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_driver
+#' @rdname duckdb_driver-class
 #' @inheritParams DBI::dbIsValid
 #' @importFrom DBI dbConnect
 #' @export
@@ -165,7 +172,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_driver
+#' @rdname duckdb_driver-class
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -176,7 +183,12 @@ setMethod(
 )
 
 
-#' @rdname duckdb_driver
+#' @description
+#' `duckdb_shutdown()` shuts down a database instance.
+#'
+#' @return `dbDisconnect()` and `duckdb_shutdown()` are called for their
+#'   side effect.
+#' @rdname duckdb
 #' @export
 duckdb_shutdown <- function(drv) {
   if (!is(drv, "duckdb_driver")) {

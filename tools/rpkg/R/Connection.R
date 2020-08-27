@@ -1,13 +1,20 @@
-# Defined here, needed by duckdb_connection
-#' @rdname duckdb_driver
+#' DuckDB driver class
+#'
+#' Implements \linkS4class{DBIDriver}.
+#'
+#' @aliases duckdb_driver
+#' @keywords internal
 #' @export
 setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "externalptr", dbdir = "character", read_only = "logical"))
 
 #' DuckDB connection class
-#' @rdname duckdb_connection
+#'
+#' Implements \linkS4class{DBIConnection}.
+#'
+#' @aliases duckdb_connection
+#' @keywords internal
 #' @export
-setClass(
-  "duckdb_connection",
+setClass("duckdb_connection",
   contains = "DBIConnection",
   slots = list(dbdir = "character", conn_ref = "externalptr", driver = "duckdb_driver", debug = "logical")
 )
@@ -21,7 +28,7 @@ duckdb_connection <- function(duckdb_driver, debug) {
   )
 }
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams methods::show
 #' @export
 setMethod(
@@ -31,7 +38,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbIsValid
 #' @export
 setMethod(
@@ -50,7 +57,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbSendQuery
 #' @export
 setMethod(
@@ -77,7 +84,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbDataType
 #' @export
 setMethod(
@@ -91,7 +98,7 @@ duckdb_random_string <- function(x) {
   paste(sample(letters, 10, replace = TRUE), collapse = "")
 }
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbWriteTable
 #' @param row.names Whether the row.names of the data.frame should be preserved
 #' @param overwrite If a table with the given name already exists, should it be overwritten?
@@ -200,7 +207,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbListTables
 #' @export
 setMethod(
@@ -215,7 +222,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbExistsTable
 #' @export
 setMethod(
@@ -247,7 +254,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbListFields
 #' @export
 setMethod(
@@ -264,7 +271,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbRemoveTable
 #' @export
 setMethod(
@@ -278,7 +285,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -294,7 +301,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbBegin
 #' @export
 setMethod(
@@ -305,7 +312,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbCommit
 #' @export
 setMethod(
@@ -316,7 +323,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_connection
+#' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbRollback
 #' @export
 setMethod(
