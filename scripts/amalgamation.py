@@ -193,12 +193,7 @@ def generate_amalgamation(source_file, header_file):
         sfile.write("#ifndef DUCKDB_AMALGAMATION\n#error header mismatch\n#endif\n\n")
 
         for compile_dir in compile_directories:
-<<<<<<< HEAD
             sfile.write(write_dir(compile_dir))
-=======
-            write_dir(compile_dir, sfile)
-
->>>>>>> master
         # for windows we write file_system.cpp last
         # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
         sfile.write(write_file(file_system_cpp, True))
