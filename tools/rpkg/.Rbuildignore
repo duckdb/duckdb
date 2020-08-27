@@ -4,6 +4,8 @@
 .*\.zip
 git
 configure
+dependencies.R
+src/Makevars.in
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^build-win$

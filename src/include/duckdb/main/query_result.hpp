@@ -11,6 +11,8 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
+struct ArrowSchema;
+
 namespace duckdb {
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT };
@@ -58,6 +60,8 @@ public:
 	idx_t column_count() {
 		return types.size();
 	}
+
+	void ToArrowSchema(ArrowSchema *out_array);
 
 private:
 	//! The current chunk used by the iterator

@@ -1,9 +1,12 @@
 package org.duckdb;
 
 import java.math.BigInteger;
+import java.sql.Date;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.sql.Types;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
@@ -53,6 +56,14 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.DOUBLE;
 		} else if (type_name.equals("VARCHAR")) {
 			return Types.VARCHAR;
+		}  else if (type_name.equals("TIME")) {
+			return Types.TIME;
+		}  else if (type_name.equals("DATE")) {
+			return Types.DATE;
+		}  else if (type_name.equals("TIMESTAMP")) {
+			return Types.TIMESTAMP;
+		}  else if (type_name.equals("INTERVAL")) {
+			return Types.VARCHAR;
 		} else {
 			throw new SQLException("Unknown type " + type_name);
 		}
@@ -76,6 +87,12 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Double.class.toString();
 		case Types.VARCHAR:
 			return String.class.toString();
+		case Types.TIME:
+			return Time.class.toString();
+		case Types.DATE:
+			return Date.class.toString();
+		case Types.TIMESTAMP:
+			return Timestamp.class.toString();
 		default:
 			throw new SQLException("Unknown type " + getColumnTypeName(column));
 		}

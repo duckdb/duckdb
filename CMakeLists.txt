@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 2.8.7)
+cmake_policy(SET CMP0026 NEW)
+cmake_policy(SET CMP0051 NEW)
 # if(APPLE) # needs to be before project() SET(CMAKE_CXX_FLAGS -stdlib=libc++)
 # SET(CMAKE_OSX_DEPLOYMENT_TARGET "10.7" CACHE STRING "Minimum OS X deployment
 # version") endif()
@@ -73,7 +75,13 @@ endif()
 
 option(ENABLE_SANITIZER "Enable sanitizer." TRUE)
 if(${ENABLE_SANITIZER})
-  set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+  if (BUILD_PYTHON OR BUILD_R)
+    if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+      message(WARNING "Sanitizers are not supported for the Python build. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled")
+    endif()
+  else()
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+  endif()
 endif()
 
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)
@@ -107,8 +115,14 @@ option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
+option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
+
+if (BUILD_PYTHON OR BUILD_R)
+set(BUILD_ICU_EXTENSION TRUE)
+set(BUILD_PARQUET_EXTENSION TRUE)
+endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")

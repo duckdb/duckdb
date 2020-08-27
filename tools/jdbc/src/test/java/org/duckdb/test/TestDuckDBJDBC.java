@@ -6,6 +6,8 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.Date;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.Connection;
@@ -13,6 +15,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.util.Properties;
 
 import org.duckdb.DuckDBConnection;
@@ -690,6 +694,72 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_exotic_types() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT '2019-11-26 21:11:00'::timestamp ts, '2019-11-26'::date dt, interval '5 days' iv, '21:11:00'::time te");
+		assertTrue(rs.next());
+		assertEquals(rs.getObject("ts"), Timestamp.valueOf("2019-11-26 21:11:00"));
+		assertEquals(rs.getTimestamp("ts"), Timestamp.valueOf("2019-11-26 21:11:00"));
+
+		assertEquals(rs.getObject("dt"), Date.valueOf("2019-11-26"));
+		assertEquals(rs.getDate("dt"), Date.valueOf("2019-11-26"));
+
+		assertEquals(rs.getObject("iv"), "5 days");
+
+		assertEquals(rs.getObject("te"), Time.valueOf("21:11:00"));
+		assertEquals(rs.getTime("te"), Time.valueOf("21:11:00"));
+
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	
+	public static void test_exotic_nulls() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT NULL::timestamp ts, NULL::date dt, NULL::time te");
+		assertTrue(rs.next());
+		assertNull(rs.getObject("ts"));
+		assertNull(rs.getTimestamp("ts"));
+
+		assertNull(rs.getObject("dt"));
+		assertNull(rs.getDate("dt"));
+		
+		assertNull(rs.getObject("te"));
+		assertNull(rs.getTime("te"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	
+	public static void test_evil_date() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT '513125-08-05 (BC)'::date d");
+	
+		assertTrue(rs.next());
+		assertNull(rs.getDate("d"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	
 	public static void test_connect_wrong_url_bug848() throws Exception {
 		Driver d = new DuckDBDriver();
 		assertNull(d.connect("jdbc:h2:", null));

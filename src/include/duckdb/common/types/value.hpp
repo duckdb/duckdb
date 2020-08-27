@@ -234,5 +234,7 @@ template <> hugeint_t Value::GetValue() const;
 template <> string Value::GetValue() const;
 template <> float Value::GetValue() const;
 template <> double Value::GetValue() const;
+template <> uintptr_t Value::GetValue() const;
+
 
 } // namespace duckdb

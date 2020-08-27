@@ -11,6 +11,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 
+struct ArrowArray;
+
 namespace duckdb {
 
 //!  A Data Chunk represents a set of vectors.
@@ -110,6 +112,9 @@ public:
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
+
+	//! export data chunk as a arrow struct array that can be imported as arrow record batch
+	void ToArrowArray(ArrowArray *out_array);
 
 private:
 	idx_t count;

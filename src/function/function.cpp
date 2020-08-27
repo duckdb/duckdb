@@ -25,6 +25,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterSQLiteFunctions();
 	RegisterReadFunctions();
 	RegisterTableFunctions();
+	RegisterArrowFunctions();
 
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();

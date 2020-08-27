@@ -633,7 +633,7 @@ hugeint_t & hugeint_t::operator^=(const hugeint_t & rhs) {
 	return *this;
 }
 
-string hugeint_t::ToString() {
+string hugeint_t::ToString() const {
 	return Hugeint::ToString(*this);
 }
 
