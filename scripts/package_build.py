@@ -53,6 +53,22 @@ def includes():
 def include_flags():
     return ' ' + ' '.join(['-I' + x for x in includes()])
 
+def convert_backslashes(x):
+    return '/'.join(x.split(os.path.sep))
+
+def get_relative_path(source_dir, target_file):
+    source_dir = convert_backslashes(source_dir)
+    target_file = convert_backslashes(target_file)
+    # check if we are dealing with an already relative path
+    if target_file[0] == '/':
+        # absolute path: try to convert
+        if source_dir not in target_file:
+            raise Exception("Failed to make path " + target_file + " relative to source directory " + source_dir)
+        target_file = target_file.replace(source_dir, "").lstrip('/')
+    print(target_file)
+
+    return os.path.sep.join(target_file.split('/'))
+
 def build_package(target_dir):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
@@ -105,9 +121,6 @@ def build_package(target_dir):
             if entry in fname:
                 return True
         return False
-
-    def convert_backslashes(x):
-        return '/'.join(x.split(os.path.sep))
 
     def generate_unity_build(entries, idx):
         ub_file = os.path.join(target_dir, 'amalgamation-{}.cpp'.format(str(idx)))

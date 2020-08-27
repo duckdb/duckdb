@@ -60,7 +60,7 @@ extra_files = []
 header_files = []
 
 script_path = os.path.dirname(os.path.abspath(__file__))
-include_directories = ['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+include_directories = [get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
     source_files = ['duckdb_python.cpp']
@@ -74,7 +74,7 @@ if len(existing_duckdb_dir) == 0:
 
         (source_list, include_list, original_sources, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
 
-        duckdb_sources = [x.replace(script_path + os.path.sep, '') for x in source_list]
+        duckdb_sources = [package_build.get_relative_path(script_path, x) for x in source_list]
         duckdb_sources.sort()
 
         original_sources = [os.path.join('duckdb', x) for x in original_sources]
