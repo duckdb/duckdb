@@ -577,8 +577,11 @@ matrix:
       dist: xenial
       language: r
       r: devel
+      cache: packages
+      warnings_are_errors: true
 
       before_install:
+        - mkdir -p $HOME/.R && echo -e 'CC=ccache gcc\nCXX=ccache g++\nCXX11=ccache g++\n' > $HOME/.R/Makevars
         - cd tools/rpkg
 
       script:
@@ -586,6 +589,7 @@ matrix:
         - R CMD build .
         - R CMD INSTALL duckdb_*.tar.gz
         - (cd tests && R -f testthat.R)
+        - R CMD check --as-cran -o /tmp duckdb_*.tar.gz
         - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb-*.tar.gz
 
 
