@@ -1308,7 +1308,7 @@ template <class SRC> hugeint_t NumericToHugeDecimalCast(SRC input, uint8_t width
 	hugeint_t max_width = Hugeint::PowersOfTen[width - scale];
 	hugeint_t hinput = hugeint_t(input);
 	if (hinput >= max_width || hinput <= -max_width) {
-		throw OutOfRangeException("Could not cast value %d to DECIMAL(%d,%d)", input, width, scale);
+		throw OutOfRangeException("Could not cast value %s to DECIMAL(%d,%d)", hinput.ToString() , width, scale);
 	}
 	return hinput * Hugeint::PowersOfTen[scale];
 }
@@ -1385,7 +1385,7 @@ template <class DST> DST HugeintToDecimalCast(hugeint_t input, uint8_t width, ui
 	// check for overflow
 	hugeint_t max_width = Hugeint::PowersOfTen[width - scale];
 	if (input >= max_width || input <= -max_width) {
-		throw OutOfRangeException("Could not cast value %d to DECIMAL(%d,%d)", input.ToString(), width, scale);
+		throw OutOfRangeException("Could not cast value %s to DECIMAL(%d,%d)", input.ToString(), width, scale);
 	}
 	return Hugeint::Cast<DST>(input * Hugeint::PowersOfTen[scale]);
 }
