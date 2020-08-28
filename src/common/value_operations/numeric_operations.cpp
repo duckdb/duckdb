@@ -17,6 +17,9 @@ template <class OP> static Value templated_binary_operation(const Value &left, c
 		Value right_cast = right.CastAs(result_type);
 		return templated_binary_operation<OP>(left_cast, right_cast);
 	}
+	if (left.is_null || right.is_null) {
+		return Value().CastAs(result_type);
+	}
 	if (TypeIsIntegral(result_type.InternalType())) {
 		// integer addition
 		return Value::Numeric(result_type, OP::template Operation<hugeint_t, hugeint_t, hugeint_t>(
