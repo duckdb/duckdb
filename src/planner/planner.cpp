@@ -82,7 +82,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		CreatePlan(*statement);
 		break;
 	case StatementType::SHOW_STATEMENT: {
-		cout << "Case SHOW_STATEMENT\n";
+		cout << "Case SHOW_STATEMENT in planner\n";
 	}
 	case StatementType::PREPARE_STATEMENT: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
