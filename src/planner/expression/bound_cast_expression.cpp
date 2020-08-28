@@ -54,6 +54,9 @@ bool BoundCastExpression::Equals(const BaseExpression *other_) const {
 	if (!Expression::Equals(child.get(), other->child.get())) {
 		return false;
 	}
+	if (return_type != other->return_type) {
+		return false;
+	}
 	return true;
 }
 

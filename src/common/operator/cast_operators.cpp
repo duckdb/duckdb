@@ -1221,7 +1221,7 @@ template <class T> T decimal_string_cast(string_t input, uint8_t width, uint8_t 
 	state.decimal_count = 0;
 	if (!TryIntegerCast<DecimalCastData<T>, false, DecimalCastOperation, false>(input.GetData(), input.GetSize(), state,
 	                                                                            false)) {
-		throw OutOfRangeException("Could not cast string value \"%s\" to DECIMAL(%d,%d)", input.GetData(), (int)width,
+		throw ConversionException("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetData(), (int)width,
 		                          (int)scale);
 	}
 	return state.result;
