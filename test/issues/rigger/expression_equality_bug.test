@@ -1,0 +1,12 @@
+# name: test/issues/rigger/expression_equality_bug.test
+# description: SQLancer bug that detected an error in expression equality
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 BOOLEAN DEFAULT(1168904737), c1 BOOLEAN DEFAULT(DATE '1969-12-28'), c2 DATE, PRIMARY KEY(c1, c2, c0));
+
+statement ok
+SELECT t0.c0 FROM t0 WHERE (((t0.rowid)SIMILAR TO(TIMESTAMP '1970-01-11 11:17:02')) BETWEEN TIMESTAMP '1970-01-11 23:34:33' AND DATE '1970-01-20') UNION ALL SELECT t0.c0 FROM t0 WHERE (NOT (((t0.rowid)SIMILAR TO(TIMESTAMP '1970-01-11 11:17:02')) BETWEEN TIMESTAMP '1970-01-11 23:34:33' AND DATE '1970-01-20')) UNION ALL SELECT t0.c0 FROM t0 WHERE (((((t0.rowid)SIMILAR TO(TIMESTAMP '1970-01-11 11:17:02')) BETWEEN TIMESTAMP '1970-01-11 23:34:33' AND DATE '1970-01-20')) IS NULL);

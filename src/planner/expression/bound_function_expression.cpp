@@ -33,7 +33,7 @@ hash_t BoundFunctionExpression::Hash() const {
 }
 
 bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundFunctionExpression *)other_;

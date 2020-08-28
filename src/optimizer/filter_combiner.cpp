@@ -25,6 +25,7 @@ Expression *FilterCombiner::GetNode(Expression *expr) {
 	// expression does not exist yet: create a copy and store it
 	auto copy = expr->Copy();
 	auto pointer_copy = copy.get();
+	assert(stored_expressions.find(pointer_copy) == stored_expressions.end());
 	stored_expressions.insert(make_pair(pointer_copy, move(copy)));
 	return pointer_copy;
 }
