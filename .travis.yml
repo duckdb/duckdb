@@ -574,7 +574,7 @@ matrix:
       name: R Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-      dist: xenial
+      dist: bionic
       language: r
       r: devel
       cache: packages
