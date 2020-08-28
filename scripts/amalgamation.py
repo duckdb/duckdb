@@ -54,6 +54,7 @@ excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp'
 # files excluded from individual file compilation during test_compile
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
 
+file_system_cpp = os.path.join('src', 'common', 'file_system.cpp')
 
 linenumbers = False
 
@@ -83,16 +84,23 @@ def cleanup_file(text):
 # recursively get all includes and write them
 written_files = {}
 
+def need_to_write_file(current_file, ignore_excluded = False):
+    if amal_dir in current_file:
+        return False
+    if current_file in always_excluded:
+        return False
+    if current_file.split(os.sep)[-1] in excluded_files and not ignore_excluded:
+        # file is in ignored files set
+        return False
+    if current_file in written_files:
+        # file is already written
+        return False
+    return True
+
 def write_file(current_file, ignore_excluded = False):
     global linenumbers
     global written_files
-    if current_file in always_excluded:
-        return ""
-    if current_file.split(os.sep)[-1] in excluded_files and not ignore_excluded:
-        # file is in ignored files set
-        return ""
-    if current_file in written_files:
-        # file is already written
+    if not need_to_write_file(current_file, ignore_excluded):
         return ""
     written_files[current_file] = True
 
@@ -141,9 +149,9 @@ def copy_if_different(src, dest):
         with open(dest, 'r') as f:
             dest_text = f.read()
         if source_text == dest_text:
-            print("Skipping copy of " + src + ", identical copy already exists at " + dest)
+            # print("Skipping copy of " + src + ", identical copy already exists at " + dest)
             return
-    print("Copying " + src + " to " + dest)
+    # print("Copying " + src + " to " + dest)
     shutil.copyfile(src, dest)
 
 def git_commit_hash():
@@ -177,9 +185,10 @@ def generate_amalgamation(source_file, header_file):
 
         for compile_dir in compile_directories:
             write_dir(compile_dir, sfile)
+
         # for windows we write file_system.cpp last
         # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
-        sfile.write(write_file(os.path.join('src', 'common', 'file_system.cpp'), True))
+        sfile.write(write_file(file_system_cpp, True))
 
     copy_if_different(temp_header, header_file)
     copy_if_different(temp_source, source_file)
@@ -189,7 +198,48 @@ def generate_amalgamation(source_file, header_file):
     except:
         pass
 
+def list_files(dname, file_list):
+    files = os.listdir(dname)
+    files.sort()
+    for fname in files:
+        if fname in excluded_files:
+            continue
+        fpath = os.path.join(dname, fname)
+        if os.path.isdir(fpath):
+            list_files(fpath, file_list)
+        elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
+            if need_to_write_file(fpath):
+                file_list.append(fpath)
 
+def list_sources():
+    file_list = []
+    for compile_dir in compile_directories:
+        list_files(compile_dir, file_list)
+    return file_list + [file_system_cpp]
+
+def list_include_files_recursive(dname, file_list):
+    files = os.listdir(dname)
+    files.sort()
+    for fname in files:
+        if fname in excluded_files:
+            continue
+        fpath = os.path.join(dname, fname)
+        if os.path.isdir(fpath):
+            list_include_files_recursive(fpath, file_list)
+        elif fname.endswith('.hpp') or fname.endswith('.h') or fname.endswith('.hh') or fname.endswith('.tcc'):
+            file_list.append(fpath)
+
+def list_includes_files(include_dirs):
+    file_list = []
+    for include_dir in include_dirs:
+        list_include_files_recursive(include_dir, file_list)
+    return file_list
+
+def list_includes():
+    return list_includes_files(include_paths)
+
+def list_include_dirs():
+    return include_paths
 
 if __name__ == "__main__":
     for arg in sys.argv:
@@ -201,6 +251,22 @@ if __name__ == "__main__":
             header_file = os.path.join(*arg.split('=', 1)[1].split('/'))
         elif arg.startswith('--source='):
             source_file = os.path.join(*arg.split('=', 1)[1].split('/'))
+        elif arg.startswith('--list-sources'):
+            file_list = list_sources()
+            print('\n'.join(file_list))
+            exit(1)
+        elif arg.startswith('--list-objects'):
+            file_list = list_sources()
+            print(' '.join([x.rsplit('.', 1)[0] + '.o' for x in file_list]))
+            exit(1)
+        elif arg.startswith('--includes'):
+            include_dirs = list_include_dirs()
+            print(' '.join(['-I' + x for x in include_dirs]))
+            exit(1)
+        elif arg.startswith('--include-directories'):
+            include_dirs = list_include_dirs()
+            print('\n'.join(include_dirs))
+            exit(1)
     if not os.path.exists(amal_dir):
         os.makedirs(amal_dir)
 

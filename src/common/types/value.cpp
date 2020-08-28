@@ -394,6 +394,14 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 		return Value::HASH(value);
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(value);
+	case LogicalTypeId::DATE:
+		assert(value <= NumericLimits<int32_t>::Maximum());
+		return Value::DATE(value);
+	case LogicalTypeId::TIME:
+		assert(value <= NumericLimits<int32_t>::Maximum());
+		return Value::TIME(value);
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(value);
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
