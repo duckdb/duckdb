@@ -12,8 +12,12 @@ using namespace std;
 template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
 	auto left_type = left.type(), right_type = right.type();
 	if (left_type != right_type) {
-		LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
-		return templated_boolean_operation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
+		try {
+			LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
+			return templated_boolean_operation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
+		} catch(...) {
+			return false;
+		}
 	}
 	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:
