@@ -298,15 +298,18 @@ struct LogicalType {
 	//! Deserializes a blob back into an LogicalType
 	static LogicalType Deserialize(Deserializer &source);
 
+
+
 	string ToString() const;
 	bool IsIntegral() const;
 	bool IsNumeric() const;
 	bool IsMoreGenericThan(LogicalType &other) const;
 	hash_t Hash() const;
 
-	//! Returns the "order" of a numeric type; for auto-casting numeric types the type of the highest order should be
-	//! used to guarantee a cast doesn't fail
-	int NumericTypeOrder() const;
+	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
+
+	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
+	void GetDecimalProperties(int &width, int &scale) const;
 
 	void Verify() const;
 
@@ -321,7 +324,6 @@ private:
 
 private:
 	PhysicalType GetInternalType();
-
 public:
 	static const LogicalType SQLNULL;
 	static const LogicalType BOOLEAN;
@@ -357,7 +359,6 @@ public:
 
 string LogicalTypeIdToString(LogicalTypeId type);
 
-LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 LogicalType TransformStringToLogicalType(string str);
 
 //! Returns the PhysicalType for the given type

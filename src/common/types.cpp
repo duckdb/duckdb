@@ -423,24 +423,44 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-int LogicalType::NumericTypeOrder() const {
-	switch (InternalType()) {
-	case PhysicalType::INT8:
-		return 1;
-	case PhysicalType::INT16:
-		return 2;
-	case PhysicalType::INT32:
-		return 3;
-	case PhysicalType::INT64:
-		return 4;
-	case PhysicalType::INT128:
-		return 5;
-	case PhysicalType::FLOAT:
-		return 6;
-	case PhysicalType::DOUBLE:
-		return 7;
+void LogicalType::GetDecimalProperties(int &width, int &scale) const {
+	switch (id_) {
+	case LogicalTypeId::SQLNULL:
+		width = 0;
+		scale = 0;
+		break;
+	case LogicalTypeId::TINYINT:
+		// tinyint: [-127, 127] = DECIMAL(3,0)
+		width = 3;
+		scale = 0;
+		break;
+	case LogicalTypeId::SMALLINT:
+		// smallint: [-32767, 32767] = DECIMAL(5,0)
+		width = 5;
+		scale = 0;
+		break;
+	case LogicalTypeId::INTEGER:
+		// integer: [-2147483647, 2147483647] = DECIMAL(10,0)
+		width = 10;
+		scale = 0;
+		break;
+	case LogicalTypeId::BIGINT:
+		// bigint: [-9223372036854775807, 9223372036854775807] = DECIMAL(19,0)
+		width = 19;
+		scale = 0;
+		break;
+	case LogicalTypeId::HUGEINT:
+		// hugeint: max size decimal (38, 0)
+		// note that a hugeint is not guaranteed to fit in this
+		width = 38;
+		scale = 0;
+		break;
+	case LogicalTypeId::DECIMAL:
+		width = width_;
+		scale = scale_;
+		break;
 	default:
-		throw NotImplementedException("Not a numeric type");
+		throw NotImplementedException("Unimplemented type for GetDecimalProperties");
 	}
 }
 
@@ -538,7 +558,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	return true;
 }
 
-LogicalType MaxLogicalType(LogicalType left, LogicalType right) {
+LogicalType LogicalType::MaxLogicalType(LogicalType left, LogicalType right) {
 	if (left.id() < right.id()) {
 		return right;
 	} else if (right.id() < left.id()) {

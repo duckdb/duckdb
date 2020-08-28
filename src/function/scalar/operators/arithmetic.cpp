@@ -132,46 +132,6 @@ template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t righ
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(right, left);
 }
 
-void get_decimal_properties(const LogicalType &type, int &width, int &scale) {
-	switch (type.id()) {
-	case LogicalTypeId::SQLNULL:
-		width = 0;
-		scale = 0;
-		break;
-	case LogicalTypeId::TINYINT:
-		// tinyint: [-127, 127] = DECIMAL(3,0)
-		width = 3;
-		scale = 0;
-		break;
-	case LogicalTypeId::SMALLINT:
-		// smallint: [-32767, 32767] = DECIMAL(5,0)
-		width = 5;
-		scale = 0;
-		break;
-	case LogicalTypeId::INTEGER:
-		// integer: [-2147483647, 2147483647] = DECIMAL(10,0)
-		width = 10;
-		scale = 0;
-		break;
-	case LogicalTypeId::BIGINT:
-		// bigint: [-9223372036854775807, 9223372036854775807] = DECIMAL(19,0)
-		width = 19;
-		scale = 0;
-		break;
-	case LogicalTypeId::HUGEINT:
-		// hugeint: max size decimal (38, 0)
-		width = 38;
-		scale = 0;
-		break;
-	case LogicalTypeId::DECIMAL:
-		width = type.width();
-		scale = type.scale();
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type for DECIMAL arithmetic");
-	}
-}
-
 template <class OP>
 unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
@@ -179,7 +139,7 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	int max_width = 0, max_scale = 0, max_width_over_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		int width, scale;
-		get_decimal_properties(arguments[i]->return_type, width, scale);
+		arguments[i]->return_type.GetDecimalProperties(width, scale);
 		max_width = MaxValue<int>(width, max_width);
 		max_scale = MaxValue<int>(scale, max_scale);
 		max_width_over_scale = MaxValue<int>(width - scale, max_width_over_scale);
@@ -421,7 +381,7 @@ unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFun
 	int result_width = 0, result_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		int width, scale;
-		get_decimal_properties(arguments[i]->return_type, width, scale);
+		arguments[i]->return_type.GetDecimalProperties(width, scale);
 
 		result_width += width;
 		result_scale += scale;

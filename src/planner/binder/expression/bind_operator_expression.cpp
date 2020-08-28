@@ -17,7 +17,7 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression 
 	// get the maximum type from the children
 	LogicalType max_type = children[0]->expr->return_type;
 	for (idx_t i = 1; i < children.size(); i++) {
-		max_type = MaxLogicalType(max_type, children[i]->expr->return_type);
+		max_type = LogicalType::MaxLogicalType(max_type, children[i]->expr->return_type);
 	}
 	// cast all children to the same type
 	for (idx_t i = 0; i < children.size(); i++) {

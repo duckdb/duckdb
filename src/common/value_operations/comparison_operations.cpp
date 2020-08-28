@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -11,27 +12,8 @@ using namespace std;
 template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
 	auto left_type = left.type(), right_type = right.type();
 	if (left_type != right_type) {
-		LogicalType left_cast = LogicalType::INVALID, right_cast = LogicalType::INVALID;
-
-		if (left_type.IsNumeric() && right_type.IsNumeric()) {
-			if (left_type.NumericTypeOrder() < right_type.NumericTypeOrder()) {
-				left_cast = right.type();
-			} else {
-				right_cast = left.type();
-			}
-		} else if (left_type.id() == LogicalTypeId::BOOLEAN) {
-			right_cast = LogicalType::BOOLEAN;
-		} else if (right_type.id() == LogicalTypeId::BOOLEAN) {
-			left_cast = LogicalType::BOOLEAN;
-		}
-		if (left_cast.id() != LogicalTypeId::INVALID) {
-			return templated_boolean_operation<OP>(left.CastAs(left_cast), right);
-		} else if (right_cast.id() != LogicalTypeId::INVALID) {
-			return templated_boolean_operation<OP>(left, right.CastAs(right_cast));
-		}
-		// throw NotImplementedException("Unimplemented type for Value comparison: %s - %s", left.type().ToString(),
-		// right.type().ToString());
-		return false;
+		LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
+		return templated_boolean_operation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
 	}
 	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:

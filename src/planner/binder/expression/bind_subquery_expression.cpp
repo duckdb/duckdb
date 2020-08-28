@@ -76,7 +76,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// ANY comparison
 		// cast child and subquery child to equivalent types
 		assert(bound_node->types.size() == 1);
-		auto compare_type = MaxLogicalType(child->expr->return_type, bound_node->types[0]);
+		auto compare_type = LogicalType::MaxLogicalType(child->expr->return_type, bound_node->types[0]);
 		child->expr = BoundCastExpression::AddCastToType(move(child->expr), compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;

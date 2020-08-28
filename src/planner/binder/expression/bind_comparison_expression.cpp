@@ -9,6 +9,8 @@
 
 #include "duckdb/function/scalar/string_functions.hpp"
 
+#include "duckdb/common/types/decimal.hpp"
+
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
@@ -58,6 +60,48 @@ void ExpressionBinder::TestCollation(ClientContext &context, string collation) {
 	PushCollation(context, make_unique<BoundConstantExpression>(Value("")), collation);
 }
 
+LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type) {
+	auto result_type = LogicalType::MaxLogicalType(left_type, right_type);
+	switch(result_type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		// result is a decimal: we need the maximum width and the maximum scale over width
+		vector<LogicalType> argument_types = { left_type, right_type };
+		int max_width = 0, max_scale = 0, max_width_over_scale = 0;
+		for (idx_t i = 0; i < argument_types.size(); i++) {
+			int width, scale;
+			argument_types[i].GetDecimalProperties(width, scale);
+			max_width = MaxValue<int>(width, max_width);
+			max_scale = MaxValue<int>(scale, max_scale);
+			max_width_over_scale = MaxValue<int>(width - scale, max_width_over_scale);
+		}
+		max_width = MaxValue(max_scale + max_width_over_scale, max_width);
+		if (max_width > Decimal::MAX_WIDTH_DECIMAL) {
+			// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
+			max_width = Decimal::MAX_WIDTH_DECIMAL;
+		}
+		return LogicalType(LogicalTypeId::DECIMAL, max_width, max_scale);
+	}
+	case LogicalTypeId::VARCHAR:
+		// for comparison with strings, we prefer to bind to the numeric types
+		if (left_type.IsNumeric()) {
+			return left_type;
+		} else if (right_type.IsNumeric()) {
+			return right_type;
+		} else {
+			// else: check if collations are compatible
+			if (!left_type.collation().empty() && !right_type.collation().empty() &&
+			    left_type.collation() != right_type.collation()) {
+				throw BinderException("Cannot combine types with different collation!");
+			}
+		}
+		return result_type;
+	case LogicalTypeId::UNKNOWN:
+		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
+	default:
+		return result_type;
+	}
+}
+
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	string error;
@@ -73,24 +117,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	auto right_sql_type = right.expr->return_type;
 	// cast the input types to the same type
 	// now obtain the result type of the input types
-	auto input_type = MaxLogicalType(left_sql_type, right_sql_type);
-	if (input_type.id() == LogicalTypeId::VARCHAR) {
-		// for comparison with strings, we prefer to bind to the numeric types
-		if (left_sql_type.IsNumeric()) {
-			input_type = left_sql_type;
-		} else if (right_sql_type.IsNumeric()) {
-			input_type = right_sql_type;
-		} else {
-			// else: check if collations are compatible
-			if (!left_sql_type.collation().empty() && !right_sql_type.collation().empty() &&
-			    left_sql_type.collation() != right_sql_type.collation()) {
-				throw BinderException("Cannot combine types with different collation!");
-			}
-		}
-	}
-	if (input_type.id() == LogicalTypeId::UNKNOWN) {
-		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
-	}
+	auto input_type = BoundComparisonExpression::BindComparison(left_sql_type, right_sql_type);
 	// add casts (if necessary)
 	left.expr = BoundCastExpression::AddCastToType(move(left.expr), input_type);
 	right.expr = BoundCastExpression::AddCastToType(move(right.expr), input_type);
