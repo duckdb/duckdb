@@ -134,6 +134,10 @@ template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t righ
 
 void get_decimal_properties(const LogicalType &type, int &width, int &scale) {
 	switch (type.id()) {
+	case LogicalTypeId::SQLNULL:
+		width = 0;
+		scale = 0;
+		break;
 	case LogicalTypeId::TINYINT:
 		// tinyint: [-127, 127] = DECIMAL(3,0)
 		width = 3;
