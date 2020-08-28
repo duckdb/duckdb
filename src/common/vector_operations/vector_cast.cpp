@@ -93,15 +93,48 @@ template <class T> static void from_decimal_cast(Vector &source, Vector &result,
 
 template <class SOURCE, class DEST, class POWERS_SOURCE, class POWERS_DEST>
 void decimal_scale_up_loop(Vector &source, Vector &result, idx_t count) {
-	auto limit = POWERS_SOURCE::PowersOfTen[result.type.width() - (result.type.scale() - source.type.scale())];
-	auto multiply_factor = POWERS_DEST::PowersOfTen[result.type.scale() - source.type.scale()];
+	assert(result.type.scale() >= source.type.scale());
+	idx_t scale_difference = result.type.scale() - source.type.scale();
+	auto multiply_factor = POWERS_DEST::PowersOfTen[scale_difference];
+	idx_t target_width = result.type.width() - scale_difference;
+	if (source.type.width() < target_width) {
+		// type will always fit: no need to check limit
+		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
+			return Cast::Operation<SOURCE, DEST>(input) * multiply_factor;
+		});
+	} else {
+		// type might not fit: check limit
+		auto limit = POWERS_SOURCE::PowersOfTen[target_width];
+		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
+			if (input >= limit || input <= -limit) {
+				throw OutOfRangeException("Casting to %s failed", result.type.ToString());
+			}
+			return Cast::Operation<SOURCE, DEST>(input) * multiply_factor;
+		});
+	}
+}
 
-	UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
-		if (input >= limit || input <= -limit) {
-			throw OutOfRangeException("Casting to %s failed", result.type.ToString());
-		}
-		return Cast::Operation<SOURCE, DEST>(input) * multiply_factor;
-	});
+template <class SOURCE, class DEST, class POWERS_SOURCE>
+void decimal_scale_down_loop(Vector &source, Vector &result, idx_t count) {
+	assert(result.type.scale() < source.type.scale());
+	idx_t scale_difference = source.type.scale() - result.type.scale();
+	idx_t target_width = result.type.width() + scale_difference;
+	auto divide_factor = POWERS_SOURCE::PowersOfTen[scale_difference];
+	if (source.type.width() < target_width) {
+		// type will always fit: no need to check limit
+		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
+			return Cast::Operation<SOURCE, DEST>(input / divide_factor);
+		});
+	} else {
+		// type might not fit: check limit
+		auto limit = POWERS_SOURCE::PowersOfTen[target_width];
+		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
+			if (input >= limit || input <= -limit) {
+				throw OutOfRangeException("Casting to %s failed", result.type.ToString());
+			}
+			return Cast::Operation<SOURCE, DEST>(input / divide_factor);
+		});
+	}
 }
 
 template <class SOURCE, class POWERS_SOURCE>
@@ -130,27 +163,18 @@ static void decimal_decimal_cast_switch(Vector &source, Vector &result, idx_t co
 		}
 	} else {
 		// divide
-		int64_t divide_factor = NumericHelper::PowersOfTen[source.type.scale() - result.type.scale()];
 		switch (result.type.InternalType()) {
 		case PhysicalType::INT16:
-			UnaryExecutor::Execute<SOURCE, int16_t, true>(source, result, count, [&](SOURCE input) {
-				return Cast::Operation<SOURCE, int16_t>(input / divide_factor);
-			});
+			decimal_scale_down_loop<SOURCE, int16_t, POWERS_SOURCE>(source, result, count);
 			break;
 		case PhysicalType::INT32:
-			UnaryExecutor::Execute<SOURCE, int32_t, true>(source, result, count, [&](SOURCE input) {
-				return Cast::Operation<SOURCE, int32_t>(input / divide_factor);
-			});
+			decimal_scale_down_loop<SOURCE, int32_t, POWERS_SOURCE>(source, result, count);
 			break;
 		case PhysicalType::INT64:
-			UnaryExecutor::Execute<SOURCE, int64_t, true>(source, result, count, [&](SOURCE input) {
-				return Cast::Operation<SOURCE, int64_t>(input / divide_factor);
-			});
+			decimal_scale_down_loop<SOURCE, int64_t, POWERS_SOURCE>(source, result, count);
 			break;
 		case PhysicalType::INT128:
-			UnaryExecutor::Execute<SOURCE, hugeint_t, true>(source, result, count, [&](SOURCE input) {
-				return Cast::Operation<SOURCE, hugeint_t>(input / divide_factor);
-			});
+			decimal_scale_down_loop<SOURCE, hugeint_t, POWERS_SOURCE>(source, result, count);
 			break;
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal");
