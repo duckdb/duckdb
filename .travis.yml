@@ -358,7 +358,7 @@ matrix:
         - python3 scripts/amalgamation.py
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DAMALGAMATION_BUILD=1 ../.. && travis_wait 30 cmake --build .)
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-        - git clone https://github.com/sqlancer/sqlancer.git
+        - git clone https://github.com/hannesmuehleisen/sqlancer.git
         - (cd sqlancer && mvn package -q -DskipTests)
         - cp build/release/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
         - java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
@@ -387,7 +387,7 @@ matrix:
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DENABLE_SANITIZER=TRUE ../.. && cmake --build .)
         - ASAN_OPTIONS=detect_leaks=0 LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libasan.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6" java -cp build/debug/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-        - git clone https://github.com/sqlancer/sqlancer.git
+        - git clone https://github.com/hannesmuehleisen/sqlancer.git
         - (cd sqlancer && mvn package -q -DskipTests)
         - cp build/debug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
         - ASAN_OPTIONS=detect_leaks=0 LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libasan.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6" java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb

@@ -1260,19 +1260,19 @@ template <> string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t w
 }
 
 template <> int16_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
-	return Cast::Operation<bool, int16_t>(input);
+	return input ? NumericHelper::PowersOfTen[scale] : 0;
 }
 
 template <> int32_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
-	return Cast::Operation<bool, int32_t>(input);
+    return input ? NumericHelper::PowersOfTen[scale] : 0;
 }
 
 template <> int64_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
-	return Cast::Operation<bool, int64_t>(input);
+    return input ? NumericHelper::PowersOfTen[scale] : 0;
 }
 
 template <> hugeint_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
-	return Cast::Operation<bool, hugeint_t>(input);
+    return input ? Hugeint::PowersOfTen[scale] : 0;
 }
 
 template <> bool CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
