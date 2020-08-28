@@ -2,7 +2,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 idx_t VersionManager::GetSelVector(Transaction &transaction, idx_t index, SelectionVector &sel_vector,
@@ -75,7 +75,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 	idx_t chunk_idx = row_id / STANDARD_VECTOR_SIZE;
 	idx_t idx_in_chunk = row_id - chunk_idx * STANDARD_VECTOR_SIZE;
 
-	// check if we are targetting a different chunk than the current chunk
+	// check if we are targeting a different chunk than the current chunk
 	if (chunk_idx != current_chunk) {
 		// if we are, first flush the previous chunk
 		Flush();
@@ -162,3 +162,5 @@ void VersionManager::RevertAppend(row_t row_start, row_t row_end) {
 		info.erase(chunk_start);
 	}
 }
+
+} // namespace duckdb

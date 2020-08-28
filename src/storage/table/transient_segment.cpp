@@ -6,12 +6,12 @@
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-TransientSegment::TransientSegment(BufferManager &manager, TypeId type, idx_t start)
+TransientSegment::TransientSegment(BufferManager &manager, PhysicalType type, idx_t start)
     : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {
-	if (type == TypeId::VARCHAR) {
+	if (type == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(manager, start);
 	} else {
 		data = make_unique<NumericSegment>(manager, type, start);
@@ -68,3 +68,5 @@ void TransientSegment::RevertAppend(idx_t start_row) {
 	data->tuple_count = start_row - this->start;
 	this->count = start_row - this->start;
 }
+
+} // namespace duckdb

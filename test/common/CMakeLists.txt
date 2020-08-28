@@ -5,7 +5,6 @@ add_library_unity(test_common
                   test_date.cpp
                   test_file_system.cpp
                   test_gzip_stream.cpp
-                  test_hyperloglog.cpp
                   test_timestamp.cpp
                   test_utf.cpp
                   test_string_util.cpp) # test_serializer.cpp

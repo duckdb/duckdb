@@ -1,16 +1,20 @@
 #include "duckdb/execution/window_segment_tree.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 #include <cmath>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, TypeId result_type, ChunkCollection *input)
-    : aggregate(aggregate), state(aggregate.state_size()), statep(TypeId::POINTER), result_type(result_type),
+WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, LogicalType result_type, ChunkCollection *input)
+    : aggregate(aggregate), state(aggregate.state_size()), statep(LogicalTypeId::POINTER), result_type(result_type),
       input_ref(input) {
-	statep.SetCount(STANDARD_VECTOR_SIZE);
+#if STANDARD_VECTOR_SIZE < 512
+	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
+#endif
+
 	Value ptr_val = Value::POINTER((idx_t)state.data());
 	statep.Reference(ptr_val);
 	statep.Normalify(STANDARD_VECTOR_SIZE);
@@ -46,21 +50,40 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 
 	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	Vector s;
-	s.Slice(statep, start_in_vector);
+	s.Slice(statep, 0);
 	if (l_idx == 0) {
 		const auto input_count = input_ref->column_count();
-		auto &chunk = input_ref->GetChunk(begin);
-		for (idx_t i = 0; i < input_count; ++i) {
-			auto &v = inputs.data[i];
-			auto &vec = chunk.data[i];
-			v.Slice(vec, start_in_vector);
-			v.Verify(inputs.size());
+		if (start_in_vector + inputs.size() < STANDARD_VECTOR_SIZE) {
+			auto &chunk = input_ref->GetChunk(begin);
+			for (idx_t i = 0; i < input_count; ++i) {
+				auto &v = inputs.data[i];
+				auto &vec = chunk.data[i];
+				v.Slice(vec, start_in_vector);
+				v.Verify(inputs.size());
+			}
+		} else {
+			// we cannot just slice the individual vector!
+			auto &chunk_a = input_ref->GetChunk(begin);
+			auto &chunk_b = input_ref->GetChunk(end);
+			idx_t chunk_a_count = chunk_a.size() - start_in_vector;
+			idx_t chunk_b_count = inputs.size() - chunk_a_count;
+			for (idx_t i = 0; i < input_count; ++i) {
+				auto &v = inputs.data[i];
+				VectorOperations::Copy(chunk_a.data[i], v, chunk_a.size(), start_in_vector, 0);
+				VectorOperations::Copy(chunk_b.data[i], v, chunk_b_count, 0, chunk_a_count);
+			}
 		}
 		aggregate.update(&inputs.data[0], input_count, s, inputs.size());
 	} else {
 		assert(end - begin <= STANDARD_VECTOR_SIZE);
-		data_ptr_t ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
-		Vector v(result_type, ptr);
+		// find out where the states begin
+		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
+		// set up a vector of pointers that point towards the set of states
+		Vector v(LogicalType::POINTER);
+		auto pdata = FlatVector::GetData<data_ptr_t>(v);
+		for (idx_t i = 0; i < inputs.size(); i++) {
+			pdata[i] = begin_ptr + i * state.size();
+		}
 		v.Verify(inputs.size());
 		aggregate.combine(v, s, inputs.size());
 	}
@@ -138,3 +161,5 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 
 	return AggegateFinal();
 }
+
+} // namespace duckdb

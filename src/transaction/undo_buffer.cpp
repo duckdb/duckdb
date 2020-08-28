@@ -49,7 +49,7 @@ data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
 }
 
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
-	assert(len <= std::numeric_limits<uint32_t>::max());
+	assert(len <= NumericLimits<uint32_t>::Maximum());
 	idx_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
 	if (head->current_position + needed_space >= head->maximum_size) {
 		auto new_chunk =
@@ -151,7 +151,7 @@ void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog
 		// commit WITH write ahead log
 		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
 	} else {
-		// comit WITHOUT write ahead log
+		// commit WITHOUT write ahead log
 		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<false>(type, data); });
 	}
 }

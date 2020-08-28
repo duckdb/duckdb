@@ -17,12 +17,20 @@ template <> hash_t Hash(int64_t val) {
 	return murmurhash64((uint64_t)val);
 }
 
+template <> hash_t Hash(hugeint_t val) {
+	return murmurhash64(val.lower) ^ murmurhash64(val.upper);
+}
+
 template <> hash_t Hash(float val) {
 	return std::hash<float>{}(val);
 }
 
 template <> hash_t Hash(double val) {
 	return std::hash<double>{}(val);
+}
+
+template <> hash_t Hash(interval_t val) {
+	return Hash(val.days) ^ Hash(val.months) ^ Hash(val.msecs);
 }
 
 template <> hash_t Hash(const char *str) {

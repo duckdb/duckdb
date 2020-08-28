@@ -401,7 +401,7 @@ opt_asc_desc: ASC_P							{ $$ = PG_SORTBY_ASC; }
 		;
 
 opt_nulls_order: NULLS_LA FIRST_P			{ $$ = PG_SORTBY_NULLS_FIRST; }
-			| NULLS_LA LAST_P				{ $$ = SORTBY_NULLS_LAST; }
+			| NULLS_LA LAST_P				{ $$ = PG_SORTBY_NULLS_LAST; }
 			| /*EMPTY*/						{ $$ = PG_SORTBY_NULLS_DEFAULT; }
 		;
 
@@ -835,7 +835,7 @@ alias_clause:
 					$$->aliasname = $2;
 					$$->colnames = $4;
 				}
-			| AS ColId
+			| AS ColIdOrString
 				{
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $2;
@@ -2356,7 +2356,7 @@ func_expr_common_subexpr:
 					/* various trim expressions are defined in SQL
 					 * - thomas 1997-07-19
 					 */
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("btrim"), $4, @1);
+					$$ = (PGNode *) makeFuncCall(SystemFuncName("trim"), $4, @1);
 				}
 			| TRIM '(' LEADING trim_list ')'
 				{
@@ -2368,7 +2368,7 @@ func_expr_common_subexpr:
 				}
 			| TRIM '(' trim_list ')'
 				{
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("btrim"), $3, @1);
+					$$ = (PGNode *) makeFuncCall(SystemFuncName("trim"), $3, @1);
 				}
 			| NULLIF '(' a_expr ',' a_expr ')'
 				{
@@ -2380,22 +2380,6 @@ func_expr_common_subexpr:
 					c->args = $3;
 					c->location = @1;
 					$$ = (PGNode *)c;
-				}
-			| GREATEST '(' expr_list ')'
-				{
-					PGMinMaxExpr *v = makeNode(PGMinMaxExpr);
-					v->args = $3;
-					v->op = PG_IS_GREATEST;
-					v->location = @1;
-					$$ = (PGNode *)v;
-				}
-			| LEAST '(' expr_list ')'
-				{
-					PGMinMaxExpr *v = makeNode(PGMinMaxExpr);
-					v->args = $3;
-					v->op = IS_LEAST;
-					v->location = @1;
-					$$ = (PGNode *)v;
 				}
 		;
 
@@ -3008,7 +2992,7 @@ target_list:
 			| target_list ',' target_el				{ $$ = lappend($1, $3); }
 		;
 
-target_el:	a_expr AS ColLabel
+target_el:	a_expr AS ColLabelOrString
 				{
 					$$ = makeNode(PGResTarget);
 					$$->name = $3;
@@ -3267,6 +3251,10 @@ ColId:		IDENT									{ $$ = $1; }
 			| col_name_keyword						{ $$ = pstrdup($1); }
 		;
 
+ColIdOrString:	ColId											{ $$ = $1; }
+				| SCONST										{ $$ = $1; }
+		;
+
 /* Type/function identifier --- names that can be type or function names.
  */
 type_function_name:	IDENT							{ $$ = $1; }
@@ -3302,4 +3290,8 @@ ColLabel:	IDENT									{ $$ = $1; }
 			| col_name_keyword						{ $$ = pstrdup($1); }
 			| type_func_name_keyword				{ $$ = pstrdup($1); }
 			| reserved_keyword						{ $$ = pstrdup($1); }
+		;
+
+ColLabelOrString:	ColLabel						{ $$ = $1; }
+					| SCONST						{ $$ = $1; }
 		;

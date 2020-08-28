@@ -1,0 +1,19 @@
+# name: test/issues/rigger/test_516.test
+# description: Issue 516
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Query with comparison on boolean column results in 'Invalid type: Invalid Type [BOOL]: Invalid type for
+# index'
+statement ok
+CREATE TABLE t0(c0 BOOL UNIQUE);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+query T
+SELECT * FROM t0 WHERE t0.c0 = true;
+----
+

@@ -3,7 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 string LogicalOperator::ParamsToString() const {
@@ -40,11 +40,11 @@ vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, i
 	return result;
 }
 
-vector<TypeId> LogicalOperator::MapTypes(vector<TypeId> types, vector<idx_t> projection_map) {
+vector<LogicalType> LogicalOperator::MapTypes(vector<LogicalType> types, vector<idx_t> projection_map) {
 	if (projection_map.size() == 0) {
 		return types;
 	} else {
-		vector<TypeId> result_types;
+		vector<LogicalType> result_types;
 		for (auto index : projection_map) {
 			result_types.push_back(types[index]);
 		}
@@ -81,3 +81,5 @@ string LogicalOperator::ToString(idx_t depth) const {
 void LogicalOperator::Print() {
 	Printer::Print(ToString());
 }
+
+} // namespace duckdb

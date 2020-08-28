@@ -1,0 +1,193 @@
+# name: test/sql/update/test_null_update.test
+# description: Test standard update behavior with NULLs
+# group: [update]
+
+# create a table
+statement ok con1
+CREATE TABLE test (a INTEGER);
+
+statement ok con1
+INSERT INTO test VALUES (1), (2), (3), (NULL)
+
+query I con1
+SELECT * FROM test ORDER BY a
+----
+NULL
+1
+2
+3
+
+# test updating from a non-null value to a null value
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE test SET a=NULL WHERE a=2
+
+# not seen yet by con2, only by con1
+query I con1
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+NULL
+1
+2
+3
+
+# commit
+statement ok con1
+COMMIT
+
+query I con1
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+# now test a rollback
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE test SET a=NULL WHERE a=3
+
+# not seen yet by con2, only by con1
+query I con1
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+NULL
+1
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+statement ok con1
+ROLLBACK
+
+query I con1
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+# test updating from a null value to a non-null value
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE test SET a=10 WHERE a IS NULL
+
+# not seen yet by con2, only by con1
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+3
+10
+10
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+# now rollback
+statement ok con1
+ROLLBACK
+
+# values are back to original values
+query I con1
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+# perform the same update, but this time commit
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE test SET a=10 WHERE a IS NULL
+
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+3
+10
+10
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+NULL
+NULL
+1
+3
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+3
+10
+10
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+1
+3
+10
+10
+

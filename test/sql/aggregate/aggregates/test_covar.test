@@ -1,0 +1,98 @@
+# name: test/sql/aggregate/aggregates/test_covar.test
+# description: Test COVAR operators
+# group: [aggregates]
+
+# test incorrect usage of COVAR_POP function
+statement error
+SELECT COVAR_POP()
+
+statement error
+SELECT COVAR_POP(1, 2, 3)
+
+statement error
+SELECT COVAR_POP(COVAR_POP(1))
+
+# test incorrect usage of COVAR_SAMP function
+statement error
+SELECT COVAR_SAMP()
+
+statement error
+SELECT COVAR_SAMP(1, 2, 3)
+
+statement error
+SELECT COVAR_SAMP(COVAR_SAMP(1))
+
+# test population covariance on scalar values
+query RRRR
+SELECT COVAR_POP(3,3), COVAR_POP(NULL,3), COVAR_POP(3,NULL), COVAR_POP(NULL,NULL)
+----
+0.000000
+NULL
+NULL
+NULL
+
+# test sample covariance on scalar values
+query RRRR
+SELECT COVAR_SAMP(3,3), COVAR_SAMP(NULL,3), COVAR_SAMP(3,NULL), COVAR_SAMP(NULL,NULL)
+----
+NULL
+NULL
+NULL
+NULL
+
+# test population covariance on a sequence
+statement ok
+CREATE SEQUENCE seqx;
+
+statement ok
+CREATE SEQUENCE seqy;
+
+query R
+SELECT COVAR_POP(nextval('seqx'),nextval('seqy'))
+----
+0.000000
+
+query R
+SELECT COVAR_POP(nextval('seqx'),nextval('seqy'))
+----
+0.000000
+
+# test population covariance on a set of values
+statement ok
+CREATE TABLE integers(x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (10,NULL), (10,11), (20,22), (25,NULL), (30,35)
+
+query RRRRR
+SELECT COVAR_POP(x,y), COVAR_POP(x,1), COVAR_POP(1,y), COVAR_POP(x,NULL), COVAR_POP(NULL,y) FROM integers
+----
+80.000000
+0.000000
+0.000000
+NULL
+NULL
+
+query RRRRR
+SELECT COVAR_SAMP(x,y), COVAR_SAMP(x,1), COVAR_SAMP(1,y), COVAR_SAMP(x,NULL), COVAR_SAMP(NULL,y) FROM integers
+----
+120.000000
+0.000000
+0.000000
+NULL
+NULL
+
+# test covar on empty set
+query RR
+SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM integers WHERE x > 100
+----
+NULL
+NULL
+
+# test covar with only null inputs
+query RR
+SELECT COVAR_POP(NULL, NULL), COVAR_SAMP(NULL, NULL) FROM integers
+----
+NULL
+NULL
+

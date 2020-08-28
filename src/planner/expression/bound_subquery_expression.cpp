@@ -2,11 +2,11 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-BoundSubqueryExpression::BoundSubqueryExpression(TypeId return_type)
-    : Expression(ExpressionType::SUBQUERY, ExpressionClass::BOUND_SUBQUERY, return_type) {
+BoundSubqueryExpression::BoundSubqueryExpression(LogicalType return_type)
+    : Expression(ExpressionType::SUBQUERY, ExpressionClass::BOUND_SUBQUERY, move(return_type)) {
 }
 
 string BoundSubqueryExpression::ToString() const {
@@ -21,3 +21,5 @@ bool BoundSubqueryExpression::Equals(const BaseExpression *other_) const {
 unique_ptr<Expression> BoundSubqueryExpression::Copy() {
 	throw SerializationException("Cannot copy BoundSubqueryExpression");
 }
+
+} // namespace duckdb

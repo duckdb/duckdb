@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 class BoundSubqueryNode : public QueryNode {
@@ -65,19 +65,19 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto child = (BoundExpression *)expr.child.get();
 	auto subquery_binder = move(bound_subquery->subquery_binder);
 	auto bound_node = move(bound_subquery->bound_node);
-	SQLType return_type =
-	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : SQLType(SQLTypeId::BOOLEAN);
-	if (return_type.id == SQLTypeId::UNKNOWN) {
+	LogicalType return_type =
+	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : LogicalType(LogicalTypeId::BOOLEAN);
+	if (return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 	}
 
-	auto result = make_unique<BoundSubqueryExpression>(GetInternalType(return_type));
+	auto result = make_unique<BoundSubqueryExpression>(return_type);
 	if (expr.subquery_type == SubqueryType::ANY) {
 		// ANY comparison
 		// cast child and subquery child to equivalent types
 		assert(bound_node->types.size() == 1);
-		auto compare_type = MaxSQLType(child->sql_type, bound_node->types[0]);
-		child->expr = BoundCastExpression::AddCastToType(move(child->expr), child->sql_type, compare_type);
+		auto compare_type = MaxLogicalType(child->expr->return_type, bound_node->types[0]);
+		child->expr = BoundCastExpression::AddCastToType(move(child->expr), compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;
 	}
@@ -87,5 +87,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	result->child = child ? move(child->expr) : nullptr;
 	result->comparison_type = expr.comparison_type;
 
-	return BindResult(move(result), return_type);
+	return BindResult(move(result));
 }
+
+} // namespace duckdb

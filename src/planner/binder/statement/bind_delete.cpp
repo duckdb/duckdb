@@ -6,7 +6,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundStatement Binder::Bind(DeleteStatement &stmt) {
@@ -42,11 +42,13 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	// set up the delete expression
 	del->expressions.push_back(
-	    make_unique<BoundColumnRefExpression>(TypeId::INT64, ColumnBinding(get.table_index, get.column_ids.size())));
+	    make_unique<BoundColumnRefExpression>(LOGICAL_ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	result.plan = move(del);
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 	return result;
 }
+
+} // namespace duckdb

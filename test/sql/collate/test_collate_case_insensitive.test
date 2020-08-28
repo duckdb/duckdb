@@ -1,0 +1,83 @@
+# name: test/sql/collate/test_collate_case_insensitive.test
+# description: Test case insensitive collation
+# group: [collate]
+
+statement ok
+CREATE TABLE collate_test(s VARCHAR COLLATE NOCASE)
+
+statement ok
+INSERT INTO collate_test VALUES ('hello'), ('WoRlD'), ('world'), ('Mühleisen')
+
+# collate in equality
+query T
+SELECT * FROM collate_test WHERE s='HeLlo'
+----
+hello
+
+query T
+SELECT * FROM collate_test WHERE s='MÜhleisen'
+----
+Mühleisen
+
+query T
+SELECT * FROM collate_test WHERE s='world'
+----
+WoRlD
+world
+
+# collate in join
+statement ok
+CREATE TABLE collate_join_table(s VARCHAR, i INTEGER)
+
+statement ok
+INSERT INTO collate_join_table VALUES ('HeLlO', 1), ('mÜHLEISEN', 3)
+
+query TTI
+SELECT collate_test.s, collate_join_table.s, i FROM collate_test JOIN collate_join_table ON (collate_test.s=collate_join_table.s) ORDER BY i
+----
+hello	HeLlO	1
+Mühleisen	mÜHLEISEN	3
+
+statement ok
+DROP TABLE collate_test
+
+# ORDER BY with collation
+statement ok
+CREATE TABLE collate_test(s VARCHAR COLLATE NOCASE)
+
+statement ok
+INSERT INTO collate_test VALUES ('Hallo'), ('ham'), ('HELLO'), ('hElp')
+
+query T
+SELECT * FROM collate_test ORDER BY s
+----
+Hallo
+ham
+HELLO
+hElp
+
+statement ok
+DROP TABLE collate_test
+
+# DISTINCT with collation
+statement ok
+CREATE TABLE collate_test(s VARCHAR COLLATE NOCASE)
+
+statement ok
+INSERT INTO collate_test VALUES ('Hallo'), ('hallo')
+
+query T
+SELECT DISTINCT s FROM collate_test
+----
+Hallo
+
+
+# LIKE with collation: not yet supported
+# REQUIRE_NO_FAIL(con.Query("DROP TABLE collate_test"));
+# REQUIRE_NO_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE NOCASE)"));
+# REQUIRE_NO_FAIL(con.Query("INSERT INTO collate_test VALUES ('Hallo'), ('hallo')"));
+
+# result = con.Query("SELECT * FROM collate_test WHERE s LIKE 'h%'");
+# REQUIRE(CHECK_COLUMN(result, 0, {"Hallo", "hallo"}));
+# result = con.Query("SELECT * FROM collate_test WHERE s LIKE 'HA%'");
+# REQUIRE(CHECK_COLUMN(result, 0, {"Hallo", "hallo"}));

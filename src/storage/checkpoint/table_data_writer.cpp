@@ -10,7 +10,7 @@
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
@@ -48,7 +48,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
 	for (idx_t i = 0; i < table.columns.size(); i++) {
-		auto type_id = GetInternalType(table.columns[i].type);
+		auto type_id = table.columns[i].type.InternalType();
 		stats.push_back(make_unique<SegmentStatistics>(type_id, GetTypeIdSize(type_id)));
 		CreateSegment(i);
 	}
@@ -70,14 +70,14 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
 		unordered_map<idx_t, vector<TableFilter>> mock;
-		table.storage->Scan(transaction, chunk, state, mock);
+		table.storage->Scan(transaction, chunk, state, column_ids, mock);
 		if (chunk.size() == 0) {
 			break;
 		}
 		// for each column, we append whatever we can fit into the block
 		idx_t chunk_size = chunk.size();
 		for (idx_t i = 0; i < table.columns.size(); i++) {
-			assert(chunk.data[i].type == GetInternalType(table.columns[i].type));
+			assert(chunk.data[i].type == table.columns[i].type);
 			AppendData(transaction, i, chunk.data[i], chunk_size);
 		}
 	}
@@ -90,8 +90,8 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 }
 
 void TableDataWriter::CreateSegment(idx_t col_idx) {
-	auto type_id = GetInternalType(table.columns[col_idx].type);
-	if (type_id == TypeId::VARCHAR) {
+	auto type_id = table.columns[col_idx].type.InternalType();
+	if (type_id == PhysicalType::VARCHAR) {
 		auto string_segment = make_unique<StringSegment>(manager.buffer_manager, 0);
 		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(manager);
 		segments[col_idx] = move(string_segment);
@@ -140,7 +140,7 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	idx_t type_size = stats[col_idx]->type == TypeId::VARCHAR ? 8 : stats[col_idx]->type_size;
+	idx_t type_size = stats[col_idx]->type == PhysicalType::VARCHAR ? 8 : stats[col_idx]->type_size;
 	memcpy(&data_pointer.min_stats, stats[col_idx]->minimum.get(), type_size);
 	memcpy(&data_pointer.max_stats, stats[col_idx]->maximum.get(), type_size);
 	data_pointers[col_idx].push_back(move(data_pointer));
@@ -189,8 +189,8 @@ void TableDataWriter::WriteDataPointers() {
 			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
 			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
-			manager.tabledata_writer->WriteData(data_pointer.min_stats, 8);
-			manager.tabledata_writer->WriteData(data_pointer.max_stats, 8);
+			manager.tabledata_writer->WriteData(data_pointer.min_stats, 16);
+			manager.tabledata_writer->WriteData(data_pointer.max_stats, 16);
 		}
 	}
 }
@@ -251,3 +251,5 @@ void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
 	offset = 0;
 	block_id = new_block_id;
 }
+
+} // namespace duckdb

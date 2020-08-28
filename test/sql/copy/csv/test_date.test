@@ -1,0 +1,17 @@
+# name: test/sql/copy/csv/test_date.test
+# description: Test date copy
+# group: [csv]
+
+statement ok
+CREATE TABLE date_test(d date);
+
+query I
+COPY date_test FROM 'test/sql/copy/csv/data/test/date.csv';
+----
+1
+
+query T
+SELECT cast(d as string) FROM date_test;
+----
+2019-06-05
+

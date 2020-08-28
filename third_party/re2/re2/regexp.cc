@@ -23,7 +23,7 @@
 #include "re2/stringpiece.h"
 #include "re2/walker-inl.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Constructor.  Allocates vectors as appropriate for operator.
 Regexp::Regexp(RegexpOp op, ParseFlags parse_flags)
@@ -50,15 +50,15 @@ Regexp::~Regexp() {
     default:
       break;
     case kRegexpCapture:
-      delete name_;
+      delete capture_.name_;
       break;
     case kRegexpLiteralString:
-      delete[] runes_;
+      delete[] literal_string_.runes_;
       break;
     case kRegexpCharClass:
-      if (cc_)
-        cc_->Delete();
-      delete ccb_;
+      if (char_class_.cc_)
+          char_class_.cc_->Delete();
+      delete char_class_.ccb_;
       break;
   }
 }
@@ -169,19 +169,19 @@ void Regexp::Destroy() {
 
 void Regexp::AddRuneToString(Rune r) {
   DCHECK(op_ == kRegexpLiteralString);
-  if (nrunes_ == 0) {
+  if (literal_string_.nrunes_ == 0) {
     // start with 8
-    runes_ = new Rune[8];
-  } else if (nrunes_ >= 8 && (nrunes_ & (nrunes_ - 1)) == 0) {
+      literal_string_.runes_ = new Rune[8];
+  } else if (literal_string_.nrunes_ >= 8 && (literal_string_.nrunes_ & (literal_string_.nrunes_ - 1)) == 0) {
     // double on powers of two
-    Rune *old = runes_;
-    runes_ = new Rune[nrunes_ * 2];
-    for (int i = 0; i < nrunes_; i++)
-      runes_[i] = old[i];
+    Rune *old = literal_string_.runes_;
+      literal_string_.runes_ = new Rune[literal_string_.nrunes_ * 2];
+    for (int i = 0; i < literal_string_.nrunes_; i++)
+        literal_string_.runes_[i] = old[i];
     delete[] old;
   }
 
-  runes_[nrunes_++] = r;
+    literal_string_.runes_[literal_string_.nrunes_++] = r;
 }
 
 Regexp* Regexp::HaveMatch(int match_id, ParseFlags flags) {
@@ -299,7 +299,7 @@ Regexp* Regexp::Capture(Regexp* sub, ParseFlags flags, int cap) {
   Regexp* re = new Regexp(kRegexpCapture, flags);
   re->AllocSub(1);
   re->sub()[0] = sub;
-  re->cap_ = cap;
+  re->capture_.cap_ = cap;
   return re;
 }
 
@@ -307,8 +307,8 @@ Regexp* Regexp::Repeat(Regexp* sub, ParseFlags flags, int min, int max) {
   Regexp* re = new Regexp(kRegexpRepeat, flags);
   re->AllocSub(1);
   re->sub()[0] = sub;
-  re->min_ = min;
-  re->max_ = max;
+  re->repeat_.min_ = min;
+  re->repeat_.max_ = max;
   return re;
 }
 
@@ -331,7 +331,7 @@ Regexp* Regexp::LiteralString(Rune* runes, int nrunes, ParseFlags flags) {
 
 Regexp* Regexp::NewCharClass(CharClass* cc, ParseFlags flags) {
   Regexp* re = new Regexp(kRegexpCharClass, flags);
-  re->cc_ = cc;
+  re->char_class_.cc_ = cc;
   return re;
 }
 
@@ -683,16 +683,16 @@ bool Regexp::RequiredPrefix(std::string* prefix, bool* foldcase,
     case kRegexpLiteralString:
       // Convert to string in proper encoding.
       if (re->parse_flags() & Latin1) {
-        prefix->resize(re->nrunes_);
-        for (int j = 0; j < re->nrunes_; j++)
-          (*prefix)[j] = static_cast<char>(re->runes_[j]);
+        prefix->resize(re->literal_string_.nrunes_);
+        for (int j = 0; j < re->literal_string_.nrunes_; j++)
+          (*prefix)[j] = static_cast<char>(re->literal_string_.runes_[j]);
       } else {
         // Convert to UTF-8 in place.
         // Assume worst-case space and then trim.
-        prefix->resize(re->nrunes_ * UTFmax);
+        prefix->resize(re->literal_string_.nrunes_ * UTFmax);
         char *p = &(*prefix)[0];
-        for (int j = 0; j < re->nrunes_; j++) {
-          Rune r = re->runes_[j];
+        for (int j = 0; j < re->literal_string_.nrunes_; j++) {
+          Rune r = re->literal_string_.runes_[j];
           if (r < Runeself)
             *p++ = static_cast<char>(r);
           else
@@ -968,4 +968,4 @@ CharClass* CharClassBuilder::GetCharClass() {
   return cc;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

@@ -1,0 +1,38 @@
+# name: test/sql/function/numeric/test_pow.test
+# description: Power test
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE powerme(a DOUBLE, b INTEGER)
+
+statement ok
+INSERT INTO powerme VALUES (2.1, 3)
+
+query R
+select pow(a, 0) from powerme
+----
+1.000000
+
+query R
+select pow(b, -2) from powerme
+----
+0.111111
+
+query R
+select pow(a, b) from powerme
+----
+9.261000
+
+query R
+select pow(b, a) from powerme
+----
+10.045109
+
+query R
+select power(b, a) from powerme
+----
+10.045109
+

@@ -1,0 +1,15 @@
+# name: test/sql/delete/test_large_delete.test
+# description: Test scan with large deletions
+# group: [delete]
+
+statement ok
+CREATE TABLE a AS SELECT * FROM range(0, 10000, 1) t1(i);
+
+statement ok
+DELETE FROM a WHERE i >= 2000 AND i < 5000;
+
+query I
+SELECT COUNT(*) FROM a;
+----
+7000
+

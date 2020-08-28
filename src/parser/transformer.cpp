@@ -4,8 +4,9 @@
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 bool Transformer::TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
@@ -79,3 +80,5 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 	}
 	return nullptr;
 }
+
+} // namespace duckdb

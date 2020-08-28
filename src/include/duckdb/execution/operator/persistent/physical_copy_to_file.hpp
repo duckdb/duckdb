@@ -8,26 +8,31 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/function/copy_function.hpp"
 
 namespace duckdb {
 
 //! Copy the contents of a query into a table
-class PhysicalCopyToFile : public PhysicalOperator {
+class PhysicalCopyToFile : public PhysicalSink {
 public:
-	PhysicalCopyToFile(LogicalOperator &op, unique_ptr<CopyInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, op.types), info(move(info)) {
+	PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data)
+	    : PhysicalSink(PhysicalOperatorType::COPY_TO_FILE, move(types)), function(function),
+	      bind_data(move(bind_data)) {
 	}
 
-	//! Settings for the COPY statement
-	unique_ptr<CopyInfo> info;
-	//! The names of the child expression
-	vector<string> names;
-	//! The types of the child expression
-	vector<SQLType> sql_types;
+	CopyFunction function;
+	unique_ptr<FunctionData> bind_data;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+
+	void Sink(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate,
+	          DataChunk &input) override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
+	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 };
 } // namespace duckdb

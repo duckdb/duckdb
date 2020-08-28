@@ -1,0 +1,23 @@
+# name: test/sql/alter/rename_col/test_rename_col_unique.test
+# description: Test ALTER TABLE RENAME COLUMN on a table with constraints: UNIQUE constraint
+# group: [rename_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER, PRIMARY KEY(i, j))
+
+statement ok
+INSERT INTO test (i, j) VALUES (1, 1), (2, 2)
+
+statement error
+INSERT INTO test (i, j) VALUES (1, 1)
+
+statement ok
+ALTER TABLE test RENAME COLUMN i TO k
+
+# the unique constraint should still work after altering the table
+statement ok
+INSERT INTO test (k, j) VALUES (3, 3), (4, 4)
+
+statement error
+INSERT INTO test (k, j) VALUES (1, 1)
+

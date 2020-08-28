@@ -2,8 +2,9 @@
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformTableRefNode(PGNode *n) {
 	switch (n->type) {
@@ -19,3 +20,5 @@ unique_ptr<TableRef> Transformer::TransformTableRefNode(PGNode *n) {
 		throw NotImplementedException("From Type %d not supported yet...", n->type);
 	}
 }
+
+} // namespace duckdb

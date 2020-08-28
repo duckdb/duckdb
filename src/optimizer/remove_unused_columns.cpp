@@ -1,3 +1,5 @@
+#include <map>
+
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -8,6 +10,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_table_function.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
@@ -15,7 +18,7 @@
 
 #include "duckdb/planner/expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
@@ -34,7 +37,7 @@ template <class T> void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &l
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
-			// this entry is not referred to, erase it from the set of expresisons
+			// this entry is not referred to, erase it from the set of expressions
 			list.erase(list.begin() + col_idx);
 			offset++;
 			col_idx--;
@@ -56,8 +59,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 
 			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
 				// removed all expressions from the aggregate: push a COUNT(*)
+				auto count_star_fun = CountStarFun::GetFunction();
 				aggr.expressions.push_back(
-				    make_unique<BoundAggregateExpression>(TypeId::INT64, CountStarFun::GetFunction(), false));
+				    make_unique<BoundAggregateExpression>(count_star_fun.return_type, count_star_fun, false));
 			}
 		}
 
@@ -147,6 +151,19 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
+	case LogicalOperatorType::TABLE_FUNCTION: {
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		auto &fun = (LogicalTableFunction &)op;
+		if (!everything_referenced && fun.function.supports_projection) {
+			// table producing function: figure out which columns are referenced
+			ClearUnusedExpressions(fun.column_ids, fun.table_index);
+			// see above for this special case
+			if (fun.column_ids.size() == 0) {
+				fun.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+			}
+		}
+		return;
+	}
 	case LogicalOperatorType::DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
@@ -181,3 +198,5 @@ unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundReferenceExpressio
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
 	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }
+
+} // namespace duckdb

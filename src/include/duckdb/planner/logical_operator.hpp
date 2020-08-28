@@ -16,6 +16,7 @@
 #include "duckdb/planner/column_binding.hpp"
 
 #include <functional>
+#include <algorithm>
 
 namespace duckdb {
 
@@ -38,14 +39,14 @@ public:
 	//! The set of expressions contained within the operator, if any
 	vector<unique_ptr<Expression>> expressions;
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
-	vector<TypeId> types;
+	vector<LogicalType> types;
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings() {
 		return {};
 	}
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
-	static vector<TypeId> MapTypes(vector<TypeId> types, vector<idx_t> projection_map);
+	static vector<LogicalType> MapTypes(vector<LogicalType> types, vector<idx_t> projection_map);
 	static vector<ColumnBinding> MapBindings(vector<ColumnBinding> types, vector<idx_t> projection_map);
 
 	//! Resolve the types of the logical operator and its children

@@ -1,0 +1,22 @@
+# name: test/sql/catalog/test_if_not_exists.test
+# description: Test IF NOT EXISTS
+# group: [catalog]
+
+statement ok
+CREATE TABLE IF NOT EXISTS integers(i INTEGER, j INTEGER)
+
+statement ok
+CREATE TABLE IF NOT EXISTS integers(i INTEGER, j INTEGER)
+
+statement ok
+CREATE TABLE IF NOT EXISTS integers2 AS SELECT 42
+
+statement ok
+CREATE TABLE IF NOT EXISTS integers2 AS SELECT 42
+
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+DROP TABLE IF EXISTS integers
+

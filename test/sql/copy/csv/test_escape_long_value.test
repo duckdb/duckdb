@@ -1,0 +1,34 @@
+# name: test/sql/copy/csv/test_escape_long_value.test
+# description: Test long value with escapes
+# group: [csv]
+
+# long value with escape and simple delimiter
+# load CSV file into a table
+statement ok
+CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);
+
+query I
+COPY long_escaped_value FROM 'test/sql/copy/csv/data/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE);
+----
+1
+
+query IIT
+SELECT * FROM long_escaped_value
+----
+3 values hashing to 935bbda15d681cd3f79b11e49788e90e
+
+# long value with escape and complex delimiter
+# load CSV file into a table
+statement ok
+CREATE TABLE long_escaped_value_unicode (a INTEGER, b INTEGER, c VARCHAR);
+
+query I
+COPY long_escaped_value_unicode FROM 'test/sql/copy/csv/data/test/long_escaped_value_unicode.csv';
+----
+1
+
+query IIT
+SELECT * FROM long_escaped_value_unicode
+----
+3 values hashing to 935bbda15d681cd3f79b11e49788e90e
+

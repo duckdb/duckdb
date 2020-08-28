@@ -9,7 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include <stdarg.h> // for va_list
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 /**
@@ -24,7 +25,7 @@ public:
 	static bool Contains(const string &haystack, const string &needle);
 
 	//! Returns true if the target string starts with the given prefix
-	static bool StartsWith(const string &str, const string &prefix);
+	static bool StartsWith(string str, string prefix);
 
 	//! Returns true if the target string <b>ends</b> with the given suffix.
 	static bool EndsWith(const string &str, const string &suffix);
@@ -72,8 +73,9 @@ public:
 	static string Lower(const string &str);
 
 	//! Format a string using printf semantics
-	static string Format(const string fmt_str, ...);
-	static string VFormat(const string fmt_str, va_list ap);
+	template <typename... Args> static string Format(const string fmt_str, Args... params) {
+		return Exception::ConstructMessage(fmt_str, params...);
+	}
 
 	//! Split the input string into a vector of strings based on the split string
 	static vector<string> Split(const string &input, const string &split);

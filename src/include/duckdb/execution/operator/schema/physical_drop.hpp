@@ -17,13 +17,13 @@ namespace duckdb {
 class PhysicalDrop : public PhysicalOperator {
 public:
 	PhysicalDrop(unique_ptr<DropInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::DROP, {TypeId::BOOL}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::DROP, {LogicalType::BOOLEAN}), info(move(info)) {
 	}
 
 	unique_ptr<DropInfo> info;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb

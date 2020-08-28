@@ -119,20 +119,29 @@ bool OrderModifier::Equals(const ResultModifier *other_) const {
 unique_ptr<ResultModifier> OrderModifier::Copy() {
 	auto copy = make_unique<OrderModifier>();
 	for (auto &order : orders) {
-		OrderByNode node;
-		node.type = order.type;
-		node.expression = order.expression->Copy();
-		copy->orders.push_back(move(node));
+		copy->orders.push_back(OrderByNode(order.type, order.null_order, order.expression->Copy()));
 	}
 	return move(copy);
+}
+
+void OrderByNode::Serialize(Serializer &serializer) {
+	serializer.Write<OrderType>(type);
+	serializer.Write<OrderByNullType>(null_order);
+	expression->Serialize(serializer);
+}
+
+OrderByNode OrderByNode::Deserialize(Deserializer &source) {
+	auto type = source.Read<OrderType>();
+	auto null_order = source.Read<OrderByNullType>();
+	auto expression = ParsedExpression::Deserialize(source);
+	return OrderByNode(type, null_order, move(expression));
 }
 
 void OrderModifier::Serialize(Serializer &serializer) {
 	ResultModifier::Serialize(serializer);
 	serializer.Write<int64_t>(orders.size());
 	for (auto &order : orders) {
-		serializer.Write<OrderType>(order.type);
-		order.expression->Serialize(serializer);
+		order.Serialize(serializer);
 	}
 }
 
@@ -140,10 +149,7 @@ unique_ptr<ResultModifier> OrderModifier::Deserialize(Deserializer &source) {
 	auto mod = make_unique<OrderModifier>();
 	auto order_count = source.Read<int64_t>();
 	for (int64_t i = 0; i < order_count; i++) {
-		OrderByNode node;
-		node.type = source.Read<OrderType>();
-		node.expression = ParsedExpression::Deserialize(source);
-		mod->orders.push_back(move(node));
+		mod->orders.push_back(OrderByNode::Deserialize((source)));
 	}
 	return move(mod);
 }

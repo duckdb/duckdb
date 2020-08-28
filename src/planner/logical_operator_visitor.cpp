@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
@@ -52,6 +52,12 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::DELIM_JOIN:
 	case LogicalOperatorType::COMPARISON_JOIN: {
+		if (op.type == LogicalOperatorType::DELIM_JOIN) {
+			auto &delim_join = (LogicalDelimJoin &)op;
+			for (auto &expr : delim_join.duplicate_eliminated_columns) {
+				VisitExpression(&expr);
+			}
+		}
 		auto &join = (LogicalComparisonJoin &)op;
 		for (auto &cond : join.conditions) {
 			VisitExpression(&cond.left);
@@ -148,7 +154,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
 		VisitExpression(&expr);
-		return move(expr);
+		return expr;
 	});
 }
 
@@ -236,3 +242,5 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(CommonSubExpression 
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
+
+} // namespace duckdb

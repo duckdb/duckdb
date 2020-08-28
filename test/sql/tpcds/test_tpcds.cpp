@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
+TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;
@@ -15,11 +15,7 @@ TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
 	tpcds::dbgen(0, db);
 
 	// this is to make sure we do not get regressions in query compilation
-	unordered_set<size_t> missing_queries = {55, 101};
 	for (size_t q = 1; q < 104; q++) {
-		if (missing_queries.count(q) != 0) {
-			continue;
-		}
 		REQUIRE_NO_FAIL(con.Query(tpcds::get_query(q)));
 	}
 }

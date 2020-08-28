@@ -2,8 +2,9 @@
 #include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformResTarget(PGResTarget *root) {
 	if (!root) {
@@ -67,7 +68,7 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(PGNode *node) {
 	case T_PGSetToDefault:
 		return make_unique<DefaultExpression>();
 	case T_PGCollateClause:
-		return TransformCollateExpr(reinterpret_cast<PGCollateClause*>(node));
+		return TransformCollateExpr(reinterpret_cast<PGCollateClause *>(node));
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
 	}
@@ -90,3 +91,5 @@ bool Transformer::TransformExpressionList(PGList *list, vector<unique_ptr<Parsed
 	}
 	return true;
 }
+
+} // namespace duckdb

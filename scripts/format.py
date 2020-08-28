@@ -11,8 +11,8 @@ import subprocess
 cpp_format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=file "${FILE}"'
 sql_format_command = 'pg_format "${FILE}" -o "${FILE}.out" && mv "${FILE}.out" "${FILE}"'
 cmake_format_command = 'cmake-format -i "${FILE}"'
-extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql', '.txt']
-formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples']
+extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql', '.txt', '.test', '.test_slow']
+formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h']
 confirm = True
@@ -58,9 +58,6 @@ def can_format_file(full_path):
     # check ignored files
     if fname in ignored_files:
         return False
-    # skip files that end in .txt but are not CMakeLists.txt
-    if full_path.endswith('.txt'):
-        return fname == 'CMakeLists.txt'
     found = False
     # check file extension
     for ext in extensions:
@@ -73,6 +70,9 @@ def can_format_file(full_path):
     for dname in formatted_directories:
         if full_path.startswith(dname):
             return True
+    # skip files that end in .txt but are not CMakeLists.txt
+    if full_path.endswith('.txt'):
+        return fname == 'CMakeLists.txt'
     return False
 
 
@@ -156,6 +156,49 @@ def format_file(f, full_path, directory, ext, sort_includes):
         file.close()
     elif ext == ".txt" and f != 'CMakeLists.txt':
         return
+    elif ext == '.test' or ext == '.test_slow':
+        try:
+            with open(full_path, "r") as file_:
+                lines = file_.readlines()
+        except:
+            return
+        found_name = False
+        found_group = False
+        group_name = full_path.split('/')[-2]
+        new_path_line = '# name: ' + full_path + '\n'
+        new_group_line =  '# group: [' + group_name + ']' + '\n'
+        found_diff = False
+        for i in range(0, len(lines)):
+            line = lines[i]
+            if line.startswith('# name: ') or line.startswith('#name: '):
+                if found_name:
+                    print("Error formatting file " + full_path + ", multiple lines starting with # name found")
+                    exit(1)
+                found_name = True
+                if lines[i] != new_path_line:
+                    found_diff = True
+                    lines[i] = new_path_line
+            if line.startswith('# group: ') or line.startswith('#group: '):
+                if found_group:
+                    print("Error formatting file " + full_path + ", multiple lines starting with # group found")
+                    exit(1)
+                found_group = True
+                if lines[i] != new_group_line:
+                    found_diff = True
+                    lines[i] = new_group_line
+        if not found_group:
+            lines = [new_group_line] + lines
+            found_diff = True
+        if not found_name:
+            lines = [new_path_line] + lines
+            found_diff = True
+        if found_diff:
+            print(full_path)
+            print(new_path_line)
+            print(new_group_line)
+            with open(full_path, "w+") as file_:
+                file_.write(''.join(lines))
+        return
     format_command = format_commands[ext]
     cmd = format_command.replace("${FILE}", full_path).replace(
         "${SORT_INCLUDES}", "1" if sort_includes else "0")
@@ -188,6 +231,8 @@ if format_all:
     format_directory('test')
     format_directory('tools')
     format_directory('examples')
+    format_directory('extension')
+
 else:
     for full_path in changed_files:
         splits = full_path.split(os.path.sep)

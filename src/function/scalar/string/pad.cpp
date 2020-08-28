@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
@@ -116,8 +117,6 @@ struct RpadOperator {
 };
 
 template <class Op> static void pad_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT32 &&
-	       args.data[2].type == TypeId::VARCHAR);
 	auto &str_vector = args.data[0];
 	auto &len_vector = args.data[1];
 	auto &pad_vector = args.data[2];
@@ -131,18 +130,18 @@ template <class Op> static void pad_function(DataChunk &args, ExpressionState &s
 }
 
 void LpadFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("lpad",                              // name of the function
-	                               {SQLType::VARCHAR, SQLType::INTEGER, // argument list
-	                                SQLType::VARCHAR},
-	                               SQLType::VARCHAR,             // return type
+	set.AddFunction(ScalarFunction("lpad",                                      // name of the function
+	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
+	                                LogicalType::VARCHAR},
+	                               LogicalType::VARCHAR,         // return type
 	                               pad_function<LpadOperator>)); // pointer to function implementation
 }
 
 void RpadFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("rpad",                              // name of the function
-	                               {SQLType::VARCHAR, SQLType::INTEGER, // argument list
-	                                SQLType::VARCHAR},
-	                               SQLType::VARCHAR,             // return type
+	set.AddFunction(ScalarFunction("rpad",                                      // name of the function
+	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
+	                                LogicalType::VARCHAR},
+	                               LogicalType::VARCHAR,         // return type
 	                               pad_function<RpadOperator>)); // pointer to function implementation
 }
 

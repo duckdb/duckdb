@@ -1,0 +1,18 @@
+# name: test/sql/subquery/scalar/test_tpcds_correlated_subquery.test
+# description: Test correlated subqueries based on TPC-DS
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE item(i_manufact INTEGER)
+
+query I
+SELECT * FROM item i1 WHERE (SELECT count(*) AS item_cnt FROM item WHERE (i_manufact = i1.i_manufact AND i_manufact=3) OR (i_manufact = i1.i_manufact AND i_manufact=3)) > 0 ORDER BY 1 LIMIT 100;
+----
+
+query I
+SELECT * FROM item i1 WHERE (SELECT count(*) AS item_cnt FROM item WHERE (i_manufact = i1.i_manufact AND i_manufact=3) OR (i_manufact = i1.i_manufact AND i_manufact=3)) ORDER BY 1 LIMIT 100;
+----
+

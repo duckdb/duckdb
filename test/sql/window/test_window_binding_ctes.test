@@ -1,0 +1,66 @@
+# name: test/sql/window/test_window_binding_ctes.test
+# description: Test binding of named window functions in CTEs
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+# named window clause
+query II
+select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i);
+----
+1	NULL
+2	1
+3	2
+
+# named window clause in CTE
+query II
+with subquery as (select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i)) select * from subquery;
+----
+1	NULL
+2	1
+3	2
+
+# named window clause in subquery
+query II
+select * from (select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i)) t1;
+----
+1	NULL
+2	1
+3	2
+
+# named window clause in view
+statement ok
+CREATE VIEW v1 AS select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i);
+
+query II
+select * from v1;
+----
+1	NULL
+2	1
+3	2
+
+# same window clause name multiple times but in different subqueries
+query IIII
+SELECT * FROM (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i) window named_window AS ( ORDER BY i)) t1, (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i) window named_window AS ( ORDER BY i)) t2 ORDER BY 1, 2, 3, 4;
+----
+1	NULL	1	NULL
+1	NULL	2	1
+1	NULL	3	2
+2	1	1	NULL
+2	1	2	1
+2	1	3	2
+3	2	1	NULL
+3	2	2	1
+3	2	3	2
+
+# we cannot use named window specifications of the main query inside CTEs
+statement error
+WITH subquery AS (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i)) SELECT * FROM subquery window named_window AS ( ORDER BY i);
+
+# duplicate window clause name
+statement error
+select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i), named_window as (order by j);
+

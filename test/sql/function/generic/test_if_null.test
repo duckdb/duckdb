@@ -1,0 +1,24 @@
+# name: test/sql/function/generic/test_if_null.test
+# description: IFNULL test
+# group: [generic]
+
+query III
+SELECT IFNULL(NULL, NULL), IFNULL(NULL, 10), IFNULL(1, 10)
+----
+NULL	10	1
+
+query IR
+SELECT IFNULL(NULL, 2000), IFNULL(20.5, 2000)
+----
+2000	20.500000
+
+query TT
+SELECT IFNULL(NULL, '1996-11-05 10:11:56'::timestamp), IFNULL('2020-05-05'::date, '1996-11-05 10:11:56'::timestamp)
+----
+1996-11-05 10:11:56	2020-05-05 00:00:00
+
+query TT
+SELECT IFNULL(NULL, 'not NULL'), IFNULL('NULL', 'not NULL')
+----
+not NULL	NULL
+

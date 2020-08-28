@@ -27,6 +27,8 @@ public:
 	StorageManager(DuckDB &database, string path, bool read_only);
 	~StorageManager();
 
+	static StorageManager &GetStorageManager(ClientContext &context);
+
 	//! Initialize a database or load an existing database from the given path
 	void Initialize();
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
@@ -36,6 +38,10 @@ public:
 
 	DuckDB &GetDatabase() {
 		return database;
+	}
+
+	string GetDBPath() {
+		return path;
 	}
 	//! The BlockManager to read/store meta information and data in blocks
 	unique_ptr<BlockManager> block_manager;

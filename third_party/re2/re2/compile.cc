@@ -21,7 +21,7 @@
 #include "re2/regexp.h"
 #include "re2/walker-inl.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // List of pointers to Inst* that need to be filled in (patched).
 // Because the Inst* haven't been filled in yet,
@@ -501,8 +501,8 @@ int Compiler::CachedRuneByteSuffix(uint8_t lo, uint8_t hi, bool foldcase,
 }
 
 bool Compiler::IsCachedRuneByteSuffix(int id) {
-  uint8_t lo = inst_[id].lo_;
-  uint8_t hi = inst_[id].hi_;
+  uint8_t lo = inst_[id].inst_byte_range_data_.lo_;
+  uint8_t hi = inst_[id].inst_byte_range_data_.hi_;
   bool foldcase = inst_[id].foldcase() != 0;
   int next = inst_[id].out();
 
@@ -1276,4 +1276,4 @@ Prog* Prog::CompileSet(Regexp* re, RE2::Anchor anchor, int64_t max_mem) {
   return Compiler::CompileSet(re, anchor, max_mem);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

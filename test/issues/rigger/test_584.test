@@ -1,0 +1,19 @@
+# name: test/issues/rigger/test_584.test
+# description: Issue 584
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# A select with BETWEEN and VARCHAR cast results in an incorrect result
+statement ok
+CREATE TABLE t0(c0 INTEGER);
+
+statement ok
+INSERT INTO t0(c0) VALUES (-2);
+
+query I
+SELECT t0.c0 FROM t0 WHERE -1 BETWEEN t0.c0::VARCHAR AND 1;
+----
+-2
+

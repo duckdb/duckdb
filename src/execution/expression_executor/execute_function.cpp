@@ -1,7 +1,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct FunctionState : public ExpressionState {
@@ -12,7 +12,7 @@ struct FunctionState : public ExpressionState {
 		}
 	}
 
-	vector<TypeId> child_types;
+	vector<LogicalType> child_types;
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,
@@ -35,7 +35,7 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 			assert(state->child_types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 #ifdef DEBUG
-			if (expr.arguments[i].id == SQLTypeId::VARCHAR) {
+			if (expr.arguments[i].id() == LogicalTypeId::VARCHAR) {
 				arguments.data[i].UTFVerify(count);
 			}
 #endif
@@ -43,9 +43,12 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		arguments.Verify();
 	}
 	expr.function.function(arguments, *state, result);
+
 	if (result.type != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, result.type,
 		                            "expected function to return the former "
 		                            "but the function returned the latter");
 	}
 }
+
+} // namespace duckdb

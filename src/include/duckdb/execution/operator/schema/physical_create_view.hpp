@@ -17,13 +17,13 @@ namespace duckdb {
 class PhysicalCreateView : public PhysicalOperator {
 public:
 	PhysicalCreateView(unique_ptr<CreateViewInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_VIEW, {TypeId::BOOL}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_VIEW, {LogicalType::BIGINT}), info(move(info)) {
 	}
 
 	unique_ptr<CreateViewInfo> info;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
@@ -40,15 +41,20 @@ public:
 
 //! Single node in ORDER BY statement
 struct OrderByNode {
-	OrderByNode() {
-	}
-	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) : type(type), expression(move(expression)) {
+	OrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<ParsedExpression> expression)
+	    : type(type), null_order(null_order), expression(move(expression)) {
 	}
 
 	//! Sort order, ASC or DESC
 	OrderType type;
+	//! The NULL sort order, NULLS_FIRST or NULLS_LAST
+	OrderByNullType null_order;
 	//! Expression to order by
 	unique_ptr<ParsedExpression> expression;
+
+public:
+	void Serialize(Serializer &serializer);
+	static OrderByNode Deserialize(Deserializer &source);
 };
 
 class LimitModifier : public ResultModifier {

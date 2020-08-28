@@ -1,0 +1,233 @@
+# name: test/sql/projection/test_complex_expressions.test
+# description: Complex Expressions
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE exprtest (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)
+
+query II
+SELECT * FROM exprtest
+----
+42	10
+43	100
+NULL	1
+45	-1
+
+# BETWEEN
+query I
+SELECT a FROM exprtest WHERE a BETWEEN 43 AND 44
+----
+43
+
+query I
+SELECT a FROM exprtest WHERE a NOT BETWEEN 43 AND 44
+----
+42
+45
+
+query I
+SELECT a FROM exprtest WHERE a BETWEEN b AND 44
+----
+42
+
+# CASE
+query I
+SELECT CASE a WHEN 42 THEN 100 WHEN 43 THEN 200 ELSE 300 END FROM exprtest
+----
+100
+200
+300
+300
+
+query I
+SELECT CASE WHEN a = 42 THEN 100 WHEN a = 43 THEN 200 ELSE 300 END FROM exprtest
+----
+100
+200
+300
+300
+
+query I
+SELECT CASE WHEN a = 42 THEN 100 WHEN a = 43 THEN 200 END FROM exprtest
+----
+100
+200
+NULL
+NULL
+
+# COALESCE
+query I
+SELECT COALESCE(NULL, NULL, 42, 43)
+----
+42
+
+query I
+SELECT COALESCE(NULL, NULL, 42)
+----
+42
+
+query I
+SELECT COALESCE(42, NULL, 43)
+----
+42
+
+query I
+SELECT COALESCE(NULL, NULL, NULL)
+----
+NULL
+
+query I
+SELECT COALESCE(a, b) FROM exprtest
+----
+42
+43
+1
+45
+
+# ABS
+query III
+SELECT ABS(1), ABS(-1), ABS(NULL)
+----
+1	1	NULL
+
+query I
+SELECT ABS(b) FROM exprtest
+----
+10
+100
+1
+1
+
+# IN
+statement ok
+CREATE TABLE intest (a INTEGER, b INTEGER, c INTEGER)
+
+statement ok
+INSERT INTO intest VALUES (42, 42, 42), (43, 42, 42), (44, 41, 44);
+
+query III
+SELECT * FROM intest WHERE a IN (42, 43)
+----
+42	42	42
+43	42	42
+
+query T
+SELECT a IN (42, 43) FROM intest 
+----
+1
+1
+0
+
+query III
+SELECT * FROM intest WHERE a IN (86, 103, 162)
+----
+
+query III
+SELECT * FROM intest WHERE a IN (NULL, NULL, NULL, NULL)
+----
+
+query III
+SELECT * FROM intest WHERE a IN (b)
+----
+42	42	42
+
+query III
+SELECT * FROM intest WHERE a IN (b, c)
+----
+42	42	42
+44	41	44
+
+query III
+SELECT * FROM intest WHERE a IN (43, b) ORDER BY 1
+----
+42	42	42
+43	42	42
+
+query III
+SELECT * FROM intest WHERE a NOT IN (42, 43)
+----
+44	41	44
+
+query III
+SELECT * FROM intest WHERE a NOT IN (86, 103, 162) ORDER BY 1
+----
+42	42	42
+43	42	42
+44	41	44
+
+query III
+SELECT * FROM intest WHERE a NOT IN (NULL, NULL)
+----
+
+query III
+SELECT * FROM intest WHERE a NOT IN (b) ORDER BY 1
+----
+43	42	42
+44	41	44
+
+query III
+SELECT * FROM intest WHERE a NOT IN (b, c)
+----
+43	42	42
+
+query III
+SELECT * FROM intest WHERE a NOT IN (43, b)
+----
+44	41	44
+
+query III
+SELECT * FROM intest WHERE NULL IN ('a', 'b')
+----
+
+query III
+SELECT * FROM intest WHERE NULL NOT IN ('a', 'b')
+----
+
+statement ok
+CREATE TABLE strtest (a INTEGER, b VARCHAR)
+
+statement ok
+INSERT INTO strtest VALUES (1, 'a'), (2, 'h'), (3, 'd')
+
+statement ok
+INSERT INTO strtest VALUES (4, NULL)
+
+query I
+SELECT a FROM strtest WHERE b = 'a'
+----
+1
+
+query I
+SELECT a FROM strtest WHERE b <> 'a'
+----
+2
+3
+
+query I
+SELECT a FROM strtest WHERE b < 'h'
+----
+1
+3
+
+query I
+SELECT a FROM strtest WHERE b <= 'h'
+----
+1
+2
+3
+
+query I
+SELECT a FROM strtest WHERE b > 'h'
+----
+
+query I
+SELECT a FROM strtest WHERE b >= 'h'
+----
+2
+

@@ -36,7 +36,7 @@ static void TestStringCast(vector<string> &working_values, vector<DST> &expected
 		StringUtil::Trim(value);
 		vector<string> splits;
 		splits = StringUtil::Split(value, 'e');
-		if (splits.size() > 1) {
+		if (splits.size() > 1 || value[0] == '+') {
 			continue;
 		}
 		splits = StringUtil::Split(value, '.');
@@ -54,7 +54,7 @@ template <class T> static void TestExponent() {
 	double value = 1;
 	T expected_value = 1;
 	for (idx_t exponent = 0; exponent < 100; exponent++) {
-		if (value < MaximumValue<T>()) {
+		if (value < NumericLimits<T>::Maximum()) {
 			// expect success
 			str = "1e" + to_string(exponent);
 			REQUIRE(TryCast::Operation<string_t, T>(string_t(str), parse_result));
@@ -75,9 +75,9 @@ template <class T> static void TestExponent() {
 }
 
 TEST_CASE("Test casting to boolean", "[cast]") {
-	vector<string> working_values = {"true", "false", "TRUE", "FALSE", "T", "F"};
-	vector<bool> expected_values = {true, false, true, false, true, false};
-	vector<string> broken_values = {"1", "blabla", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+	vector<string> working_values = {"true", "false", "TRUE", "FALSE", "T", "F", "1", "0", "False", "True"};
+	vector<bool> expected_values = {true, false, true, false, true, false, true, false, false, true};
+	vector<string> broken_values = {"304", "1002", "blabla", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
 
 	bool result;
 	for (idx_t i = 0; i < working_values.size(); i++) {
@@ -115,15 +115,15 @@ TEST_CASE("Test casting to int8_t", "[cast]") {
 	vector<double> broken_values_double = {128, -128, 10000000000, -10000000000, 1e100, -1e100};
 	TestNumericCast<double, int8_t>(working_values_double, broken_values_double);
 	// string -> int8_t
-	vector<string> working_values_str = {"10",  "-10",   "127", "-127", "1.3",   "1e2",      "2e1",
+	vector<string> working_values_str = {"10", "+10", "-10",   "127", "-127", "1.3",   "1e2",      "2e1",
 	                                     "2e0", "20e-1", "1.",  "  3",  " 3   ", "\t3 \t \n"};
-	vector<int8_t> expected_values_str = {10, -10, 127, -127, 1, 100, 20, 2, 2, 1, 3, 3, 3};
+	vector<int8_t> expected_values_str = {10, 10, -10, 127, -127, 1, 100, 20, 2, 2, 1, 3, 3, 3};
 	vector<string> broken_values_str = {
 	    "128",   "-128",        "10000000000000000000000000000000000000000000000000000000000000",
 	    "aaaa",  "19A",         "",
 	    "1e3",   "1e",          "1e-",
 	    "1e100", "1e100000000", "1000e-1",
-	    " 3 2"};
+	    " 3 2", "+"};
 	TestStringCast<int8_t>(working_values_str, expected_values_str, broken_values_str);
 	TestExponent<int8_t>();
 }
@@ -146,13 +146,13 @@ TEST_CASE("Test casting to int16_t", "[cast]") {
 	vector<double> broken_values_double = {32768, -32768, 10000000000, -10000000000, 1e100, -1e100};
 	TestNumericCast<double, int16_t>(working_values_double, broken_values_double);
 	// string -> int16_t
-	vector<string> working_values_str = {"10", "-10", "32767", "-32767", "1.3", "3e4", "250e2"};
-	vector<int16_t> expected_values_str = {10, -10, 32767, -32767, 1, 30000, 25000};
+	vector<string> working_values_str = {"10", "-10", "32767", "-32767", "1.3", "3e4", "250e2", "3e+4", "3e0", "30e-1"};
+	vector<int16_t> expected_values_str = {10, -10, 32767, -32767, 1, 30000, 25000, 30000, 3, 3};
 	vector<string> broken_values_str = {
 	    "32768", "-32768",     "10000000000000000000000000000000000000000000000000000000000000",
 	    "aaaa",  "19A",        "",
 	    "1.A",   "1e",         "1e-",
-	    "1e100", "1e100000000"};
+	    "1e100", "1e100000000", "+"};
 	TestStringCast<int16_t>(working_values_str, expected_values_str, broken_values_str);
 	TestExponent<int16_t>();
 }
@@ -203,9 +203,9 @@ TEST_CASE("Test casting to int64_t", "[cast]") {
 	// string -> int64_t
 	vector<string> working_values_str = {
 	    "10",   "-10", "9223372036854775807", "-9223372036854775807", "1.3", "-9223372036854775807.1293813",
-	    "1e18", "1."};
+	    "1e18", "1e+18", "1."};
 	vector<int64_t> expected_values_str = {
-	    10, -10, 9223372036854775807LL, -9223372036854775807LL, 1, -9223372036854775807LL, 1000000000000000000LL, 1};
+	    10, -10, 9223372036854775807LL, -9223372036854775807LL, 1, -9223372036854775807LL, 1000000000000000000LL, 1000000000000000000LL, 1};
 	vector<string> broken_values_str = {"9223372036854775808",
 	                                    "-9223372036854775808",
 	                                    "10000000000000000000000000000000000000000000000000000000000000",
@@ -213,7 +213,10 @@ TEST_CASE("Test casting to int64_t", "[cast]") {
 	                                    "19A",
 	                                    "",
 	                                    "1.A",
-	                                    "1.2382398723A"};
+	                                    "1.2382398723A",
+										"1e++1",
+										"1e+1+1",
+										"1e+1-1", "+"};
 	TestStringCast<int64_t>(working_values_str, expected_values_str, broken_values_str);
 	TestExponent<int64_t>();
 }
@@ -263,6 +266,7 @@ TEST_CASE("Test casting to float", "[cast]") {
 TEST_CASE("Test casting to double", "[cast]") {
 	// string -> double
 	vector<string> working_values = {"1.3",
+	                                 "+1.3",
 	                                 "1.34514",
 	                                 "1e10",
 	                                 "1e-2",
@@ -278,7 +282,7 @@ TEST_CASE("Test casting to double", "[cast]") {
 	                                 " \t 1.2e2 \t",
 	                                 "1.2e 2"};
 	vector<double> expected_values = {
-	    1.3,         1.34514, 1e10, 1e-2, -1e-1, 1.2e12, 1.1781237378938173987123987123981723981723981723987123,
+	    1.3,         1.3, 1.34514, 1e10, 1e-2, -1e-1, 1.2e12, 1.1781237378938173987123987123981723981723981723987123,
 	    1.123456789, 1.0,     -1.2, -12,  1.2,   120,    120,
 	    120};
 	vector<string> broken_values = {
@@ -286,6 +290,6 @@ TEST_CASE("Test casting to double", "[cast]") {
 	    "12aaa", "1e10e10", "1e",
 	    "1e-",   "1e10a",   "1.1781237378938173987123987123981723981723981723934834583490587123w",
 	    "1.2.3", "1.222.",  "1..",
-	    "1 . 2", "1. 2",    "1.2 e20"};
+	    "1 . 2", "1. 2",    "1.2 e20", "+"};
 	TestStringCastDouble<double>(working_values, expected_values, broken_values);
 }

@@ -3,8 +3,9 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformValuesList(PGList *list) {
 	auto result = make_unique<ExpressionListRef>();
@@ -47,3 +48,5 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(PGNode *node) {
 	result->schema = table.schema_name;
 	return result;
 }
+
+} // namespace duckdb

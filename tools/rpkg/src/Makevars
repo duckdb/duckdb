@@ -1,2 +1,0 @@
-PKG_CXXFLAGS = -I.
-OBJECTS=duckdbr.o duckdb.o

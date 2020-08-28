@@ -1,0 +1,19 @@
+# name: test/sql/alter/rename_col/test_rename_col_failure.test
+# description: Test failure conditions of ALTER TABLE
+# group: [rename_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+# cannot rename a column that does not exist
+statement error
+ALTER TABLE test RENAME COLUMN blablabla TO k
+
+# cannot rename a column to an already existing column
+statement error
+ALTER TABLE test RENAME COLUMN i TO j
+
+# after failure original columns should still be there
+statement ok
+SELECT i, j FROM test
+

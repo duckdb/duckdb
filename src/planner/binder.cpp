@@ -5,7 +5,9 @@
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
 
-using namespace duckdb;
+#include <algorithm>
+
+namespace duckdb {
 using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_)
@@ -54,7 +56,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((VacuumStatement &)statement);
 	default:
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
-		                              StatementTypeToString(statement.type).c_str());
+		                              StatementTypeToString(statement.type));
 	}
 }
 
@@ -149,7 +151,7 @@ void Binder::AddCTE(const string &name, QueryNode *cte) {
 	assert(!name.empty());
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
-		throw BinderException("Duplicate CTE \"%s\" in query!", name.c_str());
+		throw BinderException("Duplicate CTE \"%s\" in query!", name);
 	}
 	CTE_bindings[name] = cte;
 }
@@ -218,3 +220,5 @@ void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
 		correlated_columns.push_back(info);
 	}
 }
+
+} // namespace duckdb

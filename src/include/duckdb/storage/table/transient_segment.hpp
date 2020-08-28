@@ -18,7 +18,7 @@ struct ColumnAppendState;
 
 class TransientSegment : public ColumnSegment {
 public:
-	TransientSegment(BufferManager &manager, TypeId type, idx_t start);
+	TransientSegment(BufferManager &manager, PhysicalType type, idx_t start);
 
 	//! The buffer manager
 	BufferManager &manager;

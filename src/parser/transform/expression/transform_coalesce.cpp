@@ -2,8 +2,9 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 // COALESCE(a,b,c) returns the first argument that is NOT NULL, so
 // rewrite into CASE(a IS NOT NULL, a, CASE(b IS NOT NULL, b, c))
@@ -35,3 +36,5 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(PGAExpr *root) {
 	}
 	return move(exp_root);
 }
+
+} // namespace duckdb

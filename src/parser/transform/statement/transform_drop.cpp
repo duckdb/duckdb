@@ -1,8 +1,9 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<SQLStatement> Transformer::TransformDrop(PGNode *node) {
 	auto stmt = (PGDropStmt *)(node);
@@ -52,3 +53,5 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(PGNode *node) {
 	info.if_exists = stmt->missing_ok;
 	return move(result);
 }
+
+} // namespace duckdb

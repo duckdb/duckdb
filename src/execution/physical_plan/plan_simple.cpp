@@ -11,7 +11,7 @@
 #include "duckdb/execution/operator/schema/physical_drop.hpp"
 #include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op) {
@@ -30,3 +30,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}
 }
+
+} // namespace duckdb

@@ -12,14 +12,15 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/execution/execution_context.hpp"
+
+#include <functional>
 
 namespace duckdb {
-class ClientContext;
 class ExpressionExecutor;
 class PhysicalOperator;
+class OperatorTaskInfo;
 
 //! The current state/context of the operator. The PhysicalOperatorState is
 //! updated using the GetChunk function, and allows the caller to repeatedly
@@ -50,7 +51,7 @@ public:
 */
 class PhysicalOperator {
 public:
-	PhysicalOperator(PhysicalOperatorType type, vector<TypeId> types) : type(type), types(types) {
+	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types) : type(type), types(types) {
 	}
 	virtual ~PhysicalOperator() {
 	}
@@ -60,14 +61,14 @@ public:
 	//! The set of children of the operator
 	vector<unique_ptr<PhysicalOperator>> children;
 	//! The types returned by this physical operator
-	vector<TypeId> types;
+	vector<LogicalType> types;
 
 public:
 	string ToString(idx_t depth = 0) const;
 	void Print();
 
 	//! Return a vector of the types that will be returned by this operator
-	vector<TypeId> &GetTypes() {
+	vector<LogicalType> &GetTypes() {
 		return types;
 	}
 	//! Initialize a given chunk to the types that will be returned by this
@@ -79,9 +80,9 @@ public:
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
+	virtual void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
 
-	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
+	void GetChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 
 	//! Create a new empty instance of the operator state
 	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {
@@ -91,5 +92,14 @@ public:
 	virtual string ExtraRenderInformation() const {
 		return "";
 	}
+
+	virtual bool IsSink() const {
+		return false;
+	}
+
+	//! Provides an interface for parallel scans of this operator. For every OperatorTaskInfo returned, one task is
+	//! created. The OperatorTaskInfo can be accessed as part of the TaskContext during execution.
+	virtual void ParallelScanInfo(ClientContext &context, std::function<void(unique_ptr<OperatorTaskInfo>)> callback);
 };
+
 } // namespace duckdb

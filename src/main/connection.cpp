@@ -11,7 +11,7 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Connection::Connection(DuckDB &database) : db(database), context(make_unique<ClientContext>(database)) {
@@ -57,6 +57,10 @@ void Connection::EnableQueryVerification() {
 
 void Connection::DisableQueryVerification() {
 	context->query_verification_enabled = false;
+}
+
+void Connection::ForceParallelism() {
+	context->force_parallelism = true;
 }
 
 unique_ptr<QueryResult> Connection::SendQuery(string query) {
@@ -179,3 +183,5 @@ void Connection::Rollback() {
 		throw Exception(result->error);
 	}
 }
+
+} // namespace duckdb

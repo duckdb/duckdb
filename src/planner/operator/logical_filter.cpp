@@ -2,7 +2,7 @@
 
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LogicalFilter::LogicalFilter(unique_ptr<Expression> expression) : LogicalOperator(LogicalOperatorType::FILTER) {
@@ -43,3 +43,5 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 	}
 	return found_conjunction;
 }
+
+} // namespace duckdb

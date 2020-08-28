@@ -30,10 +30,10 @@ public:
 	//! The names returned by this QueryNode.
 	vector<string> names;
 	//! The types returned by this QueryNode.
-	vector<SQLType> types;
+	vector<LogicalType> types;
 
 public:
 	virtual idx_t GetRootIndex() = 0;
 };
 
-}; // namespace duckdb
+} // namespace duckdb

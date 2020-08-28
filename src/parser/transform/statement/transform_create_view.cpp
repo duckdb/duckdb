@@ -2,8 +2,9 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 	assert(node);
@@ -56,3 +57,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

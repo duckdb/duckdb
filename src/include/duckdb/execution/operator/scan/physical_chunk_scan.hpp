@@ -16,11 +16,11 @@ namespace duckdb {
 //! The PhysicalChunkCollectionScan scans a Chunk Collection
 class PhysicalChunkScan : public PhysicalOperator {
 public:
-	PhysicalChunkScan(vector<TypeId> types, PhysicalOperatorType op_type)
-	    : PhysicalOperator(op_type, types), collection(nullptr) {
+	PhysicalChunkScan(vector<LogicalType> types, PhysicalOperatorType op_type)
+	    : PhysicalOperator(op_type, move(types)), collection(nullptr) {
 	}
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 public:

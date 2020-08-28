@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 
 namespace duckdb {
 
 //! Physically insert a set of data into a table
-class PhysicalInsert : public PhysicalOperator {
+class PhysicalInsert : public PhysicalSink {
 public:
-	PhysicalInsert(LogicalOperator &op, TableCatalogEntry *table, vector<idx_t> column_index_map,
+	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
 	               vector<unique_ptr<Expression>> bound_defaults)
-	    : PhysicalOperator(PhysicalOperatorType::INSERT, op.types), column_index_map(column_index_map), table(table),
+	    : PhysicalSink(PhysicalOperatorType::INSERT, move(types)), column_index_map(column_index_map), table(table),
 	      bound_defaults(move(bound_defaults)) {
 	}
 
@@ -26,7 +26,11 @@ public:
 	vector<unique_ptr<Expression>> bound_defaults;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb

@@ -4,11 +4,11 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-Expression::Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type)
-    : BaseExpression(type, expression_class), return_type(return_type) {
+Expression::Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type)
+    : BaseExpression(type, expression_class), return_type(move(return_type)) {
 }
 
 bool Expression::IsAggregate() const {
@@ -58,8 +58,10 @@ bool Expression::HasSubquery() const {
 
 hash_t Expression::Hash() const {
 	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
-	hash = CombineHash(hash, duckdb::Hash<uint32_t>((uint32_t)return_type));
+	hash = CombineHash(hash, return_type.Hash());
 	ExpressionIterator::EnumerateChildren(*this,
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
 }
+
+} // namespace duckdb

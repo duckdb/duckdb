@@ -43,7 +43,6 @@ struct BinaryLambdaWrapper {
 };
 
 struct BinaryExecutor {
-private:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static void ExecuteFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,

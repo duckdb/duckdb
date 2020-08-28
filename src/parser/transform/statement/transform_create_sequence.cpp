@@ -3,8 +3,9 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateSeqStmt *>(node);
@@ -37,10 +38,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 				}
 				if (info->increment < 0) {
 					info->start_value = info->max_value = -1;
-					info->min_value = numeric_limits<int64_t>::min();
+					info->min_value = NumericLimits<int64_t>::Minimum();
 				} else {
 					info->start_value = info->min_value = 1;
-					info->max_value = numeric_limits<int64_t>::max();
+					info->max_value = NumericLimits<int64_t>::Maximum();
 				}
 			} else if (opt_name == "minvalue") {
 				assert(val->type == T_PGInteger);
@@ -61,7 +62,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 				assert(val->type == T_PGInteger);
 				info->cycle = val->val.ival > 0;
 			} else {
-				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name.c_str());
+				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name);
 			}
 		}
 	}
@@ -81,3 +82,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

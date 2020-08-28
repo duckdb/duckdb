@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth) {
@@ -11,9 +11,11 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 		return BindResult(error);
 	}
 	auto &child = (BoundExpression &)*expr.child;
-	if (child.sql_type.id != SQLTypeId::VARCHAR) {
+	if (child.expr->return_type.id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("collations are only supported for type varchar");
 	}
-	child.sql_type.collation = expr.collation;
-	return BindResult(move(child.expr), child.sql_type);
+	child.expr->return_type = LogicalType(LogicalTypeId::VARCHAR, expr.collation);
+	return BindResult(move(child.expr));
 }
+
+} // namespace duckdb

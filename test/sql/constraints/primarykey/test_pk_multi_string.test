@@ -1,0 +1,31 @@
+# name: test/sql/constraints/primarykey/test_pk_multi_string.test
+# description: PRIMARY KEY constraint on multiple string columns with overlapping values
+# group: [primarykey]
+
+statement ok
+CREATE TABLE tst(a varchar, b varchar,PRIMARY KEY(a,b))
+
+# insert two conflicting pairs at the same time
+statement error
+INSERT INTO tst VALUES ('hell', 'hello'), ('hell','hello')
+
+# insert unique values
+statement ok
+INSERT INTO tst VALUES ('hell', 'hello'), ('hello','hell'), ('hel','hell'), ('hell','hel')
+
+# insert a duplicate value as part of a chain of values
+statement error
+INSERT INTO tst VALUES ('hell', 'hello'),('hel', 'hello');
+
+# now insert just the second value
+statement ok
+INSERT INTO tst VALUES ('hel', 'hello');
+
+# this should fail since it will cause a duplicate
+statement error
+UPDATE tst SET b='hello' WHERE b='hel'
+
+# this should  work since it won't cause a duplicate
+statement ok
+UPDATE tst SET b='hell' WHERE b='hel'
+

@@ -2,7 +2,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection &op) {
@@ -15,7 +15,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 	}
 #endif
 
-	auto projection = make_unique<PhysicalProjection>(op, move(op.expressions));
+	auto projection = make_unique<PhysicalProjection>(op.types, move(op.expressions));
 	projection->children.push_back(move(plan));
 	return move(projection);
 }
+
+} // namespace duckdb

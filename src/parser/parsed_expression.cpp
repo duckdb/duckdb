@@ -5,7 +5,7 @@
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool ParsedExpression::IsAggregate() const {
@@ -160,3 +160,5 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	result->alias = alias;
 	return result;
 }
+
+} // namespace duckdb

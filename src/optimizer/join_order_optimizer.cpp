@@ -4,7 +4,9 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-using namespace duckdb;
+#include <algorithm>
+
+namespace duckdb {
 using namespace std;
 
 using JoinNode = JoinOrderOptimizer::JoinNode;
@@ -761,3 +763,5 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// now perform the actual reordering
 	return RewritePlan(move(plan), final_plan->second.get());
 }
+
+} // namespace duckdb

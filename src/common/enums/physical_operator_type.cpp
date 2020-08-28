@@ -91,9 +91,27 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 	case PhysicalOperatorType::RECURSIVE_CTE:
 		return "REC_CTE";
 	case PhysicalOperatorType::INVALID:
-	default:
 		return "INVALID";
+	case PhysicalOperatorType::EXPRESSION_SCAN:
+		return "EXPRESSION_SCAN";
+	case PhysicalOperatorType::ALTER:
+		return "ALTER";
+	case PhysicalOperatorType::CREATE_SEQUENCE:
+		return "CREATE_SEQUENCE";
+	case PhysicalOperatorType::CREATE_VIEW:
+		return "CREATE_VIEW";
+	case PhysicalOperatorType::CREATE_SCHEMA:
+		return "CREATE_SCHEMA";
+	case PhysicalOperatorType::DROP:
+		return "DROP";
+	case PhysicalOperatorType::PRAGMA:
+		return "PRAGMA";
+	case PhysicalOperatorType::TRANSACTION:
+		return "TRANSACTION";
+	case PhysicalOperatorType::PREPARE:
+		return "PREPARE";
 	}
+	return "UNDEFINED";
 }
 
 } // namespace duckdb

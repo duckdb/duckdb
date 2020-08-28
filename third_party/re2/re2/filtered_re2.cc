@@ -12,7 +12,7 @@
 #include "re2/prefilter.h"
 #include "re2/prefilter_tree.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 FilteredRE2::FilteredRE2()
     : compiled_(false),
@@ -118,4 +118,4 @@ void FilteredRE2::PrintPrefilter(int regexpid) {
   prefilter_tree_->PrintPrefilter(regexpid);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

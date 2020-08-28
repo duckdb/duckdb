@@ -19,7 +19,7 @@
 #include "re2/prefilter.h"
 #include "re2/re2.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 PrefilterTree::PrefilterTree()
     : compiled_(false),
@@ -399,4 +399,4 @@ std::string PrefilterTree::DebugNodeString(Prefilter* node) const {
   return node_string;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

@@ -16,10 +16,10 @@ namespace duckdb {
 //! PhysicalWindow implements window functions
 class PhysicalUnnest : public PhysicalOperator {
 public:
-	PhysicalUnnest(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+	PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
 	               PhysicalOperatorType type = PhysicalOperatorType::UNNEST);
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	//! The projection list of the SELECT statement (that contains aggregates)
 	vector<unique_ptr<Expression>> select_list;

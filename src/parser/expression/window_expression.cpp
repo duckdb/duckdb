@@ -1,10 +1,12 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type, string schema, string function_name)
     : ParsedExpression(type, ExpressionClass::WINDOW), schema(schema), function_name(StringUtil::Lower(function_name)) {
@@ -88,10 +90,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	}
 
 	for (auto &o : orders) {
-		OrderByNode node;
-		node.type = o.type;
-		node.expression = o.expression->Copy();
-		new_window->orders.push_back(move(node));
+		new_window->orders.push_back(OrderByNode(o.type, o.null_order, o.expression->Copy()));
 	}
 
 	new_window->start = start;
@@ -110,11 +109,10 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema);
 	serializer.WriteList(children);
 	serializer.WriteList(partitions);
-	assert(orders.size() <= numeric_limits<uint32_t>::max());
+	assert(orders.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)orders.size());
 	for (auto &order : orders) {
-		serializer.Write<OrderType>(order.type);
-		order.expression->Serialize(serializer);
+		order.Serialize(serializer);
 	}
 	serializer.Write<WindowBoundary>(start);
 	serializer.Write<WindowBoundary>(end);
@@ -134,9 +132,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 
 	auto order_count = source.Read<uint32_t>();
 	for (idx_t i = 0; i < order_count; i++) {
-		auto order_type = source.Read<OrderType>();
-		auto expression = ParsedExpression::Deserialize(source);
-		expr->orders.push_back(OrderByNode(order_type, move(expression)));
+		expr->orders.push_back(OrderByNode::Deserialize((source)));
 	}
 	expr->start = source.Read<WindowBoundary>();
 	expr->end = source.Read<WindowBoundary>();
@@ -146,4 +142,6 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->offset_expr = source.ReadOptional<ParsedExpression>();
 	expr->default_expr = source.ReadOptional<ParsedExpression>();
 	return move(expr);
+}
+
 }

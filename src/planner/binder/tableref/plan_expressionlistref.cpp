@@ -3,7 +3,7 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
@@ -16,7 +16,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
 	}
 	// now create a LogicalExpressionGet from the set of expressions
 	// fetch the types
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	for (auto &expr : ref.values[0]) {
 		types.push_back(expr->return_type);
 	}
@@ -24,3 +24,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
 	expr_get->AddChild(move(root));
 	return move(expr_get);
 }
+
+} // namespace duckdb

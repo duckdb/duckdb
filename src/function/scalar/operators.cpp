@@ -1,7 +1,7 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void BuiltinFunctions::RegisterOperators() {
@@ -15,4 +15,7 @@ void BuiltinFunctions::RegisterOperators() {
 	Register<BitwiseAndFun>();
 	Register<BitwiseOrFun>();
 	Register<BitwiseXorFun>();
+	Register<BitwiseNotFun>();
 }
+
+} // namespace duckdb

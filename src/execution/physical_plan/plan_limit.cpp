@@ -2,7 +2,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
@@ -10,7 +10,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 
 	auto plan = CreatePlan(*op.children[0]);
 
-	auto limit = make_unique<PhysicalLimit>(op, op.limit, op.offset);
+	auto limit = make_unique<PhysicalLimit>(op.types, op.limit, op.offset);
 	limit->children.push_back(move(plan));
 	return move(limit);
 }
+
+} // namespace duckdb

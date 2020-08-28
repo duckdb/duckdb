@@ -87,7 +87,7 @@
 #include "parser/scansup.hpp"
 #include "mb/pg_wchar.hpp"
 
-
+#include <stdexcept>
 
 
 
@@ -118,6 +118,9 @@
 #ifndef FLEXINT_H
 #define FLEXINT_H
 
+namespace duckdb_libpgquery {
+
+
 /* C99 systems have <inttypes.h>. Non-C99 systems may or may not. */
 
 #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
@@ -130,6 +133,9 @@
 #endif
 
 #include <inttypes.h>
+
+
+
 typedef int8_t flex_int8_t;
 typedef uint8_t flex_uint8_t;
 typedef int16_t flex_int16_t;
@@ -8578,18 +8584,6 @@ static __thread yyconst struct yy_trans_info *yy_start_state_list[27] =
 
 
 
-/*
- * GUC variables.  This is a DIRECT violation of the warning given at the
- * head of gram.y, ie flex/bison code must not depend on any GUC variables;
- * as such, changing their values can induce very unintuitive behavior.
- * But we shall have to live with it until we can remove these variables.
- */
-__thread int			backslash_quote = PG_BACKSLASH_QUOTE_SAFE_ENCODING;
-
-__thread bool		escape_string_warning = true;
-
-__thread bool		standard_conforming_strings = true;
-
 
 // /*
 //  * Set the type of YYSTYPE.
@@ -8642,8 +8636,8 @@ static void check_escape_warning(core_yyscan_t yyscanner);
  * this would cause warnings.  Providing our own declarations should be
  * harmless even when the bug gets fixed.
  */
-extern int	core_yyget_column(yyscan_t yyscanner);
-extern void core_yyset_column(int column_no, yyscan_t yyscanner);
+int	core_yyget_column(yyscan_t yyscanner);
+void core_yyset_column(int column_no, yyscan_t yyscanner);
 
 #define YY_NO_INPUT 1
 /*
@@ -8929,11 +8923,7 @@ void core_yyset_lval (YYSTYPE * yylval_param ,yyscan_t yyscanner );
  */
 
 #ifndef YY_SKIP_YYWRAP
-#ifdef __cplusplus
-extern "C" int core_yywrap (yyscan_t yyscanner );
-#else
-extern int core_yywrap (yyscan_t yyscanner );
-#endif
+int core_yywrap (yyscan_t yyscanner );
 #endif
 
 #ifndef yytext_ptr
@@ -9021,7 +9011,7 @@ static int input (yyscan_t yyscanner );
 #ifndef YY_DECL
 #define YY_DECL_IS_OURS 1
 
-extern int core_yylex \
+int core_yylex \
                (core_YYSTYPE * yylval_param,YYLTYPE * yylloc_param ,yyscan_t yyscanner);
 
 #define YY_DECL int core_yylex \
@@ -9072,11 +9062,13 @@ YY_DECL
 		if ( ! yyg->yy_start )
 			yyg->yy_start = 1;	/* first start state */
 
+		/*// R does not allow us to have a reference to stdout even if we are not using it
 		if ( ! yyin )
 			yyin = stdin;
 
 		if ( ! yyout )
 			yyout = stdout;
+		 */
 
 		if ( ! YY_CURRENT_BUFFER ) {
 			core_yyensure_buffer_stack (yyscanner);
@@ -10755,7 +10747,6 @@ YY_BUFFER_STATE core_yy_scan_buffer  (char * base, yy_size_t  size , yyscan_t yy
 #define YY_EXIT_FAILURE 2
 #endif
 
-#include <stdexcept>
 
 static void yy_fatal_error (yyconst char* msg , yyscan_t yyscanner)
 {
@@ -11066,9 +11057,9 @@ scanner_init(const char *str,
 	yyext->keywords = keywords;
 	yyext->num_keywords = num_keywords;
 
-	yyext->backslash_quote = backslash_quote;
-	yyext->escape_string_warning = escape_string_warning;
-	yyext->standard_conforming_strings = standard_conforming_strings;
+	yyext->backslash_quote = PG_BACKSLASH_QUOTE_SAFE_ENCODING;
+	yyext->escape_string_warning = true;
+	yyext->standard_conforming_strings = true;
 
 	/*
 	 * Make a scan buffer with special termination needed by flex.
@@ -11478,3 +11469,4 @@ core_yyrealloc(void *ptr, yy_size_t bytes, core_yyscan_t yyscanner)
 
 
 
+}

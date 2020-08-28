@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, idx_t maximum_memory)
@@ -230,7 +230,7 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents
-	auto handle = fs.OpenFile(path, FileFlags::WRITE | FileFlags::CREATE);
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
 	buffer.Write(*handle, sizeof(idx_t));
 }
@@ -243,7 +243,7 @@ unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	idx_t alloc_size;
 	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
-	auto handle = fs.OpenFile(path, FileFlags::READ);
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(&alloc_size, sizeof(idx_t), 0);
 	// first evict blocks until we can handle the size
 	while (current_memory + alloc_size > maximum_memory) {
@@ -269,3 +269,5 @@ void BufferManager::DeleteTemporaryFile(block_id_t id) {
 		fs.RemoveFile(path);
 	}
 }
+
+} // namespace duckdb

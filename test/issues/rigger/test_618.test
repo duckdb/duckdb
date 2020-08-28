@@ -1,0 +1,20 @@
+# name: test/issues/rigger/test_618.test
+# description: Issue 618
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Failed ALTER COLUMN results in a 'Transaction conflict' error that cannot be aborted
+statement ok
+CREATE TABLE t0(c0 DATE);
+
+statement ok
+INSERT INTO t0 VALUES (DATE '2000-01-01');
+
+statement error
+ALTER TABLE t0 ALTER COLUMN c0 SET DATA TYPE INT;
+
+statement ok
+INSERT INTO t0 VALUES (DEFAULT);
+

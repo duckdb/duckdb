@@ -44,7 +44,7 @@
 #include "util/util.h"
 #include "util/utf.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 enum {
   EvenOdd = 1,
@@ -73,6 +73,6 @@ extern const CaseFold* LookupCaseFold(const CaseFold*, int, Rune rune);
 // Returns the result of applying the fold f to the rune r.
 extern Rune ApplyFold(const CaseFold *f, Rune r);
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_UNICODE_CASEFOLD_H_

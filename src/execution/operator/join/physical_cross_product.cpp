@@ -2,7 +2,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
@@ -17,14 +17,15 @@ public:
 	ChunkCollection right_data;
 };
 
-PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
                                            unique_ptr<PhysicalOperator> right)
-    : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, op.types) {
+    : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, move(types)) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }
 
-void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                            PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_data.column_count() == 0) {
@@ -88,3 +89,5 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
 	return make_unique<PhysicalCrossProductOperatorState>(children[0].get(), children[1].get());
 }
+
+} // namespace duckdb

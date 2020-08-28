@@ -31,9 +31,9 @@ public:
 	block_id_t block_id;
 	uint32_t offset;
 	//! The minimum value of the segment
-	data_t min_stats[8];
+	data_t min_stats[16];
 	//! The maximum value of the segment
-	data_t max_stats[8];
+	data_t max_stats[16];
 };
 
 //! CheckpointManager is responsible for checkpointing the database

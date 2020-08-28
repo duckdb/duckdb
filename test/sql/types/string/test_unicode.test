@@ -1,0 +1,32 @@
+# name: test/sql/types/string/test_unicode.test
+# description: Test unicode strings
+# group: [string]
+
+# insert unicode strings into the database
+statement ok
+CREATE TABLE emojis(id INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO emojis VALUES (1, '🦆'), (2, '🦆🍞🦆')
+
+# retrieve unicode strings again
+query IT
+SELECT * FROM emojis ORDER BY id
+----
+1	🦆
+2	🦆🍞🦆
+
+# substring on emojis
+query TT
+SELECT substring(s, 1, 1), substring(s, 2, 1) FROM emojis ORDER BY id
+----
+🦆	(empty)
+🦆	🍞
+
+# length on emojis
+query I
+SELECT length(s) FROM emojis ORDER BY id
+----
+1
+3
+

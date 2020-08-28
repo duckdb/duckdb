@@ -3,8 +3,9 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell) {
 	auto constraint = reinterpret_cast<PGConstraint *>(cell->data.ptr_value);
@@ -53,3 +54,5 @@ unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell, Column
 		throw NotImplementedException("Constraint not implemented!");
 	}
 }
+
+} // namespace duckdb

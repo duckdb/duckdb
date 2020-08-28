@@ -3,9 +3,10 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/function_set.hpp"
+
 #include <cmath>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct covar_state_t {
@@ -93,7 +94,7 @@ struct CovarSampOperation : public CovarOperation {
 void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_pop("covar_pop");
 	covar_pop.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarPopOperation>(
-	    SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(covar_pop);
 }
 
@@ -101,6 +102,8 @@ void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_samp("covar_samp");
 	covar_samp.AddFunction(
 	    AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarSampOperation>(
-	        SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(covar_samp);
 }
+
+} // namespace duckdb

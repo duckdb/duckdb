@@ -2,7 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include <string>
+#include "duckdb/common/algorithm.hpp"
 
 using namespace std;
 
@@ -57,10 +57,6 @@ struct StringAggFunction {
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-		throw NotImplementedException("String aggregate combine!");
-	}
-
 	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->dataptr) {
@@ -83,9 +79,14 @@ struct StringAggFunction {
 
 void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet string_agg("string_agg");
-	string_agg.AddFunction(AggregateFunction::BinaryAggregateDestructor<string_agg_state_t, string_t, string_t,
-	                                                                    string_t, StringAggFunction>(
-	    SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR));
+	string_agg.AddFunction(AggregateFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	    AggregateFunction::StateSize<string_agg_state_t>,
+	    AggregateFunction::StateInitialize<string_agg_state_t, StringAggFunction>,
+	    AggregateFunction::BinaryScatterUpdate<string_agg_state_t, string_t, string_t, StringAggFunction>, nullptr,
+	    AggregateFunction::StateFinalize<string_agg_state_t, string_t, StringAggFunction>,
+	    AggregateFunction::BinaryUpdate<string_agg_state_t, string_t, string_t, StringAggFunction>, nullptr,
+	    AggregateFunction::StateDestroy<string_agg_state_t, StringAggFunction>));
 	set.AddFunction(string_agg);
 }
 

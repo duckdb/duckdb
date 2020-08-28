@@ -4,7 +4,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonExpression &expr,
@@ -52,23 +52,27 @@ template <class OP>
 static idx_t templated_select_operation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
-	switch (left.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (left.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return BinaryExecutor::Select<int8_t, int8_t, OP>(left, right, sel, count, true_sel, false_sel);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return BinaryExecutor::Select<int16_t, int16_t, OP>(left, right, sel, count, true_sel, false_sel);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return BinaryExecutor::Select<int32_t, int32_t, OP>(left, right, sel, count, true_sel, false_sel);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return BinaryExecutor::Select<int64_t, int64_t, OP>(left, right, sel, count, true_sel, false_sel);
-	case TypeId::POINTER:
+	case PhysicalType::INT128:
+		return BinaryExecutor::Select<hugeint_t, hugeint_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::POINTER:
 		return BinaryExecutor::Select<uintptr_t, uintptr_t, OP>(left, right, sel, count, true_sel, false_sel);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return BinaryExecutor::Select<float, float, OP>(left, right, sel, count, true_sel, false_sel);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return BinaryExecutor::Select<double, double, OP>(left, right, sel, count, true_sel, false_sel);
-	case TypeId::VARCHAR:
+	case PhysicalType::INTERVAL:
+		return BinaryExecutor::Select<interval_t, interval_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::VARCHAR:
 		return BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InvalidTypeException(left.type, "Invalid type for comparison");
@@ -101,3 +105,5 @@ idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionStat
 		throw NotImplementedException("Unknown comparison type!");
 	}
 }
+
+} // namespace duckdb

@@ -55,6 +55,9 @@ public:
 	//! Finalize the benchmark runner
 	virtual void Finalize() {
 	}
+	virtual string GetQuery() {
+		return string();
+	}
 	//! Interrupt the benchmark because of a timeout
 	virtual void Interrupt(BenchmarkState *state) = 0;
 	//! Returns information about the benchmark

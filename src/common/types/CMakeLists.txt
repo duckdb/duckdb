@@ -4,7 +4,9 @@ add_library_unity(duckdb_common_types
                   data_chunk.cpp
                   date.cpp
                   hash.cpp
-                  hyperloglog.cpp
+                  hugeint.cpp
+                  interval.cpp
+                  numeric_helper.cpp
                   null_value.cpp
                   selection_vector.cpp
                   string_heap.cpp

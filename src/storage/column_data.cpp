@@ -4,7 +4,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info)
@@ -21,6 +21,13 @@ void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
 void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = (ColumnSegment *)data.GetRootSegment();
 	state.vector_index = 0;
+	state.initialized = false;
+}
+
+void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
+	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
+	state.current = (ColumnSegment*) data.GetSegment(row_idx);
+	state.vector_index = (row_idx - state.current->start) / STANDARD_VECTOR_SIZE;
 	state.initialized = false;
 }
 
@@ -85,11 +92,8 @@ void ColumnScanState::Next() {
 
 void TableScanState::NextVector() {
 	//! nothing to scan for this vector, skip the entire vector
-	for (idx_t j = 0; j < column_ids.size(); j++) {
-		auto column = column_ids[j];
-		if (column != COLUMN_IDENTIFIER_ROW_ID) {
-			column_scans[j].Next();
-		}
+	for (idx_t j = 0; j < column_count; j++) {
+		column_scans[j].Next();
 	}
 }
 
@@ -174,6 +178,8 @@ void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(manager, type, start_row);
+	auto new_segment = make_unique<TransientSegment>(manager, type.InternalType(), start_row);
 	data.AppendSegment(move(new_segment));
 }
+
+} // namespace duckdb

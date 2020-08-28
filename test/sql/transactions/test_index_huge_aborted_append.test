@@ -1,0 +1,59 @@
+# name: test/sql/transactions/test_index_huge_aborted_append.test
+# description: Test abort of big append (bigger than block size)
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok con1
+CREATE TABLE integers(i INTEGER PRIMARY KEY);
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con2
+BEGIN TRANSACTION;
+
+# insert two blocks worth of values into the table in con2, plus the value [1]
+# and the value [1] in con
+statement ok con1
+INSERT INTO integers VALUES (1);
+
+statement ok con2
+INSERT INTO integers SELECT i FROM range(2, 131068, 1) t1(i)
+
+# finally insert the value "1"
+statement ok con2
+INSERT INTO integers VALUES (1)
+
+# con commits first
+statement ok con1
+COMMIT;
+
+# con2 fails to commit because of the conflict
+statement error con2
+COMMIT;
+
+query I con1
+SELECT * FROM integers
+----
+1
+
+# now append some rows again
+statement ok con1
+INSERT INTO integers VALUES (2);
+
+statement ok con1
+INSERT INTO integers VALUES (3);
+
+statement ok con1
+INSERT INTO integers VALUES (4);
+
+query I con1
+SELECT * FROM integers ORDER BY 1
+----
+1
+2
+3
+4
+

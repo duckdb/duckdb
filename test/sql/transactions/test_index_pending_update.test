@@ -1,0 +1,40 @@
+# name: test/sql/transactions/test_index_pending_update.test
+# description: Test index with pending updates
+# group: [transactions]
+
+# we cannot create an index with pending updates
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3)
+
+# update a value
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE integers SET i=4 WHERE i=1
+
+# failed to create an index: pending updates
+statement error con1
+CREATE INDEX i_index ON integers using art(i)
+
+# now we commit
+statement ok con2
+COMMIT
+
+# no more pending updates: creating the index works now
+statement ok con1
+CREATE INDEX i_index ON integers using art(i)
+
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=4
+----
+1
+
+query I con2
+SELECT COUNT(*) FROM integers WHERE i=4
+----
+1
+

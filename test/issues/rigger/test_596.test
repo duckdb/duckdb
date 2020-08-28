@@ -1,0 +1,17 @@
+# name: test/issues/rigger/test_596.test
+# description: Issue 596
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# STDDEV_POP unexpectedly does not fetch any rows
+statement ok
+CREATE TABLE t0(c0 DOUBLE);
+
+statement ok
+INSERT INTO t0(c0) VALUES(1E200), (0);
+
+statement error
+SELECT STDDEV_POP(c0) FROM t0;
+

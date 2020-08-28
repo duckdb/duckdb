@@ -1,0 +1,31 @@
+# name: test/sql/types/time/test_time.test
+# description: Test basic TIME functionality
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE times(i TIME)
+
+statement ok
+INSERT INTO times VALUES ('00:01:20'), ('20:08:10.998'), ('20:08:10.33'), ('20:08:10.001'), (NULL)
+
+query T
+SELECT * FROM times
+----
+00:01:20
+20:08:10.998
+20:08:10.330
+20:08:10.001
+NULL
+
+query T
+SELECT cast(i AS VARCHAR) FROM times
+----
+00:01:20
+20:08:10.998
+20:08:10.330
+20:08:10.001
+NULL
+

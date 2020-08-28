@@ -2,8 +2,9 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/assert.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using QueryEdge = QueryGraph::QueryEdge;
@@ -124,3 +125,5 @@ NeighborInfo *QueryGraph::GetConnection(JoinRelationSet *node, JoinRelationSet *
 void QueryGraph::Print() {
 	Printer::Print(ToString());
 }
+
+} // namespace duckdb

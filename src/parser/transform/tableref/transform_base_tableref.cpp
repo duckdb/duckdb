@@ -1,8 +1,9 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
 	auto result = make_unique<BaseTableRef>();
@@ -14,3 +15,5 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
 		result->schema_name = root->schemaname;
 	return move(result);
 }
+
+} // namespace duckdb

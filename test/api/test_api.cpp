@@ -60,7 +60,7 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 	conn->DisableProfiling();
 	// perform a long running query in the background (many cross products)
-	bool correct;
+	bool correct = true;
 	auto background_thread = thread(long_running_query, conn.get(), &correct);
 	// wait a little bit
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -266,7 +266,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 }
 
 static void VerifyStreamResult(unique_ptr<QueryResult> result) {
-	REQUIRE(result->types[0] == TypeId::INT32);
+	REQUIRE(result->types[0] == LogicalType::INTEGER);
 	size_t current_row = 0;
 	size_t current_expected_value = 0;
 	size_t expected_rows = 500 * 5;
@@ -317,4 +317,38 @@ TEST_CASE("Test fetch API with big results", "[api][.]") {
 		next = move(nextnext);
 	}
 	VerifyStreamResult(move(result));
+}
+
+TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	auto con = make_unique<Connection>(db);
+	auto con2 = make_unique<Connection>(db);
+	auto con3 = make_unique<Connection>(db);
+
+	// simple prepare: begin transaction before the second client calls PREPARE
+	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
+	// open a transaction in con2, this forces the prepared statement to be kept around until this transaction is closed
+	REQUIRE_NO_FAIL(con2->Query("BEGIN TRANSACTION"));
+	// we prepare a statement in con
+	REQUIRE_NO_FAIL(con->Query("PREPARE s1 AS SELECT * FROM integers"));
+	// now we drop con while the second client still has an active transaction
+	con.reset();
+	// now commit the transaction in the second client
+	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
+
+	con = make_unique<Connection>(db);
+	// three transactions
+	// open a transaction in con2, this forces the prepared statement to be kept around until this transaction is closed
+	REQUIRE_NO_FAIL(con2->Query("BEGIN TRANSACTION"));
+	// create a prepare, this creates a dependency from s1 -> integers
+	REQUIRE_NO_FAIL(con->Query("PREPARE s1 AS SELECT * FROM integers"));
+	// drop the client
+	con.reset();
+	// now begin a transaction in con3
+	REQUIRE_NO_FAIL(con3->Query("BEGIN TRANSACTION"));
+	// drop the table integers with cascade, this should drop s1 as well
+	REQUIRE_NO_FAIL(con3->Query("DROP TABLE integers CASCADE"));
+	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
+	REQUIRE_NO_FAIL(con3->Query("COMMIT"));
 }

@@ -9,8 +9,9 @@
 
 #include <cmath>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 //! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
@@ -24,9 +25,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types)), select_list(move(select_list)) {
 }
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {
@@ -61,13 +62,13 @@ static idx_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, id
 	return l - 1;
 }
 
-static void MaterializeExpressions(ClientContext &context, Expression **exprs, idx_t expr_count, ChunkCollection &input,
+static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCollection &input,
                                    ChunkCollection &output, bool scalar = false) {
 	if (expr_count == 0) {
 		return;
 	}
 
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	ExpressionExecutor executor;
 	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
@@ -89,15 +90,16 @@ static void MaterializeExpressions(ClientContext &context, Expression **exprs, i
 	}
 }
 
-static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
-                                  ChunkCollection &output, bool scalar = false) {
-	MaterializeExpressions(context, &expr, 1, input, output, scalar);
+static void MaterializeExpression(Expression *expr, ChunkCollection &input, ChunkCollection &output,
+                                  bool scalar = false) {
+	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForWindow(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
-                                    ChunkCollection &output, ChunkCollection &sort_collection) {
-	vector<TypeId> sort_types;
+static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                    ChunkCollection &sort_collection) {
+	vector<LogicalType> sort_types;
 	vector<OrderType> orders;
+	vector<OrderByNullType> null_order_types;
 	ExpressionExecutor executor;
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
@@ -105,6 +107,7 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 		auto &pexpr = wexpr->partitions[prt_idx];
 		sort_types.push_back(pexpr->return_type);
 		orders.push_back(OrderType::ASCENDING);
+		null_order_types.push_back(OrderByNullType::NULLS_FIRST);
 		executor.AddExpression(*pexpr);
 	}
 
@@ -112,6 +115,7 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 		auto &oexpr = wexpr->orders[ord_idx].expression;
 		sort_types.push_back(oexpr->return_type);
 		orders.push_back(wexpr->orders[ord_idx].type);
+		null_order_types.push_back(wexpr->orders[ord_idx].null_order);
 		executor.AddExpression(*oexpr);
 	}
 
@@ -131,7 +135,7 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 	assert(input.count == sort_collection.count);
 
 	auto sorted_vector = unique_ptr<idx_t[]>(new idx_t[input.count]);
-	sort_collection.Sort(orders, sorted_vector.get());
+	sort_collection.Sort(orders, null_order_types, sorted_vector.get());
 
 	input.Reorder(sorted_vector.get());
 	output.Reorder(sorted_vector.get());
@@ -272,13 +276,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 	}
 }
 
-static void ComputeWindowExpression(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
-                                    ChunkCollection &output, idx_t output_idx) {
+static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                    idx_t output_idx) {
 
 	ChunkCollection sort_collection;
 	bool needs_sorting = wexpr->partitions.size() + wexpr->orders.size() > 0;
 	if (needs_sorting) {
-		SortCollectionForWindow(context, wexpr, input, output, sort_collection);
+		SortCollectionForWindow(wexpr, input, output, sort_collection);
 	}
 
 	// evaluate inner expressions of window functions, could be more complex
@@ -288,17 +292,17 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 		exprs.push_back(child.get());
 	}
 	// TODO: child may be a scalar, don't need to materialize the whole collection then
-	MaterializeExpressions(context, exprs.data(), exprs.size(), input, payload_collection);
+	MaterializeExpressions(exprs.data(), exprs.size(), input, payload_collection);
 
 	ChunkCollection leadlag_offset_collection;
 	ChunkCollection leadlag_default_collection;
 	if (wexpr->type == ExpressionType::WINDOW_LEAD || wexpr->type == ExpressionType::WINDOW_LAG) {
 		if (wexpr->offset_expr) {
-			MaterializeExpression(context, wexpr->offset_expr.get(), input, leadlag_offset_collection,
+			MaterializeExpression(wexpr->offset_expr.get(), input, leadlag_offset_collection,
 			                      wexpr->offset_expr->IsScalar());
 		}
 		if (wexpr->default_expr) {
-			MaterializeExpression(context, wexpr->default_expr.get(), input, leadlag_default_collection,
+			MaterializeExpression(wexpr->default_expr.get(), input, leadlag_default_collection,
 			                      wexpr->default_expr->IsScalar());
 		}
 	}
@@ -307,14 +311,12 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr &&
 	    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(context, wexpr->start_expr.get(), input, boundary_start_collection,
-		                      wexpr->start_expr->IsScalar());
+		MaterializeExpression(wexpr->start_expr.get(), input, boundary_start_collection, wexpr->start_expr->IsScalar());
 	}
 	ChunkCollection boundary_end_collection;
 	if (wexpr->end_expr &&
 	    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(context, wexpr->end_expr.get(), input, boundary_end_collection,
-		                      wexpr->end_expr->IsScalar());
+		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, wexpr->end_expr->IsScalar());
 	}
 
 	// build a segment tree for frame-adhering aggregates
@@ -350,7 +352,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 			rank_equal++;
 		}
 
-		auto res = Value();
+		Value res;
 
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
@@ -394,19 +396,30 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
-			int64_t n_size = (n_total / n_param);
-			if (n_size > 0) {
-				int64_t n_large = n_total - n_param * n_size;
-				int64_t i_small = n_large * (n_size + 1);
-
-				assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
-
-				if (row_idx < (idx_t)i_small) {
-					res = Value::Numeric(wexpr->return_type, 1 + row_idx / (n_size + 1));
-				} else {
-					res = Value::Numeric(wexpr->return_type, 1 + n_large + (row_idx - i_small) / n_size);
-				}
+			if (n_param > n_total) {
+				// more groups allowed than we have values
+				// map every entry to a unique group
+				n_param = n_total;
 			}
+			int64_t n_size = (n_total / n_param);
+			// find the row idx within the group
+			assert(row_idx >= bounds.partition_start);
+			int64_t adjusted_row_idx = row_idx - bounds.partition_start;
+			// now compute the ntile
+			int64_t n_large = n_total - n_param * n_size;
+			int64_t i_small = n_large * (n_size + 1);
+			int64_t result_ntile;
+
+			assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
+
+			if (adjusted_row_idx < i_small) {
+				result_ntile = 1 + adjusted_row_idx / (n_size + 1);
+			} else {
+				result_ntile = 1 + n_large + (adjusted_row_idx - i_small) / n_size;
+			}
+			// result has to be between [1, NTILE]
+			assert(result_ntile >= 1 && result_ntile <= n_param);
+			res = Value::Numeric(wexpr->return_type, result_ntile);
 			break;
 		}
 		case ExpressionType::WINDOW_LEAD:
@@ -421,7 +434,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
-				auto lead_idx = row_idx + 1;
+				auto lead_idx = row_idx + offset;
 				if (lead_idx < bounds.partition_end) {
 					res = payload_collection.GetValue(0, lead_idx);
 				} else {
@@ -447,14 +460,14 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 			break;
 		}
 		default:
-			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type).c_str());
+			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
 
 		output.SetValue(output_idx, row_idx, res);
 	}
 }
 
-void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
 	ChunkCollection &big_data = state->tuples;
 	ChunkCollection &window_results = state->window_results;
@@ -470,7 +483,7 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			return;
 		}
 
-		vector<TypeId> window_types;
+		vector<LogicalType> window_types;
 		for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			window_types.push_back(select_list[expr_idx]->return_type);
 		}
@@ -495,7 +508,7 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			// sort by partition and order clause in window def
 			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-			ComputeWindowExpression(context, wexpr, big_data, window_results, window_output_idx++);
+			ComputeWindowExpression(wexpr, big_data, window_results, window_output_idx++);
 		}
 	}
 
@@ -522,3 +535,5 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
 	return make_unique<PhysicalWindowOperatorState>(children[0].get());
 }
+
+} // namespace duckdb

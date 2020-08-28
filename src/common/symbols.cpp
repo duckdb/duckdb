@@ -13,10 +13,11 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/relation.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/list.hpp"
@@ -24,6 +25,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -33,7 +35,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/parser/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -77,6 +78,8 @@ template class std::unique_ptr<CrossProductRef>;
 template class std::unique_ptr<JoinRef>;
 template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<TableFunctionRef>;
+template class std::unique_ptr<Pipeline>;
+template class std::shared_ptr<Pipeline>;
 
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<BoundQueryNode>;
@@ -140,26 +143,27 @@ template class std::unique_ptr<Binder>;
 	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front() const;                                      \
 	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::front();
 
-INSTANTIATE_VECTOR(std::vector<ColumnDefinition>);
+INSTANTIATE_VECTOR(std::vector<ColumnDefinition>)
 template class std::vector<ExpressionType>;
-INSTANTIATE_VECTOR(std::vector<JoinCondition>);
-INSTANTIATE_VECTOR(std::vector<OrderByNode>);
+INSTANTIATE_VECTOR(std::vector<JoinCondition>)
+INSTANTIATE_VECTOR(std::vector<OrderByNode>)
 template class std::vector<uint64_t>;
 template class std::vector<string>;
 INSTANTIATE_VECTOR(std::vector<Expression *>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>);
-template class std::vector<TypeId>;
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>)
+template class std::vector<PhysicalType>;
 template class std::vector<Value>;
 template class std::vector<int>;
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>);
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>)
+INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>)
 template class std::vector<std::vector<Expression *>>;
-template class std::vector<SQLType>;
+template class std::vector<LogicalType>;
 
 template struct std::atomic<uint64_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;
@@ -171,7 +175,7 @@ template class std::stack<PhysicalOperator *>;
 	template MAP_DEFINITION::mapped_type &MAP_DEFINITION::operator[](const MAP_DEFINITION::key_type &k);
 
 using catalog_map = std::unordered_map<string, unique_ptr<CatalogEntry>>;
-INSTANTIATE_UNORDERED_MAP(catalog_map);
+INSTANTIATE_UNORDERED_MAP(catalog_map)
 
 template class std::unordered_map<string, uint64_t>;
 template class std::unordered_map<string, std::vector<string>>;

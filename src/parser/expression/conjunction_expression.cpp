@@ -3,7 +3,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ConjunctionExpression::ConjunctionExpression(ExpressionType type)
@@ -67,3 +67,5 @@ unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType t
 	source.ReadList<ParsedExpression>(result->children);
 	return move(result);
 }
+
+} // namespace duckdb

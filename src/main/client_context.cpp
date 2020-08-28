@@ -15,6 +15,7 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -24,13 +25,16 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
-using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
+
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
-      temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
+    : db(database), transaction(*database.transaction_manager), interrupted(false), executor(*this),
+      catalog(*database.catalog), temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 	random_device rd;
 	random_engine.seed(rd());
@@ -104,7 +108,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 string ClientContext::FinalizeQuery(bool success) {
 	profiler.EndQuery();
 
-	execution_context.Reset();
+	executor.Reset();
 
 	string error;
 	if (transaction.HasActiveTransaction()) {
@@ -146,12 +150,7 @@ void ClientContext::CleanupInternal() {
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal() {
-	assert(execution_context.physical_plan);
-	auto chunk = make_unique<DataChunk>();
-	// run the plan to get the next chunks
-	execution_context.physical_plan->InitializeChunk(*chunk);
-	execution_context.physical_plan->GetChunk(*this, *chunk, execution_context.physical_state.get());
-	return chunk;
+	return executor.FetchChunk();
 }
 
 unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query,
@@ -170,7 +169,7 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	result->read_only = planner.read_only;
 	result->requires_valid_transaction = planner.requires_valid_transaction;
 	result->names = planner.names;
-	result->sql_types = planner.sql_types;
+	result->types = planner.types;
 	result->value_map = move(planner.value_map);
 
 #ifdef DEBUG
@@ -192,7 +191,6 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	profiler.EndPhase();
 
 	result->dependencies = move(physical_planner.dependencies);
-	result->types = physical_plan->types;
 	result->plan = move(physical_plan);
 	return result;
 }
@@ -202,9 +200,9 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	if (ActiveTransaction().is_invalidated && statement.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
-	if (db.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
+	if (db.config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
-		                                   StatementTypeToString(statement.statement_type).c_str()));
+		                                   StatementTypeToString(statement.statement_type)));
 	}
 
 	// bind the bound values before execution
@@ -213,21 +211,18 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	bool create_stream_result = statement.statement_type == StatementType::SELECT_STATEMENT && allow_stream_result;
 
 	// store the physical plan in the context for calls to Fetch()
-	execution_context.physical_plan = move(statement.plan);
-	execution_context.physical_state = execution_context.physical_plan->GetOperatorState();
+	executor.Initialize(move(statement.plan));
 
-	auto types = execution_context.physical_plan->GetTypes();
-	assert(types.size() == statement.sql_types.size());
+	auto types = executor.GetTypes();
+	assert(types == statement.types);
 
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		return make_unique<StreamQueryResult>(statement.statement_type, *this, statement.sql_types, types,
-		                                      statement.names);
+		return make_unique<StreamQueryResult>(statement.statement_type, *this, statement.types, statement.names);
 	}
 	// create a materialized result by continuously fetching
-	auto result =
-	    make_unique<MaterializedQueryResult>(statement.statement_type, statement.sql_types, types, statement.names);
+	auto result = make_unique<MaterializedQueryResult>(statement.statement_type, statement.types, statement.names);
 	while (true) {
 		auto chunk = FetchInternal();
 		if (chunk->size() == 0) {
@@ -235,7 +230,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 		}
 #ifdef DEBUG
 		for (idx_t i = 0; i < chunk->column_count(); i++) {
-			if (statement.sql_types[i].id == SQLTypeId::VARCHAR) {
+			if (statement.types[i].id() == LogicalTypeId::VARCHAR) {
 				chunk->data[i].UTFVerify(chunk->size());
 			}
 		}
@@ -262,7 +257,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 
 		// first parse the query
 		Parser parser;
-		parser.ParseQuery(query.c_str());
+		parser.ParseQuery(query);
 		if (parser.statements.size() == 0) {
 			throw Exception("No statement to prepare!");
 		}
@@ -305,7 +300,7 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 	auto execute = make_unique<ExecuteStatement>();
 	execute->name = name;
 	for (auto &val : values) {
-		execute->values.push_back(make_unique<ConstantExpression>(val.GetSQLType(), val));
+		execute->values.push_back(make_unique<ConstantExpression>(val));
 	}
 
 	return RunStatement(query, move(execute), allow_stream_result);
@@ -423,6 +418,12 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 
 unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
+	if (log_query_writer) {
+		// log query path is set: log the query
+		log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
+		log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+		log_query_writer->Flush();
+	}
 
 	Parser parser;
 	try {
@@ -476,6 +477,9 @@ void ClientContext::Invalidate() {
 		appender->Invalidate("Database that this appender belongs to has been closed!", false);
 	}
 	appenders.clear();
+	// clear temporary objects and prepared statemnts
+	temporary_objects.reset();
+	prepared_statements.reset();
 }
 
 string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
@@ -488,6 +492,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// Hash() of expressions
 	// Equality() of statements and expressions
 	// Correctness of plans both with and without optimizers
+	// Correctness of plans both with and without parallelism
 
 	// copy the statement
 	auto select_stmt = (SelectStatement *)statement.get();
@@ -542,17 +547,23 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// see below
 	auto statement_copy_for_explain = select_stmt->Copy();
 
-	auto original_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     copied_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     deserialized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     unoptimized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
+	unique_ptr<MaterializedQueryResult> original_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    copied_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    deserialized_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    unoptimized_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
+
 	// execute the original statement
 	try {
 		auto result = RunStatementInternal(query, move(statement), false);
 		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		original_result->error = ex.what();
 		original_result->success = false;
+		interrupted = false;
 	}
 
 	// check explain, only if q does not already contain EXPLAIN
@@ -570,52 +581,57 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	try {
 		auto result = RunStatementInternal(query, move(copied_stmt), false);
 		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		copied_result->error = ex.what();
+		copied_result->success = false;
+		interrupted = false;
 	}
 	// now execute the deserialized statement
 	try {
 		auto result = RunStatementInternal(query, move(deserialized_stmt), false);
 		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		deserialized_result->error = ex.what();
+		deserialized_result->success = false;
+		interrupted = false;
 	}
 	// now execute the unoptimized statement
 	enable_optimizer = false;
 	try {
 		auto result = RunStatementInternal(query, move(unoptimized_stmt), false);
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		unoptimized_result->error = ex.what();
+		unoptimized_result->success = false;
+		interrupted = false;
 	}
-
 	enable_optimizer = true;
+
 	if (profiling_is_enabled) {
 		profiler.Enable();
 	}
 
 	// now compare the results
-	// the results of all four runs should be identical
-	if (!original_result->collection.Equals(copied_result->collection)) {
-		string result = "Copied result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Copied Result\n" + copied_result->ToString();
-		return result;
-	}
-	if (!original_result->collection.Equals(deserialized_result->collection)) {
-		string result = "Deserialized result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Deserialized Result\n" + deserialized_result->ToString();
-		return result;
-	}
-	if (!original_result->collection.Equals(unoptimized_result->collection)) {
-		string result = "Unoptimized result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Unoptimized Result\n" + unoptimized_result->ToString();
-		return result;
+	// the results of all runs should be identical
+	vector<unique_ptr<MaterializedQueryResult>> results;
+	results.push_back(move(copied_result));
+	results.push_back(move(deserialized_result));
+	results.push_back(move(unoptimized_result));
+	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result"};
+	for (idx_t i = 0; i < results.size(); i++) {
+		if (!original_result->collection.Equals(results[i]->collection)) {
+			string result = names[i] + " differs from original result!\n";
+			result += "Original Result:\n" + original_result->ToString();
+			result += names[i] + ":\n" + results[i]->ToString();
+			return result;
+		}
 	}
 
 	return "";
+}
+
+void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
+	RunFunctionInTransaction([&]() { temporary_objects.get()->CreateFunction(*this, info); });
 }
 
 template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {
@@ -711,7 +727,7 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	if (result->types.size() == expected_columns.size()) {
 		bool mismatch = false;
 		for (idx_t i = 0; i < result->types.size(); i++) {
-			if (result->sql_types[i] != expected_columns[i].type || result->names[i] != expected_columns[i].name) {
+			if (result->types[i] != expected_columns[i].type || result->names[i] != expected_columns[i].name) {
 				mismatch = true;
 				break;
 			}
@@ -725,13 +741,15 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	string err_str = "Result mismatch in query!\nExpected the following columns: ";
 	for (idx_t i = 0; i < expected_columns.size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
-		err_str += expected_columns[i].name + " " + SQLTypeToString(expected_columns[i].type);
+		err_str += expected_columns[i].name + " " + expected_columns[i].type.ToString();
 	}
 	err_str += "]\nBut result contained the following: ";
 	for (idx_t i = 0; i < result->types.size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
-		err_str += result->names[i] + " " + SQLTypeToString(result->sql_types[i]);
+		err_str += result->names[i] + " " + result->types[i].ToString();
 	}
 	err_str += "]";
 	return make_unique<MaterializedQueryResult>(err_str);
 }
+
+} // namespace duckdb

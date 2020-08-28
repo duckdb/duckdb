@@ -1,0 +1,265 @@
+# name: test/sql/types/interval/test_interval.test
+# description: Test basic interval usage
+# group: [interval]
+
+statement ok
+PRAGMA enable_verification
+
+# 2 years
+query T
+SELECT INTERVAL '2 years'
+----
+2 years
+
+query T
+SELECT INTERVAL '2 years'::VARCHAR
+----
+2 years
+
+# 2 years one minute
+query T
+SELECT INTERVAL '2Y 1 M';
+----
+2 years 00:01:00
+
+# 2 years 4 days one minute 3 seconds 20 milliseconds
+query T
+SELECT INTERVAL '2Y 1 month 1 M 3S 20mS';
+----
+2 years 1 month 00:01:03.020
+
+query T
+SELECT INTERVAL '2Y 1 month 1M 3S 20mS'::VARCHAR;
+----
+2 years 1 month 00:01:03.020
+
+# -2 years +4 days +one minute 3 seconds 20 milliseconds
+query T
+SELECT INTERVAL '-2Y 4 days 1 MinUteS 3S 20mS';
+----
+-2 years 4 days 00:01:03.020
+
+query T
+SELECT INTERVAL '-2Y 4 days 1 MinUteS 3S 20mS'::VARCHAR;
+----
+-2 years 4 days 00:01:03.020
+
+# test ago usage
+query T
+SELECT INTERVAL '2Y 4 days 1 MinUteS 3S 20mS ago'::VARCHAR;
+----
+-2 years -4 days -00:01:03.020
+
+# months and hours, with optional @
+query T
+SELECT INTERVAL '@2mons 1H';
+----
+2 months 01:00:00
+
+# FIXME: we can also use the ISO 8601 interval format
+statement error
+SELECT INTERVAL 'P2MT1H1M';
+
+# FIXME: or this format
+statement error
+SELECT INTERVAL 'P00-02-00T01:00:01';
+
+query T
+SELECT INTERVAL '90' DAY;
+----
+90 days
+
+query T
+SELECT INTERVAL '90' YEAR;
+----
+90 years
+
+query T
+SELECT INTERVAL '1' YEAR TO MONTH;
+----
+1 year
+
+query T
+SELECT INTERVAL '90' MONTH;
+----
+7 years 6 months
+
+query T
+SELECT INTERVAL '90' SECOND;
+----
+00:01:30
+
+query T
+SELECT INTERVAL '90' MINUTE;
+----
+01:30:00
+
+query T
+SELECT INTERVAL '90' MINUTE TO SECOND;
+----
+01:30:00
+
+query T
+SELECT INTERVAL '90' HOUR;
+----
+90:00:00
+
+query T
+SELECT INTERVAL '90' HOUR TO MINUTE;
+----
+90:00:00
+
+query T
+SELECT INTERVAL '90' HOUR TO SECOND;
+----
+90:00:00
+
+query T
+SELECT INTERVAL '1' DAY TO HOUR;
+----
+24:00:00
+
+query T
+SELECT INTERVAL '1' DAY TO MINUTE;
+----
+24:00:00
+
+query T
+SELECT INTERVAL '1' DAY TO SECOND;
+----
+24:00:00
+
+# we can add together intervals
+query T
+SELECT INTERVAL '2 month' + INTERVAL '1 month 3 days';
+----
+3 months 3 days
+
+# or subtract them
+query T
+SELECT INTERVAL '2 month' - INTERVAL '1 month 3 days';
+----
+1 month -3 days
+
+# but not multiply
+statement error
+SELECT INTERVAL '2 month' * INTERVAL '1 month 3 days';
+
+# we can, however, multiply/divide intervals by integers
+query T
+SELECT INTERVAL '1 year 2 days 2 seconds' * 2;
+----
+2 years 4 days 00:00:04
+
+# multiplication can be done both ways
+query T
+SELECT 2 * INTERVAL '1 year 2 days 2 seconds';
+----
+2 years 4 days 00:00:04
+
+query T
+SELECT INTERVAL '1 year 2 days 2 seconds' / 2;
+----
+6 months 1 day 00:00:01
+
+# division cannot!
+statement error
+SELECT 2 / INTERVAL '1 year 2 days 2 seconds';
+
+# division by zero
+query T
+SELECT INTERVAL '1 year 2 days 2 seconds' / 0;
+----
+NULL
+
+# invalid intervals
+# empty interval
+statement error
+SELECT INTERVAL '';
+
+statement error
+SELECT INTERVAL '   	';
+
+# no number
+statement error
+SELECT INTERVAL 'years';
+
+statement error
+SELECT INTERVAL '-years';
+
+# gibberish
+statement error
+SELECT INTERVAL 'aergjaerghiuaehrgiuhaerg';
+
+# overflow in year
+statement error
+SELECT INTERVAL '100000000000000000year';
+
+# overflow in months
+statement error
+SELECT INTERVAL '100000000000000000months';
+
+statement error
+SELECT INTERVAL '4294967296months';
+
+query T
+SELECT INTERVAL '1294967296months';
+----
+107913941 years 4 months
+
+statement error
+SELECT INTERVAL '1294967296months 1294967296months';
+
+query T
+SELECT INTERVAL '1294967296months -1294967296months';
+----
+00:00:00
+
+statement error
+SELECT INTERVAL '-1294967296months -1294967296months';
+
+# overflow in days
+statement error
+SELECT INTERVAL '100000000000000000days';
+
+statement error
+SELECT INTERVAL '1294967296days 1294967296days';
+
+# overflow in msecs
+statement error
+SELECT INTERVAL '100000000000000000000msecs';
+
+statement error
+SELECT INTERVAL '100000000000000000hours';
+
+query T
+SELECT INTERVAL '2562047788000 hours';
+----
+2562047788000:00:00
+
+statement error
+SELECT INTERVAL '2562047788000 hours 2562047788000 hours';
+
+query T
+SELECT INTERVAL '-9223372036854775807msecs';
+----
+-2562047788015:12:55.807
+
+query T
+SELECT INTERVAL '9223372036854775807msecs';
+----
+2562047788015:12:55.807
+
+statement error
+SELECT INTERVAL '9223372036854775810msecs';
+
+statement error
+SELECT INTERVAL '-9223372036854775810msecs';
+
+# need a number here
+statement error
+SELECT INTERVAL 'aa' DAY;
+
+statement error
+SELECT INTERVAL '100 months' DAY;
+

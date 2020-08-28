@@ -209,11 +209,12 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP> static void Combine(Vector &source, Vector &target, idx_t count) {
-		auto sdata = FlatVector::GetData<STATE_TYPE>(source);
+		assert(source.type.id() == LogicalTypeId::POINTER && target.type.id() == LogicalTypeId::POINTER);
+		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Combine<STATE_TYPE, OP>(sdata[i], tdata[i]);
+			OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i]);
 		}
 	}
 

@@ -1,0 +1,38 @@
+# name: test/issues/rigger/test_515.test
+# description: Issue 515
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Query with a negative shift predicate yields an incorrect result
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT8, c1 DOUBLE);
+
+statement ok
+INSERT INTO t1(c0) VALUES (0);
+
+statement ok
+INSERT INTO t1(c1, c0) VALUES (1, 1);
+
+statement ok
+INSERT INTO t0 VALUES (0);
+
+query IRI
+SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE NOT (t1.c0<<-1);
+----
+1	1.000000	0
+
+query IRI
+SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE (t1.c0<<-1);
+----
+
+query T
+SELECT NOT (t1.c0<<-1) FROM t1;
+----
+1
+1
+

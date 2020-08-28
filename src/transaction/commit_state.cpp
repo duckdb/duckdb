@@ -8,7 +8,7 @@
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
@@ -80,6 +80,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::AGGREGATE_FUNCTION:
 	case CatalogType::SCALAR_FUNCTION:
 	case CatalogType::TABLE_FUNCTION:
+	case CatalogType::COPY_FUNCTION:
+	case CatalogType::COLLATION:
 
 		// do nothing, we log the query to recreate this
 		break;
@@ -95,7 +97,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 
 	if (!delete_chunk) {
 		delete_chunk = make_unique<DataChunk>();
-		vector<TypeId> delete_types = {ROW_TYPE};
+		vector<LogicalType> delete_types = {LOGICAL_ROW_TYPE};
 		delete_chunk->Initialize(delete_types);
 	}
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
@@ -112,7 +114,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	SwitchTable(&info->column_data->table_info, UndoFlags::UPDATE_TUPLE);
 
 	update_chunk = make_unique<DataChunk>();
-	vector<TypeId> update_types = {info->column_data->type, ROW_TYPE};
+	vector<LogicalType> update_types = {info->column_data->type, LOGICAL_ROW_TYPE};
 	update_chunk->Initialize(update_types);
 
 	// fetch the updated values from the base table
@@ -202,3 +204,5 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 
 template void CommitState::CommitEntry<true>(UndoFlags type, data_ptr_t data);
 template void CommitState::CommitEntry<false>(UndoFlags type, data_ptr_t data);
+
+} // namespace duckdb

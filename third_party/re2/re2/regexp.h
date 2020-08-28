@@ -96,7 +96,7 @@
 #include "util/utf.h"
 #include "re2/stringpiece.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Keep in sync with string list kOpcodeNames[] in testing/dump.cc
 enum RegexpOp {
@@ -331,14 +331,14 @@ class Regexp {
       return submany_;
   }
 
-  int min() { DCHECK_EQ(op_, kRegexpRepeat); return min_; }
-  int max() { DCHECK_EQ(op_, kRegexpRepeat); return max_; }
+  int min() { DCHECK_EQ(op_, kRegexpRepeat); return repeat_.min_; }
+  int max() { DCHECK_EQ(op_, kRegexpRepeat); return repeat_.max_; }
   Rune rune() { DCHECK_EQ(op_, kRegexpLiteral); return rune_; }
-  CharClass* cc() { DCHECK_EQ(op_, kRegexpCharClass); return cc_; }
-  int cap() { DCHECK_EQ(op_, kRegexpCapture); return cap_; }
-  const std::string* name() { DCHECK_EQ(op_, kRegexpCapture); return name_; }
-  Rune* runes() { DCHECK_EQ(op_, kRegexpLiteralString); return runes_; }
-  int nrunes() { DCHECK_EQ(op_, kRegexpLiteralString); return nrunes_; }
+  CharClass* cc() { DCHECK_EQ(op_, kRegexpCharClass); return char_class_.cc_; }
+  int cap() { DCHECK_EQ(op_, kRegexpCapture); return capture_.cap_; }
+  const std::string* name() { DCHECK_EQ(op_, kRegexpCapture); return capture_.name_; }
+  Rune* runes() { DCHECK_EQ(op_, kRegexpLiteralString); return literal_string_.runes_; }
+  int nrunes() { DCHECK_EQ(op_, kRegexpLiteralString); return literal_string_.nrunes_; }
   int match_id() { DCHECK_EQ(op_, kRegexpHaveMatch); return match_id_; }
 
   // Increments reference count, returns object as convenience.
@@ -561,22 +561,22 @@ class Regexp {
     struct {  // Repeat
       int max_;
       int min_;
-    };
+    } repeat_;
     struct {  // Capture
       int cap_;
       std::string* name_;
-    };
+    } capture_;
     struct {  // LiteralString
       int nrunes_;
       Rune* runes_;
-    };
+	} literal_string_;
     struct {  // CharClass
       // These two could be in separate union members,
       // but it wouldn't save any space (there are other two-word structs)
       // and keeping them separate avoids confusion during parsing.
       CharClass* cc_;
       CharClassBuilder* ccb_;
-    };
+    } char_class_;
     Rune rune_;  // Literal
     int match_id_;  // HaveMatch
     void *the_union_[2];  // as big as any other element, for memset
@@ -647,6 +647,6 @@ inline Regexp::ParseFlags operator~(Regexp::ParseFlags a) {
       ~static_cast<int>(a) & static_cast<int>(Regexp::AllParseFlags));
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_REGEXP_H_

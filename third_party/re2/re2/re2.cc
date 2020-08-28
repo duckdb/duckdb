@@ -30,7 +30,7 @@
 #include "re2/prog.h"
 #include "re2/regexp.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Maximum number of args we can set
 static const int kMaxArgs = 16;
@@ -63,35 +63,35 @@ static const std::map<int, std::string>* empty_group_names;
 // Converts from Regexp error code to RE2 error code.
 // Maybe some day they will diverge.  In any event, this
 // hides the existence of Regexp from RE2 users.
-static RE2::ErrorCode RegexpErrorToRE2(re2::RegexpStatusCode code) {
+static RE2::ErrorCode RegexpErrorToRE2(duckdb_re2::RegexpStatusCode code) {
   switch (code) {
-    case re2::kRegexpSuccess:
+    case duckdb_re2::kRegexpSuccess:
       return RE2::NoError;
-    case re2::kRegexpInternalError:
+    case duckdb_re2::kRegexpInternalError:
       return RE2::ErrorInternal;
-    case re2::kRegexpBadEscape:
+    case duckdb_re2::kRegexpBadEscape:
       return RE2::ErrorBadEscape;
-    case re2::kRegexpBadCharClass:
+    case duckdb_re2::kRegexpBadCharClass:
       return RE2::ErrorBadCharClass;
-    case re2::kRegexpBadCharRange:
+    case duckdb_re2::kRegexpBadCharRange:
       return RE2::ErrorBadCharRange;
-    case re2::kRegexpMissingBracket:
+    case duckdb_re2::kRegexpMissingBracket:
       return RE2::ErrorMissingBracket;
-    case re2::kRegexpMissingParen:
+    case duckdb_re2::kRegexpMissingParen:
       return RE2::ErrorMissingParen;
-    case re2::kRegexpTrailingBackslash:
+    case duckdb_re2::kRegexpTrailingBackslash:
       return RE2::ErrorTrailingBackslash;
-    case re2::kRegexpRepeatArgument:
+    case duckdb_re2::kRegexpRepeatArgument:
       return RE2::ErrorRepeatArgument;
-    case re2::kRegexpRepeatSize:
+    case duckdb_re2::kRegexpRepeatSize:
       return RE2::ErrorRepeatSize;
-    case re2::kRegexpRepeatOp:
+    case duckdb_re2::kRegexpRepeatOp:
       return RE2::ErrorRepeatOp;
-    case re2::kRegexpBadPerlOp:
+    case duckdb_re2::kRegexpBadPerlOp:
       return RE2::ErrorBadPerlOp;
-    case re2::kRegexpBadUTF8:
+    case duckdb_re2::kRegexpBadUTF8:
       return RE2::ErrorBadUTF8;
-    case re2::kRegexpBadNamedCapture:
+    case duckdb_re2::kRegexpBadNamedCapture:
       return RE2::ErrorBadNamedCapture;
   }
   return RE2::ErrorInternal;
@@ -200,7 +200,7 @@ void RE2::Init(const StringPiece& pattern, const Options& options) {
     return;
   }
 
-  re2::Regexp* suffix;
+  duckdb_re2::Regexp* suffix;
   if (entire_regexp_->RequiredPrefix(&prefix_, &prefix_foldcase_, &suffix))
     suffix_regexp_ = suffix;
   else
@@ -232,7 +232,7 @@ void RE2::Init(const StringPiece& pattern, const Options& options) {
 }
 
 // Returns rprog_, computing it if needed.
-re2::Prog* RE2::ReverseProg() const {
+duckdb_re2::Prog* RE2::ReverseProg() const {
   std::call_once(rprog_once_, [](const RE2* re) {
     re->rprog_ =
         re->suffix_regexp_->CompileToReverseProg(re->options_.max_mem() / 3);
@@ -1221,15 +1221,15 @@ bool RE2::Arg::parse_float(const char* str, size_t n, void* dest) {
     return parse_##name##_radix(str, n, dest, 0);                              \
   }
 
-DEFINE_INTEGER_PARSER(short);
-DEFINE_INTEGER_PARSER(ushort);
-DEFINE_INTEGER_PARSER(int);
-DEFINE_INTEGER_PARSER(uint);
-DEFINE_INTEGER_PARSER(long);
-DEFINE_INTEGER_PARSER(ulong);
-DEFINE_INTEGER_PARSER(longlong);
-DEFINE_INTEGER_PARSER(ulonglong);
+DEFINE_INTEGER_PARSER(short)
+DEFINE_INTEGER_PARSER(ushort)
+DEFINE_INTEGER_PARSER(int)
+DEFINE_INTEGER_PARSER(uint)
+DEFINE_INTEGER_PARSER(long)
+DEFINE_INTEGER_PARSER(ulong)
+DEFINE_INTEGER_PARSER(longlong)
+DEFINE_INTEGER_PARSER(ulonglong)
 
 #undef DEFINE_INTEGER_PARSER
 
-}  // namespace re2
+}  // namespace duckdb_re2

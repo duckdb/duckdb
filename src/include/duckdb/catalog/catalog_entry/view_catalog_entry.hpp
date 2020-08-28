@@ -10,6 +10,8 @@
 
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -28,7 +30,7 @@ public:
 	//! The set of aliases associated with the view
 	vector<string> aliases;
 	//! The returned types of the view
-	vector<SQLType> types;
+	vector<LogicalType> types;
 
 public:
 	//! Serialize the meta information of the ViewCatalogEntry a serializer

@@ -7,22 +7,24 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 #include <cstdio>
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return *context.db.file_system;
+	return *context.db.config.file_system;
 }
 
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and Append flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::APPEND));
-	// cannot combine Read and CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
+	// cannot combine Read and CREATE/Append flags
+	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
+	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
+	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+	// cannot combine CREATE and CREATE_NEW flags
+	assert(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 }
 
 #ifndef _WIN32
@@ -67,20 +69,22 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 
 	int open_flags = 0;
 	int rc;
-	if (flags & FileFlags::READ) {
+	if (flags & FileFlags::FILE_FLAGS_READ) {
 		open_flags = O_RDONLY;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::WRITE);
+		assert(flags & FileFlags::FILE_FLAGS_WRITE);
 		open_flags = O_RDWR | O_CLOEXEC;
-		if (flags & FileFlags::CREATE) {
+		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			open_flags |= O_CREAT;
+		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
+			open_flags |= O_CREAT | O_TRUNC;
 		}
-		if (flags & FileFlags::APPEND) {
+		if (flags & FileFlags::FILE_FLAGS_APPEND) {
 			open_flags |= O_APPEND;
 		}
 	}
-	if (flags & FileFlags::DIRECT_IO) {
+	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 #if defined(__sun) && defined(__SVR4)
 		throw Exception("DIRECT_IO not supported on Solaris");
 #endif
@@ -96,7 +100,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
 	// #if defined(__DARWIN__) || defined(__APPLE__)
-	// 	if (flags & FileFlags::DIRECT_IO) {
+	// 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 	// 		// OSX requires fcntl for Direct IO
 	// 		rc = fcntl(fd, F_NOCACHE, 1);
 	// 		if (fd == -1) {
@@ -124,7 +128,7 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path.c_str(),
+		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path,
 		                  strerror(errno));
 	}
 }
@@ -133,7 +137,7 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	int64_t bytes_read = read(fd, buffer, nr_bytes);
 	if (bytes_read == -1) {
-		throw IOException("Could not read from file \"%s\": %s", handle.path.c_str(), strerror(errno));
+		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
 	}
 	return bytes_read;
 }
@@ -142,7 +146,7 @@ int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	int64_t bytes_written = write(fd, buffer, nr_bytes);
 	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), strerror(errno));
+		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
 	}
 	return bytes_written;
 }
@@ -159,7 +163,7 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	if (ftruncate(fd, new_size) != 0) {
-		throw IOException("Could not truncate file \"%s\": %s", handle.path.c_str(), strerror(errno));
+		throw IOException("Could not truncate file \"%s\": %s", handle.path, strerror(errno));
 	}
 }
 
@@ -195,10 +199,10 @@ void FileSystem::CreateDirectory(const string &directory) {
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed to create directory \"%s\"!", directory.c_str());
+			throw IOException("Failed to create directory \"%s\"!", directory);
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!", directory.c_str());
+		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!", directory);
 	}
 }
 
@@ -248,28 +252,41 @@ void FileSystem::RemoveDirectory(const string &directory) {
 
 void FileSystem::RemoveFile(const string &filename) {
 	if (std::remove(filename.c_str()) != 0) {
-		throw IOException("Could not remove file \"%s\": %s", filename.c_str(), strerror(errno));
+		throw IOException("Could not remove file \"%s\": %s", filename, strerror(errno));
 	}
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {
+bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
-	DIR *dir;
-	struct dirent *ent;
-	if ((dir = opendir(directory.c_str())) != NULL) {
-		/* print all the files and directories within directory */
-		while ((ent = readdir(dir)) != NULL) {
-			string name = string(ent->d_name);
-			if (!name.empty() && name[0] != '.') {
-				callback(name);
-			}
-		}
-		closedir(dir);
-	} else {
+	DIR *dir = opendir(directory.c_str());
+	if (!dir) {
 		return false;
 	}
+	struct dirent *ent;
+	// loop over all files in the directory
+	while ((ent = readdir(dir)) != NULL) {
+		string name = string(ent->d_name);
+		// skip . .. and empty files
+		if (name.empty() || name == "." || name == "..") {
+			continue;
+		}
+		// now stat the file to figure out if it is a regular file or directory
+		string full_path = JoinPath(directory, name);
+		if (access(full_path.c_str(), 0) != 0) {
+			continue;
+		}
+		struct stat status;
+		stat(full_path.c_str(), &status);
+		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
+			// not a file or directory: skip
+			continue;
+		}
+		// invoke callback
+		callback(name, status.st_mode & S_IFDIR);
+	}
+	closedir(dir);
 	return true;
 }
 
@@ -291,6 +308,12 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
+void FileSystem::SetWorkingDirectory(string path) {
+	if (chdir(path.c_str()) != 0) {
+		throw IOException("Could not change working directory!");
+	}
+}
+
 #else
 
 #include <string>
@@ -302,11 +325,12 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
+#undef FILE_CREATE // woo mingw
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string GetLastErrorAsString() {
 	// Get the error message, if any.
-	DWORD errorMessageID = ::GetLastError();
+	DWORD errorMessageID = GetLastError();
 	if (errorMessageID == 0)
 		return std::string(); // No error message has been recorded
 
@@ -347,32 +371,34 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
 	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL;
-	if (flags & FileFlags::READ) {
+	if (flags & FileFlags::FILE_FLAGS_READ) {
 		desired_access = GENERIC_READ;
 		share_mode = FILE_SHARE_READ;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::WRITE);
+		assert(flags & FileFlags::FILE_FLAGS_WRITE);
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
-		if (flags & FileFlags::CREATE) {
+		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			creation_disposition = OPEN_ALWAYS;
+		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
+			creation_disposition = CREATE_ALWAYS;
 		}
-		if (flags & FileFlags::DIRECT_IO) {
+		if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
 		}
 	}
-	if (flags & FileFlags::DIRECT_IO) {
+	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
 	HANDLE hFile =
 	    CreateFileA(path, desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Cannot open file \"%s\": %s", path, error.c_str());
+		throw IOException("Cannot open file \"%s\": %s", path, error);
 	}
 	auto handle = make_unique<WindowsFileHandle>(*this, path, hFile);
-	if (flags & FileFlags::APPEND) {
+	if (flags & FileFlags::FILE_FLAGS_APPEND) {
 		SetFilePointer(*handle, GetFileSize(*handle));
 	}
 	return move(handle);
@@ -385,8 +411,7 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	auto rc = SetFilePointerEx(hFile, loc, NULL, FILE_BEGIN);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path.c_str(),
-		                  error.c_str());
+		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path, error);
 	}
 }
 
@@ -396,7 +421,7 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
+		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
 	return bytes_read;
 }
@@ -407,7 +432,7 @@ int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not write file \"%s\": %s", handle.path.c_str(), error.c_str());
+		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
 	return bytes_read;
 }
@@ -428,7 +453,7 @@ void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	// now set the end of file position
 	if (!SetEndOfFile(hFile)) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path.c_str(), error.c_str());
+		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path, error);
 	}
 }
 
@@ -505,7 +530,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	DeleteFileA(filename.c_str());
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {
+bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	WIN32_FIND_DATA ffd;
@@ -514,11 +539,11 @@ bool FileSystem::ListFiles(const string &directory, function<void(string)> callb
 		return false;
 	}
 	do {
-		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+		string cFileName = string(ffd.cFileName);
+		if (cFileName == "." || cFileName == "..") {
 			continue;
 		}
-
-		callback(string(ffd.cFileName));
+		callback(cFileName, ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 	} while (FindNextFile(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();
@@ -547,6 +572,12 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 		throw IOException("Could not move file");
 	}
 }
+
+void FileSystem::SetWorkingDirectory(string path) {
+	if (!SetCurrentDirectory(path.c_str())) {
+		throw IOException("Could not change working directory!");
+	}
+}
 #endif
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -555,7 +586,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	// now read from the location
 	int64_t bytes_read = Read(handle, buffer, nr_bytes);
 	if (bytes_read != nr_bytes) {
-		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path.c_str());
+		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path);
 	}
 }
 
@@ -565,7 +596,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 	// now write to the location
 	int64_t bytes_written = Write(handle, buffer, nr_bytes);
 	if (bytes_written != nr_bytes) {
-		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path.c_str());
+		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path);
 	}
 }
 
@@ -589,3 +620,5 @@ void FileHandle::Sync() {
 void FileHandle::Truncate(int64_t new_size) {
 	file_system.Truncate(*this, new_size);
 }
+
+} // namespace duckdb

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ public:
 	bool operator>=(const Key &k) const;
 	bool operator==(const Key &k) const;
 
-	string ToString(bool is_little_endian, TypeId type);
+	string ToString(bool is_little_endian, PhysicalType type);
 
 	static uint32_t EncodeFloat(float x);
 	static uint64_t EncodeDouble(double x);

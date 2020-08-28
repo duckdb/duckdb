@@ -4,8 +4,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/limits.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct SetseedBindData : public FunctionData {
@@ -27,7 +28,7 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	input.Normalify(args.size());
 
 	auto input_seeds = FlatVector::GetData<double>(input);
-	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
+	uint32_t half_max = NumericLimits<uint32_t>::Maximum() / 2;
 
 	for (idx_t i = 0; i < args.size(); i++) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {
@@ -47,5 +48,7 @@ unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientConte
 
 void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    ScalarFunction("setseed", {SQLType::DOUBLE}, SQLType::SQLNULL, setseed_function, true, setseed_bind));
+	    ScalarFunction("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, setseed_function, true, setseed_bind));
 }
+
+} // namespace duckdb

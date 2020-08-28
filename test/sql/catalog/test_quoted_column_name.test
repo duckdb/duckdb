@@ -1,0 +1,15 @@
+# name: test/sql/catalog/test_quoted_column_name.test
+# description: Test quoted column name
+# group: [catalog]
+
+statement ok
+CREATE TABLE integers("42" INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (33)
+
+query I
+SELECT "42" FROM integers;
+----
+33
+

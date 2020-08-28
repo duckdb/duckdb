@@ -1,0 +1,55 @@
+# name: test/sql/aggregate/distinct/test_distinct.test
+# description: Test DISTINCT keyword
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (11, 21), (11, 22)
+
+query II
+SELECT DISTINCT a, b FROM test ORDER BY a, b
+----
+11	21
+11	22
+13	22
+
+query II
+SELECT DISTINCT test.a, b FROM test ORDER BY a, b
+----
+11	21
+11	22
+13	22
+
+query I
+SELECT DISTINCT a FROM test ORDER BY a
+----
+11
+13
+
+query I
+SELECT DISTINCT b FROM test ORDER BY b
+----
+21
+22
+
+query IR
+SELECT DISTINCT a, SUM(B) FROM test GROUP BY a ORDER BY a
+----
+11	65.000000
+13	22.000000
+
+query I
+SELECT DISTINCT MAX(b) FROM test GROUP BY a
+----
+22
+
+query I
+SELECT DISTINCT CASE WHEN a > 11 THEN 11 ELSE a END FROM test
+----
+11
+

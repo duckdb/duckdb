@@ -1,27 +1,38 @@
 #include "duckdb/function/scalar/math_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
-#include <algorithm>
+#include "duckdb/common/algorithm.hpp"
 #include <cmath>
+#include <errno.h>
 
 using namespace std;
 
 namespace duckdb {
 
-template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::TINYINT:
-		return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
-	case SQLTypeId::SMALLINT:
-		return ScalarFunction::UnaryFunction<int16_t, TR, OP>;
-	case SQLTypeId::INTEGER:
-		return ScalarFunction::UnaryFunction<int32_t, TR, OP>;
-	case SQLTypeId::BIGINT:
-		return ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(LogicalType type) {
+	scalar_function_t function;
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		function = &ScalarFunction::UnaryFunction<int8_t, TR, OP>;
+		break;
+	case LogicalTypeId::SMALLINT:
+		function = &ScalarFunction::UnaryFunction<int16_t, TR, OP>;
+		break;
+	case LogicalTypeId::INTEGER:
+		function = &ScalarFunction::UnaryFunction<int32_t, TR, OP>;
+		break;
+	case LogicalTypeId::BIGINT:
+		function = &ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+		break;
+	case LogicalTypeId::HUGEINT:
+		function = &ScalarFunction::UnaryFunction<hugeint_t, TR, OP>;
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunctionFixedReturn");
 	}
+	return function;
 }
 
 struct UnaryDoubleWrapper {
@@ -68,14 +79,14 @@ static void BinaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state
 // abs
 //===--------------------------------------------------------------------===//
 struct AbsOperator {
-	template <class TA, class TR> static inline TR Operation(TA left) {
-		return left < 0 ? left * -1 : left;
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return input < 0 ? -input : input;
 	}
 };
 
 void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet abs("abs");
-	for (auto &type : SQLType::NUMERIC) {
+	for (auto &type : LogicalType::NUMERIC) {
 		abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type)));
 	}
 	set.AddFunction(abs);
@@ -97,10 +108,14 @@ struct BitCntOperator {
 
 void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("bit_count");
-	for (auto &type : SQLType::INTEGRAL) {
-		functions.AddFunction(ScalarFunction({type}, SQLType::TINYINT,
-		                                     GetScalarIntegerUnaryFunctionFixedReturn<int8_t, BitCntOperator>(type)));
-	}
+	functions.AddFunction(ScalarFunction({LogicalType::TINYINT}, LogicalType::TINYINT,
+	                                     ScalarFunction::UnaryFunction<int8_t, int8_t, BitCntOperator>));
+	functions.AddFunction(ScalarFunction({LogicalType::SMALLINT}, LogicalType::TINYINT,
+	                                     ScalarFunction::UnaryFunction<int16_t, int8_t, BitCntOperator>));
+	functions.AddFunction(ScalarFunction({LogicalType::INTEGER}, LogicalType::TINYINT,
+	                                     ScalarFunction::UnaryFunction<int32_t, int8_t, BitCntOperator>));
+	functions.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TINYINT,
+	                                     ScalarFunction::UnaryFunction<int64_t, int8_t, BitCntOperator>));
 	set.AddFunction(functions);
 }
 
@@ -120,8 +135,8 @@ struct SignOperator {
 
 void SignFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet sign("sign");
-	for (auto &type : SQLType::NUMERIC) {
-		sign.AddFunction(ScalarFunction({type}, SQLType::TINYINT,
+	for (auto &type : LogicalType::NUMERIC) {
+		sign.AddFunction(ScalarFunction({type}, LogicalType::TINYINT,
 		                                ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
 	}
 	set.AddFunction(sign);
@@ -138,13 +153,17 @@ struct CeilOperator {
 
 void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet ceil("ceil");
-	for (auto &type : SQLType::NUMERIC) {
+	for (auto &type : LogicalType::NUMERIC) {
 		scalar_function_t func;
 		if (type.IsIntegral()) {
 			// ceil on integral type is a nop
 			func = ScalarFunction::NopFunction;
+		} else if (type.id() == LogicalTypeId::FLOAT) {
+			func = ScalarFunction::UnaryFunction<float, float, CeilOperator>;
+		} else if (type.id() == LogicalTypeId::DOUBLE) {
+			func = ScalarFunction::UnaryFunction<double, double, CeilOperator>;
 		} else {
-			func = ScalarFunction::GetScalarUnaryFunction<CeilOperator>(type);
+			throw NotImplementedException("Unimplemented numeric type for function \"ceil\"");
 		}
 		ceil.AddFunction(ScalarFunction({type}, type, func));
 	}
@@ -164,13 +183,17 @@ struct FloorOperator {
 
 void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet floor("floor");
-	for (auto &type : SQLType::NUMERIC) {
+	for (auto &type : LogicalType::NUMERIC) {
 		scalar_function_t func;
 		if (type.IsIntegral()) {
 			// floor on integral type is a nop
 			func = ScalarFunction::NopFunction;
+		} else if (type.id() == LogicalTypeId::FLOAT) {
+			func = ScalarFunction::UnaryFunction<float, float, FloorOperator>;
+		} else if (type.id() == LogicalTypeId::DOUBLE) {
+			func = ScalarFunction::UnaryFunction<double, double, FloorOperator>;
 		} else {
-			func = ScalarFunction::GetScalarUnaryFunction<FloorOperator>(type);
+			throw NotImplementedException("Unimplemented numeric type for function \"floor\"");
 		}
 		floor.AddFunction(ScalarFunction({type}, type, func));
 	}
@@ -196,18 +219,19 @@ struct RoundOperator {
 
 void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet round("round");
-	for (auto &type : SQLType::NUMERIC) {
+	for (auto &type : LogicalType::NUMERIC) {
 		scalar_function_t func;
 		if (type.IsIntegral()) {
 			// round on integral type is a nop
 			func = ScalarFunction::NopFunction;
-		} else if (type.id == SQLTypeId::FLOAT) {
+		} else if (type.id() == LogicalTypeId::FLOAT) {
 			func = ScalarFunction::BinaryFunction<float, int32_t, float, RoundOperator>;
-		} else {
-			assert(type.id == SQLTypeId::DOUBLE || type.id == SQLTypeId::DECIMAL);
+		} else if (type.id() == LogicalTypeId::DOUBLE) {
 			func = ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperator>;
+		} else {
+			throw NotImplementedException("Unimplemented numeric type for function \"round\"");
 		}
-		round.AddFunction(ScalarFunction({type, SQLType::INTEGER}, type, func));
+		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, func));
 	}
 	set.AddFunction(round);
 }
@@ -222,8 +246,8 @@ struct ExpOperator {
 };
 
 void ExpFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("exp", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, ExpOperator>));
+	set.AddFunction(ScalarFunction("exp", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, ExpOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -236,7 +260,7 @@ struct PowOperator {
 };
 
 void PowFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction power_function("pow", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE,
+	ScalarFunction power_function("pow", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                              BinaryDoubleFunctionWrapper<double, PowOperator>);
 	set.AddFunction(power_function);
 	power_function.name = "power";
@@ -253,8 +277,8 @@ struct SqrtOperator {
 };
 
 void SqrtFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("sqrt", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, SqrtOperator>));
+	set.AddFunction(ScalarFunction("sqrt", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, SqrtOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -267,8 +291,8 @@ struct CbRtOperator {
 };
 
 void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("cbrt", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, CbRtOperator>));
+	set.AddFunction(ScalarFunction("cbrt", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, CbRtOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -282,8 +306,8 @@ struct LnOperator {
 };
 
 void LnFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("ln", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, LnOperator>));
+	set.AddFunction(ScalarFunction("ln", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, LnOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -296,7 +320,7 @@ struct Log10Operator {
 };
 
 void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"log10", "log"}, ScalarFunction({SQLType::DOUBLE}, SQLType::DOUBLE,
+	set.AddFunction({"log10", "log"}, ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                                                 UnaryDoubleFunctionWrapper<double, Log10Operator>));
 }
 
@@ -310,22 +334,21 @@ struct Log2Operator {
 };
 
 void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("log2", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, Log2Operator>));
+	set.AddFunction(ScalarFunction("log2", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, Log2Operator>));
 }
 
 //===--------------------------------------------------------------------===//
 // pi
 //===--------------------------------------------------------------------===//
-Value pi_value = Value::DOUBLE(PI);
-
 static void pi_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 0);
+	Value pi_value = Value::DOUBLE(PI);
 	result.Reference(pi_value);
 }
 
 void PiFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("pi", {}, SQLType::DOUBLE, pi_function));
+	set.AddFunction(ScalarFunction("pi", {}, LogicalType::DOUBLE, pi_function));
 }
 
 //===--------------------------------------------------------------------===//
@@ -338,7 +361,7 @@ struct DegreesOperator {
 };
 
 void DegreesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("degrees", {SQLType::DOUBLE}, SQLType::DOUBLE,
+	set.AddFunction(ScalarFunction("degrees", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                               UnaryDoubleFunctionWrapper<double, DegreesOperator>));
 }
 
@@ -352,7 +375,7 @@ struct RadiansOperator {
 };
 
 void RadiansFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("radians", {SQLType::DOUBLE}, SQLType::DOUBLE,
+	set.AddFunction(ScalarFunction("radians", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                               UnaryDoubleFunctionWrapper<double, RadiansOperator>));
 }
 
@@ -366,8 +389,8 @@ struct SinOperator {
 };
 
 void SinFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("sin", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, SinOperator>));
+	set.AddFunction(ScalarFunction("sin", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, SinOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -380,8 +403,8 @@ struct CosOperator {
 };
 
 void CosFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("cos", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, CosOperator>));
+	set.AddFunction(ScalarFunction("cos", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, CosOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -394,8 +417,8 @@ struct TanOperator {
 };
 
 void TanFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("tan", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, TanOperator>));
+	set.AddFunction(ScalarFunction("tan", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, TanOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -411,8 +434,8 @@ struct ASinOperator {
 };
 
 void AsinFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("asin", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, ASinOperator>));
+	set.AddFunction(ScalarFunction("asin", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, ASinOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -425,8 +448,8 @@ struct ATanOperator {
 };
 
 void AtanFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("atan", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, ATanOperator>));
+	set.AddFunction(ScalarFunction("atan", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, ATanOperator>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -439,7 +462,7 @@ struct ATan2 {
 };
 
 void Atan2Fun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("atan2", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE,
+	set.AddFunction(ScalarFunction("atan2", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                               BinaryDoubleFunctionWrapper<double, ATan2>));
 }
 
@@ -454,7 +477,7 @@ struct ACos {
 
 void AcosFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    ScalarFunction("acos", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, ACos>));
+	    ScalarFunction("acos", {LogicalType::DOUBLE}, LogicalType::DOUBLE, UnaryDoubleFunctionWrapper<double, ACos>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -467,8 +490,8 @@ struct CotOperator {
 };
 
 void CotFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("cot", {SQLType::DOUBLE}, SQLType::DOUBLE, UnaryDoubleFunctionWrapper<double, CotOperator>));
+	set.AddFunction(ScalarFunction("cot", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, CotOperator>));
 }
 
 } // namespace duckdb

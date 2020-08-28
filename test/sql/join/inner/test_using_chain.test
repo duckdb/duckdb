@@ -1,0 +1,73 @@
+# name: test/sql/join/inner/test_using_chain.test
+# description: Test chaining USING joins
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (1, 2)
+
+statement ok
+CREATE TABLE t2 (b INTEGER, c INTEGER)
+
+statement ok
+INSERT INTO t2 VALUES (2, 3)
+
+statement ok
+CREATE TABLE t3 (c INTEGER, d INTEGER)
+
+statement ok
+INSERT INTO t3 VALUES (3, 4)
+
+# multiple joins with using
+# single column
+query IIII
+SELECT * FROM t1 JOIN t2 USING (b) JOIN t3 USING (c) ORDER BY 1, 2, 3, 4;
+----
+1	2	3	4
+
+# column does not exist on left side of join
+statement error
+SELECT * FROM t1 JOIN t2 USING (c)
+
+# column does not exist on right side of join
+statement error
+SELECT * FROM t1 JOIN t2 USING (a)
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP TABLE t2
+
+statement ok
+DROP TABLE t3
+
+statement ok
+CREATE TABLE t1 (a INTEGER, b INTEGER, c INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (1, 2, 2)
+
+statement ok
+CREATE TABLE t2 (b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+INSERT INTO t2 VALUES (2, 2, 3, 4)
+
+statement ok
+CREATE TABLE t3 (d INTEGER, e INTEGER)
+
+statement ok
+INSERT INTO t3 VALUES (3, 4)
+
+# multi column
+query IIIII
+SELECT * FROM t1 JOIN t2 USING (b, c) JOIN t3 USING (d, e);
+----
+1	2	2	3	4
+

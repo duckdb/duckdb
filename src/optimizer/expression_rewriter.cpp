@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,
@@ -74,3 +74,5 @@ void ExpressionRewriter::Apply(LogicalOperator &root) {
 		filter.SplitPredicates();
 	}
 }
+
+} // namespace duckdb

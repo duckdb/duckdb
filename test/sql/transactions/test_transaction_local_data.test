@@ -1,0 +1,53 @@
+# name: test/sql/transactions/test_transaction_local_data.test
+# description: Test operations on transaction local data
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+# perform different operations on the same data within one transaction
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+# append
+statement ok
+INSERT INTO integers VALUES (1, 3), (2, 3)
+
+query II
+SELECT * FROM integers ORDER BY 1
+----
+1	3
+2	3
+
+# update
+statement ok
+UPDATE integers SET j=5 WHERE i=2
+
+query II
+SELECT * FROM integers ORDER BY 1
+----
+1	3
+2	5
+
+# delete
+statement ok
+DELETE FROM integers WHERE i=2
+
+query II
+SELECT * FROM integers ORDER BY 1
+----
+1	3
+
+# commit
+statement ok
+COMMIT
+
+# we can still read the table now
+query II
+SELECT * FROM integers ORDER BY 1
+----
+1	3
+

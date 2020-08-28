@@ -1,8 +1,9 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<PragmaStatement> Transformer::TransformShow(PGNode *node) {
 	// we transform SHOW x into PRAGMA SHOW('x')
@@ -25,3 +26,5 @@ unique_ptr<PragmaStatement> Transformer::TransformShow(PGNode *node) {
 
 	return result;
 }
+
+} // namespace duckdb

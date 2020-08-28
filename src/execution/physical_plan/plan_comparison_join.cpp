@@ -5,7 +5,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
@@ -18,12 +18,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	if (op.conditions.size() == 0) {
 		// no conditions: insert a cross product
-		return make_unique<PhysicalCrossProduct>(op, move(left), move(right));
+		return make_unique<PhysicalCrossProduct>(op.types, move(left), move(right));
 	}
 
 	bool has_equality = false;
 	bool has_inequality = false;
+#ifndef NDEBUG
 	bool has_null_equal_conditions = false;
+#endif
 	for (auto &cond : op.conditions) {
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
@@ -32,19 +34,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			has_inequality = true;
 		}
 		if (cond.null_values_are_equal) {
+#ifndef NDEBUG
 			has_null_equal_conditions = true;
+#endif
 			assert(cond.comparison == ExpressionType::COMPARE_EQUAL);
 		}
 	}
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
 		// equality join: use hash join
-		plan = make_unique<PhysicalHashJoin>(context, op, move(left), move(right), move(op.conditions), op.join_type,
+		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 		                                     op.left_projection_map, op.right_projection_map);
 	} else {
 		assert(!has_null_equal_conditions); // don't support this for anything but hash joins for now
-		if (op.conditions.size() == 1 && (op.join_type == JoinType::MARK || op.join_type == JoinType::INNER) &&
-		    !has_inequality) {
+		if (op.conditions.size() == 1 && !has_inequality) {
 			// range join: use piecewise merge join
 			plan =
 			    make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions), op.join_type);
@@ -55,3 +58,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	}
 	return plan;
 }
+
+} // namespace duckdb

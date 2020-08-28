@@ -1,0 +1,30 @@
+# name: test/issues/rigger/test_536.test
+# description: Issue 536
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Nondeterministic clause when using an UNION query and HAVING clause
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 VARCHAR);
+
+statement ok
+INSERT INTO t1 VALUES (0.9201898334673894), (0);
+
+statement ok
+INSERT INTO t0 VALUES (0);
+
+query IT
+SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0);
+----
+
+query IT
+SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0) UNION ALL SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING NOT t1.c0>MAX(t1.c0) ORDER BY 1, 2;
+----
+0	0
+0	0.9201898334673894
+

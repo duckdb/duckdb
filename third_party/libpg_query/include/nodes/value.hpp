@@ -15,6 +15,8 @@
 
 #include "nodes/nodes.hpp"
 
+namespace duckdb_libpgquery {
+
 /*----------------------
  *		PGValue node
  *
@@ -38,21 +40,21 @@
  * Nulls, of course, don't need the value part at all.
  *----------------------
  */
-typedef struct PGValue
-{
-	PGNodeTag		type;			/* tag appropriately (eg. T_PGString) */
-	union ValUnion
-	{
-		long		ival;		/* machine integer */
-		char	   *str;		/* string */
-	}			val;
+typedef struct PGValue {
+	PGNodeTag type; /* tag appropriately (eg. T_PGString) */
+	union ValUnion {
+		long ival; /* machine integer */
+		char *str; /* string */
+	} val;
 } PGValue;
 
-#define intVal(v)		(((PGValue *)(v))->val.ival)
-#define floatVal(v)		atof(((PGValue *)(v))->val.str)
-#define strVal(v)		(((PGValue *)(v))->val.str)
+#define intVal(v) (((PGValue *)(v))->val.ival)
+#define floatVal(v) atof(((PGValue *)(v))->val.str)
+#define strVal(v) (((PGValue *)(v))->val.str)
 
-extern PGValue *makeInteger(long i);
-extern PGValue *makeFloat(char *numericStr);
-extern PGValue *makeString(const char *str);
-extern PGValue *makeBitString(char *str);
+PGValue *makeInteger(long i);
+PGValue *makeFloat(char *numericStr);
+PGValue *makeString(const char *str);
+PGValue *makeBitString(char *str);
+
+}

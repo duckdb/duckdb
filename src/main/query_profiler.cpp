@@ -4,13 +4,19 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <iostream>
 #include <utility>
+#include <algorithm>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 constexpr idx_t TREE_RENDER_WIDTH = 20;
 constexpr idx_t REMAINING_RENDER_WIDTH = TREE_RENDER_WIDTH - 2;
@@ -20,19 +26,52 @@ void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 	if (!enabled) {
 		return;
 	}
-	if (statement.type != StatementType::SELECT_STATEMENT && statement.type != StatementType::EXECUTE_STATEMENT) {
-		return;
-	}
 	this->running = true;
 	this->query = query;
 	tree_map.clear();
-	execution_stack = stack<PhysicalOperator *>();
 	root = nullptr;
 	phase_timings.clear();
 	phase_stack.clear();
 
 	main_query.Start();
-	op.Start();
+}
+
+bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
+	switch (op_type) {
+	case PhysicalOperatorType::ORDER_BY:
+	case PhysicalOperatorType::LIMIT:
+	case PhysicalOperatorType::TOP_N:
+	case PhysicalOperatorType::AGGREGATE:
+	case PhysicalOperatorType::WINDOW:
+	case PhysicalOperatorType::UNNEST:
+	case PhysicalOperatorType::DISTINCT:
+	case PhysicalOperatorType::SIMPLE_AGGREGATE:
+	case PhysicalOperatorType::HASH_GROUP_BY:
+	case PhysicalOperatorType::SORT_GROUP_BY:
+	case PhysicalOperatorType::FILTER:
+	case PhysicalOperatorType::PROJECTION:
+	case PhysicalOperatorType::COPY_FROM_FILE:
+	case PhysicalOperatorType::COPY_TO_FILE:
+	case PhysicalOperatorType::TABLE_FUNCTION:
+	case PhysicalOperatorType::SEQ_SCAN:
+	case PhysicalOperatorType::INDEX_SCAN:
+	case PhysicalOperatorType::CHUNK_SCAN:
+	case PhysicalOperatorType::DELIM_SCAN:
+	case PhysicalOperatorType::EXTERNAL_FILE_SCAN:
+	case PhysicalOperatorType::QUERY_DERIVED_SCAN:
+	case PhysicalOperatorType::EXPRESSION_SCAN:
+	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
+	case PhysicalOperatorType::NESTED_LOOP_JOIN:
+	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::CROSS_PRODUCT:
+	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+	case PhysicalOperatorType::DELIM_JOIN:
+	case PhysicalOperatorType::UNION:
+	case PhysicalOperatorType::RECURSIVE_CTE:
+		return true;
+	default:
+		return false;
+	}
 }
 
 void QueryProfiler::EndQuery() {
@@ -42,8 +81,9 @@ void QueryProfiler::EndQuery() {
 
 	main_query.End();
 	this->running = false;
-	// print the query after termination, if this is enabled
+	// print or output the query profiling after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
+		// check if this query should be output based on the operator types
 		string query_info;
 		if (automatic_print_format == ProfilerPrintFormat::JSON) {
 			query_info = ToJSON();
@@ -52,7 +92,8 @@ void QueryProfiler::EndQuery() {
 		}
 
 		if (save_location.empty()) {
-			cout << query_info << "\n";
+			Printer::Print(query_info);
+			Printer::Print("\n");
 		} else {
 			WriteToFile(save_location.c_str(), query_info);
 		}
@@ -103,47 +144,53 @@ void QueryProfiler::EndPhase() {
 	}
 }
 
-void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
+void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 	if (!enabled || !running) {
 		return;
 	}
-
-	if (!root) {
-		// start of execution: create operator tree
-		root = CreateTree(phys_op);
+	this->query_requires_profiling = false;
+	this->root = CreateTree(root_op);
+	if (!query_requires_profiling) {
+		// query does not require profiling: disable profiling for this query
+		this->running = false;
+		tree_map.clear();
+		root = nullptr;
+		phase_timings.clear();
+		phase_stack.clear();
 	}
+}
+
+OperatorProfiler::OperatorProfiler(bool enabled_) : enabled(enabled_) {
+	execution_stack = stack<PhysicalOperator *>();
+}
+
+void OperatorProfiler::StartOperator(PhysicalOperator *phys_op) {
+	if (!enabled) {
+		return;
+	}
+
 	if (!execution_stack.empty()) {
 		// add timing for the previous element
 		op.End();
-		assert(tree_map.count(execution_stack.top()) > 0);
-		auto &info = tree_map[execution_stack.top()]->info;
-		info.time += op.Elapsed();
+
+		AddTiming(execution_stack.top(), op.Elapsed(), 0);
 	}
-	if (tree_map.count(phys_op) == 0) {
-		// element does not exist in the tree! this only happens with a subquery
-		// create a new tree
-		assert(execution_stack.size() > 0);
-		auto node = tree_map[execution_stack.top()];
-		auto new_tree = CreateTree(phys_op, node->depth + 1);
-		// add it to the current node
-		node->children.push_back(move(new_tree));
-	}
+
 	execution_stack.push(phys_op);
 
 	// start timing for current element
 	op.Start();
 }
 
-void QueryProfiler::EndOperator(DataChunk &chunk) {
-	if (!enabled || !running) {
+void OperatorProfiler::EndOperator(DataChunk *chunk) {
+	if (!enabled) {
 		return;
 	}
 
 	// finish timing for the current element
 	op.End();
-	auto &info = tree_map[execution_stack.top()]->info;
-	info.time += op.Elapsed();
-	info.elements += chunk.size();
+
+	AddTiming(execution_stack.top(), op.Elapsed(), chunk ? chunk->size() : 0);
 
 	assert(!execution_stack.empty());
 	execution_stack.pop();
@@ -151,6 +198,28 @@ void QueryProfiler::EndOperator(DataChunk &chunk) {
 	// start timing again for the previous element, if any
 	if (!execution_stack.empty()) {
 		op.Start();
+	}
+}
+
+void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elements) {
+	auto entry = timings.find(op);
+	if (entry == timings.end()) {
+		// add new entry
+		timings[op] = OperatorTimingInformation(time, elements);
+	} else {
+		// add to existing entry
+		entry->second.time += time;
+		entry->second.elements += elements;
+	}
+}
+
+void QueryProfiler::Flush(OperatorProfiler &profiler) {
+	for (auto &node : profiler.timings) {
+		auto entry = tree_map.find(node.first);
+		assert(entry != tree_map.end());
+
+		entry->second->info.time += node.second.time;
+		entry->second->info.elements += node.second.elements;
 	}
 }
 
@@ -245,6 +314,9 @@ static string remove_padding(string l) {
 }
 
 unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, idx_t depth) {
+	if (OperatorRequiresProfiling(root->type)) {
+		this->query_requires_profiling = true;
+	}
 	auto node = make_unique<QueryProfiler::TreeNode>();
 	node->name = PhysicalOperatorToString(root->type);
 	node->extra_info = root->ExtraRenderInformation();
@@ -280,6 +352,24 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 		auto child_node = CreateTree(child.get(), depth + 1);
 		node->children.push_back(move(child_node));
 	}
+	switch (root->type) {
+	case PhysicalOperatorType::DELIM_JOIN: {
+		auto &delim_join = (PhysicalDelimJoin &)*root;
+		auto child_node = CreateTree((PhysicalOperator *)delim_join.join.get(), depth + 1);
+		node->children.push_back(move(child_node));
+		child_node = CreateTree((PhysicalOperator *)delim_join.distinct.get(), depth + 1);
+		node->children.push_back(move(child_node));
+		break;
+	}
+	case PhysicalOperatorType::EXECUTE: {
+		auto &execute = (PhysicalExecute &)*root;
+		auto child_node = CreateTree((PhysicalOperator *)execute.plan, depth + 1);
+		node->children.push_back(move(child_node));
+		break;
+	}
+	default:
+		break;
+	}
 	return node;
 }
 
@@ -288,7 +378,7 @@ static string DrawPadded(string text, char padding_character = ' ') {
 	if (text.size() > remaining_width) {
 		text = text.substr(0, remaining_width);
 	}
-	assert(text.size() <= (idx_t)numeric_limits<int32_t>::max());
+	assert(text.size() <= (idx_t)NumericLimits<int32_t>::Maximum());
 
 	auto right_padding = (remaining_width - text.size()) / 2;
 	auto left_padding = remaining_width - text.size() - right_padding;
@@ -403,3 +493,5 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	}
 	return result;
 }
+
+} // namespace duckdb

@@ -11,7 +11,7 @@ public:
 	~PostgresParser();
 
 	bool success;
-	PGList *parse_tree;
+	duckdb_libpgquery::PGList *parse_tree;
 	std::string error_message;
 	int error_location;
 };

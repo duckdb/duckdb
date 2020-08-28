@@ -1,0 +1,152 @@
+# name: test/sql/function/date/test_date_part.test
+# description: DATE_PART test
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(d DATE, s VARCHAR);
+
+statement ok
+INSERT INTO dates VALUES ('1992-01-01', 'year'), ('1992-03-03', 'month'), ('1992-05-05', 'day');
+
+# test date_part with different combinations of constant/non-constant columns
+query I
+SELECT date_part(NULL::VARCHAR, NULL::TIMESTAMP) FROM dates;
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, NULL::TIMESTAMP) FROM dates;
+----
+NULL
+NULL
+NULL
+
+# dates
+query I
+SELECT date_part(NULL, d) FROM dates;
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, DATE '1992-01-01') FROM dates;
+----
+1992
+1
+1
+
+query I
+SELECT date_part('year', d) FROM dates;
+----
+1992
+1992
+1992
+
+query I
+SELECT date_part(s, d) FROM dates;
+----
+1992
+3
+5
+
+# timestamps
+query I
+SELECT date_part(NULL, d::TIMESTAMP) FROM dates;
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, TIMESTAMP '1992-01-01') FROM dates;
+----
+1992
+1
+1
+
+query I
+SELECT date_part('year', d::TIMESTAMP) FROM dates;
+----
+1992
+1992
+1992
+
+query I
+SELECT date_part(s, d::TIMESTAMP) FROM dates;
+----
+1992
+3
+5
+
+#  last_day
+query TTT
+SELECT LAST_DAY(DATE '1900-02-12'), LAST_DAY(DATE '1992-02-12'), LAST_DAY(DATE '2000-02-12');
+----
+1900-02-28	1992-02-29	2000-02-29
+
+query T
+SELECT LAST_DAY(d) FROM dates;
+----
+1992-01-31
+1992-03-31
+1992-05-31
+
+query T
+SELECT LAST_DAY(d::timestamp) FROM dates;
+----
+1992-01-31
+1992-03-31
+1992-05-31
+
+#  monthname
+query T
+SELECT MONTHNAME(d) FROM dates;
+----
+January
+March
+May
+
+#  dayname
+query T
+SELECT DAYNAME(d) FROM dates;
+----
+Wednesday
+Tuesday
+Tuesday
+
+#  yearweek
+query I
+SELECT YEARWEEK(d) FROM dates;
+----
+199201
+199209
+199218
+
+#  aliases
+query I
+SELECT DAYOFMONTH(d) FROM dates;
+----
+1
+3
+5
+
+query I
+SELECT WEEKDAY(d) FROM dates;
+----
+3
+2
+2
+
+query I
+SELECT WEEKOFYEAR(d) FROM dates;
+----
+1
+9
+18
+

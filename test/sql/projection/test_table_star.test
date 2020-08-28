@@ -1,0 +1,86 @@
+# name: test/sql/projection/test_table_star.test
+# description: Test table star expressions
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
+
+query II
+SELECT * FROM test
+----
+11	22
+12	21
+13	22
+
+query II
+SELECT test.* FROM test
+----
+11	22
+12	21
+13	22
+
+query II
+SELECT t.* FROM test t
+----
+11	22
+12	21
+13	22
+
+statement error
+SELECT test.* FROM test t
+
+statement error
+SELECT xyz.* FROM test
+
+statement error
+SELECT xyz.*
+
+# issue 415
+statement ok
+create table r4 (i int, j int)
+
+statement ok
+insert into r4 (i, j) values (1,1), (1,2), (1,3), (1,4), (1,5)
+
+query III
+select t1.i, t1.j as a, t2.j as b from r4 t1 inner join r4 t2 using(i,j) ORDER BY a
+----
+1	1	1
+1	2	2
+1	3	3
+1	4	4
+1	5	5
+
+query III
+select t1.i, t1.j as a, t2.j as b from r4 t1 inner join r4 t2 on t1.i=t2.i and t1.j=t2.j ORDER BY a
+----
+1	1	1
+1	2	2
+1	3	3
+1	4	4
+1	5	5
+
+query III
+select t1.*, t2.j b from r4 t1 inner join r4 t2 using(i,j) ORDER BY t1.j
+----
+1	1	1
+1	2	2
+1	3	3
+1	4	4
+1	5	5
+
+query III
+select t1.*, t2.j b from r4 t1 inner join r4 t2 on t1.i=t2.i and t1.j=t2.j ORDER BY t1.j
+----
+1	1	1
+1	2	2
+1	3	3
+1	4	4
+1	5	5
+

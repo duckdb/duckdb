@@ -19,10 +19,11 @@ struct PragmaCollateData : public TableFunctionData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vector<Value> inputs,
-                                                    vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("collname");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	return make_unique<PragmaCollateData>();
 }
@@ -34,7 +35,7 @@ static void pragma_collate_info(ClientContext &context, vector<Value> &input, Da
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = Transaction::GetTransaction(context);
-		Catalog::GetCatalog(context).schemas.Scan(transaction, [&](CatalogEntry *entry) {
+		Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
 			auto schema = (SchemaCatalogEntry *)entry;
 			schema->collations.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
 		});

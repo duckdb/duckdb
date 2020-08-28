@@ -2,8 +2,9 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformFrom(PGList *root) {
 	if (!root) {
@@ -35,3 +36,5 @@ unique_ptr<TableRef> Transformer::TransformFrom(PGList *root) {
 	auto n = reinterpret_cast<PGNode *>(root->head->data.ptr_value);
 	return TransformTableRefNode(n);
 }
+
+} // namespace duckdb

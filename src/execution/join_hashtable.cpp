@@ -14,14 +14,14 @@ namespace duckdb {
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> btypes,
-                             JoinType type)
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
+                             vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
       entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
-		auto type_size = GetTypeIdSize(type);
+		auto type_size = GetTypeIdSize(type.InternalType());
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
 			// all equality conditions should be at the front
 			// all other conditions at the back
@@ -41,20 +41,19 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	// at least one equality is necessary
 	assert(equality_types.size() > 0);
 
-	if (type == JoinType::ANTI || type == JoinType::SEMI || type == JoinType::MARK) {
-		// for ANTI, SEMI and MARK join, we only need to store the keys
-		build_size = 0;
-		build_types.clear();
-	} else {
-		// otherwise we need to store the entire build side for reconstruction
-		// purposes
-		for (idx_t i = 0; i < build_types.size(); i++) {
-			build_size += GetTypeIdSize(build_types[i]);
-		}
+	for (idx_t i = 0; i < build_types.size(); i++) {
+		build_size += GetTypeIdSize(build_types[i].InternalType());
 	}
 	tuple_size = condition_size + build_size;
+	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
 	entry_size = tuple_size + std::max(sizeof(hash_t), sizeof(uintptr_t));
+	if (join_type == JoinType::OUTER) {
+		// outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
+		// we place the bool before the NEXT pointer
+		entry_size += sizeof(bool);
+		pointer_offset += sizeof(bool);
+	}
 	// compute the per-block capacity of this HT
 	block_capacity = std::max((idx_t)STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
 }
@@ -144,32 +143,47 @@ static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &
 	}
 }
 
-void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count,
+static void initialize_outer_join(idx_t count, data_ptr_t key_locations[]) {
+	for (idx_t i = 0; i < count; i++) {
+		auto target = (bool *)key_locations[i];
+		*target = false;
+		key_locations[i] += sizeof(bool);
+	}
+}
+
+void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
                                         data_ptr_t key_locations[]) {
 	switch (type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		templated_serialize_vdata<int8_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_serialize_vdata<int16_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_serialize_vdata<int32_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_serialize_vdata<int64_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::INT128:
+		templated_serialize_vdata<hugeint_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::FLOAT:
 		templated_serialize_vdata<float>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_serialize_vdata<double>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::HASH:
+	case PhysicalType::HASH:
 		templated_serialize_vdata<hash_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::VARCHAR: {
+	case PhysicalType::INTERVAL:
+		templated_serialize_vdata<interval_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::VARCHAR: {
+		StringHeap local_heap;
 		auto source = (string_t *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
@@ -181,10 +195,12 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 			} else if (source[source_idx].IsInlined()) {
 				*target = source[source_idx];
 			} else {
-				*target = string_heap.AddString(source[source_idx]);
+				*target = local_heap.AddString(source[source_idx]);
 			}
 			key_locations[i] += sizeof(string_t);
 		}
+		lock_guard<mutex> append_lock(ht_lock);
+		string_heap.MergeHeap(local_heap);
 		break;
 	}
 	default:
@@ -197,18 +213,14 @@ void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVect
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	SerializeVectorData(vdata, v.type, sel, count, key_locations);
+	SerializeVectorData(vdata, v.type.InternalType(), sel, count, key_locations);
 }
 
-idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[],
+idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
                                    idx_t remaining) {
 	idx_t append_count = std::min(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
-	idx_t offset = count - remaining;
-	for (idx_t i = 0; i < append_count; i++) {
-		key_locations[offset + i] = dataptr;
-		dataptr += entry_size;
-	}
+	append_entries.push_back(BlockAppendEntry(dataptr, append_count));
 	block.count += append_count;
 	return append_count;
 }
@@ -255,6 +267,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// special case: correlated mark join
 	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
 		auto &info = correlated_mark_join_info;
+		lock_guard<mutex> mj_lock(info.mj_lock);
 		// Correlated MARK join
 		// for the correlated mark join we need to keep track of COUNT(*) and COUNT(COLUMN) for each of the correlated
 		// columns push into the aggregate hash table
@@ -284,44 +297,57 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	count += added_count;
 
 	vector<unique_ptr<BufferHandle>> handles;
+	vector<BlockAppendEntry> append_entries;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// first allocate space of where to serialize the keys and payload columns
 	idx_t remaining = added_count;
-	// first append to the last block (if any)
-	if (blocks.size() != 0) {
-		auto &last_block = blocks.back();
-		if (last_block.count < last_block.capacity) {
-			// last block has space: pin the buffer of this block
-			auto handle = buffer_manager.Pin(last_block.block_id);
-			// now append to the block
-			idx_t append_count = AppendToBlock(last_block, *handle, added_count, key_locations, remaining);
+	{
+		// first append to the last block (if any)
+		lock_guard<mutex> append_lock(ht_lock);
+		if (blocks.size() != 0) {
+			auto &last_block = blocks.back();
+			if (last_block.count < last_block.capacity) {
+				// last block has space: pin the buffer of this block
+				auto handle = buffer_manager.Pin(last_block.block_id);
+				// now append to the block
+				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
+				remaining -= append_count;
+				handles.push_back(move(handle));
+			}
+		}
+		while (remaining > 0) {
+			// now for the remaining data, allocate new buffers to store the data and append there
+			auto handle = buffer_manager.Allocate(block_capacity * entry_size);
+
+			HTDataBlock new_block;
+			new_block.count = 0;
+			new_block.capacity = block_capacity;
+			new_block.block_id = handle->block_id;
+
+			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
+			blocks.push_back(new_block);
 		}
 	}
-	while (remaining > 0) {
-		// now for the remaining data, allocate new buffers to store the data and append there
-		auto handle = buffer_manager.Allocate(block_capacity * entry_size);
-
-		HTDataBlock new_block;
-		new_block.count = 0;
-		new_block.capacity = block_capacity;
-		new_block.block_id = handle->block_id;
-
-		idx_t append_count = AppendToBlock(new_block, *handle, added_count, key_locations, remaining);
-		remaining -= append_count;
-		handles.push_back(move(handle));
-		blocks.push_back(new_block);
+	// now set up the key_locations based on the append entries
+	idx_t append_idx = 0;
+	for (auto &append_entry : append_entries) {
+		idx_t next = append_idx + append_entry.count;
+		for (; append_idx < next; append_idx++) {
+			key_locations[append_idx] = append_entry.baseptr;
+			append_entry.baseptr += entry_size;
+		}
 	}
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
-	Vector hash_values(TypeId::HASH);
+	Vector hash_values(LogicalType::HASH);
 	Hash(keys, *current_sel, added_count, hash_values);
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.column_count(); i++) {
-		SerializeVectorData(key_data[i], keys.data[i].type, *current_sel, added_count, key_locations);
+		SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, key_locations);
 	}
 	// now serialize the payload
 	if (build_types.size() > 0) {
@@ -329,11 +355,15 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
 	}
+	if (join_type == JoinType::OUTER) {
+		// for OUTER joins initialize the "found" boolean to false
+		initialize_outer_join(added_count, key_locations);
+	}
 	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
-	assert(hashes.type == TypeId::HASH);
+	assert(hashes.type.id() == LogicalTypeId::HASH);
 
 	// use bitmask to get position in array
 	ApplyBitmask(hashes, count);
@@ -347,7 +377,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
-		auto prev_pointer = (data_ptr_t *)(key_locations[i] + tuple_size);
+		auto prev_pointer = (data_ptr_t *)(key_locations[i] + pointer_offset);
 		*prev_pointer = pointers[index];
 
 		// set pointer to current tuple
@@ -367,7 +397,7 @@ void JoinHashTable::Finalize() {
 	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
-	Vector hashes(TypeId::HASH);
+	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
@@ -382,7 +412,7 @@ void JoinHashTable::Finalize() {
 			// fetch the next vector of entries from the blocks
 			idx_t next = std::min((idx_t)STANDARD_VECTOR_SIZE, block.count - entry);
 			for (idx_t i = 0; i < next; i++) {
-				hash_data[i] = *((hash_t *)(dataptr + tuple_size));
+				hash_data[i] = *((hash_t *)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
 				dataptr += entry_size;
 			}
@@ -416,7 +446,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	}
 
 	// hash all the keys
-	Vector hashes(TypeId::HASH);
+	Vector hashes(LogicalType::HASH);
 	Hash(keys, *current_sel, ss->count, hashes);
 
 	// now initialize the pointers of the scan structure based on the hashes
@@ -438,7 +468,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht) : sel_vector(STANDARD_VECTOR_SIZE), ht(ht), finished(false) {
-	pointers.Initialize(TypeId::POINTER);
+	pointers.Initialize(LogicalType::POINTER);
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -459,6 +489,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::ANTI:
 		NextAntiJoin(keys, left, result);
 		break;
+	case JoinType::OUTER:
 	case JoinType::LEFT:
 		NextLeftJoin(keys, left, result);
 		break;
@@ -503,30 +534,36 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 }
 
 template <bool NO_MATCH_SEL, class OP>
-static idx_t GatherSwitch(VectorData &data, TypeId type, Vector &pointers, const SelectionVector &current_sel,
+static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers, const SelectionVector &current_sel,
                           idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
                           idx_t &no_match_count) {
 	switch (type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                 no_match_sel, no_match_count);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return TemplatedGather<NO_MATCH_SEL, int16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                  no_match_sel, no_match_count);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return TemplatedGather<NO_MATCH_SEL, int32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                  no_match_sel, no_match_count);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                  no_match_sel, no_match_count);
-	case TypeId::FLOAT:
+	case PhysicalType::INT128:
+		return TemplatedGather<NO_MATCH_SEL, hugeint_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                    no_match_sel, no_match_count);
+	case PhysicalType::FLOAT:
 		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                no_match_sel, no_match_count);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                 no_match_sel, no_match_count);
-	case TypeId::VARCHAR:
+	case PhysicalType::INTERVAL:
+		return TemplatedGather<NO_MATCH_SEL, interval_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                     no_match_sel, no_match_count);
+	case PhysicalType::VARCHAR:
 		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                   no_match_sel, no_match_count);
 	default:
@@ -541,34 +578,35 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 	idx_t offset = 0;
 	idx_t no_match_count = 0;
 	for (idx_t i = 0; i < ht.predicates.size(); i++) {
+		auto internal_type = keys.data[i].type.InternalType();
 		switch (ht.predicates[i]) {
 		case ExpressionType::COMPARE_EQUAL:
 			remaining_count =
-			    GatherSwitch<NO_MATCH_SEL, Equals>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			    GatherSwitch<NO_MATCH_SEL, Equals>(key_data[i], internal_type, this->pointers, *current_sel,
 			                                       remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 			remaining_count =
-			    GatherSwitch<NO_MATCH_SEL, NotEquals>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			    GatherSwitch<NO_MATCH_SEL, NotEquals>(key_data[i], internal_type, this->pointers, *current_sel,
 			                                          remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThan>(key_data[i], keys.data[i].type, this->pointers,
+			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThan>(key_data[i], internal_type, this->pointers,
 			                                                          *current_sel, remaining_count, offset, match_sel,
 			                                                          no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThanEquals>(
-			    key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel,
-			    no_match_sel, no_match_count);
+			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThanEquals>(key_data[i], internal_type, this->pointers,
+			                                                                *current_sel, remaining_count, offset,
+			                                                                match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
 			remaining_count =
-			    GatherSwitch<NO_MATCH_SEL, LessThan>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			    GatherSwitch<NO_MATCH_SEL, LessThan>(key_data[i], internal_type, this->pointers, *current_sel,
 			                                         remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThanEquals>(key_data[i], keys.data[i].type, this->pointers,
+			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThanEquals>(key_data[i], internal_type, this->pointers,
 			                                                             *current_sel, remaining_count, offset,
 			                                                             match_sel, no_match_sel, no_match_count);
 			break;
@@ -579,7 +617,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 			break;
 		}
 		current_sel = match_sel;
-		offset += GetTypeIdSize(keys.data[i].type);
+		offset += GetTypeIdSize(internal_type);
 	}
 	return remaining_count;
 }
@@ -621,7 +659,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 	auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto idx = sel.get_index(i);
-		auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
+		auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.pointer_offset);
 		ptrs[idx] = *chain_pointer;
 		if (ptrs[idx]) {
 			this->sel_vector.set_index(new_count++, idx);
@@ -651,37 +689,48 @@ static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const Sel
 	}
 }
 
-void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
-                                 const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
+                               const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
-	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
-	switch (result.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (result.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		TemplatedGatherResult<int16_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		TemplatedGatherResult<int32_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::INT128:
+		TemplatedGatherResult<hugeint_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::FLOAT:
 		TemplatedGatherResult<float>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		TemplatedGatherResult<double>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::INTERVAL:
+		TemplatedGatherResult<interval_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::VARCHAR:
 		TemplatedGatherResult<string_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
 	}
-	offset += GetTypeIdSize(result.type);
+	offset += GetTypeIdSize(result.type.InternalType());
+}
+
+void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
+                                 const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
+	GatherResultVector(result, result_vector, ptrs, sel_vector, count, offset);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
@@ -699,6 +748,16 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
+		if (ht.join_type == JoinType::OUTER) {
+			// outer join: mark join matches as FOUND in the HT
+			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
+			for (idx_t i = 0; i < result_count; i++) {
+				auto idx = result_vector.get_index(i);
+				auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
+				auto target = (bool *)chain_pointer;
+				*target = true;
+			}
+		}
 		// matches were found
 		// construct the result
 		// on the LHS, we create a slice using the result vector
@@ -821,7 +880,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {
 	assert(result.column_count() == input.column_count() + 1);
-	assert(result.data.back().type == TypeId::BOOL);
+	assert(result.data.back().type == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
 	assert(ht.count > 0);
 
@@ -865,7 +924,6 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 			last_key.Orrify(keys.size(), kdata);
 			for (idx_t i = 0; i < input.size(); i++) {
 				auto kidx = kdata.sel->get_index(i);
-				;
 				nullmask[i] = (*kdata.nullmask)[kidx];
 			}
 			break;
@@ -967,6 +1025,48 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
+}
+
+void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
+	// scan the HT starting from the current position and check which rows from the build side did not find a match
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	idx_t found_entries = 0;
+	for (; state.block_position < blocks.size(); state.block_position++) {
+		auto &block = blocks[state.block_position];
+		auto &handle = pinned_handles[state.block_position];
+		auto baseptr = handle->node->buffer;
+		for (; state.position < block.count; state.position++) {
+			auto tuple_base = baseptr + state.position * entry_size;
+			auto found_match = (bool *)(tuple_base + tuple_size);
+			if (!*found_match) {
+				key_locations[found_entries++] = tuple_base;
+				if (found_entries == STANDARD_VECTOR_SIZE) {
+					state.position++;
+					break;
+				}
+			}
+		}
+		if (found_entries == STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+	result.SetCardinality(found_entries);
+	if (found_entries > 0) {
+		idx_t left_column_count = result.column_count() - build_types.size();
+		// set the left side as a constant NULL
+		for (idx_t i = 0; i < left_column_count; i++) {
+			result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+			ConstantVector::SetNull(result.data[i], true);
+		}
+		// gather the values from the RHS
+		idx_t offset = condition_size;
+		for (idx_t i = 0; i < build_types.size(); i++) {
+			auto &vector = result.data[left_column_count + i];
+			assert(vector.type == build_types[i]);
+			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *)key_locations,
+			                   FlatVector::IncrementalSelectionVector, found_entries, offset);
+		}
+	}
 }
 
 } // namespace duckdb

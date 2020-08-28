@@ -4,7 +4,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 FunctionExpression::FunctionExpression(string schema, string function_name,
@@ -18,7 +18,7 @@ FunctionExpression::FunctionExpression(string schema, string function_name,
 
 FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children,
                                        bool distinct, bool is_operator)
-    : FunctionExpression(DEFAULT_SCHEMA, function_name, children, distinct, is_operator) {
+    : FunctionExpression(INVALID_SCHEMA, function_name, children, distinct, is_operator) {
 }
 
 string FunctionExpression::ToString() const {
@@ -92,3 +92,5 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	function->schema = schema;
 	return move(function);
 }
+
+} // namespace duckdb

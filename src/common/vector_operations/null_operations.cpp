@@ -7,11 +7,11 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <bool INVERSE> void is_null_loop(Vector &input, Vector &result, idx_t count) {
-	assert(result.type == TypeId::BOOL);
+	assert(result.type == LogicalType::BOOLEAN);
 
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 		result.vector_type = VectorType::CONSTANT_VECTOR;
@@ -84,3 +84,5 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 		return false;
 	}
 }
+
+} // namespace duckdb

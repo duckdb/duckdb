@@ -8,22 +8,25 @@
 
 #pragma once
 
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/query_result.hpp"
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
-class DuckDB;
+class ClientContext;
+class ThreadContext;
+class TaskContext;
 
 class ExecutionContext {
 public:
-	unique_ptr<PhysicalOperator> physical_plan;
-	unique_ptr<PhysicalOperatorState> physical_state;
-
-public:
-	void Reset() {
-		physical_plan = nullptr;
-		physical_state = nullptr;
+	ExecutionContext(ClientContext &client_, ThreadContext &thread_, TaskContext &task_)
+	    : client(client_), thread(thread_), task(task_) {
 	}
+
+	//! The client-global context; caution needs to be taken when used in parallel situations
+	ClientContext &client;
+	//! The thread-local context for this execution
+	ThreadContext &thread;
+	//! The task context for this execution
+	TaskContext &task;
 };
+
 } // namespace duckdb

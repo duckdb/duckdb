@@ -1,0 +1,114 @@
+# name: test/sql/optimizer/expression/test_nop_arithmetic.test
+# description: Test NOP arithmetic expressions
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO test VALUES (42, 10), (43, 100);
+
+# a + 0
+query I
+SELECT a + 0 FROM test
+----
+42
+43
+
+# 0 + a
+query I
+SELECT 0 + a FROM test
+----
+42
+43
+
+# a - 0
+query I
+SELECT a - 0 FROM test
+----
+42
+43
+
+# 0 - a
+query I
+SELECT 0 - a FROM test
+----
+-42
+-43
+
+# a * 1
+query I
+SELECT a * 1 FROM test
+----
+42
+43
+
+# 1 * a
+query I
+SELECT 1 * a FROM test
+----
+42
+43
+
+# a * 0 => 0
+query I
+SELECT a * 0 FROM test
+----
+0
+0
+
+query I
+SELECT 0 * a FROM test
+----
+0
+0
+
+# a / 1
+query I
+SELECT a / 1 FROM test
+----
+42
+43
+
+# 1 / a
+query I
+SELECT 1 / a FROM test
+----
+0
+0
+
+# a / 0 => NULL
+query I
+SELECT a / 0 FROM test
+----
+NULL
+NULL
+
+# 0 / a => 0
+query I
+SELECT 0 / a FROM test
+----
+0
+0
+
+# test expressions involving NULL as well
+statement ok
+UPDATE test SET a=NULL
+
+# NULL * 0 = NULL
+query I
+SELECT a * 0 FROM test
+----
+NULL
+NULL
+
+# 0 / NULL = NULL
+query I
+SELECT 0 / a FROM test
+----
+NULL
+NULL
+

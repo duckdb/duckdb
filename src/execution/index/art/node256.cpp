@@ -1,7 +1,7 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 
 Node256::Node256(ART &art, size_t compressionLength) : Node(art, NodeType::N256, compressionLength) {
 }
@@ -76,3 +76,5 @@ void Node256::erase(ART &art, unique_ptr<Node> &node, int pos) {
 		node = move(newNode);
 	}
 }
+
+} // namespace duckdb

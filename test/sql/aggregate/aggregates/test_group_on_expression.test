@@ -1,0 +1,75 @@
+# name: test/sql/aggregate/aggregates/test_group_on_expression.test
+# description: Test GROUP BY on expression
+# group: [aggregates]
+
+statement ok
+CREATE TABLE integer(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO integer VALUES (3, 4), (3, 5), (3, 7);
+
+# group by on expression
+query I
+SELECT j * 2 FROM integer GROUP BY j * 2 ORDER BY j * 2;
+----
+8
+10
+14
+
+# verify that adding or removing the table name does not impact the validity of the query
+query I
+SELECT integer.j * 2 FROM integer GROUP BY j * 2 ORDER BY j * 2;
+----
+8
+10
+14
+
+query I
+SELECT j * 2 FROM integer GROUP BY integer.j * 2 ORDER BY j * 2;
+----
+8
+10
+14
+
+query I
+SELECT j * 2 FROM integer GROUP BY j * 2 ORDER BY integer.j * 2;
+----
+8
+10
+14
+
+query I
+SELECT integer.j * 2 FROM integer GROUP BY j * 2 ORDER BY integer.j * 2;
+----
+8
+10
+14
+
+query I
+SELECT j * 2 FROM integer GROUP BY integer.j * 2 ORDER BY integer.j * 2;
+----
+8
+10
+14
+
+query I
+SELECT integer.j * 2 FROM integer GROUP BY integer.j * 2 ORDER BY j * 2;
+----
+8
+10
+14
+
+query I
+SELECT integer.j * 2 FROM integer GROUP BY integer.j * 2 ORDER BY integer.j * 2;
+----
+8
+10
+14
+
+query I
+SELECT j * 2 AS i FROM integer GROUP BY j * 2 ORDER BY i;
+----
+8
+10
+14
+

@@ -1,0 +1,19 @@
+# name: test/sql/prepared/test_prepare_types.test
+# description: PREPARE many types for INSERT
+# group: [prepared]
+
+# prepare different types in insert
+statement ok
+CREATE TABLE test(a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e REAL, f DOUBLE, g DATE, h VARCHAR)
+
+statement ok
+PREPARE s1 AS INSERT INTO test VALUES ($1,$2,$3,$4,$5,$6,$7,$8);
+
+statement ok
+EXECUTE s1(1,2,3,4,1.5,2.5,'1992-10-20', 'hello world');
+
+query IIIIRRTT
+SELECT * FROM test
+----
+1	2	3	4	1.500000	2.500000	1992-10-20	hello world
+

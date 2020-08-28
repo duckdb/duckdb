@@ -6,8 +6,11 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
-using namespace duckdb;
+#include "duckdb/parallel/task_context.hpp"
+
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
@@ -19,7 +22,7 @@ public:
 	//! Whether or not the scan has been initialized
 	bool initialized;
 	//! The current position in the scan
-	TableScanState scan_offset;
+	TableScanState scan_state;
 	//! Execute filters inside the table
 	ExpressionExecutor executor;
 };
@@ -40,17 +43,42 @@ PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tab
 		expression = move(filter[0]);
 	}
 }
-void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+
+class TableScanTaskInfo : public OperatorTaskInfo {
+public:
+	TableScanState state;
+};
+
+void PhysicalTableScan::ParallelScanInfo(ClientContext &context,
+                                         std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
+	// generate parallel scans
+	table.InitializeParallelScan(context, column_ids, &table_filters, [&](TableScanState state) {
+		auto task = make_unique<TableScanTaskInfo>();
+		task->state = move(state);
+		callback(move(task));
+	});
+}
+
+void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
 	if (column_ids.empty()) {
 		return;
 	}
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &transaction = Transaction::GetTransaction(context.client);
 	if (!state->initialized) {
-		table.InitializeScan(transaction, state->scan_offset, column_ids, &table_filters);
+		auto &task = context.task;
+		auto task_info = task.task_info.find(this);
+		if (task_info != task.task_info.end()) {
+			// task specific limitations: scan the part indicated by the task
+			auto &info = (TableScanTaskInfo &)*task_info->second;
+			state->scan_state = move(info.state);
+		} else {
+			// no task specific limitations for the scan: scan the entire table
+			table.InitializeScan(transaction, state->scan_state, column_ids, &table_filters);
+		}
 		state->initialized = true;
 	}
-	table.Scan(transaction, chunk, state->scan_offset, table_filters);
+	table.Scan(transaction, chunk, state->scan_state, column_ids, table_filters);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {
@@ -68,3 +96,5 @@ unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
 		return make_unique<PhysicalTableScanOperatorState>();
 	}
 }
+
+} // namespace duckdb

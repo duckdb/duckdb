@@ -1,0 +1,18 @@
+# name: test/issues/rigger/test_503.test
+# description: Issue 503
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# RIGHT JOIN with a predicate that compares two integer columns results in an 'Unhandled type' error
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+query II
+SELECT * FROM t0 RIGHT JOIN t1 ON t0.c0!=t1.c0;
+----
+

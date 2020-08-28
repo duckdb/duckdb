@@ -1,0 +1,25 @@
+# name: test/sql/collate/test_unsupported_collations.test
+# description: Test unsupported collations
+# group: [collate]
+
+# unrecognized collation
+statement error
+CREATE TABLE collate_test(s VARCHAR COLLATE blabla)
+
+# non-varchar columns cannot have collations
+statement error
+CREATE TABLE collate_test(s INTEGER COLLATE blabla)
+
+# cannot combine these collations
+statement error
+CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)
+
+statement error
+CREATE TABLE collate_test(s VARCHAR COLLATE 1)
+
+statement error
+CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')
+
+statement error
+PRAGMA default_collation='blabla'
+

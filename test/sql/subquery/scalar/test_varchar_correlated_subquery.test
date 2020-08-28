@@ -1,0 +1,93 @@
+# name: test/sql/subquery/scalar/test_varchar_correlated_subquery.test
+# description: Test varchar correlated subqueries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+# varchar tests
+statement ok
+CREATE TABLE strings(v VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('world'), (NULL)
+
+# ANY
+query T
+SELECT NULL IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
+----
+0
+NULL
+NULL
+
+query T
+SELECT 3 IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
+----
+0
+0
+0
+
+query T
+SELECT 'hello' IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
+----
+0
+1
+0
+
+query T
+SELECT 'bla' IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
+----
+0
+0
+0
+
+query T
+SELECT 'hello' IN (SELECT * FROM strings WHERE v=s1.v or v IS NULL) FROM strings s1 ORDER BY v
+----
+NULL
+1
+NULL
+
+query T
+SELECT 'bla' IN (SELECT * FROM strings WHERE v=s1.v or v IS NULL) FROM strings s1 ORDER BY v
+----
+NULL
+NULL
+NULL
+
+# EXISTS
+query T
+SELECT * FROM strings WHERE EXISTS(SELECT NULL, v) ORDER BY v
+----
+NULL
+hello
+world
+
+query T
+SELECT * FROM strings s1 WHERE EXISTS(SELECT v FROM strings WHERE v=s1.v OR v IS NULL) ORDER BY v
+----
+NULL
+hello
+world
+
+query T
+SELECT * FROM strings s1 WHERE EXISTS(SELECT v FROM strings WHERE v=s1.v) ORDER BY v
+----
+hello
+world
+
+#  scalar query
+query T
+SELECT (SELECT v FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
+----
+NULL
+hello
+world
+
+query T
+SELECT (SELECT v FROM strings WHERE v=s1.v OR (v='hello' AND s1.v IS NULL)) FROM strings s1 ORDER BY v
+----
+hello
+hello
+world
+

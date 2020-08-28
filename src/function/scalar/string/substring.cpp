@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
@@ -29,7 +30,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 
 	// check if there is any non-ascii
 	bool ascii_only = true;
-	int ascii_end = std::min(offset + length + 1, (int)input_size);
+	int ascii_end = min(offset + length + 1, (int)input_size);
 	for (int i = 0; i < ascii_end; i++) {
 		if (input_data[i] & 0x80) {
 			ascii_only = false;
@@ -78,24 +79,23 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 }
 
 static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT32 &&
-	       args.data[2].type == TypeId::INT32);
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	auto &length_vector = args.data[2];
 
 	idx_t current_len = 0;
 	unique_ptr<char[]> output;
-	TernaryExecutor::Execute<string_t, int, int, string_t>(
+	TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
 	    input_vector, offset_vector, length_vector, result, args.size(),
-	    [&](string_t input_string, int offset, int length) {
+	    [&](string_t input_string, int32_t offset, int32_t length) {
 		    return SubstringFun::substring_scalar_function(result, input_string, offset, length, output, current_len);
 	    });
 }
 
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"substring", "substr"}, ScalarFunction({SQLType::VARCHAR, SQLType::INTEGER, SQLType::INTEGER},
-	                                                        SQLType::VARCHAR, substring_function));
+	set.AddFunction({"substring", "substr"},
+	                ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::INTEGER},
+	                               LogicalType::VARCHAR, substring_function));
 }
 
 } // namespace duckdb

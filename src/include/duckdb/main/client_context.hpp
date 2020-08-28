@@ -8,15 +8,16 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/executor.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/stream_query_result.hpp"
-#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/common/unordered_set.hpp"
+
 #include <random>
 
 namespace duckdb {
@@ -25,6 +26,7 @@ class Catalog;
 class DuckDB;
 class PreparedStatementData;
 class Relation;
+class BufferedFileWriter;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -45,7 +47,8 @@ public:
 	//! Lock on using the ClientContext in parallel
 	std::mutex context_lock;
 
-	ExecutionContext execution_context;
+	//! The query executor
+	Executor executor;
 
 	Catalog &catalog;
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
@@ -55,6 +58,12 @@ public:
 	bool query_verification_enabled = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
+	//! Force parallelism of small tables, used for testing
+	bool force_parallelism = false;
+	//! Output only the logical_opt explain output, used for optimization verification
+	bool explain_output_optimized_only = false;
+	//! The writer used to log queries (if logging is enabled)
+	unique_ptr<BufferedFileWriter> log_query_writer;
 
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
@@ -104,6 +113,9 @@ public:
 
 	void RegisterAppender(Appender *appender);
 	void RemoveAppender(Appender *appender);
+
+	//! Register function in the temporary schema
+	void RegisterFunction(CreateFunctionInfo *info);
 
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is

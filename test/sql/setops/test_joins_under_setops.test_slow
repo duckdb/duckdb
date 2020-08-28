@@ -1,0 +1,31 @@
+# name: test/sql/setops/test_joins_under_setops.test_slow
+# description: Test joins under setops
+# group: [setops]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test AS SELECT * FROM range(0, 1024, 1) t1(a);
+
+statement ok
+CREATE TABLE test2 AS SELECT * FROM range(0, 1024, 1) t1(b);
+
+# Join under setops
+query II
+(SELECT * FROM test, test2 WHERE a=b) UNION (SELECT * FROM test,test2 WHERE a=b) ORDER BY 1
+----
+2048 values hashing to 3ac3f0295787aec0c2f4d7239e905c5b
+
+# join under setops with CTEs
+query R
+WITH test_cte AS ((SELECT * FROM test, test2 WHERE a=b) UNION (SELECT * FROM test,test2 WHERE a=b)) SELECT SUM(ta.a) FROM test_cte ta, test_cte tb WHERE ta.a=tb.a
+----
+523776.000000
+
+# join under setops with CTEs and aggregates
+query R
+WITH test_cte AS ((SELECT * FROM test, test2 WHERE a=b) UNION (SELECT * FROM test,test2 WHERE a=b)), results AS (SELECT SUM(ta.a) AS sum_a FROM test_cte ta, test_cte tb WHERE ta.a=tb.a) SELECT * FROM (SELECT * FROM results GROUP BY sum_a UNION SELECT * FROM results GROUP BY sum_a UNION SELECT * FROM results GROUP BY sum_a UNION SELECT * FROM results GROUP BY sum_a) AS t
+----
+523776.000000
+

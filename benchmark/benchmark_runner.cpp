@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb.hpp"
 #include "duckdb_benchmark.hpp"
+#include "interpreted_benchmark.hpp"
 
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
@@ -26,8 +27,28 @@ Benchmark::Benchmark(bool register_benchmark, string name, string group) : name(
 	}
 }
 
+static void listFiles(FileSystem &fs, const string &path, std::function<void(const string &)> cb) {
+	fs.ListFiles(path, [&](string fname, bool is_dir) {
+		string full_path = fs.JoinPath(path, fname);
+		if (is_dir) {
+			// recurse into directory
+			listFiles(fs, full_path, cb);
+		} else {
+			cb(full_path);
+		}
+	});
+}
+
+static bool endsWith(const string &mainStr, const string &toMatch) {
+	return (mainStr.size() >= toMatch.size() &&
+	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
+}
+
+BenchmarkRunner::BenchmarkRunner() {
+}
+
 void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
-	auto &fs = *db.file_system;
+	auto &fs = db.GetFileSystem();
 	// check if the database directory exists; if not create it
 	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
 		fs.CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
@@ -64,7 +85,7 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 }
 
 bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
-	auto &fs = *db.file_system;
+	auto &fs = db.GetFileSystem();
 	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
 		return false;
 	}
@@ -279,6 +300,13 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const 
  */
 ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 	auto &instance = BenchmarkRunner::GetInstance();
+	// first load interpreted benchmarks
+	FileSystem fs;
+	listFiles(fs, "benchmark", [](string path) {
+		if (endsWith(path, ".benchmark")) {
+			new InterpretedBenchmark(path);
+		}
+	});
 	auto &benchmarks = instance.benchmarks;
 	if (!configuration.name_pattern.empty()) {
 		// run only benchmarks which names matches the
@@ -307,11 +335,11 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 			}
 		} else if (configuration.meta == BenchmarkMetaType::QUERY) {
 			for (const auto &benchmark_index : benchmark_indices) {
-				auto duckdb_benchmark = dynamic_cast<DuckDBBenchmark *>(benchmarks[benchmark_index]);
-				if (!duckdb_benchmark) {
+				auto query = benchmarks[benchmark_index]->GetQuery();
+				if (query.empty()) {
 					continue;
 				}
-				fprintf(stdout, "%s\n", duckdb_benchmark->GetQuery().c_str());
+				fprintf(stdout, "%s\n", query.c_str());
 			}
 		} else {
 			for (const auto &benchmark_index : benchmark_indices) {

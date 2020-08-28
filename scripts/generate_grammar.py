@@ -1,7 +1,9 @@
 # use bison to generate the parser files
 # the following version of bison is used:
 # bison (GNU Bison) 2.3
-import os, subprocess, re
+import os
+import subprocess
+import re
 
 bison_location     = "bison"
 base_dir           = 'third_party/libpg_query/grammar'
@@ -64,6 +66,7 @@ kwlist.sort(key=lambda x: strip_p(x[0]))
 # now generate kwlist.h
 # PG_KEYWORD("abort", ABORT_P, UNRESERVED_KEYWORD)
 kwtext = """
+namespace duckdb_libpgquery {
 #define PG_KEYWORD(a,b,c) {a,b,c},
 
 const PGScanKeyword ScanKeywords[] = {
@@ -74,6 +77,7 @@ kwtext += """
 };
 
 const int NumScanKeywords = lengthof(ScanKeywords);
+} // namespace duckdb_libpgquery
 """
 
 with open(kwlist_header, 'w+') as f:

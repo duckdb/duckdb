@@ -7,7 +7,7 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
@@ -74,3 +74,4 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		throw NotImplementedException("Catalog entry type");
 	}
 }
+} // namespace duckdb

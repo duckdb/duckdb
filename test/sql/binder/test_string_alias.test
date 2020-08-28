@@ -1,0 +1,32 @@
+# name: test/sql/binder/test_string_alias.test
+# description: Test that we can use string aliases with an AS clause
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+# we can use strings as long as there is an AS clause
+statement ok
+SELECT i AS 'hello world' FROM integers
+
+# without an AS clause this does not work
+statement error
+SELECT i 'hello world' FROM integers
+
+# double quotes work everywhere
+statement ok
+SELECT i "hello world" FROM integers
+
+statement ok
+SELECT i AS "hello world" FROM integers
+
+# also in table aliases we can use strings
+statement ok
+SELECT "hello world".i FROM integers AS 'hello world'
+
+# but not without the AS clause
+statement error
+SELECT "hello world".i FROM integers 'hello world'

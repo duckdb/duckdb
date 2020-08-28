@@ -6,8 +6,9 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CatalogSet::CatalogSet(Catalog &catalog) : catalog(catalog) {
@@ -39,7 +40,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 		if (HasConflict(transaction, current)) {
 			// current version has been written to by a currently active
 			// transaction
-			throw TransactionException("Catalog write-write conflict on create with \"%s\"", current.name.c_str());
+			throw TransactionException("Catalog write-write conflict on create with \"%s\"", current.name);
 		}
 		// there is a current version that has been committed
 		// if it has not been deleted there is a conflict
@@ -54,7 +55,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 	value->set = this;
 
 	// now add the dependency set of this object to the dependency manager
-	catalog.dependency_manager.AddObject(transaction, value.get(), dependencies);
+	catalog.dependency_manager->AddObject(transaction, value.get(), dependencies);
 
 	value->child = move(data[name]);
 	value->child->parent = value.get();
@@ -80,7 +81,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	if (HasConflict(transaction, current)) {
 		// current version has been written to by a currently active
 		// transaction
-		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", current.name.c_str());
+		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", current.name);
 	}
 
 	// lock this catalog set to disallow reading
@@ -96,7 +97,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	}
 
 	// now transfer all dependencies from the old table to the new table
-	catalog.dependency_manager.AlterObject(transaction, data[name].get(), value.get());
+	catalog.dependency_manager->AlterObject(transaction, data[name].get(), value.get());
 
 	value->timestamp = transaction.transaction_id;
 	value->child = move(data[name]);
@@ -125,7 +126,7 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool ca
 	}
 	if (HasConflict(transaction, *entry->second)) {
 		// current version has been written to by a currently active transaction
-		throw TransactionException("Catalog write-write conflict on drop with \"%s\"", name.c_str());
+		throw TransactionException("Catalog write-write conflict on drop with \"%s\"", name);
 	}
 	// there is a current version that has been committed by this transaction
 	if (entry->second->deleted) {
@@ -147,7 +148,7 @@ void CatalogSet::DropEntryInternal(Transaction &transaction, CatalogEntry &curre
                                    set_lock_map_t &lock_set) {
 	assert(data.find(current.name) != data.end());
 	// first check any dependencies of this object
-	current.catalog->dependency_manager.DropObject(transaction, &current, cascade, lock_set);
+	current.catalog->dependency_manager->DropObject(transaction, &current, cascade, lock_set);
 
 	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
@@ -222,7 +223,7 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	auto &to_be_removed_node = entry->parent;
 	if (!to_be_removed_node->deleted) {
 		// delete the entry from the dependency manager as well
-		catalog.dependency_manager.EraseObject(to_be_removed_node);
+		catalog.dependency_manager->EraseObject(to_be_removed_node);
 	}
 	if (to_be_removed_node->parent) {
 		// if the to be removed node has a parent, set the child pointer to the
@@ -237,3 +238,5 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		entry->parent = nullptr;
 	}
 }
+
+} // namespace duckdb

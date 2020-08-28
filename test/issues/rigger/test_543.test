@@ -1,0 +1,39 @@
+# name: test/issues/rigger/test_543.test
+# description: Issue 543
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Unexpected result for SUM() upon overflow
+statement ok
+CREATE TABLE t0(c1 BIGINT);
+
+statement ok
+INSERT INTO t0(c1) VALUES (2);
+
+statement ok
+INSERT INTO t0(c1) VALUES (9223372036854775807);
+
+query R
+SELECT SUM(t0.c1) FROM t0;
+----
+9223372036854775809
+
+statement ok
+DROP TABLE t0;
+
+statement ok
+CREATE TABLE t0(c1 BIGINT);
+
+statement ok
+INSERT INTO t0(c1) VALUES (1);
+
+statement ok
+INSERT INTO t0(c1) VALUES (9223372036854775807);
+
+query R
+SELECT SUM(t0.c1) FROM t0;
+----
+9223372036854775808
+

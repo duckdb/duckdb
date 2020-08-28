@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
@@ -87,32 +87,32 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
           SelectionVector &fside, idx_t fcount) {
 	assert(res_true.type == res_false.type && res_true.type == result.type);
 
-	switch (result.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (result.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		case_loop<int8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		case_loop<int16_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		case_loop<int32_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		case_loop<int64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		case_loop<float>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		case_loop<double>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		case_loop<string_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		StringVector::AddHeapReference(result, res_true);
 		StringVector::AddHeapReference(result, res_false);
 		break;
-	case TypeId::LIST: {
+	case PhysicalType::LIST: {
 		auto result_cc = make_unique<ChunkCollection>();
 		ListVector::SetEntry(result, move(result_cc));
 
@@ -155,7 +155,8 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for case expression: %s",
-		                              TypeIdToString(result.type).c_str());
+		throw NotImplementedException("Unimplemented type for case expression: %s", result.type.ToString());
 	}
 }
+
+} // namespace duckdb

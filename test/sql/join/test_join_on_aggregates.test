@@ -1,0 +1,32 @@
+# name: test/sql/join/test_join_on_aggregates.test
+# description: Test join on aggregates
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# test join on ungrouped aggregates
+query RR
+SELECT * FROM (SELECT SUM(i) AS x FROM integers) a, (SELECT SUM(i) AS x FROM integers) b WHERE a.x=b.x;
+----
+6.000000	6.000000
+
+# Test join on aggregates with GROUP BY
+statement ok
+CREATE TABLE groups(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO groups VALUES (1, 1), (2, 1), (3, 2), (NULL, 2)
+
+query IRII
+SELECT a.j,a.x,a.y,b.y FROM (SELECT j, MIN(i) AS y, SUM(i) AS x FROM groups GROUP BY j) a, (SELECT j, MIN(i) AS y, SUM(i) AS x FROM groups GROUP BY j) b WHERE a.j=b.j AND a.x=b.x ORDER BY a.j;
+----
+1	3.000000	1	1
+2	3.000000	3	3
+

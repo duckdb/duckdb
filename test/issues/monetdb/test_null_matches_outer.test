@@ -1,0 +1,42 @@
+# name: test/issues/monetdb/test_null_matches_outer.test
+# description: MonetDB Test: null_matches_in_outer.Bug-6398.sql
+# group: [monetdb]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table "E" ("intCol" bigint, "stringCol" varchar);
+
+statement ok
+insert into "E" values (0, 'zero');
+
+statement ok
+insert into "E" values (1, 'one');
+
+statement ok
+insert into "E" values (2, 'two');
+
+statement ok
+insert into "E" values (null, null);
+
+statement ok
+create table "I" ("intCol" bigint, "stringCol" varchar);
+
+statement ok
+insert into "I" values (2, 'due');
+
+statement ok
+insert into "I" values (4, 'quattro');
+
+statement ok
+insert into "I" values (null, 'this is not null')
+
+query ITIT
+select * from "E" left outer join "I" on "E"."intCol" = "I"."intCol" or ("E"."intCol" is null and  "I"."intCol" is null) ORDER BY 1;
+----
+NULL	NULL	NULL	this is not null
+0	zero	NULL	NULL
+1	one	NULL	NULL
+2	two	2	due
+

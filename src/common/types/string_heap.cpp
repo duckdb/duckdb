@@ -1,12 +1,13 @@
 #include "duckdb/common/types/string_heap.hpp"
 
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 #define MINIMUM_HEAP_SIZE 4096
@@ -66,3 +67,5 @@ void StringHeap::MergeHeap(StringHeap &other) {
 	}
 	other.tail = nullptr;
 }
+
+} // namespace duckdb

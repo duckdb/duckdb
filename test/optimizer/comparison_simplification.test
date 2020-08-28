@@ -1,0 +1,35 @@
+# name: test/optimizer/comparison_simplification.test
+# description: Comparison simplification test
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(X INTEGER);
+
+statement ok
+PRAGMA explain_output='optimized';
+
+# comparisons with NULL result in NULL
+query I nosort compnorm1
+EXPLAIN SELECT NULL FROM test
+----
+
+query I nosort compnorm1
+EXPLAIN SELECT X=NULL FROM test
+----
+
+query I nosort compnorm1
+EXPLAIN SELECT X>NULL FROM test
+----
+
+query I nosort compnorm1
+EXPLAIN SELECT NULL>X FROM test
+----
+
+# in the WHERE clause this gets pruned entirely
+query I nosort compnorm2
+EXPLAIN SELECT * FROM test WHERE 1=0
+----
+
+query I nosort compnorm2
+EXPLAIN SELECT * FROM test WHERE X=NULL
+----

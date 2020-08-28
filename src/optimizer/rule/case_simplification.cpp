@@ -3,7 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -24,10 +24,12 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 
 	// fold based on the constant condition
-	auto condition = constant_value.CastAs(TypeId::BOOL);
+	auto condition = constant_value.CastAs(LogicalType::BOOLEAN);
 	if (condition.is_null || !condition.value_.boolean) {
 		return move(root->result_if_false);
 	} else {
 		return move(root->result_if_true);
 	}
 }
+
+} // namespace duckdb

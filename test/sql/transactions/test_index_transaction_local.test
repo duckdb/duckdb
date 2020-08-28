@@ -1,0 +1,101 @@
+# name: test/sql/transactions/test_index_transaction_local.test
+# description: Test index with transaction local commits
+# group: [transactions]
+
+# first test simple index usage
+statement ok con1
+CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3)
+
+# inserting a duplicate value fails
+statement error con1
+INSERT INTO integers VALUES (1)
+
+# inserting a non-duplicate value works
+statement ok con1
+INSERT INTO integers VALUES (4)
+
+# updating a primary key to an existing value fails
+statement error con1
+UPDATE integers SET i=1 WHERE i=4
+
+# but updating to a non-existing value works
+statement ok con1
+UPDATE integers SET i=5 WHERE i=4
+
+# if we first delete a value, we can insert that value again
+statement ok con1
+DELETE FROM integers WHERE i=1
+
+statement ok con1
+INSERT INTO integers VALUES (1)
+
+statement ok con1
+DELETE FROM integers WHERE i >= 4
+
+query I con1
+SELECT COUNT(*) FROM integers
+----
+3
+
+query I con2
+SELECT COUNT(*) FROM integers
+----
+3
+
+# now test with multiple transactions
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# both transactions can insert the same value
+statement ok con1
+INSERT INTO integers VALUES (4)
+
+statement ok con2
+INSERT INTO integers VALUES (4)
+
+query I con1
+SELECT COUNT(*) FROM integers
+----
+4
+
+query I con2
+SELECT COUNT(*) FROM integers
+----
+4
+
+# also using the index is fine
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+1
+
+query I con2
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+1
+
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=4
+----
+1
+
+query I con2
+SELECT COUNT(*) FROM integers WHERE i=4
+----
+1
+
+# conflict happens on commit
+# we can commit con
+statement ok con1
+COMMIT
+
+# but then con2 fails to commit
+statement error con2
+COMMIT
+

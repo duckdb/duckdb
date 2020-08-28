@@ -17,7 +17,7 @@
 
 #include "util/utf.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 enum
 {
@@ -257,4 +257,4 @@ utfrune(const char *s, Rune c)
 	return 0;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

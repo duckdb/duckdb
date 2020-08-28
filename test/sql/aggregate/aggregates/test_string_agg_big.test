@@ -1,0 +1,16 @@
+# name: test/sql/aggregate/aggregates/test_string_agg_big.test
+# description: STRING_AGG big
+# group: [aggregates]
+
+statement ok
+CREATE TABLE strings AS SELECT c::VARCHAR g, (c*10+e)::VARCHAR x FROM range(0, 100, 1) t1(c), range(0, 100, 1) t2(e);
+
+query I
+SELECT COUNT(*) FROM (SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g) t1
+----
+100
+
+query I
+SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g ORDER BY 1, 2
+----
+200 values hashing to b8126ea73f21372cdb3f2dc483106a12

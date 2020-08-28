@@ -10,9 +10,10 @@ using namespace std;
 
 #define TPCH_QUERY_BODY(QNR)                                                                                           \
 	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \
-		if (!BenchmarkRunner::TryLoadDatabase(state->db, "tpch")) {                                                    \
+		string cached_name = "tpch_sf" + to_string(SF);                                                                \
+		if (!BenchmarkRunner::TryLoadDatabase(state->db, cached_name)) {                                               \
 			tpch::dbgen(SF, state->db);                                                                                \
-			BenchmarkRunner::SaveDatabase(state->db, "tpch");                                                          \
+			BenchmarkRunner::SaveDatabase(state->db, cached_name);                                                     \
 		}                                                                                                              \
 	}                                                                                                                  \
 	virtual string GetQuery() {                                                                                        \

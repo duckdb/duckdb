@@ -8,36 +8,23 @@
 
 #pragma once
 
-#include <cstdlib>
 #include <memory>
-#include <string>
-#include <vector>
-#include <cmath>
+#include <cstdint>
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 
 //! inline std directives that we use frequently
 using std::move;
 using std::shared_ptr;
-using std::string;
 using std::unique_ptr;
 using data_ptr = unique_ptr<char[]>;
 using std::make_shared;
-using std::vector;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA "main"
 #define TEMP_SCHEMA "temp"
 #define INVALID_SCHEMA ""
-
-//! The vector size used in the execution engine
-#ifndef STANDARD_VECTOR_SIZE
-#define STANDARD_VECTOR_SIZE 1024
-#endif
-
-#if ((STANDARD_VECTOR_SIZE & (STANDARD_VECTOR_SIZE - 1)) != 0)
-#error Vector size should be a power of two
-#endif
 
 //! a saner size_t for loop indices etc
 typedef uint64_t idx_t;
@@ -74,9 +61,6 @@ extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 
 //! The maximum row identifier used in tables
 extern const row_t MAX_ROW_ID;
-
-//! Zero selection vector: completely filled with the value 0 [READ ONLY]
-extern const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 
 extern const transaction_t TRANSACTION_ID_START;
 extern const transaction_t MAXIMUM_QUERY_ID;

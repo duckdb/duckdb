@@ -19,8 +19,7 @@ class DuckDB;
 
 //! The benchmark runner class is responsible for running benchmarks
 class BenchmarkRunner {
-	BenchmarkRunner() {
-	}
+	BenchmarkRunner();
 
 public:
 	static constexpr const char *DUCKDB_BENCHMARK_DIRECTORY = "duckdb_benchmark_data";

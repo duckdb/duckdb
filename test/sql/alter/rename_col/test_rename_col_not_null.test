@@ -1,0 +1,23 @@
+# name: test/sql/alter/rename_col/test_rename_col_not_null.test
+# description: Test ALTER TABLE RENAME COLUMN on a table with constraints: NOT NULL constraint
+# group: [rename_col]
+
+statement ok
+CREATE TABLE test(i INTEGER NOT NULL, j INTEGER)
+
+statement ok
+INSERT INTO test (i, j) VALUES (1, 2), (2, 3)
+
+statement error
+INSERT INTO test (i, j) VALUES (NULL, 2)
+
+statement ok
+ALTER TABLE test RENAME COLUMN i TO k
+
+# the not null constraint should still work after altering the table
+statement ok
+INSERT INTO test (k, j) VALUES (1, 2), (2, 3)
+
+statement error
+INSERT INTO test (k, j) VALUES (NULL, 2)
+

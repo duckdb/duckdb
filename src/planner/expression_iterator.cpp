@@ -6,20 +6,20 @@
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void ExpressionIterator::EnumerateChildren(const Expression &expr, function<void(const Expression &child)> callback) {
 	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		callback(*child);
-		return move(child);
+		return child;
 	});
 }
 
 void ExpressionIterator::EnumerateChildren(Expression &expr, std::function<void(Expression &child)> callback) {
 	EnumerateChildren(expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		callback(*child);
-		return move(child);
+		return child;
 	});
 }
 
@@ -139,7 +139,7 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 	callback(*expr);
 	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		EnumerateExpression(child, callback);
-		return move(child);
+		return child;
 	});
 }
 
@@ -219,3 +219,5 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		}
 	}
 }
+
+} // namespace duckdb

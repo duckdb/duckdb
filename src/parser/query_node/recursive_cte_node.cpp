@@ -1,6 +1,6 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool RecursiveCTENode::Equals(const QueryNode *other_) const {
@@ -50,3 +50,5 @@ unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &source) {
 	result->right = QueryNode::Deserialize(source);
 	return move(result);
 }
+
+} // namespace duckdb

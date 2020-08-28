@@ -1,0 +1,13 @@
+# name: test/issues/rigger/test_587.test
+# description: Issue 587
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# A negative DATE results in a 'double free or corruption' crash
+query T
+SELECT (DATE '-10000-01-01')::VARCHAR;
+----
+10000-01-01 (BC)
+

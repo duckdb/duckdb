@@ -31,7 +31,7 @@ public:
 	//! The set of data chunks in the collection
 	vector<unique_ptr<DataChunk>> chunks;
 	//! The types of the ChunkCollection
-	vector<TypeId> types;
+	vector<LogicalType> types;
 
 	//! The amount of columns in the ChunkCollection
 	idx_t column_count() {
@@ -64,7 +64,7 @@ public:
 		return *chunks[LocateChunk(index)];
 	}
 
-	void Sort(vector<OrderType> &desc, idx_t result[]);
+	void Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]);
 	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
 	void Reorder(idx_t order[]);
 
@@ -80,7 +80,7 @@ public:
 		return result;
 	}
 
-	void Heap(vector<OrderType> &desc, idx_t heap[], idx_t heap_size);
+	void Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[], idx_t heap_size);
 	idx_t MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size);
 };
 } // namespace duckdb

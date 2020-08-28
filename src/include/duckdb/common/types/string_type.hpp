@@ -37,6 +37,10 @@ public:
 				return;
 			}
 			// small string: inlined
+			/* Note: this appears to write out-of bounds on `prefix` if `length` > `PREFIX_LENGTH`
+			 but this is not the case because the `value_` union `inlined` char array directly
+			 follows it with 8 more chars to use for the string value.
+			 */
 			memcpy(prefix, data, length);
 			prefix[length] = '\0';
 		} else {
@@ -100,4 +104,4 @@ private:
 	} value_;
 };
 
-}; // namespace duckdb
+} // namespace duckdb

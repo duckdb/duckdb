@@ -36,8 +36,8 @@
 
 // Dummy implementations of strerror_r and strerror_s called if corresponding
 // system functions are not available.
-inline fmt::internal::null<> strerror_r(int, char*, ...) { return {}; }
-inline fmt::internal::null<> strerror_s(char*, std::size_t, ...) { return {}; }
+inline duckdb_fmt::internal::null<> strerror_r(int, char*, ...) { return {}; }
+inline duckdb_fmt::internal::null<> strerror_s(char*, std::size_t, ...) { return {}; }
 
 FMT_BEGIN_NAMESPACE
 namespace internal {
@@ -154,9 +154,11 @@ FMT_FUNC void report_error(format_func func, int error_code,
                            string_view message) FMT_NOEXCEPT {
   memory_buffer full_message;
   func(full_message, error_code, message);
+  /*// R does not allow us to have a reference to stderr even if we are not using it
   // Don't use fwrite_fully because the latter may throw.
   (void)std::fwrite(full_message.data(), full_message.size(), 1, stderr);
   std::fputc('\n', stderr);
+  */
 }
 }  // namespace internal
 

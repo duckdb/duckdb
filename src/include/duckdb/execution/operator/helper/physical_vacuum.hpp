@@ -17,13 +17,13 @@ namespace duckdb {
 class PhysicalVacuum : public PhysicalOperator {
 public:
 	PhysicalVacuum(unique_ptr<VacuumInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::VACUUM, {TypeId::BOOL}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::VACUUM, {LogicalType::BOOLEAN}), info(move(info)) {
 	}
 
 	unique_ptr<VacuumInfo> info;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb

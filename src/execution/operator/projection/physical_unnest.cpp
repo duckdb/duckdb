@@ -1,12 +1,14 @@
 #include "duckdb/execution/operator/projection/physical_unnest.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 //! The operator state of the window
 class PhysicalUnnestOperatorState : public PhysicalOperatorState {
@@ -23,14 +25,14 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalUnnest::PhysicalUnnest(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
 
 	assert(this->select_list.size() > 0);
 }
 
-void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalUnnestOperatorState *>(state_);
 	while (true) { // repeat until we actually have produced some rows
 		if (state->child_chunk.size() == 0 || state->parent_position >= state->child_chunk.size()) {
@@ -45,7 +47,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 			// get the list data to unnest
 			ExpressionExecutor executor;
-			vector<TypeId> list_data_types;
+			vector<LogicalType> list_data_types;
 			for (auto &exp : select_list) {
 				assert(exp->type == ExpressionType::BOUND_UNNEST);
 				auto bue = (BoundUnnestExpression *)exp.get();
@@ -68,7 +70,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			for (idx_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 				auto &v = state->list_data.data[col_idx];
 
-				assert(v.type == TypeId::LIST);
+				assert(v.type == LogicalType::LIST);
 				// TODO deal with NULL values here!
 				auto list_data = FlatVector::GetData<list_entry_t>(v);
 				auto list_entry = list_data[state->parent_position];
@@ -128,3 +130,5 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 unique_ptr<PhysicalOperatorState> PhysicalUnnest::GetOperatorState() {
 	return make_unique<PhysicalUnnestOperatorState>(children[0].get());
 }
+
+} // namespace duckdb

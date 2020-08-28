@@ -1,8 +1,9 @@
 #include "duckdb/parser/statement/alter_table_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
 	auto stmt = reinterpret_cast<PGRenameStmt *>(node);
@@ -57,3 +58,5 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
 	assert(info);
 	return make_unique<AlterTableStatement>(move(info));
 }
+
+} // namespace duckdb

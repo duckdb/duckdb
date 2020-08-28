@@ -1,0 +1,52 @@
+# name: test/sql/constraints/primarykey/test_pk_updel_local.test
+# description: PRIMARY KEY and update/delete in the same transaction
+# group: [primarykey]
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers VALUES (1);
+
+statement ok
+UPDATE integers SET i=33;
+
+statement ok
+ROLLBACK
+
+statement ok
+INSERT INTO integers VALUES (1);
+
+statement ok
+INSERT INTO integers VALUES (33);
+
+query I
+SELECT * FROM integers ORDER BY i
+----
+1
+33
+
+statement ok
+DROP TABLE integers
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO integers VALUES (1);
+
+statement ok
+UPDATE integers SET i=33;
+
+statement ok
+INSERT INTO integers VALUES (1);
+
+query I
+SELECT * FROM integers ORDER BY i
+----
+1
+33
+

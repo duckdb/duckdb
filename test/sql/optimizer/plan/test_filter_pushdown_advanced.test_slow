@@ -1,0 +1,52 @@
+# name: test/sql/optimizer/plan/test_filter_pushdown_advanced.test_slow
+# description: Test filter pushdown with more advanced expressions
+# group: [plan]
+
+# in this test we run queries that will take a long time without filter pushdown, but are almost instant with
+# proper filter pushdown we create two tables with 10K elements each in most tests we cross product them together
+# in some way to create a "big table" (100M entries) but the filter can be pushed past the cross product in all
+# cases
+statement ok
+CREATE TABLE vals1 AS SELECT i AS i, i AS j FROM range(0, 10000, 1) t1(i)
+
+statement ok
+CREATE TABLE vals2(k INTEGER, l INTEGER)
+
+statement ok
+INSERT INTO vals2 SELECT * FROM vals1
+
+# x + 1 = 5001
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i+1=5001 AND tbl1.i<>5000;
+----
+0
+
+# x - 1 = 4999
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i-1=4999 AND tbl1.i<>5000;
+----
+0
+
+# x * 2 = 10000
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i*2=10000 AND tbl1.i<>5000;
+----
+0
+
+#  x * 2 = 9999 should always return false (as 9999 % 2 != 0, it's not cleanly divisible)
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i*2=9999;
+# 0
+
+# x / 2 = 2500
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i/2=2500 AND tbl1.i<>5000;
+# 0
+
+# -x=-5000
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE -tbl1.i=-5000 AND tbl1.i<>5000;
+----
+0
+
+# x + (1 + 1) = 5002
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i+(1+1)=5002 AND tbl1.i<>5000;
+# 0

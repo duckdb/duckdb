@@ -17,14 +17,15 @@ namespace duckdb {
 class PhysicalPrepare : public PhysicalOperator {
 public:
 	PhysicalPrepare(string name, unique_ptr<PreparedStatementData> prepared)
-	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {TypeId::BOOL}), name(name), prepared(move(prepared)) {
+	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {LogicalType::BOOLEAN}), name(name),
+	      prepared(move(prepared)) {
 	}
 
 	string name;
 	unique_ptr<PreparedStatementData> prepared;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb

@@ -1,0 +1,22 @@
+# name: test/issues/rigger/test_625.test
+# description: Issue 625
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# DROP column results in an assertion failure unique.index < base.columns.size()
+statement ok
+CREATE TABLE t0(c0 INT, c INT UNIQUE);
+
+# we don't support this case yet
+statement error
+ALTER TABLE t0 DROP c0;
+
+# check that unique constraint still works
+statement ok
+INSERT INTO t0 (c) VALUES (1);
+
+statement error
+INSERT INTO t0 (c) VALUES (1);
+

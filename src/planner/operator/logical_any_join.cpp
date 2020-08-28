@@ -1,6 +1,6 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperatorType::ANY_JOIN) {
@@ -9,3 +9,5 @@ LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperato
 string LogicalAnyJoin::ParamsToString() const {
 	return "[" + condition->ToString() + "]";
 }
+
+} // namespace duckdb

@@ -4,12 +4,19 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, bool is_operator)
-    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
-      function(bound_function), is_operator(is_operator) {
+BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
+                                                 bool is_operator)
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
+      function(bound_function), arguments(bound_function.arguments), is_operator(is_operator) {
+}
+
+BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
+                                                 vector<LogicalType> arguments, bool is_operator)
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
+      function(bound_function), arguments(move(arguments)), is_operator(is_operator) {
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -50,13 +57,13 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, is_operator);
+	auto copy = make_unique<BoundFunctionExpression>(return_type, function, arguments, is_operator);
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
 	copy->bind_info = bind_info ? bind_info->Copy() : nullptr;
 	copy->CopyProperties(*this);
-	copy->arguments = arguments;
-	copy->sql_return_type = sql_return_type;
 	return move(copy);
 }
+
+} // namespace duckdb

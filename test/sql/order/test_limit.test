@@ -1,0 +1,69 @@
+# name: test/sql/order/test_limit.test
+# description: Test LIMIT keyword
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
+
+# constant limit
+query I
+SELECT a FROM test LIMIT 1
+----
+11
+
+# decimal limit
+query I
+SELECT a FROM test LIMIT 1.5
+----
+11
+
+# LIMIT with operation
+query I
+SELECT a FROM test LIMIT 2-1
+----
+11
+
+# LIMIT with non-scalar should fail
+statement error
+SELECT a FROM test LIMIT a
+
+# LIMIT with non-scalar operation should also fail
+statement error
+SELECT a FROM test LIMIT a+1
+
+# aggregate in limit
+statement error
+SELECT a FROM test LIMIT SUM(42)
+
+# window function in limit
+statement error
+SELECT a FROM test LIMIT row_number() OVER ()
+
+# subquery in limit
+statement error
+SELECT a FROM test LIMIT (SELECT MIN(a) FROM test)
+
+# LIMIT Bug #321 Crazy Result
+statement ok
+CREATE TABLE test2 (a STRING);
+
+statement ok
+INSERT INTO test2 VALUES ('Hello World')
+
+statement ok
+PREPARE v1 AS SELECT * FROM test2 LIMIT 3
+
+query I
+EXECUTE v1
+----
+Hello World
+
+# can only limit by integers
+statement error
+select 1 limit date '1992-01-01';

@@ -10,8 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
-
-#include <type_traits>
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -21,6 +20,64 @@ class Deserializer;
 struct blob_t {
 	data_ptr_t data;
 	idx_t size;
+};
+
+struct interval_t {
+	int32_t months;
+	int32_t days;
+	int64_t msecs;
+};
+
+struct hugeint_t {
+public:
+	uint64_t lower;
+	int64_t upper;
+
+public:
+	hugeint_t() = default;
+	hugeint_t(int64_t value);
+	hugeint_t(const hugeint_t &rhs) = default;
+	hugeint_t(hugeint_t &&rhs) = default;
+	hugeint_t &operator=(const hugeint_t &rhs) = default;
+	hugeint_t &operator=(hugeint_t &&rhs) = default;
+
+	string ToString() const;
+
+	// comparison operators
+	bool operator==(const hugeint_t &rhs) const;
+	bool operator!=(const hugeint_t &rhs) const;
+	bool operator<=(const hugeint_t &rhs) const;
+	bool operator<(const hugeint_t &rhs) const;
+	bool operator>(const hugeint_t &rhs) const;
+	bool operator>=(const hugeint_t &rhs) const;
+
+	// arithmetic operators
+	hugeint_t operator+(const hugeint_t &rhs) const;
+	hugeint_t operator-(const hugeint_t &rhs) const;
+	hugeint_t operator*(const hugeint_t &rhs) const;
+	hugeint_t operator/(const hugeint_t &rhs) const;
+	hugeint_t operator%(const hugeint_t &rhs) const;
+	hugeint_t operator-() const;
+
+	// bitwise operators
+	hugeint_t operator>>(const hugeint_t &rhs) const;
+	hugeint_t operator<<(const hugeint_t &rhs) const;
+	hugeint_t operator&(const hugeint_t &rhs) const;
+	hugeint_t operator|(const hugeint_t &rhs) const;
+	hugeint_t operator^(const hugeint_t &rhs) const;
+	hugeint_t operator~() const;
+
+	// in-place operators
+	hugeint_t &operator+=(const hugeint_t &rhs);
+	hugeint_t &operator-=(const hugeint_t &rhs);
+	hugeint_t &operator*=(const hugeint_t &rhs);
+	hugeint_t &operator/=(const hugeint_t &rhs);
+	hugeint_t &operator%=(const hugeint_t &rhs);
+	hugeint_t &operator>>=(const hugeint_t &rhs);
+	hugeint_t &operator<<=(const hugeint_t &rhs);
+	hugeint_t &operator&=(const hugeint_t &rhs);
+	hugeint_t &operator|=(const hugeint_t &rhs);
+	hugeint_t &operator^=(const hugeint_t &rhs);
 };
 
 struct string_t;
@@ -46,7 +103,7 @@ struct list_entry_t {
 //===--------------------------------------------------------------------===//
 
 // taken from arrow's type.h
-enum class TypeId : uint8_t {
+enum class PhysicalType : uint8_t {
 	/// A NULL type having no physical storage
 	NA = 0,
 
@@ -162,6 +219,7 @@ enum class TypeId : uint8_t {
 	VARBINARY = 201,
 	POINTER = 202,
 	HASH = 203,
+	INT128 = 204, // 128-bit integers
 
 	INVALID = 255
 };
@@ -169,7 +227,7 @@ enum class TypeId : uint8_t {
 //===--------------------------------------------------------------------===//
 // SQL Types
 //===--------------------------------------------------------------------===//
-enum class SQLTypeId : uint8_t {
+enum class LogicalTypeId : uint8_t {
 	INVALID = 0,
 	SQLNULL = 1, /* NULL type, used for constant NULL */
 	UNKNOWN = 2, /* unknown type, used for parameter expressions */
@@ -189,117 +247,161 @@ enum class SQLTypeId : uint8_t {
 	CHAR = 21,
 	VARCHAR = 22,
 	VARBINARY = 23,
+	BLOB = 24,
+	INTERVAL = 25,
+
+	HUGEINT = 50,
+	POINTER = 51,
+	HASH = 52,
 
 	STRUCT = 100,
 	LIST = 101
 };
 
-struct SQLType {
-	SQLTypeId id;
-	uint16_t width;
-	uint8_t scale;
-	string collation;
+struct LogicalType {
+	LogicalType();
+	LogicalType(LogicalTypeId id);
+	LogicalType(LogicalTypeId id, string collation);
+	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
+	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
+	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation,
+	            child_list_t<LogicalType> child_types);
 
-	// TODO serialize this
-	child_list_t<SQLType> child_type;
-
-	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0, string collation = string())
-	    : id(id), width(width), scale(scale), collation(move(collation)) {
+	LogicalTypeId id() const {
+		return id_;
+	}
+	uint8_t width() const {
+		return width_;
+	}
+	uint8_t scale() const {
+		return scale_;
+	}
+	const string &collation() const {
+		return collation_;
+	}
+	const child_list_t<LogicalType> &child_types() const {
+		return child_types_;
+	}
+	PhysicalType InternalType() const {
+		return physical_type_;
 	}
 
-	bool operator==(const SQLType &rhs) const {
-		return id == rhs.id && width == rhs.width && scale == rhs.scale;
+	bool operator==(const LogicalType &rhs) const {
+		return id_ == rhs.id_ && width_ == rhs.width_ && scale_ == rhs.scale_;
 	}
-	bool operator!=(const SQLType &rhs) const {
+	bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
 	}
 
-	//! Serializes a SQLType to a stand-alone binary blob
+	//! Serializes a LogicalType to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
-	//! Deserializes a blob back into an SQLType
-	static SQLType Deserialize(Deserializer &source);
+	//! Deserializes a blob back into an LogicalType
+	static LogicalType Deserialize(Deserializer &source);
 
+	string ToString() const;
 	bool IsIntegral() const;
 	bool IsNumeric() const;
-	bool IsMoreGenericThan(SQLType &other) const;
+	bool IsMoreGenericThan(LogicalType &other) const;
+	hash_t Hash() const;
+
+	//! Returns the "order" of a numeric type; for auto-casting numeric types the type of the highest order should be
+	//! used to guarantee a cast doesn't fail
+	int NumericTypeOrder() const;
+
+private:
+	LogicalTypeId id_;
+	uint8_t width_;
+	uint8_t scale_;
+	string collation_;
+
+	child_list_t<LogicalType> child_types_;
+	PhysicalType physical_type_;
+
+private:
+	PhysicalType GetInternalType();
 
 public:
-	static const SQLType SQLNULL;
-	static const SQLType BOOLEAN;
-	static const SQLType TINYINT;
-	static const SQLType SMALLINT;
-	static const SQLType INTEGER;
-	static const SQLType BIGINT;
-	static const SQLType FLOAT;
-	static const SQLType DOUBLE;
-	static const SQLType DATE;
-	static const SQLType TIMESTAMP;
-	static const SQLType TIME;
-	static const SQLType VARCHAR;
-	static const SQLType VARBINARY;
-	static const SQLType STRUCT;
-	static const SQLType LIST;
-	static const SQLType ANY;
+	static const LogicalType SQLNULL;
+	static const LogicalType BOOLEAN;
+	static const LogicalType TINYINT;
+	static const LogicalType SMALLINT;
+	static const LogicalType INTEGER;
+	static const LogicalType BIGINT;
+	static const LogicalType FLOAT;
+	static const LogicalType DOUBLE;
+	static const LogicalType DATE;
+	static const LogicalType TIMESTAMP;
+	static const LogicalType TIME;
+	static const LogicalType VARCHAR;
+	static const LogicalType VARBINARY;
+	static const LogicalType STRUCT;
+	static const LogicalType LIST;
+	static const LogicalType ANY;
+	static const LogicalType BLOB;
+	static const LogicalType INTERVAL;
+	static const LogicalType HUGEINT;
+	static const LogicalType HASH;
+	static const LogicalType POINTER;
+	static const LogicalType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)
-	static const vector<SQLType> NUMERIC;
+	static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types
-	static const vector<SQLType> INTEGRAL;
+	static const vector<LogicalType> INTEGRAL;
 	//! A list of ALL SQL types
-	static const vector<SQLType> ALL_TYPES;
+	static const vector<LogicalType> ALL_TYPES;
 };
 
-string SQLTypeIdToString(SQLTypeId type);
-string SQLTypeToString(SQLType type);
+string LogicalTypeIdToString(LogicalTypeId type);
 
-SQLType MaxSQLType(SQLType left, SQLType right);
-SQLType TransformStringToSQLType(string str);
+LogicalType MaxLogicalType(LogicalType left, LogicalType right);
+LogicalType TransformStringToLogicalType(string str);
 
-//! Gets the internal type associated with the given SQL type
-TypeId GetInternalType(SQLType type);
-//! Returns the "simplest" SQL type corresponding to the given type id (e.g. TypeId::INT32 -> SQLTypeId::INTEGER)
-SQLType SQLTypeFromInternalType(TypeId type);
-
-//! Returns the TypeId for the given type
-template <class T> TypeId GetTypeId() {
+//! Returns the PhysicalType for the given type
+template <class T> PhysicalType GetTypeId() {
 	if (std::is_same<T, bool>()) {
-		return TypeId::BOOL;
+		return PhysicalType::BOOL;
 	} else if (std::is_same<T, int8_t>()) {
-		return TypeId::INT8;
+		return PhysicalType::INT8;
 	} else if (std::is_same<T, int16_t>()) {
-		return TypeId::INT16;
+		return PhysicalType::INT16;
 	} else if (std::is_same<T, int32_t>()) {
-		return TypeId::INT32;
+		return PhysicalType::INT32;
 	} else if (std::is_same<T, int64_t>()) {
-		return TypeId::INT64;
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, hugeint_t>()) {
+		return PhysicalType::INT128;
 	} else if (std::is_same<T, uint64_t>()) {
-		return TypeId::HASH;
+		return PhysicalType::HASH;
 	} else if (std::is_same<T, uintptr_t>()) {
-		return TypeId::POINTER;
+		return PhysicalType::POINTER;
 	} else if (std::is_same<T, float>()) {
-		return TypeId::FLOAT;
+		return PhysicalType::FLOAT;
 	} else if (std::is_same<T, double>()) {
-		return TypeId::DOUBLE;
+		return PhysicalType::DOUBLE;
 	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>()) {
-		return TypeId::VARCHAR;
+		return PhysicalType::VARCHAR;
+	} else if (std::is_same<T, interval_t>()) {
+		return PhysicalType::INTERVAL;
 	} else {
-		return TypeId::INVALID;
+		return PhysicalType::INVALID;
 	}
 }
 
 template <class T> bool IsValidType() {
-	return GetTypeId<T>() != TypeId::INVALID;
+	return GetTypeId<T>() != PhysicalType::INVALID;
 }
 
-//! The TypeId used by the row identifiers column
-extern const TypeId ROW_TYPE;
+//! The PhysicalType used by the row identifiers column
+extern const LogicalType LOGICAL_ROW_TYPE;
+extern const PhysicalType ROW_TYPE;
 
-string TypeIdToString(TypeId type);
-idx_t GetTypeIdSize(TypeId type);
-bool TypeIsConstantSize(TypeId type);
-bool TypeIsIntegral(TypeId type);
-bool TypeIsNumeric(TypeId type);
-bool TypeIsInteger(TypeId type);
+string TypeIdToString(PhysicalType type);
+idx_t GetTypeIdSize(PhysicalType type);
+bool TypeIsConstantSize(PhysicalType type);
+bool TypeIsIntegral(PhysicalType type);
+bool TypeIsNumeric(PhysicalType type);
+bool TypeIsInteger(PhysicalType type);
 
 template <class T> bool IsIntegerType() {
 	return TypeIsIntegral(GetTypeId<T>());
@@ -308,4 +410,4 @@ template <class T> bool IsIntegerType() {
 bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
 
-}; // namespace duckdb
+} // namespace duckdb

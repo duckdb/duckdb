@@ -2,8 +2,9 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalExpressionScanState : public PhysicalOperatorState {
 public:
@@ -16,7 +17,8 @@ public:
 	unique_ptr<ExpressionExecutor> executor;
 };
 
-void PhysicalExpressionScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalExpressionScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                              PhysicalOperatorState *state_) {
 	auto state = (PhysicalExpressionScanState *)state_;
 	if (state->expression_index >= expressions.size()) {
 		// finished executing all expression lists
@@ -41,3 +43,5 @@ void PhysicalExpressionScan::GetChunkInternal(ClientContext &context, DataChunk 
 unique_ptr<PhysicalOperatorState> PhysicalExpressionScan::GetOperatorState() {
 	return make_unique<PhysicalExpressionScanState>(children[0].get());
 }
+
+} // namespace duckdb

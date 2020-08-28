@@ -15,7 +15,7 @@
 #include "re2/regexp.h"
 #include "re2/walker-inl.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 enum {
   PrecAtom,
@@ -346,4 +346,4 @@ static void AppendCCRange(std::string* t, Rune lo, Rune hi) {
   }
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

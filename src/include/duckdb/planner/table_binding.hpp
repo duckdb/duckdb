@@ -22,6 +22,7 @@ class SubqueryRef;
 class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
+class BoundTableFunction;
 
 enum class BindingType : uint8_t { TABLE = 0, SUBQUERY = 1, TABLE_FUNCTION = 2, GENERIC = 3 };
 
@@ -58,13 +59,13 @@ public:
 
 //! Represents a generic binding with types and names
 struct GenericBinding : public Binding {
-	GenericBinding(const string &alias, vector<SQLType> types, vector<string> names, idx_t index);
+	GenericBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index);
 
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	//! Column names of the subquery
 	vector<string> names;
 	//! Name -> index for the names
-	unordered_map<string, uint64_t> name_map;
+	unordered_map<string, column_t> name_map;
 
 public:
 	bool HasMatchingBinding(const string &column_name) override;

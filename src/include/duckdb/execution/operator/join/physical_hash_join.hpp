@@ -19,22 +19,32 @@ namespace duckdb {
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
-	PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-	                 unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-	                 vector<idx_t> left_projection_map, vector<idx_t> right_projection_map);
-	PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-	                 unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
+	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+	                 vector<JoinCondition> cond, JoinType join_type, vector<idx_t> left_projection_map,
+	                 vector<idx_t> right_projection_map);
+	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+	                 vector<JoinCondition> cond, JoinType join_type);
 
-	unique_ptr<JoinHashTable> hash_table;
 	vector<idx_t> right_projection_map;
+	//! The types of the keys
+	vector<LogicalType> condition_types;
+	//! The types of all conditions
+	vector<LogicalType> build_types;
+	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
+	vector<LogicalType> delim_types;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
-	void BuildHashTable(ClientContext &context, PhysicalOperatorState *state_);
-	void ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
+	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
 };
 
 } // namespace duckdb

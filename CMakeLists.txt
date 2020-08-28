@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 2.8.7)
+cmake_policy(SET CMP0026 NEW)
+cmake_policy(SET CMP0051 NEW)
 # if(APPLE) # needs to be before project() SET(CMAKE_CXX_FLAGS -stdlib=libc++)
 # SET(CMAKE_OSX_DEPLOYMENT_TARGET "10.7" CACHE STRING "Minimum OS X deployment
 # version") endif()
@@ -59,6 +61,8 @@ if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
 endif()
 
+option(DISABLE_UNITY "Disable unity builds." FALSE)
+
 option(FORCE_COLORED_OUTPUT
        "Always produce ANSI-colored output (GNU/Clang only)." FALSE)
 if(${FORCE_COLORED_OUTPUT})
@@ -71,7 +75,13 @@ endif()
 
 option(ENABLE_SANITIZER "Enable sanitizer." TRUE)
 if(${ENABLE_SANITIZER})
-  set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+  if (BUILD_PYTHON OR BUILD_R)
+    if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+      message(WARNING "Sanitizers are not supported for the Python build. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled")
+    endif()
+  else()
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+  endif()
 endif()
 
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)
@@ -98,9 +108,20 @@ option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
        FALSE)
 
+option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
+option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
+option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
+option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
+option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
+option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
+
+if (BUILD_PYTHON OR BUILD_R)
+set(BUILD_ICU_EXTENSION TRUE)
+set(BUILD_PARQUET_EXTENSION TRUE)
+endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
@@ -170,6 +191,7 @@ include_directories(third_party/re2)
 include_directories(third_party/miniz)
 include_directories(third_party/utf8proc/include)
 include_directories(third_party/miniparquet)
+include_directories(third_party/concurrentqueue)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -254,12 +276,17 @@ endfunction()
 
 add_subdirectory(extension)
 add_subdirectory(src)
-add_subdirectory(third_party)
-add_subdirectory(test)
-add_subdirectory(tools)
-if(NOT WIN32 AND NOT SUN)
-  add_subdirectory(benchmark)
+
+option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
+if(${BUILD_UNITTESTS})
+  add_subdirectory(test)
+  if(NOT WIN32 AND NOT SUN AND ${BUILD_BENCHMARKS})
+    add_subdirectory(benchmark)
+  endif()
 endif()
+
+add_subdirectory(third_party)
+add_subdirectory(tools)
 
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")

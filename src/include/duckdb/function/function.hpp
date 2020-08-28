@@ -22,21 +22,27 @@ class Transaction;
 
 class AggregateFunction;
 class AggregateFunctionSet;
+class CopyFunction;
 class ScalarFunctionSet;
 class ScalarFunction;
+class TableFunctionSet;
 class TableFunction;
 
 struct FunctionData {
 	virtual ~FunctionData() {
 	}
 
-	virtual unique_ptr<FunctionData> Copy() = 0;
+	virtual unique_ptr<FunctionData> Copy() {
+		return make_unique<FunctionData>();
+	};
 };
 
 struct TableFunctionData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override {
 		throw NotImplementedException("Copy not required for table-producing function");
 	}
+	// used to pass on projections to table functions that support them. NB, can contain COLUMN_IDENTIFIER_ROW_ID
+	vector<idx_t> column_ids;
 };
 
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
@@ -52,47 +58,67 @@ public:
 
 public:
 	//! Returns the formatted string name(arg1, arg2, ...)
-	static string CallToString(string name, vector<SQLType> arguments);
+	static string CallToString(string name, vector<LogicalType> arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
-	static string CallToString(string name, vector<SQLType> arguments, SQLType return_type);
+	static string CallToString(string name, vector<LogicalType> arguments, LogicalType return_type);
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments);
+	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
+	//! function, or throws an exception if none could be found.
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments);
 };
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects)
-	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(SQLTypeId::INVALID),
-	      has_side_effects(has_side_effects) {
+	SimpleFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID)
+	    : Function(name), arguments(move(arguments)), varargs(varargs) {
 	}
 	virtual ~SimpleFunction() {
 	}
 
 	//! The set of arguments of the function
-	vector<SQLType> arguments;
+	vector<LogicalType> arguments;
+	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
+	//! arguments
+	LogicalType varargs;
+
+public:
+	virtual string ToString() {
+		return Function::CallToString(name, arguments);
+	}
+
+	bool HasVarArgs() {
+		return varargs.id() != LogicalTypeId::INVALID;
+	}
+};
+
+class BaseScalarFunction : public SimpleFunction {
+public:
+	BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, bool has_side_effects,
+	                   LogicalType varargs = LogicalType::INVALID)
+	    : SimpleFunction(move(name), move(arguments), move(varargs)), return_type(return_type),
+	      has_side_effects(has_side_effects) {
+	}
+	virtual ~BaseScalarFunction() {
+	}
+
 	//! Return type of the function
-	SQLType return_type;
-	//! The type of varargs to support, or SQLTypeId::INVALID if the function does not accept variable length arguments
-	SQLType varargs;
+	LogicalType return_type;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
 
 public:
 	//! Cast a set of expressions to the arguments of this function
-	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types);
+	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<LogicalType> &types);
 
-	string ToString() {
+	string ToString() override {
 		return Function::CallToString(name, arguments, return_type);
-	}
-
-	bool HasVarArgs() {
-		return varargs.id != SQLTypeId::INVALID;
 	}
 };
 
@@ -109,9 +135,12 @@ public:
 	void AddFunction(ScalarFunctionSet set);
 	void AddFunction(ScalarFunction function);
 	void AddFunction(vector<string> names, ScalarFunction function);
+	void AddFunction(TableFunctionSet set);
 	void AddFunction(TableFunction function);
+	void AddFunction(CopyFunction function);
 
-	void AddCollation(string name, ScalarFunction function, bool combinable = false, bool not_required_for_equality = false);
+	void AddCollation(string name, ScalarFunction function, bool combinable = false,
+	                  bool not_required_for_equality = false);
 
 private:
 	ClientContext &context;
@@ -125,6 +154,8 @@ private:
 	// table-producing functions
 	void RegisterSQLiteFunctions();
 	void RegisterReadFunctions();
+	void RegisterTableFunctions();
+	void RegisterArrowFunctions();
 
 	// aggregates
 	void RegisterAlgebraicAggregates();
@@ -133,6 +164,7 @@ private:
 
 	// scalar functions
 	void RegisterDateFunctions();
+	void RegisterGenericFunctions();
 	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();

@@ -1,7 +1,7 @@
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using namespace duckdb;
@@ -18,3 +18,5 @@ string LogicalDistinct::ParamsToString() const {
 
 	return result;
 }
+
+} // namespace duckdb

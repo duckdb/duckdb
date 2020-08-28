@@ -3,7 +3,9 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 
-using namespace duckdb;
+#include <algorithm>
+
+namespace duckdb {
 using namespace std;
 
 HasCorrelatedExpressions::HasCorrelatedExpressions(const vector<CorrelatedColumnInfo> &correlated)
@@ -41,3 +43,5 @@ unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundSubqueryExpre
 	}
 	return nullptr;
 }
+
+} // namespace duckdb

@@ -4,9 +4,9 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
-#include <regex>
+#include "re2/re2.h"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -25,6 +25,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	auto root = (BoundFunctionExpression *)bindings[0];
 	auto constant_expr = (BoundConstantExpression *)bindings[1];
 	assert(root->children.size() == 2);
+
 	if (constant_expr->value.is_null) {
 		return make_unique<BoundConstantExpression>(Value(root->return_type));
 	}
@@ -35,20 +36,24 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	}
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
-	assert(constant_value.type == constant_expr->return_type);
+	assert(constant_value.type() == constant_expr->return_type);
 	string patt_str = string(((string_t)constant_value.str_value).GetData());
 
-	if (std::regex_match(patt_str, std::regex("[^%_]*[%]+"))) {
+	duckdb_re2::RE2 prefix_pattern("[^%_]*[%]+");
+	duckdb_re2::RE2 suffix_pattern("[%]+[^%_]*");
+	duckdb_re2::RE2 contains_pattern("[%]+[^%_]*[%]+");
+
+	if (duckdb_re2::RE2::FullMatch(patt_str, prefix_pattern)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str);
 
-	} else if (std::regex_match(patt_str, std::regex("[%]+[^%_]*"))) {
+	} else if (duckdb_re2::RE2::FullMatch(patt_str, suffix_pattern)) {
 		// Suffix LIKE pattern: [%]+[^%_]*, ignoring underscore
 
 		return ApplyRule(root, SuffixFun::GetFunction(), patt_str);
 
-	} else if (std::regex_match(patt_str, std::regex("[%]+[^%_]*[%]+"))) {
+	} else if (duckdb_re2::RE2::FullMatch(patt_str, contains_pattern)) {
 		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
 
 		return ApplyRule(root, ContainsFun::GetFunction(), patt_str);
@@ -69,3 +74,5 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *
 
 	return expr->Copy();
 }
+
+} // namespace duckdb

@@ -11,8 +11,11 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
-using namespace duckdb;
+#include "duckdb/function/scalar/regexp.hpp"
+
 using namespace std;
+
+namespace duckdb {
 
 unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator> op) {
 
@@ -56,4 +59,6 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 	}
 
 	return op;
+}
+
 }

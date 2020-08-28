@@ -5,8 +5,9 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 static IndexType StringToIndexType(const string &str) {
 	string upper_str = StringUtil::Upper(str);
@@ -15,7 +16,7 @@ static IndexType StringToIndexType(const string &str) {
 	} else if (upper_str == "ART") {
 		return IndexType::ART;
 	} else {
-		throw ConversionException(StringUtil::Format("No IndexType conversion from string '%s'", upper_str.c_str()));
+		throw ConversionException("No IndexType conversion from string '%s'", upper_str);
 	}
 	return IndexType::INVALID;
 }
@@ -63,3 +64,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

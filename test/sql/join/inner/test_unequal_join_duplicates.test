@@ -1,0 +1,26 @@
+# name: test/sql/join/inner/test_unequal_join_duplicates.test
+# description: Test inequality join with > STANDARD_VECTOR_SIZE duplicates
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1), (2)
+
+statement ok
+CREATE TABLE test2 AS SELECT * FROM repeat(1, 10*1024) t1(b);
+
+query I
+SELECT COUNT(*) FROM test2;
+----
+10240
+
+query I
+SELECT COUNT(*) FROM test INNER JOIN test2 ON test.b<>test2.b
+----
+10240
+

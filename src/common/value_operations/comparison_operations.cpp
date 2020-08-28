@@ -2,55 +2,63 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
-	if (left.type != right.type) {
-		TypeId left_cast = TypeId::INVALID, right_cast = TypeId::INVALID;
-		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
-			if (left.type < right.type) {
-				left_cast = right.type;
+	auto left_type = left.type(), right_type = right.type();
+	if (left_type != right_type) {
+		LogicalType left_cast = LogicalType::INVALID, right_cast = LogicalType::INVALID;
+
+		if (left_type.IsNumeric() && right_type.IsNumeric()) {
+			if (left_type.NumericTypeOrder() < right_type.NumericTypeOrder()) {
+				left_cast = right.type();
 			} else {
-				right_cast = left.type;
+				right_cast = left.type();
 			}
-		} else if (left.type == TypeId::BOOL) {
-			right_cast = TypeId::BOOL;
-		} else if (right.type == TypeId::BOOL) {
-			left_cast = TypeId::BOOL;
+		} else if (left_type.id() == LogicalTypeId::BOOLEAN) {
+			right_cast = LogicalType::BOOLEAN;
+		} else if (right_type.id() == LogicalTypeId::BOOLEAN) {
+			left_cast = LogicalType::BOOLEAN;
 		}
-		if (left_cast != TypeId::INVALID) {
+		if (left_cast.id() != LogicalTypeId::INVALID) {
 			return templated_boolean_operation<OP>(left.CastAs(left_cast), right);
-		} else if (right_cast != TypeId::INVALID) {
+		} else if (right_cast.id() != LogicalTypeId::INVALID) {
 			return templated_boolean_operation<OP>(left, right.CastAs(right_cast));
 		}
+		// throw NotImplementedException("Unimplemented type for Value comparison: %s - %s", left.type().ToString(),
+		// right.type().ToString());
 		return false;
 	}
-	switch (left.type) {
-	case TypeId::BOOL:
+	switch (left_type.InternalType()) {
+	case PhysicalType::BOOL:
 		return OP::Operation(left.value_.boolean, right.value_.boolean);
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return OP::Operation(left.value_.tinyint, right.value_.tinyint);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return OP::Operation(left.value_.smallint, right.value_.smallint);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return OP::Operation(left.value_.integer, right.value_.integer);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return OP::Operation(left.value_.bigint, right.value_.bigint);
-	case TypeId::POINTER:
+	case PhysicalType::INT128:
+		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
+	case PhysicalType::POINTER:
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
-	case TypeId::HASH:
+	case PhysicalType::HASH:
 		return OP::Operation(left.value_.hash, right.value_.hash);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return OP::Operation(left.value_.float_, right.value_.float_);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return OP::Operation(left.value_.double_, right.value_.double_);
-	case TypeId::VARCHAR:
+	case PhysicalType::INTERVAL:
+		return OP::Operation(left.value_.interval, right.value_.interval);
+	case PhysicalType::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
-	case TypeId::STRUCT: {
+	case PhysicalType::STRUCT: {
 		for (idx_t i = 0; i < left.struct_value.size(); i++) {
 			if (i >= right.struct_value.size() || left.struct_value[i].first != right.struct_value[i].first ||
 			    left.struct_value[i].second != left.struct_value[i].second) {
@@ -59,7 +67,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		}
 		return true;
 	}
-	case TypeId::LIST: {
+	case PhysicalType::LIST: {
 		return left.list_value == right.list_value;
 	}
 	default:
@@ -110,3 +118,5 @@ bool ValueOperations::LessThan(const Value &left, const Value &right) {
 bool ValueOperations::LessThanEquals(const Value &left, const Value &right) {
 	return ValueOperations::GreaterThanEquals(right, left);
 }
+
+} // namespace duckdb

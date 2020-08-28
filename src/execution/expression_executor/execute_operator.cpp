@@ -2,7 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundOperatorExpression &expr,
@@ -27,7 +27,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		Execute(*expr.children[0], state->child_states[0].get(), sel, count, left);
 
 		// init result to false
-		Vector intermediate(TypeId::BOOL);
+		Vector intermediate(LogicalType::BOOLEAN);
 		Value false_val = Value::BOOLEAN(false);
 		intermediate.Reference(false_val);
 
@@ -36,7 +36,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		// to get the overall result.
 		for (idx_t child = 1; child < expr.children.size(); child++) {
 			Vector vector_to_check(expr.children[child]->return_type);
-			Vector comp_res(TypeId::BOOL);
+			Vector comp_res(LogicalType::BOOLEAN);
 
 			Execute(*expr.children[child], state->child_states[child].get(), sel, count, vector_to_check);
 			VectorOperations::Equals(left, vector_to_check, comp_res, count);
@@ -46,7 +46,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 				intermediate.Reference(comp_res);
 			} else {
 				// otherwise OR together
-				Vector new_result(TypeId::BOOL, true, false);
+				Vector new_result(LogicalType::BOOLEAN, true, false);
 				VectorOperations::Or(intermediate, comp_res, new_result, count);
 				intermediate.Reference(new_result);
 			}
@@ -81,3 +81,5 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		throw NotImplementedException("operator");
 	}
 }
+
+} // namespace duckdb

@@ -1,0 +1,55 @@
+# name: test/sql/aggregate/aggregates/test_incorrect_aggregate.test
+# description: Test incorrect usages of aggregates
+# group: [aggregates]
+
+statement error
+SELECT COUNT(1, 2, 3)
+
+statement error
+SELECT COUNT(COUNT(1))
+
+statement error
+SELECT STDDEV_SAMP()
+
+statement error
+SELECT STDDEV_SAMP(1, 2, 3)
+
+statement error
+SELECT STDDEV_SAMP(STDDEV_SAMP(1))
+
+statement error
+SELECT SUM()
+
+statement error
+SELECT SUM(1, 2, 3)
+
+statement error
+SELECT SUM(SUM(1))
+
+statement error
+SELECT FIRST()
+
+statement error
+SELECT FIRST(1, 2, 3)
+
+statement error
+SELECT FIRST(FIRST(1))
+
+statement error
+SELECT MAX()
+
+statement error
+SELECT MAX(1, 2, 3)
+
+statement error
+SELECT MAX(MAX(1))
+
+statement error
+SELECT MIN()
+
+statement error
+SELECT MIN(1, 2, 3)
+
+statement error
+SELECT MIN(MIN(1))
+

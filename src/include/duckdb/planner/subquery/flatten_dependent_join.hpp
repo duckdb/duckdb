@@ -35,7 +35,7 @@ struct FlattenDependentJoins {
 	column_binding_map_t<idx_t> correlated_map;
 	column_binding_map_t<idx_t> replacement_map;
 	const vector<CorrelatedColumnInfo> &correlated_columns;
-	vector<TypeId> delim_types;
+	vector<LogicalType> delim_types;
 
 private:
 	unique_ptr<LogicalOperator> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan);

@@ -1,11 +1,11 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, TypeId return_type)
-    : Expression(type, ExpressionClass::BOUND_OPERATOR, return_type) {
+BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, LogicalType return_type)
+    : Expression(type, ExpressionClass::BOUND_OPERATOR, move(return_type)) {
 }
 
 string BoundOperatorExpression::ToString() const {
@@ -50,3 +50,5 @@ unique_ptr<Expression> BoundOperatorExpression::Copy() {
 	}
 	return move(copy);
 }
+
+} // namespace duckdb

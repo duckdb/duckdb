@@ -2,17 +2,17 @@
 
 #include "duckdb/common/types/hash.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, idx_t depth)
-    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type), binding(binding),
+BoundColumnRefExpression::BoundColumnRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t depth)
+    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, move(type)), binding(binding),
       depth(depth) {
 	this->alias = alias;
 }
 
-BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, idx_t depth)
-    : BoundColumnRefExpression(string(), type, binding, depth) {
+BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth)
+    : BoundColumnRefExpression(string(), move(type), binding, depth) {
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() {
@@ -37,3 +37,5 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_) const {
 string BoundColumnRefExpression::ToString() const {
 	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
 }
+
+} // namespace duckdb

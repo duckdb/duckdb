@@ -11,9 +11,11 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterSQLiteFunctions() {
+	PragmaVersion::RegisterFunction(*this);
 	PragmaCollations::RegisterFunction(*this);
 	PragmaTableInfo::RegisterFunction(*this);
 	SQLiteMaster::RegisterFunction(*this);
+	PragmaDatabaseList::RegisterFunction(*this);
 
 	CreateViewInfo info;
 	info.schema = DEFAULT_SCHEMA;

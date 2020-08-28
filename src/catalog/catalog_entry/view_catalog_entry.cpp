@@ -4,10 +4,11 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
@@ -26,7 +27,7 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	query->Serialize(serializer);
-	assert(aliases.size() <= numeric_limits<uint32_t>::max());
+	assert(aliases.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)aliases.size());
 	for (auto &alias : aliases) {
 		serializer.WriteString(alias);
@@ -48,7 +49,9 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	}
 	auto type_count = source.Read<uint32_t>();
 	for (uint32_t i = 0; i < type_count; i++) {
-		info->types.push_back(SQLType::Deserialize(source));
+		info->types.push_back(LogicalType::Deserialize(source));
 	}
 	return info;
 }
+
+} // namespace duckdb

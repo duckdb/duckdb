@@ -18,7 +18,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	vector<idx_t> result_lengths(args.size(), 0);
 	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
-		assert(input.type == TypeId::VARCHAR);
+		assert(input.type.id() == LogicalTypeId::VARCHAR);
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(input)) {
 				// constant null, skip
@@ -244,15 +244,19 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// e.g.:
 	// concat_ws(',', NULL, NULL) = ""
 	// concat_ws(',', '', '') = ","
-	ScalarFunction concat = ScalarFunction("concat", {SQLType::VARCHAR}, SQLType::VARCHAR, concat_function);
-	concat.varargs = SQLType::VARCHAR;
+	ScalarFunction concat = ScalarFunction("concat", {LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_function);
+	concat.varargs = LogicalType::VARCHAR;
 	set.AddFunction(concat);
 
-	set.AddFunction(ScalarFunction("||", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_operator));
+	ScalarFunctionSet concat_op("||");
+	concat_op.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_operator));
+	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, concat_operator));
+	set.AddFunction(concat_op);
 
-	ScalarFunction concat_ws =
-	    ScalarFunction("concat_ws", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_ws_function);
-	concat_ws.varargs = SQLType::VARCHAR;
+	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                          LogicalType::VARCHAR, concat_ws_function);
+	concat_ws.varargs = LogicalType::VARCHAR;
 	set.AddFunction(concat_ws);
 }
 

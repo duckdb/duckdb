@@ -5,10 +5,11 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
@@ -177,7 +178,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 
 void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set) {
 	// remove the dependencies from all entries of the CatalogSet
-	Catalog::GetCatalog(context).dependency_manager.ClearDependencies(*catalog_set);
+	Catalog::GetCatalog(context).dependency_manager->ClearDependencies(*catalog_set);
 
 	lock_guard<mutex> lock(transaction_lock);
 	if (active_transactions.size() > 0) {
@@ -189,3 +190,5 @@ void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<Catalo
 		old_catalog_sets.push_back(move(set));
 	}
 }
+
+} // namespace duckdb

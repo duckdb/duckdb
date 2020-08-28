@@ -32,9 +32,11 @@ public:
 	unordered_map<idx_t, vector<TableFilter>> table_filters;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	string ExtraRenderInformation() const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
+	void ParallelScanInfo(ClientContext &context, std::function<void(unique_ptr<OperatorTaskInfo>)> callback) override;
 };
 
 } // namespace duckdb

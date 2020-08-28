@@ -1,0 +1,32 @@
+# name: test/sql/function/numeric/test_invalid_math.test
+# description: Test invalid input for math functions
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+query RR
+SELECT SQRT(-1), SQRT(0)
+----
+NULL	0.000000
+
+query RRRRRR
+SELECT LN(-1), LN(0), LOG10(-1), LOG10(0), LOG2(-1), LOG2(0)
+----
+NULL	NULL	NULL	NULL	NULL	NULL
+
+query RRR
+SELECT POW(1e300,100), POW(-1e300,100), POW(-1.0, 0.5)
+----
+NULL	NULL	NULL
+
+query RR
+SELECT EXP(1e300), EXP(1e100)
+----
+NULL	NULL
+
+query RRR
+SELECT ACOS(3), ACOS(100), DEGREES(1e308)
+----
+NULL	NULL	NULL
+

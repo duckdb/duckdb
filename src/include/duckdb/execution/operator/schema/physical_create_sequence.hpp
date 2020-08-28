@@ -17,13 +17,13 @@ namespace duckdb {
 class PhysicalCreateSequence : public PhysicalOperator {
 public:
 	PhysicalCreateSequence(unique_ptr<CreateSequenceInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_SEQUENCE, {TypeId::BOOL}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_SEQUENCE, {LogicalType::BIGINT}), info(move(info)) {
 	}
 
 	unique_ptr<CreateSequenceInfo> info;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb

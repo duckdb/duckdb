@@ -14,8 +14,10 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
+
 //! Type used for nullmasks
 typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 
@@ -32,7 +34,9 @@ class VectorStructBuffer;
 class VectorListBuffer;
 class ChunkCollection;
 
-//!  Vector of values of a specified TypeId.
+struct SelCache;
+
+//!  Vector of values of a specified PhysicalType.
 class Vector {
 	friend struct ConstantVector;
 	friend struct DictionaryVector;
@@ -49,16 +53,16 @@ public:
 	//! Create a vector of size one holding the passed on value
 	Vector(Value value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	Vector(TypeId type);
+	Vector(LogicalType type);
 	//! Create a non-owning vector that references the specified data
-	Vector(TypeId type, data_ptr_t dataptr);
+	Vector(LogicalType type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(TypeId type, bool create_data, bool zero_data);
+	Vector(LogicalType type, bool create_data, bool zero_data);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
@@ -68,11 +72,11 @@ public:
 	//! constant, if it is compressed)
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
-	TypeId type;
+	LogicalType type;
 
 public:
 	//! Create a vector that references the specified value.
-	void Reference(Value &value);
+	void Reference(const Value &value);
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
 
@@ -83,11 +87,11 @@ public:
 	//! Turns the vector into a dictionary vector with the specified dictionary
 	void Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
-	void Slice(const SelectionVector &sel, idx_t count, sel_cache_t &cache);
+	void Slice(const SelectionVector &sel, idx_t count, SelCache &cache);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false);
+	void Initialize(LogicalType new_type = LogicalType::INVALID, bool zero_data = false);
 
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
@@ -231,8 +235,9 @@ struct StringVector {
 	static string_t AddString(Vector &vector, string_t data);
 	//! Add a string to the string heap of the vector (auxiliary data)
 	static string_t AddString(Vector &vector, const string &data);
-	//! Add a blob to the string heap of the vector (auxiliary data)
-	static string_t AddBlob(Vector &vector, string_t data);
+	//! Add a string or a blob to the string heap of the vector (auxiliary data)
+	//! This function is the same as ::AddString, except the added data does not need to be valid UTF8
+	static string_t AddStringOrBlob(Vector &vector, string_t data);
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
 	static string_t EmptyString(Vector &vector, idx_t len);
@@ -254,28 +259,6 @@ struct SequenceVector {
 		start = data[0];
 		increment = data[1];
 	}
-};
-
-class StandaloneVector : public Vector {
-public:
-	StandaloneVector() : Vector() {
-	}
-	StandaloneVector(TypeId type) : Vector(type) {
-	}
-	StandaloneVector(TypeId type, data_ptr_t dataptr) : Vector(type, dataptr) {
-	}
-
-public:
-	idx_t size() {
-		return count;
-	}
-	void SetCount(idx_t count) {
-		assert(count <= STANDARD_VECTOR_SIZE);
-		this->count = count;
-	}
-
-protected:
-	idx_t count;
 };
 
 } // namespace duckdb

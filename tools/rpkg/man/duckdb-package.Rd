@@ -2,12 +2,13 @@
 % Please edit documentation in R/duckdb.R
 \docType{package}
 \name{duckdb-package}
-\alias{duckdb}
 \alias{duckdb-package}
-\title{duckdb: DBI Package for DuckDB}
+\title{DuckDB client package for R}
 \description{
-TODO
+R client package for DuckDB: an embeddable SQL OLAP Database Management System.
 }
-\details{
-TBD.
+\seealso{
+\code{\link[=duckdb]{duckdb()}} for connection instructions.
+
+\url{https://duckdb.org/} for the project website.
 }

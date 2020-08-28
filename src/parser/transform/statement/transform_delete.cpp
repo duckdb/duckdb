@@ -1,8 +1,9 @@
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<DeleteStatement> Transformer::TransformDelete(PGNode *node) {
 	auto stmt = reinterpret_cast<PGDeleteStmt *>(node);
@@ -16,3 +17,5 @@ unique_ptr<DeleteStatement> Transformer::TransformDelete(PGNode *node) {
 	}
 	return result;
 }
+
+} // namespace duckdb

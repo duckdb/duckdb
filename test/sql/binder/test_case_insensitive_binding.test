@@ -1,0 +1,156 @@
+# name: test/sql/binder/test_case_insensitive_binding.test
+# description: Test case insensitive binding of columns
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+# we can bind case insensitive column names
+
+statement ok
+CREATE TABLE test ("HeLlO" INTEGER)
+
+# lowercase names are aliased
+statement ok
+SELECT HeLlO FROM test
+
+statement ok
+SELECT hello FROM test
+
+statement ok
+SELECT "HeLlO" FROM test
+
+# specifying a different, non-lower, case does fail!
+statement error
+SELECT "HELLO" FROM test
+
+statement error
+SELECT "HELLo" FROM test
+
+statement ok
+SELECT test.HeLlO FROM test
+
+statement ok
+SELECT test.hello FROM test
+
+statement ok
+SELECT test."HeLlO" FROM test
+
+statement error
+SELECT test."HELLO" FROM test
+
+statement error
+SELECT test."HELLo" FROM test
+
+statement ok
+UPDATE test SET hello=3
+
+statement ok
+UPDATE test SET HeLlO=3
+
+statement ok
+DROP TABLE test
+
+# if the reference is ambiguous (e.g. hello -> HeLlO, HELLO) the name must match exactly
+statement ok
+CREATE TABLE test("HeLlO" INTEGER, "HELLO" INTEGER)
+
+statement error
+SELECT HeLlO FROM test
+
+statement error
+SELECT hello FROM test
+
+statement ok
+SELECT "HeLlO" FROM test
+
+statement ok
+SELECT "HELLO" FROM test
+
+statement error
+SELECT "HELLo" FROM test
+
+statement error
+UPDATE test SET hello = 3
+
+statement ok
+UPDATE test SET "HeLlO" = 3
+
+statement ok
+UPDATE test SET "HELLO" = 3
+
+statement error
+SELECT test.HeLlO FROM test
+
+statement error
+SELECT test.hello FROM test
+
+statement ok
+SELECT test."HeLlO" FROM test
+
+statement ok
+SELECT test."HELLO" FROM test
+
+statement error
+SELECT test."HELLo" FROM test
+
+# conflicts can also come from different sources!
+statement ok
+CREATE TABLE test1("HeLlO" INTEGER)
+
+statement ok
+CREATE TABLE test2("HELLO" INTEGER)
+
+statement error
+SELECT HeLlO FROM test1, test2
+
+statement error
+SELECT hello FROM test1, test2
+
+statement ok
+SELECT "HeLlO" FROM test1, test2
+
+statement ok
+SELECT "HELLO" FROM test1, test2
+
+statement error
+SELECT "HELLo" FROM test1, test2
+
+# in this case we can eliminate the conflict by specifically selecting the source
+statement ok
+SELECT test1.HeLlO FROM test1, test2
+
+statement ok
+SELECT test1.hello FROM test1, test2
+
+statement ok
+SELECT test1."HeLlO" FROM test1, test2
+
+statement error
+SELECT test1."HELLO" FROM test1, test2
+
+statement error
+SELECT test1."HELLo" FROM test1, test2
+
+statement ok
+SELECT test2.HeLlO FROM test1, test2
+
+statement ok
+SELECT test2.hello FROM test1, test2
+
+statement error
+SELECT test2."HeLlO" FROM test1, test2
+
+statement ok
+SELECT test2."HELLO" FROM test1, test2
+
+statement error
+SELECT test2."HELLo" FROM test1, test2
+
+statement ok
+SELECT * FROM test1 JOIN test2 USING (hello)
+
+query I
+SELECT hello FROM (SELECT 42) tbl("HeLlO")
+----
+42

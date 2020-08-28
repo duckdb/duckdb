@@ -11,27 +11,28 @@ namespace duckdb {
 
 DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	specifier = StringUtil::Lower(specifier);
-	if (specifier == "year") {
+	if (specifier == "year" || specifier == "y" || specifier == "years") {
 		return DatePartSpecifier::YEAR;
-	} else if (specifier == "month") {
+	} else if (specifier == "month" || specifier == "mon" || specifier == "months" || specifier == "mons") {
 		return DatePartSpecifier::MONTH;
-	} else if (specifier == "day") {
+	} else if (specifier == "day" || specifier == "days" || specifier == "d") {
 		return DatePartSpecifier::DAY;
-	} else if (specifier == "decade") {
+	} else if (specifier == "decade" || specifier == "decades") {
 		return DatePartSpecifier::DECADE;
-	} else if (specifier == "century") {
+	} else if (specifier == "century" || specifier == "centuries") {
 		return DatePartSpecifier::CENTURY;
-	} else if (specifier == "millennium") {
+	} else if (specifier == "millennium" || specifier == "millenia") {
 		return DatePartSpecifier::MILLENNIUM;
-	} else if (specifier == "microseconds") {
+	} else if (specifier == "microseconds" || specifier == "microsecond") {
 		return DatePartSpecifier::MICROSECONDS;
-	} else if (specifier == "milliseconds") {
+	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" ||
+	           specifier == "msecs") {
 		return DatePartSpecifier::MILLISECONDS;
-	} else if (specifier == "second") {
+	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
 		return DatePartSpecifier::SECOND;
-	} else if (specifier == "minute") {
+	} else if (specifier == "minute" || specifier == "minutes" || specifier == "m") {
 		return DatePartSpecifier::MINUTE;
-	} else if (specifier == "hour") {
+	} else if (specifier == "hour" || specifier == "hours" || specifier == "h") {
 		return DatePartSpecifier::HOUR;
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01
@@ -42,7 +43,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	} else if (specifier == "isodow") {
 		// isodow (Monday = 1, Sunday = 7)
 		return DatePartSpecifier::ISODOW;
-	} else if (specifier == "week") {
+	} else if (specifier == "week" || specifier == "weeks" || specifier == "w") {
 		// week number
 		return DatePartSpecifier::WEEK;
 	} else if (specifier == "doy") {
@@ -52,7 +53,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 		// quarter of the year (1-4)
 		return DatePartSpecifier::QUARTER;
 	} else {
-		throw ConversionException("extract specifier \"%s\" not recognized", specifier.c_str());
+		throw ConversionException("extract specifier \"%s\" not recognized", specifier);
 	}
 }
 
@@ -161,7 +162,7 @@ template <> int64_t DayOfYearOperator::Operation(timestamp_t input) {
 
 struct WeekOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return Date::ExtractWeekNumber(input);
+		return Date::ExtractISOWeekNumber(input);
 	}
 };
 
@@ -285,9 +286,9 @@ struct DatePartOperator {
 template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, string name) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-	    ScalarFunction({SQLType::DATE}, SQLType::BIGINT, ScalarFunction::UnaryFunction<date_t, int64_t, OP>));
-	operator_set.AddFunction(
-	    ScalarFunction({SQLType::TIMESTAMP}, SQLType::BIGINT, ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<date_t, int64_t, OP>));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT,
+	                                        ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
 	set.AddFunction(operator_set);
 }
 
@@ -306,20 +307,15 @@ template <> date_t LastDayOperator::Operation(timestamp_t input) {
 	return LastDayOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
-static string_t s_monthNames[] = {"January", "February", "March",     "April",   "May",      "June",
-                                  "July",    "August",   "September", "October", "November", "December"};
-
 struct MonthNameOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return s_monthNames[MonthOperator::Operation<TA, int64_t>(input) - 1];
+		return Date::MonthNames[MonthOperator::Operation<TA, int64_t>(input) - 1];
 	}
 };
 
-static string_t s_dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-
 struct DayNameOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return s_dayNames[DayOfWeekOperator::Operation<TA, int64_t>(input)];
+		return Date::DayNames[DayOfWeekOperator::Operation<TA, int64_t>(input)];
 	}
 };
 
@@ -353,36 +349,36 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 
 	//  register the last_day function
 	ScalarFunctionSet last_day("last_day");
-	last_day.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::DATE,
+	last_day.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE,
 	                                    ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator, true>));
-	last_day.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::DATE,
+	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
 	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator, true>));
 	set.AddFunction(last_day);
 
 	//  register the monthname function
 	ScalarFunctionSet monthname("monthname");
-	monthname.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::VARCHAR,
+	monthname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
 	                                     ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator, true>));
 	monthname.AddFunction(
-	    ScalarFunction({SQLType::TIMESTAMP}, SQLType::VARCHAR,
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                   ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator, true>));
 	set.AddFunction(monthname);
 
 	//  register the dayname function
 	ScalarFunctionSet dayname("dayname");
-	dayname.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::VARCHAR,
+	dayname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
 	                                   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator, true>));
-	dayname.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::VARCHAR,
+	dayname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                                   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator, true>));
 	set.AddFunction(dayname);
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(
-	    ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT,
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
 	                   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator, true>));
 	date_part.AddFunction(
-	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT,
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
 	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator, true>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";

@@ -5,7 +5,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
@@ -79,7 +79,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	// look into the children to see if we can replace them
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		PerformCSEReplacement(&child, expression_count);
-		return move(child);
+		return child;
 	});
 }
 
@@ -94,3 +94,5 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 		PerformCSEReplacement(&op.expressions[i], expression_count);
 	}
 }
+
+} // namespace duckdb

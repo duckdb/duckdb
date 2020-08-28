@@ -9,15 +9,16 @@
 #pragma once
 
 #include "duckdb/parser/base_expression.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {
 public:
-	Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type);
+	Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type);
 
 	//! The return type of the expression
-	TypeId return_type;
+	LogicalType return_type;
 
 public:
 	bool IsAggregate() const override;

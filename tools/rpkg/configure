@@ -1,7 +1,8 @@
 #!/bin/sh
 
-if [ ! -f "../../scripts/amalgamation.py" ]; then
-	echo "Could find neither the amalgamation build script"
-	exit 1
-fi
-(cd ../.. && python scripts/amalgamation.py --source=tools/rpkg/src/duckdb.cpp --header=tools/rpkg/src/duckdb.h)
+set -e
+set -x
+
+cd `dirname $0`
+
+python rconfigure.py

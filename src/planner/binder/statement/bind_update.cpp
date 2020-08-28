@@ -43,12 +43,11 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.columns[check_column_id];
-			auto col_type = GetInternalType(column.type);
 			// first add
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    col_type, ColumnBinding(proj.table_index, proj.expressions.size())));
-			proj.expressions.push_back(
-			    make_unique<BoundColumnRefExpression>(col_type, ColumnBinding(get.table_index, get.column_ids.size())));
+			    column.type, ColumnBinding(proj.table_index, proj.expressions.size())));
+			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
+			    column.type, ColumnBinding(get.table_index, get.column_ids.size())));
 			get.column_ids.push_back(check_column_id);
 			update.columns.push_back(check_column_id);
 		}
@@ -127,17 +126,16 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		auto &colname = stmt.columns[i];
 		auto &expr = stmt.expressions[i];
 		if (!table->ColumnExists(colname)) {
-			throw BinderException("Referenced update column %s not found in table!", colname.c_str());
+			throw BinderException("Referenced update column %s not found in table!", colname);
 		}
 		auto &column = table->GetColumn(colname);
 		if (std::find(update->columns.begin(), update->columns.end(), column.oid) != update->columns.end()) {
-			throw BinderException("Multiple assignments to same column \"%s\"", colname.c_str());
+			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
 		update->columns.push_back(column.oid);
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
-			update->expressions.push_back(
-			    make_unique<BoundDefaultExpression>(GetInternalType(column.type), column.type));
+			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.type));
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.type;
@@ -158,14 +156,14 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	// finally add the row id column to the projection list
 	proj->expressions.push_back(
-	    make_unique<BoundColumnRefExpression>(ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
+	    make_unique<BoundColumnRefExpression>(LOGICAL_ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(move(proj));
 
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 	result.plan = move(update);
 	return result;
 }

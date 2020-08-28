@@ -4,7 +4,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 TransactionContext::~TransactionContext() {
@@ -31,7 +31,7 @@ void TransactionContext::Commit() {
 	current_transaction = nullptr;
 	string error = transaction_manager.CommitTransaction(transaction);
 	if (!error.empty()) {
-		throw TransactionException("Failed to commit: %s", error.c_str());
+		throw TransactionException("Failed to commit: %s", error);
 	}
 }
 
@@ -42,3 +42,5 @@ void TransactionContext::Rollback() {
 	current_transaction = nullptr;
 	transaction_manager.RollbackTransaction(transaction);
 }
+
+} // namespace duckdb

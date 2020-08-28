@@ -12,12 +12,21 @@ add_subdirectory(tpcds)
 add_subdirectory(imdb)
 add_subdirectory(expression_reordering)
 
-add_executable(benchmark_runner benchmark_runner.cpp ${BENCHMARK_OBJECT_FILES})
-target_link_libraries(benchmark_runner
-                      duckdb
-                      dbgen
-                      dsdgen
-                      imdb
-                      test_helpers
-                      tpce
-                      sqlite_transfer)
+add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp ${BENCHMARK_OBJECT_FILES})
+
+target_link_libraries(
+  benchmark_runner
+  duckdb
+  dbgen
+  dsdgen
+  imdb
+  test_helpers
+  sqlite_transfer)
+
+if (${BUILD_TPCE})
+  target_link_libraries(benchmark_runner tpce)
+endif()
+
+if(${BUILD_PARQUET_EXTENSION})
+  target_link_libraries(benchmark_runner parquet_extension)
+endif()

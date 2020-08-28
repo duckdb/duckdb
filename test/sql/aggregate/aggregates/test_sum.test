@@ -1,0 +1,75 @@
+# name: test/sql/aggregate/aggregates/test_sum.test
+# description: Test sum aggregate
+# group: [aggregates]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 1000, 1);
+
+# positive numbers
+query I
+SELECT SUM(i) FROM integers;
+----
+499500
+
+# negative numbers
+statement ok
+INSERT INTO integers SELECT * FROM range(0, -1000, -1);
+
+query I
+SELECT SUM(i) FROM integers;
+----
+0
+
+# more negative numbers
+statement ok
+INSERT INTO integers SELECT * FROM range(0, -1000, -1);
+
+query I
+SELECT SUM(i) FROM integers;
+----
+-499500
+
+# now perform sum of a constant
+query I
+SELECT SUM(1) FROM integers;
+----
+3000
+
+# negative constant
+query I
+SELECT SUM(-1) FROM integers;
+----
+-3000
+
+# negative constant with a low amount of values
+query I
+SELECT SUM(-1) FROM integers WHERE i=-1;
+----
+-2
+
+# no values
+query I
+SELECT SUM(-1) FROM integers WHERE i>10000;
+----
+NULL
+
+# bigint sum
+statement ok
+CREATE TABLE bigints(b BIGINT);
+
+# a bunch of huge values
+statement ok
+INSERT INTO bigints SELECT * FROM range(4611686018427387904, 4611686018427388904, 1);
+
+# sum them up
+query I
+SELECT SUM(b) FROM bigints
+----
+4611686018427388403500
+
+# this is too big for a bigint
+statement error
+SELECT SUM(b)::BIGINT FROM bigints

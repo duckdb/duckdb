@@ -1,0 +1,112 @@
+# name: test/sql/alter/add_col/test_add_col_transactions.test
+# description: Test ALTER TABLE ADD COLUMN with multiple transactions
+# group: [add_col]
+
+statement ok con1
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok con1
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Only one pending table alter can be active at a time
+statement ok con1
+BEGIN TRANSACTION
+
+# con adds a column to test
+statement ok con1
+ALTER TABLE test ADD COLUMN k INTEGER
+
+# con2 cannot add a new column now!
+statement error con2
+ALTER TABLE test ADD COLUMN l INTEGER
+
+statement ok con1
+COMMIT
+
+# after a commit, con2 can add a new column again
+statement ok con2
+ALTER TABLE test ADD COLUMN l INTEGER
+
+statement ok con1
+DROP TABLE test
+
+statement ok con1
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok con1
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Can only append to newest table
+statement ok con1
+BEGIN TRANSACTION
+
+# con adds a column to test
+statement ok con1
+ALTER TABLE test ADD COLUMN k INTEGER
+
+# con2 cannot append now!
+statement error con2
+INSERT INTO test (i, j) VALUES (3, 3)
+
+# but we can delete rows!
+statement ok con2
+DELETE FROM test WHERE i=1
+
+query III con1
+SELECT * FROM test
+----
+1	1	NULL
+2	2	NULL
+
+query II con2
+SELECT * FROM test
+----
+2	2
+
+# we can also update rows
+statement ok con2
+UPDATE test SET j=100
+
+query III con1
+SELECT * FROM test
+----
+1	1	NULL
+2	2	NULL
+
+query II con2
+SELECT * FROM test
+----
+2	100
+
+statement ok con1
+COMMIT
+
+query III con1
+SELECT * FROM test
+----
+2	100	NULL
+
+statement ok con1
+DROP TABLE test
+
+statement ok con1
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok con1
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Alter table while other transaction still has pending appends
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO test VALUES (3, 3)
+
+# now con adds a column
+statement ok con1
+ALTER TABLE test ADD COLUMN k INTEGER
+
+# cannot commit con2! conflict on append
+statement error con2
+COMMIT
+

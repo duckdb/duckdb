@@ -1,0 +1,76 @@
+# name: test/sql/subquery/any_all/test_scalar_in.test
+# description: Test scalar IN query
+# group: [any_all]
+
+statement ok
+PRAGMA enable_verification
+
+query T
+SELECT 1 IN (SELECT 1)
+----
+1
+
+query T
+SELECT NULL IN (SELECT 1)
+----
+NULL
+
+query T
+SELECT 1 IN (SELECT NULL)
+----
+NULL
+
+query T
+SELECT 1 IN (SELECT 2)
+----
+0
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3)
+
+query T
+SELECT 4 IN (SELECT * FROM integers)
+----
+0
+
+query T
+SELECT 1 IN (SELECT * FROM integers)
+----
+1
+
+query T
+SELECT 1 IN (SELECT * FROM integers) FROM integers
+----
+1
+1
+1
+
+statement ok
+INSERT INTO integers VALUES (NULL)
+
+query T
+SELECT 4 IN (SELECT * FROM integers)
+----
+NULL
+
+query T
+SELECT 1 IN (SELECT * FROM integers)
+----
+1
+
+query I
+SELECT * FROM integers WHERE (4 IN (SELECT * FROM integers)) IS NULL ORDER BY 1
+----
+NULL
+1
+2
+3
+
+query I
+SELECT * FROM integers WHERE (i IN (SELECT * FROM integers)) IS NULL ORDER BY 1
+----
+NULL
+

@@ -1,0 +1,31 @@
+# name: test/sql/pragma/test_pragma_parsing.test
+# description: Test PRAGMA parsing
+# group: [pragma]
+
+# Almost pragma but not quite
+statement error
+PRAG
+
+# Pragma without a keyword
+statement error
+PRAGMA 
+
+# Unknown pragma error
+statement error
+PRAGMA random_unknown_pragma
+
+# Call pragma in wrong way
+statement error
+PRAGMA table_info = 3
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+# Now it should work
+statement ok
+PRAGMA table_info('integers');
+
+# Parsing also works with extra spaces
+statement ok
+  PRAGMA    table_info  ('integers');
+

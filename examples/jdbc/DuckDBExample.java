@@ -8,7 +8,7 @@ import java.sql.Statement;
 
 public class DuckDBExample {
 	public static void main(String[] args) throws SQLException, ClassNotFoundException {
-		Class.forName("nl.cwi.da.duckdb.DuckDBDriver");
+		Class.forName("org.duckdb.DuckDBDriver");
 
 		// this JDBC url creates a temporary in-memory database. If you want to use a
 		// persistent DB, append its file name

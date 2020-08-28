@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::CASE_EXPR, ExpressionClass::CASE) {
@@ -49,3 +49,5 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, De
 	expression->result_if_false = ParsedExpression::Deserialize(source);
 	return move(expression);
 }
+
+} // namespace duckdb

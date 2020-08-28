@@ -12,7 +12,7 @@
 
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
@@ -38,7 +38,7 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		auto &select_node = (SelectNode &)*select.node;
 		auto &table_function = (TableFunctionRef &)*select_node.from_table;
 		auto &function = (FunctionExpression &)*table_function.function;
-		function.children.push_back(make_unique<ConstantExpression>(SQLTypeId::VARCHAR, pragma.parameters[0]));
+		function.children.push_back(make_unique<ConstantExpression>(pragma.parameters[0]));
 		return select_statement;
 	} else if (keyword == "show_tables") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {
@@ -47,6 +47,14 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		// turn into SELECT name FROM sqlite_master();
 		Parser parser;
 		parser.ParseQuery("SELECT name FROM sqlite_master() ORDER BY name");
+		return move(parser.statements[0]);
+	} else if (keyword == "database_list") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Invalid PRAGMA database_list: cannot be called");
+		}
+		// turn into SELECT * FROM pragma_collations();
+		Parser parser;
+		parser.ParseQuery("SELECT * FROM pragma_database_list() ORDER BY 1");
 		return move(parser.statements[0]);
 	} else if (keyword == "collations") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {
@@ -75,8 +83,17 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		auto &select_node = (SelectNode &)*select.node;
 		auto &table_function = (TableFunctionRef &)*select_node.from_table;
 		auto &function = (FunctionExpression &)*table_function.function;
-		function.children.push_back(make_unique<ConstantExpression>(SQLTypeId::VARCHAR, pragma.parameters[0]));
+		function.children.push_back(make_unique<ConstantExpression>(pragma.parameters[0]));
 		return select_statement;
+	} else if (keyword == "version") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Invalid PRAGMA version: cannot be called");
+		}
+		Parser parser;
+		parser.ParseQuery("SELECT * FROM pragma_version()");
+		return move(parser.statements[0]);
 	}
 	return nullptr;
 }
+
+} // namespace duckdb

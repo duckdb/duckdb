@@ -1,8 +1,9 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
 	auto stmt = reinterpret_cast<PGUpdateStmt *>(node);
@@ -21,3 +22,5 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
 	}
 	return result;
 }
+
+} // namespace duckdb

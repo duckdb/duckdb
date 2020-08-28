@@ -2,8 +2,9 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 	auto stmt = reinterpret_cast<PGPragmaStmt *>(node);
@@ -46,3 +47,5 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 
 	return result;
 }
+
+} // namespace duckdb

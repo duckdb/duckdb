@@ -1,0 +1,18 @@
+# name: test/issues/rigger/test_490.test
+# description: Issue 490
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# A comparison column=column unexpectedly evaluates to TRUE for column=NULL
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (NULL);
+
+query I
+SELECT * FROM t0 WHERE c0 = c0;
+----
+

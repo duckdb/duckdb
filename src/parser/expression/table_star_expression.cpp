@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 TableStarExpression::TableStarExpression(string relation_name)
@@ -30,3 +30,5 @@ void TableStarExpression::Serialize(Serializer &serializer) {
 unique_ptr<ParsedExpression> TableStarExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	return make_unique<TableStarExpression>(source.Read<string>());
 }
+
+} // namespace duckdb

@@ -2,7 +2,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
@@ -15,7 +15,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	}
 #endif
 
-	auto window = make_unique<PhysicalWindow>(op, move(op.expressions));
+	auto window = make_unique<PhysicalWindow>(op.types, move(op.expressions));
 	window->children.push_back(move(plan));
 	return move(window);
 }
+
+} // namespace duckdb

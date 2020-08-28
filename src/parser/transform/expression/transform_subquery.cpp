@@ -2,8 +2,9 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 	if (!root) {
@@ -60,3 +61,5 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 	}
 	return move(subquery_expr);
 }
+
+} // namespace duckdb

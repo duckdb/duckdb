@@ -45,33 +45,33 @@ typedef struct pg_tzenum pg_tzenum;
 
 /* these functions are in localtime.c */
 
-extern struct pg_tm *pg_localtime(const pg_time_t *timep, const pg_tz *tz);
-extern struct pg_tm *pg_gmtime(const pg_time_t *timep);
-extern int pg_next_dst_boundary(const pg_time_t *timep,
+struct pg_tm *pg_localtime(const pg_time_t *timep, const pg_tz *tz);
+struct pg_tm *pg_gmtime(const pg_time_t *timep);
+int pg_next_dst_boundary(const pg_time_t *timep,
 					 long int *before_gmtoff,
 					 int *before_isdst,
 					 pg_time_t *boundary,
 					 long int *after_gmtoff,
 					 int *after_isdst,
 					 const pg_tz *tz);
-extern bool pg_interpret_timezone_abbrev(const char *abbrev,
+bool pg_interpret_timezone_abbrev(const char *abbrev,
 							 const pg_time_t *timep,
 							 long int *gmtoff,
 							 int *isdst,
 							 const pg_tz *tz);
-extern bool pg_get_timezone_offset(const pg_tz *tz, long int *gmtoff);
-extern const char *pg_get_timezone_name(pg_tz *tz);
-extern bool pg_tz_acceptable(pg_tz *tz);
+bool pg_get_timezone_offset(const pg_tz *tz, long int *gmtoff);
+const char *pg_get_timezone_name(pg_tz *tz);
+bool pg_tz_acceptable(pg_tz *tz);
 
 /* these functions and variables are in pgtz.c */
 
-extern pg_tz *session_timezone;
-extern pg_tz *log_timezone;
+pg_tz *session_timezone;
+pg_tz *log_timezone;
 
-extern void pg_timezone_initialize(void);
-extern pg_tz *pg_tzset(const char *tzname);
-extern pg_tz *pg_tzset_offset(long gmtoffset);
+void pg_timezone_initialize(void);
+pg_tz *pg_tzset(const char *tzname);
+pg_tz *pg_tzset_offset(long gmtoffset);
 
-extern pg_tzenum *pg_tzenumerate_start(void);
-extern pg_tz *pg_tzenumerate_next(pg_tzenum *dir);
-extern void pg_tzenumerate_end(pg_tzenum *dir);
+pg_tzenum *pg_tzenumerate_start(void);
+pg_tz *pg_tzenumerate_next(pg_tzenum *dir);
+void pg_tzenumerate_end(pg_tzenum *dir);

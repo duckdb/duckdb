@@ -3,8 +3,9 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateTableAsStmt *>(node);
@@ -28,3 +29,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

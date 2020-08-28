@@ -23,7 +23,7 @@ static void test_runner() {
 
 	con.EnableProfiling();
 
-	tpch::dbgen(0.1, db);
+	tpch::dbgen(0.01, db);
 
 	ifstream t(fname);
 	string query((istreambuf_iterator<char>(t)), istreambuf_iterator<char>());
@@ -35,10 +35,9 @@ static void test_runner() {
 
 struct RegisterSQLSmithTests {
 	RegisterSQLSmithTests() {
-		return;
 		// register a separate SQL Smith test for each file in the QUERY_DIRECTORY
 		fs.ListFiles(QUERY_DIRECTORY,
-		             [&](const string &path) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
+		             [&](const string &path, bool) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
 	}
 };
 RegisterSQLSmithTests register_sqlsmith_test;

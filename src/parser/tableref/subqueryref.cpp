@@ -1,9 +1,11 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_p, string alias_p)
     : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_p)) {
@@ -27,7 +29,7 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 void SubqueryRef::Serialize(Serializer &serializer) {
 	TableRef::Serialize(serializer);
 	subquery->Serialize(serializer);
-	assert(column_name_alias.size() <= numeric_limits<uint32_t>::max());
+	assert(column_name_alias.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)column_name_alias.size());
 	for (auto &alias : column_name_alias) {
 		serializer.WriteString(alias);
@@ -45,4 +47,6 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 		result->column_name_alias.push_back(source.Read<string>());
 	}
 	return move(result);
+}
+
 }

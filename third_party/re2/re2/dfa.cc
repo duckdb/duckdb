@@ -50,7 +50,7 @@
 //#pragma warning(disable: 4200)
 #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 #if !defined(__linux__)  /* only Linux seems to have memrchr */
 static void* memrchr(const void* s, int c, size_t n) {
@@ -125,12 +125,7 @@ class DFA {
 
 // Work around the bug affecting flexible array members in GCC 6.x (for x >= 1).
 // (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=70932)
-#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ == 6 && __GNUC_MINOR__ >= 1
-    std::atomic<State*> next_[0];   // Outgoing arrows from State,
-#else
-    std::atomic<State*> next_[];    // Outgoing arrows from State,
-#endif
-
+    std::atomic<State*> next_[1];    // Outgoing arrows from State,
                         // one per input byte class
   };
 
@@ -1284,7 +1279,7 @@ DFA::State* DFA::StateSaver::Restore() {
 // inline it to create the specialized ones.
 //
 // Note that matches are delayed by one byte, to make it easier to
-// accomodate match conditions depending on the next input byte (like $ and \b).
+// accommodate match conditions depending on the next input byte (like $ and \b).
 // When s->next[c]->IsMatch(), it means that there is a match ending just
 // *before* byte c.
 
@@ -2086,4 +2081,4 @@ bool Prog::PossibleMatchRange(std::string* min, std::string* max, int maxlen) {
   return GetDFA(kLongestMatch)->PossibleMatchRange(min, max, maxlen);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

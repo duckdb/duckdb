@@ -15,6 +15,8 @@
 
 #include "pg_definitions.hpp"
 
+namespace duckdb_libpgquery {
+
 /*
  * The first field of every node is NodeTag. Each node created (with makeNode)
  * will have one of the following tags as the value of its first field.
@@ -24,8 +26,7 @@
  * the node numbers are never stored on disk.  But don't do it in a released
  * branch, because that would represent an ABI break for extensions.
  */
-typedef enum PGNodeTag
-{
+typedef enum PGNodeTag {
 	T_PGInvalid = 0,
 
 	/*
@@ -490,16 +491,16 @@ typedef enum PGNodeTag
 	 * purposes (usually because they are involved in APIs where we want to
 	 * pass multiple object types through the same pointer).
 	 */
-	T_PGTriggerData,				/* in commands/trigger.h */
-	T_PGEventTriggerData,			/* in commands/event_trigger.h */
-	T_PGReturnSetInfo,			/* in nodes/execnodes.h */
-	T_PGWindowObjectData,			/* private in nodeWindowAgg.c */
-	T_PGTIDBitmap,				/* in nodes/tidbitmap.h */
-	T_PGInlineCodeBlock,			/* in nodes/parsenodes.h */
-	T_PGFdwRoutine,				/* in foreign/fdwapi.h */
-	T_PGIndexAmRoutine,			/* in access/amapi.h */
-	T_PGTsmRoutine,				/* in access/tsmapi.h */
-	T_PGForeignKeyCacheInfo		/* in utils/rel.h */
+	T_PGTriggerData,        /* in commands/trigger.h */
+	T_PGEventTriggerData,   /* in commands/event_trigger.h */
+	T_PGReturnSetInfo,      /* in nodes/execnodes.h */
+	T_PGWindowObjectData,   /* private in nodeWindowAgg.c */
+	T_PGTIDBitmap,          /* in nodes/tidbitmap.h */
+	T_PGInlineCodeBlock,    /* in nodes/parsenodes.h */
+	T_PGFdwRoutine,         /* in foreign/fdwapi.h */
+	T_PGIndexAmRoutine,     /* in access/amapi.h */
+	T_PGTsmRoutine,         /* in access/tsmapi.h */
+	T_PGForeignKeyCacheInfo /* in utils/rel.h */
 } PGNodeTag;
 
 /*
@@ -508,58 +509,17 @@ typedef enum PGNodeTag
  * a variable to be of PGNode * (instead of void *) can also facilitate
  * debugging.
  */
-typedef struct PGNode
-{
-	PGNodeTag		type;
+typedef struct PGNode {
+	PGNodeTag type;
 } PGNode;
 
-#define nodeTag(nodeptr)		(((const PGNode*)(nodeptr))->type)
+#define nodeTag(nodeptr) (((const PGNode *)(nodeptr))->type)
 
-/*
- * newNode -
- *	  create a new node of the specified size and tag the node with the
- *	  specified tag.
- *
- * !WARNING!: Avoid using newNode directly. You should be using the
- *	  macro makeNode.  eg. to create a PGQuery node, use makeNode(PGQuery)
- *
- * Note: the size argument should always be a compile-time constant, so the
- * apparent risk of multiple evaluation doesn't matter in practice.
- */
-#ifdef __GNUC__
+#define makeNode(_type_) ((_type_ *)newNode(sizeof(_type_), T_##_type_))
 
-/* With GCC, we can use a compound statement within an expression */
-#define newNode(size, tag) \
-({	PGNode   *_result; \
-	AssertMacro((size) >= sizeof(PGNode));		/* need the tag, at least */ \
-	_result = (PGNode *) palloc0fast(size); \
-	_result->type = (tag); \
-	_result; \
-})
-#else
+#define NodeSetTag(nodeptr, t) (((PGNode *)(nodeptr))->type = (t))
 
-/*
- *	There is no way to dereference the palloc'ed pointer to assign the
- *	tag, and also return the pointer itself, so we need a holder variable.
- *	Fortunately, this macro isn't recursive so we just define
- *	a global variable for this purpose.
- */
-extern __thread PGNode *newNodeMacroHolder;
-
-#define newNode(size, tag) \
-( \
-	AssertMacro((size) >= sizeof(PGNode)),		/* need the tag, at least */ \
-	newNodeMacroHolder = (PGNode *) palloc0fast(size), \
-	newNodeMacroHolder->type = (tag), \
-	newNodeMacroHolder \
-)
-#endif							/* __GNUC__ */
-
-
-#define makeNode(_type_)		((_type_ *) newNode(sizeof(_type_),T_##_type_))
-#define NodeSetTag(nodeptr,t)	(((PGNode*)(nodeptr))->type = (t))
-
-#define IsA(nodeptr,_type_)		(nodeTag(nodeptr) == T_##_type_)
+#define IsA(nodeptr, _type_) (nodeTag(nodeptr) == T_##_type_)
 
 /*
  * castNode(type, ptr) casts ptr to "type *", and if assertions are enabled,
@@ -569,17 +529,14 @@ extern __thread PGNode *newNodeMacroHolder;
  * evaluations of the ptr argument (which could e.g. be a function call).
  */
 #ifdef USE_ASSERT_CHECKING
-static inline PGNode *
-castNodeImpl(PGNodeTag type, void *ptr)
-{
+static inline PGNode *castNodeImpl(PGNodeTag type, void *ptr) {
 	Assert(ptr == NULL || nodeTag(ptr) == type);
-	return (PGNode *) ptr;
+	return (PGNode *)ptr;
 }
-#define castNode(_type_, nodeptr) ((_type_ *) castNodeImpl(T_##_type_, nodeptr))
+#define castNode(_type_, nodeptr) ((_type_ *)castNodeImpl(T_##_type_, nodeptr))
 #else
-#define castNode(_type_, nodeptr) ((_type_ *) (nodeptr))
-#endif							/* USE_ASSERT_CHECKING */
-
+#define castNode(_type_, nodeptr) ((_type_ *)(nodeptr))
+#endif /* USE_ASSERT_CHECKING */
 
 /* ----------------------------------------------------------------
  *					  extern declarations follow
@@ -589,33 +546,33 @@ castNodeImpl(PGNodeTag type, void *ptr)
 /*
  * nodes/{outfuncs.c,print.c}
  */
-struct PGBitmapset;				/* not to include bitmapset.h here */
-struct PGStringInfoData;			/* not to include stringinfo.h here */
+struct PGBitmapset;      /* not to include bitmapset.h here */
+struct PGStringInfoData; /* not to include stringinfo.h here */
 
-extern void outNode(struct PGStringInfoData *str, const void *obj);
-extern void outToken(struct PGStringInfoData *str, const char *s);
-extern void outBitmapset(struct PGStringInfoData *str,
-			 const struct PGBitmapset *bms);
-extern void outDatum(struct PGStringInfoData *str, uintptr_t value,
-		 int typlen, bool typbyval);
-extern char *nodeToString(const void *obj);
-extern char *bmsToString(const struct PGBitmapset *bms);
+PGNode* newNode(size_t size, PGNodeTag type);
+
+void outNode(struct PGStringInfoData *str, const void *obj);
+void outToken(struct PGStringInfoData *str, const char *s);
+void outBitmapset(struct PGStringInfoData *str, const struct PGBitmapset *bms);
+void outDatum(struct PGStringInfoData *str, uintptr_t value, int typlen, bool typbyval);
+char *nodeToString(const void *obj);
+char *bmsToString(const struct PGBitmapset *bms);
 
 /*
  * nodes/{readfuncs.c,read.c}
  */
-extern void *stringToNode(char *str);
-extern struct PGBitmapset *readBitmapset(void);
-extern uintptr_t readDatum(bool typbyval);
-extern bool *readBoolCols(int numCols);
-extern int *readIntCols(int numCols);
-extern PGOid *readOidCols(int numCols);
-extern int16_t *readAttrNumberCols(int numCols);
+void *stringToNode(char *str);
+struct PGBitmapset *readBitmapset(void);
+uintptr_t readDatum(bool typbyval);
+bool *readBoolCols(int numCols);
+int *readIntCols(int numCols);
+PGOid *readOidCols(int numCols);
+int16_t *readAttrNumberCols(int numCols);
 
 /*
  * nodes/copyfuncs.c
  */
-extern void *copyObjectImpl(const void *obj);
+void *copyObjectImpl(const void *obj);
 
 /* cast result back to argument type, if supported by compiler */
 //#ifdef HAVE_TYPEOF
@@ -627,8 +584,7 @@ extern void *copyObjectImpl(const void *obj);
 /*
  * nodes/equalfuncs.c
  */
-//extern bool equal(const void *a, const void *b);
-
+// extern bool equal(const void *a, const void *b);
 
 /*
  * Typedefs for identifying qualifier selectivities and plan costs as such.
@@ -638,9 +594,8 @@ extern void *copyObjectImpl(const void *obj);
  * These could have gone into plannodes.h or some such, but many files
  * depend on them...
  */
-typedef double Selectivity;		/* fraction of tuples a qualifier will pass */
-typedef double Cost;			/* execution cost (in page-access units) */
-
+typedef double Selectivity; /* fraction of tuples a qualifier will pass */
+typedef double Cost;        /* execution cost (in page-access units) */
 
 /*
  * PGCmdType -
@@ -648,19 +603,17 @@ typedef double Cost;			/* execution cost (in page-access units) */
  *
  * This is needed in both parsenodes.h and plannodes.h, so put it here...
  */
-typedef enum PGCmdType
-{
+typedef enum PGCmdType {
 	PG_CMD_UNKNOWN,
-	PG_CMD_SELECT,					/* select stmt */
-	PG_CMD_UPDATE,					/* update stmt */
-	PG_CMD_INSERT,					/* insert stmt */
+	PG_CMD_SELECT, /* select stmt */
+	PG_CMD_UPDATE, /* update stmt */
+	PG_CMD_INSERT, /* insert stmt */
 	PG_CMD_DELETE,
-	PG_CMD_UTILITY,				/* cmds like create, destroy, copy, vacuum,
+	PG_CMD_UTILITY, /* cmds like create, destroy, copy, vacuum,
 								 * etc. */
-	PG_CMD_NOTHING					/* dummy command for instead nothing rules
+	PG_CMD_NOTHING  /* dummy command for instead nothing rules
 								 * with qual */
 } PGCmdType;
-
 
 /*
  * PGJoinType -
@@ -672,16 +625,15 @@ typedef enum PGCmdType
  *
  * This is needed in both parsenodes.h and plannodes.h, so put it here...
  */
-typedef enum PGJoinType
-{
+typedef enum PGJoinType {
 	/*
 	 * The canonical kinds of joins according to the SQL JOIN syntax. Only
 	 * these codes can appear in parser output (e.g., PGJoinExpr nodes).
 	 */
-	PG_JOIN_INNER,					/* matching tuple pairs only */
-	PG_JOIN_LEFT,					/* pairs + unmatched LHS tuples */
-	PG_JOIN_FULL,					/* pairs + unmatched LHS + unmatched RHS */
-	PG_JOIN_RIGHT,					/* pairs + unmatched RHS tuples */
+	PG_JOIN_INNER, /* matching tuple pairs only */
+	PG_JOIN_LEFT,  /* pairs + unmatched LHS tuples */
+	PG_JOIN_FULL,  /* pairs + unmatched LHS + unmatched RHS */
+	PG_JOIN_RIGHT, /* pairs + unmatched RHS tuples */
 
 	/*
 	 * Semijoins and anti-semijoins (as defined in relational theory) do not
@@ -692,15 +644,15 @@ typedef enum PGJoinType
 	 * which matching RHS row is joined to.  In PG_JOIN_ANTI output, the row is
 	 * guaranteed to be null-extended.
 	 */
-	PG_JOIN_SEMI,					/* 1 copy of each LHS row that has match(es) */
-	PG_JOIN_ANTI,					/* 1 copy of each LHS row that has no match */
+	PG_JOIN_SEMI, /* 1 copy of each LHS row that has match(es) */
+	PG_JOIN_ANTI, /* 1 copy of each LHS row that has no match */
 
 	/*
 	 * These codes are used internally in the planner, but are not supported
 	 * by the executor (nor, indeed, by most of the planner).
 	 */
-	PG_JOIN_UNIQUE_OUTER,			/* LHS path must be made unique */
-	PG_JOIN_UNIQUE_INNER			/* RHS path must be made unique */
+	PG_JOIN_UNIQUE_OUTER, /* LHS path must be made unique */
+	PG_JOIN_UNIQUE_INNER  /* RHS path must be made unique */
 
 	/*
 	 * We might need additional join types someday.
@@ -722,11 +674,7 @@ typedef enum PGJoinType
  * quals attached to a semijoin can be treated the same as innerjoin quals.
  */
 #define IS_OUTER_JOIN(jointype) \
-	(((1 << (jointype)) & \
-	  ((1 << PG_JOIN_LEFT) | \
-	   (1 << PG_JOIN_FULL) | \
-	   (1 << PG_JOIN_RIGHT) | \
-	   (1 << PG_JOIN_ANTI))) != 0)
+	(((1 << (jointype)) & ((1 << PG_JOIN_LEFT) | (1 << PG_JOIN_FULL) | (1 << PG_JOIN_RIGHT) | (1 << PG_JOIN_ANTI))) != 0)
 
 /*
  * PGAggStrategy -
@@ -734,12 +682,11 @@ typedef enum PGJoinType
  *
  * This is needed in both plannodes.h and relation.h, so put it here...
  */
-typedef enum PGAggStrategy
-{
-	PG_AGG_PLAIN,					/* simple agg across all input rows */
-	PG_AGG_SORTED,					/* grouped agg, input must be sorted */
-	PG_AGG_HASHED,					/* grouped agg, use internal hashtable */
-	AGG_MIXED					/* grouped agg, hash and sort both used */
+typedef enum PGAggStrategy {
+	PG_AGG_PLAIN,  /* simple agg across all input rows */
+	PG_AGG_SORTED, /* grouped agg, input must be sorted */
+	PG_AGG_HASHED, /* grouped agg, use internal hashtable */
+	AGG_MIXED      /* grouped agg, hash and sort both used */
 } PGAggStrategy;
 
 /*
@@ -750,14 +697,13 @@ typedef enum PGAggStrategy
  */
 
 /* Primitive options supported by nodeAgg.c: */
-#define AGGSPLITOP_COMBINE		0x01	/* substitute combinefn for transfn */
-#define AGGSPLITOP_SKIPFINAL	0x02	/* skip finalfn, return state as-is */
-#define AGGSPLITOP_SERIALIZE	0x04	/* apply serializefn to output */
-#define AGGSPLITOP_DESERIALIZE	0x08	/* apply deserializefn to input */
+#define AGGSPLITOP_COMBINE 0x01 /* substitute combinefn for transfn */
+#define AGGSPLITOP_SKIPFINAL 0x02 /* skip finalfn, return state as-is */
+#define AGGSPLITOP_SERIALIZE 0x04 /* apply serializefn to output */
+#define AGGSPLITOP_DESERIALIZE 0x08 /* apply deserializefn to input */
 
 /* Supported operating modes (i.e., useful combinations of these options): */
-typedef enum PGAggSplit
-{
+typedef enum PGAggSplit {
 	/* Basic, non-split aggregation: */
 	PG_AGGSPLIT_SIMPLE = 0,
 	/* Initial phase of partial aggregation, with serialization: */
@@ -767,10 +713,10 @@ typedef enum PGAggSplit
 } PGAggSplit;
 
 /* Test whether an PGAggSplit value selects each primitive option: */
-#define DO_AGGSPLIT_COMBINE(as)		(((as) & AGGSPLITOP_COMBINE) != 0)
-#define DO_AGGSPLIT_SKIPFINAL(as)	(((as) & AGGSPLITOP_SKIPFINAL) != 0)
-#define DO_AGGSPLIT_SERIALIZE(as)	(((as) & AGGSPLITOP_SERIALIZE) != 0)
-#define DO_AGGSPLIT_DESERIALIZE(as) (((as) & AGGSPLITOP_DESERIALIZE) != 0)
+#define DO_AGGSPLIT_COMBINE(as) (((as)&AGGSPLITOP_COMBINE) != 0)
+#define DO_AGGSPLIT_SKIPFINAL(as) (((as)&AGGSPLITOP_SKIPFINAL) != 0)
+#define DO_AGGSPLIT_SERIALIZE(as) (((as)&AGGSPLITOP_SERIALIZE) != 0)
+#define DO_AGGSPLIT_DESERIALIZE(as) (((as)&AGGSPLITOP_DESERIALIZE) != 0)
 
 /*
  * PGSetOpCmd and PGSetOpStrategy -
@@ -778,18 +724,16 @@ typedef enum PGAggSplit
  *
  * This is needed in both plannodes.h and relation.h, so put it here...
  */
-typedef enum PGSetOpCmd
-{
+typedef enum PGSetOpCmd {
 	PG_SETOPCMD_INTERSECT,
 	PG_SETOPCMD_INTERSECT_ALL,
 	PG_SETOPCMD_EXCEPT,
 	PG_SETOPCMD_EXCEPT_ALL
 } PGSetOpCmd;
 
-typedef enum PGSetOpStrategy
-{
-	PG_SETOP_SORTED,				/* input must be sorted */
-	PG_SETOP_HASHED				/* use internal hashtable */
+typedef enum PGSetOpStrategy {
+	PG_SETOP_SORTED, /* input must be sorted */
+	PG_SETOP_HASHED  /* use internal hashtable */
 } PGSetOpStrategy;
 
 /*
@@ -798,10 +742,10 @@ typedef enum PGSetOpStrategy
  *
  * This is needed in both parsenodes.h and plannodes.h, so put it here...
  */
-typedef enum PGOnConflictAction
-{
-	PG_ONCONFLICT_NONE,			/* No "ON CONFLICT" clause */
-	PG_ONCONFLICT_NOTHING,			/* ON CONFLICT ... DO NOTHING */
-	PG_ONCONFLICT_UPDATE			/* ON CONFLICT ... DO UPDATE */
+typedef enum PGOnConflictAction {
+	PG_ONCONFLICT_NONE,    /* No "ON CONFLICT" clause */
+	PG_ONCONFLICT_NOTHING, /* ON CONFLICT ... DO NOTHING */
+	PG_ONCONFLICT_UPDATE   /* ON CONFLICT ... DO UPDATE */
 } PGOnConflictAction;
 
+}

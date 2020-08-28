@@ -1,0 +1,147 @@
+# name: test/sql/subquery/scalar/test_correlated_subquery.test
+# description: Test correlated subqueries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# scalar select with correlation
+query II
+SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	43
+2	44
+3	45
+
+# ORDER BY correlated subquery
+query I
+SELECT i FROM integers i1 ORDER BY (SELECT 100-i1.i);
+----
+NULL
+3
+2
+1
+
+# subquery returning multiple results
+query II
+SELECT i, (SELECT 42+i1.i FROM integers) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	43
+2	44
+3	45
+
+# subquery with LIMIT
+query II
+SELECT i, (SELECT 42+i1.i FROM integers LIMIT 1) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	43
+2	44
+3	45
+
+# subquery with LIMIT 0
+query II
+SELECT i, (SELECT 42+i1.i FROM integers LIMIT 0) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+# subquery with WHERE clause that is always FALSE
+query II
+SELECT i, (SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+# correlated EXISTS with WHERE clause that is always FALSE
+query IT
+SELECT i, EXISTS(SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+# correlated ANY with WHERE clause that is always FALSE
+query IT
+SELECT i, i=ANY(SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+# subquery with OFFSET is not supported
+statement error
+SELECT i, (SELECT i+i1.i FROM integers LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;
+
+# subquery with ORDER BY is not supported
+statement error
+SELECT i, (SELECT i+i1.i FROM integers ORDER BY 1 LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;
+
+# correlated filter without FROM clause
+query II
+SELECT i, (SELECT 42 WHERE i1.i>2) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	42
+
+# correlated filter with matching entry on NULL
+query II
+SELECT i, (SELECT 42 WHERE i1.i IS NULL) AS j FROM integers i1 ORDER BY i;
+----
+NULL	42
+1	NULL
+2	NULL
+3	NULL
+
+# scalar select with correlation in projection
+query II
+SELECT i, (SELECT i+i1.i FROM integers WHERE i=1) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	2
+2	3
+3	4
+
+# scalar select with correlation in filter
+query II
+SELECT i, (SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	1
+2	2
+3	3
+
+# scalar select with operation in projection
+query II
+SELECT i, (SELECT i+1 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	2
+2	3
+3	4
+
+# correlated scalar select with constant in projection
+query II
+SELECT i, (SELECT 42 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	42
+2	42
+3	42
+

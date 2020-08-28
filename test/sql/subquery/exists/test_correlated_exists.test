@@ -1,0 +1,126 @@
+# name: test/sql/subquery/exists/test_correlated_exists.test
+# description: Test correlated exists
+# group: [exists]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# correlated EXISTS
+query IT
+SELECT i, EXISTS(SELECT i FROM integers WHERE i1.i>2) FROM integers i1 ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	1
+
+query IT
+SELECT i, EXISTS(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;
+----
+NULL	0
+1	1
+2	1
+3	1
+
+query IT
+SELECT i, EXISTS(SELECT i FROM integers WHERE i IS NULL OR i>i1.i*10) FROM integers i1 ORDER BY i;
+----
+NULL	1
+1	1
+2	1
+3	1
+
+query IT
+SELECT i, EXISTS(SELECT i FROM integers WHERE i1.i>i OR i1.i IS NULL) FROM integers i1 ORDER BY i;
+----
+NULL	1
+1	0
+2	1
+3	1
+
+query I
+SELECT i FROM integers i1 WHERE EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i;
+----
+1
+2
+3
+
+# correlated EXISTS with aggregations
+query T
+SELECT EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;
+----
+1
+
+query IR
+SELECT i, SUM(i) FROM integers i1 GROUP BY i HAVING EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) ORDER BY i;
+----
+1	1.000000
+2	2.000000
+
+query T
+SELECT EXISTS(SELECT i+MIN(i1.i) FROM integers WHERE i=3) FROM integers i1;
+----
+1
+
+query T
+SELECT EXISTS(SELECT i+MIN(i1.i) FROM integers WHERE i=5) FROM integers i1;
+----
+0
+
+# GROUP BY correlated exists
+query TI
+SELECT EXISTS(SELECT i FROM integers WHERE i=i1.i) AS g, COUNT(*) FROM integers i1 GROUP BY g ORDER BY g;
+----
+0	1
+1	3
+
+# SUM on exists
+query R
+SELECT SUM(CASE WHEN EXISTS(SELECT i FROM integers WHERE i=i1.i) THEN 1 ELSE 0 END) FROM integers i1;
+----
+3.000000
+
+# aggregates with multiple parameters
+query R
+SELECT (SELECT COVAR_POP(i1.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1
+----
+NULL
+0.000000
+0.000000
+0.000000
+
+query R
+SELECT (SELECT COVAR_POP(i2.i, i1.i) FROM integers i2) FROM integers i1 ORDER BY 1
+----
+NULL
+0.000000
+0.000000
+0.000000
+
+query R
+SELECT (SELECT COVAR_POP(i1.i+i2.i, i1.i+i2.i) FROM integers i2) FROM integers i1 ORDER BY 1
+----
+NULL
+0.666667
+0.666667
+0.666667
+
+query R
+SELECT (SELECT COVAR_POP(i2.i, i2.i) FROM integers i2) FROM integers i1 ORDER BY 1;
+----
+0.666667
+0.666667
+0.666667
+0.666667
+
+query R
+SELECT (SELECT COVAR_POP(i1.i, i1.i) FROM integers i2 LIMIT 1) FROM integers i1 ORDER BY 1;
+----
+0.666667
+

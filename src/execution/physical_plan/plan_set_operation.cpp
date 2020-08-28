@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
@@ -20,7 +20,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	switch (op.type) {
 	case LogicalOperatorType::UNION:
 		// UNION
-		return make_unique<PhysicalUnion>(op, move(left), move(right));
+		return make_unique<PhysicalUnion>(op.types, move(left), move(right));
 	default: {
 		// EXCEPT/INTERSECT
 		assert(op.type == LogicalOperatorType::EXCEPT || op.type == LogicalOperatorType::INTERSECT);
@@ -38,7 +38,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		// EXCEPT is ANTI join
 		// INTERSECT is SEMI join
 		JoinType join_type = op.type == LogicalOperatorType::EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-		return make_unique<PhysicalHashJoin>(context, op, move(left), move(right), move(conditions), join_type);
+		return make_unique<PhysicalHashJoin>(op, move(left), move(right), move(conditions), join_type);
 	}
 	}
 }
+
+} // namespace duckdb

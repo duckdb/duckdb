@@ -1,0 +1,380 @@
+# name: test/sql/catalog/sequence/test_sequence.test
+# description: Test Sequences
+# group: [sequence]
+
+# note: query verification is disabled for these queries
+# because running the same query multiple times with a sequence does not result in the same answer
+# create a sequence
+statement ok
+CREATE SEQUENCE seq;
+
+# cannot create duplicate sequence
+statement error
+CREATE SEQUENCE seq;
+
+# ignore errors if sequence already exists
+statement ok
+CREATE SEQUENCE IF NOT EXISTS seq;
+
+# generate values from the sequence
+query I
+SELECT nextval('seq')
+----
+1
+
+query I
+SELECT nextval('seq')
+----
+2
+
+query II
+SELECT nextval('seq'), nextval('seq');
+----
+3	4
+
+# NULL in nextval
+query I
+SELECT nextval(NULL)
+----
+NULL
+
+query I
+SELECT nextval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
+----
+5
+NULL
+6
+
+# can't create a sequence that already exists
+statement error
+CREATE SEQUENCE seq;
+
+# drop the sequence
+statement ok
+DROP SEQUENCE seq;
+
+# can't drop non-existing sequence
+statement error
+DROP SEQUENCE seq;
+
+# but doesn't fail with IF EXISTS
+statement ok
+DROP SEQUENCE IF EXISTS seq;
+
+# INCREMENT BY
+statement ok
+CREATE SEQUENCE seq INCREMENT BY 2;
+
+query I
+SELECT nextval('seq')
+----
+1
+
+query I
+SELECT nextval('"seq"')
+----
+3
+
+statement ok
+DROP SEQUENCE seq;
+
+# MINVALUE
+statement ok
+CREATE SEQUENCE seq MINVALUE 3;
+
+query I
+SELECT nextval('seq')
+----
+3
+
+query I
+SELECT nextval('seq')
+----
+4
+
+statement ok
+DROP SEQUENCE seq;
+
+# MAXVALUE
+statement ok
+CREATE SEQUENCE seq MAXVALUE 2;
+
+query I
+SELECT nextval('seq')
+----
+1
+
+query I
+SELECT nextval('seq')
+----
+2
+
+# max value exceeded
+statement error
+SELECT nextval('seq')
+
+statement ok
+DROP SEQUENCE seq;
+
+# MAXVALUE and CYCLE
+statement ok
+CREATE SEQUENCE seq MAXVALUE 2 CYCLE;
+
+query I
+SELECT nextval('seq')
+----
+1
+
+query I
+SELECT nextval('seq')
+----
+2
+
+# max value exceeded: cycle back
+query I
+SELECT nextval('seq')
+----
+1
+
+statement ok
+DROP SEQUENCE seq;
+
+# START WITH, MINVALUE, MAXVALUE and CYCLE
+statement ok
+CREATE SEQUENCE seq MINVALUE 3 MAXVALUE 5 START WITH 4 CYCLE;
+
+query I
+SELECT nextval('seq')
+----
+4
+
+query I
+SELECT nextval('seq')
+----
+5
+
+query I
+SELECT nextval('seq')
+----
+3
+
+statement ok
+DROP SEQUENCE seq;
+
+# START WITH defaults to MAXVALUE if increment is negative
+statement ok
+CREATE SEQUENCE seq INCREMENT BY -1 MINVALUE 0 MAXVALUE 2;
+
+query I
+SELECT nextval('seq')
+----
+2
+
+query I
+SELECT nextval('seq')
+----
+1
+
+query I
+SELECT nextval('seq')
+----
+0
+
+statement error
+SELECT nextval('seq')
+
+statement ok
+DROP SEQUENCE seq;
+
+# START WITH defaults to MINVALUE if increment is positive
+statement ok
+CREATE SEQUENCE seq INCREMENT BY 1 MINVALUE 0 MAXVALUE 2;
+
+query I
+SELECT nextval('seq')
+----
+0
+
+query I
+SELECT nextval('seq')
+----
+1
+
+query I
+SELECT nextval('seq')
+----
+2
+
+statement error
+SELECT nextval('seq')
+
+statement ok
+DROP SEQUENCE seq;
+
+# for positive increment min_value/start defaults to 1 and max_value defaults to 2^63
+statement ok
+CREATE SEQUENCE seq INCREMENT 1 MAXVALUE 3 START 2 CYCLE;
+
+query I
+SELECT nextval('seq')
+----
+2
+
+query I
+SELECT nextval('seq')
+----
+3
+
+query I
+SELECT nextval('seq')
+----
+1
+
+statement ok
+DROP SEQUENCE seq;
+
+# for negative increment min_value defaults to -2^63 and max_value/start defaults to -1
+statement ok
+CREATE SEQUENCE seq INCREMENT -1 CYCLE;
+
+query I
+SELECT nextval('seq')
+----
+-1
+
+query I
+SELECT nextval('seq')
+----
+-2
+
+query I
+SELECT nextval('seq')
+----
+-3
+
+statement ok
+DROP SEQUENCE seq;
+
+statement ok
+CREATE SEQUENCE seq INCREMENT -1 MINVALUE -2 CYCLE;
+
+query I
+SELECT nextval('seq')
+----
+-1
+
+query I
+SELECT nextval('seq')
+----
+-2
+
+query I
+SELECT nextval('seq')
+----
+-1
+
+statement ok
+DROP SEQUENCE seq;
+
+# min_value defaults to 1, setting start to -1 gives start < min_value
+statement error
+CREATE SEQUENCE seq INCREMENT 1 START -1 CYCLE;
+
+# max_value defaults to -1, setting start to 1 gives start > max_value
+statement error
+CREATE SEQUENCE seq INCREMENT -1 START 1 CYCLE;
+
+# sequences in schemas
+statement ok
+CREATE SCHEMA a;
+
+statement ok
+CREATE SCHEMA b;
+
+statement ok
+CREATE SEQUENCE a.seq;
+
+statement ok
+CREATE SEQUENCE b.seq;
+
+query II
+SELECT nextval('a.seq'), nextval('b.seq');
+----
+1	1
+
+# with quotes
+query II
+SELECT nextval('"a"."seq"'), nextval('"b".seq');
+----
+2	2
+
+# unterminated quotes
+statement error
+SELECT nextval('"a"."seq');
+
+# too many separators
+statement error
+SELECT nextval('a.b.c.d');
+
+# start exceeds max value
+statement error
+CREATE SEQUENCE seq MAXVALUE 5 START WITH 6;
+
+# start preceeds min value
+statement error
+CREATE SEQUENCE seq MINVALUE 5 START WITH 4;
+
+# min value bigger than max
+statement error
+CREATE SEQUENCE seq MINVALUE 7 MAXVALUE 5;
+
+# increment must not be 0
+statement error
+CREATE SEQUENCE seq INCREMENT 0;
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE SEQUENCE seq2;
+
+# we can use operations in nextval
+query I
+SELECT nextval('s'||'e'||'q')
+----
+1
+
+statement ok
+DROP SEQUENCE seq;
+
+# sequences with tables
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES ('seq'), ('seq2')
+
+# nextval is run once per value
+query TI
+SELECT s, nextval('seq') FROM strings
+----
+seq	1
+seq2	2
+
+# we can also use the strings from the table as input to the sequence
+query TI
+SELECT s, nextval(s) FROM strings
+----
+seq	3
+seq2	1
+
+# this will also cause an error if the sequence does not exist
+statement ok
+INSERT INTO strings VALUES ('nonexistant_seq')
+
+statement error
+SELECT s, nextval(s) FROM strings
+

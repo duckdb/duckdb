@@ -73,18 +73,18 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 		register_operator(o);                                                                                          \
 	} while (0)
 
-	// BINOP(||, TEXT);
+	BINOP(||, TEXT);
 	BINOP(*, INTEGER);
 	BINOP(/, INTEGER);
 
 	BINOP(+, INTEGER);
 	BINOP(-, INTEGER);
 
-	// BINOP(>>, INTEGER);
-	// BINOP(<<, INTEGER);
+	BINOP(>>, INTEGER);
+	BINOP(<<, INTEGER);
 
-	// BINOP(&, INTEGER);
-	// BINOP(|, INTEGER);
+	BINOP(&, INTEGER);
+	BINOP(|, INTEGER);
 
 	BINOP(<, INTEGER);
 	BINOP(<=, INTEGER);
@@ -137,12 +137,12 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 
 	FUNC1(abs, INTEGER, REAL);
 	// FUNC1(hex, TEXT, TEXT);
-	// FUNC1(length, INTEGER, TEXT);
-	// FUNC1(lower, TEXT, TEXT);
+	FUNC1(length, INTEGER, TEXT);
+	FUNC1(lower, TEXT, TEXT);
 	// FUNC1(ltrim, TEXT, TEXT);
 	// FUNC1(quote, TEXT, TEXT);
 	// FUNC1(randomblob, TEXT, INTEGER);
-	// FUNC1(round, INTEGER, REAL);
+	FUNC1(round, INTEGER, REAL);
 	// FUNC1(rtrim, TEXT, TEXT);
 	// FUNC1(soundex, TEXT, TEXT);
 	// FUNC1(sqlite_compileoption_get, TEXT, INTEGER);
@@ -153,7 +153,7 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 	// FUNC1(typeof, TEXT, REAL);
 	// FUNC1(typeof, TEXT, TEXT);
 	// FUNC1(unicode, INTEGER, TEXT);
-	// FUNC1(upper, TEXT, TEXT);
+	FUNC1(upper, TEXT, TEXT);
 	// FUNC1(zeroblob, TEXT, INTEGER);
 
 	// FUNC2(glob, INTEGER, TEXT, TEXT);
@@ -163,10 +163,10 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 	// FUNC2(rtrim, TEXT, TEXT, TEXT);
 	// FUNC2(trim, TEXT, TEXT, TEXT);
 	// FUNC2(round, INTEGER, REAL, INTEGER);
-	// FUNC2(substr, TEXT, TEXT, INTEGER);
+	FUNC2(substr, TEXT, TEXT, INTEGER);
 
-	// FUNC3(substr, TEXT, TEXT, INTEGER, INTEGER);
-	// FUNC3(replace, TEXT, TEXT, TEXT, TEXT);
+	FUNC3(substr, TEXT, TEXT, INTEGER, INTEGER);
+	FUNC3(replace, TEXT, TEXT, TEXT, TEXT);
 
 #define AGG(n, r, a)                                                                                                   \
 	do {                                                                                                               \
@@ -180,7 +180,7 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 	AGG(count, INTEGER, REAL);
 	AGG(count, INTEGER, TEXT);
 	AGG(count, INTEGER, INTEGER);
-	// AGG(group_concat, TEXT, TEXT);
+	AGG(string_agg, TEXT, TEXT);
 	AGG(max, REAL, REAL);
 	AGG(max, INTEGER, INTEGER);
 	AGG(min, REAL, REAL);
@@ -204,7 +204,7 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 
 dut_duckdb::dut_duckdb(std::string &conninfo) : duckdb_connection(conninfo) {
 	cerr << "Generating TPC-H...";
-	tpch::dbgen(0.1, *database);
+	tpch::dbgen(0.01, *database);
 	cerr << "done." << endl;
 	// q("PRAGMA main.auto_vacuum = 2");
 }

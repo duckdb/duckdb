@@ -24,7 +24,7 @@ struct CreateViewInfo : public CreateInfo {
 	//! Aliases of the view
 	vector<string> aliases;
 	//! Return types
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	//! The QueryNode of the view
 	unique_ptr<QueryNode> query;
 };

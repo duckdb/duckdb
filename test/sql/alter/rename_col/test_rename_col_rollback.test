@@ -1,0 +1,33 @@
+# name: test/sql/alter/rename_col/test_rename_col_rollback.test
+# description: Test ALTER TABLE RENAME COLUMN with rollback
+# group: [rename_col]
+
+# CREATE TABLE
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+START TRANSACTION
+
+# rename the column in the first transaction
+statement ok
+ALTER TABLE test RENAME COLUMN i TO k
+
+# now we should see the new name
+statement error
+SELECT i FROM test
+
+statement ok
+SELECT k FROM test
+
+# rollback
+statement ok
+ROLLBACK
+
+# now we should see the old name again
+statement ok
+SELECT i FROM test
+
+statement error
+SELECT k FROM test
+

@@ -1,0 +1,35 @@
+# name: test/sql/types/blob/test_blob_string.test
+# description: Insert BLOB values from normal strings
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE blobs (b BYTEA);
+
+# insert BLOB from string
+statement ok
+INSERT INTO blobs VALUES ('aaaaaaaaaa')
+
+# sizes: 10, 100, 1000, 10000 -> double plus two due to hexadecimal representation
+# The concat function casts BLOB to VARCHAR,resulting in a hex string
+statement ok
+INSERT INTO blobs SELECT b||b||b||b||b||b||b||b||b||b FROM blobs WHERE OCTET_LENGTH(b)=(SELECT MAX(OCTET_LENGTH(b)) FROM blobs)
+
+# The concat function casts BLOB to VARCHAR,resulting in a hex string
+statement ok
+INSERT INTO blobs SELECT b||b||b||b||b||b||b||b||b||b FROM blobs WHERE OCTET_LENGTH(b)=(SELECT MAX(OCTET_LENGTH(b)) FROM blobs)
+
+# The concat function casts BLOB to VARCHAR,resulting in a hex string
+statement ok
+INSERT INTO blobs SELECT b||b||b||b||b||b||b||b||b||b FROM blobs WHERE OCTET_LENGTH(b)=(SELECT MAX(OCTET_LENGTH(b)) FROM blobs)
+
+query I
+SELECT OCTET_LENGTH(b) FROM blobs ORDER BY 1
+----
+10
+100
+1000
+10000
+

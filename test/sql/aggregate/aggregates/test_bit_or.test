@@ -1,0 +1,56 @@
+# name: test/sql/aggregate/aggregates/test_bit_or.test
+# description: Test BIT_OR operator
+# group: [aggregates]
+
+# test on scalar values
+query II
+SELECT BIT_OR(3), BIT_OR(NULL)
+----
+3
+0
+
+# test on a sequence
+statement ok
+CREATE SEQUENCE seq;
+
+query I
+SELECT BIT_OR(nextval('seq'))
+----
+1
+
+query I
+SELECT BIT_OR(nextval('seq'))
+----
+2
+
+# test on a set of integers
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (3), (7), (15), (31), (3), (15)
+
+query IIII
+SELECT BIT_OR(i), BIT_OR(1), BIT_OR(DISTINCT i), BIT_OR(NULL) FROM integers
+----
+31
+1
+31
+0
+
+# test on an empty set
+query I
+SELECT BIT_OR(i) FROM integers WHERE i > 100
+----
+0
+
+# test incorrect usage
+statement error
+SELECT BIT_OR()
+
+statement error
+SELECT BIT_OR(1, 2, 3)
+
+statement error
+SELECT BIT_OR(BIT_AND(1))
+

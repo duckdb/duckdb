@@ -12,6 +12,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
+class ChunkCollection;
 
 //! PhysicalJoin represents the base class of the join operators
 class PhysicalComparisonJoin : public PhysicalJoin {
@@ -23,21 +24,11 @@ public:
 
 public:
 	string ExtraRenderInformation() const override;
-};
 
-class PhysicalComparisonJoinState : public PhysicalOperatorState {
-public:
-	PhysicalComparisonJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
-	    : PhysicalOperatorState(left) {
-		assert(left && right);
-		for (auto &cond : conditions) {
-			lhs_executor.AddExpression(*cond.left);
-			rhs_executor.AddExpression(*cond.right);
-		}
-	}
-
-	ExpressionExecutor lhs_executor;
-	ExpressionExecutor rhs_executor;
+	//! Construct the join result of a join with an empty RHS
+	static void ConstructEmptyJoinResult(JoinType type, bool has_null, DataChunk &input, DataChunk &result);
+	//! Construct the remainder of a Full Outer Join based on which tuples in the RHS found no match
+	static void ConstructFullOuterJoinResult(bool *found_match, ChunkCollection &input, DataChunk &result, idx_t &scan_position);
 };
 
 } // namespace duckdb

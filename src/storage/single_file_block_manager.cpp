@@ -3,7 +3,9 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+#include <algorithm>
+
+namespace duckdb {
 using namespace std;
 
 SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new,
@@ -15,17 +17,17 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 	FileLockType lock;
 	if (read_only) {
 		assert(!create_new);
-		flags = FileFlags::READ;
+		flags = FileFlags::FILE_FLAGS_READ;
 		lock = FileLockType::READ_LOCK;
 	} else {
-		flags = FileFlags::WRITE;
+		flags = FileFlags::FILE_FLAGS_WRITE;
 		lock = FileLockType::WRITE_LOCK;
 		if (create_new) {
-			flags |= FileFlags::CREATE;
+			flags |= FileFlags::FILE_FLAGS_FILE_CREATE;
 		}
 	}
 	if (use_direct_io) {
-		flags |= FileFlags::DIRECT_IO;
+		flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 	// open the RDBMS handle
 	handle = fs.OpenFile(path, flags, lock);
@@ -203,3 +205,5 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	used_blocks.clear();
 }
+
+} // namespace duckdb

@@ -1,0 +1,63 @@
+# name: test/sql/catalog/test_create_from_select.test
+# description: Create table from SELECT statement
+# group: [catalog]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (3), (4), (5)
+
+query I
+SELECT * FROM integers
+----
+3
+4
+5
+
+statement ok
+INSERT INTO integers SELECT i+3 FROM integers;
+
+query I
+SELECT * FROM integers
+----
+3
+4
+5
+6
+7
+8
+
+statement ok
+CREATE TABLE integers2 AS SELECT i, i+2 AS j FROM integers;
+
+query II
+SELECT * FROM integers2 ORDER BY i
+----
+3	5
+4	6
+5	7
+6	8
+7	9
+8	10
+
+query I
+SELECT i FROM integers2 ORDER BY i
+----
+3
+4
+5
+6
+7
+8
+
+query I
+SELECT j FROM integers2 ORDER BY i
+----
+5
+6
+7
+8
+9
+10
+

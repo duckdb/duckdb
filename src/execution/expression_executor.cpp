@@ -2,7 +2,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ExpressionExecutor::ExpressionExecutor() {
@@ -80,7 +80,9 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	executor.ExecuteExpression(result);
 
 	assert(result.vector_type == VectorType::CONSTANT_VECTOR);
-	return result.GetValue(0);
+	auto result_value = result.GetValue(0);
+	assert(result_value.type() == expr.return_type);
+	return result_value;
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
@@ -163,7 +165,7 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 		return 0;
 	}
 	assert(true_sel || false_sel);
-	assert(expr.return_type == TypeId::BOOL);
+	assert(expr.return_type.id() == LogicalTypeId::BOOLEAN);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select((BoundBetweenExpression &)expr, state, sel, count, true_sel, false_sel);
@@ -223,7 +225,7 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(TypeId::BOOL, (data_ptr_t)intermediate_bools);
+	Vector intermediate(LogicalType::BOOLEAN, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, sel, count, intermediate);
 
 	VectorData idata;
@@ -237,3 +239,5 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);
 	}
 }
+
+} // namespace duckdb

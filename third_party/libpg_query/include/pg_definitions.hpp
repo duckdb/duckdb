@@ -44,15 +44,16 @@ typedef uint32_t PGOid;
 #define __thread __declspec(thread)
 #endif
 
-typedef struct {
-	int32_t vl_len_;    /* these fields must match ArrayType! */
-	int ndim;         /* always 1 for PGint2vector */
-	int32_t dataoffset; /* always 0 for PGint2vector */
-	PGOid elemtype;
-	int dim1;
-	int lbound1;
-	int16_t values[];
-} PGint2vector;
+
+//typedef struct {
+//	int32_t vl_len_;    /* these fields must match ArrayType! */
+//	int ndim;         /* always 1 for PGint2vector */
+//	int32_t dataoffset; /* always 0 for PGint2vector */
+//	PGOid elemtype;
+//	int dim1;
+//	int lbound1;
+//	int16_t values[];
+//} PGint2vector;
 
 typedef struct PGNameData {
 	char data[NAMEDATALEN];

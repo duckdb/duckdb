@@ -1,0 +1,64 @@
+# name: test/sql/copy/csv/test_force_not_null.test
+# description: Test force_not_null
+# group: [csv]
+
+statement ok
+CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
+
+# test if null value is correctly converted into string
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test');
+----
+3
+
+query ITT
+SELECT * FROM test ORDER BY 1;
+----
+0	(empty)	NULL
+1	(empty)	NULL
+8	test	tea
+
+statement ok
+DELETE FROM test;
+
+# test if null value is correctly converted into string if explicit columns are used
+query I
+COPY test (col_a, col_b, col_c) FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test');
+----
+3
+
+query ITT
+SELECT * FROM test ORDER BY 1;
+----
+0	(empty)	NULL
+1	(empty)	NULL
+8	test	tea
+
+# FORCE_NOT_NULL is only supported in COPY ... FROM ...
+statement error
+COPY test TO 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test');
+
+# FORCE_NOT_NULL must not be empty and must have the correct parameter type
+statement error
+COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL, NULL 'test');
+
+statement error
+COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL 42, NULL 'test');
+
+# test using a column in FORCE_NOT_NULL that is not set as output, but that is a column of the table
+statement error
+COPY test (col_b, col_a) FROM 'test/sql/copy/csv/data/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_b));
+
+# test using a column in FORCE_NOT_NULL that is not a column of the table
+statement error
+COPY test FROM 'test/sql/copy/csv/data/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_d));
+
+# FORCE_NOT_NULL fails on integer columns with NULL values, but only if there are null values
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
+----
+3
+
+statement error
+COPY test FROM 'test/sql/copy/csv/data/test/force_not_null_inull.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
+

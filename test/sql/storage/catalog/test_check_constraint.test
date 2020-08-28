@@ -1,0 +1,33 @@
+# name: test/sql/storage/catalog/test_check_constraints.test
+# description: Test serialization of CHECK constraint
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/check_storage_test.db
+
+# create a table with a check constraint
+statement ok
+CREATE TABLE test(a INTEGER CHECK (a<10), b INTEGER CHECK(CASE WHEN b < 10 THEN a < b ELSE a + b < 100 END));
+
+# reload the database
+restart
+
+# matching tuple
+statement ok
+INSERT INTO test VALUES (3, 7);
+
+# check constraint on a violated (a < 10)
+statement error
+INSERT INTO test VALUES (12, 13);
+
+# check constraint on b violated  (b < 10) => (a < b)
+statement error
+INSERT INTO test VALUES (5, 3);
+
+# check constraint on b not violated !(b < 10) => (a + b < 100)
+statement ok
+INSERT INTO test VALUES (9, 90);
+
+# check constraint on b violated !(b < 10) => (a + b < 100)
+statement error
+INSERT INTO test VALUES (9, 99);

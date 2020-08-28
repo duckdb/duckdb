@@ -1,12 +1,12 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type,
+BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
                                              unique_ptr<AggregateFunction> aggregate)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, return_type), aggregate(move(aggregate)) {
+    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)) {
 }
 
 string BoundWindowExpression::ToString() const {
@@ -79,10 +79,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	}
 
 	for (auto &o : orders) {
-		BoundOrderByNode node;
-		node.type = o.type;
-		node.expression = o.expression->Copy();
-		new_window->orders.push_back(move(node));
+		new_window->orders.push_back(BoundOrderByNode(o.type, o.null_order, o.expression->Copy()));
 	}
 
 	new_window->start = start;
@@ -94,3 +91,5 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 
 	return move(new_window);
 }
+
+} // namespace duckdb

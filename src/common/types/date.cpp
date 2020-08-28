@@ -2,14 +2,22 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/limits.hpp"
 
+#include <cstring>
 #include <cctype>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
+#include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+
+string_t Date::MonthNamesAbbreviated[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+string_t Date::MonthNames[] = {"January", "February", "March",     "April",   "May",      "June",
+                               "July",    "August",   "September", "October", "November", "December"};
+string_t Date::DayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+string_t Date::DayNamesAbbreviated[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 // Taken from MonetDB mtime.c
 
@@ -110,18 +118,23 @@ static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-static bool TryConvertDate(const char *buf, date_t &result) {
+bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool strict) {
 	int32_t day = 0, month = -1;
 	int32_t year = 0, yearneg = (buf[0] == '-');
-	idx_t pos = 0;
+	pos = 0;
 	int sep;
 
-	if (yearneg == 0 && !std::isdigit((unsigned char)buf[0])) {
+	// skip leading spaces
+	while (std::isspace((unsigned char)buf[pos])) {
+		pos++;
+	}
+
+	if (yearneg == 0 && !std::isdigit((unsigned char)buf[pos])) {
 		return false;
 	}
 
 	// first parse the year
-	for (pos = yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
+	for (pos = pos + yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
 		if (year > YEAR_MAX) {
 			break;
@@ -149,17 +162,38 @@ static bool TryConvertDate(const char *buf, date_t &result) {
 		return false;
 	}
 
-	if (std::isdigit((unsigned char)buf[pos])) {
-		return false;
+	// check for an optional trailing " (BC)""
+	if (std::isspace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' && buf[pos + 3] == 'C' &&
+	    buf[pos + 4] == ')') {
+		year = -year;
+		pos += 5;
+	}
+
+	// in strict mode, check remaining string for non-space characters
+	if (strict) {
+		// skip trailing spaces
+		while (std::isspace((unsigned char)buf[pos])) {
+			pos++;
+		}
+		// check position. if end was not reached, non-space chars remaining
+		if (pos < strlen(buf)) {
+			return false;
+		}
+	} else {
+		// in non-strict mode, check for any direct trailing digits
+		if (std::isdigit((unsigned char)buf[pos])) {
+			return false;
+		}
 	}
 
 	result = Date::FromDate(yearneg ? -year : year, month, day);
 	return true;
 }
 
-date_t Date::FromCString(const char *buf) {
+date_t Date::FromCString(const char *buf, bool strict) {
 	date_t result;
-	if (!TryConvertDate(buf, result)) {
+	idx_t pos;
+	if (!TryConvertDate(buf, pos, result, strict)) {
 		throw ConversionException("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
 		                          buf);
@@ -167,8 +201,8 @@ date_t Date::FromCString(const char *buf) {
 	return result;
 }
 
-date_t Date::FromString(string str) {
-	return Date::FromCString(str.c_str());
+date_t Date::FromString(string str, bool strict) {
+	return Date::FromCString(str.c_str(), strict);
 }
 
 string Date::ToString(int32_t date) {
@@ -209,7 +243,7 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 }
 
 date_t Date::EpochToDate(int64_t epoch) {
-	assert((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= numeric_limits<int32_t>::max());
+	assert((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
 	return (date_t)((epoch / SECONDS_PER_DAY) + EPOCH_DATE);
 }
 
@@ -261,8 +295,8 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	}
 }
 
-static int32_t GetWeek(int32_t year, int32_t month, int32_t day) {
-	auto day_of_the_year = (leapyear(year) ? CUMLEAPDAYS[month] : CUMDAYS[month]) + day;
+static int32_t GetISOWeek(int32_t year, int32_t month, int32_t day) {
+	auto day_of_the_year = (Date::IsLeapYear(year) ? CUMLEAPDAYS[month] : CUMDAYS[month]) + day;
 	// get the first day of the first week of the year
 	// the first week is the week that has the 4th of January in it
 	auto day_of_the_fourth = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 4));
@@ -273,16 +307,47 @@ static int32_t GetWeek(int32_t year, int32_t month, int32_t day) {
 	auto first_day_of_the_first_week = day_of_the_fourth >= 4 ? 0 : 5 - day_of_the_fourth;
 	if (day_of_the_year < first_day_of_the_first_week) {
 		// day is part of last year
-		return GetWeek(year - 1, 12, day);
+		return GetISOWeek(year - 1, 12, day);
 	} else {
 		return ((day_of_the_year - first_day_of_the_first_week) / 7) + 1;
 	}
 }
 
-int32_t Date::ExtractWeekNumber(date_t date) {
+int32_t Date::ExtractISOWeekNumber(date_t date) {
 	int32_t year, month, day;
 	Date::Convert(date, year, month, day);
-	return GetWeek(year, month - 1, day - 1);
+	return GetISOWeek(year, month - 1, day - 1);
+}
+
+int32_t Date::ExtractWeekNumberRegular(date_t date, bool monday_first) {
+	int32_t year, month, day;
+	Date::Convert(date, year, month, day);
+	month -= 1;
+	day -= 1;
+	// get the day of the year
+	auto day_of_the_year = (Date::IsLeapYear(year) ? CUMLEAPDAYS[month] : CUMDAYS[month]) + day;
+	// now figure out the first monday or sunday of the year
+	// what day is January 1st?
+	auto day_of_jan_first = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 1));
+	// monday = 1, sunday = 7
+	int32_t first_week_start;
+	if (monday_first) {
+		// have to find next "1"
+		if (day_of_jan_first == 1) {
+			// jan 1 is monday: starts immediately
+			first_week_start = 0;
+		} else {
+			// jan 1 is not monday: count days until next monday
+			first_week_start = 8 - day_of_jan_first;
+		}
+	} else {
+		first_week_start = 7 - day_of_jan_first;
+	}
+	if (day_of_the_year < first_week_start) {
+		// day occurs before first week starts: week 0
+		return 0;
+	}
+	return ((day_of_the_year - first_week_start) / 7) + 1;
 }
 
 // Returns the date of the monday of the current week.
@@ -298,3 +363,5 @@ date_t Date::GetMondayOfCurrentWeek(date_t date) {
 
 	return (Date::FromDate(year, month, day));
 }
+
+} // namespace duckdb

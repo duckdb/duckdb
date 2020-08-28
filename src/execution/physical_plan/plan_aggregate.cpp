@@ -5,11 +5,22 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
+	unique_ptr<PhysicalOperator> groupby;
 	assert(op.children.size() == 1);
+
+	bool all_combinable = true;
+	for (idx_t i = 0; i < op.expressions.size(); i++) {
+		auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
+		if (!aggregate.function.combine) {
+			// unsupported aggregate for simple aggregation: use hash aggregation
+			all_combinable = false;
+			break;
+		}
+	}
 
 	auto plan = CreatePlan(*op.children[0]);
 	if (op.groups.size() == 0) {
@@ -25,18 +36,18 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 			}
 		}
 		if (use_simple_aggregation) {
-			auto groupby = make_unique<PhysicalSimpleAggregate>(op.types, move(op.expressions));
-			groupby->children.push_back(move(plan));
-			return move(groupby);
+			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
+			                                                                      all_combinable);
 		} else {
-			auto groupby = make_unique<PhysicalHashAggregate>(op.types, move(op.expressions));
-			groupby->children.push_back(move(plan));
-			return move(groupby);
+			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(op.types, move(op.expressions));
 		}
 	} else {
 		// groups! create a GROUP BY aggregator
-		auto groupby = make_unique<PhysicalHashAggregate>(op.types, move(op.expressions), move(op.groups));
-		groupby->children.push_back(move(plan));
-		return move(groupby);
+		groupby =
+		    make_unique_base<PhysicalOperator, PhysicalHashAggregate>(op.types, move(op.expressions), move(op.groups));
 	}
+	groupby->children.push_back(move(plan));
+	return groupby;
 }
+
+} // namespace duckdb

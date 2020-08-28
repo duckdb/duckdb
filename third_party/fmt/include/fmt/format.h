@@ -116,17 +116,7 @@ FMT_END_NAMESPACE
 #endif
 
 #ifndef FMT_USE_UDL_TEMPLATE
-// EDG front end based compilers (icc, nvcc) do not support UDL templates yet
-// and GCC 9 warns about them.
-#  if FMT_USE_USER_DEFINED_LITERALS && FMT_ICC_VERSION == 0 && \
-      FMT_CUDA_VERSION == 0 &&                                 \
-      ((FMT_GCC_VERSION >= 600 && FMT_GCC_VERSION <= 900 &&    \
-        __cplusplus >= 201402L) ||                             \
-       FMT_CLANG_VERSION >= 304)
-#    define FMT_USE_UDL_TEMPLATE 1
-#  else
-#    define FMT_USE_UDL_TEMPLATE 0
-#  endif
+#define FMT_USE_UDL_TEMPLATE 0
 #endif
 
 // __builtin_clz is broken in clang with Microsoft CodeGen:
@@ -3254,15 +3244,10 @@ template <typename Char> struct udl_arg {
 
 inline namespace literals {
 #  if FMT_USE_UDL_TEMPLATE
-#    pragma GCC diagnostic push
-#    if FMT_CLANG_VERSION
-#      pragma GCC diagnostic ignored "-Wgnu-string-literal-operator-template"
-#    endif
 template <typename Char, Char... CHARS>
 FMT_CONSTEXPR internal::udl_formatter<Char, CHARS...> operator""_format() {
   return {};
 }
-#    pragma GCC diagnostic pop
 #  else
 /**
   \rst
@@ -3308,16 +3293,16 @@ FMT_END_NAMESPACE
 
 #define FMT_STRING_IMPL(s, ...)                                         \
   [] {                                                                  \
-    struct str : fmt::compile_string {                                  \
+    struct str : duckdb_fmt::compile_string {                                  \
       using char_type = typename std::remove_cv<std::remove_pointer<    \
           typename std::decay<decltype(s)>::type>::type>::type;         \
       __VA_ARGS__ FMT_CONSTEXPR                                         \
-      operator fmt::basic_string_view<char_type>() const {              \
+      operator duckdb_fmt::basic_string_view<char_type>() const {              \
         return {s, sizeof(s) / sizeof(char_type) - 1};                  \
       }                                                                 \
     } result;                                                           \
     /* Suppress Qt Creator warning about unused operator. */            \
-    (void)static_cast<fmt::basic_string_view<typename str::char_type>>( \
+    (void)static_cast<duckdb_fmt::basic_string_view<typename str::char_type>>( \
         result);                                                        \
     return result;                                                      \
   }()

@@ -14,7 +14,7 @@
 namespace duckdb {
 class PhysicalRecursiveCTE : public PhysicalOperator {
 public:
-	PhysicalRecursiveCTE(LogicalOperator &op, bool union_all, unique_ptr<PhysicalOperator> top,
+	PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
 	                     unique_ptr<PhysicalOperator> bottom);
 
 	bool union_all;
@@ -22,7 +22,7 @@ public:
 	ChunkCollection intermediate_table;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
@@ -30,4 +30,4 @@ private:
 	idx_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);
 };
 
-}; // namespace duckdb
+} // namespace duckdb

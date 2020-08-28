@@ -12,7 +12,8 @@
 
 namespace duckdb {
 
-// The Like Optimization rule rewrites LIKE to optimized scalar functions (e.g.: prefix, suffix, and contains)
+// The Empty_needle_removal Optimization rule folds some foldable ConstantExpression 
+//(e.g.: PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to (CASE WHEN x IS NOT NULL THEN)
 class EmptyNeedleRemovalRule : public Rule {
 public:
 	EmptyNeedleRemovalRule(ExpressionRewriter &rewriter);

@@ -1,0 +1,34 @@
+# name: test/sql/subquery/scalar/test_delete_subquery.test
+# description: Test subqueries in delete
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(id INTEGER, i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (4, NULL)
+
+# correlated subquery in delete
+statement ok
+DELETE FROM integers i1 WHERE i>(SELECT MAX(i) FROM integers WHERE i1.i<>i)
+
+query II
+SELECT id, i FROM integers ORDER BY id
+----
+1	1
+2	2
+4	NULL
+
+# uncorrelated subquery in delete
+statement ok
+DELETE FROM integers i1 WHERE i=(SELECT MAX(i) FROM integers)
+
+query II
+SELECT id, i FROM integers ORDER BY id
+----
+1	1
+4	NULL
+

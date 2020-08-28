@@ -1,0 +1,20 @@
+# name: test/sql/function/numeric/test_bit_count.test
+# description: BIT_COUNT test
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE bits(t tinyint, s smallint, i integer, b bigint)
+
+statement ok
+INSERT INTO bits VALUES (NULL, NULL, NULL, NULL), (31, 1023, 11834119, 50827156903621017), (-59, -517, -575693, -9876543210)
+
+query IIII
+select bit_count(t), bit_count(s),bit_count(i), bit_count(b) from bits
+----
+NULL	NULL	NULL	NULL
+5	10	11	27
+4	14	24	49
+

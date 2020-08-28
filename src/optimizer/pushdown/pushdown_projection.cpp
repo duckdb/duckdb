@@ -4,7 +4,7 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj, unique_ptr<Expression> expr) {
@@ -45,3 +45,5 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
 	return op;
 }
+
+} // namespace duckdb

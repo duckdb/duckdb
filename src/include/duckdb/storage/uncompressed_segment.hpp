@@ -24,13 +24,13 @@ struct UpdateInfo;
 //! An uncompressed segment represents an uncompressed segment of a column residing in a block
 class UncompressedSegment {
 public:
-	UncompressedSegment(BufferManager &manager, TypeId type, idx_t row_start);
+	UncompressedSegment(BufferManager &manager, PhysicalType type, idx_t row_start);
 	virtual ~UncompressedSegment();
 
 	//! The buffer manager
 	BufferManager &manager;
 	//! Type of the uncompressed segment
-	TypeId type;
+	PhysicalType type;
 	//! The block id that this segment relates to
 	block_id_t block_id;
 	//! The size of a vector of this type
@@ -50,7 +50,8 @@ public:
 	virtual void InitializeScan(ColumnScanState &state) {
 	}
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
-	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result, bool get_lock= true);
+	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
+	          bool get_lock = true);
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);

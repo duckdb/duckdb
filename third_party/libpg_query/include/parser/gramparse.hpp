@@ -20,14 +20,15 @@
 
 #include "nodes/parsenodes.hpp"
 #include "parser/scanner.hpp"
+
+namespace duckdb_libpgquery {
 #include "parser/gram.hpp"
 
 /*
  * The YY_EXTRA data that a flex scanner allows us to pass around.  Private
  * state needed for raw parsing/lexing goes here.
  */
-typedef struct base_yy_extra_type
-{
+typedef struct base_yy_extra_type {
 	/*
 	 * Fields used by the core scanner.
 	 */
@@ -36,17 +37,17 @@ typedef struct base_yy_extra_type
 	/*
 	 * State variables for base_yylex().
 	 */
-	bool		have_lookahead; /* is lookahead info valid? */
-	int			lookahead_token;	/* one-token lookahead */
-	core_YYSTYPE lookahead_yylval;	/* yylval for lookahead token */
-	YYLTYPE		lookahead_yylloc;	/* yylloc for lookahead token */
-	char	   *lookahead_end;	/* end of current token */
-	char		lookahead_hold_char;	/* to be put back at *lookahead_end */
+	bool have_lookahead;           /* is lookahead info valid? */
+	int lookahead_token;           /* one-token lookahead */
+	core_YYSTYPE lookahead_yylval; /* yylval for lookahead token */
+	YYLTYPE lookahead_yylloc;      /* yylloc for lookahead token */
+	char *lookahead_end;           /* end of current token */
+	char lookahead_hold_char;      /* to be put back at *lookahead_end */
 
 	/*
 	 * State variables that belong to the grammar.
 	 */
-	PGList	   *parsetree;		/* final parse result is delivered here */
+	PGList *parsetree; /* final parse result is delivered here */
 } base_yy_extra_type;
 
 /*
@@ -55,14 +56,13 @@ typedef struct base_yy_extra_type
  * and this is sufficiently performance-critical to make it seem worth
  * cheating a bit to use an inline macro.
  */
-#define pg_yyget_extra(yyscanner) (*((base_yy_extra_type **) (yyscanner)))
-
+#define pg_yyget_extra(yyscanner) (*((base_yy_extra_type **)(yyscanner)))
 
 /* from parser.c */
-extern int base_yylex(YYSTYPE *lvalp, YYLTYPE *llocp,
-		   core_yyscan_t yyscanner);
+int base_yylex(YYSTYPE *lvalp, YYLTYPE *llocp, core_yyscan_t yyscanner);
 
 /* from gram.y */
-extern void parser_init(base_yy_extra_type *yyext);
-extern int	base_yyparse(core_yyscan_t yyscanner);
+void parser_init(base_yy_extra_type *yyext);
+int base_yyparse(core_yyscan_t yyscanner);
 
+}

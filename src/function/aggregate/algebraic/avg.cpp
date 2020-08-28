@@ -4,7 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/function_set.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <class T> struct avg_state_t {
@@ -54,6 +54,7 @@ struct AverageFunction {
 void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet avg("avg");
 	avg.AddFunction(AggregateFunction::UnaryAggregate<avg_state_t<double>, double, double, AverageFunction>(
-	    SQLType::DOUBLE, SQLType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(avg);
 }
+} // namespace duckdb

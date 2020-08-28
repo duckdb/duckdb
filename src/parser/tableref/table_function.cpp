@@ -1,8 +1,8 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-
+#include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool TableFunctionRef::Equals(const TableRef *other_) const {
@@ -34,3 +34,5 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 
 	return move(copy);
 }
+
+} // namespace duckdb

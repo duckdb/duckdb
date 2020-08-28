@@ -15,7 +15,7 @@ namespace duckdb {
 //! LogicalDelimGet represents a duplicate eliminated scan belonging to a DelimJoin
 class LogicalDelimGet : public LogicalOperator {
 public:
-	LogicalDelimGet(idx_t table_index, vector<TypeId> types)
+	LogicalDelimGet(idx_t table_index, vector<LogicalType> types)
 	    : LogicalOperator(LogicalOperatorType::DELIM_GET), table_index(table_index) {
 		assert(types.size() > 0);
 		chunk_types = types;
@@ -24,7 +24,7 @@ public:
 	//! The table index in the current bind context
 	idx_t table_index;
 	//! The types of the chunk
-	vector<TypeId> chunk_types;
+	vector<LogicalType> chunk_types;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

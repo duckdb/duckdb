@@ -1,8 +1,10 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/algorithm.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformParamRef(PGParamRef *node) {
 	if (!node) {
@@ -17,3 +19,5 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(PGParamRef *node) {
 	SetParamCount(max(ParamCount(), expr->parameter_nr));
 	return move(expr);
 }
+
+} // namespace duckdb
