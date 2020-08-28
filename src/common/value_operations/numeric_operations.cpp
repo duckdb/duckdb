@@ -36,7 +36,7 @@ template <class OP> static Value templated_binary_operation(const Value &left, c
 	if (left.is_null || right.is_null) {
 		return Value(result_type);
 	}
-	if (result_type.IsIntegral()) {
+	if (TypeIsIntegral(result_type.InternalType())) {
 		// integer addition
 		return Value::Numeric(result_type, OP::template Operation<hugeint_t, hugeint_t, hugeint_t>(
 		                                       left.GetValue<hugeint_t>(), right.GetValue<hugeint_t>()));
