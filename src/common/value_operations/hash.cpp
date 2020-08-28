@@ -29,6 +29,8 @@ hash_t ValueOperations::Hash(const Value &op) {
 		return duckdb::Hash(op.value_.double_);
 	case PhysicalType::POINTER:
 		return duckdb::Hash(op.value_.pointer);
+	case PhysicalType::INTERVAL:
+		return duckdb::Hash(op.value_.interval);
 	case PhysicalType::VARCHAR:
 		return duckdb::Hash(op.str_value.c_str());
 	default:

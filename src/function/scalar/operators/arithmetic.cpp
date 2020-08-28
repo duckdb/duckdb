@@ -139,7 +139,10 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	int max_width = 0, max_scale = 0, max_width_over_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		int width, scale;
-		arguments[i]->return_type.GetDecimalProperties(width, scale);
+		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		if (!can_convert) {
+			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());
+		}
 		max_width = MaxValue<int>(width, max_width);
 		max_scale = MaxValue<int>(scale, max_scale);
 		max_width_over_scale = MaxValue<int>(width - scale, max_width_over_scale);
@@ -381,8 +384,10 @@ unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFun
 	int result_width = 0, result_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		int width, scale;
-		arguments[i]->return_type.GetDecimalProperties(width, scale);
-
+		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		if (!can_convert) {
+			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());
+		}
 		result_width += width;
 		result_scale += scale;
 	}

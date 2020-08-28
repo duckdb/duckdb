@@ -298,8 +298,6 @@ struct LogicalType {
 	//! Deserializes a blob back into an LogicalType
 	static LogicalType Deserialize(Deserializer &source);
 
-
-
 	string ToString() const;
 	bool IsIntegral() const;
 	bool IsNumeric() const;
@@ -309,7 +307,7 @@ struct LogicalType {
 	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
-	void GetDecimalProperties(int &width, int &scale) const;
+	bool GetDecimalProperties(int &width, int &scale) const;
 
 	void Verify() const;
 
@@ -324,6 +322,7 @@ private:
 
 private:
 	PhysicalType GetInternalType();
+
 public:
 	static const LogicalType SQLNULL;
 	static const LogicalType BOOLEAN;

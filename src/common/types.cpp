@@ -423,10 +423,14 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-void LogicalType::GetDecimalProperties(int &width, int &scale) const {
+bool LogicalType::GetDecimalProperties(int &width, int &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
 		width = 0;
+		scale = 0;
+		break;
+	case LogicalTypeId::BOOLEAN:
+		width = 1;
 		scale = 0;
 		break;
 	case LogicalTypeId::TINYINT:
@@ -460,8 +464,9 @@ void LogicalType::GetDecimalProperties(int &width, int &scale) const {
 		scale = scale_;
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type for GetDecimalProperties");
+		return false;
 	}
+	return true;
 }
 
 bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
