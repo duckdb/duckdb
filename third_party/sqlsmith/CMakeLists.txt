@@ -1,5 +1,7 @@
 include_directories(include)
 
+include_directories(../../extension/tpch/include)
+
 add_executable(sqlsmith
                duckdb.cc
                dump.cc

@@ -1,0 +1,42 @@
+# name: benchmark/tpch/aggregate/q1_integer_keys.benchmark
+# description: Simple COUNT aggregate over lineitem
+# group: [aggregate]
+
+require tpch
+
+load
+CALL dbgen(sf=1, suffix="_normal");
+CREATE TABLE lineitem AS
+SELECT l_orderkey,
+       l_partkey,
+       l_suppkey,
+       l_linenumber,
+       l_quantity,
+       l_extendedprice,
+       l_discount,
+       l_tax,
+       CASE l_returnflag
+           WHEN 'N' THEN 0
+           WHEN 'R' THEN 1
+           WHEN 'A' THEN 2
+           ELSE NULL
+       END l_returnflag,
+       CASE l_linestatus
+           WHEN 'F' THEN 0
+           WHEN 'O' THEN 1
+           ELSE NULL
+       END l_linestatus,
+       l_shipdate,
+       l_commitdate,
+       l_receiptdate,
+       l_shipinstruct,
+       l_shipmode,
+       l_comment
+FROM lineitem_normal;
+
+run
+PRAGMA tpch(1);
+
+# FIXME
+result I
+1

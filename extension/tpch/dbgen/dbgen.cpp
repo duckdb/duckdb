@@ -100,7 +100,7 @@ void append_string(tpch_append_information &info, const char *value) {
 }
 
 void append_decimal(tpch_append_information &info, int64_t value) {
-	info.appender->Append<int64_t>(value);
+	info.appender->AppendValue<int64_t>(value);
 }
 
 void append_date(tpch_append_information &info, string value) {

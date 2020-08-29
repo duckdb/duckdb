@@ -1,0 +1,17 @@
+# name: benchmark/tpch/aggregate/lineitem_group.benchmark
+# description: Grouped aggregate over lineitem (grouped by an integer column)
+# group: [aggregate]
+
+require tpch
+
+cache tpch-sf1
+
+load
+CALL dbgen(1);
+
+run
+SELECT l_quantity, SUM(l_quantity) FROM lineitem GROUP BY l_quantity
+
+# FIXME
+result I
+1

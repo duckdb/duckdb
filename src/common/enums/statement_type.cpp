@@ -44,6 +44,8 @@ string StatementTypeToString(StatementType type) {
 		return "RELATION";
 	case StatementType::EXPORT_STATEMENT:
 		return "EXPORT";
+	case StatementType::CALL_STATEMENT:
+		return "CALL";
 	case StatementType::INVALID_STATEMENT:
 		return "INVALID";
 	}

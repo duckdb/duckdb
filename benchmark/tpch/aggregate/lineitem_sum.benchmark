@@ -1,0 +1,17 @@
+# name: benchmark/tpch/aggregate/lineitem_sum.benchmark
+# description: Simple SUM aggregate over lineitem
+# group: [aggregate]
+
+require tpch
+
+cache tpch-sf1
+
+load
+CALL dbgen(1);
+
+run
+SELECT SUM(l_quantity) FROM lineitem
+
+# FIXME
+result I
+1

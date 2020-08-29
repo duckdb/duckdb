@@ -30,7 +30,7 @@ typedef void (*pragma_function_t)(ClientContext &context, vector<Value> paramete
 //!   -> assignments can also be called through SET memory_limit='8GB'
 //! Pragma functions can either return a new query to execute (pragma_query_t)
 //! or they can
-class PragmaFunction : public BaseScalarFunction {
+class PragmaFunction : public SimpleFunction {
 public:
 	// Call
 	static PragmaFunction PragmaCall(string name, pragma_query_t query, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID);
@@ -42,6 +42,8 @@ public:
 	static PragmaFunction PragmaAssignment(string name, LogicalType type, pragma_query_t query);
 	static PragmaFunction PragmaAssignment(string name, LogicalType type, pragma_function_t function);
 public:
+	PragmaType type;
+
 	pragma_query_t query;
 	pragma_function_t function;
 private:

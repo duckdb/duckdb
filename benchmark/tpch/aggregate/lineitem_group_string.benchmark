@@ -1,0 +1,17 @@
+# name: benchmark/tpch/aggregate/lineitem_group_string.benchmark
+# description: Grouped aggregate over lineitem (grouped by a string column)
+# group: [aggregate]
+
+require tpch
+
+cache tpch-sf1
+
+load
+CALL dbgen(1);
+
+run
+SELECT l_returnflag, SUM(l_quantity) FROM lineitem GROUP BY l_returnflag
+
+# FIXME
+result I
+1

@@ -4,7 +4,7 @@ add_library(
   append.cpp
   bulkupdate.cpp
   cast.cpp
-        data_skipping.cpp
+  data_skipping.cpp
   groupby.cpp
   in.cpp
   multiplications.cpp
@@ -15,10 +15,7 @@ add_library(
   rangequery.cpp
   string.cpp
   window.cpp
-  storage.cpp
-  prefix_tpch.cpp
-  suffix_tpch.cpp
-  contains_tpch.cpp)
+  storage.cpp)
 set(BENCHMARK_OBJECT_FILES
     ${BENCHMARK_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_benchmark_micro>
     PARENT_SCOPE)

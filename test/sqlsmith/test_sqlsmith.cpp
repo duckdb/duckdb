@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "dbgen.hpp"
 #include "test_helpers.hpp"
+#include "tpch-extension.hpp"
 
 #include <fstream>
 #include <streambuf>
@@ -19,11 +19,12 @@ static void test_runner() {
 
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
+	db.LoadExtension<TPCHExtension>();
 	Connection con(db);
 
 	con.EnableProfiling();
 
-	tpch::dbgen(0.01, db);
+	REQUIRE_NO_FAIL(con.Query("CALL dbgen(0.01)"));
 
 	ifstream t(fname);
 	string query((istreambuf_iterator<char>(t)), istreambuf_iterator<char>());

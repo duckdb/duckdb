@@ -1,0 +1,17 @@
+# name: benchmark/tpch/aggregate/lineitem_count.benchmark
+# description: Simple COUNT aggregate over lineitem
+# group: [aggregate]
+
+require tpch
+
+cache tpch-sf1
+
+load
+CALL dbgen(1);
+
+run
+SELECT COUNT(*) FROM lineitem
+
+# FIXME
+result I
+1
