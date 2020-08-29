@@ -20,7 +20,6 @@ struct DBGenFunctionData : public TableFunctionData {
 	bool overwrite = false;
 };
 
-
 static unique_ptr<FunctionData> dbgen_bind(ClientContext &context, vector<Value> &inputs,
                                               unordered_map<string, Value> &named_parameters,
                                               vector<LogicalType> &return_types, vector<string> &names) {

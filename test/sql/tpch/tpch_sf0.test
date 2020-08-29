@@ -12,6 +12,6 @@ CALL dbgen(sf=0);
 loop i 1 23
 
 statement ok
-SELECT * FROM tpch_q${i}
+PRAGMA tpch(i)
 
 endloop

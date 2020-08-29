@@ -23,6 +23,7 @@ class Transaction;
 class AggregateFunction;
 class AggregateFunctionSet;
 class CopyFunction;
+class PragmaFunction;
 class ScalarFunctionSet;
 class ScalarFunction;
 class TableFunctionSet;
@@ -133,6 +134,7 @@ public:
 	void AddFunction(AggregateFunctionSet set);
 	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunctionSet set);
+	void AddFunction(PragmaFunction function);
 	void AddFunction(ScalarFunction function);
 	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunctionSet set);
