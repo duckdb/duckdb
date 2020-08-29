@@ -175,7 +175,7 @@ enum class PhysicalType : uint8_t {
 
 	/// Precision- and scale-based decimal type. Storage type depends on the
 	/// parameters.
-	DECIMAL = 22,
+	// DECIMAL = 22,
 
 	/// A list of some logical data type
 	LIST = 23,
@@ -241,9 +241,9 @@ enum class LogicalTypeId : uint8_t {
 	DATE = 15,
 	TIME = 16,
 	TIMESTAMP = 17,
-	FLOAT = 18,
-	DOUBLE = 19,
-	DECIMAL = 20,
+	DECIMAL = 18,
+	FLOAT = 19,
+	DOUBLE = 20,
 	CHAR = 21,
 	VARCHAR = 22,
 	VARBINARY = 23,
@@ -304,9 +304,12 @@ struct LogicalType {
 	bool IsMoreGenericThan(LogicalType &other) const;
 	hash_t Hash() const;
 
-	//! Returns the "order" of a numeric type; for auto-casting numeric types the type of the highest order should be
-	//! used to guarantee a cast doesn't fail
-	int NumericTypeOrder() const;
+	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
+
+	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
+	bool GetDecimalProperties(int &width, int &scale) const;
+
+	void Verify() const;
 
 private:
 	LogicalTypeId id_;
@@ -329,6 +332,7 @@ public:
 	static const LogicalType BIGINT;
 	static const LogicalType FLOAT;
 	static const LogicalType DOUBLE;
+	static const LogicalType DECIMAL;
 	static const LogicalType DATE;
 	static const LogicalType TIMESTAMP;
 	static const LogicalType TIME;
@@ -354,7 +358,6 @@ public:
 
 string LogicalTypeIdToString(LogicalTypeId type);
 
-LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 LogicalType TransformStringToLogicalType(string str);
 
 //! Returns the PhysicalType for the given type

@@ -12,19 +12,34 @@ statement ok
 INSERT INTO roundme VALUES (42.123456, 3)
 
 query R
-select round(42.12345, 0)
+select round(42.12345::DOUBLE, 0)
 ----
 42.000000
 
 query R
-select round(42.12345, 2)
+select round(42.12345::DOUBLE)
+----
+42.000000
+
+query R
+select round(42.12345::DOUBLE, 2)
 ----
 42.120000
 
+query RR
+select round(42.12345::DOUBLE, 4), round(42.1235::DOUBLE, 1000)
+----
+42.123400	42.12345
+
 query I
-select round(42, 0)
+select round(42::DOUBLE, 0)
 ----
 42
+
+query III
+select round(42::DOUBLE, -1), round(42::DOUBLE, -2), round(42::DOUBLE, -1000)
+----
+40	0	0
 
 query R
 select round(a, 1) from roundme

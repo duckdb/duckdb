@@ -123,13 +123,13 @@ static void pragma_table_info(ClientContext &context, vector<Value> &input, Data
 
 		// look up the table name in the catalog
 		auto &catalog = Catalog::GetCatalog(context);
-		data.entry = catalog.GetEntry(context, CatalogType::TABLE, schema, table_name);
+		data.entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema, table_name);
 	}
 	switch (data.entry->type) {
-	case CatalogType::TABLE:
+	case CatalogType::TABLE_ENTRY:
 		pragma_table_info_table(data, (TableCatalogEntry *)data.entry, output);
 		break;
-	case CatalogType::VIEW:
+	case CatalogType::VIEW_ENTRY:
 		pragma_table_info_view(data, (ViewCatalogEntry *)data.entry, output);
 		break;
 	default:

@@ -64,7 +64,7 @@ public:
 		// simple estimator, just take the max of the children
 		idx_t max_cardinality = 0;
 		for (auto &child : children) {
-			max_cardinality = std::max(child->EstimateCardinality(), max_cardinality);
+			max_cardinality = MaxValue(child->EstimateCardinality(), max_cardinality);
 		}
 		return max_cardinality;
 	}

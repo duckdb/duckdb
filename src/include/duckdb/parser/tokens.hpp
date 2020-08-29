@@ -29,6 +29,7 @@ class PrepareStatement;
 class ExecuteStatement;
 class PragmaStatement;
 class ExplainStatement;
+class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
 

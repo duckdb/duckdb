@@ -22,6 +22,7 @@ namespace duckdb {
 
 class ColumnDefinition;
 struct OrderByNode;
+struct CopyInfo;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -83,6 +84,7 @@ private:
 	unique_ptr<InsertStatement> TransformInsert(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGCopyStmt node into a CopyStatement
 	unique_ptr<CopyStatement> TransformCopy(duckdb_libpgquery::PGNode *node);
+	void TransformCopyOptions(CopyInfo &info, duckdb_libpgquery::PGList *options);
 	//! Transform a Postgres T_PGTransactionStmt node into a TransactionStatement
 	unique_ptr<TransactionStatement> TransformTransaction(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_DeleteStatement node into a DeleteStatement
@@ -91,6 +93,10 @@ private:
 	unique_ptr<UpdateStatement> TransformUpdate(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGPragmaStmt node into a PragmaStatement
 	unique_ptr<PragmaStatement> TransformPragma(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres T_PGExportStmt node into a ExportStatement
+	unique_ptr<ExportStatement> TransformExport(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres T_PGImportStmt node into a PragmaStatement
+	unique_ptr<PragmaStatement> TransformImport(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExplainStatement> TransformExplain(duckdb_libpgquery::PGNode *node);
 	unique_ptr<VacuumStatement> TransformVacuum(duckdb_libpgquery::PGNode *node);
 	unique_ptr<PragmaStatement> TransformShow(duckdb_libpgquery::PGNode *node);
@@ -188,7 +194,7 @@ private:
 	//! Transform a range var into a (schema) qualified name
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar *root);
 
-	//! Transform a Postgres TypeName string into a SQLType
+	//! Transform a Postgres TypeName string into a LogicalType
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression

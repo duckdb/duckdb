@@ -16,6 +16,7 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/operator/logical_explain.hpp"
+#include "duckdb/planner/operator/logical_export.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"

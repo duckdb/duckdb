@@ -15,10 +15,15 @@ import distutils.spawn
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-toolchain_args = ['-std=c++11', '-g0']
-if 'DUCKDEBUG' in os.environ:
-    toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
-if 'DUCKDB_INSTALL_USER' in os.environ:
+if os.name == 'nt':
+    # windows:
+    toolchain_args = ['/wd4244', '/wd4267', '/wd4200', '/wd26451', '/wd26495', '/D_CRT_SECURE_NO_WARNINGS']
+else:
+    # macos/linux
+    toolchain_args = ['-std=c++11', '-g0']
+    if 'DUCKDEBUG' in os.environ:
+        toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
+if 'DUCKDB_INSTALL_USER' in os.environ and 'install' in sys.argv:
     sys.argv.append('--user')
 
 existing_duckdb_dir = ''
@@ -43,7 +48,6 @@ if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 class get_pybind_include(object):
-
     def __init__(self, user=False):
         self.user = user
 
@@ -60,7 +64,7 @@ extra_files = []
 header_files = []
 
 script_path = os.path.dirname(os.path.abspath(__file__))
-include_directories = ['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+include_directories = [get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
     source_files = ['duckdb_python.cpp']
@@ -72,9 +76,9 @@ if len(existing_duckdb_dir) == 0:
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
 
-        (source_list, include_list, original_sources, githash) = package_build.build_package(os.path.join(script_path, 'duckdb'))
+        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, 'duckdb'))
 
-        duckdb_sources = [x.replace(script_path + os.path.sep, '') for x in source_list]
+        duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
         duckdb_sources.sort()
 
         original_sources = [os.path.join('duckdb', x) for x in original_sources]
@@ -95,10 +99,7 @@ if len(existing_duckdb_dir) == 0:
             for include_file in duckdb_includes:
                 f.write(include_file + '\n')
 
-        with open('githash.list', 'w+') as f:
-            f.write(githash + '\n')
-
-        extra_files = ['sources.list', 'includes.list', 'githash.list'] + original_sources
+        extra_files = ['sources.list', 'includes.list'] + original_sources
     else:
         # if amalgamation does not exist, we are in a package distribution
         # read the include files, source list and include files from the supplied lists
@@ -108,12 +109,8 @@ if len(existing_duckdb_dir) == 0:
         with open('includes.list', 'r') as f:
             duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
 
-        with open('githash.list', 'r') as f:
-            githash = f.read().strip()
-
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
-    toolchain_args += ['-DDUCKDB_SOURCE_ID="{}"'.format(githash)]
 
     libduckdb = Extension('duckdb',
         include_dirs=include_directories,
@@ -150,6 +147,30 @@ setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
 if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
     setuptools_scm_conf['local_scheme'] = 'no-local-version'
 
+# data files need to be formatted as [(directory, [files...]), (directory2, [files...])]
+# no clue why the setup script can't do this automatically, but hey
+def setup_data_files(data_files):
+    directory_map = {}
+    for data_file in data_files:
+        normalized_fpath = os.path.sep.join(data_file.split('/'))
+        splits = normalized_fpath.rsplit(os.path.sep, 1)
+        if len(splits) == 1:
+            # no directory specified
+            directory = ""
+            fname = normalized_fpath
+        else:
+            directory = splits[0]
+            fname = splits[1]
+        if directory not in directory_map:
+            directory_map[directory] = []
+        directory_map[directory].append(normalized_fpath)
+    new_data_files = []
+    for kv in directory_map.keys():
+        new_data_files.append((kv, directory_map[kv]))
+    return new_data_files
+
+data_files = setup_data_files(extra_files + header_files)
+
 setup(
     name = "duckdb",
     description = 'DuckDB embedded database',
@@ -159,7 +180,7 @@ setup(
     install_requires=[ # these version is still available for Python 2, newer ones aren't
          'numpy>=1.14'
     ],
-    data_files = extra_files + header_files,
+    data_files = data_files,
     packages=['duckdb_query_graph'],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.4'],

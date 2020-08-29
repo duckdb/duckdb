@@ -129,7 +129,7 @@ public class DuckDBResultSet implements ResultSet {
 			return getHugeint(columnIndex);
 		} else if (column_type.equals("FLOAT")) {
 			return getFloat(columnIndex);
-		} else if (column_type.equals("DOUBLE")) {
+		} else if (column_type.equals("DOUBLE") || column_type.startsWith("DECIMAL")) {
 			return getDouble(columnIndex);
 		} else if (column_type.equals("VARCHAR")) {
 			return getString(columnIndex);
@@ -298,7 +298,8 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return Double.NaN;
 		}
-		if ("DOUBLE".equals(meta.column_types[columnIndex - 1])) {
+		String col_type_str = meta.column_types[columnIndex - 1];
+		if (col_type_str.equals("DOUBLE") || col_type_str.startsWith("DECIMAL")) {
 			return getbuf(columnIndex, 8).getDouble();
 		}
 		Object o = getObject(columnIndex);

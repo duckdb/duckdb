@@ -35,6 +35,31 @@ SELECT format('{}', 33), format('{} + {} = {}', 3, 5, 3 + 5)
 ----
 33	3 + 5 = 8
 
+# exotic types
+# dates, times and timestamps are strings
+query T
+SELECT format('{} {} = {}', DATE '1992-01-01', TIME '12:01:00', TIMESTAMP '1992-01-01 12:01:00')
+----
+1992-01-01 12:01:00 = 1992-01-01 12:01:00
+
+# blob
+query T
+SELECT format('{}', BLOB '\x01a0')
+----
+\x01A0
+
+# hugeint
+query T
+SELECT format('{}', 120381902481294715712::HUGEINT)
+----
+120381902481294715712
+
+# decimal
+query T
+SELECT format('{:.3f}', '1.234'::DECIMAL)
+----
+1.234
+
 # integers with special formatting specifiers
 query TTT
 SELECT format('{:04d}', 33), format('{} {:02d}:{:02d}:{:02d} {}', 'time', 12, 3, 16, 'AM'), format('{:10d}', 1992)

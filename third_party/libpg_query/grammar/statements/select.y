@@ -1279,7 +1279,7 @@ opt_float:	'(' Iconst ')'
 				}
 			| /*EMPTY*/
 				{
-					$$ = SystemTypeName("float8");
+					$$ = SystemTypeName("float4");
 				}
 		;
 

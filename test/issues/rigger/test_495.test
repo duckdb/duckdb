@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # Comparison on UNIQUE NUMERIC column causes a query to omit a row in the result set
 statement ok
-CREATE TABLE t0(c0 NUMERIC UNIQUE);
+CREATE TABLE t0(c0 DOUBLE UNIQUE);
 
 statement ok
 INSERT INTO t0(c0) VALUES (1163404482), (0), (488566);

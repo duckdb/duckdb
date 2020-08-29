@@ -17,6 +17,7 @@ add_library_unity(duckdb_physical_plan
                   plan_empty_result.cpp
                   plan_execute.cpp
                   plan_explain.cpp
+                  plan_export.cpp
                   plan_filter.cpp
                   plan_get.cpp
                   plan_index_scan.cpp

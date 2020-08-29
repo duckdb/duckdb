@@ -15,11 +15,11 @@ namespace duckdb {
 
 struct CreateTableFunctionInfo : public CreateFunctionInfo {
 	CreateTableFunctionInfo(TableFunctionSet set)
-	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION), functions(move(set.functions)) {
+	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(move(set.functions)) {
 		this->name = set.name;
 	}
 	CreateTableFunctionInfo(TableFunction function)
-	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION) {
+	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY) {
 		this->name = function.name;
 		functions.push_back(move(function));
 	}

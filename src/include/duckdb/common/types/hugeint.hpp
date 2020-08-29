@@ -29,18 +29,15 @@ public:
 		return result;
 	}
 
-	template<class T>
-	static bool TryCast(hugeint_t input, T &result);
+	template <class T> static bool TryCast(hugeint_t input, T &result);
 
-	template<class T>
-	static T Cast(hugeint_t input) {
+	template <class T> static T Cast(hugeint_t input) {
 		T value;
 		TryCast(input, value);
 		return value;
 	}
 
-	template<class T>
-	static hugeint_t Convert(T value);
+	template <class T> static hugeint_t Convert(T value);
 
 	static void NegateInPlace(hugeint_t &input) {
 		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
@@ -107,17 +104,18 @@ public:
 	static hugeint_t PowersOfTen[40];
 };
 
-template<> bool Hugeint::TryCast(hugeint_t input, int8_t &result);
-template<> bool Hugeint::TryCast(hugeint_t input, int16_t &result);
-template<> bool Hugeint::TryCast(hugeint_t input, int32_t &result);
-template<> bool Hugeint::TryCast(hugeint_t input, int64_t &result);
-template<> bool Hugeint::TryCast(hugeint_t input, float &result);
-template<> bool Hugeint::TryCast(hugeint_t input, double &result);
+template <> bool Hugeint::TryCast(hugeint_t input, int8_t &result);
+template <> bool Hugeint::TryCast(hugeint_t input, int16_t &result);
+template <> bool Hugeint::TryCast(hugeint_t input, int32_t &result);
+template <> bool Hugeint::TryCast(hugeint_t input, int64_t &result);
+template <> bool Hugeint::TryCast(hugeint_t input, hugeint_t &result);
+template <> bool Hugeint::TryCast(hugeint_t input, float &result);
+template <> bool Hugeint::TryCast(hugeint_t input, double &result);
 
-template<> hugeint_t Hugeint::Convert(int8_t value);
-template<> hugeint_t Hugeint::Convert(int16_t value);
-template<> hugeint_t Hugeint::Convert(int32_t value);
-template<> hugeint_t Hugeint::Convert(int64_t value);
-template<> hugeint_t Hugeint::Convert(float value);
-template<> hugeint_t Hugeint::Convert(double value);
+template <> hugeint_t Hugeint::Convert(int8_t value);
+template <> hugeint_t Hugeint::Convert(int16_t value);
+template <> hugeint_t Hugeint::Convert(int32_t value);
+template <> hugeint_t Hugeint::Convert(int64_t value);
+template <> hugeint_t Hugeint::Convert(float value);
+template <> hugeint_t Hugeint::Convert(double value);
 } // namespace duckdb

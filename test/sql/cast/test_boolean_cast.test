@@ -108,3 +108,63 @@ SELECT CAST(CAST('0' AS decimal) AS BOOLEAN)
 ----
 0
 
+query T
+SELECT CAST(CAST('1' AS decimal(1,0)) AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST(CAST('0' AS decimal(1,0)) AS BOOLEAN)
+----
+0
+
+query T
+SELECT CAST(CAST('1' AS decimal(9,0)) AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST(CAST('0' AS decimal(9,0)) AS BOOLEAN)
+----
+0
+
+query T
+SELECT CAST(CAST('1' AS decimal(38,0)) AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST(CAST('0' AS decimal(38,0)) AS BOOLEAN)
+----
+0
+
+query T
+SELECT CAST(CAST('1' AS float) AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST(CAST('0' AS float) AS BOOLEAN)
+----
+0
+
+query T
+SELECT CAST(CAST('1' AS double) AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST(CAST('0' AS double) AS BOOLEAN)
+----
+0
+
+query T
+SELECT CAST(CAST('1' AS HUGEINT) AS BOOLEAN)
+----
+1
+
+query T
+SELECT CAST(CAST('0' AS HUGEINT) AS BOOLEAN)
+----
+0
+

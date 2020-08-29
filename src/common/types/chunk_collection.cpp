@@ -74,7 +74,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 
 		// first append data to the current chunk
 		DataChunk &last_chunk = *chunks.back();
-		idx_t added_data = std::min(remaining_data, (idx_t)(STANDARD_VECTOR_SIZE - last_chunk.size()));
+		idx_t added_data = MinValue<idx_t>(remaining_data, STANDARD_VECTOR_SIZE - last_chunk.size());
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
 			new_chunk.Normalify();

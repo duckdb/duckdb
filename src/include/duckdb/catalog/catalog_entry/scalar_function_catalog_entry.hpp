@@ -19,7 +19,7 @@ namespace duckdb {
 class ScalarFunctionCatalogEntry : public StandardEntry {
 public:
 	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInfo *info)
-	    : StandardEntry(CatalogType::SCALAR_FUNCTION, schema, catalog, info->name), functions(info->functions) {
+	    : StandardEntry(CatalogType::SCALAR_FUNCTION_ENTRY, schema, catalog, info->name), functions(info->functions) {
 	}
 
 	//! The scalar functions

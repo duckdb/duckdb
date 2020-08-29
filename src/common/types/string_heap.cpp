@@ -44,7 +44,7 @@ string_t StringHeap::EmptyString(idx_t len) {
 	assert(len >= string_t::INLINE_LENGTH);
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
 		// have to make a new entry
-		auto new_chunk = make_unique<StringChunk>(std::max(len + 1, (idx_t)MINIMUM_HEAP_SIZE));
+		auto new_chunk = make_unique<StringChunk>(MaxValue<idx_t>(len + 1, MINIMUM_HEAP_SIZE));
 		new_chunk->prev = move(chunk);
 		chunk = move(new_chunk);
 		if (!tail) {

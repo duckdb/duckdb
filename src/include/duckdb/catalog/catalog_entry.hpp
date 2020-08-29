@@ -38,6 +38,10 @@ public:
 	//! AlterEntry
 	virtual void SetAsRoot() {
 	}
+	//! Convert the catalog entry to a SQL string that can be used to re-construct the catalog entry
+	virtual string ToSQL() {
+		throw CatalogException("Unsupported catalog type for ToSQL()");
+	}
 
 	//! The type of this catalog entry
 	CatalogType type;

@@ -10,7 +10,9 @@ add_library_unity(duckdb_transformer_statement
                   transform_create_view.cpp
                   transform_delete.cpp
                   transform_explain.cpp
+                  transform_export.cpp
                   transform_drop.cpp
+                  transform_import.cpp
                   transform_insert.cpp
                   transform_pragma.cpp
                   transform_rename.cpp

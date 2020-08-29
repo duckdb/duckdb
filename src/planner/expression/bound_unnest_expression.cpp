@@ -24,7 +24,7 @@ hash_t BoundUnnestExpression::Hash() const {
 }
 
 bool BoundUnnestExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundUnnestExpression *)other_;

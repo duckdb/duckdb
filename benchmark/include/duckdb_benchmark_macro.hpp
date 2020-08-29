@@ -11,7 +11,6 @@
 #pragma once
 
 #include "duckdb_benchmark.hpp"
-#include "sqlite_benchmark.hpp"
 
 #define DUCKDB_BENCHMARK(NAME, GROUP)                                                                                  \
 	class NAME##Benchmark : public DuckDBBenchmark {                                                                   \
@@ -22,9 +21,6 @@
 		static NAME##Benchmark *GetInstance() {                                                                        \
 			static NAME##Benchmark singleton(true);                                                                    \
 			auto benchmark = unique_ptr<DuckDBBenchmark>(new NAME##Benchmark(false));                                  \
-			if (!benchmark->GetQuery().empty()) {                                                                      \
-				static SQLiteBenchmark sqlite_singleton(move(benchmark));                                              \
-			}                                                                                                          \
 			return &singleton;                                                                                         \
 		}
 

@@ -153,19 +153,6 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			    &udf_double);
 			break;
 		}
-		case LogicalTypeId::DECIMAL: {
-			con.CreateScalarFunction<double, double>(func_name + "_1", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-			                                         &udf_decimal);
-
-			con.CreateScalarFunction<double, double, double>(
-			    func_name + "_2", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, &udf_decimal);
-
-			con.CreateScalarFunction<double, double, double, double>(
-			    func_name + "_3", {LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-			    &udf_decimal);
-			break;
-		}
-
 		case LogicalTypeId::VARCHAR: {
 			con.CreateScalarFunction<string_t, string_t>(func_name + "_1", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
 			                                             &udf_varchar);
@@ -223,6 +210,9 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 
 		// Running the UDF functions and checking the results
 		for (LogicalType sql_type : all_sql_types) {
+			if (sql_type.id() == LogicalTypeId::DECIMAL) {
+				continue;
+			}
 			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;
 			if (sql_type.IsNumeric()) {
@@ -310,6 +300,9 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 
 	SECTION("Cheking NULLs with UDF functions") {
 		for (LogicalType sql_type : all_sql_types) {
+			if (sql_type.id() == LogicalTypeId::DECIMAL) {
+				continue;
+			}
 			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;
 

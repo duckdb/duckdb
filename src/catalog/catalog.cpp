@@ -108,7 +108,7 @@ void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
 }
 
 void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
-	if (info->type == CatalogType::SCHEMA) {
+	if (info->type == CatalogType::SCHEMA_ENTRY) {
 		// DROP SCHEMA
 		DropSchema(context, info);
 	} else {
@@ -153,11 +153,11 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
 
 template <>
 TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
-	auto entry = GetEntry(context, CatalogType::TABLE, move(schema_name), name, if_exists);
+	auto entry = GetEntry(context, CatalogType::TABLE_ENTRY, move(schema_name), name, if_exists);
 	if (!entry) {
 		return nullptr;
 	}
-	if (entry->type != CatalogType::TABLE) {
+	if (entry->type != CatalogType::TABLE_ENTRY) {
 		throw CatalogException("%s is not a table", name);
 	}
 	return (TableCatalogEntry *)entry;
@@ -166,13 +166,13 @@ TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name,
 template <>
 SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                         bool if_exists) {
-	return (SequenceCatalogEntry *)GetEntry(context, CatalogType::SEQUENCE, move(schema_name), name, if_exists);
+	return (SequenceCatalogEntry *)GetEntry(context, CatalogType::SEQUENCE_ENTRY, move(schema_name), name, if_exists);
 }
 
 template <>
 TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                              bool if_exists) {
-	return (TableFunctionCatalogEntry *)GetEntry(context, CatalogType::TABLE_FUNCTION, move(schema_name), name,
+	return (TableFunctionCatalogEntry *)GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, move(schema_name), name,
 	                                             if_exists);
 }
 
@@ -186,8 +186,8 @@ CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schem
 template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                                  bool if_exists) {
-	auto entry = GetEntry(context, CatalogType::AGGREGATE_FUNCTION, move(schema_name), name, if_exists);
-	if (entry->type != CatalogType::AGGREGATE_FUNCTION) {
+	auto entry = GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, move(schema_name), name, if_exists);
+	if (entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw CatalogException("%s is not an aggregate function", name);
 	}
 	return (AggregateFunctionCatalogEntry *)entry;
@@ -195,13 +195,13 @@ AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string 
 
 template <>
 CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
-	return (CollateCatalogEntry *)GetEntry(context, CatalogType::COLLATION, move(schema_name), name, if_exists);
+	return (CollateCatalogEntry *)GetEntry(context, CatalogType::COLLATION_ENTRY, move(schema_name), name, if_exists);
 }
 
 void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
 	if (info->schema == INVALID_SCHEMA) {
 		// invalid schema, look for table in temp schema
-		auto entry = GetEntry(context, CatalogType::TABLE, TEMP_SCHEMA, info->table, true);
+		auto entry = GetEntry(context, CatalogType::TABLE_ENTRY, TEMP_SCHEMA, info->table, true);
 		info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
 	}
 	auto schema = GetSchema(context, info->schema);

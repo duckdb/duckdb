@@ -2,7 +2,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <algorithm>
-#include <fstream>
 
 using namespace std;
 
@@ -10,7 +9,8 @@ namespace duckdb {
 
 class CopyToFunctionGlobalState : public GlobalOperatorState {
 public:
-	CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state) : rows_copied(0), global_state(move(global_state)) {
+	CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
+	    : rows_copied(0), global_state(move(global_state)) {
 	}
 
 	idx_t rows_copied;

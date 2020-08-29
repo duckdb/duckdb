@@ -1912,4 +1912,20 @@ typedef struct PGCallStmt {
 	PGNode *func;
 } PGCallStmt;
 
+/* ----------------------
+ *		EXPORT/IMPORT Statements
+ * ----------------------
+ */
+
+typedef struct PGExportStmt {
+	PGNodeTag type;
+	char *filename;       /* filename */
+	PGList *options;      /* PGList of PGDefElem nodes */
+} PGExportStmt;
+
+typedef struct PGImportStmt {
+	PGNodeTag type;
+	char *filename;       /* filename */
+} PGImportStmt;
+
 }

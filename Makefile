@@ -91,9 +91,8 @@ doxygen: docs
 
 release:
 	mkdir -p build/release && \
-	python scripts/amalgamation.py && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 reldebug:

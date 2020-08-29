@@ -3,9 +3,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <chrono>  // chrono::system_clock
-#include <string>  // string
 #include <ctime>
 
 using namespace std;
@@ -50,7 +50,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 			pos++;
 		}
 		// skip any spaces at the end
-		while(pos < len && std::isspace(str[pos])) {
+		while(pos < len && StringUtil::CharacterIsSpace(str[pos])) {
 			pos++;
 		}
 		if (pos < len) {

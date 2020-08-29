@@ -42,9 +42,12 @@ string StatementTypeToString(StatementType type) {
 		return "VACUUM";
 	case StatementType::RELATION_STATEMENT:
 		return "RELATION";
-	default:
+	case StatementType::EXPORT_STATEMENT:
+		return "EXPORT";
+	case StatementType::INVALID_STATEMENT:
 		return "INVALID";
 	}
+	return "INVALID";
 }
 
 } // namespace duckdb

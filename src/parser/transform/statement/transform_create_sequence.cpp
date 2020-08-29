@@ -27,10 +27,18 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 				continue;
 			}
 			assert(val);
-
+			int64_t opt_value;
+			if (val->type == T_PGInteger) {
+				opt_value = val->val.ival;
+			} else if (val->type == T_PGFloat) {
+				if (!TryCast::Operation<string_t, int64_t>(val->val.str, opt_value, true)) {
+					throw ParserException("Expected an integer argument for option %s", opt_name);
+				}
+			} else {
+				throw ParserException("Expected an integer argument for option %s", opt_name);
+			}
 			if (opt_name == "increment") {
-				assert(val->type == T_PGInteger);
-				info->increment = val->val.ival;
+				info->increment = opt_value;
 				if (info->increment == 0) {
 					throw ParserException("Increment must not be zero");
 				}
@@ -42,23 +50,19 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 					info->max_value = NumericLimits<int64_t>::Maximum();
 				}
 			} else if (opt_name == "minvalue") {
-				assert(val->type == T_PGInteger);
-				info->min_value = val->val.ival;
+				info->min_value = opt_value;
 				if (info->increment > 0) {
 					info->start_value = info->min_value;
 				}
 			} else if (opt_name == "maxvalue") {
-				assert(val->type == T_PGInteger);
-				info->max_value = val->val.ival;
+				info->max_value = opt_value;
 				if (info->increment < 0) {
 					info->start_value = info->max_value;
 				}
 			} else if (opt_name == "start") {
-				assert(val->type == T_PGInteger);
-				info->start_value = val->val.ival;
+				info->start_value = opt_value;
 			} else if (opt_name == "cycle") {
-				assert(val->type == T_PGInteger);
-				info->cycle = val->val.ival > 0;
+				info->cycle = opt_value > 0;
 			} else {
 				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name);
 			}

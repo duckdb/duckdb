@@ -31,7 +31,7 @@ struct StringAggFunction {
 
 		if (state->dataptr == nullptr) {
 			// first iteration: allocate space for the string and copy it into the state
-			state->alloc_size = std::max((idx_t)8, (idx_t)NextPowerOfTwo(str_size));
+			state->alloc_size = MaxValue<idx_t>(8, NextPowerOfTwo(str_size));
 			state->dataptr = new char[state->alloc_size];
 			state->size = str_size - 1;
 			memcpy(state->dataptr, str, str_size);

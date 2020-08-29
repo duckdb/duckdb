@@ -110,6 +110,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "TRANSACTION";
 	case PhysicalOperatorType::PREPARE:
 		return "PREPARE";
+	case PhysicalOperatorType::EXPORT:
+		return "EXPORT";
 	}
 	return "UNDEFINED";
 }

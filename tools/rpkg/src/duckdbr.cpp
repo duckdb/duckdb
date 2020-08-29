@@ -35,6 +35,27 @@ static void vector_to_r(Vector &src_vec, size_t count, void *dest, uint64_t dest
 	}
 }
 
+struct RIntegralType {
+	template<class T>
+	static double DoubleCast(T val) {
+		return double(val);
+	}
+};
+
+template<class T>
+static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
+	auto src_ptr = FlatVector::GetData<T>(src_vec);
+	auto &nullmask = FlatVector::Nullmask(src_vec);
+	double division = pow(10, scale);
+	for (size_t row_idx = 0; row_idx < count; row_idx++) {
+		dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : RIntegralType::DoubleCast<T>(src_ptr[row_idx]) / division;
+	}
+}
+
+template <> double RIntegralType::DoubleCast<>(hugeint_t val) {
+	return Hugeint::Cast<double>(val);
+}
+
 struct RDoubleType {
 	static bool IsNull(double val) {
 		return ISNA(val);
@@ -257,6 +278,7 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
+		case LogicalTypeId::DECIMAL:
 			rtype = "numeric";
 			break;
 		case LogicalTypeId::VARCHAR: {
@@ -527,6 +549,29 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 						} else {
 							Hugeint::TryCast(src_data[row_idx], dest_ptr[row_idx]);
 						}
+					}
+					break;
+				}
+				case LogicalTypeId::DECIMAL: {
+					auto &src_vec = chunk->data[col_idx];
+					auto &decimal_type = result->types[col_idx];
+					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+					auto dec_scale = decimal_type.scale();
+					switch(decimal_type.InternalType()) {
+					case PhysicalType::INT16:
+						RDecimalCastLoop<int16_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					case PhysicalType::INT32:
+						RDecimalCastLoop<int32_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					case PhysicalType::INT64:
+						RDecimalCastLoop<int64_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					case PhysicalType::INT128:
+						RDecimalCastLoop<hugeint_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					default:
+						throw NotImplementedException("Unimplemented internal type for DECIMAL");
 					}
 					break;
 				}

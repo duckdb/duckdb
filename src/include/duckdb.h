@@ -126,6 +126,10 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 //! Destroys the specified result
 void duckdb_destroy_result(duckdb_result *result);
 
+//! Returns the column name of the specified column. The result does not need to be freed;
+//! the column names will automatically be destroyed when the result is destroyed.
+const char *duckdb_column_name(duckdb_result *result, idx_t col);
+
 // SAFE fetch functions
 // These functions will perform conversions if necessary. On failure (e.g. if conversion cannot be performed) a special
 // value is returned.
