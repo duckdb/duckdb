@@ -30,7 +30,6 @@ Authors@R:
       person("Tony Kelman", role = "cph"),
       person("Jonas Fonseca", role = "cph"),
       person("Lukas Fittl", role = "cph"))
-
 Description: The DuckDB project is an embedded analytical data
     management system with SQL support. This package includes all of
     DuckDB and a DBI connector.
