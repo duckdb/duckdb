@@ -7,36 +7,20 @@
 namespace duckdb {
 using namespace std;
 
-static LogicalType get_value_binop_result_type(const Value &left, const Value &right) {
+template <class OP> static Value templated_binary_operation(const Value &left, const Value &right) {
 	auto left_type = left.type();
 	auto right_type = right.type();
-	if (left.is_null || right.is_null) {
-		// either value is NULL: result is NULL
-		if (left_type.InternalType() > right_type.InternalType()) {
-			return left_type;
-		} else {
-			return right_type;
-		}
-	}
-	// figure out the result type
 	LogicalType result_type = left_type;
 	if (left_type != right_type) {
-		// pick the type with the highest type order
-		if (left_type.NumericTypeOrder() > right_type.NumericTypeOrder()) {
-			result_type = left_type;
-		} else {
-			result_type = right_type;
-		}
+		result_type = LogicalType::MaxLogicalType(left.type(), right.type());
+		Value left_cast = left.CastAs(result_type);
+		Value right_cast = right.CastAs(result_type);
+		return templated_binary_operation<OP>(left_cast, right_cast);
 	}
-	return result_type;
-}
-
-template <class OP> static Value templated_binary_operation(const Value &left, const Value &right) {
-	auto result_type = get_value_binop_result_type(left, right);
 	if (left.is_null || right.is_null) {
-		return Value(result_type);
+		return Value().CastAs(result_type);
 	}
-	if (result_type.IsIntegral()) {
+	if (TypeIsIntegral(result_type.InternalType())) {
 		// integer addition
 		return Value::Numeric(result_type, OP::template Operation<hugeint_t, hugeint_t, hugeint_t>(
 		                                       left.GetValue<hugeint_t>(), right.GetValue<hugeint_t>()));

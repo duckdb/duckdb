@@ -9,8 +9,3 @@
 #pragma once
 
 #include <algorithm>
-
-namespace duckdb {
-using std::min;
-using std::max;
-}

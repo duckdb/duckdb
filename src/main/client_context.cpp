@@ -147,6 +147,8 @@ void ClientContext::CleanupInternal() {
 
 	open_result->is_open = false;
 	open_result = nullptr;
+
+	this->query = string();
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal() {
@@ -337,6 +339,8 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query,
 
 unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_ptr<SQLStatement> statement,
                                                     bool allow_stream_result) {
+	this->query = query;
+
 	unique_ptr<QueryResult> result;
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (transaction.IsAutoCommit()) {
@@ -619,6 +623,12 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	results.push_back(move(unoptimized_result));
 	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result"};
 	for (idx_t i = 0; i < results.size(); i++) {
+		if (original_result->success != results[i]->success) {
+			string result = names[i] + " differs from original result!\n";
+			result += "Original Result:\n" + original_result->ToString();
+			result += names[i] + ":\n" + results[i]->ToString();
+			return result;
+		}
 		if (!original_result->collection.Equals(results[i]->collection)) {
 			string result = names[i] + " differs from original result!\n";
 			result += "Original Result:\n" + original_result->ToString();

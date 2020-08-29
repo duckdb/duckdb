@@ -19,8 +19,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function]") {
 	const vector<LogicalTypeId> all_sql_types = {
 	    LogicalTypeId::BOOLEAN, LogicalTypeId::TINYINT, LogicalTypeId::SMALLINT, LogicalTypeId::DATE,
 	    LogicalTypeId::TIME,    LogicalTypeId::INTEGER, LogicalTypeId::BIGINT,   LogicalTypeId::TIMESTAMP,
-	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::DECIMAL,  LogicalTypeId::VARCHAR,
-	    LogicalTypeId::BLOB};
+	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::VARCHAR,  LogicalTypeId::BLOB};
 
 	// Creating the tables
 	for (LogicalType sql_type : all_sql_types) {
@@ -142,19 +141,6 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function]") {
 			                             LogicalType::DOUBLE, &udf_ternary_function<double>);
 			break;
 		}
-		case LogicalTypeId::DECIMAL: {
-			con.CreateVectorizedFunction(func_name + "_1", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
-			                             &udf_unary_function<double>);
-
-			con.CreateVectorizedFunction(func_name + "_2", {LogicalType::DOUBLE, LogicalType::DOUBLE},
-			                             LogicalType::DOUBLE, &udf_binary_function<double>);
-
-			con.CreateVectorizedFunction(func_name + "_3",
-			                             {LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE},
-			                             LogicalType::DOUBLE, &udf_ternary_function<double>);
-			break;
-		}
-
 		case LogicalTypeId::VARCHAR: {
 			con.CreateVectorizedFunction(func_name + "_1", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
 			                             &udf_unary_function<char *>);

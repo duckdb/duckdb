@@ -2,12 +2,11 @@
 # description: MonetDB Test: round.Bug-3542.sql
 # group: [monetdb]
 
-# FIXME: decimal
 statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE test_num_data (id integer, val numeric(18,10));
+CREATE TABLE test_num_data (id integer, val decimal(18,10));
 
 statement ok
 INSERT INTO test_num_data VALUES (1, '-0.0');
@@ -19,21 +18,21 @@ query IR
 SELECT * FROM test_num_data ORDER BY id
 ----
 1	0.000000
-2	-34338492.215397
+2	-34338492.215397047
 
-# query IIR
-# SELECT t1.id, t2.id, t1.val * t2.val FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;
-# ----
-# 1	1	0.000000
-# 1	2	-0.000000
-# 2	1	-0.000000
-# 2	2	1179132047626883.59686213585632020900
+query IIR
+SELECT t1.id, t2.id, t1.val * t2.val FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;
+----
+1	1	0.000000
+1	2	-0.000000
+2	1	-0.000000
+2	2	1179132047626883.59686213585632020900
 
 
-# query IIR
-# SELECT t1.id, t2.id, round(t1.val * t2.val, 30) FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;
-# ----
-# 1 1 0
-# 1 2 0
-# 2 1 0
-# 2 2 1179132047626883.596862135856320209000000000000
+query IIR
+SELECT t1.id, t2.id, round(t1.val * t2.val, 30) FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;
+----
+1	1	0
+1	2	0
+2	1	0
+2	2	1179132047626883.596862135856320209000000000000

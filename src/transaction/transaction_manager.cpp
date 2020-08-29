@@ -92,8 +92,8 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
 		} else {
-			lowest_start_time = std::min(lowest_start_time, active_transactions[i]->start_time);
-			lowest_active_query = std::min(lowest_active_query, active_transactions[i]->active_query);
+			lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
+			lowest_active_query = MinValue(lowest_active_query, active_transactions[i]->active_query);
 		}
 	}
 	transaction_t lowest_stored_query = lowest_start_time;
@@ -115,7 +115,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		assert(recently_committed_transactions[i]);
-		lowest_stored_query = std::min(recently_committed_transactions[i]->start_time, lowest_stored_query);
+		lowest_stored_query = MinValue(recently_committed_transactions[i]->start_time, lowest_stored_query);
 		if (recently_committed_transactions[i]->commit_id < lowest_start_time) {
 			// changes made BEFORE this transaction are no longer relevant
 			// we can cleanup the undo buffer

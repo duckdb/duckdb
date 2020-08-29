@@ -145,7 +145,7 @@ static int nextLine(Script *p) {
 		}
 
 		/* If the line consists of all spaces, make it an empty line */
-		for (i = i - 1; i >= p->iCur && isspace(p->zScript[i]); i--) {
+		for (i = i - 1; i >= p->iCur && StringUtil::CharacterIsSpace(p->zScript[i]); i--) {
 		}
 		if (i < p->iCur) {
 			p->zLine[0] = 0;
@@ -173,7 +173,7 @@ static int nextIsBlank(Script *p) {
 	int i = p->iNext;
 	if (i >= p->iEnd)
 		return 1;
-	while (i < p->iEnd && isspace(p->zScript[i])) {
+	while (i < p->iEnd && StringUtil::CharacterIsSpace(p->zScript[i])) {
 		if (p->zScript[i] == '\n')
 			return 1;
 		i++;
@@ -215,10 +215,10 @@ static int findStartOfNextRecord(Script *p) {
 static void findToken(const char *z, int *piStart, int *pLen) {
 	int i;
 	int iStart;
-	for (i = 0; isspace(z[i]); i++) {
+	for (i = 0; StringUtil::CharacterIsSpace(z[i]); i++) {
 	}
 	*piStart = iStart = i;
-	while (z[i] && !isspace(z[i])) {
+	while (z[i] && !StringUtil::CharacterIsSpace(z[i])) {
 		i++;
 	}
 	*pLen = i - iStart;
@@ -1270,17 +1270,23 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				fprintf(stderr, "%s:%d: load cannot be called in a loop\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
+			bool readonly = string(sScript.azToken[2]) == "readonly";
 			dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
 			if (dbpath.empty() || dbpath == ":memory:") {
 				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n",
 				        zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			// delete the target database file, if it exists
-			DeleteDatabase(dbpath);
-
+			if (!readonly) {
+				// delete the target database file, if it exists
+				DeleteDatabase(dbpath);
+			}
 			// set up the config file
 			config = GetTestConfig();
+			if (readonly) {
+				config->use_temporary_directory = false;
+				config->access_mode = AccessMode::READ_ONLY;
+			}
 			// now create the database file
 			LoadDatabase(dbpath);
 		} else if (strcmp(sScript.azToken[0], "restart") == 0) {

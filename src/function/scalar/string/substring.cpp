@@ -46,7 +46,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 
 	if (ascii_only) {
 		// ascii only
-		length = std::min(offset + length, (int)input_size);
+		length = MinValue<int>(offset + length, input_size);
 		if (offset >= length) {
 			return string_t((uint32_t)0);
 		}

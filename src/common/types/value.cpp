@@ -11,6 +11,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -135,6 +136,52 @@ bool Value::FloatIsValid(float value) {
 
 bool Value::DoubleIsValid(double value) {
 	return !(std::isnan(value) || std::isinf(value));
+}
+
+Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
+	assert(width <= Decimal::MAX_WIDTH_INT16);
+	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	result.value_.smallint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
+	assert(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
+	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	result.value_.integer = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
+	LogicalType decimal_type(LogicalTypeId::DECIMAL, width, scale);
+	Value result(decimal_type);
+	switch(decimal_type.InternalType()) {
+	case PhysicalType::INT16:
+		result.value_.smallint = value;
+		break;
+	case PhysicalType::INT32:
+		result.value_.integer = value;
+		break;
+	case PhysicalType::INT64:
+		result.value_.bigint = value;
+		break;
+	default:
+		result.value_.hugeint = value;
+		break;
+	}
+	result.type_.Verify();
+	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
+	assert(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
+	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
 }
 
 Value Value::FLOAT(float value) {
@@ -386,6 +433,8 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 		return Value::BIGINT(value);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
+	case LogicalTypeId::DECIMAL:
+		return Value::DECIMAL(value, type.width(), type.scale());
 	case LogicalTypeId::FLOAT:
 		return Value((float)value);
 	case LogicalTypeId::DOUBLE:
@@ -437,6 +486,19 @@ string Value::ToString() const {
 		return to_string(value_.float_);
 	case LogicalTypeId::DOUBLE:
 		return to_string(value_.double_);
+	case LogicalTypeId::DECIMAL: {
+		auto internal_type = type_.InternalType();
+		if (internal_type == PhysicalType::INT16) {
+			return Decimal::ToString(value_.smallint, type_.scale());
+		} else if (internal_type == PhysicalType::INT32) {
+			return Decimal::ToString(value_.integer, type_.scale());
+		} else if (internal_type == PhysicalType::INT64) {
+			return Decimal::ToString(value_.bigint, type_.scale());
+		} else {
+			assert(internal_type == PhysicalType::INT128);
+			return Decimal::ToString(value_.hugeint, type_.scale());
+		}
+	}
 	case LogicalTypeId::DATE:
 		return Date::ToString(value_.integer);
 	case LogicalTypeId::TIME:

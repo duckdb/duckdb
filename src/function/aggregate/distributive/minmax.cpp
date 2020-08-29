@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/planner/expression.hpp"
 
 using namespace std;
 
@@ -33,7 +34,6 @@ template <class OP> static AggregateFunction GetUnaryAggregate(LogicalType type)
 		return AggregateFunction::UnaryAggregate<min_max_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
 	case LogicalTypeId::FLOAT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<float>, float, float, OP>(type, type);
-	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::DOUBLE:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<double>, double, double, OP>(type, type);
 	case LogicalTypeId::INTERVAL:
@@ -188,12 +188,38 @@ struct MaxOperationString : public StringMinMaxBase {
 	}
 };
 
+template <class OP>
+unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateFunction &function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	switch(decimal_type.InternalType()) {
+	case PhysicalType::INT16:
+		function = GetUnaryAggregate<OP>(LogicalType::SMALLINT);
+		break;
+	case PhysicalType::INT32:
+		function = GetUnaryAggregate<OP>(LogicalType::INTEGER);
+		break;
+	case PhysicalType::INT64:
+		function = GetUnaryAggregate<OP>(LogicalType::BIGINT);
+		break;
+	default:
+		function = GetUnaryAggregate<OP>(LogicalType::HUGEINT);
+		break;
+	}
+	function.arguments[0] = decimal_type;
+	function.return_type = decimal_type;
+	return nullptr;
+}
+
 template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunctionSet &set) {
 	for (auto type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
 			        type.id(), type.id()));
+		} else if (type.id() == LogicalTypeId::DECIMAL) {
+			set.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+			                                  bind_decimal_min_max<OP>));
 		} else {
 			set.AddFunction(GetUnaryAggregate<OP>(type));
 		}

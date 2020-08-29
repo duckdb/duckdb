@@ -30,7 +30,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
 		auto count_star_fun = CountStarFun::GetFunction();
-		auto count_star = make_unique<BoundAggregateExpression>(count_star_fun.return_type, count_star_fun, false);
+		auto count_star = AggregateFunction::BindAggregateFunction(binder.context, count_star_fun, {}, false);
 		auto idx_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
@@ -81,9 +81,11 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
 		auto bound = make_unique<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, 0));
-		auto first_agg =
-		    make_unique<BoundAggregateExpression>(expr.return_type, FirstFun::GetFunction(expr.return_type), false);
-		first_agg->children.push_back(move(bound));
+		vector<unique_ptr<Expression>> first_children;
+		first_children.push_back(move(bound));
+		auto first_agg = AggregateFunction::BindAggregateFunction(
+		    binder.context, FirstFun::GetFunction(expr.return_type), move(first_children), false);
+
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();
 		auto aggr = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, move(expressions));

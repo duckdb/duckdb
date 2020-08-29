@@ -758,6 +758,22 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
+	
+	public static void test_decimal() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT '1.23'::decimal(3,2) d");
+	
+		assertTrue(rs.next());
+		assertEquals(rs.getDouble("d"), 1.23);
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
 
 	
 	public static void test_connect_wrong_url_bug848() throws Exception {

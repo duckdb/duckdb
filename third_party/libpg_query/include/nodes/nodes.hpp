@@ -416,6 +416,8 @@ typedef enum PGNodeTag {
 	T_PGCreateStatsStmt,
 	T_PGAlterCollationStmt,
 	T_PGPragmaStmt,
+	T_PGExportStmt,
+	T_PGImportStmt,
 
 	/*
 	 * TAGS FOR PARSE TREE NODES (parsenodes.h)

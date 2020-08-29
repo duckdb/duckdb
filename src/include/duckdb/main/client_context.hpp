@@ -46,6 +46,8 @@ public:
 	bool is_invalidated = false;
 	//! Lock on using the ClientContext in parallel
 	std::mutex context_lock;
+	//! The current query being executed by the client context
+	string query;
 
 	//! The query executor
 	Executor executor;

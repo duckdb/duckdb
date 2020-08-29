@@ -30,7 +30,7 @@ void UncompressedSegment::Verify(Transaction &transaction) {
 	// Vector result(this->type);
 	// for (idx_t i = 0; i < this->tuple_count; i += STANDARD_VECTOR_SIZE) {
 	// 	idx_t vector_idx = i / STANDARD_VECTOR_SIZE;
-	// 	idx_t count = std::min((idx_t)STANDARD_VECTOR_SIZE, tuple_count - i);
+	// 	idx_t count = MinValue((idx_t)STANDARD_VECTOR_SIZE, tuple_count - i);
 	// 	Scan(transaction, state, vector_idx, result);
 	// 	result.Verify(count);
 	// }
@@ -151,7 +151,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 	// the inplace loops take the result as the last parameter
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, Equals, false, true, true, true, false>(
 			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
@@ -161,7 +161,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 		break;
 	}
 	case ExpressionType::COMPARE_LESSTHAN: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, LessThan, false, true, true, true, false>(
 			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
@@ -171,7 +171,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHAN: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, GreaterThan, false, true, true, true, false>(
 			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
@@ -181,7 +181,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 		break;
 	}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, LessThanEquals, false, true, true, true, false>(
 			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
@@ -192,7 +192,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-		if (nullmask.any()) {
+		if (!nullmask.any()) {
 			approved_tuple_count =
 			    BinaryExecutor::SelectFlatLoop<T, T, GreaterThanEquals, false, true, true, true, false>(
 			        vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);

@@ -18,7 +18,7 @@ void BufferedFileReader::ReadData(data_ptr_t target_buffer, uint64_t read_size) 
 	// first copy anything we can from the buffer
 	data_ptr_t end_ptr = target_buffer + read_size;
 	while (true) {
-		idx_t to_read = std::min((idx_t)(end_ptr - target_buffer), read_data - offset);
+		idx_t to_read = MinValue<idx_t>(end_ptr - target_buffer, read_data - offset);
 		if (to_read > 0) {
 			memcpy(target_buffer, data.get() + offset, to_read);
 			offset += to_read;

@@ -421,7 +421,7 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 			break;
 		}
 		idx_t current_tuple_count = tuple_count - vector_index * STANDARD_VECTOR_SIZE;
-		idx_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
+		idx_t append_count = MinValue(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
 		append_function(stats, handle->node->buffer + vector_size * vector_index, current_tuple_count, data, offset,

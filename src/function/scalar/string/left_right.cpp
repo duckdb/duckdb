@@ -15,7 +15,7 @@ static string_t left_scalar_function(Vector &result, const string_t str, int64_t
 	}
 
 	int64_t num_characters = LengthFun::Length<string_t, int64_t>(str);
-	pos = std::max(int64_t(0), num_characters + pos);
+	pos = MaxValue<int64_t>(0, num_characters + pos);
 	return SubstringFun::substring_scalar_function(result, str, 1, pos, output, current_len);
 }
 
@@ -39,12 +39,12 @@ static string_t right_scalar_function(Vector &result, const string_t str, int64_
                                       idx_t &current_len) {
 	int64_t num_characters = LengthFun::Length<string_t, int64_t>(str);
 	if (pos >= 0) {
-		int64_t len = std::min(num_characters, pos);
+		int64_t len = MinValue<int64_t>(num_characters, pos);
 		int64_t start = num_characters - len + 1;
 		return SubstringFun::substring_scalar_function(result, str, start, len, output, current_len);
 	}
 
-	int64_t len = num_characters - std::min(num_characters, -pos);
+	int64_t len = num_characters - MinValue<int64_t>(num_characters, -pos);
 	int64_t start = num_characters - len + 1;
 	return SubstringFun::substring_scalar_function(result, str, start, len, output, current_len);
 }

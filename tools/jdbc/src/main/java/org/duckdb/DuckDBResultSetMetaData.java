@@ -52,7 +52,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.BIGINT;
 		} else if (type_name.equals("FLOAT")) {
 			return Types.FLOAT;
-		} else if (type_name.equals("DOUBLE")) {
+		} else if (type_name.equals("DOUBLE") || type_name.startsWith("DECIMAL")) {
 			return Types.DOUBLE;
 		} else if (type_name.equals("VARCHAR")) {
 			return Types.VARCHAR;

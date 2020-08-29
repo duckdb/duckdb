@@ -1,0 +1,15 @@
+# name: test/issues/rigger/test_value_binop.test
+# description: Test missing value binop that triggers optimiezr bug
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 DATE, c1 SMALLINT);
+
+statement ok
+CREATE TABLE t1(c0 NUMERIC, c1 DATE DEFAULT(true), PRIMARY KEY(c1));
+
+statement ok
+SELECT COUNT((NOT IFNULL((CASE ((t0.rowid)+(0.250079098209133)) WHEN '0.3133638032049081' THEN t0.rowid WHEN t0.rowid THEN (((- t0.rowid)) IS NULL) ELSE (('1654422017')||((t0.rowid IN (false, '6㹬', TIMESTAMP '1970-01-25 20:11:23')))) END ), DATE '1970-01-12'))) FROM t0;

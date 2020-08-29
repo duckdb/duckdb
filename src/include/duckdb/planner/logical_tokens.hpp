@@ -31,6 +31,7 @@ class LogicalDistinct;
 class LogicalEmptyResult;
 class LogicalExecute;
 class LogicalExplain;
+class LogicalExport;
 class LogicalExpressionGet;
 class LogicalFilter;
 class LogicalGet;

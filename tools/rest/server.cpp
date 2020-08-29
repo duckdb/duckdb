@@ -124,6 +124,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DECIMAL:
 		case LogicalTypeId::INTERVAL:
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::BLOB:

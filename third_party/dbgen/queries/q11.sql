@@ -10,7 +10,7 @@ where
  and s_nationkey = n_nationkey
  and n_name = 'GERMANY'
 group by
- ps_partkey 
+ ps_partkey
 having
  sum(ps_supplycost * ps_availqty) >
  (
