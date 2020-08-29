@@ -590,7 +590,7 @@ matrix:
         - R CMD INSTALL duckdb_*.tar.gz
         - (cd tests && R -f testthat.R)
         - R CMD check --as-cran -o /tmp duckdb_*.tar.gz
-        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb-*.tar.gz
+        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
 
 
     - os: osx
@@ -608,7 +608,7 @@ matrix:
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - (cd tests && R -f testthat.R)
-        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb-*.tgz
+        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
 
 
     - os: windows
@@ -631,5 +631,5 @@ matrix:
         - sh configure
         - sh build_win
         - (cd tests && R -f testthat.R)
-        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb-*.zip
+        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
 
