@@ -11,13 +11,13 @@ unique_ptr<SQLStatement> Transformer::TransformShow(PGNode *node) {
 	// we transform SHOW x into PRAGMA SHOW('x')
 	cout << "Here\n";
 	auto stmt = reinterpret_cast<PGVariableShowStmtSelect *>(node);
-	auto select_stmt = reinterpret_cast<PGSelectStmt *>(stmt->stmt);
+	//auto select_stmt = reinterpret_cast<PGSelectStmt *>(stmt->stmt);
 	cout << "Here222\n";
 	if(string(stmt->name) == "select"){
 		cout << "select statement\n";
 		auto result = make_unique<ShowStatement>();
-		result->selectStatement = make_unique<SelectStatement>();
-		result->selectStatement->node = TransformSelectNode(select_stmt);
+		result->selectStatement = TransformStatement(stmt->stmt);
+		//result->selectStatement->node = TransformSelectNode(select_stmt);
 		return result;
 	} /*else {
 
