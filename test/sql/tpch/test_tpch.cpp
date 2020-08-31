@@ -1,5 +1,5 @@
 // #include "catch.hpp"
-// #include "dbgen.hpp"
+// #include "tpch-extension.hpp"
 // #include "test_helpers.hpp"
 
 // #include <chrono>
@@ -9,16 +9,6 @@
 // using namespace duckdb;
 // using namespace std;
 
-// TEST_CASE("Test TPC-H SF0", "[tpch]") {
-// 	unique_ptr<QueryResult> result;
-// 	DuckDB db(nullptr);
-// 	Connection con(db);
-
-// 	tpch::dbgen(0, db);
-// 	for (size_t i = 1; i <= 22; i++) {
-// 		REQUIRE_NO_FAIL(con.Query(tpch::get_query(i)));
-// 	}
-// }
 
 // TEST_CASE("Test TPC-H SF0.01", "[tpch]") {
 // 	unique_ptr<QueryResult> result;

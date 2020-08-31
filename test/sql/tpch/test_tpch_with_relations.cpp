@@ -1,6 +1,6 @@
 // #include "catch.hpp"
-// #include "dbgen.hpp"
 // #include "test_helpers.hpp"
+// #include "tpch-extension.hpp"
 
 // #include <chrono>
 // #include <iostream>
@@ -12,10 +12,11 @@
 // TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 // 	unique_ptr<QueryResult> result;
 // 	DuckDB db(nullptr);
+// 	db.LoadExtension<TPCHExtension>();
 // 	Connection con(db);
 // 	double sf = 0.01;
 
-// 	tpch::dbgen(sf, db);
+// 	con.Query("CALL dbgen(" + to_string(sf) + ")");
 
 // 	auto lineitem = con.Table("lineitem");
 // 	auto part = con.Table("part");

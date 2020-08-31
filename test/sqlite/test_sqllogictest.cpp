@@ -87,6 +87,11 @@ public:
 	bool output_result_mode = false;
 	bool debug_mode = false;
 	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
+	bool in_loop = false;
+	string loop_iterator_name;
+	int loop_idx;
+	int loop_start;
+	int loop_end;
 };
 
 /*
@@ -401,6 +406,14 @@ static bool result_is_hash(string result) {
 	return pos == result.size();
 }
 
+static string replace_loop_iterator(string text, string loop_iterator_name, idx_t index) {
+	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", to_string(index));
+}
+
+static bool result_is_file(string result) {
+	return StringUtil::StartsWith(result, "<FILE>:");
+}
+
 bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, string zScriptFile,
                     int query_line, string zScript, int current_row, int current_column, vector<string> &values,
                     int expected_column_count, bool row_wise) {
@@ -517,11 +530,13 @@ struct Command {
 	}
 
 	virtual void Execute() = 0;
-	void Execute(string loop_iterator_name, int idx) {
+	void ExecuteLoop() {
 		// store the original query
 		auto original_query = sql_query;
 		// perform the string replacement
-		sql_query = StringUtil::Replace(sql_query, "${" + loop_iterator_name + "}", to_string(idx));
+		if (runner.in_loop) {
+			sql_query = replace_loop_iterator(sql_query, runner.loop_iterator_name, runner.loop_idx);
+		}
 		// execute the iterated statement
 		Execute();
 		// now restore the original query
@@ -552,6 +567,7 @@ struct Query : public Command {
 
 	void Execute() override;
 	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise);
+	vector<string> LoadResultFromFile(string fname);
 };
 
 struct RestartCommand : public Command {
@@ -609,6 +625,35 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 	print_result_error(result, values, expected_column_count, row_wise);
 	FAIL();
 }
+
+vector<string> Query::LoadResultFromFile(string fname) {
+	DuckDB db(nullptr);
+	Connection con(db);
+	fname = StringUtil::Replace(fname, "<FILE>:", "");
+
+	auto csv_result = con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', auto_detect=1)");
+	if (!csv_result->success) {
+		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error);
+		print_error_header(error.c_str(), file_name.c_str(), query_line);
+		FAIL();
+	}
+	expected_column_count = csv_result->column_count();
+
+	vector<string> values;
+	while(true) {
+		auto chunk = csv_result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		for(idx_t r = 0; r < chunk->size(); r++) {
+			for(idx_t c = 0; c < chunk->column_count(); c++) {
+				values.push_back(chunk->GetValue(c, r).ToString());
+			}
+		}
+	}
+	return values;
+}
+
 
 void Query::Execute() {
 	auto connection = CommandConnection();
@@ -707,6 +752,12 @@ void Query::Execute() {
 	if (values.size() == 1 && result_is_hash(values[0])) {
 		compare_hash = true;
 	}
+	vector<string> comparison_values;
+	if (values.size() == 1 && result_is_file(values[0])) {
+		comparison_values = LoadResultFromFile(replace_loop_iterator(values[0], runner.loop_iterator_name, runner.loop_idx));
+	} else {
+		comparison_values = values;
+	}
 	/* Hash the results if we are over the hash threshold or if we
 	** there is a hash label */
 	if (runner.output_hash_mode || compare_hash) {
@@ -740,15 +791,15 @@ void Query::Execute() {
 			expected_column_count = result->column_count();
 			column_count_mismatch = true;
 		}
-		idx_t expected_rows = values.size() / expected_column_count;
+		idx_t expected_rows = comparison_values.size() / expected_column_count;
 		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
-		bool row_wise = expected_column_count > 1 && values.size() == result->collection.count;
+		bool row_wise = expected_column_count > 1 && comparison_values.size() == result->collection.count;
 		if (!row_wise) {
 			// the counts do not match up for it to be row-wise
 			// however, this can also be because the query returned an incorrect # of rows
 			// we make a guess: if everything contains tabs, we still treat the input as row wise
 			bool all_tabs = true;
-			for (auto &val : values) {
+			for (auto &val : comparison_values) {
 				if (val.find('\t') == string::npos) {
 					all_tabs = false;
 					break;
@@ -758,16 +809,16 @@ void Query::Execute() {
 		}
 		if (row_wise) {
 			// values are displayed row-wise, format row wise with a tab
-			expected_rows = values.size();
+			expected_rows = comparison_values.size();
 			row_wise = true;
-		} else if (values.size() % expected_column_count != 0) {
+		} else if (comparison_values.size() % expected_column_count != 0) {
 			if (column_count_mismatch) {
 				ColumnCountMismatch(*result, original_expected_columns, row_wise);
 			}
 			print_error_header("Error in test!", file_name, query_line);
 			print_line_sep();
 			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int)expected_column_count,
-			        (int)values.size());
+			        (int)comparison_values.size());
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL();
 		}
@@ -781,15 +832,15 @@ void Query::Execute() {
 			print_line_sep();
 			print_sql(sql_query);
 			print_line_sep();
-			print_result_error(*result, values, expected_column_count, row_wise);
+			print_result_error(*result, comparison_values, expected_column_count, row_wise);
 			FAIL();
 		}
 
 		if (row_wise) {
 			int current_row = 0;
-			for (int i = 0; i < nResult && i < (int)values.size(); i++) {
+			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
 				// split based on tab character
-				auto splits = StringUtil::Split(values[i], "\t");
+				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
 					if (column_count_mismatch) {
 						ColumnCountMismatch(*result, original_expected_columns, row_wise);
@@ -810,7 +861,7 @@ void Query::Execute() {
 				for (idx_t c = 0; c < splits.size(); c++) {
 					bool success =
 					    compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], file_name,
-					                   query_line, sql_query, current_row, c, values, expected_column_count, row_wise);
+					                   query_line, sql_query, current_row, c, comparison_values, expected_column_count, row_wise);
 					if (!success) {
 						FAIL();
 					}
@@ -821,10 +872,10 @@ void Query::Execute() {
 			}
 		} else {
 			int current_row = 0, current_column = 0;
-			for (int i = 0; i < nResult && i < (int)values.size(); i++) {
+			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
 				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column],
-				                              values[i], file_name, query_line, sql_query, current_row, current_column,
-				                              values, expected_column_count, row_wise);
+				                              comparison_values[i], file_name, query_line, sql_query, current_row, current_column,
+				                              comparison_values, expected_column_count, row_wise);
 				if (!success) {
 					FAIL();
 				}
@@ -955,10 +1006,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	Script sScript;   /* Script parsing status */
 	FILE *in;         /* For reading script */
 	int bHt = 0;      /* True if -ht command-line option */
-	bool in_loop = false;
-	string loop_iterator_name;
-	int loop_start;
-	int loop_end;
 	bool skip_execution = false;
 	vector<unique_ptr<Command>> loop_statements;
 	bool skip_index = false;
@@ -1248,9 +1295,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				fprintf(stderr, "%s:%d: Test error: empty loop!\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			for (int loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
+			for (loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
 				for (auto &statement : loop_statements) {
-					statement->Execute(loop_iterator_name, loop_idx);
+					statement->ExecuteLoop();
 				}
 			}
 			loop_statements.clear();

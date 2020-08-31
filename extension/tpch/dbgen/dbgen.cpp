@@ -373,7 +373,6 @@ string get_table_name(int num) {
 	}
 }
 
-// FIXME; find replace: LogicalType(LogicalTypeId::DOUBLE) -> LogicalType(LogicalTypeId::DECIMAL, 15, 2)
 struct RegionInfo {
 	static constexpr char *Name = "region";
 	static constexpr char *Columns[] = { "r_regionkey", "r_name", "r_comment" };
@@ -396,7 +395,7 @@ struct SupplierInfo {
 	static constexpr idx_t ColumnCount = 7;
 	static const LogicalType Types[];
 };
-const LogicalType SupplierInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR) };
+const LogicalType SupplierInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR) };
 
 struct CustomerInfo {
 	static constexpr char *Name = "customer";
@@ -404,7 +403,7 @@ struct CustomerInfo {
 	static constexpr idx_t ColumnCount = 8;
 	static const LogicalType Types[];
 };
-const LogicalType CustomerInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
+const LogicalType CustomerInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
 
 struct PartInfo {
 	static constexpr char *Name = "part";
@@ -412,7 +411,7 @@ struct PartInfo {
 	static constexpr idx_t ColumnCount = 9;
 	static const LogicalType Types[];
 };
-const LogicalType PartInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR) };
+const LogicalType PartInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR) };
 
 struct PartsuppInfo {
 	static constexpr char *Name = "partsupp";
@@ -420,7 +419,7 @@ struct PartsuppInfo {
 	static constexpr idx_t ColumnCount = 5;
 	static const LogicalType Types[];
 };
-const LogicalType PartsuppInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR) };
+const LogicalType PartsuppInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR) };
 
 struct OrdersInfo {
 	static constexpr char *Name = "orders";
@@ -428,7 +427,7 @@ struct OrdersInfo {
 	static constexpr idx_t ColumnCount = 9;
 	static const LogicalType Types[];
 };
-const LogicalType OrdersInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR) };
+const LogicalType OrdersInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR) };
 
 struct LineitemInfo {
 	static constexpr char *Name = "lineitem";
@@ -436,7 +435,7 @@ struct LineitemInfo {
 	static constexpr idx_t ColumnCount = 16;
 	static const LogicalType Types[];
 };
-const LogicalType LineitemInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::DOUBLE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
+const LogicalType LineitemInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
 
 template<class T>
 static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
