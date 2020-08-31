@@ -3,7 +3,6 @@ add_subdirectory(parallelism)
 add_subdirectory(storage)
 
 if(NOT WIN32 AND NOT SUN)
-  add_subdirectory(tpch)
   add_subdirectory(tpcds)
 endif()
 

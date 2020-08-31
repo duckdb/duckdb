@@ -28,7 +28,7 @@ QualifiedName Transformer::TransformQualifiedName(duckdb_libpgquery::PGRangeVar 
 	if (root->schemaname) {
 		qname.schema = root->schemaname;
 	} else {
-		qname.schema = DEFAULT_SCHEMA;
+		qname.schema = INVALID_SCHEMA;
 	}
 	return qname;
 }

@@ -79,4 +79,12 @@ void TPCHExtension::Load(DuckDB &db) {
 	con.Commit();
 }
 
+std::string TPCHExtension::GetQuery(int query) {
+	return tpch::DBGenWrapper::GetQuery(query);
+}
+
+std::string TPCHExtension::GetAnswer(double sf, int query) {
+	return tpch::DBGenWrapper::GetAnswer(sf, query);
+}
+
 } // namespace duckdb
