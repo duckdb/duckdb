@@ -15,7 +15,6 @@ if(NOT WIN32 AND NOT SUN)
     add_subdirectory(tpce)
   endif()
   add_subdirectory(persistence)
-  add_subdirectory(nested)
 endif()
 
 add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
