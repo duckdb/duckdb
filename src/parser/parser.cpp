@@ -7,8 +7,6 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
-#include "duckdb/parser/statement/pragma_statement.hpp"
-#include "duckdb/parser/pragma_handler.hpp"
 #include "postgres_parser.hpp"
 
 #include "parser/parser.hpp"
@@ -20,7 +18,6 @@ Parser::Parser() {
 }
 
 void Parser::ParseQuery(string query) {
-	vector<unique_ptr<SQLStatement>> transformed_statements;
 	Transformer transformer;
 	{
 		PostgresParser parser;
@@ -37,28 +34,8 @@ void Parser::ParseQuery(string query) {
 
 		// if it succeeded, we transform the Postgres parse tree into a list of
 		// SQLStatements
-		transformer.TransformParseTree(parser.parse_tree, transformed_statements);
+		transformer.TransformParseTree(parser.parse_tree, statements);
 		n_prepared_parameters = transformer.ParamCount();
-	}
-
-	// check if there are any PragmaStatements that we need to handle
-	for (idx_t i = 0; i < transformed_statements.size(); i++) {
-		if (transformed_statements[i]->type == StatementType::PRAGMA_STATEMENT) {
-			// PRAGMA statement: check if we need to replace it by a new set of statements
-			PragmaHandler handler;
-			auto new_query = handler.HandlePragma(*((PragmaStatement &)*transformed_statements[i]).info);
-			if (!new_query.empty()) {
-				// this PRAGMA statement gets replaced by a new query string
-				// push the new query string through the parser again and add it to the transformer
-				Parser parser;
-				parser.ParseQuery(new_query);
-				for (auto &stmt : parser.statements) {
-					statements.push_back(move(stmt));
-				}
-				continue;
-			}
-		}
-		statements.push_back(move(transformed_statements[i]));
 	}
 	if (statements.size() > 0) {
 		auto &last_statement = statements.back();

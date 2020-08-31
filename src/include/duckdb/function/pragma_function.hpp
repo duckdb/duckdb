@@ -12,10 +12,10 @@
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 
 namespace duckdb {
-
+class ClientContext;
 
 //! Return a substitute query to execute instead of this pragma statement
-typedef string (*pragma_query_t)(vector<Value> parameters);
+typedef string (*pragma_query_t)(ClientContext &context, vector<Value> parameters);
 //! Execute the main pragma function
 typedef void (*pragma_function_t)(ClientContext &context, vector<Value> parameters);
 
@@ -39,8 +39,10 @@ public:
 	static PragmaFunction PragmaStatement(string name, pragma_query_t query);
 	static PragmaFunction PragmaStatement(string name, pragma_function_t function);
 	// Assignment
-	static PragmaFunction PragmaAssignment(string name, LogicalType type, pragma_query_t query);
-	static PragmaFunction PragmaAssignment(string name, LogicalType type, pragma_function_t function);
+	static PragmaFunction PragmaAssignment(string name, pragma_query_t query, LogicalType type);
+	static PragmaFunction PragmaAssignment(string name, pragma_function_t function, LogicalType type);
+
+	string ToString();
 public:
 	PragmaType type;
 

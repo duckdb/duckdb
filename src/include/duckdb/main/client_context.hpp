@@ -119,6 +119,13 @@ public:
 	//! Register function in the temporary schema
 	void RegisterFunction(CreateFunctionInfo *info);
 
+	//! Parse statements from a query
+	vector<unique_ptr<SQLStatement>> ParseStatements(string query, idx_t *n_prepared_parameters = nullptr);
+
+	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto commit mode.
+	void RunFunctionInTransaction(std::function<void(void)> fun);
+	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
+	void RunFunctionInTransactionInternal(std::function<void(void)> fun);
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
@@ -145,9 +152,6 @@ private:
 	//! Call CreatePreparedStatement() and ExecutePreparedStatement() without any bound values
 	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
 	                                             bool allow_stream_result);
-
-	template <class T> void RunFunctionInTransaction(T &&fun);
-
 private:
 	idx_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)

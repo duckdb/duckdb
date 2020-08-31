@@ -40,6 +40,7 @@ class LogicalInsert;
 class LogicalJoin;
 class LogicalLimit;
 class LogicalOrder;
+class LogicalPragma;
 class LogicalPrepare;
 class LogicalProjection;
 class LogicalRecursiveCTE;

@@ -94,9 +94,7 @@ unique_ptr<TableDescription> Connection::TableInfo(string schema_name, string ta
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query) {
-	Parser parser;
-	parser.ParseQuery(query);
-	return move(parser.statements);
+	return context->ParseStatements(query);
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {

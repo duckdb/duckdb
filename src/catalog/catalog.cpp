@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -58,6 +59,11 @@ CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFu
 CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
 	auto schema = GetSchema(context, info->schema);
 	return schema->CreateCopyFunction(context, info);
+}
+
+CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return schema->CreatePragmaFunction(context, info);
 }
 
 CatalogEntry *Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
@@ -179,9 +185,17 @@ TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string sche
 template <>
 CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                             bool if_exists) {
-	return (CopyFunctionCatalogEntry *)GetEntry(context, CatalogType::COPY_FUNCTION, move(schema_name), name,
+	return (CopyFunctionCatalogEntry *)GetEntry(context, CatalogType::COPY_FUNCTION_ENTRY, move(schema_name), name,
 	                                            if_exists);
 }
+
+template <>
+PragmaFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                            bool if_exists) {
+	return (PragmaFunctionCatalogEntry *)GetEntry(context, CatalogType::PRAGMA_FUNCTION_ENTRY, move(schema_name), name,
+	                                            if_exists);
+}
+
 
 template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,

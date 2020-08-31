@@ -2,7 +2,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 
-#include "duckdb/execution/operator/helper/physical_pragma.hpp"
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
 #include "duckdb/execution/operator/schema/physical_alter.hpp"
 #include "duckdb/execution/operator/schema/physical_create_schema.hpp"
@@ -20,8 +19,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 		return make_unique<PhysicalAlter>(unique_ptr_cast<ParseInfo, AlterInfo>(move(op.info)));
 	case LogicalOperatorType::DROP:
 		return make_unique<PhysicalDrop>(unique_ptr_cast<ParseInfo, DropInfo>(move(op.info)));
-	case LogicalOperatorType::PRAGMA:
-		return make_unique<PhysicalPragma>(unique_ptr_cast<ParseInfo, PragmaInfo>(move(op.info)));
 	case LogicalOperatorType::TRANSACTION:
 		return make_unique<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(move(op.info)));
 	case LogicalOperatorType::VACUUM:

@@ -14,6 +14,7 @@ add_library_unity(duckdb_func_scalar
                   nested_functions.cpp
                   math_functions.cpp
                   operators.cpp
+                  pragma_functions.cpp
                   sequence_functions.cpp
                   trigonometrics_functions.cpp)
 set(ALL_OBJECT_FILES

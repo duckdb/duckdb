@@ -80,7 +80,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 	case CatalogType::TABLE_FUNCTION_ENTRY:
-	case CatalogType::COPY_FUNCTION:
+	case CatalogType::COPY_FUNCTION_ENTRY:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
 	case CatalogType::COLLATION_ENTRY:
 
 		// do nothing, we log the query to recreate this

@@ -13,7 +13,11 @@
 
 namespace duckdb {
 
-enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };
+enum class PragmaType : uint8_t {
+	PRAGMA_STATEMENT,
+	PRAGMA_ASSIGNMENT,
+	PRAGMA_CALL
+};
 
 struct PragmaInfo : public ParseInfo {
 	//! Name of the PRAGMA statement

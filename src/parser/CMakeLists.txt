@@ -18,7 +18,6 @@ add_library_unity(duckdb_parser
                   parsed_expression.cpp
                   parsed_expression_iterator.cpp
                   parser.cpp
-                  pragma_handler.cpp
                   query_node.cpp
                   result_modifier.cpp
                   tableref.cpp
