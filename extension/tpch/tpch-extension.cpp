@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 
 #include "dbgen.hpp"
 
@@ -50,13 +51,17 @@ static void dbgen_function(ClientContext &context, vector<Value> &input, DataChu
 
 	data.finished = true;
 }
+static string pragma_tpch_query(ClientContext &context, vector<Value> parameters) {
+	auto index = parameters[0].GetValue<int32_t>();
+	return tpch::DBGenWrapper::GetQuery(index);
+}
 
 void TPCHExtension::Load(DuckDB &db) {
 	// load the collations
 	Connection con(db);
 	con.BeginTransaction();
 
-	auto dbgen_func = TableFunction("dbgen", {}, dbgen_bind, dbgen_function);
+	TableFunction dbgen_func("dbgen", {}, dbgen_bind, dbgen_function);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
@@ -65,6 +70,11 @@ void TPCHExtension::Load(DuckDB &db) {
 
 	// create the dbgen function
 	db.catalog->CreateTableFunction(*con.context, &dbgen_info);
+
+	auto tpch_func = PragmaFunction::PragmaCall("tpch", pragma_tpch_query, { LogicalType::BIGINT });
+
+	CreatePragmaFunctionInfo info(tpch_func);
+	db.catalog->CreatePragmaFunction(*con.context, &info);
 
 	con.Commit();
 }

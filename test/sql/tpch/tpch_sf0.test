@@ -13,3 +13,16 @@ statement ok
 PRAGMA tpch(${i})
 
 endloop
+
+# out of range
+statement error
+PRAGMA tpch(-1)
+
+statement error
+PRAGMA tpch(3290819023812038903)
+
+statement error
+PRAGMA tpch(32908301298)
+
+statement error
+PRAGMA tpch(1.1)

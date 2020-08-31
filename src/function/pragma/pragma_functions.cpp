@@ -134,7 +134,6 @@ static void pragma_explain_output(ClientContext &context, vector<Value> paramete
 	}
 }
 
-
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	register_enable_profiling(set);
 
