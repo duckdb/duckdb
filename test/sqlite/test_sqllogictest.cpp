@@ -481,8 +481,8 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 		print_line_sep();
 		print_sql(zScript);
 		print_line_sep();
-		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row << ", column "
-		          << current_column << std::endl
+		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
+		          << current_column + 1 << std::endl
 		          << termcolor::reset;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
 		print_line_sep();
@@ -567,7 +567,7 @@ struct Query : public Command {
 
 	void Execute() override;
 	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise);
-	vector<string> LoadResultFromFile(string fname);
+	vector<string> LoadResultFromFile(string fname, vector<string> names);
 };
 
 struct RestartCommand : public Command {
@@ -626,12 +626,21 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 	FAIL();
 }
 
-vector<string> Query::LoadResultFromFile(string fname) {
+vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 	DuckDB db(nullptr);
 	Connection con(db);
 	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
-	auto csv_result = con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', auto_detect=1)");
+	string struct_definition = "STRUCT_PACK(";
+	for(idx_t i = 0; i < names.size(); i++) {
+		if (i > 0 ) {
+			struct_definition += ", ";
+		}
+		struct_definition += "\"" + names[i] + "\" := 'VARCHAR'";
+	}
+	struct_definition += ")";
+
+	auto csv_result = con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
 	if (!csv_result->success) {
 		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error);
 		print_error_header(error.c_str(), file_name.c_str(), query_line);
@@ -754,7 +763,7 @@ void Query::Execute() {
 	}
 	vector<string> comparison_values;
 	if (values.size() == 1 && result_is_file(values[0])) {
-		comparison_values = LoadResultFromFile(replace_loop_iterator(values[0], runner.loop_iterator_name, runner.loop_idx));
+		comparison_values = LoadResultFromFile(replace_loop_iterator(values[0], runner.loop_iterator_name, runner.loop_idx), result->names);
 	} else {
 		comparison_values = values;
 	}

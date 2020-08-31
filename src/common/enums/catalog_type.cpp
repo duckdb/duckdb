@@ -32,6 +32,10 @@ string CatalogTypeToString(CatalogType type) {
 		return "Prepared Statement";
 	case CatalogType::SEQUENCE_ENTRY:
 		return "Sequence";
+	case CatalogType::INVALID:
+	case CatalogType::DELETED_ENTRY:
+	case CatalogType::UPDATED_ENTRY:
+		return "Invalid";
 	}
 	return "Unknown";
 }
