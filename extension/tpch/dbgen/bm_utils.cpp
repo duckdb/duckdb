@@ -444,3 +444,20 @@ set_state(int table, long sf, long procs, long step, DSS_HUGE *extra_rows) {
 
 	return (result);
 }
+
+void permute_dist(distribution *d, long stream) {
+	int i;
+
+	if (d != NULL) {
+		if (d->permute == (long *)NULL) {
+			d->permute = (long *)malloc(sizeof(long) * DIST_SIZE(d));
+			MALLOC_CHECK(d->permute);
+		}
+		for (i = 0; i < DIST_SIZE(d); i++)
+			*(d->permute + i) = i;
+		permute(d->permute, DIST_SIZE(d), stream);
+	} else
+		INTERNAL_ERROR("Bad call to permute_dist");
+
+	return;
+}
