@@ -79,7 +79,7 @@ static char alpha_num[65] = "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMN
 char *getenv PROTO((const char *name));
 #endif
 void usage();
-long *permute_dist(distribution *d, long stream);
+void permute_dist(distribution *d, long stream);
 static seed_t *Seed = DBGenGlobals::Seed;
 static tdef *tdefs = DBGenGlobals::tdefs;
 
