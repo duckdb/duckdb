@@ -8,6 +8,7 @@
 
 DSS_HUGE NextRand(DSS_HUGE seed);
 void permute(long *set, int cnt, long stream);
+void permute_dist(distribution *d, long stream);
 long seed;
 char *eol[2] = {" ", "},"};
 static seed_t *Seed = DBGenGlobals::Seed;
@@ -29,6 +30,23 @@ void permute(long *a, int c, long s) {
 			*(a + i) = temp;
 		}
 	}
+
+	return;
+}
+
+void permute_dist(distribution *d, long stream) {
+	int i;
+
+	if (d != NULL) {
+		if (d->permute == (long *)NULL) {
+			d->permute = (long *)malloc(sizeof(long) * DIST_SIZE(d));
+			MALLOC_CHECK(d->permute);
+		}
+		for (i = 0; i < DIST_SIZE(d); i++)
+			*(d->permute + i) = i;
+		permute(d->permute, DIST_SIZE(d), stream);
+	} else
+		INTERNAL_ERROR("Bad call to permute_dist");
 
 	return;
 }
