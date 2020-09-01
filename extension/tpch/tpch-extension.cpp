@@ -57,7 +57,6 @@ static string pragma_tpch_query(ClientContext &context, vector<Value> parameters
 }
 
 void TPCHExtension::Load(DuckDB &db) {
-	// load the collations
 	Connection con(db);
 	con.BeginTransaction();
 
@@ -71,6 +70,7 @@ void TPCHExtension::Load(DuckDB &db) {
 	// create the dbgen function
 	db.catalog->CreateTableFunction(*con.context, &dbgen_info);
 
+	// create the TPCH pragma that allows us to run the query
 	auto tpch_func = PragmaFunction::PragmaCall("tpch", pragma_tpch_query, { LogicalType::BIGINT });
 
 	CreatePragmaFunctionInfo info(tpch_func);

@@ -13,6 +13,7 @@ if (len(sys.argv) < 2):
 
 BIN_PREFIX=sys.argv[1]
 DBFILE = "tpch_sf01.duckdb"
+DUCKDB_PREFIX = os.path.join(BIN_PREFIX, '..', '..', 'duckdb')
 
 
 def find_free_port():
@@ -31,10 +32,12 @@ if not os.path.isfile(server_binary):
 # create database if not exists
 db_file = "%s/%s" % (BIN_PREFIX, DBFILE)
 if not os.path.isfile(db_file):
-	process = subprocess.Popen(("%s/duckdb_dbgen --database=%s --scale_factor=0.1" % (BIN_PREFIX, db_file)).split(' '))
-	process.wait()
+	print('Generating TPC-H Database')
+	process = subprocess.run([DUCKDB_PREFIX, db_file], input='CALL dbgen(sf=0.1)', stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8')
 	if process.returncode != 0 or not os.path.isfile(db_file):
 		raise Exception('dbgen failed')
+	# hack to checkpoint the WAL
+	process = subprocess.run([DUCKDB_PREFIX, db_file], input='SELECT 42', stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8')
 
 
 
