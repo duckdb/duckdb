@@ -89,7 +89,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 		}
 		// look for a command in this line
 		auto splits = StringUtil::Split(StringUtil::Lower(line), ' ');
-		if (splits[0] == "load" || splits[0] == "run" || splits[0] == "init") {
+		if (splits[0] == "load" || splits[0] == "run" || splits[0] == "init" || splits[0] == "cleanup") {
 			if (queries.find(splits[0]) != queries.end()) {
 				throw std::runtime_error("Multiple calls to " + splits[0] + " in the same benchmark file");
 			}
@@ -254,7 +254,19 @@ void InterpretedBenchmark::Run(BenchmarkState *state_) {
 	state.result = state.con.Query(run_query);
 }
 
-void InterpretedBenchmark::Cleanup(BenchmarkState *state) {
+void InterpretedBenchmark::Cleanup(BenchmarkState *state_) {
+	auto &state = (InterpretedBenchmarkState &)*state_;
+	if (queries.find("cleanup") != queries.end()) {
+		unique_ptr<QueryResult> result;
+		string cleanup_query = queries["cleanup"];
+		result = state.con.Query(cleanup_query);
+		while(result) {
+			if (!result->success) {
+				throw Exception(result->error);
+			}
+			result = move(result->next);
+		}
+	}
 }
 
 string InterpretedBenchmark::Verify(BenchmarkState *state_) {
