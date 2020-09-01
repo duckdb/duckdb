@@ -10,7 +10,6 @@ add_subdirectory(tpch)
 endif()
 add_subdirectory(tpcds)
 add_subdirectory(imdb)
-add_subdirectory(expression_reordering)
 
 add_extension_definitions()
 
