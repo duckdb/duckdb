@@ -76,6 +76,7 @@ private:
 
 InterpretedBenchmark::InterpretedBenchmark(string full_path)
     : Benchmark(true, full_path, ParseGroupFromPath(full_path)), benchmark_path(full_path) {
+	replacement_mapping["BENCHMARK_DIR"] = BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY;
 }
 
 void InterpretedBenchmark::LoadBenchmark() {
@@ -215,8 +216,11 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 	if (queries.find("init") != queries.end()) {
 		string init_query = queries["init"];
 		result = state->con.Query(init_query);
-		if (!result->success) {
-			throw Exception(result->error);
+		while(result) {
+			if (!result->success) {
+				throw Exception(result->error);
+			}
+			result = move(result->next);
 		}
 	}
 
@@ -236,8 +240,11 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 			BenchmarkRunner::SaveDatabase(state->db, data_cache);
 		}
 	}
-	if (result && !result->success) {
-		throw Exception(result->error);
+	while(result) {
+		if (!result->success) {
+			throw Exception(result->error);
+		}
+		result = move(result->next);
 	}
 	return state;
 }
