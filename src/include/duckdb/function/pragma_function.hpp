@@ -33,8 +33,10 @@ typedef void (*pragma_function_t)(ClientContext &context, vector<Value> paramete
 class PragmaFunction : public SimpleFunction {
 public:
 	// Call
-	static PragmaFunction PragmaCall(string name, pragma_query_t query, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID);
-	static PragmaFunction PragmaCall(string name, pragma_function_t function, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID);
+	static PragmaFunction PragmaCall(string name, pragma_query_t query, vector<LogicalType> arguments,
+	                                 LogicalType varargs = LogicalType::INVALID);
+	static PragmaFunction PragmaCall(string name, pragma_function_t function, vector<LogicalType> arguments,
+	                                 LogicalType varargs = LogicalType::INVALID);
 	// Statement
 	static PragmaFunction PragmaStatement(string name, pragma_query_t query);
 	static PragmaFunction PragmaStatement(string name, pragma_function_t function);
@@ -43,13 +45,16 @@ public:
 	static PragmaFunction PragmaAssignment(string name, pragma_function_t function, LogicalType type);
 
 	string ToString();
+
 public:
 	PragmaType type;
 
 	pragma_query_t query;
 	pragma_function_t function;
+
 private:
-	PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function, vector<LogicalType> arguments, LogicalType varargs);
+	PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,
+	               vector<LogicalType> arguments, LogicalType varargs);
 };
 
-}
+} // namespace duckdb

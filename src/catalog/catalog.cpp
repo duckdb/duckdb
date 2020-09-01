@@ -191,11 +191,10 @@ CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schem
 
 template <>
 PragmaFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
-                                            bool if_exists) {
+                                              bool if_exists) {
 	return (PragmaFunctionCatalogEntry *)GetEntry(context, CatalogType::PRAGMA_FUNCTION_ENTRY, move(schema_name), name,
-	                                            if_exists);
+	                                              if_exists);
 }
-
 
 template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,

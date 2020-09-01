@@ -18,10 +18,10 @@ struct CreatePragmaFunctionInfo : public CreateFunctionInfo {
 		functions.push_back(move(function));
 		this->name = function.name;
 	}
-	CreatePragmaFunctionInfo(string name, vector<PragmaFunction> functions_) :
-		CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(move(functions_)) {
+	CreatePragmaFunctionInfo(string name, vector<PragmaFunction> functions_)
+	    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(move(functions_)) {
 		this->name = name;
-		for(auto &function : functions) {
+		for (auto &function : functions) {
 			function.name = name;
 		}
 	}

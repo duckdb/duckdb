@@ -22,8 +22,10 @@ public:
 	PragmaHandler(ClientContext &context);
 
 	void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
+
 private:
 	ClientContext &context;
+
 private:
 	//! Handles a pragma statement, (potentially) returning a new statement to replace the current one
 	string HandlePragma(PragmaInfo &pragma);

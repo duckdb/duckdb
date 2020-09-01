@@ -1,4 +1,4 @@
-# name: test/sql/tpch/tpch_sf01.test
+# name: test/sql/tpch/tpch_sf01.test_slow
 # description: Test TPC-H SF0.1
 # group: [tpch]
 

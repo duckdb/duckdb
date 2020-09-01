@@ -1,6 +1,6 @@
 # name: test/sql/types/struct/lineitem_struct.test_slow
 # description: Test packing and unpacking lineitem into structs
-# group: [list]
+# group: [struct]
 
 require tpch
 

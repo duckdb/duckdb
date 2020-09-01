@@ -16,7 +16,8 @@
 namespace duckdb {
 using namespace std;
 
-PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {}
+PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
+}
 
 void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatement>> &statements) {
 	vector<unique_ptr<SQLStatement>> new_statements;
@@ -32,7 +33,7 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 				parser.ParseQuery(new_query);
 				// insert the new statements and remove the old statement
 				// FIXME: off by one here maybe?
-				for(idx_t j = 0; j < parser.statements.size(); j++) {
+				for (idx_t j = 0; j < parser.statements.size(); j++) {
 					new_statements.push_back(move(parser.statements[j]));
 				}
 				continue;
@@ -42,7 +43,6 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 	}
 	statements = move(new_statements);
 }
-
 
 void PragmaHandler::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
 	// first check if there are any pragma statements
@@ -57,13 +57,12 @@ void PragmaHandler::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 		// no pragmas: skip this step
 		return;
 	}
-	context.RunFunctionInTransactionInternal([&]() {
-		HandlePragmaStatementsInternal(statements);
-	});
+	context.RunFunctionInTransactionInternal([&]() { HandlePragmaStatementsInternal(statements); });
 }
 
 string PragmaHandler::HandlePragma(PragmaInfo &info) {
-	auto entry = Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
+	auto entry =
+	    Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
 	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, info);
 	auto &bound_function = entry->functions[bound_idx];
 	if (bound_function.query) {

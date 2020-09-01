@@ -24,67 +24,67 @@ using namespace duckdb;
 using namespace std;
 
 seed_t DBGenGlobals::Seed[MAX_STREAM + 1] = {
-	{PART, 1, 0, 1},                           /* P_MFG_SD     0 */
-	{PART, 46831694, 0, 1},                    /* P_BRND_SD    1 */
-	{PART, 1841581359, 0, 1},                  /* P_TYPE_SD    2 */
-	{PART, 1193163244, 0, 1},                  /* P_SIZE_SD    3 */
-	{PART, 727633698, 0, 1},                   /* P_CNTR_SD    4 */
-	{NONE, 933588178, 0, 1},                   /* text pregeneration  5 */
-	{PART, 804159733, 0, 2},                   /* P_CMNT_SD    6 */
-	{PSUPP, 1671059989, 0, SUPP_PER_PART},     /* PS_QTY_SD    7 */
-	{PSUPP, 1051288424, 0, SUPP_PER_PART},     /* PS_SCST_SD   8 */
-	{PSUPP, 1961692154, 0, SUPP_PER_PART * 2}, /* PS_CMNT_SD   9 */
-	{ORDER, 1227283347, 0, 1},                 /* O_SUPP_SD    10 */
-	{ORDER, 1171034773, 0, 1},                 /* O_CLRK_SD    11 */
-	{ORDER, 276090261, 0, 2},                  /* O_CMNT_SD    12 */
-	{ORDER, 1066728069, 0, 1},                 /* O_ODATE_SD   13 */
-	{LINE, 209208115, 0, O_LCNT_MAX},          /* L_QTY_SD     14 */
-	{LINE, 554590007, 0, O_LCNT_MAX},          /* L_DCNT_SD    15 */
-	{LINE, 721958466, 0, O_LCNT_MAX},          /* L_TAX_SD     16 */
-	{LINE, 1371272478, 0, O_LCNT_MAX},         /* L_SHIP_SD    17 */
-	{LINE, 675466456, 0, O_LCNT_MAX},          /* L_SMODE_SD   18 */
-	{LINE, 1808217256, 0, O_LCNT_MAX},         /* L_PKEY_SD    19 */
-	{LINE, 2095021727, 0, O_LCNT_MAX},         /* L_SKEY_SD    20 */
-	{LINE, 1769349045, 0, O_LCNT_MAX},         /* L_SDTE_SD    21 */
-	{LINE, 904914315, 0, O_LCNT_MAX},          /* L_CDTE_SD    22 */
-	{LINE, 373135028, 0, O_LCNT_MAX},          /* L_RDTE_SD    23 */
-	{LINE, 717419739, 0, O_LCNT_MAX},          /* L_RFLG_SD    24 */
-	{LINE, 1095462486, 0, O_LCNT_MAX * 2},     /* L_CMNT_SD    25 */
-	{CUST, 881155353, 0, 9},                   /* C_ADDR_SD    26 */
-	{CUST, 1489529863, 0, 1},                  /* C_NTRG_SD    27 */
-	{CUST, 1521138112, 0, 3},                  /* C_PHNE_SD    28 */
-	{CUST, 298370230, 0, 1},                   /* C_ABAL_SD    29 */
-	{CUST, 1140279430, 0, 1},                  /* C_MSEG_SD    30 */
-	{CUST, 1335826707, 0, 2},                  /* C_CMNT_SD    31 */
-	{SUPP, 706178559, 0, 9},                   /* S_ADDR_SD    32 */
-	{SUPP, 110356601, 0, 1},                   /* S_NTRG_SD    33 */
-	{SUPP, 884434366, 0, 3},                   /* S_PHNE_SD    34 */
-	{SUPP, 962338209, 0, 1},                   /* S_ABAL_SD    35 */
-	{SUPP, 1341315363, 0, 2},                  /* S_CMNT_SD    36 */
-	{PART, 709314158, 0, 92},                  /* P_NAME_SD    37 */
-	{ORDER, 591449447, 0, 1},                  /* O_PRIO_SD    38 */
-	{LINE, 431918286, 0, 1},                   /* HVAR_SD      39 */
-	{ORDER, 851767375, 0, 1},                  /* O_CKEY_SD    40 */
-	{NATION, 606179079, 0, 2},                 /* N_CMNT_SD    41 */
-	{REGION, 1500869201, 0, 2},                /* R_CMNT_SD    42 */
-	{ORDER, 1434868289, 0, 1},                 /* O_LCNT_SD    43 */
-	{SUPP, 263032577, 0, 1},                   /* BBB offset   44 */
-	{SUPP, 753643799, 0, 1},                   /* BBB type     45 */
-	{SUPP, 202794285, 0, 1},                   /* BBB comment  46 */
-	{SUPP, 715851524, 0, 1}                    /* BBB junk     47 */
+    {PART, 1, 0, 1},                           /* P_MFG_SD     0 */
+    {PART, 46831694, 0, 1},                    /* P_BRND_SD    1 */
+    {PART, 1841581359, 0, 1},                  /* P_TYPE_SD    2 */
+    {PART, 1193163244, 0, 1},                  /* P_SIZE_SD    3 */
+    {PART, 727633698, 0, 1},                   /* P_CNTR_SD    4 */
+    {NONE, 933588178, 0, 1},                   /* text pregeneration  5 */
+    {PART, 804159733, 0, 2},                   /* P_CMNT_SD    6 */
+    {PSUPP, 1671059989, 0, SUPP_PER_PART},     /* PS_QTY_SD    7 */
+    {PSUPP, 1051288424, 0, SUPP_PER_PART},     /* PS_SCST_SD   8 */
+    {PSUPP, 1961692154, 0, SUPP_PER_PART * 2}, /* PS_CMNT_SD   9 */
+    {ORDER, 1227283347, 0, 1},                 /* O_SUPP_SD    10 */
+    {ORDER, 1171034773, 0, 1},                 /* O_CLRK_SD    11 */
+    {ORDER, 276090261, 0, 2},                  /* O_CMNT_SD    12 */
+    {ORDER, 1066728069, 0, 1},                 /* O_ODATE_SD   13 */
+    {LINE, 209208115, 0, O_LCNT_MAX},          /* L_QTY_SD     14 */
+    {LINE, 554590007, 0, O_LCNT_MAX},          /* L_DCNT_SD    15 */
+    {LINE, 721958466, 0, O_LCNT_MAX},          /* L_TAX_SD     16 */
+    {LINE, 1371272478, 0, O_LCNT_MAX},         /* L_SHIP_SD    17 */
+    {LINE, 675466456, 0, O_LCNT_MAX},          /* L_SMODE_SD   18 */
+    {LINE, 1808217256, 0, O_LCNT_MAX},         /* L_PKEY_SD    19 */
+    {LINE, 2095021727, 0, O_LCNT_MAX},         /* L_SKEY_SD    20 */
+    {LINE, 1769349045, 0, O_LCNT_MAX},         /* L_SDTE_SD    21 */
+    {LINE, 904914315, 0, O_LCNT_MAX},          /* L_CDTE_SD    22 */
+    {LINE, 373135028, 0, O_LCNT_MAX},          /* L_RDTE_SD    23 */
+    {LINE, 717419739, 0, O_LCNT_MAX},          /* L_RFLG_SD    24 */
+    {LINE, 1095462486, 0, O_LCNT_MAX * 2},     /* L_CMNT_SD    25 */
+    {CUST, 881155353, 0, 9},                   /* C_ADDR_SD    26 */
+    {CUST, 1489529863, 0, 1},                  /* C_NTRG_SD    27 */
+    {CUST, 1521138112, 0, 3},                  /* C_PHNE_SD    28 */
+    {CUST, 298370230, 0, 1},                   /* C_ABAL_SD    29 */
+    {CUST, 1140279430, 0, 1},                  /* C_MSEG_SD    30 */
+    {CUST, 1335826707, 0, 2},                  /* C_CMNT_SD    31 */
+    {SUPP, 706178559, 0, 9},                   /* S_ADDR_SD    32 */
+    {SUPP, 110356601, 0, 1},                   /* S_NTRG_SD    33 */
+    {SUPP, 884434366, 0, 3},                   /* S_PHNE_SD    34 */
+    {SUPP, 962338209, 0, 1},                   /* S_ABAL_SD    35 */
+    {SUPP, 1341315363, 0, 2},                  /* S_CMNT_SD    36 */
+    {PART, 709314158, 0, 92},                  /* P_NAME_SD    37 */
+    {ORDER, 591449447, 0, 1},                  /* O_PRIO_SD    38 */
+    {LINE, 431918286, 0, 1},                   /* HVAR_SD      39 */
+    {ORDER, 851767375, 0, 1},                  /* O_CKEY_SD    40 */
+    {NATION, 606179079, 0, 2},                 /* N_CMNT_SD    41 */
+    {REGION, 1500869201, 0, 2},                /* R_CMNT_SD    42 */
+    {ORDER, 1434868289, 0, 1},                 /* O_LCNT_SD    43 */
+    {SUPP, 263032577, 0, 1},                   /* BBB offset   44 */
+    {SUPP, 753643799, 0, 1},                   /* BBB type     45 */
+    {SUPP, 202794285, 0, 1},                   /* BBB comment  46 */
+    {SUPP, 715851524, 0, 1}                    /* BBB junk     47 */
 };
 double DBGenGlobals::dM = 2147483647.0;
 tdef DBGenGlobals::tdefs[10] = {
-	{"part.tbl", "part table", 200000, NULL, NULL, PSUPP, 0},
-	{"partsupp.tbl", "partsupplier table", 200000, NULL, NULL, NONE, 0},
-	{"supplier.tbl", "suppliers table", 10000, NULL, NULL, NONE, 0},
-	{"customer.tbl", "customers table", 150000, NULL, NULL, NONE, 0},
-	{"orders.tbl", "order table", 150000, NULL, NULL, LINE, 0},
-	{"lineitem.tbl", "lineitem table", 150000, NULL, NULL, NONE, 0},
-	{"orders.tbl", "orders/lineitem tables", 150000, NULL, NULL, LINE, 0},
-	{"part.tbl", "part/partsupplier tables", 200000, NULL, NULL, PSUPP, 0},
-	{"nation.tbl", "nation table", NATIONS_MAX, NULL, NULL, NONE, 0},
-	{"region.tbl", "region table", NATIONS_MAX, NULL, NULL, NONE, 0},
+    {"part.tbl", "part table", 200000, NULL, NULL, PSUPP, 0},
+    {"partsupp.tbl", "partsupplier table", 200000, NULL, NULL, NONE, 0},
+    {"supplier.tbl", "suppliers table", 10000, NULL, NULL, NONE, 0},
+    {"customer.tbl", "customers table", 150000, NULL, NULL, NONE, 0},
+    {"orders.tbl", "order table", 150000, NULL, NULL, LINE, 0},
+    {"lineitem.tbl", "lineitem table", 150000, NULL, NULL, NONE, 0},
+    {"orders.tbl", "orders/lineitem tables", 150000, NULL, NULL, LINE, 0},
+    {"part.tbl", "part/partsupplier tables", 200000, NULL, NULL, PSUPP, 0},
+    {"nation.tbl", "nation table", NATIONS_MAX, NULL, NULL, NONE, 0},
+    {"region.tbl", "region table", NATIONS_MAX, NULL, NULL, NONE, 0},
 };
 
 static seed_t *Seed = DBGenGlobals::Seed;
@@ -97,10 +97,9 @@ static tdef *tdefs = DBGenGlobals::tdefs;
 namespace tpch {
 
 struct UnsafeAppender {
-	UnsafeAppender(ClientContext &context, TableCatalogEntry *tbl) :
-		context(context), tbl(tbl), col(0) {
+	UnsafeAppender(ClientContext &context, TableCatalogEntry *tbl) : context(context), tbl(tbl), col(0) {
 		vector<LogicalType> types;
-		for(idx_t i = 0; i < tbl->columns.size(); i++) {
+		for (idx_t i = 0; i < tbl->columns.size(); i++) {
 			types.push_back(tbl->columns[i].type);
 		}
 		chunk.Initialize(types);
@@ -126,8 +125,7 @@ struct UnsafeAppender {
 		chunk.Reset();
 	}
 
-	template<class T>
-	void AppendValue(T value) {
+	template <class T> void AppendValue(T value) {
 		assert(col < chunk.column_count());
 		FlatVector::GetData<T>(chunk.data[col])[chunk.size()] = value;
 		col++;
@@ -136,6 +134,7 @@ struct UnsafeAppender {
 	void AppendString(const char *value) {
 		AppendValue<string_t>(StringVector::AddString(chunk.data[col], value));
 	}
+
 private:
 	ClientContext &context;
 	TableCatalogEntry *tbl;
@@ -435,8 +434,9 @@ struct RegionInfo {
 	static const char *Columns[];
 	static const LogicalType Types[];
 };
-const char *RegionInfo::Columns[] = { "r_regionkey", "r_name", "r_comment" };
-const LogicalType RegionInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
+const char *RegionInfo::Columns[] = {"r_regionkey", "r_name", "r_comment"};
+const LogicalType RegionInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+                                         LogicalType(LogicalTypeId::VARCHAR)};
 
 struct NationInfo {
 	static constexpr char *Name = "nation";
@@ -444,8 +444,9 @@ struct NationInfo {
 	static constexpr idx_t ColumnCount = 4;
 	static const LogicalType Types[];
 };
-const char *NationInfo::Columns[] = { "n_nationkey", "n_name", "n_regionkey", "n_comment" };
-const LogicalType NationInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR) };
+const char *NationInfo::Columns[] = {"n_nationkey", "n_name", "n_regionkey", "n_comment"};
+const LogicalType NationInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+                                         LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR)};
 
 struct SupplierInfo {
 	static constexpr char *Name = "supplier";
@@ -453,8 +454,13 @@ struct SupplierInfo {
 	static constexpr idx_t ColumnCount = 7;
 	static const LogicalType Types[];
 };
-const char *SupplierInfo::Columns[] = { "s_suppkey", "s_name", "s_address", "s_nationkey", "s_phone", "s_acctbal", "s_comment" };
-const LogicalType SupplierInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR) };
+const char *SupplierInfo::Columns[] = {"s_suppkey", "s_name",    "s_address", "s_nationkey",
+                                       "s_phone",   "s_acctbal", "s_comment"};
+const LogicalType SupplierInfo::Types[] = {
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2),
+    LogicalType(LogicalTypeId::VARCHAR)};
 
 struct CustomerInfo {
 	static constexpr char *Name = "customer";
@@ -462,8 +468,13 @@ struct CustomerInfo {
 	static constexpr idx_t ColumnCount = 8;
 	static const LogicalType Types[];
 };
-const char *CustomerInfo::Columns[] = { "c_custkey", "c_name", "c_address", "c_nationkey", "c_phone", "c_acctbal", "c_mktsegment", "c_comment" };
-const LogicalType CustomerInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
+const char *CustomerInfo::Columns[] = {"c_custkey", "c_name",    "c_address",    "c_nationkey",
+                                       "c_phone",   "c_acctbal", "c_mktsegment", "c_comment"};
+const LogicalType CustomerInfo::Types[] = {
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR)};
 
 struct PartInfo {
 	static constexpr char *Name = "part";
@@ -471,8 +482,13 @@ struct PartInfo {
 	static constexpr idx_t ColumnCount = 9;
 	static const LogicalType Types[];
 };
-const char *PartInfo::Columns[] = { "p_partkey", "p_name", "p_mfgr", "p_brand", "p_type", "p_size", "p_container", "p_retailprice", "p_comment" };
-const LogicalType PartInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR) };
+const char *PartInfo::Columns[] = {"p_partkey", "p_name",      "p_mfgr",        "p_brand",  "p_type",
+                                   "p_size",    "p_container", "p_retailprice", "p_comment"};
+const LogicalType PartInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
+                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2),
+                                       LogicalType(LogicalTypeId::VARCHAR)};
 
 struct PartsuppInfo {
 	static constexpr char *Name = "partsupp";
@@ -480,8 +496,10 @@ struct PartsuppInfo {
 	static constexpr idx_t ColumnCount = 5;
 	static const LogicalType Types[];
 };
-const char *PartsuppInfo::Columns[] = { "ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment" };
-const LogicalType PartsuppInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR) };
+const char *PartsuppInfo::Columns[] = {"ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
+const LogicalType PartsuppInfo::Types[] = {
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR)};
 
 struct OrdersInfo {
 	static constexpr char *Name = "orders";
@@ -489,8 +507,14 @@ struct OrdersInfo {
 	static constexpr idx_t ColumnCount = 9;
 	static const LogicalType Types[];
 };
-const char *OrdersInfo::Columns[] = { "o_orderkey", "o_custkey", "o_orderstatus", "o_totalprice", "o_orderdate", "o_orderpriority", "o_clerk", "o_shippriority", "o_comment" };
-const LogicalType OrdersInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR) };
+const char *OrdersInfo::Columns[] = {"o_orderkey",      "o_custkey", "o_orderstatus",  "o_totalprice", "o_orderdate",
+                                     "o_orderpriority", "o_clerk",   "o_shippriority", "o_comment"};
+const LogicalType OrdersInfo::Types[] = {
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DECIMAL, 15, 2),
+    LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::VARCHAR)};
 
 struct LineitemInfo {
 	static constexpr char *Name = "lineitem";
@@ -498,17 +522,27 @@ struct LineitemInfo {
 	static constexpr idx_t ColumnCount = 16;
 	static const LogicalType Types[];
 };
-const char *LineitemInfo::Columns[] = { "l_orderkey", "l_partkey", "l_suppkey", "l_linenumber", "l_quantity", "l_extendedprice", "l_discount", "l_tax", "l_returnflag", "l_linestatus", "l_shipdate", "l_commitdate", "l_receiptdate", "l_shipinstruct", "l_shipmode", "l_comment" };
-const LogicalType LineitemInfo::Types[] = { LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::DATE), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR) };
+const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_suppkey",  "l_linenumber",
+                                       "l_quantity",    "l_extendedprice", "l_discount", "l_tax",
+                                       "l_returnflag",  "l_linestatus",    "l_shipdate", "l_commitdate",
+                                       "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
+const LogicalType LineitemInfo::Types[] = {
+    LogicalType(LogicalTypeId::INTEGER),        LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::INTEGER),        LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::INTEGER),        LogicalType(LogicalTypeId::DECIMAL, 15, 2),
+    LogicalType(LogicalTypeId::DECIMAL, 15, 2), LogicalType(LogicalTypeId::DECIMAL, 15, 2),
+    LogicalType(LogicalTypeId::VARCHAR),        LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::DATE),           LogicalType(LogicalTypeId::DATE),
+    LogicalType(LogicalTypeId::DATE),           LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR),        LogicalType(LogicalTypeId::VARCHAR)};
 
-template<class T>
-static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
+template <class T> static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
 	auto info = make_unique<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = OnCreateConflict::ERROR;
 	info->temporary = false;
-	for(idx_t i = 0; i < T::ColumnCount; i++) {
+	for (idx_t i = 0; i < T::ColumnCount; i++) {
 		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_unique<NotNullConstraint>(i));
 	}

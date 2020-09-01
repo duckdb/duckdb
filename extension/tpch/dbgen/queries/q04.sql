@@ -1,21 +1,20 @@
-select
- o_orderpriority,
- count(*) as order_count
-from
- orders
-where
- o_orderdate >= cast('1993-07-01' as date)
- and o_orderdate < cast('1993-10-01' as date)
- and exists (
- select
- *
- from
- lineitem
- where
- l_orderkey = o_orderkey
- and l_commitdate < l_receiptdate
- )
-group by
- o_orderpriority
-order by
- o_orderpriority;
+SELECT
+    o_orderpriority,
+    count(*) AS order_count
+FROM
+    orders
+WHERE
+    o_orderdate >= CAST('1993-07-01' AS date)
+    AND o_orderdate < CAST('1993-10-01' AS date)
+    AND EXISTS (
+        SELECT
+            *
+        FROM
+            lineitem
+        WHERE
+            l_orderkey = o_orderkey
+            AND l_commitdate < l_receiptdate)
+GROUP BY
+    o_orderpriority
+ORDER BY
+    o_orderpriority;

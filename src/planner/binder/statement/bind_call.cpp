@@ -13,7 +13,7 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	ref.function = move(stmt.function);
 
 	auto bound_func = Bind(ref);
-	auto &bound_table_func = (BoundTableFunction &) *bound_func;
+	auto &bound_table_func = (BoundTableFunction &)*bound_func;
 
 	result.types = bound_table_func.return_types;
 	result.names = bound_table_func.names;

@@ -3,15 +3,18 @@
 
 namespace duckdb {
 
-PragmaFunction::PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function, vector<LogicalType> arguments, LogicalType varargs) :
-	SimpleFunction(move(name), move(arguments), move(varargs)), type(pragma_type), query(query), function(function) {}
+PragmaFunction::PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,
+                               vector<LogicalType> arguments, LogicalType varargs)
+    : SimpleFunction(move(name), move(arguments), move(varargs)), type(pragma_type), query(query), function(function) {
+}
 
-
-PragmaFunction PragmaFunction::PragmaCall(string name, pragma_query_t query, vector<LogicalType> arguments, LogicalType varargs) {
+PragmaFunction PragmaFunction::PragmaCall(string name, pragma_query_t query, vector<LogicalType> arguments,
+                                          LogicalType varargs) {
 	return PragmaFunction(name, PragmaType::PRAGMA_CALL, query, nullptr, move(arguments), move(varargs));
 }
 
-PragmaFunction PragmaFunction::PragmaCall(string name, pragma_function_t function, vector<LogicalType> arguments, LogicalType varargs) {
+PragmaFunction PragmaFunction::PragmaCall(string name, pragma_function_t function, vector<LogicalType> arguments,
+                                          LogicalType varargs) {
 	return PragmaFunction(name, PragmaType::PRAGMA_CALL, nullptr, function, move(arguments), move(varargs));
 }
 
@@ -26,17 +29,17 @@ PragmaFunction PragmaFunction::PragmaStatement(string name, pragma_function_t fu
 }
 
 PragmaFunction PragmaFunction::PragmaAssignment(string name, pragma_query_t query, LogicalType type) {
-	vector<LogicalType> types { move(type) };
+	vector<LogicalType> types{move(type)};
 	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, query, nullptr, types, LogicalType::INVALID);
 }
 
 PragmaFunction PragmaFunction::PragmaAssignment(string name, pragma_function_t function, LogicalType type) {
-	vector<LogicalType> types { move(type) };
+	vector<LogicalType> types{move(type)};
 	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, nullptr, function, types, LogicalType::INVALID);
 }
 
 string PragmaFunction::ToString() {
-	switch(type) {
+	switch (type) {
 	case PragmaType::PRAGMA_STATEMENT:
 		return StringUtil::Format("PRAGMA %s", name);
 	case PragmaType::PRAGMA_ASSIGNMENT:
@@ -47,4 +50,4 @@ string PragmaFunction::ToString() {
 	return "UNKNOWN";
 }
 
-}
+} // namespace duckdb

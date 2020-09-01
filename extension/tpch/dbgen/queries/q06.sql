@@ -1,9 +1,10 @@
-select
- sum(l_extendedprice * l_discount) as revenue
-from
- lineitem
-where
- l_shipdate >= cast('1994-01-01' as date)
- and l_shipdate < cast('1995-01-01' as date)
- and l_discount between 0.05 and 0.07
- and l_quantity < 24;
+SELECT
+    sum(l_extendedprice * l_discount) AS revenue
+FROM
+    lineitem
+WHERE
+    l_shipdate >= CAST('1994-01-01' AS date)
+    AND l_shipdate < CAST('1995-01-01' AS date)
+    AND l_discount BETWEEN 0.05
+    AND 0.07
+    AND l_quantity < 24;

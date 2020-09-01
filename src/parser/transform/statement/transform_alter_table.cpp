@@ -37,14 +37,12 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 			break;
 		}
 		case PG_AT_DropColumn: {
-			result->info = make_unique<RemoveColumnInfo>(qname.schema, qname.name, command->name,
-			                                             command->missing_ok);
+			result->info = make_unique<RemoveColumnInfo>(qname.schema, qname.name, command->name, command->missing_ok);
 			break;
 		}
 		case PG_AT_ColumnDefault: {
 			auto expr = TransformExpression(command->def);
-			result->info =
-			    make_unique<SetDefaultInfo>(qname.schema, qname.name, command->name, move(expr));
+			result->info = make_unique<SetDefaultInfo>(qname.schema, qname.name, command->name, move(expr));
 			break;
 		}
 		case PG_AT_AlterColumnType: {

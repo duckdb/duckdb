@@ -22,5 +22,4 @@ public:
 	static std::string GetAnswer(double sf, int query);
 };
 
-
 } // namespace duckdb

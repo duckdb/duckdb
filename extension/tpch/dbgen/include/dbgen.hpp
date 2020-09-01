@@ -19,7 +19,6 @@ class ClientContext;
 
 namespace tpch {
 
-
 struct DBGenWrapper {
 	//! Create the TPC-H tables in the given schema with the given suffix
 	static void CreateTPCHSchema(duckdb::ClientContext &context, string schema, string suffix);

@@ -22,10 +22,7 @@ add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
 if(NOT WIN32 AND NOT SUN)
-  target_link_libraries(unittest
-                        duckdb
-                        dsdgen
-                        test_helpers)
+  target_link_libraries(unittest duckdb dsdgen test_helpers)
   if(${BUILD_TPCE})
     target_link_libraries(unittest tpce)
   endif()

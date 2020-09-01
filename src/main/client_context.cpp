@@ -265,7 +265,6 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query, id
 	handler.HandlePragmaStatements(parser.statements);
 
 	return move(parser.statements);
-
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {

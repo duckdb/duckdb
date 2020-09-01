@@ -23,9 +23,9 @@ string pragma_collations(ClientContext &context, vector<Value> parameters) {
 string pragma_show(ClientContext &context, vector<Value> parameters) {
 	// PRAGMA table_info but with some aliases
 	return StringUtil::Format(
-		"SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
-		"NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info('%s')",
-		parameters[0].ToString());
+	    "SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
+	    "NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info('%s')",
+	    parameters[0].ToString());
 }
 
 string pragma_version(ClientContext &context, vector<Value> parameters) {
@@ -46,16 +46,17 @@ string pragma_import_database(ClientContext &context, vector<Value> parameters) 
 
 		query += string(buffer.get(), fsize);
 	}
-	return query;}
+	return query;
+}
 
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(PragmaFunction::PragmaCall("table_info", pragma_table_info, { LogicalType::VARCHAR }));
+	set.AddFunction(PragmaFunction::PragmaCall("table_info", pragma_table_info, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables", pragma_show_tables));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_list", pragma_database_list));
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", pragma_collations));
-	set.AddFunction(PragmaFunction::PragmaCall("show", pragma_show, { LogicalType::VARCHAR }));
+	set.AddFunction(PragmaFunction::PragmaCall("show", pragma_show, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", pragma_version));
-	set.AddFunction(PragmaFunction::PragmaCall("import_database", pragma_import_database, { LogicalType::VARCHAR }));
+	set.AddFunction(PragmaFunction::PragmaCall("import_database", pragma_import_database, {LogicalType::VARCHAR}));
 }
 
-}
+} // namespace duckdb

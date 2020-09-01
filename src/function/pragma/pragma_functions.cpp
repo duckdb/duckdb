@@ -25,8 +25,7 @@ static void pragma_enable_profiling_assignment(ClientContext &context, vector<Va
 	} else if (assignment == "query_tree") {
 		context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else {
-		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]",
-								assignment);
+		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]", assignment);
 	}
 	context.profiler.Enable();
 }
@@ -34,7 +33,8 @@ static void pragma_enable_profiling_assignment(ClientContext &context, vector<Va
 void register_enable_profiling(BuiltinFunctions &set) {
 	vector<PragmaFunction> functions;
 	functions.push_back(PragmaFunction::PragmaStatement(string(), pragma_enable_profiling_statement));
-	functions.push_back(PragmaFunction::PragmaAssignment(string(), pragma_enable_profiling_assignment, LogicalType::VARCHAR));
+	functions.push_back(
+	    PragmaFunction::PragmaAssignment(string(), pragma_enable_profiling_assignment, LogicalType::VARCHAR));
 
 	set.AddFunction("enable_profile", functions);
 	set.AddFunction("enable_profiling", functions);
@@ -74,7 +74,7 @@ static void pragma_null_order(ClientContext &context, vector<Value> parameters) 
 		config.default_null_order = OrderByNullType::NULLS_LAST;
 	} else {
 		throw ParserException("Unrecognized null order '%s', expected either NULLS FIRST or NULLS LAST",
-								new_null_order);
+		                      new_null_order);
 	}
 }
 
@@ -111,15 +111,13 @@ static void pragma_disable_force_parallelism(ClientContext &context, vector<Valu
 	context.force_parallelism = false;
 }
 
-
 static void pragma_log_query_path(ClientContext &context, vector<Value> parameters) {
 	auto str_val = parameters[0].ToString();
 	if (str_val.empty()) {
 		// empty path: clean up query writer
 		context.log_query_writer = nullptr;
 	} else {
-		context.log_query_writer =
-			make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), str_val);
+		context.log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), str_val);
 	}
 }
 
@@ -219,4 +217,4 @@ idx_t ParseMemoryLimit(string arg) {
 	return (idx_t)multiplier * limit;
 }
 
-}
+} // namespace duckdb

@@ -6,7 +6,7 @@ include_directories(include)
 
 add_subdirectory(micro)
 if(${BUILD_TPCH_EXTENSION})
-add_subdirectory(tpch)
+  add_subdirectory(tpch)
 endif()
 add_subdirectory(tpcds)
 add_subdirectory(imdb)
@@ -16,12 +16,7 @@ add_extension_definitions()
 add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp
                                 ${BENCHMARK_OBJECT_FILES})
 
-target_link_libraries(benchmark_runner
-                      duckdb
-                      dsdgen
-                      imdb
-                      test_helpers)
-
+target_link_libraries(benchmark_runner duckdb dsdgen imdb test_helpers)
 
 link_extension_libraries(benchmark_runner)
 

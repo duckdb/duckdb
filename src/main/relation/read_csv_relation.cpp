@@ -13,8 +13,8 @@ namespace duckdb {
 
 ReadCSVRelation::ReadCSVRelation(ClientContext &context, string csv_file_p, vector<ColumnDefinition> columns_p,
                                  bool auto_detect, string alias_p)
-    : Relation(context, RelationType::READ_CSV_RELATION), csv_file(move(csv_file_p)),
-	  auto_detect(auto_detect), alias(move(alias_p)), columns(move(columns_p)) {
+    : Relation(context, RelationType::READ_CSV_RELATION), csv_file(move(csv_file_p)), auto_detect(auto_detect),
+      alias(move(alias_p)), columns(move(columns_p)) {
 	if (alias.empty()) {
 		alias = StringUtil::Split(csv_file, ".")[0];
 	}
@@ -40,12 +40,12 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 			column_names.push_back(make_pair(columns[i].name, Value(columns[i].type.ToString())));
 		}
 		auto colnames = make_unique<ConstantExpression>(Value::STRUCT(move(column_names)));
-		children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-															make_unique<ColumnRefExpression>("columns"), move(colnames)));
+		children.push_back(make_unique<ComparisonExpression>(
+		    ExpressionType::COMPARE_EQUAL, make_unique<ColumnRefExpression>("columns"), move(colnames)));
 	} else {
 		children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-		                       make_unique<ColumnRefExpression>("auto_detect"),
-							   make_unique<ConstantExpression>(Value::BOOLEAN(true))));
+		                                                     make_unique<ColumnRefExpression>("auto_detect"),
+		                                                     make_unique<ConstantExpression>(Value::BOOLEAN(true))));
 	}
 	table_ref->function = make_unique<FunctionExpression>("read_csv", children);
 	return move(table_ref);

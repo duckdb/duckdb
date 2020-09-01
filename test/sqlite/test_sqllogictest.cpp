@@ -619,15 +619,16 @@ vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";
-	for(idx_t i = 0; i < names.size(); i++) {
-		if (i > 0 ) {
+	for (idx_t i = 0; i < names.size(); i++) {
+		if (i > 0) {
 			struct_definition += ", ";
 		}
 		struct_definition += "\"" + names[i] + "\" := 'VARCHAR'";
 	}
 	struct_definition += ")";
 
-	auto csv_result = con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
+	auto csv_result =
+	    con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
 	if (!csv_result->success) {
 		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error);
 		print_error_header(error.c_str(), file_name.c_str(), query_line);
@@ -636,20 +637,19 @@ vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 	expected_column_count = csv_result->column_count();
 
 	vector<string> values;
-	while(true) {
+	while (true) {
 		auto chunk = csv_result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
-		for(idx_t r = 0; r < chunk->size(); r++) {
-			for(idx_t c = 0; c < chunk->column_count(); c++) {
+		for (idx_t r = 0; r < chunk->size(); r++) {
+			for (idx_t c = 0; c < chunk->column_count(); c++) {
 				values.push_back(chunk->GetValue(c, r).ToString());
 			}
 		}
 	}
 	return values;
 }
-
 
 void Query::Execute() {
 	auto connection = CommandConnection();
@@ -750,7 +750,8 @@ void Query::Execute() {
 	}
 	vector<string> comparison_values;
 	if (values.size() == 1 && result_is_file(values[0])) {
-		comparison_values = LoadResultFromFile(replace_loop_iterator(values[0], runner.loop_iterator_name, runner.loop_idx), result->names);
+		comparison_values = LoadResultFromFile(
+		    replace_loop_iterator(values[0], runner.loop_iterator_name, runner.loop_idx), result->names);
 	} else {
 		comparison_values = values;
 	}
@@ -855,9 +856,9 @@ void Query::Execute() {
 					FAIL();
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
-					bool success =
-					    compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], file_name,
-					                   query_line, sql_query, current_row, c, comparison_values, expected_column_count, row_wise);
+					bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c],
+					                              file_name, query_line, sql_query, current_row, c, comparison_values,
+					                              expected_column_count, row_wise);
 					if (!success) {
 						FAIL();
 					}
@@ -870,8 +871,8 @@ void Query::Execute() {
 			int current_row = 0, current_column = 0;
 			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
 				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column],
-				                              comparison_values[i], file_name, query_line, sql_query, current_row, current_column,
-				                              comparison_values, expected_column_count, row_wise);
+				                              comparison_values[i], file_name, query_line, sql_query, current_row,
+				                              current_column, comparison_values, expected_column_count, row_wise);
 				if (!success) {
 					FAIL();
 				}

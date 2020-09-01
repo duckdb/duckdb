@@ -1,4 +1,3 @@
-
 include_directories(../../extension/tpch/include)
 
 add_library_unity(test_sqlsmith OBJECT test_sqlsmith.cpp)

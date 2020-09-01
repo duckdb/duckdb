@@ -31,13 +31,13 @@ class ExtensionHelper {
 public:
 	static void LoadAllExtensions(DuckDB &db) {
 #ifdef BUILD_ICU_EXTENSION
-			db.LoadExtension<ICUExtension>();
+		db.LoadExtension<ICUExtension>();
 #endif
 #ifdef BUILD_PARQUET_EXTENSION
-			db.LoadExtension<ParquetExtension>();
+		db.LoadExtension<ParquetExtension>();
 #endif
 #ifdef BUILD_TPCH_EXTENSION
-			db.LoadExtension<TPCHExtension>();
+		db.LoadExtension<TPCHExtension>();
 #endif
 	}
 
@@ -72,5 +72,3 @@ public:
 };
 
 } // namespace duckdb
-
-

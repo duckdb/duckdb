@@ -22,8 +22,8 @@ struct DBGenFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> dbgen_bind(ClientContext &context, vector<Value> &inputs,
-                                              unordered_map<string, Value> &named_parameters,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+                                           unordered_map<string, Value> &named_parameters,
+                                           vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<DBGenFunctionData>();
 	for (auto &kv : named_parameters) {
 		if (kv.first == "sf") {
@@ -71,7 +71,7 @@ void TPCHExtension::Load(DuckDB &db) {
 	db.catalog->CreateTableFunction(*con.context, &dbgen_info);
 
 	// create the TPCH pragma that allows us to run the query
-	auto tpch_func = PragmaFunction::PragmaCall("tpch", pragma_tpch_query, { LogicalType::BIGINT });
+	auto tpch_func = PragmaFunction::PragmaCall("tpch", pragma_tpch_query, {LogicalType::BIGINT});
 
 	CreatePragmaFunctionInfo info(tpch_func);
 	db.catalog->CreatePragmaFunction(*con.context, &info);

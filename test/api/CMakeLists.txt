@@ -17,10 +17,9 @@ if(NOT WIN32)
 endif()
 
 if(${BUILD_TPCH_EXTENSION})
-include_directories(../../extension/tpch/include)
-set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpch_with_relations.cpp)
+  include_directories(../../extension/tpch/include)
+  set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpch_with_relations.cpp)
 endif()
-
 
 add_library_unity(test_api OBJECT ${TEST_API_OBJECTS})
 set(ALL_OBJECT_FILES

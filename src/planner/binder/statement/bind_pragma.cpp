@@ -23,4 +23,4 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	return result;
 }
 
-}
+} // namespace duckdb

@@ -37,6 +37,7 @@ public:
 	string BenchmarkInfo() override;
 
 	string GetLogOutput(BenchmarkState *state) override;
+
 private:
 	std::unordered_map<string, string> replacement_mapping;
 

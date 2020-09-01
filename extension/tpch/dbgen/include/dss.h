@@ -467,9 +467,9 @@ int dbg_print(int dt, FILE *tgt, void *data, int len, int eol);
 #define BBB_OFFSET_SD 47
 
 struct DBGenGlobals {
-    static seed_t Seed[MAX_STREAM + 1];
-    static double dM;
-    static tdef tdefs[10];
+	static seed_t Seed[MAX_STREAM + 1];
+	static double dM;
+	static tdef tdefs[10];
 };
 
 #endif /* DSS_H */

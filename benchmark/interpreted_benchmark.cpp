@@ -43,8 +43,9 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 };
 
 struct BenchmarkFileReader {
-	BenchmarkFileReader(string path_, unordered_map<std::string, std::string> replacement_map) :
-		path(path_), infile(path), linenr(0), replacements(replacement_map) {}
+	BenchmarkFileReader(string path_, unordered_map<std::string, std::string> replacement_map)
+	    : path(path_), infile(path), linenr(0), replacements(replacement_map) {
+	}
 
 public:
 	bool ReadLine(std::string &line) {
@@ -52,7 +53,7 @@ public:
 			return false;
 		}
 		linenr++;
-		for(auto &replacement : replacements) {
+		for (auto &replacement : replacements) {
 			line = StringUtil::Replace(line, "${" + replacement.first + "}", replacement.second);
 		}
 		StringUtil::Trim(line);
@@ -66,12 +67,12 @@ public:
 	std::string FormatException(string exception_msg) {
 		return path + ":" + to_string(linenr) + " - " + exception_msg;
 	}
+
 private:
 	std::string path;
 	std::ifstream infile;
 	int linenr;
 	unordered_map<std::string, std::string> replacements;
-
 };
 
 InterpretedBenchmark::InterpretedBenchmark(string full_path)
@@ -119,7 +120,9 @@ void InterpretedBenchmark::LoadBenchmark() {
 			}
 			// count the amount of columns
 			if (splits.size() <= 1 || splits[1].size() == 0) {
-				throw std::runtime_error(reader.FormatException("result must be followed by a column count (e.g. result III) or a file (e.g. result /path/to/file.csv)"));
+				throw std::runtime_error(
+				    reader.FormatException("result must be followed by a column count (e.g. result III) or a file "
+				                           "(e.g. result /path/to/file.csv)"));
 			}
 			bool is_file = false;
 			for (idx_t i = 0; i < splits[1].size(); i++) {
@@ -165,9 +168,9 @@ void InterpretedBenchmark::LoadBenchmark() {
 					}
 					auto result_splits = StringUtil::Split(line, "\t");
 					if ((int64_t)result_splits.size() != result_column_count) {
-						throw std::runtime_error(reader.FormatException("expected " +
-												to_string(result_column_count) + " values but got " +
-												to_string(result_splits.size())));
+						throw std::runtime_error(reader.FormatException("expected " + to_string(result_column_count) +
+						                                                " values but got " +
+						                                                to_string(result_splits.size())));
 					}
 					result_values.push_back(move(result_splits));
 				}
@@ -182,7 +185,8 @@ void InterpretedBenchmark::LoadBenchmark() {
 				}
 				auto parameters = StringUtil::Split(line, '=');
 				if (parameters.size() != 2) {
-					throw std::runtime_error(reader.FormatException("Expected a template parameter in the form of X=Y"));
+					throw std::runtime_error(
+					    reader.FormatException("Expected a template parameter in the form of X=Y"));
 				}
 				replacement_mapping[parameters[0]] = parameters[1];
 			}
@@ -204,19 +208,20 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 	run_query = queries["run"];
 
 	auto state = make_unique<InterpretedBenchmarkState>();
-	for(auto &extension : extensions) {
+	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 			throw std::runtime_error("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
-			throw std::runtime_error("Extension " + extension + " is not available/was not compiled. Cannot run this benchmark.");
+			throw std::runtime_error("Extension " + extension +
+			                         " is not available/was not compiled. Cannot run this benchmark.");
 		}
 	}
 
 	if (queries.find("init") != queries.end()) {
 		string init_query = queries["init"];
 		result = state->con.Query(init_query);
-		while(result) {
+		while (result) {
 			if (!result->success) {
 				throw Exception(result->error);
 			}
@@ -240,7 +245,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 			BenchmarkRunner::SaveDatabase(state->db, data_cache);
 		}
 	}
-	while(result) {
+	while (result) {
 		if (!result->success) {
 			throw Exception(result->error);
 		}
@@ -260,7 +265,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_) {
 		unique_ptr<QueryResult> result;
 		string cleanup_query = queries["cleanup"];
 		result = state.con.Query(cleanup_query);
-		while(result) {
+		while (result) {
 			if (!result->success) {
 				throw Exception(result->error);
 			}
@@ -280,13 +285,15 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 	}
 	// compare the column count
 	if ((int64_t)state.result->column_count() != result_column_count) {
-		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s", (int64_t)result_column_count,
-		                          (int64_t)state.result->column_count(), state.result->ToString());
+		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s",
+		                          (int64_t)result_column_count, (int64_t)state.result->column_count(),
+		                          state.result->ToString());
 	}
 	// compare row count
 	if (state.result->collection.count != result_values.size()) {
 		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
-		                          (int64_t)state.result->collection.count, (int64_t)result_values.size(), state.result->ToString());
+		                          (int64_t)state.result->collection.count, (int64_t)result_values.size(),
+		                          state.result->ToString());
 	}
 	// compare values
 	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
