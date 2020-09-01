@@ -56,9 +56,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-extern double dM;
 
-extern seed_t Seed[];
+static seed_t *Seed = DBGenGlobals::Seed;
 
 void dss_random64(DSS_HUGE *tgt, DSS_HUGE nLow, DSS_HUGE nHigh, long nStream) {
 	DSS_HUGE nTemp;

@@ -10,11 +10,9 @@
 #include "dsstypes.h"
 
 #include <math.h>
-#ifdef ADHOC
-#include "adhoc.h"
-extern adhoc_t adhocs[];
-#endif /* ADHOC */
 #include "rng64.h"
+
+static tdef *tdefs = DBGenGlobals::tdefs;
 
 #define LEAP_ADJ(yr, mnth) ((LEAP(yr) && (mnth) >= 2) ? 1 : 0)
 #define JDAY_BASE 8035        /* start from 1/1/70 a la unix */

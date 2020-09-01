@@ -55,10 +55,7 @@ void permute(long *set, int cnt, long stream);
 void permute_dist(distribution *d, long stream);
 long seed;
 char *eol[2] = {" ", "},"};
-extern seed_t Seed[];
-#ifdef TEST
-tdef tdefs = {NULL};
-#endif
+static seed_t *Seed = DBGenGlobals::Seed;
 
 #define MAX_QUERY 22
 #define ITERATIONS 1000

@@ -18,6 +18,9 @@
 #include "dss.h"
 #include "rnd.h"
 
+static seed_t *Seed = DBGenGlobals::Seed;
+static tdef *tdefs = DBGenGlobals::tdefs;
+
 const char *tpch_env_config PROTO((const char *tag, const char *dflt));
 void NthElement(DSS_HUGE, DSS_HUGE *);
 
@@ -134,6 +137,6 @@ UnifInt(DSS_HUGE nLow, DSS_HUGE nHigh, long nStream)
 #ifdef RNG_TEST
 	Seed[nStream].nCalls += 1;
 #endif
-	nTemp = (DSS_HUGE)(((double)Seed[nStream].value / dM) * (dRange));
+	nTemp = (DSS_HUGE)(((double)Seed[nStream].value / DBGenGlobals::dM) * (dRange));
 	return (nLow + nTemp);
 }

@@ -80,7 +80,8 @@ char *getenv PROTO((const char *name));
 #endif
 void usage();
 long *permute_dist(distribution *d, long stream);
-extern seed_t Seed[];
+static seed_t *Seed = DBGenGlobals::Seed;
+static tdef *tdefs = DBGenGlobals::tdefs;
 
 /*
  * tpch_env_config: look for a environmental variable setting and return its

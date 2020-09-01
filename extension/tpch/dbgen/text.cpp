@@ -420,33 +420,3 @@ void dbg_text(char *tgt, int min, int max, int sd) {
 
 	return;
 }
-
-#ifdef TEXT_TEST
-tdef tdefs[1] = {NULL};
-distribution nouns, verbs, adjectives, adverbs, auxillaries, terminators, articles, prepositions, grammar, np, vp;
-
-int main() {
-	char prattle[401];
-
-	verbose = 1;
-
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "nouns", &nouns);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "verbs", &verbs);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "adjectives", &adjectives);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "adverbs", &adverbs);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "auxillaries", &auxillaries);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "terminators", &terminators);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "articles", &articles);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "prepositions", &prepositions);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "grammar", &grammar);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "np", &np);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "vp", &vp);
-
-	while (1) {
-		dbg_text(&prattle[0], 300, 400, 0);
-		printf("<%s>\n", prattle);
-	}
-
-	return (0);
-}
-#endif /* TEST */

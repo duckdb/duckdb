@@ -10,7 +10,7 @@
 #define ADVANCE_STREAM64(stream_id, num_calls) advanceStream(stream_id, num_calls, 1)
 #define MAX_COLOR 92
 long name_bits[MAX_COLOR / BITS_PER_LONG];
-extern seed_t Seed[];
+static seed_t *Seed = DBGenGlobals::Seed;
 void fakeVStr(int nAvg, long nSeed, DSS_HUGE nCount);
 void NthElement(DSS_HUGE N, DSS_HUGE *StartSeed);
 

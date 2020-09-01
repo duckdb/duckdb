@@ -5,10 +5,6 @@
 #ifndef DSS_H
 #define DSS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifdef TPCH
 #define NAME "TPC-H"
 #endif
@@ -215,11 +211,6 @@ EXTERN int delete_segments;
 EXTERN int insert_orders_segment;
 EXTERN int insert_lineitem_segment;
 EXTERN int delete_segment;
-
-#ifndef DECLARER
-extern tdef tdefs[];
-
-#endif /* DECLARER */
 
 /*****************************************************************
  ** table level defines use the following naming convention: t_ccc_xxx
@@ -475,8 +466,10 @@ int dbg_print(int dt, FILE *tgt, void *data, int len, int eol);
 #define BBB_CMNT_SD 46
 #define BBB_OFFSET_SD 47
 
-#ifdef __cplusplus
+struct DBGenGlobals {
+    static seed_t Seed[MAX_STREAM + 1];
+    static double dM;
+    static tdef tdefs[10];
 };
-#endif
 
 #endif /* DSS_H */

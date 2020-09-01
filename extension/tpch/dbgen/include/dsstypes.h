@@ -5,10 +5,6 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*
  * typedefs
  */
@@ -146,7 +142,3 @@ int ld_nation PROTO((code_t * c, int mode));
 int mk_region PROTO((DSS_HUGE i, code_t *c));
 int pr_region PROTO((code_t * c, int mode));
 int ld_region PROTO((code_t * c, int mode));
-
-#ifdef __cplusplus
-};
-#endif
