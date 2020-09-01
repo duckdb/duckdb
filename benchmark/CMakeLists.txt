@@ -10,6 +10,8 @@ add_subdirectory(tpcds)
 add_subdirectory(imdb)
 add_subdirectory(expression_reordering)
 
+add_extension_definitions()
+
 add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp
                                 ${BENCHMARK_OBJECT_FILES})
 
@@ -19,14 +21,9 @@ target_link_libraries(benchmark_runner
                       imdb
                       test_helpers)
 
+
+link_extension_libraries(benchmark_runner)
+
 if(${BUILD_TPCE})
   target_link_libraries(benchmark_runner tpce)
-endif()
-
-if(${BUILD_PARQUET_EXTENSION})
-  target_link_libraries(benchmark_runner parquet_extension)
-endif()
-
-if(${BUILD_TPCH_EXTENSION})
-  target_link_libraries(benchmark_runner tpch_extension)
 endif()

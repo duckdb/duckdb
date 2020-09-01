@@ -1,4 +1,5 @@
 #include "interpreted_benchmark.hpp"
+#include "benchmark_runner.hpp"
 #include "duckdb.hpp"
 
 #include <fstream>
@@ -6,6 +7,8 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
+
+#include "extension_helper.hpp"
 
 namespace duckdb {
 
@@ -39,90 +42,201 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	}
 };
 
+struct BenchmarkFileReader {
+	BenchmarkFileReader(string path_, unordered_map<std::string, std::string> replacement_map) :
+		path(path_), infile(path), linenr(0), replacements(replacement_map) {}
+
+public:
+	bool ReadLine(std::string &line) {
+		if (!std::getline(infile, line)) {
+			return false;
+		}
+		linenr++;
+		for(auto &replacement : replacements) {
+			line = StringUtil::Replace(line, "${" + replacement.first + "}", replacement.second);
+		}
+		StringUtil::Trim(line);
+		return true;
+	}
+
+	int LineNumber() {
+		return linenr;
+	}
+
+	std::string FormatException(string exception_msg) {
+		return path + ":" + to_string(linenr) + " - " + exception_msg;
+	}
+private:
+	std::string path;
+	std::ifstream infile;
+	int linenr;
+	unordered_map<std::string, std::string> replacements;
+
+};
+
 InterpretedBenchmark::InterpretedBenchmark(string full_path)
     : Benchmark(true, full_path, ParseGroupFromPath(full_path)), benchmark_path(full_path) {
 }
 
 void InterpretedBenchmark::LoadBenchmark() {
-	std::ifstream infile(benchmark_path);
-	std::string line;
-	int linenr = 0;
-	while (std::getline(infile, line)) {
-		linenr++;
-		// skip comments
-		if (line[0] == '#') {
-			continue;
-		}
-		StringUtil::Trim(line);
-		// skip blank lines
-		if (line.empty()) {
+	BenchmarkFileReader reader(benchmark_path, replacement_mapping);
+	string line;
+	while (reader.ReadLine(line)) {
+		// skip blank lines and comments
+		if (line.empty() || line[0] == '#') {
 			continue;
 		}
 		// look for a command in this line
 		auto splits = StringUtil::Split(StringUtil::Lower(line), ' ');
-		if (splits[0] == "load") {
-			if (!init_query.empty()) {
-				throw std::runtime_error("Multiple calls to LOAD in the same benchmark file");
+		if (splits[0] == "load" || splits[0] == "run" || splits[0] == "init") {
+			if (queries.find(splits[0]) != queries.end()) {
+				throw std::runtime_error("Multiple calls to " + splits[0] + " in the same benchmark file");
 			}
 			// load command: keep reading until we find a blank line or EOF
-			while (std::getline(infile, line)) {
-				linenr++;
-				StringUtil::Trim(line);
+			string query;
+			while (reader.ReadLine(line)) {
 				if (line.empty()) {
 					break;
 				} else {
-					init_query += line;
+					query += line + " ";
 				}
 			}
-		} else if (splits[0] == "run") {
-			if (!run_query.empty()) {
-				throw std::runtime_error("Multiple calls to RUN in the same benchmark file");
+			queries[splits[0]] = query;
+		} else if (splits[0] == "require") {
+			if (splits.size() != 2) {
+				throw std::runtime_error(reader.FormatException("require requires a single parameter"));
 			}
-			// load command: keep reading until we find a blank line or EOF
-			while (std::getline(infile, line)) {
-				linenr++;
-				StringUtil::Trim(line);
-				if (line.empty()) {
-					break;
-				} else {
-					run_query += line;
-				}
+			extensions.insert(splits[1]);
+		} else if (splits[0] == "cache") {
+			if (splits.size() != 2) {
+				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
 			}
+			data_cache = splits[1];
 		} else if (splits[0] == "result") {
 			if (result_column_count > 0) {
-				throw std::runtime_error("multiple results found!");
+				throw std::runtime_error(reader.FormatException("multiple results found"));
 			}
 			// count the amount of columns
 			if (splits.size() <= 1 || splits[1].size() == 0) {
-				throw std::runtime_error("result must be followed by a column count (e.g. result III)");
+				throw std::runtime_error(reader.FormatException("result must be followed by a column count (e.g. result III) or a file (e.g. result /path/to/file.csv)"));
 			}
+			bool is_file = false;
 			for (idx_t i = 0; i < splits[1].size(); i++) {
 				if (splits[1][i] != 'i') {
-					throw std::runtime_error("result must be followed by a column count (e.g. result III)");
+					is_file = true;
+					break;
 				}
 			}
-			result_column_count = splits[1].size();
-			// keep reading results until eof
-			while (std::getline(infile, line)) {
-				linenr++;
-				auto result_splits = StringUtil::Split(line, "\t");
-				if ((int64_t)result_splits.size() != result_column_count) {
-					throw std::runtime_error("error on line " + to_string(linenr) + ", expected " +
-					                         to_string(result_column_count) + " values but got " +
-					                         to_string(result_splits.size()));
+			if (is_file) {
+				// read the results from the file
+				result_column_count = -1;
+				std::ifstream csv_infile(splits[1]);
+				bool skipped_header = false;
+				while (std::getline(csv_infile, line)) {
+					if (line.empty()) {
+						break;
+					}
+					if (!skipped_header) {
+						skipped_header = true;
+						continue;
+					}
+					auto result_splits = StringUtil::Split(line, "|");
+					if (result_column_count < 0) {
+						result_column_count = result_splits.size();
+					} else if (result_column_count != result_splits.size()) {
+						throw std::runtime_error("error in file " + splits[1] + ", inconsistent amount of rows in CSV");
+					}
+					result_values.push_back(move(result_splits));
 				}
-				result_values.push_back(move(result_splits));
+
+				// read the main file until we encounter an empty line
+				while (reader.ReadLine(line)) {
+					if (line.empty()) {
+						break;
+					}
+				}
+			} else {
+				result_column_count = splits[1].size();
+				// keep reading results until eof
+				while (reader.ReadLine(line)) {
+					if (line.empty()) {
+						break;
+					}
+					auto result_splits = StringUtil::Split(line, "\t");
+					if ((int64_t)result_splits.size() != result_column_count) {
+						throw std::runtime_error(reader.FormatException("expected " +
+												to_string(result_column_count) + " values but got " +
+												to_string(result_splits.size())));
+					}
+					result_values.push_back(move(result_splits));
+				}
 			}
+		} else if (splits[0] == "template") {
+			// template: update the path to read
+			benchmark_path = splits[1];
+			// now read parameters
+			while (reader.ReadLine(line)) {
+				if (line.empty()) {
+					break;
+				}
+				auto parameters = StringUtil::Split(line, '=');
+				if (parameters.size() != 2) {
+					throw std::runtime_error(reader.FormatException("Expected a template parameter in the form of X=Y"));
+				}
+				replacement_mapping[parameters[0]] = parameters[1];
+			}
+			// restart the load from the template file
+			LoadBenchmark();
+			return;
+		} else {
+			throw std::runtime_error(reader.FormatException("unrecognized command " + splits[0]));
 		}
 	}
 }
 
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
+	unique_ptr<QueryResult> result;
 	LoadBenchmark();
+	if (queries.find("run") == queries.end()) {
+		throw Exception("Invalid benchmark file: no \"run\" query specified");
+	}
+	run_query = queries["run"];
 
 	auto state = make_unique<InterpretedBenchmarkState>();
-	auto result = state->con.Query(init_query);
-	if (!result->success) {
+	for(auto &extension : extensions) {
+		auto result = ExtensionHelper::LoadExtension(state->db, extension);
+		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+			throw std::runtime_error("Unknown extension " + extension);
+		} else if (result == ExtensionLoadResult::NOT_LOADED) {
+			throw std::runtime_error("Extension " + extension + " is not available/was not compiled. Cannot run this benchmark.");
+		}
+	}
+
+	if (queries.find("init") != queries.end()) {
+		string init_query = queries["init"];
+		result = state->con.Query(init_query);
+		if (!result->success) {
+			throw Exception(result->error);
+		}
+	}
+
+	string load_query;
+	if (queries.find("load") != queries.end()) {
+		load_query = queries["load"];
+	}
+
+	if (data_cache.empty()) {
+		// no cache specified: just run the initialization code
+		result = state->con.Query(load_query);
+	} else {
+		// cache specified: try to load the cache
+		if (!BenchmarkRunner::TryLoadDatabase(state->db, data_cache)) {
+			// failed to load: write the cache
+			result = state->con.Query(load_query);
+			BenchmarkRunner::SaveDatabase(state->db, data_cache);
+		}
+	}
+	if (result && !result->success) {
 		throw Exception(result->error);
 	}
 	return state;
@@ -147,13 +261,13 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 	}
 	// compare the column count
 	if ((int64_t)state.result->column_count() != result_column_count) {
-		return StringUtil::Format("Error in result: expected %lld columns but got %lld", (int64_t)result_column_count,
-		                          (int64_t)state.result->column_count());
+		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s", (int64_t)result_column_count,
+		                          (int64_t)state.result->column_count(), state.result->ToString());
 	}
 	// compare row count
 	if (state.result->collection.count != result_values.size()) {
-		return StringUtil::Format("Error in result: expected %lld rows but got %lld",
-		                          (int64_t)state.result->collection.count, (int64_t)result_values.size());
+		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
+		                          (int64_t)state.result->collection.count, (int64_t)result_values.size(), state.result->ToString());
 	}
 	// compare values
 	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
@@ -163,7 +277,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 			verify_val = verify_val.CastAs(state.result->types[c]);
 			if (!Value::ValuesAreEqual(value, verify_val)) {
 				return StringUtil::Format(
-				    "Error in result on row %lld column %lld: expected value \"%s\" but got value \"%s\"", r, c,
+				    "Error in result on row %lld column %lld: expected value \"%s\" but got value \"%s\"", r + 1, c + 1,
 				    verify_val.ToString().c_str(), value.ToString().c_str());
 			}
 		}

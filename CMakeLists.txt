@@ -279,6 +279,40 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+function(add_extension_definitions)
+include_directories(${CMAKE_SOURCE_DIR}/extension)
+
+if(${BUILD_ICU_EXTENSION})
+include_directories(${CMAKE_SOURCE_DIR}/extension/icu/include)
+add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
+endif()
+
+if(${BUILD_PARQUET_EXTENSION})
+include_directories(${CMAKE_SOURCE_DIR}/extension/parquet/include)
+add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
+endif()
+
+if(${BUILD_TPCH_EXTENSION})
+include_directories(${CMAKE_SOURCE_DIR}/extension/tpch/include)
+add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
+endif()
+endfunction()
+
+function(link_extension_libraries LIBRARY)
+if(${BUILD_PARQUET_EXTENSION})
+target_link_libraries(${LIBRARY} parquet_extension)
+endif()
+
+if(${BUILD_ICU_EXTENSION})
+target_link_libraries(${LIBRARY} icu_extension)
+endif()
+
+if(${BUILD_TPCH_EXTENSION})
+target_link_libraries(${LIBRARY} tpch_extension)
+endif()
+
+endfunction()
+
 add_subdirectory(extension)
 add_subdirectory(src)
 
@@ -286,7 +320,7 @@ option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 if(${BUILD_UNITTESTS})
   add_subdirectory(test)
   if(NOT WIN32 AND NOT SUN AND ${BUILD_BENCHMARKS})
-    # add_subdirectory(benchmark)
+    add_subdirectory(benchmark)
   endif()
 endif()
 

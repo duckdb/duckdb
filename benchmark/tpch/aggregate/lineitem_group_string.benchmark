@@ -4,14 +4,15 @@
 
 require tpch
 
-cache tpch-sf1
+cache tpch_sf1
 
 load
-CALL dbgen(1);
+CALL dbgen(sf=1);
 
 run
-SELECT l_returnflag, SUM(l_quantity) FROM lineitem GROUP BY l_returnflag
+SELECT l_returnflag, SUM(l_quantity) FROM lineitem GROUP BY l_returnflag ORDER BY 1
 
-# FIXME
-result I
-1
+result II
+A	37734107
+N	77624935
+R	37719753

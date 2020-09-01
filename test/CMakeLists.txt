@@ -33,16 +33,9 @@ else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()
 
-if(${BUILD_PARQUET_EXTENSION})
-  target_link_libraries(unittest parquet_extension)
-endif()
-
-if(${BUILD_ICU_EXTENSION})
-  target_link_libraries(unittest icu_extension)
-endif()
+link_extension_libraries(unittest)
 
 if(${BUILD_TPCH_EXTENSION})
-  target_link_libraries(unittest tpch_extension)
   if(${BUILD_SQLSMITH})
     add_subdirectory(sqlsmith)
   endif()

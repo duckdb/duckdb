@@ -4,14 +4,13 @@
 
 require tpch
 
-cache tpch-sf1
+cache tpch_sf1
 
 load
-CALL dbgen(1);
+CALL dbgen(sf=1);
 
 run
 SELECT SUM(l_quantity) FROM lineitem
 
-# FIXME
 result I
-1
+153078795

@@ -8,8 +8,10 @@
 
 #include "benchmark.hpp"
 
-namespace duckdb {
+#include <unordered_map>
+#include <unordered_set>
 
+namespace duckdb {
 
 //! Interpreted benchmarks read the benchmark from a file
 class InterpretedBenchmark : public Benchmark {
@@ -36,9 +38,14 @@ public:
 
 	string GetLogOutput(BenchmarkState *state) override;
 private:
-	string benchmark_path;
-	string init_query;
+	std::unordered_map<string, string> replacement_mapping;
+
+	std::unordered_map<string, string> queries;
 	string run_query;
+
+	string benchmark_path;
+	string data_cache;
+	std::unordered_set<string> extensions;
 	int64_t result_column_count = 0;
 	vector<vector<string>> result_values;
 };

@@ -42,17 +42,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
 
-#ifdef BUILD_ICU_EXTENSION
-#include "icu-extension.hpp"
-#endif
-
-#ifdef BUILD_PARQUET_EXTENSION
-#include "parquet-extension.hpp"
-#endif
-
-#ifdef BUILD_TPCH_EXTENSION
-#include "tpch-extension.hpp"
-#endif
+#include "extension_helper.hpp"
 
 #include "test_helpers.hpp"
 
@@ -68,12 +58,9 @@ using namespace std;
 
 #define DEFAULT_HASH_THRESHOLD 0
 
-enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
-
 struct SQLLogicTestRunner {
 public:
 	void ExecuteFile(string script);
-	ExtensionLoadResult LoadExtension(string extension);
 	void LoadDatabase(string dbpath);
 
 public:
@@ -956,36 +943,6 @@ void RestartCommand::Execute() {
 	runner.LoadDatabase(runner.dbpath);
 }
 
-ExtensionLoadResult SQLLogicTestRunner::LoadExtension(string extension) {
-	if (extension == "parquet") {
-#ifdef BUILD_PARQUET_EXTENSION
-		db->LoadExtension<ParquetExtension>();
-#else
-		// parquet extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "icu") {
-#ifdef BUILD_ICU_EXTENSION
-		db->LoadExtension<ICUExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "tpch") {
-#ifdef BUILD_TPCH_EXTENSION
-		db->LoadExtension<TPCHExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else {
-		// unknown extension
-		return ExtensionLoadResult::EXTENSION_UNKNOWN;
-	}
-	extensions.insert(extension);
-	return ExtensionLoadResult::LOADED_EXTENSION;
-}
-
 void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	// restart the database with the specified db path
 	db.reset();
@@ -998,7 +955,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 
 	// load any previously loaded extensions again
 	for (auto &extension : extensions) {
-		LoadExtension(extension);
+		ExtensionHelper::LoadExtension(*db, extension);
 	}
 }
 
@@ -1322,8 +1279,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					return;
 				}
 			} else {
-				auto result = LoadExtension(param);
-				if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+				auto result = ExtensionHelper::LoadExtension(*db, param);
+				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
+					// add the extension to the list of loaded extensions
+					extensions.insert(param);
+				} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 					fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine,
 					        sScript.azToken[1]);
 					FAIL();

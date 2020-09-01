@@ -44,6 +44,7 @@ string PragmaFunction::ToString() {
 	case PragmaType::PRAGMA_CALL:
 		return StringUtil::Format("PRAGMA %s", Function::CallToString(name, arguments));
 	}
+	return "UNKNOWN";
 }
 
 }

@@ -4,10 +4,10 @@
 
 require tpch
 
-cache tpch-sf1
+cache tpch_sf1
 
 load
-CALL dbgen(1);
+CALL dbgen(sf=1);
 
 run
 SELECT l_returnflag,
@@ -29,7 +29,4 @@ GROUP BY l_returnflag,
 ORDER BY l_returnflag,
          l_linestatus
 
-# FIXME
-result I
-1
-
+result extension/tpch/dbgen/answers/sf1/q01.csv

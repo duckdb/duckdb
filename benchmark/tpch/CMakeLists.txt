@@ -2,9 +2,6 @@ include_directories(../../third_party/sqlite/include)
 include_directories(../../extension/parquet/include)
 
 set(BENCHMARK_SOURCE_FILES
-    lineitem_aggregate.cpp
-    sf1.cpp
-    sf1-parallel.cpp
     read_lineitem.cpp
     startup.cpp)
 

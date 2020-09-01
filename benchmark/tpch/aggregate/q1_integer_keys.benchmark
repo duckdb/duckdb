@@ -5,7 +5,7 @@
 require tpch
 
 load
-CALL dbgen(sf=1, suffix="_normal");
+CALL dbgen(sf=1, suffix='_normal');
 CREATE TABLE lineitem AS
 SELECT l_orderkey,
        l_partkey,
@@ -16,9 +16,9 @@ SELECT l_orderkey,
        l_discount,
        l_tax,
        CASE l_returnflag
-           WHEN 'N' THEN 0
-           WHEN 'R' THEN 1
-           WHEN 'A' THEN 2
+           WHEN 'N' THEN 1
+           WHEN 'R' THEN 2
+           WHEN 'A' THEN 0
            ELSE NULL
        END l_returnflag,
        CASE l_linestatus
@@ -37,6 +37,8 @@ FROM lineitem_normal;
 run
 PRAGMA tpch(1);
 
-# FIXME
-result I
-1
+result IIIIIIIIII
+0	0	37734107	56586554400.73	53758257134.8700	55909065222.827692	25.5220	38273.1297	0.0500	1478493
+1	0	991417	1487504710.38	1413082168.0541	1469649223.194375	25.5165	38284.4678	0.0501	38854
+1	1	74476040	111701729697.74	106118230307.6056	110367043872.497010	25.5022	38249.1180	0.0500	2920374
+2	0	37719753	56568041380.90	53741292684.6040	55889619119.831932	25.5058	38250.8546	0.0500	1478870
