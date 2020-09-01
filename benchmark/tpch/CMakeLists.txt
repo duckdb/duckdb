@@ -1,5 +1,4 @@
-include_directories(../../third_party/sqlite/include)
-include_directories(../../extension/parquet/include)
+include_directories(../../extension/tpch/include)
 
 set(BENCHMARK_SOURCE_FILES
     startup.cpp)
