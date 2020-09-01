@@ -12,14 +12,12 @@ add_definitions(-DDBNAME=dss
 add_library(dbgen STATIC
     dbgen.cpp
     dbgen_gunk.cpp
-    bm_utils.c
-    build.c
-    permute.c
-    rnd.c
-    rng64.c
-    speed_seed.c
-    text.c)
-
-set_property(TARGET dbgen PROPERTY C_STANDARD 99)
+    bm_utils.cpp
+    build.cpp
+    permute.cpp
+    rnd.cpp
+    rng64.cpp
+    speed_seed.cpp
+    text.cpp)
 
 disable_target_warnings(dbgen)

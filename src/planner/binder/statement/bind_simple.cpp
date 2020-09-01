@@ -2,6 +2,7 @@
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/binder.hpp"
 
 using namespace std;
 

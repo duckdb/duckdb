@@ -115,7 +115,7 @@ typedef struct {
 	const char *comment;
 	DSS_HUGE base;
 	int (*loader)();
-	long (*gen_seed)();
+	long (*gen_seed)(int, int);
 	int child;
 	DSS_HUGE vtotal;
 } tdef;
