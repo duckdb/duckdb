@@ -1,5 +1,4 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -42,10 +41,9 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(PGNode *node) {
 	}
 	result->select_statement = TransformSelect(stmt->selectStmt);
 
-	auto ref = TransformRangeVar(stmt->relation);
-	auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
-	result->table = table.table_name;
-	result->schema = table.schema_name;
+	auto qname = TransformQualifiedName(stmt->relation);
+	result->table = qname.name;
+	result->schema = qname.schema;
 	return result;
 }
 

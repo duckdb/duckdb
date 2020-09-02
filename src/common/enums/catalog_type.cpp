@@ -20,8 +20,10 @@ string CatalogTypeToString(CatalogType type) {
 		return "Scalar Function";
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		return "Aggregate Function";
-	case CatalogType::COPY_FUNCTION:
+	case CatalogType::COPY_FUNCTION_ENTRY:
 		return "Copy Function";
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+		return "Pragma Function";
 	case CatalogType::VIEW_ENTRY:
 		return "View";
 	case CatalogType::INDEX_ENTRY:
@@ -30,9 +32,12 @@ string CatalogTypeToString(CatalogType type) {
 		return "Prepared Statement";
 	case CatalogType::SEQUENCE_ENTRY:
 		return "Sequence";
-	default:
-		return "Unknown";
+	case CatalogType::INVALID:
+	case CatalogType::DELETED_ENTRY:
+	case CatalogType::UPDATED_ENTRY:
+		return "Invalid";
 	}
+	return "Unknown";
 }
 
 } // namespace duckdb

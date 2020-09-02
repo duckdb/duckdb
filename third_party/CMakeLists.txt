@@ -9,9 +9,10 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(utf8proc)
 endif()
 
-if(NOT WIN32 AND NOT SUN AND ${BUILD_UNITTESTS})
+if(NOT WIN32
+   AND NOT SUN
+   AND ${BUILD_UNITTESTS})
   add_subdirectory(imdb)
-  add_subdirectory(dbgen)
   add_subdirectory(dsdgen)
   if(${BUILD_SQLSMITH})
     add_subdirectory(sqlsmith)

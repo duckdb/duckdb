@@ -42,13 +42,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
 
-#ifdef BUILD_ICU_EXTENSION
-#include "icu-extension.hpp"
-#endif
-
-#ifdef BUILD_PARQUET_EXTENSION
-#include "parquet-extension.hpp"
-#endif
+#include "extension_helper.hpp"
 
 #include "test_helpers.hpp"
 
@@ -64,12 +58,9 @@ using namespace std;
 
 #define DEFAULT_HASH_THRESHOLD 0
 
-enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
-
 struct SQLLogicTestRunner {
 public:
 	void ExecuteFile(string script);
-	ExtensionLoadResult LoadExtension(string extension);
 	void LoadDatabase(string dbpath);
 
 public:
@@ -83,6 +74,11 @@ public:
 	bool output_result_mode = false;
 	bool debug_mode = false;
 	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
+	bool in_loop = false;
+	string loop_iterator_name;
+	int loop_idx;
+	int loop_start;
+	int loop_end;
 };
 
 /*
@@ -397,6 +393,14 @@ static bool result_is_hash(string result) {
 	return pos == result.size();
 }
 
+static string replace_loop_iterator(string text, string loop_iterator_name, idx_t index) {
+	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", to_string(index));
+}
+
+static bool result_is_file(string result) {
+	return StringUtil::StartsWith(result, "<FILE>:");
+}
+
 bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, string zScriptFile,
                     int query_line, string zScript, int current_row, int current_column, vector<string> &values,
                     int expected_column_count, bool row_wise) {
@@ -464,8 +468,8 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 		print_line_sep();
 		print_sql(zScript);
 		print_line_sep();
-		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row << ", column "
-		          << current_column << std::endl
+		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
+		          << current_column + 1 << std::endl
 		          << termcolor::reset;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
 		print_line_sep();
@@ -513,11 +517,13 @@ struct Command {
 	}
 
 	virtual void Execute() = 0;
-	void Execute(string loop_iterator_name, int idx) {
+	void ExecuteLoop() {
 		// store the original query
 		auto original_query = sql_query;
 		// perform the string replacement
-		sql_query = StringUtil::Replace(sql_query, "${" + loop_iterator_name + "}", to_string(idx));
+		if (runner.in_loop) {
+			sql_query = replace_loop_iterator(sql_query, runner.loop_iterator_name, runner.loop_idx);
+		}
 		// execute the iterated statement
 		Execute();
 		// now restore the original query
@@ -548,6 +554,7 @@ struct Query : public Command {
 
 	void Execute() override;
 	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise);
+	vector<string> LoadResultFromFile(string fname, vector<string> names);
 };
 
 struct RestartCommand : public Command {
@@ -604,6 +611,44 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 	print_line_sep();
 	print_result_error(result, values, expected_column_count, row_wise);
 	FAIL();
+}
+
+vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
+	DuckDB db(nullptr);
+	Connection con(db);
+	fname = StringUtil::Replace(fname, "<FILE>:", "");
+
+	string struct_definition = "STRUCT_PACK(";
+	for (idx_t i = 0; i < names.size(); i++) {
+		if (i > 0) {
+			struct_definition += ", ";
+		}
+		struct_definition += "\"" + names[i] + "\" := 'VARCHAR'";
+	}
+	struct_definition += ")";
+
+	auto csv_result =
+	    con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
+	if (!csv_result->success) {
+		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error);
+		print_error_header(error.c_str(), file_name.c_str(), query_line);
+		FAIL();
+	}
+	expected_column_count = csv_result->column_count();
+
+	vector<string> values;
+	while (true) {
+		auto chunk = csv_result->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		for (idx_t r = 0; r < chunk->size(); r++) {
+			for (idx_t c = 0; c < chunk->column_count(); c++) {
+				values.push_back(chunk->GetValue(c, r).ToString());
+			}
+		}
+	}
+	return values;
 }
 
 void Query::Execute() {
@@ -703,6 +748,13 @@ void Query::Execute() {
 	if (values.size() == 1 && result_is_hash(values[0])) {
 		compare_hash = true;
 	}
+	vector<string> comparison_values;
+	if (values.size() == 1 && result_is_file(values[0])) {
+		comparison_values = LoadResultFromFile(
+		    replace_loop_iterator(values[0], runner.loop_iterator_name, runner.loop_idx), result->names);
+	} else {
+		comparison_values = values;
+	}
 	/* Hash the results if we are over the hash threshold or if we
 	** there is a hash label */
 	if (runner.output_hash_mode || compare_hash) {
@@ -736,15 +788,15 @@ void Query::Execute() {
 			expected_column_count = result->column_count();
 			column_count_mismatch = true;
 		}
-		idx_t expected_rows = values.size() / expected_column_count;
+		idx_t expected_rows = comparison_values.size() / expected_column_count;
 		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
-		bool row_wise = expected_column_count > 1 && values.size() == result->collection.count;
+		bool row_wise = expected_column_count > 1 && comparison_values.size() == result->collection.count;
 		if (!row_wise) {
 			// the counts do not match up for it to be row-wise
 			// however, this can also be because the query returned an incorrect # of rows
 			// we make a guess: if everything contains tabs, we still treat the input as row wise
 			bool all_tabs = true;
-			for (auto &val : values) {
+			for (auto &val : comparison_values) {
 				if (val.find('\t') == string::npos) {
 					all_tabs = false;
 					break;
@@ -754,16 +806,16 @@ void Query::Execute() {
 		}
 		if (row_wise) {
 			// values are displayed row-wise, format row wise with a tab
-			expected_rows = values.size();
+			expected_rows = comparison_values.size();
 			row_wise = true;
-		} else if (values.size() % expected_column_count != 0) {
+		} else if (comparison_values.size() % expected_column_count != 0) {
 			if (column_count_mismatch) {
 				ColumnCountMismatch(*result, original_expected_columns, row_wise);
 			}
 			print_error_header("Error in test!", file_name, query_line);
 			print_line_sep();
 			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int)expected_column_count,
-			        (int)values.size());
+			        (int)comparison_values.size());
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL();
 		}
@@ -777,15 +829,15 @@ void Query::Execute() {
 			print_line_sep();
 			print_sql(sql_query);
 			print_line_sep();
-			print_result_error(*result, values, expected_column_count, row_wise);
+			print_result_error(*result, comparison_values, expected_column_count, row_wise);
 			FAIL();
 		}
 
 		if (row_wise) {
 			int current_row = 0;
-			for (int i = 0; i < nResult && i < (int)values.size(); i++) {
+			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
 				// split based on tab character
-				auto splits = StringUtil::Split(values[i], "\t");
+				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
 					if (column_count_mismatch) {
 						ColumnCountMismatch(*result, original_expected_columns, row_wise);
@@ -804,9 +856,9 @@ void Query::Execute() {
 					FAIL();
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
-					bool success =
-					    compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], file_name,
-					                   query_line, sql_query, current_row, c, values, expected_column_count, row_wise);
+					bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c],
+					                              file_name, query_line, sql_query, current_row, c, comparison_values,
+					                              expected_column_count, row_wise);
 					if (!success) {
 						FAIL();
 					}
@@ -817,10 +869,10 @@ void Query::Execute() {
 			}
 		} else {
 			int current_row = 0, current_column = 0;
-			for (int i = 0; i < nResult && i < (int)values.size(); i++) {
+			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
 				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column],
-				                              values[i], file_name, query_line, sql_query, current_row, current_column,
-				                              values, expected_column_count, row_wise);
+				                              comparison_values[i], file_name, query_line, sql_query, current_row,
+				                              current_column, comparison_values, expected_column_count, row_wise);
 				if (!success) {
 					FAIL();
 				}
@@ -892,29 +944,6 @@ void RestartCommand::Execute() {
 	runner.LoadDatabase(runner.dbpath);
 }
 
-ExtensionLoadResult SQLLogicTestRunner::LoadExtension(string extension) {
-	if (extension == "parquet") {
-#ifdef BUILD_PARQUET_EXTENSION
-		db->LoadExtension<ParquetExtension>();
-#else
-		// parquet extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "icu") {
-#ifdef BUILD_ICU_EXTENSION
-		db->LoadExtension<ICUExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else {
-		// unknown extension
-		return ExtensionLoadResult::EXTENSION_UNKNOWN;
-	}
-	extensions.insert(extension);
-	return ExtensionLoadResult::LOADED_EXTENSION;
-}
-
 void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	// restart the database with the specified db path
 	db.reset();
@@ -927,7 +956,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 
 	// load any previously loaded extensions again
 	for (auto &extension : extensions) {
-		LoadExtension(extension);
+		ExtensionHelper::LoadExtension(*db, extension);
 	}
 }
 
@@ -944,10 +973,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	Script sScript;   /* Script parsing status */
 	FILE *in;         /* For reading script */
 	int bHt = 0;      /* True if -ht command-line option */
-	bool in_loop = false;
-	string loop_iterator_name;
-	int loop_start;
-	int loop_end;
 	bool skip_execution = false;
 	vector<unique_ptr<Command>> loop_statements;
 	bool skip_index = false;
@@ -1237,9 +1262,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				fprintf(stderr, "%s:%d: Test error: empty loop!\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			for (int loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
+			for (loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
 				for (auto &statement : loop_statements) {
-					statement->Execute(loop_iterator_name, loop_idx);
+					statement->ExecuteLoop();
 				}
 			}
 			loop_statements.clear();
@@ -1255,8 +1280,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					return;
 				}
 			} else {
-				auto result = LoadExtension(param);
-				if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+				auto result = ExtensionHelper::LoadExtension(*db, param);
+				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
+					// add the extension to the list of loaded extensions
+					extensions.insert(param);
+				} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 					fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine,
 					        sScript.azToken[1]);
 					FAIL();

@@ -273,6 +273,8 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 		for (idx_t index = 0; index < benchmarks.size(); ++index) {
 			if (RE2::FullMatch(benchmarks[index]->name, configuration.name_pattern)) {
 				benchmark_indices.emplace_back(index);
+			} else if (RE2::FullMatch(benchmarks[index]->group, configuration.name_pattern)) {
+				benchmark_indices.emplace_back(index);
 			}
 		}
 		benchmark_indices.shrink_to_fit();

@@ -9,6 +9,7 @@
 #include "duckdb/main/relation/table_function_relation.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
@@ -94,9 +95,7 @@ unique_ptr<TableDescription> Connection::TableInfo(string schema_name, string ta
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query) {
-	Parser parser;
-	parser.ParseQuery(query);
-	return move(parser.statements);
+	return context->ParseStatements(query);
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
@@ -150,13 +149,24 @@ shared_ptr<Relation> Connection::Values(string values, vector<string> column_nam
 	return make_shared<ValueRelation>(*context, move(values), move(column_names), alias);
 }
 
+shared_ptr<Relation> Connection::ReadCSV(string csv_file) {
+	BufferedCSVReaderOptions options;
+	options.file_path = csv_file;
+	BufferedCSVReader reader(*context, options);
+	vector<ColumnDefinition> column_list;
+	for (idx_t i = 0; i < reader.sql_types.size(); i++) {
+		column_list.push_back(ColumnDefinition(reader.col_names[i], reader.sql_types[i]));
+	}
+	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list), true);
+}
+
 shared_ptr<Relation> Connection::ReadCSV(string csv_file, vector<string> columns) {
 	// parse columns
 	vector<ColumnDefinition> column_list;
 	for (auto &column : columns) {
 		auto col_list = Parser::ParseColumnList(column);
 		if (col_list.size() != 1) {
-			throw ParserException("Expected a singlec olumn definition");
+			throw ParserException("Expected a single column definition");
 		}
 		column_list.push_back(move(col_list[0]));
 	}
