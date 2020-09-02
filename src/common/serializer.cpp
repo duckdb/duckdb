@@ -10,4 +10,12 @@ template <> string Deserializer::Read() {
 	return string((char *)buffer.get(), size);
 }
 
+void Deserializer::ReadStringVector(vector<string> &list) {
+	uint32_t sz = Read<uint32_t>();
+	list.resize(sz);
+	for(idx_t i = 0; i < sz; i++) {
+		list[i] = Read<string>();
+	}
+}
+
 } // namespace duckdb

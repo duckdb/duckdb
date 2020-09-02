@@ -76,8 +76,6 @@ public:
 		ReadData((data_ptr_t)&value, sizeof(T));
 		return value;
 	}
-	template <> string Read();
-
 	template <class T> void ReadList(vector<unique_ptr<T>> &list) {
 		auto select_count = Read<uint32_t>();
 		for (uint32_t i = 0; i < select_count; i++) {
@@ -94,13 +92,10 @@ public:
 		return nullptr;
 	}
 
-	void ReadStringVector(vector<string> &list) {
-		uint32_t sz = Read<uint32_t>();
-		list.resize(sz);
-		for(idx_t i = 0; i < sz; i++) {
-			list[i] = Read<string>();
-		}
-	}
+	void ReadStringVector(vector<string> &list);
 };
+
+template <> string Deserializer::Read();
+
 
 } // namespace duckdb
