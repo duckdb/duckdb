@@ -86,14 +86,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	    table_function.bind(context, result->parameters, named_parameters, result->return_types, result->names);
 	assert(result->return_types.size() == result->names.size());
 	assert(result->return_types.size() > 0);
-	vector<string> names;
-	// first push any column name aliases
-	for (idx_t i = 0; i < min<idx_t>(ref.column_name_alias.size(), result->names.size()); i++) {
-		names.push_back(ref.column_name_alias[i]);
-	}
-	// then fill up the remainder with the given result names
-	for (idx_t i = names.size(); i < result->names.size(); i++) {
-		names.push_back(result->names[i]);
+	vector<string> names = result->names;
+	for (idx_t i = 0; i < ref.column_name_alias.size() && i < result->names.size(); i++) {
+		names[i] = ref.column_name_alias[i];
 	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddGenericBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, names,
