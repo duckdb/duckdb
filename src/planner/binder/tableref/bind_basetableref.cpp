@@ -6,6 +6,7 @@
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -17,10 +18,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	if (cte) {
 		// Check if there is a CTE binding in the BindContext
 		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
-		if (ctebinding == nullptr) {
+		if (!ctebinding) {
 			// Move CTE to subquery and bind recursively
-			SubqueryRef subquery(move(cte));
+			SubqueryRef subquery(cte->query->Copy());
 			subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
+			subquery.column_name_alias = cte->aliases;
 			return Bind(subquery);
 		} else {
 			// There is a CTE binding in the BindContext.

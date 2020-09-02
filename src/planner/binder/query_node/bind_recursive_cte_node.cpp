@@ -24,17 +24,24 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	result->left_binder = make_unique<Binder>(context, this);
 	result->left = result->left_binder->BindNode(*statement.left);
 
+	// the result types of the CTE are the types of the LHS
+	result->types = result->left->types;
+	// names are picked from the LHS, unless aliases are explicitly specified
+	result->names = result->left->names;
+	for(idx_t i = 0; i < statement.aliases.size() && i < result->names.size(); i++) {
+		result->names[i] = statement.aliases[i];
+	}
+
 	// This allows the right side to reference the CTE recursively
-	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->left->names, result->left->types);
+	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
 
 	result->right_binder = make_unique<Binder>(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
-	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->left->names,
-	                                                 result->left->types);
+	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
+	                                                 result->types);
 	result->right = result->right_binder->BindNode(*statement.right);
 
-	result->names = result->left->names;
 
 	// move the correlated expressions from the child binders to this binder
 	MoveCorrelatedExpressions(*result->left_binder);
@@ -46,8 +53,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		                "same number of result columns");
 	}
 
-	// the result types of the CTE are the types of the LHS
-	result->types = result->left->types;
 	if (statement.modifiers.size() > 0) {
 		throw NotImplementedException("FIXME: bind modifiers in recursive CTE");
 	}

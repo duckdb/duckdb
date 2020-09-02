@@ -46,6 +46,13 @@ public:
 		}
 	}
 
+	void WriteStringVector(const vector<string> &list) {
+		Write<uint32_t>((uint32_t)list.size());
+		for (auto &child : list) {
+			WriteString(child);
+		}
+	}
+
 	template <class T> void WriteOptional(unique_ptr<T> &element) {
 		Write<bool>(element ? true : false);
 		if (element) {
@@ -69,6 +76,7 @@ public:
 		ReadData((data_ptr_t)&value, sizeof(T));
 		return value;
 	}
+	template <> string Read();
 
 	template <class T> void ReadList(vector<unique_ptr<T>> &list) {
 		auto select_count = Read<uint32_t>();
@@ -85,8 +93,14 @@ public:
 		}
 		return nullptr;
 	}
-};
 
-template <> string Deserializer::Read();
+	void ReadStringVector(vector<string> &list) {
+		uint32_t sz = Read<uint32_t>();
+		list.resize(sz);
+		for(idx_t i = 0; i < sz; i++) {
+			list[i] = Read<string>();
+		}
+	}
+};
 
 } // namespace duckdb
