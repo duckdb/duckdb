@@ -1040,6 +1040,7 @@ static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
 		return Type::INT64;
 	case LogicalTypeId::FLOAT:
 		return Type::FLOAT;
+	case LogicalTypeId::DECIMAL: // for now...
 	case LogicalTypeId::DOUBLE:
 		return Type::DOUBLE;
 	case LogicalTypeId::VARCHAR:
@@ -1200,9 +1201,26 @@ public:
 				case LogicalTypeId::FLOAT:
 					_write_plain<float, float>(input_column, input.size(), nullmask, temp_writer);
 					break;
+				case LogicalTypeId::DECIMAL: {
+					// FIXME: fixed length byte array...
+					Vector double_vec(LogicalType::DOUBLE);
+					VectorOperations::Cast(input_column, double_vec, input.size());
+					_write_plain<double, double>(double_vec, input.size(), nullmask, temp_writer);
+					break;
+				}
 				case LogicalTypeId::DOUBLE:
 					_write_plain<double, double>(input_column, input.size(), nullmask, temp_writer);
 					break;
+				case LogicalTypeId::DATE: {
+					auto *ptr = FlatVector::GetData<date_t>(input_column);
+					for (idx_t r = 0; r < input.size(); r++) {
+						if (!nullmask[r]) {
+							auto ts = Timestamp::FromDatetime(ptr[r], 0);
+							temp_writer.Write<Int96>(timestamp_t_to_impala_timestamp(ts));
+						}
+					}
+					break;
+				}
 				case LogicalTypeId::TIMESTAMP: {
 					auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
 					for (idx_t r = 0; r < input.size(); r++) {

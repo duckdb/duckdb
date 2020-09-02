@@ -54,6 +54,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((ExplainStatement &)statement);
 	case StatementType::VACUUM_STATEMENT:
 		return Bind((VacuumStatement &)statement);
+	case StatementType::CALL_STATEMENT:
+		return Bind((CallStatement &)statement);
 	case StatementType::EXPORT_STATEMENT:
 		return Bind((ExportStatement &)statement);
 	default:

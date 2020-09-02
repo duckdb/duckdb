@@ -73,6 +73,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::EXPLAIN_STATEMENT:
 	case StatementType::VACUUM_STATEMENT:
 	case StatementType::RELATION_STATEMENT:
+	case StatementType::CALL_STATEMENT:
 	case StatementType::EXPORT_STATEMENT:
 	case StatementType::PRAGMA_STATEMENT:
 		CreatePlan(*statement);

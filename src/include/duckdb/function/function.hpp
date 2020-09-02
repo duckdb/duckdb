@@ -23,10 +23,13 @@ class Transaction;
 class AggregateFunction;
 class AggregateFunctionSet;
 class CopyFunction;
+class PragmaFunction;
 class ScalarFunctionSet;
 class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
+
+struct PragmaInfo;
 
 struct FunctionData {
 	virtual ~FunctionData() {
@@ -76,6 +79,8 @@ public:
 	//! function, or throws an exception if none could be found.
 	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments);
 	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments);
+	//! Bind a pragma function from the set of functions and input arguments
+	static idx_t BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info);
 };
 
 class SimpleFunction : public Function {
@@ -138,6 +143,8 @@ public:
 	void AddFunction(AggregateFunctionSet set);
 	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunctionSet set);
+	void AddFunction(PragmaFunction function);
+	void AddFunction(string name, vector<PragmaFunction> functions);
 	void AddFunction(ScalarFunction function);
 	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunctionSet set);
@@ -176,6 +183,9 @@ private:
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
+
+	// pragmas
+	void RegisterPragmaFunctions();
 };
 
 } // namespace duckdb

@@ -579,6 +579,8 @@ std::string Transformer::NodetypeToString(PGNodeTag type) {
 		return "T_PrepareStmt";
 	case T_PGExecuteStmt:
 		return "T_ExecuteStmt";
+	case T_PGCallStmt:
+		return "T_CallStmt";
 	case T_PGDeallocateStmt:
 		return "T_DeallocateStmt";
 	case T_PGDeclareCursorStmt:

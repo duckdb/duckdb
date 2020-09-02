@@ -46,9 +46,7 @@ public:
 	//! Whether or not the table function supports projection
 	bool supports_projection;
 
-	string ToString() {
-		return Function::CallToString(name, arguments);
-	}
+	string ToString();
 };
 
 } // namespace duckdb

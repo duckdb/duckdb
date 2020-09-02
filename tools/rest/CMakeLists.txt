@@ -1,5 +1,4 @@
 include_directories(.)
-include_directories(../../third_party/dbgen/include)
 
 add_executable(duckdb_rest_server server.cpp)
 
@@ -9,7 +8,3 @@ endif()
 
 target_link_libraries(duckdb_rest_server duckdb_static Threads::Threads
                       ${LINK_EXTRA})
-if(${BUILD_UNITTESTS})
-  add_executable(duckdb_dbgen dbgen.cpp)
-  target_link_libraries(duckdb_dbgen dbgen duckdb_static)
-endif()
