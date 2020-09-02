@@ -103,6 +103,9 @@ private:
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 
+	uint64_t hash_prefix_bitmask;
+	const uint8_t hash_prefix_bits = 16;
+
 	vector<unique_ptr<SuperLargeHashTable>> distinct_hashes;
 	//
 	//	//! The size of the initial flag for each cell

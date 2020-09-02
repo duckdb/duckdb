@@ -83,6 +83,9 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 
 	hash_width = sizeof(hash_t);
 	tuple_size = hash_width + group_width + payload_width;
+
+	hash_prefix_bitmask = ((ptrdiff_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
+
 	Resize(initial_capacity);
 }
 
@@ -550,21 +553,28 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 			auto &entry = ht_pointers[index];
 			if (*entry == nullptr) {
 				// cell is empty; mark the cell as filled
-				*entry = current_payload_offset_ptr;
-
+				auto new_entry = current_payload_offset_ptr;
 				current_payload_offset_ptr += tuple_size;
 				empty_vector.set_index(empty_count++, index);
 				new_groups.set_index(new_group_count++, index);
 				// copy the group hash to the payload for use in resize
-				memcpy(*entry, &hashes_pointer[index], hash_width);
+				memcpy(new_entry, &hashes_pointer[index], hash_width);
 				// initialize the payload info for the column
-				memcpy(*entry + hash_width + group_width, empty_payload_data.get(), payload_width);
+				memcpy(new_entry + hash_width + group_width, empty_payload_data.get(), payload_width);
+
+				// only 48 bits are used as actual addresses, expect top 16 bits to be 0
+				assert(((ptrdiff_t)new_entry >> (sizeof(ptrdiff_t) * 8 - hash_prefix_bits)) == 0);
+				// so we can use them for mischief
+				*entry = (data_ptr_t)((ptrdiff_t)new_entry | (ptrdiff_t)hashes_pointer[index]
+				                                                 << (sizeof(ptrdiff_t) * 8 - hash_prefix_bits));
 
 			} else {
 				// cell is occupied: add to check list
+				// only need to check if hash salt in ptr == prefix of hash in payload
+				// TODO need to compare high bits
 				next_vector->set_index(entry_count++, index);
 			}
-			group_pointers[index] = *entry + hash_width;
+			group_pointers[index] = (data_ptr_t)((ptrdiff_t)*entry & hash_prefix_bitmask) + hash_width;
 		}
 
 		if (empty_count > 0) {
@@ -592,7 +602,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 
 	// deref everyting
 	for (idx_t i = 0; i < groups.size(); i++) {
-		ht_pointers[i] = (data_ptr_t *)(*ht_pointers[i] + hash_width + group_width);
+		ht_pointers[i] = (data_ptr_t *)(((ptrdiff_t)*ht_pointers[i] & hash_prefix_bitmask) + hash_width + group_width);
 	}
 
 	return new_group_count;
