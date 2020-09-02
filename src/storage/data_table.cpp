@@ -73,7 +73,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 		ColumnAppendState state;
 		columns[new_column_idx]->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
-			idx_t rows_in_this_vector = std::min(rows_to_write - i, (idx_t)STANDARD_VECTOR_SIZE);
+			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
 			if (default_value) {
 				dummy_chunk.SetCardinality(rows_in_this_vector);
 				executor.ExecuteExpression(dummy_chunk, result);
@@ -244,7 +244,7 @@ void DataTable::InitializeParallelScan(ClientContext &context, const vector<colu
 	// create parallel scans for the persistent rows
 	for (idx_t i = 0; i < persistent_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
 		idx_t current = i;
-		idx_t next = std::min(i + PARALLEL_SCAN_TUPLE_COUNT, persistent_manager->max_row);
+		idx_t next = MinValue(i + PARALLEL_SCAN_TUPLE_COUNT, persistent_manager->max_row);
 
 		TableScanState state;
 		InitializeScanWithOffset(state, column_ids, table_filters, current_offset);
@@ -266,7 +266,7 @@ void DataTable::InitializeParallelScan(ClientContext &context, const vector<colu
 	}
 	for (idx_t i = 0; i < transient_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
 		idx_t current = i;
-		idx_t next = std::min(i + PARALLEL_SCAN_TUPLE_COUNT, transient_manager->max_row);
+		idx_t next = MinValue(i + PARALLEL_SCAN_TUPLE_COUNT, transient_manager->max_row);
 
 		TableScanState state;
 		InitializeScanWithOffset(state, column_ids, table_filters, current_offset);
@@ -437,7 +437,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		// exceeded the amount of rows to scan
 		return false;
 	}
-	idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, max_row - current_row);
+	idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = current_row / STANDARD_VECTOR_SIZE;
 	//! first check the zonemap if we have to scan this partition
 	if (!CheckZonemap(state, table_filters, current_row)) {
@@ -988,7 +988,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 	if (current_row >= max_row) {
 		return false;
 	}
-	idx_t count = std::min((idx_t)STANDARD_VECTOR_SIZE, max_row - current_row);
+	idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 
 	// scan the base columns to fetch the actual data
 	// note that we insert all data into the index, even if it is marked as deleted

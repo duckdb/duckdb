@@ -1902,4 +1902,15 @@ typedef struct PGPragmaStmt {
 	PGList *args; /* PGList of PGAConst nodes */
 } PGPragmaStmt;
 
+typedef struct PGExportStmt {
+	PGNodeTag type;
+	char *filename;       /* filename */
+	PGList *options;      /* PGList of PGDefElem nodes */
+} PGExportStmt;
+
+typedef struct PGImportStmt {
+	PGNodeTag type;
+	char *filename;       /* filename */
+} PGImportStmt;
+
 }

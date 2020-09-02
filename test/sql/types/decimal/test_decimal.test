@@ -1,0 +1,135 @@
+# name: test/sql/types/decimal/test_decimal.test
+# description: Test basic decimals
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+# default decimal type is (18,3)
+query I
+SELECT typeof('0.1'::DECIMAL);
+----
+DECIMAL(18,3)
+
+# test basic string conversions
+query II
+SELECT '0.1'::DECIMAL::VARCHAR, '922337203685478.758'::DECIMAL::VARCHAR;
+----
+0.100	922337203685478.758
+
+# negative values
+query II
+SELECT '-0.1'::DECIMAL::VARCHAR, '-922337203685478.758'::DECIMAL::VARCHAR;
+----
+-0.100	-922337203685478.758
+
+# some more difficult string conversions
+query III
+SELECT '   7   '::DECIMAL::VARCHAR, '9.'::DECIMAL::VARCHAR, '.1'::DECIMAL::VARCHAR;
+----
+7.000	9.000	0.100
+
+# trailing decimals get truncated
+query II
+SELECT '0.123456789'::DECIMAL::VARCHAR, '-0.123456789'::DECIMAL::VARCHAR;
+----
+0.123	-0.123
+
+# overflow in conversion
+statement error
+SELECT '9223372036854788.758'::DECIMAL;
+
+# trailing decimals with scale=0
+query I
+SELECT '0.1'::DECIMAL(3, 0)::VARCHAR;
+----
+0
+
+# default scale is 0
+query I
+SELECT '123.4'::DECIMAL(9)::VARCHAR;
+----
+123
+
+# scale = width also works
+query II
+SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;
+----
+0.100	-0.100
+
+# any value >= 1 becomes out of range, though
+statement error
+SELECT '1'::DECIMAL(3, 3)::VARCHAR;
+
+statement error
+SELECT '-1'::DECIMAL(3, 3)::VARCHAR;
+
+# repeat the same cast many times
+query I
+select '0.1'::decimal::decimal::decimal;
+----
+0.1
+
+# string casts of various decimal sizes
+query I
+select '123.4'::DECIMAL(4,1)::VARCHAR
+----
+123.4
+
+query I
+select '2.001'::DECIMAL(4,3)::VARCHAR
+----
+2.001
+
+query I
+select '123456.789'::DECIMAL(9,3)::VARCHAR
+----
+123456.789
+
+query I
+select '123456789'::DECIMAL(9,0)::VARCHAR
+----
+123456789
+
+query I
+select '123456789'::DECIMAL(18,3)::VARCHAR
+----
+123456789.000
+
+query I
+select '1701411834604692317316873037.1588410572'::DECIMAL(38,10)::VARCHAR
+----
+1701411834604692317316873037.1588410572
+
+query I
+select '0'::DECIMAL(38,10)::VARCHAR
+----
+0.0000000000
+
+query I
+select '0.00003'::DECIMAL(38,10)::VARCHAR
+----
+0.0000300000
+
+# various error conditions
+# scale must be bigger than or equal to width
+statement error
+SELECT '0.1'::DECIMAL(3, 4);
+
+# cannot have string variable as scale
+statement error
+SELECT '0.1'::DECIMAL('hello');
+
+# ...or negative numbers
+statement error
+SELECT '0.1'::DECIMAL(-17);
+
+# width/scale out of range
+statement error
+SELECT '0.1'::DECIMAL(1000);
+
+statement error
+SELECT '0.1'::DECIMAL(1, 2, 3);
+
+statement error
+SELECT '1'::INTEGER(1000);

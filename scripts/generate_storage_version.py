@@ -1,0 +1,40 @@
+# this script re-generates the storage used for storage_version.test_slow
+# before running this script, please increment the version number in src/storage/storage_info.cpp
+
+import os
+import subprocess
+
+shell_proc = os.path.join('build', 'debug', 'duckdb')
+gen_storage_script = os.path.join('test', 'sql', 'storage_version', 'generate_storage_version.sql')
+gen_storage_target = os.path.join('test', 'sql', 'storage_version', 'storage_version.db')
+
+def try_remove_file(fname):
+	try:
+		os.remove(fname)
+	except:
+		pass
+
+try_remove_file(gen_storage_target)
+try_remove_file(gen_storage_target + '.wal')
+
+def run_command_in_shell(cmd):
+	print(cmd)
+	res = subprocess.run([shell_proc, '--batch', '-init', '/dev/null', gen_storage_target], capture_output=True, input=bytearray(cmd, 'utf8'))
+	stdout = res.stdout.decode('utf8').strip()
+	stderr = res.stderr.decode('utf8').strip()
+	if res.returncode != 0:
+		print("Failed to create database file!")
+		print("----STDOUT----")
+		print(stdout)
+		print("----STDERR----")
+		print(stderr)
+
+with open(gen_storage_script, 'r') as f:
+	cmd = f.read()
+
+run_command_in_shell(cmd)
+# FIXME: force a checkpoint
+run_command_in_shell('select * from integral_values')
+run_command_in_shell('select * from integral_values')
+
+try_remove_file(gen_storage_target + '.wal')

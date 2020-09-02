@@ -98,9 +98,9 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
 	schema.tables.Scan(transaction, [&](CatalogEntry *entry) {
-		if (entry->type == CatalogType::TABLE) {
+		if (entry->type == CatalogType::TABLE_ENTRY) {
 			tables.push_back((TableCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::VIEW) {
+		} else if (entry->type == CatalogType::VIEW_ENTRY) {
 			views.push_back((ViewCatalogEntry *)entry);
 		} else {
 			throw NotImplementedException("Catalog type for entries");

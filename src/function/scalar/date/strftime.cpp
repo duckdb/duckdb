@@ -7,6 +7,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/numeric_helper.hpp"
 
+#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/function/scalar/strftime.hpp"
 
 #include "duckdb/common/vector_operations/unary_executor.hpp"
@@ -544,11 +546,12 @@ struct StrfTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> strftime_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
-	if (!expr.children[1]->IsScalar()) {
+static unique_ptr<FunctionData> strftime_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<unique_ptr<Expression>> &arguments) {
+	if (!arguments[1]->IsScalar()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
+	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	StrfTimeFormat format;
 	if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
 		auto format_string = options_str.GetValue<string>();
@@ -701,7 +704,7 @@ bool StrpTimeFormat::Parse(string_t str, int32_t result_data[], string &error_me
 	auto data = str.GetData();
 	idx_t size = str.GetSize();
 	// skip leading spaces
-	while (std::isspace(*data)) {
+	while (StringUtil::CharacterIsSpace(*data)) {
 		data++;
 		size--;
 	}
@@ -904,7 +907,7 @@ bool StrpTimeFormat::Parse(string_t str, int32_t result_data[], string &error_me
 		}
 	}
 	// skip trailing spaces
-	while (std::isspace(data[pos])) {
+	while (StringUtil::CharacterIsSpace(data[pos])) {
 		pos++;
 	}
 	if (pos != size) {
@@ -940,11 +943,12 @@ struct StrpTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> strptime_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
-	if (!expr.children[1]->IsScalar()) {
+static unique_ptr<FunctionData> strptime_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<unique_ptr<Expression>> &arguments) {
+	if (!arguments[1]->IsScalar()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
+	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	StrpTimeFormat format;
 	if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
 		string format_string = options_str.ToString();

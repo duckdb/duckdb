@@ -24,7 +24,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// add a cast to BOOLEAN in the CHECK condition
 	check.expr = BoundCastExpression::AddCastToType(move(check.expr), LogicalType::BOOLEAN);
 	// now obtain the result type of the input types
-	auto return_type = MaxLogicalType(result_if_true.expr->return_type, result_if_false.expr->return_type);
+	auto return_type = LogicalType::MaxLogicalType(result_if_true.expr->return_type, result_if_false.expr->return_type);
 	// add casts (if necessary)
 	result_if_true.expr = BoundCastExpression::AddCastToType(move(result_if_true.expr), return_type);
 	result_if_false.expr = BoundCastExpression::AddCastToType(move(result_if_false.expr), return_type);

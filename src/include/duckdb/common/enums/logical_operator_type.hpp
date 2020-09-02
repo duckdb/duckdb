@@ -85,6 +85,7 @@ enum class LogicalOperatorType : uint8_t {
 	// -----------------------------
 	PREPARE,
 	EXECUTE,
+	EXPORT,
 	VACUUM
 };
 

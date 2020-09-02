@@ -27,10 +27,10 @@ public:
 	ExpressionExecutor executor;
 };
 
-PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table,
+PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
                                      vector<column_t> column_ids, vector<unique_ptr<Expression>> filter,
                                      unordered_map<idx_t, vector<TableFilter>> table_filters)
-    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN, op.types), tableref(tableref), table(table),
+    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN, move(types)), tableref(tableref), table(table),
       column_ids(move(column_ids)), table_filters(move(table_filters)) {
 	if (filter.size() > 1) {
 		//! create a big AND out of the expressions

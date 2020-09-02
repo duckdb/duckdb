@@ -47,7 +47,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	tuple_size = condition_size + build_size;
 	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
-	entry_size = tuple_size + std::max(sizeof(hash_t), sizeof(uintptr_t));
+	entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 	if (join_type == JoinType::OUTER) {
 		// outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
@@ -55,7 +55,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		pointer_offset += sizeof(bool);
 	}
 	// compute the per-block capacity of this HT
-	block_capacity = std::max((idx_t)STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
+	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -218,7 +218,7 @@ void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVect
 
 idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
                                    idx_t remaining) {
-	idx_t append_count = std::min(remaining, block.capacity - block.count);
+	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
 	append_entries.push_back(BlockAppendEntry(dataptr, append_count));
 	block.count += append_count;
@@ -388,7 +388,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
-	idx_t capacity = NextPowerOfTwo(std::max(count * 2, (idx_t)(Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
+	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
 	assert((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
@@ -410,7 +410,7 @@ void JoinHashTable::Finalize() {
 		idx_t entry = 0;
 		while (entry < block.count) {
 			// fetch the next vector of entries from the blocks
-			idx_t next = std::min((idx_t)STANDARD_VECTOR_SIZE, block.count - entry);
+			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
 			for (idx_t i = 0; i < next; i++) {
 				hash_data[i] = *((hash_t *)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;

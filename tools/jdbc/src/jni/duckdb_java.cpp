@@ -281,6 +281,12 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::FLOAT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
 			break;
+		case LogicalTypeId::DECIMAL: {
+			Vector double_vec(LogicalType::DOUBLE);
+			VectorOperations::Cast(vec, double_vec, row_count);
+			vec.Reference(double_vec);
+			// fall through on purpose
+		}
 		case LogicalTypeId::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 			break;

@@ -1,0 +1,68 @@
+# name: test/sql/storage_version/storage_version.test_slow
+# description: Storage version test checks whether or not the storage version needs to be incremented. If this test fails, re-generate the database file
+# group: [storage_version]
+
+statement ok
+PRAGMA enable_verification
+
+load test/sql/storage_version/storage_version.db readonly
+
+statement ok
+BEGIN TRANSACTION;
+
+query IIIII
+SELECT * FROM integral_values ORDER BY 1
+----
+NULL	NULL	NULL	NULL	NULL
+1	2	3	4	5
+
+query II
+SELECT * FROM numeric_values ORDER BY 1
+----
+NULL	NULL
+1.0	3.0
+
+query IIII
+SELECT * FROM decimal_values ORDER BY 1
+----
+NULL	NULL	NULL	NULL
+1.0	3.22	10420942.4567	12908124908190481290481.11
+
+query II
+SELECT * FROM string_values ORDER BY 1
+----
+NULL	NULL
+hello world	\xAAFFAA
+
+query III
+SELECT * FROM date_values ORDER BY 1
+----
+NULL	NULL	NULL
+1992-01-01	12:00:03	1992-09-20 10:00:03
+
+query I
+SELECT nextval('test3.bla')
+----
+1
+
+query IIIII
+SELECT * FROM v1 ORDER BY 1
+----
+NULL	NULL	NULL	NULL	NULL
+1	2	3	4	5
+
+query I
+SELECT * FROM test3.v2 ORDER BY 1
+----
+NULL
+9
+
+query II
+SELECT COUNT(*), SUM(i) FROM big_integers ORDER BY 1
+----
+100000	4999950000
+
+query II
+SELECT LENGTH(a), SUBSTR(a, 5000, 3) FROM big_string ORDER BY 1
+----
+100000	aaa

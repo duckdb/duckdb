@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/expression.hpp"
 
 using namespace std;
 
@@ -103,6 +104,20 @@ template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalTy
 	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction>(type, type);
 }
 
+AggregateFunction GetDecimalFirstFunction(LogicalType type) {
+	assert(type.id() == LogicalTypeId::DECIMAL);
+	switch(type.InternalType()) {
+	case PhysicalType::INT16:
+		return FirstFun::GetFunction(LogicalType::SMALLINT);
+	case PhysicalType::INT32:
+		return FirstFun::GetFunction(LogicalType::INTEGER);
+	case PhysicalType::INT64:
+		return FirstFun::GetFunction(LogicalType::BIGINT);
+	default:
+		return FirstFun::GetFunction(LogicalType::HUGEINT);
+	}
+}
+
 AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -124,23 +139,40 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 		return GetFirstAggregateTemplated<float>(type);
 	case LogicalTypeId::DOUBLE:
 		return GetFirstAggregateTemplated<double>(type);
-	case LogicalTypeId::DECIMAL:
-		return GetFirstAggregateTemplated<double>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetFirstAggregateTemplated<interval_t>(type);
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
 		                                                   FirstFunctionString>(type, type);
+	case LogicalTypeId::DECIMAL: {
+		type.Verify();
+		AggregateFunction function = GetDecimalFirstFunction(type);
+		function.arguments[0] = type;
+		function.return_type = type;
+		return function;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for FIRST aggregate");
 	}
 }
 
+unique_ptr<FunctionData> bind_decimal_first(ClientContext &context, AggregateFunction &function,
+                                            vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	function = FirstFun::GetFunction(decimal_type);
+	return nullptr;
+}
+
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
 	for (auto type : LogicalType::ALL_TYPES) {
-		first.AddFunction(FirstFun::GetFunction(type));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+			                                    bind_decimal_first));
+		} else {
+			first.AddFunction(FirstFun::GetFunction(type));
+		}
 	}
 	set.AddFunction(first);
 }

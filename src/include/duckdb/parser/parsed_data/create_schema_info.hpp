@@ -13,7 +13,7 @@
 namespace duckdb {
 
 struct CreateSchemaInfo : public CreateInfo {
-	CreateSchemaInfo() : CreateInfo(CatalogType::SCHEMA) {
+	CreateSchemaInfo() : CreateInfo(CatalogType::SCHEMA_ENTRY) {
 	}
 };
 

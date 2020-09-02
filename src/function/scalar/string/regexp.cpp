@@ -107,24 +107,24 @@ template <class OP> static void regexp_matches_function(DataChunk &args, Express
 	}
 }
 
-static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpression &expr,
-                                                                 ClientContext &context) {
+static unique_ptr<FunctionData> regexp_matches_get_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                                 vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
-	assert(expr.children.size() == 2 || expr.children.size() == 3);
+	assert(arguments.size() == 2 || arguments.size() == 3);
 	RE2::Options options;
 	options.set_log_errors(false);
-	if (expr.children.size() == 3) {
-		if (!expr.children[2]->IsScalar()) {
+	if (arguments.size() == 3) {
+		if (!arguments[2]->IsScalar()) {
 			throw InvalidInputException("Regex options field must be a constant");
 		}
-		Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[2]);
+		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[2]);
 		if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
 			ParseRegexOptions(options_str.str_value, options);
 		}
 	}
 
-	if (expr.children[1]->IsScalar()) {
-		Value pattern_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
+	if (arguments[1]->IsScalar()) {
+		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 		if (!pattern_str.is_null && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
 			auto re = make_unique<RE2>(pattern_str.str_value, options);
 			if (!re->ok()) {
@@ -167,14 +167,15 @@ unique_ptr<FunctionData> RegexpReplaceBindData::Copy() {
 	return move(copy);
 }
 
-static unique_ptr<FunctionData> regexp_replace_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
+static unique_ptr<FunctionData> regexp_replace_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                             vector<unique_ptr<Expression>> &arguments) {
 	auto data = make_unique<RegexpReplaceBindData>();
 	data->options.set_log_errors(false);
-	if (expr.children.size() == 4) {
-		if (!expr.children[3]->IsScalar()) {
+	if (arguments.size() == 4) {
+		if (!arguments[3]->IsScalar()) {
 			throw InvalidInputException("Regex options field must be a constant");
 		}
-		Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[3]);
+		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[3]);
 		if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
 			ParseRegexOptions(options_str.str_value, data->options, &data->global_replace);
 		}

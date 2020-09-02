@@ -224,7 +224,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	auto strptr = string.GetData();
 	uint32_t remaining = string_length + 1;
 	while (remaining > 0) {
-		uint32_t to_write = std::min((uint32_t)remaining, (uint32_t)(STRING_SPACE - offset));
+		uint32_t to_write = MinValue<uint32_t>(remaining, STRING_SPACE - offset);
 		if (to_write > 0) {
 			memcpy(handle->node->buffer + offset, strptr, to_write);
 

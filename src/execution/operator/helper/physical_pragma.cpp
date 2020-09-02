@@ -79,7 +79,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		}
 		auto collation_param = StringUtil::Lower(pragma.parameters[0].ToString());
 		// bind the collation to verify that it exists
-		ExpressionBinder::PushCollation(client, nullptr, collation_param);
+		ExpressionBinder::TestCollation(client, collation_param);
 		auto &config = DBConfig::GetConfig(client);
 		config.collation = collation_param;
 	} else if (keyword == "null_order" || keyword == "default_null_order") {
@@ -168,7 +168,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 idx_t ParseMemoryLimit(string arg) {
 	// split based on the number/non-number
 	idx_t idx = 0;
-	while (std::isspace(arg[idx])) {
+	while (StringUtil::CharacterIsSpace(arg[idx])) {
 		idx++;
 	}
 	idx_t num_start = idx;
@@ -185,11 +185,11 @@ idx_t ParseMemoryLimit(string arg) {
 	double limit = Cast::Operation<string_t, double>(number.c_str());
 
 	// now parse the memory limit unit (e.g. bytes, gb, etc)
-	while (std::isspace(arg[idx])) {
+	while (StringUtil::CharacterIsSpace(arg[idx])) {
 		idx++;
 	}
 	idx_t start = idx;
-	while (idx < arg.size() && !std::isspace(arg[idx])) {
+	while (idx < arg.size() && !StringUtil::CharacterIsSpace(arg[idx])) {
 		idx++;
 	}
 	if (limit < 0) {

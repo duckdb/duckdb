@@ -7,7 +7,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <unordered_map>
-#include <algorithm> // std::max
 
 using namespace std;
 

@@ -14,6 +14,10 @@ BufferedSerializer::BufferedSerializer(unique_ptr<data_t[]> data, idx_t size) : 
 	blob.data = move(data);
 }
 
+BufferedSerializer::BufferedSerializer(data_ptr_t data, idx_t size) : maximum_size(size), data(data) {
+	blob.size = 0;
+}
+
 void BufferedSerializer::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	if (blob.size + write_size >= maximum_size) {
 		do {
@@ -25,7 +29,7 @@ void BufferedSerializer::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		blob.data = unique_ptr<data_t[]>(new_data);
 	}
 
-	memcpy(blob.data.get() + blob.size, buffer, write_size);
+	memcpy(data + blob.size, buffer, write_size);
 	blob.size += write_size;
 }
 
