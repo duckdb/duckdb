@@ -29,7 +29,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 	assert(op.children.size() == 0);
 
-	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);
+	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::RECURSIVE_CTE_SCAN);
 
 	// CreatePlan of a LogicalRecursiveCTE must have happened before.
 	auto cte = rec_ctes.find(op.cte_index);

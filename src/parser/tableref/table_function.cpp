@@ -16,12 +16,16 @@ bool TableFunctionRef::Equals(const TableRef *other_) const {
 void TableFunctionRef::Serialize(Serializer &serializer) {
 	TableRef::Serialize(serializer);
 	function->Serialize(serializer);
+	serializer.WriteString(alias);
+	serializer.WriteStringVector(column_name_alias);
 }
 
 unique_ptr<TableRef> TableFunctionRef::Deserialize(Deserializer &source) {
 	auto result = make_unique<TableFunctionRef>();
 
 	result->function = ParsedExpression::Deserialize(source);
+	result->alias = source.Read<string>();
+	source.ReadStringVector(result->column_name_alias);
 
 	return move(result);
 }
@@ -31,6 +35,7 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 
 	copy->function = function->Copy();
 	copy->alias = alias;
+	copy->column_name_alias = column_name_alias;
 
 	return move(copy);
 }

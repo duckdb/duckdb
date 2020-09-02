@@ -17,6 +17,11 @@
 
 namespace duckdb {
 
+struct CommonTableExpressionInfo {
+	vector<string> aliases;
+	unique_ptr<QueryNode> query;
+};
+
 //! SelectStatement is a typical SELECT clause
 class SelectStatement : public SQLStatement {
 public:
@@ -26,7 +31,7 @@ public:
 	bool Equals(const SQLStatement *other) const;
 
 	//! CTEs
-	unordered_map<string, unique_ptr<QueryNode>> cte_map;
+	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> cte_map;
 	//! The main query node
 	unique_ptr<QueryNode> node;
 
