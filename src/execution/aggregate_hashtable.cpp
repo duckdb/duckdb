@@ -36,7 +36,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
                                          vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects,
                                          bool parallel)
     : aggregates(move(aggregate_objects)), group_types(group_types), payload_types(payload_types), group_width(0),
-      payload_width(0), capacity(0), entries(0), data(nullptr), parallel(parallel) {
+      payload_width(0), capacity(0), entries(0) {
 	// HT tuple layout is as follows:
 	// [FLAG][GROUPS][PAYLOAD]
 	// [FLAG] is the state of the tuple in memory
@@ -81,7 +81,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 		}
 	}
 
-	tuple_size = FLAG_SIZE + (group_width + payload_width);
+	tuple_size = (group_width + payload_width);
 	Resize(initial_capacity);
 }
 
@@ -104,7 +104,7 @@ void SuperLargeHashTable::CallDestructors(Vector &state_vector, idx_t count) {
 }
 
 void SuperLargeHashTable::Destroy() {
-	if (!data) {
+	if (!payload) {
 		return;
 	}
 	// check if there is a destructor
@@ -122,21 +122,20 @@ void SuperLargeHashTable::Destroy() {
 	data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
 	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
 	idx_t count = 0;
-	for (data_ptr_t ptr = data, end = data + capacity * tuple_size; ptr < end; ptr += tuple_size) {
-		if (*ptr == FULL_CELL) {
-			// found entry
-			data_pointers[count++] = ptr + FLAG_SIZE + group_width;
-			if (count == STANDARD_VECTOR_SIZE) {
-				// vector is full: call the destructors
-				CallDestructors(state_vector, count);
-				count = 0;
-			}
+	for (data_ptr_t ptr = payload.get(), end = payload.get() + entries * tuple_size; ptr < end; ptr += tuple_size) {
+		// found entry
+		data_pointers[count++] = ptr + group_width;
+		if (count == STANDARD_VECTOR_SIZE) {
+			// vector is full: call the destructors
+			CallDestructors(state_vector, count);
+			count = 0;
 		}
 	}
 	CallDestructors(state_vector, count);
 }
 
 void SuperLargeHashTable::Resize(idx_t size) {
+
 	if (size <= capacity) {
 		throw Exception("Cannot downsize a hash table!");
 	}
@@ -148,7 +147,7 @@ void SuperLargeHashTable::Resize(idx_t size) {
 	bitmask = size - 1;
 
 	if (entries > 0) {
-		auto new_table = make_unique<SuperLargeHashTable>(size, group_types, payload_types, aggregates, parallel);
+		auto new_table = make_unique<SuperLargeHashTable>(size, group_types, payload_types, aggregates);
 
 		DataChunk groups;
 		groups.Initialize(group_types);
@@ -156,8 +155,8 @@ void SuperLargeHashTable::Resize(idx_t size) {
 		Vector addresses(LogicalType::POINTER);
 		auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
-		data_ptr_t ptr = data;
-		data_ptr_t end = data + capacity * tuple_size;
+		data_ptr_t ptr = payload.get();
+		data_ptr_t end = payload.get() + entries * tuple_size;
 
 		assert(new_table->tuple_size == this->tuple_size);
 
@@ -167,10 +166,7 @@ void SuperLargeHashTable::Resize(idx_t size) {
 			// scan the table for full cells starting from the scan position
 			idx_t found_entries = 0;
 			for (; ptr < end && found_entries < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
-				if (*ptr == FULL_CELL) {
-					// found entry
-					data_pointers[found_entries++] = ptr + FLAG_SIZE;
-				}
+				data_pointers[found_entries++] = ptr;
 			}
 			if (found_entries == 0) {
 				break;
@@ -198,22 +194,21 @@ void SuperLargeHashTable::Resize(idx_t size) {
 
 		assert(this->entries == new_table->entries);
 
-		this->data = move(new_table->data);
-		this->owned_data = move(new_table->owned_data);
+		this->hashes = move(new_table->hashes);
+		this->payload = move(new_table->payload);
 		this->capacity = new_table->capacity;
+		this->current_payload_offset_ptr = new_table->current_payload_offset_ptr;
 		this->string_heap.MergeHeap(new_table->string_heap);
-		new_table->data = nullptr;
 	} else {
-		data = new data_t[size * tuple_size];
-		owned_data = unique_ptr<data_t[]>(data);
-		for (idx_t i = 0; i < size; i++) {
-			data[i * tuple_size] = EMPTY_CELL;
-		}
-
+		// TODO we need more hashes than payload data. fill rate should be 0.75 or so max
+		payload = unique_ptr<data_t[]>(new data_t[size * tuple_size]);
+		hashes = unique_ptr<data_t[]>(new data_t[size * sizeof(data_ptr_t)]);
+		memset(hashes.get(), 0, size * sizeof(data_ptr_t));
 		capacity = size;
+		current_payload_offset_ptr = payload.get();
 	}
 
-	endptr = data + tuple_size * capacity;
+	endptr = hashes.get() + sizeof(data_ptr_t) * capacity;
 }
 
 void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
@@ -313,7 +308,7 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	// multiply the position by the tuple size and add the base address
 	UnaryExecutor::Execute<hash_t, data_ptr_t>(hashes, addresses, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
-		return data + ((element & bitmask) * tuple_size);
+		return this->hashes.get() + ((element & bitmask) * sizeof(data_ptr_t));
 	});
 }
 
@@ -500,19 +495,19 @@ static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_da
 // have already seen a value for a group
 idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups) {
 	// resize at 50% capacity, also need to fit the entire vector
-	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
+	if (entries > capacity / 2 || capacity - entries < STANDARD_VECTOR_SIZE) {
 		Resize(capacity * 2);
 	}
 
 	// we need to be able to fit at least one vector of data
-	assert(capacity - entries > STANDARD_VECTOR_SIZE);
+	assert(capacity - entries >= STANDARD_VECTOR_SIZE);
 	assert(addresses.type == LogicalType::POINTER);
 
 	// hash the groups to get the addresses
 	HashGroups(groups, addresses);
 
 	addresses.Normalify(groups.size());
-	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
+	auto ht_pointers = FlatVector::GetData<data_ptr_t *>(addresses);
 
 	data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
 	Vector pointers(LogicalType::POINTER, (data_ptr_t)group_pointers);
@@ -542,20 +537,21 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 		// first figure out for each remaining whether or not it belongs to a full or empty group
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			idx_t index = sel_vector->get_index(i);
-			auto entry = data_pointers[index];
-			if (*entry == EMPTY_CELL) {
+			auto &entry = ht_pointers[index];
+			if (*entry == nullptr) {
 				// cell is empty; mark the cell as filled
-				*entry = FULL_CELL;
+				*entry = current_payload_offset_ptr;
+
+				current_payload_offset_ptr += tuple_size;
 				empty_vector.set_index(empty_count++, index);
 				new_groups.set_index(new_group_count++, index);
 				// initialize the payload info for the column
-				memcpy(entry + FLAG_SIZE + group_width, empty_payload_data.get(), payload_width);
+				memcpy(*entry + group_width, empty_payload_data.get(), payload_width);
 			} else {
 				// cell is occupied: add to check list
 				next_vector->set_index(entry_count++, index);
 			}
-			group_pointers[index] = entry + FLAG_SIZE;
-			data_pointers[index] = entry + FLAG_SIZE + group_width;
+			group_pointers[index] = *entry;
 		}
 
 		if (empty_count > 0) {
@@ -570,16 +566,22 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
 			idx_t index = no_match_vector->get_index(i);
-			data_pointers[index] += payload_width;
-			assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
-			if (data_pointers[index] >= endptr) {
-				data_pointers[index] = data;
+			ht_pointers[index] += sizeof(data_ptr_t);
+			// assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
+			if ((data_ptr_t)ht_pointers[index] >= endptr) {
+				ht_pointers[index] = (data_ptr_t *)hashes.get();
 			}
 		}
 		sel_vector = no_match_vector;
 		std::swap(next_vector, no_match_vector);
 		remaining_entries = no_match_count;
 	}
+
+	// deref everyting
+	for (idx_t i = 0; i < groups.size(); i++) {
+		ht_pointers[i] = (data_ptr_t *)(*ht_pointers[i] + group_width);
+	}
+
 	return new_group_count;
 }
 
@@ -591,8 +593,8 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 
 idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
 	data_ptr_t ptr;
-	data_ptr_t start = data + scan_position;
-	data_ptr_t end = data + capacity * tuple_size;
+	data_ptr_t start = payload.get() + scan_position * tuple_size;
+	data_ptr_t end = current_payload_offset_ptr;
 	if (start >= end) {
 		return 0;
 	}
@@ -603,10 +605,7 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 	// scan the table for full cells starting from the scan position
 	idx_t entry = 0;
 	for (ptr = start; ptr < end && entry < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
-		if (*ptr == FULL_CELL) {
-			// found entry
-			data_pointers[entry++] = ptr + FLAG_SIZE;
-		}
+		data_pointers[entry++] = ptr;
 	}
 	if (entry == 0) {
 		return 0;
@@ -626,7 +625,7 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, groups.size());
 	}
-	scan_position = ptr - data;
+	scan_position += entry;
 	return entry;
 }
 } // namespace duckdb

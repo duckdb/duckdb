@@ -49,9 +49,6 @@ public:
 	                    vector<AggregateObject> aggregates, bool parallel = false);
 	~SuperLargeHashTable();
 
-	//! Resize the HT to the specified size. Must be larger than the current
-	//! size.
-	void Resize(idx_t size);
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
@@ -74,8 +71,6 @@ public:
 	StringHeap string_heap;
 
 private:
-	void HashGroups(DataChunk &groups, Vector &addresses);
-
 	//! The aggregates to be computed
 	vector<AggregateObject> aggregates;
 	//! The types of the group columns stored in the hashtable
@@ -94,31 +89,34 @@ private:
 	//! The amount of entries stored in the HT currently
 	idx_t entries;
 	//! The data of the HT
-	data_ptr_t data;
-	//! The endptr of the hashtable
-	data_ptr_t endptr;
-	//! Whether or not the HT has to support parallel insertion operations
-	bool parallel = false;
+	//! unique_ptr to indicate the ownership
+	unique_ptr<data_t[]> payload; //! The data of the HT
+	//! unique_ptr to indicate the ownership
+	unique_ptr<data_t[]> hashes;           //! The endptr of the hashtable
+	data_ptr_t endptr;                     // of what? of hashes
+	data_ptr_t current_payload_offset_ptr; // of what?
+
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 
 	vector<unique_ptr<SuperLargeHashTable>> distinct_hashes;
-
-	//! The size of the initial flag for each cell
-	static constexpr int FLAG_SIZE = sizeof(uint8_t);
-	//! Flag indicating a cell is empty
-	static constexpr int EMPTY_CELL = 0x00;
-	//! Flag indicating a cell is full
-	static constexpr int FULL_CELL = 0xFF;
+	//
+	//	//! The size of the initial flag for each cell
+	//	static constexpr int FLAG_SIZE = sizeof(uint8_t);
+	//	//! Flag indicating a cell is empty
+	//	static constexpr int EMPTY_CELL = 0x00;
+	//	//! Flag indicating a cell is full
+	//	static constexpr int FULL_CELL = 0xFF;
 
 	SuperLargeHashTable(const SuperLargeHashTable &) = delete;
 
-	//! unique_ptr to indicate the ownership
-	unique_ptr<data_t[]> owned_data;
-
 private:
+	//! Resize the HT to the specified size. Must be larger than the current
+	//! size.
+	void Resize(idx_t size);
+	void HashGroups(DataChunk &groups, Vector &addresses);
 	void Destroy();
 	void CallDestructors(Vector &state_vector, idx_t count);
 	void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
