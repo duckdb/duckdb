@@ -68,6 +68,7 @@ private:
 	//! The total amount of pipelines in the query
 	idx_t total_pipelines;
 
-	unordered_map<ChunkCollection *, Pipeline *> delim_join_dependencies;
+	unordered_map<PhysicalOperator *, Pipeline *> delim_join_dependencies;
+	PhysicalOperator *recursive_cte;
 };
 } // namespace duckdb

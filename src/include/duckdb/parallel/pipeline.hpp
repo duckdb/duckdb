@@ -36,6 +36,7 @@ public:
 		return dependencies.size() != 0;
 	}
 
+	void Reset(ClientContext &context);
 	void Schedule();
 
 	//! Finish a single task of this pipeline
@@ -45,6 +46,19 @@ public:
 
 	string ToString() const;
 	void Print() const;
+
+	void SetRecursiveCTE(PhysicalOperator *op) {
+		this->recursive_cte = op;
+	}
+	PhysicalOperator* GetRecursiveCTE() {
+		return recursive_cte;
+	}
+	unordered_set<Pipeline *> &GetDependencies() {
+		return dependencies;
+	}
+	void ClearParents() {
+		parents.clear();
+	}
 
 private:
 	//! The child from which to pull chunks
@@ -67,6 +81,8 @@ private:
 	std::atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
 	idx_t total_tasks;
+	//! The recursive CTE node that this pipeline belongs to, and may be executed multiple times
+	PhysicalOperator *recursive_cte;
 
 private:
 	void ScheduleSequentialTask();

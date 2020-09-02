@@ -31,12 +31,10 @@ public:
 };
 
 Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0) {
+    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0), recursive_cte(nullptr) {
 }
 
 void Pipeline::Execute(TaskContext &task) {
-	assert(finished_dependencies == dependencies.size());
-
 	auto &client = executor.context;
 	if (client.interrupted) {
 		return;
@@ -129,6 +127,13 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		// unknown operator: skip parallel task scheduling
 		return false;
 	}
+}
+
+void Pipeline::Reset(ClientContext &context) {
+	sink_state = sink->GetGlobalState(context);
+	finished_tasks = 0;
+	total_tasks = 1;
+	finished = false;
 }
 
 void Pipeline::Schedule() {

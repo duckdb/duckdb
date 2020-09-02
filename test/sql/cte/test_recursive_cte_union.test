@@ -69,9 +69,14 @@ with recursive t as (select (select min(x) from integers) as x union select x+1 
 2
 3
 
-# aggregate functions are not allowed in the recursive term of ctes
-statement error
-with recursive t as (select 1 as x union select sum(x+1) from t where x < 3) select * from t
+# aggregate functions
+query I
+with recursive t as (select 1 as x union select sum(x+1) from t where x < 3) select * from t order by 1 nulls last
+----
+1
+2
+3
+NULL
 
 # order by is not allowed in the recursive term of ctes
 statement error

@@ -102,12 +102,11 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
 		return TransformSelectNode((PGSelectStmt *)cte->ctequery);
 	}
 
-	if (stmt->limitCount) {
-		throw Exception("LIMIT in a recursive query is not implemented");
+	if (stmt->limitCount || stmt->limitOffset) {
+		throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
 	}
-
-	if (stmt->limitOffset) {
-		throw Exception("OFFSET in a recursive query is not implemented");
+	if (stmt->sortClause) {
+		throw ParserException("ORDER BY in a recursive query is not allowed");
 	}
 	return node;
 }

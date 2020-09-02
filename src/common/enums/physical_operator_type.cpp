@@ -90,6 +90,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "VACUUM";
 	case PhysicalOperatorType::RECURSIVE_CTE:
 		return "REC_CTE";
+	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
+		return "REC_CTE_SCAN";
 	case PhysicalOperatorType::INVALID:
 		return "INVALID";
 	case PhysicalOperatorType::EXPRESSION_SCAN:

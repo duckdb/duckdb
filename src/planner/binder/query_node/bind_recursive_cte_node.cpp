@@ -34,17 +34,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	                                                 result->left->types);
 	result->right = result->right_binder->BindNode(*statement.right);
 
-	// Check if there are aggregates present in the recursive term
-	switch (result->right->type) {
-	case QueryNodeType::SELECT_NODE:
-		if (!((BoundSelectNode *)result->right.get())->aggregates.empty()) {
-			throw Exception("Aggregate functions are not allowed in a recursive query's recursive term");
-		}
-		break;
-	default:
-		break;
-	}
-
 	result->names = result->left->names;
 
 	// move the correlated expressions from the child binders to this binder
@@ -53,17 +42,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// now both sides have been bound we can resolve types
 	if (result->left->types.size() != result->right->types.size()) {
-		throw Exception("Set operations can only apply to expressions with the "
+		throw BinderException("Set operations can only apply to expressions with the "
 		                "same number of result columns");
 	}
 
-	// figure out the types of the recursive CTE result by picking the max of both
-	for (idx_t i = 0; i < result->left->types.size(); i++) {
-		auto result_type = LogicalType::MaxLogicalType(result->left->types[i], result->right->types[i]);
-		result->types.push_back(result_type);
-	}
+	// the result types of the CTE are the types of the LHS
+	result->types = result->left->types;
 	if (statement.modifiers.size() > 0) {
-		throw Exception("FIXME: bind modifiers in recursive CTE");
+		throw NotImplementedException("FIXME: bind modifiers in recursive CTE");
 	}
 
 	return move(result);
