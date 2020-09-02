@@ -81,6 +81,8 @@ private:
 	idx_t group_width;
 	//! The size of the payload (aggregations) in bytes
 	idx_t payload_width;
+
+	idx_t hash_width;
 	//! The total tuple size
 	idx_t tuple_size;
 	//! The capacity of the HT. This can be increased using
