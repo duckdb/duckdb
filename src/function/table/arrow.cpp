@@ -248,10 +248,11 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunctionSet arrow("arrow_scan");
+	// TableFunctionSet arrow("arrow_scan");
 
-	arrow.AddFunction(TableFunction({LogicalType::POINTER}, arrow_scan_bind, arrow_scan_function));
-	set.AddFunction(arrow);
+	// // FIXME
+	// // arrow.AddFunction(TableFunction({LogicalType::POINTER}, arrow_scan_bind, arrow_scan_function));
+	// set.AddFunction(arrow);
 }
 
 void BuiltinFunctions::RegisterArrowFunctions() {

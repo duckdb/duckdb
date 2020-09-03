@@ -44,8 +44,9 @@ void pragma_database_list(ClientContext &context, vector<Value> &input, DataChun
 }
 
 void PragmaDatabaseList::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("pragma_database_list", {}, pragma_database_list_bind, pragma_database_list, nullptr));
+	// FIXME
+	// set.AddFunction(
+	//     TableFunction("pragma_database_list", {}, pragma_database_list_bind, pragma_database_list, nullptr));
 }
 
 } // namespace duckdb

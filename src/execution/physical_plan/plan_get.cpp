@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -27,8 +28,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			}
 		}
 		dependencies.insert(op.table);
-		return make_unique<PhysicalTableScan>(op.types, *op.table, *op.table->storage, op.column_ids,
-		                                      move(op.expressions), move(table_filter_umap));
+
+		auto scan_function = TableScanFunction::GetFunction();
+		auto bind_data = make_unique<TableScanBindData>(op.table);
+
+		return make_unique<PhysicalTableScan>(op.types, scan_function, move(bind_data), op.column_ids, move(table_filter_umap));
 	}
 }
 

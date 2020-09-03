@@ -35,7 +35,8 @@ static void pragma_version_info(ClientContext &context, vector<Value> &input, Da
 }
 
 void PragmaVersion::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_version", {}, pragma_version_bind, pragma_version_info, nullptr));
+	// FIXME
+	// set.AddFunction(TableFunction("pragma_version", {}, pragma_version_bind, pragma_version_info, nullptr));
 }
 
 const char *DuckDB::SourceID() {

@@ -32,8 +32,8 @@ public:
 	vector<column_t> column_ids;
 	//! Filters pushed down for table scan
 	vector<TableFilter> tableFilters;
-	string ParamsToString() const override;
 
+	string ParamsToString() const override;
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 

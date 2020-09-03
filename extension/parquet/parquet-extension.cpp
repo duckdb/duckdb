@@ -845,8 +845,9 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
-	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr) {
-		supports_projection = true;
+	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, nullptr) {
+		//...	, parquet_scan_bind, parquet_scan_function, nullptr
+		projection_pushdown = true;
 	}
 
 	static unique_ptr<FunctionData> ReadParquetHeader(string file_name, vector<LogicalType> &return_types,

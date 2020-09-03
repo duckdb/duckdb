@@ -138,8 +138,9 @@ static void pragma_table_info(ClientContext &context, vector<Value> &input, Data
 }
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("pragma_table_info", {LogicalType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
+	// FIXME
+	// set.AddFunction(
+	//     TableFunction("pragma_table_info", {LogicalType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
 }
 
 } // namespace duckdb

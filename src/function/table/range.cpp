@@ -60,18 +60,19 @@ static void range_function(ClientContext &context, vector<Value> &input, DataChu
 }
 
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunctionSet range("range");
+	// TableFunctionSet range("range");
 
-	// single argument range: (end) - implicit start = 0 and increment = 1
-	range.AddFunction(TableFunction({LogicalType::BIGINT}, range_function_bind, range_function));
-	// two arguments range: (start, end) - implicit increment = 1
-	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, range_function_bind, range_function));
-	// three arguments range: (start, end, increment)
-	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                range_function_bind, range_function));
-	set.AddFunction(range);
-	range.name = "generate_series";
-	set.AddFunction(range);
+	// // FIXME
+	// // // single argument range: (end) - implicit start = 0 and increment = 1
+	// // range.AddFunction(TableFunction({LogicalType::BIGINT}, range_function_bind, range_function));
+	// // // two arguments range: (start, end) - implicit increment = 1
+	// // range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, range_function_bind, range_function));
+	// // // three arguments range: (start, end, increment)
+	// // range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
+	// //                                 range_function_bind, range_function));
+	// set.AddFunction(range);
+	// range.name = "generate_series";
+	// set.AddFunction(range);
 }
 
 void BuiltinFunctions::RegisterTableFunctions() {

@@ -31,8 +31,10 @@ static void repeat_function(ClientContext &context, vector<Value> &input, DataCh
 }
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, repeat_bind, repeat_function, nullptr);
-	set.AddFunction(repeat);
+
+	// FIXME
+	// TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, repeat_bind, repeat_function, nullptr);
+	// set.AddFunction(repeat);
 }
 
 } // namespace duckdb

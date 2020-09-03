@@ -14,87 +14,67 @@ namespace duckdb {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTableScanOperatorState(Expression &expr)
-	    : PhysicalOperatorState(nullptr), initialized(false), executor(expr) {
-	}
 	PhysicalTableScanOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
 	}
+	unique_ptr<FunctionOperatorData> operator_data;
 	//! Whether or not the scan has been initialized
 	bool initialized;
-	//! The current position in the scan
-	TableScanState scan_state;
-	//! Execute filters inside the table
-	ExpressionExecutor executor;
 };
 
-PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
-                                     vector<column_t> column_ids, vector<unique_ptr<Expression>> filter,
-                                     unordered_map<idx_t, vector<TableFilter>> table_filters)
-    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN, move(types)), tableref(tableref), table(table),
-      column_ids(move(column_ids)), table_filters(move(table_filters)) {
-	if (filter.size() > 1) {
-		//! create a big AND out of the expressions
-		auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-		for (auto &expr : filter) {
-			conjunction->children.push_back(move(expr));
-		}
-		expression = move(conjunction);
-	} else if (filter.size() == 1) {
-		expression = move(filter[0]);
-	}
+PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types,
+					TableFunction function_,
+					unique_ptr<FunctionData> bind_data_,
+					vector<column_t> column_ids,
+					unordered_map<idx_t, vector<TableFilter>> table_filters) :
+	PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, move(types)), function(move(function_)),
+	bind_data(move(bind_data_)), column_ids(move(column_ids)), table_filters(move(table_filters)) {
 }
-
-class TableScanTaskInfo : public OperatorTaskInfo {
-public:
-	TableScanState state;
-};
 
 void PhysicalTableScan::ParallelScanInfo(ClientContext &context,
                                          std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
 	// generate parallel scans
-	table.InitializeParallelScan(context, column_ids, &table_filters, [&](TableScanState state) {
-		auto task = make_unique<TableScanTaskInfo>();
-		task->state = move(state);
-		callback(move(task));
-	});
+	if (function.parallel_tasks) {
+		function.parallel_tasks(context, bind_data.get(), column_ids, table_filters, callback);
+	}
 }
 
+// typedef void (*table_function_t)(ClientContext &context, vector<Value> &input, DataChunk &output,
+                                //  const FunctionData *bind_data, FunctionOperatorData *operator_state);
+
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
+	auto &state = (PhysicalTableScanOperatorState &) *state_;
 	if (column_ids.empty()) {
 		return;
 	}
-	auto &transaction = Transaction::GetTransaction(context.client);
-	if (!state->initialized) {
-		auto &task = context.task;
-		auto task_info = task.task_info.find(this);
-		if (task_info != task.task_info.end()) {
-			// task specific limitations: scan the part indicated by the task
-			auto &info = (TableScanTaskInfo &)*task_info->second;
-			state->scan_state = move(info.state);
-		} else {
-			// no task specific limitations for the scan: scan the entire table
-			table.InitializeScan(transaction, state->scan_state, column_ids, &table_filters);
+	if (!state.initialized) {
+		if (function.init) {
+			auto &task = context.task;
+			auto task_info = task.task_info.find(this);
+			if (task_info != task.task_info.end()) {
+				// task specific limitations: pass the task information to the init function
+				state.operator_data = function.init(context.client, bind_data.get(), task_info->second.get(), column_ids, table_filters);
+			} else {
+				// no task specific limitations
+				state.operator_data = function.init(context.client, bind_data.get(), nullptr, column_ids, table_filters);
+			}
 		}
-		state->initialized = true;
+		state.initialized = true;
 	}
-	table.Scan(transaction, chunk, state->scan_state, column_ids, table_filters);
+	function.function(context.client, bind_data.get(), state.operator_data.get(), chunk);
+	if (chunk.size() == 0 && function.cleanup) {
+		function.cleanup(context.client, bind_data.get(), state.operator_data.get());
+	}
 }
 
-string PhysicalTableScan::ExtraRenderInformation() const {
-	if (expression) {
-		return tableref.name + " " + expression->ToString();
-	} else {
-		return tableref.name;
+string PhysicalTableScan::ToString(idx_t depth) const {
+	if (function.to_string) {
+		return string(depth * 4, ' ') + function.to_string(bind_data.get());
 	}
+	return PhysicalOperator::ToString(depth);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
-	if (expression) {
-		return make_unique<PhysicalTableScanOperatorState>(*expression);
-	} else {
-		return make_unique<PhysicalTableScanOperatorState>();
-	}
+	return make_unique<PhysicalTableScanOperatorState>();
 }
 
 } // namespace duckdb

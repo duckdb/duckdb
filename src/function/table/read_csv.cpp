@@ -130,15 +130,17 @@ static void add_named_parameters(TableFunction &table_function) {
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction read_csv_function =
-	    TableFunction("read_csv", {LogicalType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
-	add_named_parameters(read_csv_function);
-	set.AddFunction(read_csv_function);
 
-	TableFunction read_csv_auto_function =
-	    TableFunction("read_csv_auto", {LogicalType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr);
-	add_named_parameters(read_csv_auto_function);
-	set.AddFunction(read_csv_auto_function);
+	// FIXME
+	// TableFunction read_csv_function =
+	//     TableFunction("read_csv", {LogicalType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
+	// add_named_parameters(read_csv_function);
+	// set.AddFunction(read_csv_function);
+
+	// TableFunction read_csv_auto_function =
+	//     TableFunction("read_csv_auto", {LogicalType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr);
+	// add_named_parameters(read_csv_auto_function);
+	// set.AddFunction(read_csv_auto_function);
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {

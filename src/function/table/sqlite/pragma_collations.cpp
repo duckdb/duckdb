@@ -59,7 +59,8 @@ static void pragma_collate_info(ClientContext &context, vector<Value> &input, Da
 }
 
 void PragmaCollations::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_collations", {}, pragma_collate_bind, pragma_collate_info, nullptr));
+	// FIXME
+	// set.AddFunction(TableFunction("pragma_collations", {}, pragma_collate_bind, pragma_collate_info, nullptr));
 }
 
 } // namespace duckdb

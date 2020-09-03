@@ -102,7 +102,8 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 }
 
 void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master, nullptr));
+	// FIXME
+	// set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master, nullptr));
 }
 
 } // namespace duckdb

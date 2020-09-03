@@ -10,8 +10,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "LEAF";
 	case PhysicalOperatorType::DUMMY_SCAN:
 		return "DUMMY_SCAN";
-	case PhysicalOperatorType::SEQ_SCAN:
-		return "SEQ_SCAN";
 	case PhysicalOperatorType::INDEX_SCAN:
 		return "INDEX_SCAN";
 	case PhysicalOperatorType::CHUNK_SCAN:

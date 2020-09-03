@@ -12,13 +12,13 @@ namespace duckdb {
 void PhysicalTableFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                              PhysicalOperatorState *state) {
 	// run main code
-	function.function(context.client, parameters, chunk, bind_data.get());
-	if (chunk.size() == 0) {
-		// finished, call clean up
-		if (function.final) {
-			function.final(context.client, bind_data.get());
-		}
-	}
+	// function.function(context.client, parameters, chunk, bind_data.get());
+	// if (chunk.size() == 0) {
+	// 	// finished, call clean up
+	// 	if (function.final) {
+	// 		function.final(context.client, bind_data.get());
+	// 	}
+	// }
 }
 
 string PhysicalTableFunction::ExtraRenderInformation() const {

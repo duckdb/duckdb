@@ -32,16 +32,6 @@ class Transaction;
 
 typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
 
-//! TableFilter represents a filter pushed down into the table scan.
-class TableFilter {
-public:
-	TableFilter(Value constant, ExpressionType comparison_type, idx_t column_index)
-	    : constant(constant), comparison_type(comparison_type), column_index(column_index){};
-	Value constant;
-	ExpressionType comparison_type;
-	idx_t column_index;
-};
-
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
 	}

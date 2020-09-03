@@ -53,7 +53,6 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::COPY_FROM_FILE:
 	case PhysicalOperatorType::COPY_TO_FILE:
 	case PhysicalOperatorType::TABLE_FUNCTION:
-	case PhysicalOperatorType::SEQ_SCAN:
 	case PhysicalOperatorType::INDEX_SCAN:
 	case PhysicalOperatorType::CHUNK_SCAN:
 	case PhysicalOperatorType::DELIM_SCAN:

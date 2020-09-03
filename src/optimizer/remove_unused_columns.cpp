@@ -152,17 +152,18 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 		return;
 	case LogicalOperatorType::TABLE_FUNCTION: {
-		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		auto &fun = (LogicalTableFunction &)op;
-		if (!everything_referenced && fun.function.supports_projection) {
-			// table producing function: figure out which columns are referenced
-			ClearUnusedExpressions(fun.column_ids, fun.table_index);
-			// see above for this special case
-			if (fun.column_ids.size() == 0) {
-				fun.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-			}
-		}
-		return;
+		throw NotImplementedException("Bla");
+		// LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		// auto &fun = (LogicalTableFunction &)op;
+		// if (!everything_referenced && fun.function.supports_projection) {
+		// 	// table producing function: figure out which columns are referenced
+		// 	ClearUnusedExpressions(fun.column_ids, fun.table_index);
+		// 	// see above for this special case
+		// 	if (fun.column_ids.size() == 0) {
+		// 		fun.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+		// 	}
+		// }
+		// return;
 	}
 	case LogicalOperatorType::DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
