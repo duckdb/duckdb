@@ -84,7 +84,8 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 	hash_width = sizeof(hash_t);
 	tuple_size = hash_width + group_width + payload_width;
 
-	hash_prefix_bitmask = ((ptrdiff_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
+	hash_prefix_remove_bitmask = ((hash_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
+    hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t)*8 - 16));
 
 	Resize(initial_capacity);
 }
@@ -546,6 +547,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 	while (remaining_entries > 0) {
 		idx_t entry_count = 0;
 		idx_t empty_count = 0;
+		idx_t no_match_count = 0;
 
 		// first figure out for each remaining whether or not it belongs to a full or empty group
 		for (idx_t i = 0; i < remaining_entries; i++) {
@@ -563,18 +565,25 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 				memcpy(new_entry + hash_width + group_width, empty_payload_data.get(), payload_width);
 
 				// only 48 bits are used as actual addresses, expect top 16 bits to be 0
-				assert(((ptrdiff_t)new_entry >> (sizeof(ptrdiff_t) * 8 - hash_prefix_bits)) == 0);
-				// so we can use them for mischief
-				*entry = (data_ptr_t)((ptrdiff_t)new_entry | (hash_t)hashes_pointer[index]
-				                                                 << (sizeof(ptrdiff_t) * 8 - hash_prefix_bits));
+				assert(((hash_t)new_entry & hash_prefix_get_bitmask) == 0);
+                assert(((hash_t)new_entry & hash_prefix_remove_bitmask) == (hash_t)new_entry);
+
+                // so we can use them for mischief
+				*entry = (data_ptr_t)((ptrdiff_t)new_entry | ((hash_t)hashes_pointer[index] & hash_prefix_get_bitmask));
 
 			} else {
 				// cell is occupied: add to check list
 				// only need to check if hash salt in ptr == prefix of hash in payload
-				// TODO need to compare high bits
-				next_vector->set_index(entry_count++, index);
+				if (((hash_t)*entry & hash_prefix_get_bitmask) == (hashes_pointer[index] & hash_prefix_get_bitmask))
+                {
+                    next_vector->set_index(entry_count++, index);
+				} else {
+                    ///no_match_vector->set_index(no_match_count++, index);
+                    next_vector->set_index(entry_count++, index);
+
+                }
 			}
-			group_pointers[index] = (data_ptr_t)((ptrdiff_t)*entry & hash_prefix_bitmask) + hash_width;
+			group_pointers[index] = (data_ptr_t)((ptrdiff_t)*entry & hash_prefix_remove_bitmask) + hash_width;
 		}
 
 		if (empty_count > 0) {
@@ -584,7 +593,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 		}
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
-		idx_t no_match_count = CompareGroups(groups, group_data, pointers, *next_vector, entry_count, *no_match_vector);
+		no_match_count += CompareGroups(groups, group_data, pointers, *next_vector, entry_count, *no_match_vector);
 
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
@@ -602,7 +611,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 
 	// deref everyting
 	for (idx_t i = 0; i < groups.size(); i++) {
-		ht_pointers[i] = (data_ptr_t *)(((ptrdiff_t)*ht_pointers[i] & hash_prefix_bitmask) + hash_width + group_width);
+		ht_pointers[i] = (data_ptr_t *)(((ptrdiff_t)*ht_pointers[i] & hash_prefix_remove_bitmask) + hash_width + group_width);
 	}
 
 	return new_group_count;
