@@ -565,7 +565,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 				// only 48 bits are used as actual addresses, expect top 16 bits to be 0
 				assert(((ptrdiff_t)new_entry >> (sizeof(ptrdiff_t) * 8 - hash_prefix_bits)) == 0);
 				// so we can use them for mischief
-				*entry = (data_ptr_t)((ptrdiff_t)new_entry | (ptrdiff_t)hashes_pointer[index]
+				*entry = (data_ptr_t)((ptrdiff_t)new_entry | (hash_t)hashes_pointer[index]
 				                                                 << (sizeof(ptrdiff_t) * 8 - hash_prefix_bits));
 
 			} else {
