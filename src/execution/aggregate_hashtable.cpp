@@ -85,7 +85,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 	tuple_size = hash_width + group_width + payload_width;
 
 	hash_prefix_remove_bitmask = ((hash_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
-    hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t)*8 - 16));
+	hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t) * 8 - 16));
 
 	Resize(initial_capacity);
 }
@@ -453,9 +453,8 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 	count = match_count;
 }
 
-static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
-                           SelectionVector &sel, idx_t count, SelectionVector &no_match) {
-	idx_t no_match_count = 0;
+static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
+                          SelectionVector &sel, idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
 	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
 		auto &data = groups.data[group_idx];
 		auto &gdata = group_data[group_idx];
@@ -493,7 +492,6 @@ static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_da
 			throw Exception("Unsupported type for group vector");
 		}
 	}
-	return no_match_count;
 }
 
 // this is to support distinct aggregations where we need to record whether we
@@ -510,7 +508,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 
 	Vector group_hashes(LogicalType::HASH);
 	groups.Hash(group_hashes);
-
+	group_hashes.Normalify(groups.size());
 	auto hashes_pointer = FlatVector::GetData<hash_t>(group_hashes);
 
 	// now compute the entry in the table based on the hash using a modulo
@@ -566,22 +564,21 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 
 				// only 48 bits are used as actual addresses, expect top 16 bits to be 0
 				assert(((hash_t)new_entry & hash_prefix_get_bitmask) == 0);
-                assert(((hash_t)new_entry & hash_prefix_remove_bitmask) == (hash_t)new_entry);
+				assert(((hash_t)new_entry & hash_prefix_remove_bitmask) == (hash_t)new_entry);
 
-                // so we can use them for mischief
+				// so we can use them for mischief
 				*entry = (data_ptr_t)((ptrdiff_t)new_entry | ((hash_t)hashes_pointer[index] & hash_prefix_get_bitmask));
 
 			} else {
 				// cell is occupied: add to check list
 				// only need to check if hash salt in ptr == prefix of hash in payload
-				if (((hash_t)*entry & hash_prefix_get_bitmask) == (hashes_pointer[index] & hash_prefix_get_bitmask))
-                {
-                    next_vector->set_index(entry_count++, index);
+				if (((hash_t)*entry & hash_prefix_get_bitmask) == 0 ||
+				    ((hash_t)*entry & hash_prefix_get_bitmask) == (hashes_pointer[index] & hash_prefix_get_bitmask)) {
+					next_vector->set_index(entry_count++, index);
 				} else {
-                    ///no_match_vector->set_index(no_match_count++, index);
-                    next_vector->set_index(entry_count++, index);
-
-                }
+					// next_vector->set_index(entry_count++, index);
+					no_match_vector->set_index(no_match_count++, index);
+				}
 			}
 			group_pointers[index] = (data_ptr_t)((ptrdiff_t)*entry & hash_prefix_remove_bitmask) + hash_width;
 		}
@@ -593,7 +590,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 		}
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
-		no_match_count += CompareGroups(groups, group_data, pointers, *next_vector, entry_count, *no_match_vector);
+		CompareGroups(groups, group_data, pointers, *next_vector, entry_count, *no_match_vector, no_match_count);
 
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
@@ -611,7 +608,8 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 
 	// deref everyting
 	for (idx_t i = 0; i < groups.size(); i++) {
-		ht_pointers[i] = (data_ptr_t *)(((ptrdiff_t)*ht_pointers[i] & hash_prefix_remove_bitmask) + hash_width + group_width);
+		ht_pointers[i] =
+		    (data_ptr_t *)(((ptrdiff_t)*ht_pointers[i] & hash_prefix_remove_bitmask) + hash_width + group_width);
 	}
 
 	return new_group_count;
