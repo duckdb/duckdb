@@ -84,8 +84,13 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 	hash_width = sizeof(hash_t);
 	tuple_size = hash_width + group_width + payload_width;
 
+	assert(tuple_size <= Storage::BLOCK_SIZE);
+
 	hash_prefix_remove_bitmask = ((hash_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
 	hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t) * 8 - 16));
+
+	payload.push_back(unique_ptr<data_t[]>(new data_t[Storage::BLOCK_SIZE]));
+	current_payload_offset_ptr = payload.back().get();
 
 	Resize(initial_capacity);
 }
@@ -109,7 +114,7 @@ void SuperLargeHashTable::CallDestructors(Vector &state_vector, idx_t count) {
 }
 
 void SuperLargeHashTable::Destroy() {
-	if (!payload) {
+	if (!hashes) {
 		return;
 	}
 	// check if there is a destructor
@@ -127,20 +132,27 @@ void SuperLargeHashTable::Destroy() {
 	data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
 	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
 	idx_t count = 0;
-	for (data_ptr_t ptr = payload.get(), end = payload.get() + entries * tuple_size; ptr < end; ptr += tuple_size) {
-		// found entry
-		data_pointers[count++] = ptr + hash_width + group_width;
-		if (count == STANDARD_VECTOR_SIZE) {
-			// vector is full: call the destructors
-			CallDestructors(state_vector, count);
-			count = 0;
+
+	idx_t destroy_entries = entries;
+	for (auto &payload_chunk : payload) {
+		auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, destroy_entries);
+		for (data_ptr_t ptr = payload_chunk.get(), end = payload_chunk.get() + this_entries * tuple_size; ptr < end;
+		     ptr += tuple_size) {
+			// found entry
+			data_pointers[count++] = ptr + hash_width + group_width;
+			if (count == STANDARD_VECTOR_SIZE) {
+				// vector is full: call the destructors
+				CallDestructors(state_vector, count);
+				count = 0;
+			}
 		}
+		destroy_entries -= this_entries;
 	}
 	CallDestructors(state_vector, count);
 }
 
 void SuperLargeHashTable::Resize(idx_t size) {
-
+	printf("Resize(%llu)\n", size);
 	if (size <= capacity) {
 		throw Exception("Cannot downsize a hash table!");
 	}
@@ -151,69 +163,25 @@ void SuperLargeHashTable::Resize(idx_t size) {
 	assert((size & (size - 1)) == 0);
 	bitmask = size - 1;
 
+	hashes = unique_ptr<data_t[]>(new data_t[size * sizeof(data_ptr_t)]);
+	memset(hashes.get(), 0, size * sizeof(data_ptr_t));
+	endptr = hashes.get() + sizeof(data_ptr_t) * size;
+	capacity = size;
+
 	if (entries > 0) {
-		auto new_table = make_unique<SuperLargeHashTable>(size, group_types, payload_types, aggregates);
-
-		DataChunk groups;
-		groups.Initialize(group_types);
-
-		Vector addresses(LogicalType::POINTER);
-		auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
-
-		data_ptr_t ptr = payload.get();
-		data_ptr_t end = payload.get() + entries * tuple_size;
-
-		assert(new_table->tuple_size == this->tuple_size);
-
-		while (true) {
-			groups.Reset();
-
-			// scan the table for full cells starting from the scan position
-			idx_t found_entries = 0;
-			for (; ptr < end && found_entries < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
-				data_pointers[found_entries++] = ptr + hash_width;
+		idx_t resize_entries = entries;
+		for (auto &payload_chunk : payload) {
+			auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, resize_entries);
+			for (data_ptr_t ptr = payload_chunk.get(), end = payload_chunk.get() + this_entries * tuple_size; ptr < end;
+			     ptr += tuple_size) {
+				auto entry_hash = *(hash_t *)ptr;
+				assert((entry_hash & bitmask) == (entry_hash % capacity));
+				auto entry_pointer = (data_ptr_t *)(hashes.get() + ((entry_hash & bitmask) * sizeof(data_ptr_t)));
+				*entry_pointer = (data_ptr_t)((ptrdiff_t)ptr | (entry_hash & hash_prefix_get_bitmask));
 			}
-			if (found_entries == 0) {
-				break;
-			}
-			// fetch the group columns
-			groups.SetCardinality(found_entries);
-			for (idx_t i = 0; i < groups.column_count(); i++) {
-				auto &column = groups.data[i];
-				VectorOperations::Gather::Set(addresses, column, found_entries);
-			}
-
-			groups.Verify();
-			assert(groups.size() == found_entries);
-			Vector new_addresses(LogicalType::POINTER);
-			new_table->FindOrCreateGroups(groups, new_addresses);
-
-			// NB: both address vectors already point to the payload start
-			assert(addresses.type == new_addresses.type && addresses.type == LogicalType::POINTER);
-
-			auto new_address_data = FlatVector::GetData<data_ptr_t>(new_addresses);
-			for (idx_t i = 0; i < found_entries; i++) {
-				memcpy(new_address_data[i], data_pointers[i], payload_width);
-			}
+			resize_entries -= this_entries;
 		}
-
-		assert(this->entries == new_table->entries);
-
-		this->hashes = move(new_table->hashes);
-		this->payload = move(new_table->payload);
-		this->capacity = new_table->capacity;
-		this->current_payload_offset_ptr = new_table->current_payload_offset_ptr;
-		this->string_heap.MergeHeap(new_table->string_heap);
-	} else {
-		// TODO we need more hashes than payload data. fill rate should be 0.75 or so max
-		payload = unique_ptr<data_t[]>(new data_t[size * tuple_size]);
-		hashes = unique_ptr<data_t[]>(new data_t[size * sizeof(data_ptr_t)]);
-		memset(hashes.get(), 0, size * sizeof(data_ptr_t));
-		capacity = size;
-		current_payload_offset_ptr = payload.get();
 	}
-
-	endptr = hashes.get() + sizeof(data_ptr_t) * capacity;
 }
 
 void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
@@ -498,7 +466,7 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 // have already seen a value for a group
 idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups) {
 	// resize at 50% capacity, also need to fit the entire vector
-	if (entries > capacity / 2 || capacity - entries < STANDARD_VECTOR_SIZE) {
+	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
 		Resize(capacity * 2);
 	}
 
@@ -551,8 +519,15 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			idx_t index = sel_vector->get_index(i);
 			auto &entry = ht_pointers[index];
+
 			if (*entry == nullptr) {
 				// cell is empty; mark the cell as filled
+
+				if (current_payload_offset_ptr + tuple_size > payload.back().get() + Storage::BLOCK_SIZE) {
+					payload.push_back(unique_ptr<data_t[]>(new data_t[Storage::BLOCK_SIZE]));
+					current_payload_offset_ptr = payload.back().get();
+				}
+
 				auto new_entry = current_payload_offset_ptr;
 				current_payload_offset_ptr += tuple_size;
 				empty_vector.set_index(empty_count++, index);
@@ -622,26 +597,22 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 }
 
 idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
-	data_ptr_t ptr;
-	data_ptr_t start = payload.get() + scan_position * tuple_size;
-	data_ptr_t end = current_payload_offset_ptr;
-	if (start >= end) {
-		return 0;
-	}
-
 	Vector addresses(LogicalType::POINTER);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
-	// scan the table for full cells starting from the scan position
-	idx_t entry = 0;
-	for (ptr = start; ptr < end && entry < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
-		data_pointers[entry++] = ptr + hash_width;
-	}
-	if (entry == 0) {
+	auto remaining = entries - scan_position;
+	if (remaining == 0) {
 		return 0;
 	}
-	groups.SetCardinality(entry);
-	result.SetCardinality(entry);
+	auto this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
+	for (idx_t i = 0; i < this_n; i++) {
+		// TODO these offsets dont change all the time and could be cached
+		auto payload_idx = (scan_position + i) / Storage::BLOCK_SIZE;
+		auto payload_offset = (scan_position + i) % Storage::BLOCK_SIZE;
+		data_pointers[i] = payload[payload_idx].get() + payload_offset * tuple_size + hash_width;
+	}
+	groups.SetCardinality(this_n);
+	result.SetCardinality(this_n);
 	// fetch the group columns
 	for (idx_t i = 0; i < groups.column_count(); i++) {
 		auto &column = groups.data[i];
@@ -652,10 +623,9 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 		auto &target = result.data[i];
 		auto &aggr = aggregates[i];
 		aggr.function.finalize(addresses, target, groups.size());
-
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, groups.size());
 	}
-	scan_position += entry;
-	return entry;
+	scan_position += this_n;
+	return this_n;
 }
 } // namespace duckdb

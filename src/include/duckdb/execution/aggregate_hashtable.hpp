@@ -92,21 +92,21 @@ private:
 	idx_t entries;
 	//! The data of the HT
 	//! unique_ptr to indicate the ownership
-	unique_ptr<data_t[]> payload; //! The data of the HT
+	vector<unique_ptr<data_t[]>> payload; //! The data of the HT
 	//! unique_ptr to indicate the ownership
-	unique_ptr<data_t[]> hashes;           //! The endptr of the hashtable
-	data_ptr_t endptr;                     // of what? of hashes
-	data_ptr_t current_payload_offset_ptr; // of what?
+	unique_ptr<data_t[]> hashes; //! The endptr of the hashtable
+	data_ptr_t endptr;           // of hashes
+	data_ptr_t current_payload_offset_ptr;
 
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 
-    hash_t hash_prefix_remove_bitmask;
-    hash_t hash_prefix_get_bitmask;
+	hash_t hash_prefix_remove_bitmask;
+	hash_t hash_prefix_get_bitmask;
 
-    const uint8_t hash_prefix_bits = 16;
+	const uint8_t hash_prefix_bits = 16;
 
 	vector<unique_ptr<SuperLargeHashTable>> distinct_hashes;
 	//
