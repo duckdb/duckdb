@@ -34,7 +34,8 @@ duckdb_connection <- function(duckdb_driver, debug) {
 setMethod(
   "show", "duckdb_connection",
   function(object) {
-    cat(sprintf("<duckdb_connection %s driver=%s>\n", extptr_str(object@conn_ref), drv_to_string(object@driver)))
+    message(sprintf("<duckdb_connection %s driver=%s>", extptr_str(object@conn_ref), drv_to_string(object@driver)))
+    invisible(NULL)
   }
 )
 
