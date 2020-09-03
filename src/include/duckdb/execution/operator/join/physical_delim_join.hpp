@@ -23,8 +23,7 @@ public:
 
 	unique_ptr<PhysicalOperator> join;
 	unique_ptr<PhysicalHashAggregate> distinct;
-	ChunkCollection lhs_data;
-	ChunkCollection delim_data;
+	vector<PhysicalOperator *> delim_scans;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

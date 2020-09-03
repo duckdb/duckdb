@@ -1,0 +1,121 @@
+
+# https://docs.microsoft.com/en-us/sql/t-sql/queries/with-common-table-expression-transact-sql?view=sql-server-ver15
+
+# Recursive CTEs
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+statement ok
+CREATE TABLE MyEmployees
+(
+	EmployeeID smallint NOT NULL,
+	FirstName varchar(30)  NOT NULL,
+	LastName  varchar(40) NOT NULL,
+	Title varchar(50) NOT NULL,
+	DeptID smallint NOT NULL,
+	ManagerID int NULL,
+	CONSTRAINT PK_EmployeeID PRIMARY KEY (EmployeeID)
+);
+
+statement ok
+INSERT INTO MyEmployees VALUES
+ (1, N'Ken', N'Sánchez', N'Chief Executive Officer',16,NULL)
+,(273, N'Brian', N'Welcker', N'Vice President of Sales',3,1)
+,(274, N'Stephen', N'Jiang', N'North American Sales Manager',3,273)
+,(275, N'Michael', N'Blythe', N'Sales Representative',3,274)
+,(276, N'Linda', N'Mitchell', N'Sales Representative',3,274)
+,(285, N'Syed', N'Abbas', N'Pacific Sales Manager',3,273)
+,(286, N'Lynn', N'Tsoflias', N'Sales Representative',3,285)
+,(16,  N'David',N'Bradley', N'Marketing Manager', 4, 273)
+,(23,  N'Mary', N'Gibson', N'Marketing Specialist', 4, 16);
+
+# Using a recursive common table expression to display multiple levels of recursion
+query IIII
+WITH RECURSIVE DirectReports(ManagerID, EmployeeID, Title, EmployeeLevel) AS
+(
+    SELECT ManagerID, EmployeeID, Title, 0 AS EmployeeLevel
+    FROM MyEmployees
+    WHERE ManagerID IS NULL
+    UNION ALL
+    SELECT e.ManagerID, e.EmployeeID, e.Title, EmployeeLevel + 1
+    FROM MyEmployees AS e
+        INNER JOIN DirectReports AS d
+        ON e.ManagerID = d.EmployeeID
+)
+SELECT ManagerID, EmployeeID, Title, EmployeeLevel
+FROM DirectReports
+ORDER BY EmployeeLevel, ManagerID, EmployeeID;
+----
+NULL	1	Chief Executive Officer	0
+1	273	Vice President of Sales	1
+273	16	Marketing Manager	2
+273	274	North American Sales Manager	2
+273	285	Pacific Sales Manager	2
+16	23	Marketing Specialist	3
+274	275	Sales Representative	3
+274	276	Sales Representative	3
+285	286	Sales Representative	3
+
+# Using a recursive common table expression to display two levels of recursion
+query IIII
+WITH RECURSIVE DirectReports(ManagerID, EmployeeID, Title, EmployeeLevel) AS
+(
+    SELECT ManagerID, EmployeeID, Title, 0 AS EmployeeLevel
+    FROM MyEmployees
+    WHERE ManagerID IS NULL
+    UNION ALL
+    SELECT e.ManagerID, e.EmployeeID, e.Title, EmployeeLevel + 1
+    FROM MyEmployees AS e
+        INNER JOIN DirectReports AS d
+        ON e.ManagerID = d.EmployeeID
+)
+SELECT ManagerID, EmployeeID, Title, EmployeeLevel
+FROM DirectReports
+WHERE EmployeeLevel <= 2
+ORDER BY EmployeeLevel, ManagerId, EmployeeId;
+----
+NULL	1	Chief Executive Officer	0
+1	273	Vice President of Sales	1
+273	16	Marketing Manager	2
+273	274	North American Sales Manager	2
+273	285	Pacific Sales Manager	2
+
+# Using a recursive common table expression to display a hierarchical list
+query IIII
+WITH RECURSIVE DirectReports(Name, Title, EmployeeID, EmployeeLevel, Sort)
+AS (SELECT e.FirstName || ' ' || e.LastName,
+        e.Title,
+        e.EmployeeID,
+        1,
+        e.FirstName || ' ' || e.LastName
+    FROM MyEmployees AS e
+    WHERE e.ManagerID IS NULL
+    UNION ALL
+    SELECT REPEAT ('>' , EmployeeLevel) ||
+        e.FirstName || ' ' || e.LastName,
+        e.Title,
+        e.EmployeeID,
+        EmployeeLevel + 1,
+        RTRIM(Sort) || '>' || FirstName || ' ' || LastName
+    FROM MyEmployees AS e
+    JOIN DirectReports AS d ON e.ManagerID = d.EmployeeID
+    )
+SELECT EmployeeID, Name, Title, EmployeeLevel
+FROM DirectReports
+ORDER BY Sort, EmployeeID;
+----
+1	Ken Sánchez	Chief Executive Officer	1
+273	>Brian Welcker	Vice President of Sales	2
+16	>>David Bradley	Marketing Manager	3
+23	>>>Mary Gibson	Marketing Specialist	4
+274	>>Stephen Jiang	North American Sales Manager	3
+276	>>>Linda Mitchell	Sales Representative	4
+275	>>>Michael Blythe	Sales Representative	4
+285	>>Syed Abbas	Pacific Sales Manager	3
+286	>>>Lynn Tsoflias	Sales Representative	4
+
+

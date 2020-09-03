@@ -150,17 +150,17 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	}
 }
 
-void Binder::AddCTE(const string &name, QueryNode *cte) {
-	assert(cte);
+void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
+	assert(info);
 	assert(!name.empty());
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
 		throw BinderException("Duplicate CTE \"%s\" in query!", name);
 	}
-	CTE_bindings[name] = cte;
+	CTE_bindings[name] = info;
 }
 
-unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
+CommonTableExpressionInfo* Binder::FindCTE(const string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
 		if (parent) {
@@ -168,7 +168,7 @@ unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
 		}
 		return nullptr;
 	}
-	return entry->second->Copy();
+	return entry->second;
 }
 
 idx_t Binder::GenerateTableIndex() {
