@@ -65,7 +65,7 @@ setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
   function(conn, statement, ...) {
     if (conn@debug) {
-      cat("Q ", statement, "\n")
+      message("Q ", statement)
     }
     statement <- enc2utf8(statement)
     stmt_lst <- .Call(duckdb_prepare_R, conn@conn_ref, statement)
