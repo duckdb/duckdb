@@ -60,7 +60,7 @@ public:
 	HashAggregateGlobalState(vector<LogicalType> &group_types, vector<LogicalType> &payload_types,
 	                         vector<BoundAggregateExpression *> &bindings)
 	    : is_empty(true) {
-		ht = make_unique<SuperLargeHashTable>(1024, group_types, payload_types, bindings);
+		ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE, group_types, payload_types, bindings);
 	}
 
 	//! The lock for updating the global aggregate state

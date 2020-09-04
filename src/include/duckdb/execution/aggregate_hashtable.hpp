@@ -128,6 +128,8 @@ private:
 	void CallDestructors(Vector &state_vector, idx_t count);
 	void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
 	                   const SelectionVector &sel, idx_t count);
+
+	void Verify();
 };
 
 } // namespace duckdb
