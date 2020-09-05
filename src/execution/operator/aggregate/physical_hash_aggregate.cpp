@@ -60,15 +60,14 @@ public:
 	HashAggregateGlobalState(vector<LogicalType> &group_types, vector<LogicalType> &payload_types,
 	                         vector<BoundAggregateExpression *> &bindings)
 	    : is_empty(true) {
-		ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE, group_types, payload_types, bindings);
+		final_ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE, group_types, payload_types, bindings);
 	}
 
-	//! The lock for updating the global aggregate state
-	std::mutex lock;
-	//! The aggregate HT
-	unique_ptr<SuperLargeHashTable> ht;
+	unique_ptr<SuperLargeHashTable> final_ht;
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
+	//! The lock for updating the global aggregate state
+	std::mutex lock;
 };
 
 class HashAggregateLocalState : public LocalSinkState {
@@ -87,6 +86,7 @@ public:
 		if (payload_types.size() > 0) {
 			payload_chunk.Initialize(payload_types);
 		}
+		ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE, group_types, payload_types, aggregates);
 	}
 
 	//! Expression executor for the GROUP BY chunk
@@ -97,6 +97,10 @@ public:
 	DataChunk group_chunk;
 	//! The payload chunk
 	DataChunk payload_chunk;
+	//! The aggregate HT
+	unique_ptr<SuperLargeHashTable> ht;
+	//! Whether or not any tuples were added to the HT
+	bool is_empty;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalHashAggregate::GetGlobalState(ClientContext &context) {
@@ -109,7 +113,8 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 
 void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                                  DataChunk &input) {
-	auto &gstate = (HashAggregateGlobalState &)state;
+	auto &llstate = (HashAggregateLocalState &)lstate;
+
 	auto &sink = (HashAggregateLocalState &)lstate;
 
 	DataChunk &group_chunk = sink.group_chunk;
@@ -137,9 +142,8 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	payload_chunk.Verify();
 	assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
-	lock_guard<mutex> glock(gstate.lock);
-	gstate.ht->AddChunk(group_chunk, payload_chunk);
-	gstate.is_empty = false;
+	llstate.ht->AddChunk(group_chunk, payload_chunk);
+	llstate.is_empty = false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -164,6 +168,17 @@ public:
 	idx_t ht_scan_position;
 };
 
+void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+	auto &gstate = (HashAggregateGlobalState &)state;
+	auto &source = (HashAggregateLocalState &)lstate;
+	assert(all_combinable);
+
+	lock_guard<mutex> glock(gstate.lock);
+
+	gstate.is_empty |= source.is_empty;
+	gstate.final_ht->Merge(*source.ht);
+}
+
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                              PhysicalOperatorState *state_) {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
@@ -171,7 +186,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 
 	state.group_chunk.Reset();
 	state.aggregate_chunk.Reset();
-	idx_t elements_found = gstate.ht->Scan(state.ht_scan_position, state.group_chunk, state.aggregate_chunk);
+	idx_t elements_found = gstate.final_ht->Scan(state.ht_scan_position, state.group_chunk, state.aggregate_chunk);
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups

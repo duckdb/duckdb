@@ -631,6 +631,63 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	FindOrCreateGroups(groups, addresses, new_groups);
 }
 
+void SuperLargeHashTable::FlushMerge(Vector &source_addresses, idx_t count) {
+	DataChunk groups;
+	groups.Initialize(group_types);
+	groups.SetCardinality(count);
+	for (idx_t i = 0; i < groups.column_count(); i++) {
+		auto &column = groups.data[i];
+		VectorOperations::Gather::Set(source_addresses, column, groups.size());
+	}
+
+	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
+	Vector group_addresses(LogicalType::POINTER);
+	FindOrCreateGroups(groups, group_addresses);
+
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		// for any entries for which a group was found, update the aggregate
+		auto &aggr = aggregates[aggr_idx];
+		assert(aggr.function.combine);
+		aggr.function.combine(source_addresses, group_addresses, groups.size());
+		VectorOperations::AddInPlace(source_addresses, aggr.payload_size, groups.size());
+		VectorOperations::AddInPlace(group_addresses, aggr.payload_size, groups.size());
+	}
+}
+
+void SuperLargeHashTable::Merge(SuperLargeHashTable &other) {
+	assert(other.payload_width == payload_width);
+	// TODO assert other things
+	if (other.entries == 0) {
+		return;
+	}
+	other.Verify();
+
+	Vector addresses(LogicalType::POINTER);
+	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
+
+	idx_t group_idx = 0;
+	idx_t merge_entries = other.entries;
+	for (auto &payload_chunk : other.payload) {
+		auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, merge_entries);
+		for (data_ptr_t ptr = payload_chunk.get(), end = payload_chunk.get() + this_entries * tuple_size; ptr < end;
+		     ptr += tuple_size) {
+
+			// TODO collect and pass hashes too to avoid re-hash in FindOrCreateGroups
+			addresses_ptr[group_idx++] = ptr + hash_width;
+
+			if (group_idx == STANDARD_VECTOR_SIZE) {
+				FlushMerge(addresses, group_idx);
+				group_idx = 0;
+			}
+		}
+		merge_entries -= this_entries;
+	}
+	assert(merge_entries == 0);
+
+	FlushMerge(addresses, group_idx);
+	Verify();
+}
+
 idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
 	Vector addresses(LogicalType::POINTER);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);

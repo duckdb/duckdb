@@ -67,6 +67,8 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
 
+	void Merge(SuperLargeHashTable &other);
+
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
 
@@ -130,6 +132,7 @@ private:
 	                   const SelectionVector &sel, idx_t count);
 
 	void Verify();
+	void FlushMerge(Vector &source_addresses, idx_t count);
 };
 
 } // namespace duckdb
