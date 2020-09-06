@@ -628,18 +628,22 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 
 struct DataFrameScanFunctionData : public TableFunctionData {
 	DataFrameScanFunctionData(SEXP df, idx_t row_count, vector<RType> rtypes)
-	    : df(df), row_count(row_count), rtypes(rtypes), position(0) {
+	    : df(df), row_count(row_count), rtypes(rtypes) {
 	}
 	SEXP df;
 	idx_t row_count;
 	vector<RType> rtypes;
+};
+
+struct DataFrameScanState : public FunctionOperatorData {
+	DataFrameScanState() : position(0) {}
+
 	idx_t position;
 };
 
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
-	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_bind, dataframe_scan_function,
-	                    nullptr){};
+	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_function, dataframe_scan_bind, dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality) {};
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,
@@ -685,14 +689,18 @@ struct DataFrameScanFunction : public TableFunction {
 		return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
 	}
 
-	static void dataframe_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
-	                                    FunctionData *dataptr) {
-		auto &data = *((DataFrameScanFunctionData *)dataptr);
+	static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data, OperatorTaskInfo *task_info,
+		vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+		return make_unique<DataFrameScanState>();
+	}
 
-		if (data.position >= data.row_count) {
+	static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
+		auto &data = (DataFrameScanFunctionData &) *bind_data;
+		auto &state = (DataFrameScanState &) *operator_state;
+		if (state.position >= data.row_count) {
 			return;
 		}
-		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - data.position);
+		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - state.position);
 
 		output.SetCardinality(this_count);
 
@@ -703,33 +711,33 @@ struct DataFrameScanFunction : public TableFunction {
 
 			switch (data.rtypes[col_idx]) {
 			case RType::LOGICAL: {
-				auto data_ptr = INTEGER_POINTER(coldata) + data.position;
+				auto data_ptr = INTEGER_POINTER(coldata) + state.position;
 				AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::INTEGER: {
-				auto data_ptr = INTEGER_POINTER(coldata) + data.position;
+				auto data_ptr = INTEGER_POINTER(coldata) + state.position;
 				AppendColumnSegment<int, int, RIntegerType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::NUMERIC: {
-				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 				AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::STRING:
-				AppendStringSegment(coldata, v, data.position, this_count);
+				AppendStringSegment(coldata, v, state.position, this_count);
 				break;
 			case RType::FACTOR:
-				AppendFactor(coldata, v, data.position, this_count);
+				AppendFactor(coldata, v, state.position, this_count);
 				break;
 			case RType::TIMESTAMP: {
-				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 				AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::DATE: {
-				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 				AppendColumnSegment<double, date_t, RDateType>(data_ptr, v, this_count);
 				break;
 			}
@@ -738,7 +746,12 @@ struct DataFrameScanFunction : public TableFunction {
 			}
 		}
 
-		data.position += this_count;
+		state.position += this_count;
+	}
+
+	static idx_t dataframe_scan_cardinality(const FunctionData *bind_data) {
+		auto &data = (DataFrameScanFunctionData &) *bind_data;
+		return data.row_count;
 	}
 };
 
