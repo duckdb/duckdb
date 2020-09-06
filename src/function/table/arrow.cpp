@@ -20,6 +20,7 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	ArrowArray current_chunk_root;
 	idx_t chunk_idx = 0;
 	idx_t chunk_offset = 0;
+	bool is_consumed = false;
 
 	void ReleaseArray() {
 		if (current_chunk_root.release) {
@@ -118,11 +119,24 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 	return move(res);
 }
 
-static void arrow_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
-                                FunctionData *dataptr) {
-	auto &data = *((ArrowScanFunctionData *)dataptr);
+static unique_ptr<FunctionOperatorData> arrow_scan_init(
+    ClientContext &context,
+    const FunctionData *bind_data,
+    OperatorTaskInfo *task_info,
+    vector<column_t> &column_ids,
+    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	auto &data = (ArrowScanFunctionData &) *bind_data;
+	if (data.is_consumed) {
+		throw NotImplementedException("FIXME: Arrow streams can only be read once");
+	}
+	data.is_consumed = true;
+	return nullptr;
+}
 
-	if (!data.stream->release) { // no more chunks
+static void arrow_scan_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
+	auto &data = (ArrowScanFunctionData &) *bind_data;
+	if (!data.stream->release) {
+		// no more chunks
 		return;
 	}
 
@@ -248,11 +262,10 @@ static void arrow_scan_function(ClientContext &context, vector<Value> &input, Da
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	// TableFunctionSet arrow("arrow_scan");
+	TableFunctionSet arrow("arrow_scan");
 
-	// // FIXME
-	// // arrow.AddFunction(TableFunction({LogicalType::POINTER}, arrow_scan_bind, arrow_scan_function));
-	// set.AddFunction(arrow);
+	arrow.AddFunction(TableFunction({LogicalType::POINTER}, arrow_scan_function, arrow_scan_bind, arrow_scan_init));
+	set.AddFunction(arrow);
 }
 
 void BuiltinFunctions::RegisterArrowFunctions() {

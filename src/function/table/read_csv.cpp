@@ -9,11 +9,13 @@ using namespace std;
 namespace duckdb {
 
 struct ReadCSVFunctionData : public TableFunctionData {
-	ReadCSVFunctionData() {
+	ReadCSVFunctionData() : is_consumed(false) {
 	}
 
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
+	//! Whether or not the CSV has already been read completely
+	bool is_consumed;
 };
 
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,
@@ -102,6 +104,20 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	return move(result);
 }
 
+static unique_ptr<FunctionOperatorData> read_csv_init(
+    ClientContext &context,
+    const FunctionData *bind_data_,
+    OperatorTaskInfo *task_info,
+    vector<column_t> &column_ids,
+    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	auto &bind_data = (ReadCSVFunctionData &)*bind_data_;
+	if (bind_data.is_consumed) {
+		bind_data.csv_reader = make_unique<BufferedCSVReader>(context, bind_data.csv_reader->options, bind_data.csv_reader->sql_types);
+	}
+	bind_data.is_consumed = true;
+	return nullptr;
+}
+
 static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs,
                                                    unordered_map<string, Value> &named_parameters,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
@@ -109,8 +125,8 @@ static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vecto
 	return read_csv_bind(context, inputs, named_parameters, return_types, names);
 }
 
-static void read_csv_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = ((ReadCSVFunctionData &)*dataptr);
+static void read_csv_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
+	auto &data = (ReadCSVFunctionData &)*bind_data;
 	data.csv_reader->ParseCSV(output);
 }
 
@@ -131,16 +147,13 @@ static void add_named_parameters(TableFunction &table_function) {
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
-	// FIXME
-	// TableFunction read_csv_function =
-	//     TableFunction("read_csv", {LogicalType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
-	// add_named_parameters(read_csv_function);
-	// set.AddFunction(read_csv_function);
+	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, read_csv_function, read_csv_bind, read_csv_init);
+	add_named_parameters(read_csv);
+	set.AddFunction(read_csv);
 
-	// TableFunction read_csv_auto_function =
-	//     TableFunction("read_csv_auto", {LogicalType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr);
-	// add_named_parameters(read_csv_auto_function);
-	// set.AddFunction(read_csv_auto_function);
+	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, read_csv_function, read_csv_auto_bind, read_csv_init);
+	add_named_parameters(read_csv_auto);
+	set.AddFunction(read_csv_auto);
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {
