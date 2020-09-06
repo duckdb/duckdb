@@ -696,9 +696,10 @@ void SuperLargeHashTable::Merge(SuperLargeHashTable &other) {
 		merge_entries -= this_entries;
 	}
 	assert(merge_entries == 0);
-
 	FlushMerge(addresses, hashes, group_idx);
-	Verify();
+    string_heap.MergeHeap(other.string_heap);
+
+    Verify();
 }
 
 idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
