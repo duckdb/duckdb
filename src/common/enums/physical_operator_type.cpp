@@ -8,6 +8,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 	switch (type) {
 	case PhysicalOperatorType::LEAF:
 		return "LEAF";
+	case PhysicalOperatorType::TABLE_SCAN:
+		return "TABLE_SCAN";
 	case PhysicalOperatorType::DUMMY_SCAN:
 		return "DUMMY_SCAN";
 	case PhysicalOperatorType::INDEX_SCAN:

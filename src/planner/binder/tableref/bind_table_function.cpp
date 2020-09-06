@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/algorithm.hpp"
