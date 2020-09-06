@@ -64,6 +64,7 @@ public:
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
 	//! created groups. The return value is the amount of newly created groups.
+	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses, SelectionVector &new_groups);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
 
@@ -132,7 +133,7 @@ private:
 	                   const SelectionVector &sel, idx_t count);
 
 	void Verify();
-	void FlushMerge(Vector &source_addresses, idx_t count);
+	void FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count);
 };
 
 } // namespace duckdb

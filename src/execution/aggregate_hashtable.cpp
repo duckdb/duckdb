@@ -494,7 +494,8 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
-idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups) {
+idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses,
+                                              SelectionVector &new_groups) {
 	// resize at 50% capacity, also need to fit the entire vector
 	if (entries > capacity / 2 || capacity - entries <= groups.size()) {
 		Resize(capacity * 2);
@@ -503,9 +504,8 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 	// we need to be able to fit at least one vector of data
 	assert(capacity - entries >= groups.size());
 	assert(addresses.type == LogicalType::POINTER);
+	assert(group_hashes.type == LogicalType::HASH);
 
-	Vector group_hashes(LogicalType::HASH);
-	groups.Hash(group_hashes);
 	group_hashes.Normalify(groups.size());
 	auto hashes_pointer = FlatVector::GetData<hash_t>(group_hashes);
 
@@ -631,7 +631,16 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	FindOrCreateGroups(groups, addresses, new_groups);
 }
 
-void SuperLargeHashTable::FlushMerge(Vector &source_addresses, idx_t count) {
+idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups) {
+	Vector hashes(LogicalType::HASH);
+	groups.Hash(hashes);
+	return FindOrCreateGroups(groups, hashes, addresses, new_groups);
+}
+
+void SuperLargeHashTable::FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count) {
+	assert(source_addresses.type == LogicalType::POINTER);
+	assert(source_hashes.type == LogicalType::HASH);
+
 	DataChunk groups;
 	groups.Initialize(group_types);
 	groups.SetCardinality(count);
@@ -642,7 +651,9 @@ void SuperLargeHashTable::FlushMerge(Vector &source_addresses, idx_t count) {
 
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 	Vector group_addresses(LogicalType::POINTER);
-	FindOrCreateGroups(groups, group_addresses);
+	SelectionVector new_groups_sel(STANDARD_VECTOR_SIZE);
+
+	FindOrCreateGroups(groups, source_hashes, group_addresses, new_groups_sel);
 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		// for any entries for which a group was found, update the aggregate
@@ -665,18 +676,20 @@ void SuperLargeHashTable::Merge(SuperLargeHashTable &other) {
 	Vector addresses(LogicalType::POINTER);
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
+	Vector hashes(LogicalType::HASH);
+	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
+
 	idx_t group_idx = 0;
 	idx_t merge_entries = other.entries;
 	for (auto &payload_chunk : other.payload) {
 		auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, merge_entries);
 		for (data_ptr_t ptr = payload_chunk.get(), end = payload_chunk.get() + this_entries * tuple_size; ptr < end;
 		     ptr += tuple_size) {
-
-			// TODO collect and pass hashes too to avoid re-hash in FindOrCreateGroups
-			addresses_ptr[group_idx++] = ptr + hash_width;
-
+			hashes_ptr[group_idx] = *(hash_t *)ptr;
+			addresses_ptr[group_idx] = ptr + hash_width;
+			group_idx++;
 			if (group_idx == STANDARD_VECTOR_SIZE) {
-				FlushMerge(addresses, group_idx);
+				FlushMerge(addresses, hashes, group_idx);
 				group_idx = 0;
 			}
 		}
@@ -684,7 +697,7 @@ void SuperLargeHashTable::Merge(SuperLargeHashTable &other) {
 	}
 	assert(merge_entries == 0);
 
-	FlushMerge(addresses, group_idx);
+	FlushMerge(addresses, hashes, group_idx);
 	Verify();
 }
 
