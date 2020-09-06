@@ -15,11 +15,10 @@ SELECT * FROM pragma_database_list()
 statement error
 PRAGMA database_list()
 
-# FIXME: need to merge changes from hugeint branch
-# # load a database file
-# load __TEST_DIR__/test.db
+# load a database file
+load __TEST_DIR__/test.db
 
-# query III
-# SELECT * FROM pragma_database_list()
-# ----
-# 0	main	(empty)
+query III
+SELECT * FROM pragma_database_list()
+----
+0	main	(empty)
