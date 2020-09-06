@@ -3,7 +3,7 @@
 # group: [cte]
 
 statement ok
-create table series as select * from range(-1,1+1) x(n);
+create table series as select * from generate_series(-1,1) x(n);
 
 # conway
 query III
@@ -35,9 +35,6 @@ select * from game where n=4 order by n, x, y; --select generation 4
 4	3	3
 4	3	4
 
-mode skip
-
-# FIXME: table functions keep state in function data -> this should be fixed, as it causes problems with recursive CTEs
 query III
 with recursive generation1(x,y) as (   --the initial board setup
   select 2, 3
@@ -54,7 +51,7 @@ game(n, x, y) as (
     select n, x+offset_x new_x, y+offset_y new_y, max(self) over (partition by n+1, x+offset_x, y+offset_y) cell_was_already_alive
     from game, (
         select x.n offset_x, y.n offset_y, case when x.n = 0 and y.n = 0 then 1 else 0 end self
-        from range(-1,2) x(n), range(-1,2) y(n) --join 2 row generators to get 9 pairs
+        from generate_series(-1,1) x(n), generate_series(-1,1) y(n) --join 2 row generators to get 9 pairs
       ) offsets_to_neighbours_and_self(offset_x, offset_y, self)
     where n < 100
   ) all_impacts

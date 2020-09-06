@@ -16,8 +16,12 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	auto bound_func = Bind(ref);
 	auto &bound_table_func = (BoundTableFunction &)*bound_func;
 	auto &get = (LogicalGet&) *bound_table_func.get;
+	assert(get.returned_types.size() > 0);
+	for(idx_t i = 0; i < get.returned_types.size(); i++) {
+		get.column_ids.push_back(i);
+	}
 
-	result.types = get.types;
+	result.types = get.returned_types;
 	result.names = get.names;
 	result.plan = CreatePlan(*bound_func);
 	return result;

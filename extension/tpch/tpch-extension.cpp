@@ -41,8 +41,8 @@ static unique_ptr<FunctionData> dbgen_bind(ClientContext &context, vector<Value>
 	return move(result);
 }
 
-static void dbgen_function(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = ((DBGenFunctionData &)*dataptr);
+static void dbgen_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
+	auto &data = (DBGenFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
 	}
@@ -60,16 +60,15 @@ void TPCHExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	// FIXME
-	// TableFunction dbgen_func("dbgen", {}, dbgen_bind, dbgen_function);
-	// dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	// dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
-	// dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
-	// dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
-	// CreateTableFunctionInfo dbgen_info(dbgen_func);
+	TableFunction dbgen_func("dbgen", {}, dbgen_function, dbgen_bind);
+	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
+	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
+	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
+	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	CreateTableFunctionInfo dbgen_info(dbgen_func);
 
-	// // create the dbgen function
-	// db.catalog->CreateTableFunction(*con.context, &dbgen_info);
+	// create the dbgen function
+	db.catalog->CreateTableFunction(*con.context, &dbgen_info);
 
 	// create the TPCH pragma that allows us to run the query
 	auto tpch_func = PragmaFunction::PragmaCall("tpch", pragma_tpch_query, {LogicalType::BIGINT});
