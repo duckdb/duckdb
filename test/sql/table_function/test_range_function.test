@@ -110,6 +110,21 @@ SELECT * FROM range(0, 10)
 8
 9
 
+query I
+SELECT EXISTS(SELECT * FROM range(10))
+----
+1
+
+query I
+SELECT EXISTS(SELECT * FROM range(0))
+----
+0
+
+query I
+SELECT * FROM range(10) t1(j) WHERE j=3
+----
+3
+
 statement error
 SELECT * FROM range('hello')
 

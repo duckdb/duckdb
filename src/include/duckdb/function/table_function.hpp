@@ -58,7 +58,7 @@ public:
 	              bool projection_pushdown = false,
 	              bool filter_pushdown = false)
 	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), cleanup(cleanup),
-		  parallel_tasks(parallel_tasks), dependency(dependency), to_string(to_string),
+		  parallel_tasks(parallel_tasks), dependency(dependency), cardinality(cardinality), to_string(to_string),
 		  projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
 	TableFunction(vector<LogicalType> arguments,

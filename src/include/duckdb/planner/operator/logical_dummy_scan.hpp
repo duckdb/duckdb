@@ -29,7 +29,9 @@ public:
 	}
 protected:
 	void ResolveTypes() override {
-		// already resolved
+		if (types.size() == 0) {
+			types.push_back(LogicalType::INTEGER);
+		}
 	}
 };
 } // namespace duckdb
