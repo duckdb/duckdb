@@ -10,7 +10,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_table_function.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
@@ -151,20 +150,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
-	case LogicalOperatorType::TABLE_FUNCTION: {
-		throw NotImplementedException("Bla");
-		// LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		// auto &fun = (LogicalTableFunction &)op;
-		// if (!everything_referenced && fun.function.supports_projection) {
-		// 	// table producing function: figure out which columns are referenced
-		// 	ClearUnusedExpressions(fun.column_ids, fun.table_index);
-		// 	// see above for this special case
-		// 	if (fun.column_ids.size() == 0) {
-		// 		fun.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-		// 	}
-		// }
-		// return;
-	}
 	case LogicalOperatorType::DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children

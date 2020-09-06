@@ -36,7 +36,7 @@ enum class LogicalOperatorType : uint8_t {
 	CHUNK_GET = 26,
 	DELIM_GET = 27,
 	EXPRESSION_GET = 28,
-	TABLE_FUNCTION = 29,
+	DUMMY_SCAN = 29,
 	EMPTY_RESULT = 30,
 	CTE_REF = 31,
 	// -----------------------------

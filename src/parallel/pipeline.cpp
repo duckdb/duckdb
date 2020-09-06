@@ -96,7 +96,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::HASH_JOIN:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
-	case PhysicalOperatorType::TABLE_FUNCTION: {
+	case PhysicalOperatorType::TABLE_SCAN: {
 		// we reached a scan: split it up into parts and schedule the parts
 		auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 

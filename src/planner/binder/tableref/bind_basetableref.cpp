@@ -7,6 +7,7 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -29,7 +30,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			// This can only be the case if there is a recursive CTE present.
 			auto index = GenerateTableIndex();
 			auto result = make_unique<BoundCTERef>(index, ctebinding->index);
-			auto b = (GenericBinding *)ctebinding;
+			auto b = ctebinding;
 
 			bind_context.AddGenericBinding(index, ref.alias.empty() ? ref.table_name : ref.alias, b->names, b->types);
 			// Update references to CTE
@@ -51,10 +52,19 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto table_index = GenerateTableIndex();
 		auto table = (TableCatalogEntry *)table_or_view;
 
-		auto logical_get = make_unique<LogicalGet>(table, table_index);
+		auto scan_function = TableScanFunction::GetFunction();
+		auto bind_data = make_unique<TableScanBindData>(table);
+		vector<LogicalType> table_types;
+		vector<string> table_names;
+		for(auto &col : table->columns) {
+			table_types.push_back(col.type);
+			table_names.push_back(col.name);
+		}
+
+		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), move(table_types), move(table_names));
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-		bind_context.AddBaseTable(table_index, alias, *table, *logical_get);
-		return make_unique_base<BoundTableRef, BoundBaseTableRef>(move(logical_get));
+		bind_context.AddBaseTable(table_index, alias, table_names, table_types, table->name_map, *logical_get);
+		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents

@@ -51,6 +51,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelimGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelimJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDistinct &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalDummyScan &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalEmptyResult &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExpressionGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExport &op);
@@ -67,7 +68,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExplain &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUpdate &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalTableFunction &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPrepare &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalWindow &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExecute &op);

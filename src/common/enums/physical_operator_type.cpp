@@ -74,8 +74,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT_EXTERNAL_FILE";
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
-	case PhysicalOperatorType::TABLE_FUNCTION:
-		return "TABLE_FUNCTION";
 	case PhysicalOperatorType::CREATE:
 		return "CREATE";
 	case PhysicalOperatorType::CREATE_INDEX:

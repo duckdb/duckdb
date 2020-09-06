@@ -15,6 +15,7 @@ add_library_unity(
   plan_delim_get.cpp
   plan_delim_join.cpp
   plan_distinct.cpp
+  plan_dummy_scan.cpp
   plan_empty_result.cpp
   plan_execute.cpp
   plan_explain.cpp
@@ -30,7 +31,6 @@ add_library_unity(
   plan_projection.cpp
   plan_set_operation.cpp
   plan_simple.cpp
-  plan_table_function.cpp
   plan_top_n.cpp
   plan_update.cpp
   plan_window.cpp

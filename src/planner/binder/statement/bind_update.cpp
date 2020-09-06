@@ -94,11 +94,13 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only update base table!");
 	}
+	auto &table_binding = (BoundBaseTableRef &) *bound_table;
+	auto table = table_binding.table;
+
 	auto root = CreatePlan(*bound_table);
 	auto &get = (LogicalGet &)*root;
-	assert(root->type == LogicalOperatorType::GET && get.table);
+	assert(root->type == LogicalOperatorType::GET);
 
-	auto &table = get.table;
 	if (!table->temporary) {
 		// update of persistent table: not read only!
 		this->read_only = false;

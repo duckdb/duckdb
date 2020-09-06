@@ -75,8 +75,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalCopyFromFile &)op);
 	case LogicalOperatorType::COPY_TO_FILE:
 		return CreatePlan((LogicalCopyToFile &)op);
-	case LogicalOperatorType::TABLE_FUNCTION:
-		return CreatePlan((LogicalTableFunction &)op);
+	case LogicalOperatorType::DUMMY_SCAN:
+		return CreatePlan((LogicalDummyScan &)op);
 	case LogicalOperatorType::ANY_JOIN:
 		return CreatePlan((LogicalAnyJoin &)op);
 	case LogicalOperatorType::DELIM_JOIN:

@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class OperatorTaskInfo;
+class TableFilter;
 
 struct FunctionOperatorData {
 	virtual ~FunctionOperatorData() {
@@ -38,16 +39,41 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext 
 typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output);
 typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state);
 typedef void (*table_function_parallel_t)(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters, std::function<void(unique_ptr<OperatorTaskInfo>)> callback);
+typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
+typedef idx_t (*table_function_cardinality_t)(const FunctionData *bind_data);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 class TableFunction : public SimpleFunction {
 public:
-	TableFunction(string name, vector<LogicalType> arguments, table_function_t function)
-	    : SimpleFunction(name, move(arguments)), bind(nullptr), init(nullptr), function(function), cleanup(nullptr),
-		  parallel_tasks(nullptr), to_string(nullptr), projection_pushdown(false), filter_pushdown(false) {
+	TableFunction(string name,
+	              vector<LogicalType> arguments,
+	              table_function_t function,
+	              table_function_bind_t bind = nullptr,
+	              table_function_init_t init = nullptr,
+	              table_function_cleanup_t cleanup = nullptr,
+	              table_function_parallel_t parallel_tasks = nullptr,
+				  table_function_dependency_t dependency = nullptr,
+				  table_function_cardinality_t cardinality = nullptr,
+	              table_function_to_string_t to_string = nullptr,
+	              bool projection_pushdown = false,
+	              bool filter_pushdown = false)
+	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), cleanup(cleanup),
+		  parallel_tasks(parallel_tasks), dependency(dependency), to_string(to_string),
+		  projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
-	TableFunction(vector<LogicalType> arguments, table_function_t function)
-	    : TableFunction(string(), move(arguments), function) {
+	TableFunction(vector<LogicalType> arguments,
+	              table_function_t function,
+	              table_function_bind_t bind = nullptr,
+	              table_function_init_t init = nullptr,
+	              table_function_cleanup_t cleanup = nullptr,
+	              table_function_parallel_t parallel_tasks = nullptr,
+				  table_function_dependency_t dependency = nullptr,
+				  table_function_cardinality_t cardinality = nullptr,
+	              table_function_to_string_t to_string = nullptr,
+	              bool projection_pushdown = false,
+	              bool filter_pushdown = false)
+	    : TableFunction(string(), move(arguments), function, bind, init, cleanup, parallel_tasks, dependency,
+		  cardinality, to_string, projection_pushdown, filter_pushdown) {
 	}
 
 	//! (Optional) Bind function
@@ -65,6 +91,12 @@ public:
 	//! (Optional) parallel task split
 	//! The function used to split the table-producing function into parallel tasks
 	table_function_parallel_t parallel_tasks;
+	//! (Optional) dependency function
+	//! Sets up which catalog entries this table function depend on
+	table_function_dependency_t dependency;
+	//! (Optional) cardinality function
+	//! Returns the expected cardinality of this scan
+	table_function_cardinality_t cardinality;
 	//! (Optional) function for rendering the operator to a string in profiling output
 	table_function_to_string_t to_string;
 

@@ -17,9 +17,11 @@ class TableCatalogEntry;
 //! Represents a TableReference to a base table in the schema
 class BoundBaseTableRef : public BoundTableRef {
 public:
-	BoundBaseTableRef(unique_ptr<LogicalOperator> get) : BoundTableRef(TableReferenceType::BASE_TABLE), get(move(get)) {
+	BoundBaseTableRef(TableCatalogEntry *table, unique_ptr<LogicalOperator> get) :
+		BoundTableRef(TableReferenceType::BASE_TABLE), table(table), get(move(get)) {
 	}
 
+	TableCatalogEntry *table;
 	unique_ptr<LogicalOperator> get;
 };
 } // namespace duckdb

@@ -16,6 +16,7 @@ class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalTableScanOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
 	}
+
 	unique_ptr<FunctionOperatorData> operator_data;
 	//! Whether or not the scan has been initialized
 	bool initialized;
@@ -26,7 +27,7 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types,
 					unique_ptr<FunctionData> bind_data_,
 					vector<column_t> column_ids,
 					unordered_map<idx_t, vector<TableFilter>> table_filters) :
-	PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, move(types)), function(move(function_)),
+	PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
 	bind_data(move(bind_data_)), column_ids(move(column_ids)), table_filters(move(table_filters)) {
 }
 
@@ -37,9 +38,6 @@ void PhysicalTableScan::ParallelScanInfo(ClientContext &context,
 		function.parallel_tasks(context, bind_data.get(), column_ids, table_filters, callback);
 	}
 }
-
-// typedef void (*table_function_t)(ClientContext &context, vector<Value> &input, DataChunk &output,
-                                //  const FunctionData *bind_data, FunctionOperatorData *operator_state);
 
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &state = (PhysicalTableScanOperatorState &) *state_;

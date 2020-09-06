@@ -72,29 +72,31 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 
 	// cast the parameters to the type of the function
-	auto result = make_unique<BoundTableFunction>(table_function, bind_index);
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (table_function.arguments[i] == LogicalType::ANY) {
-			result->parameters.push_back(move(parameters[i]));
-		} else {
-			result->parameters.push_back(parameters[i].CastAs(table_function.arguments[i]));
+		if (table_function.arguments[i] != LogicalType::ANY) {
+			parameters[i] = parameters[i].CastAs(table_function.arguments[i]);
 		}
 	}
 
 	// perform the binding
-	result->bind_data =
-	    table_function.bind(context, result->parameters, named_parameters, result->return_types, result->names);
-	assert(result->return_types.size() == result->names.size());
-	assert(result->return_types.size() > 0);
-	vector<string> names = result->names;
-	for (idx_t i = 0; i < ref.column_name_alias.size() && i < result->names.size(); i++) {
-		names[i] = ref.column_name_alias[i];
+	unique_ptr<FunctionData> bind_data;
+	vector<LogicalType> return_types;
+	vector<string> return_names;
+	if (table_function.bind) {
+		bind_data = table_function.bind(context, parameters, named_parameters, return_types, return_names);
 	}
+	assert(return_types.size() == return_names.size());
+	assert(return_types.size() > 0);
+	// overwrite the names with any supplied aliases
+	for (idx_t i = 0; i < ref.column_name_alias.size() && i < return_names.size(); i++) {
+		return_names[i] = ref.column_name_alias[i];
+	}
+	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);
 	// now add the table function to the bind context so its columns can be bound
-	bind_context.AddGenericBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, names,
-	                               result->return_types);
+	bind_context.AddTableFunction(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, return_names,
+	                               return_types, *get);
 
-	return move(result);
+	return make_unique_base<BoundTableRef, BoundTableFunction>(move(get));
 }
 
 } // namespace duckdb
