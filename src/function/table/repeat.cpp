@@ -6,7 +6,7 @@ using namespace std;
 namespace duckdb {
 
 struct RepeatFunctionData : public TableFunctionData {
-	RepeatFunctionData(Value value, idx_t target_count) : target_count(target_count) {
+	RepeatFunctionData(Value value, idx_t target_count) : value(move(value)), target_count(target_count) {
 	}
 
 	Value value;

@@ -8,7 +8,7 @@ namespace duckdb {
 using namespace std;
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data, vector<LogicalType> returned_types, vector<string> returned_names) :
-	LogicalOperator(LogicalOperatorType::GET), table_index(table_index), function(move(function)), bind_data(move(bind_data)), returned_types(move(returned_types)), names(move(names)) {}
+	LogicalOperator(LogicalOperatorType::GET), table_index(table_index), function(move(function)), bind_data(move(bind_data)), returned_types(move(returned_types)), names(move(returned_names)) {}
 
 string LogicalGet::ParamsToString() const {
 	return string();
