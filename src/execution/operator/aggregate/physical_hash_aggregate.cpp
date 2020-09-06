@@ -60,7 +60,7 @@ public:
 	HashAggregateGlobalState(vector<LogicalType> &group_types, vector<LogicalType> &payload_types,
 	                         vector<BoundAggregateExpression *> &bindings)
 	    : is_empty(true) {
-		final_ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE, group_types, payload_types, bindings);
+		final_ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE*2, group_types, payload_types, bindings);
 	}
 
 	unique_ptr<SuperLargeHashTable> final_ht;
@@ -86,7 +86,7 @@ public:
 		if (payload_types.size() > 0) {
 			payload_chunk.Initialize(payload_types);
 		}
-		ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE, group_types, payload_types, aggregates);
+		ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE*2, group_types, payload_types, aggregates);
 	}
 
 	//! Expression executor for the GROUP BY chunk
