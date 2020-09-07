@@ -41,8 +41,9 @@ static unique_ptr<FunctionData> dbgen_bind(ClientContext &context, vector<Value>
 	return move(result);
 }
 
-static void dbgen_function(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = ((DBGenFunctionData &)*dataptr);
+static void dbgen_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                           DataChunk &output) {
+	auto &data = (DBGenFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
 	}
@@ -60,7 +61,7 @@ void TPCHExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	TableFunction dbgen_func("dbgen", {}, dbgen_bind, dbgen_function);
+	TableFunction dbgen_func("dbgen", {}, dbgen_function, dbgen_bind);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;

@@ -1,0 +1,69 @@
+# name: test/sql/copy/csv/recursive_read_csv.test
+# description: Test read CSV function in a recursive CTE
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# first create a table from read csv, and use that in a recursive te
+statement ok
+create table r AS SELECT * FROM read_csv('test/sql/copy/csv/data/test/date.csv', columns=STRUCT_PACK(d := 'DATE'), header=0, auto_detect=0);
+
+query II
+WITH RECURSIVE t(i) AS
+(
+	SELECT 1, NULL::DATE
+	UNION ALL
+	(
+		SELECT i+1, d
+		FROM t, r
+		WHERE i<5
+	)
+)
+SELECT * FROM t ORDER BY i;
+----
+1	NULL
+2	2019-06-05
+3	2019-06-05
+4	2019-06-05
+5	2019-06-05
+
+# directly calling the function should be equivalent
+query II
+WITH RECURSIVE t(i) AS
+(
+	SELECT 1, NULL::DATE
+	UNION ALL
+	(
+		SELECT i+1, d
+		FROM t, read_csv('test/sql/copy/csv/data/test/date.csv', columns=STRUCT_PACK(d := 'DATE'), header=0, auto_detect=0)
+		WHERE i<5
+	)
+)
+SELECT * FROM t ORDER BY i;
+----
+1	NULL
+2	2019-06-05
+3	2019-06-05
+4	2019-06-05
+5	2019-06-05
+
+# should also work if we use auto detect
+query II
+WITH RECURSIVE t(i) AS
+(
+	SELECT 1, NULL::DATE
+	UNION ALL
+	(
+		SELECT i+1, d
+		FROM t, read_csv('test/sql/copy/csv/data/test/date.csv', header=0, auto_detect=1) r(d)
+		WHERE i<5
+	)
+)
+SELECT * FROM t ORDER BY i;
+----
+1	NULL
+2	2019-06-05
+3	2019-06-05
+4	2019-06-05
+5	2019-06-05

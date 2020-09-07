@@ -515,50 +515,13 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 }
 
 //===--------------------------------------------------------------------===//
-// Index Scan
-//===--------------------------------------------------------------------===//
-void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
-                                    vector<column_t> column_ids) {
-	state.index = &index;
-	state.column_ids = move(column_ids);
-	transaction.storage.InitializeScan(this, state.local_state);
-}
-
-void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value,
-                                    ExpressionType expr_type, vector<column_t> column_ids) {
-	InitializeIndexScan(transaction, state, index, move(column_ids));
-	state.index_state = index.InitializeScanSinglePredicate(transaction, state.column_ids, value, expr_type);
-}
-
-void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value low_value,
-                                    ExpressionType low_type, Value high_value, ExpressionType high_type,
-                                    vector<column_t> column_ids) {
-	InitializeIndexScan(transaction, state, index, move(column_ids));
-	state.index_state =
-	    index.InitializeScanTwoPredicates(transaction, state.column_ids, low_value, low_type, high_value, high_type);
-}
-
-void DataTable::IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state) {
-	// clear any previously pinned blocks
-	state.fetch_state.handles.clear();
-	// scan the index
-	state.index->Scan(transaction, *this, state, result);
-	if (result.size() > 0) {
-		return;
-	}
-	// scan the local structure
-	transaction.storage.Scan(state.local_state, state.column_ids, result);
-}
-
-//===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
-                      Vector &row_identifiers, idx_t fetch_count, TableIndexScanState &state) {
+                      Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	// first figure out which row identifiers we should use for this transaction by looking at the VersionManagers
 	row_t rows[STANDARD_VECTOR_SIZE];
 	idx_t count = FetchRows(transaction, row_identifiers, fetch_count, rows);
-
 	if (count == 0) {
 		// no rows to use
 		return;
@@ -579,7 +542,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 			// regular column: fetch data from the base column
 			for (idx_t i = 0; i < count; i++) {
 				auto row_id = rows[i];
-				columns[column]->FetchRow(state.fetch_state, transaction, row_id, result.data[col_idx], i);
+				columns[column]->FetchRow(state, transaction, row_id, result.data[col_idx], i);
 			}
 		}
 	}

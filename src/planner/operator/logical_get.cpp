@@ -2,31 +2,23 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 using namespace std;
 
-LogicalGet::LogicalGet(idx_t table_index)
-    : LogicalOperator(LogicalOperatorType::GET), table(nullptr), table_index(table_index) {
-}
-LogicalGet::LogicalGet(TableCatalogEntry *table, idx_t table_index)
-    : LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index) {
-}
-LogicalGet::LogicalGet(TableCatalogEntry *table, idx_t table_index, vector<column_t> column_ids)
-    : LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index), column_ids(column_ids) {
+LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+                       vector<LogicalType> returned_types, vector<string> returned_names)
+    : LogicalOperator(LogicalOperatorType::GET), table_index(table_index), function(move(function)),
+      bind_data(move(bind_data)), returned_types(move(returned_types)), names(move(returned_names)) {
 }
 
 string LogicalGet::ParamsToString() const {
-	if (!table) {
-		return "";
-	}
-	return "(" + table->name + ")";
+	return string();
+	// return "(" + table->name + ")";
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
-	if (!table) {
-		return {ColumnBinding(INVALID_INDEX, 0)};
-	}
 	if (column_ids.size() == 0) {
 		return {ColumnBinding(table_index, 0)};
 	}
@@ -41,12 +33,18 @@ void LogicalGet::ResolveTypes() {
 	if (column_ids.size() == 0) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
-	types = table->GetTypes(column_ids);
+	for (auto &index : column_ids) {
+		if (index == COLUMN_IDENTIFIER_ROW_ID) {
+			types.push_back(LOGICAL_ROW_TYPE);
+		} else {
+			types.push_back(returned_types[index]);
+		}
+	}
 }
 
 idx_t LogicalGet::EstimateCardinality() {
-	if (table) {
-		return table->storage->info->cardinality;
+	if (function.cardinality) {
+		return function.cardinality(bind_data.get());
 	} else {
 		return 1;
 	}

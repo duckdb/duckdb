@@ -10,7 +10,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_table_function.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
@@ -140,6 +139,24 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
+			// for every table filter, push a column binding into the column references map to prevent the column from
+			// being projected out
+			for (auto &filter : get.tableFilters) {
+				idx_t index = INVALID_INDEX;
+				for (idx_t i = 0; i < get.column_ids.size(); i++) {
+					if (get.column_ids[i] == filter.column_index) {
+						index = i;
+						break;
+					}
+				}
+				if (index == INVALID_INDEX) {
+					throw InternalException("Could not find column index for table filter");
+				}
+				ColumnBinding filter_binding(get.table_index, index);
+				if (column_references.find(filter_binding) == column_references.end()) {
+					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
+				}
+			}
 			// table scan: figure out which columns are referenced
 			ClearUnusedExpressions(get.column_ids, get.table_index);
 
@@ -151,19 +168,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
-	case LogicalOperatorType::TABLE_FUNCTION: {
-		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		auto &fun = (LogicalTableFunction &)op;
-		if (!everything_referenced && fun.function.supports_projection) {
-			// table producing function: figure out which columns are referenced
-			ClearUnusedExpressions(fun.column_ids, fun.table_index);
-			// see above for this special case
-			if (fun.column_ids.size() == 0) {
-				fun.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-			}
-		}
-		return;
-	}
 	case LogicalOperatorType::DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children

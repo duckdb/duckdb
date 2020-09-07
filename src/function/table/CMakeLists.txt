@@ -8,7 +8,8 @@ add_library_unity(
   repeat.cpp
   copy_csv.cpp
   read_csv.cpp
-  sqlite_functions.cpp)
+  sqlite_functions.cpp
+  table_scan.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_table>
