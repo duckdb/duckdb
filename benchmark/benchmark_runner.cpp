@@ -281,6 +281,9 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 		if (benchmark_indices.empty()) {
 			return ConfigurationError::BenchmarkNotFound;
 		}
+		std::sort(benchmark_indices.begin(), benchmark_indices.end(), [&](const int a, const int b) -> bool {
+			return benchmarks[a]->name < benchmarks[b]->name;
+		});
 		if (configuration.meta == BenchmarkMetaType::INFO) {
 			// print info of benchmarks
 			for (const auto &benchmark_index : benchmark_indices) {
