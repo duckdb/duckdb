@@ -1,7 +1,9 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+
 namespace duckdb {
 using namespace std;
 
@@ -23,47 +25,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	}
 	if (!get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top
-		if (filters.empty()) {
-			//! no filters to push
-			return op;
-		}
-		auto filter = make_unique<LogicalFilter>();
-		for (auto &f : filters) {
-			filter->expressions.push_back(move(f->filter));
-		}
-		filter->children.push_back(move(op));
-		return move(filter);
+		return FinishPushdown(move(op));
 	}
 	PushFilters();
 
-	vector<unique_ptr<Filter>> filtersToPushDown;
-	get.tableFilters = combiner.GenerateTableScanFilters(
-	    [&](unique_ptr<Expression> filter) {
-		    auto f = make_unique<Filter>();
-		    f->filter = move(filter);
-		    f->ExtractBindings();
-		    filtersToPushDown.push_back(move(f));
-	    },
-	    get.column_ids);
+	get.tableFilters = combiner.GenerateTableScanFilters(get.column_ids);
 	for (auto &f : get.tableFilters) {
 		f.column_index = get.column_ids[f.column_index];
 	}
 
 	GenerateFilters();
-	for (auto &f : filtersToPushDown) {
-		get.expressions.push_back(move(f->filter));
-	}
-
-	if (!filters.empty()) {
-		//! We didn't managed to push down all filters to table scan
-		auto logicalFilter = make_unique<LogicalFilter>();
-		for (auto &f : filters) {
-			logicalFilter->expressions.push_back(move(f->filter));
-		}
-		logicalFilter->children.push_back(move(op));
-		return move(logicalFilter);
-	}
-	return op;
+	return FinishPushdown(move(op));
 }
 
 } // namespace duckdb

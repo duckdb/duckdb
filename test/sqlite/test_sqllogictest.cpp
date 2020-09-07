@@ -516,6 +516,11 @@ struct Command {
 		}
 	}
 
+	unique_ptr<MaterializedQueryResult> ExecuteQuery(Connection *connection, string file_name, int query_line, string sql_query) {
+		query_break(query_line);
+		return connection->Query(sql_query);
+	}
+
 	virtual void Execute() = 0;
 	void ExecuteLoop() {
 		// store the original query
@@ -575,7 +580,7 @@ void Statement::Execute() {
 	}
 
 	query_break(query_line);
-	auto result = connection->Query(sql_query);
+	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
 	bool error = !result->success;
 
 	if (runner.output_result_mode || runner.debug_mode) {
@@ -597,7 +602,7 @@ void Statement::Execute() {
 		if (result) {
 			result->Print();
 		}
-		FAIL();
+		FAIL_LINE(file_name, query_line);
 	}
 	REQUIRE(!error);
 }
@@ -610,7 +615,7 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 	print_sql(sql_query);
 	print_line_sep();
 	print_result_error(result, values, expected_column_count, row_wise);
-	FAIL();
+	FAIL_LINE(file_name, query_line);
 }
 
 vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
@@ -632,7 +637,7 @@ vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 	if (!csv_result->success) {
 		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error);
 		print_error_header(error.c_str(), file_name.c_str(), query_line);
-		FAIL();
+		FAIL_LINE(file_name, query_line);
 	}
 	expected_column_count = csv_result->column_count();
 
@@ -661,8 +666,7 @@ void Query::Execute() {
 		print_line_sep();
 	}
 
-	query_break(query_line);
-	auto result = connection->Query(sql_query);
+	auto result = ExecuteQuery(connection, file_name, query_line, sql_query);
 	if (!result->success) {
 		print_line_sep();
 		fprintf(stderr, "Query unexpectedly failed (%s:%d)\n", file_name.c_str(), query_line);
@@ -671,7 +675,7 @@ void Query::Execute() {
 		print_line_sep();
 		print_header("Actual result:");
 		result->Print();
-		FAIL();
+		FAIL_LINE(file_name, query_line);
 	}
 	vector<string> azResult;
 	int nResult;
@@ -817,7 +821,7 @@ void Query::Execute() {
 			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int)expected_column_count,
 			        (int)comparison_values.size());
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
-			FAIL();
+			FAIL_LINE(file_name, query_line);
 		}
 		if (expected_rows != result->collection.count) {
 			if (column_count_mismatch) {
@@ -830,7 +834,7 @@ void Query::Execute() {
 			print_sql(sql_query);
 			print_line_sep();
 			print_result_error(*result, comparison_values, expected_column_count, row_wise);
-			FAIL();
+			FAIL_LINE(file_name, query_line);
 		}
 
 		if (row_wise) {
@@ -853,14 +857,14 @@ void Query::Execute() {
 					print_line_sep();
 					print_sql(sql_query);
 					print_line_sep();
-					FAIL();
+					FAIL_LINE(file_name, query_line);
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
 					bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c],
 					                              file_name, query_line, sql_query, current_row, c, comparison_values,
 					                              expected_column_count, row_wise);
 					if (!success) {
-						FAIL();
+						FAIL_LINE(file_name, query_line);
 					}
 					// we do this just to increment the assertion counter
 					REQUIRE(success);
@@ -874,7 +878,7 @@ void Query::Execute() {
 				                              comparison_values[i], file_name, query_line, sql_query, current_row,
 				                              current_column, comparison_values, expected_column_count, row_wise);
 				if (!success) {
-					FAIL();
+					FAIL_LINE(file_name, query_line);
 				}
 				// we do this just to increment the assertion counter
 				REQUIRE(success);
@@ -901,7 +905,7 @@ void Query::Execute() {
 			          << string(result->column_count(), 'I') << termcolor::reset << termcolor::bold << "\""
 			          << termcolor::reset << std::endl;
 			print_line_sep();
-			FAIL();
+			FAIL_LINE(file_name, query_line);
 		}
 	} else {
 		bool hash_compare_error = false;
@@ -919,7 +923,7 @@ void Query::Execute() {
 			if (values.size() <= 0) {
 				print_error_header("Error in test: attempting to compare hash but no hash found!", file_name,
 				                   query_line);
-				FAIL();
+				FAIL_LINE(file_name, query_line);
 			}
 			hash_compare_error = strcmp(values[0].c_str(), zHash) != 0;
 		}
@@ -934,7 +938,7 @@ void Query::Execute() {
 			print_header("Actual result:");
 			print_line_sep();
 			result->Print();
-			FAIL();
+			FAIL_LINE(file_name, query_line);
 		}
 		REQUIRE(!hash_compare_error);
 	}

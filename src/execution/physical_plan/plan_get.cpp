@@ -11,22 +11,30 @@ using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	assert(op.children.empty());
-	unordered_map<idx_t, vector<TableFilter>> table_filter_umap;
 
+	// create the table filter map
+	unordered_map<idx_t, vector<TableFilter>> table_filter_umap;
 	for (auto &tableFilter : op.tableFilters) {
+		// find the relative column index from the absolute column index into the table
+		idx_t column_index = INVALID_INDEX;
 		for (idx_t i = 0; i < op.column_ids.size(); i++) {
 			if (tableFilter.column_index == op.column_ids[i]) {
-				tableFilter.column_index = i;
-				auto filter = table_filter_umap.find(i);
-				if (filter != table_filter_umap.end()) {
-					filter->second.push_back(tableFilter);
-				} else {
-					table_filter_umap.insert(make_pair(i, vector<TableFilter>{tableFilter}));
-				}
+				column_index = i;
 				break;
 			}
 		}
+		if (column_index == INVALID_INDEX) {
+			throw InternalException("Could not find column index for table filter");
+		}
+		tableFilter.column_index = column_index;
+		auto filter = table_filter_umap.find(column_index);
+		if (filter != table_filter_umap.end()) {
+			filter->second.push_back(tableFilter);
+		} else {
+			table_filter_umap.insert(make_pair(column_index, vector<TableFilter>{tableFilter}));
+		}
 	}
+
 	if (op.function.dependency) {
 		op.function.dependency(dependencies, op.bind_data.get());
 	}
