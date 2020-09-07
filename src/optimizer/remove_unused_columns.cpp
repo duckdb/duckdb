@@ -139,8 +139,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
-			// for every table filter, push a column binding into the column references map to prevent the column from being projected out
-			for(auto &filter : get.tableFilters) {
+			// for every table filter, push a column binding into the column references map to prevent the column from
+			// being projected out
+			for (auto &filter : get.tableFilters) {
 				idx_t index = INVALID_INDEX;
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
 					if (get.column_ids[i] == filter.column_index) {
@@ -153,7 +154,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 				ColumnBinding filter_binding(get.table_index, index);
 				if (column_references.find(filter_binding) == column_references.end()) {
-					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression*>()));
+					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
 				}
 			}
 			// table scan: figure out which columns are referenced

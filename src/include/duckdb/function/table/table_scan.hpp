@@ -14,7 +14,8 @@ namespace duckdb {
 class TableCatalogEntry;
 
 struct TableScanBindData : public FunctionData {
-	TableScanBindData(TableCatalogEntry *table) : table(table), is_index_scan(false) {}
+	TableScanBindData(TableCatalogEntry *table) : table(table), is_index_scan(false) {
+	}
 
 	//! The table to scan
 	TableCatalogEntry *table;

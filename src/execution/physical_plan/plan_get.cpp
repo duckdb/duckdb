@@ -41,11 +41,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data), op.column_ids, move(table_filter_umap));
+		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data), op.column_ids,
+		                                           move(table_filter_umap));
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
-			for(idx_t i = 0; i < op.column_ids.size(); i++) {
+			for (idx_t i = 0; i < op.column_ids.size(); i++) {
 				if (op.column_ids[i] != i) {
 					projection_necessary = true;
 					break;
@@ -60,7 +61,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		// push a projection on top that does the projection
 		vector<LogicalType> types;
 		vector<unique_ptr<Expression>> expressions;
-		for(auto &column_id : op.column_ids) {
+		for (auto &column_id : op.column_ids) {
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				types.push_back(LogicalType::BIGINT);
 				expressions.push_back(make_unique<BoundConstantExpression>(Value::BIGINT(0)));
@@ -74,7 +75,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		projection->children.push_back(move(node));
 		return move(projection);
 	} else {
-		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids, move(table_filter_umap));
+		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids,
+		                                      move(table_filter_umap));
 	}
 }
 

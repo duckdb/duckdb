@@ -95,7 +95,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, return_names,
-	                               return_types, *get);
+	                              return_types, *get);
 
 	return make_unique_base<BoundTableRef, BoundTableFunction>(move(get));
 }

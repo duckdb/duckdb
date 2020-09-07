@@ -61,8 +61,7 @@ struct IntegralConvert {
 	}
 };
 
-template <>
-double IntegralConvert::convert_value(hugeint_t val) {
+template <> double IntegralConvert::convert_value(hugeint_t val) {
 	double result;
 	Hugeint::TryCast(val, result);
 	return result;
@@ -93,7 +92,7 @@ template <class T> static py::array fetch_column_regular(string numpy_type, Chun
 	return fetch_column<T, T, RegularConvert>(numpy_type, collection, column);
 }
 
-template<class DUCKDB_T>
+template <class DUCKDB_T>
 static void decimal_convert_internal(ChunkCollection &collection, idx_t column, double *out_ptr, double division) {
 	idx_t out_offset = 0;
 	for (auto &data_chunk : collection.chunks) {
@@ -110,13 +109,14 @@ static void decimal_convert_internal(ChunkCollection &collection, idx_t column, 
 	}
 }
 
-static py::array fetch_column_decimal(string numpy_type, ChunkCollection &collection, idx_t column, LogicalType &decimal_type) {
+static py::array fetch_column_decimal(string numpy_type, ChunkCollection &collection, idx_t column,
+                                      LogicalType &decimal_type) {
 	auto out = py::array(py::dtype(numpy_type), collection.count);
 	auto out_ptr = (double *)out.mutable_data();
 
 	auto dec_scale = decimal_type.scale();
 	double division = pow(10, dec_scale);
-	switch(decimal_type.InternalType()) {
+	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
 		decimal_convert_internal<int16_t>(collection, column, out_ptr, division);
 		break;
@@ -163,14 +163,16 @@ struct PandasScanFunctionData : public TableFunctionData {
 };
 
 struct PandasScanState : public FunctionOperatorData {
-	PandasScanState() : position(0) {}
+	PandasScanState() : position(0) {
+	}
 
 	idx_t position;
 };
 
 struct PandasScanFunction : public TableFunction {
 	PandasScanFunction()
-	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_function, pandas_scan_bind, pandas_scan_init, nullptr, nullptr, nullptr, pandas_scan_cardinality){};
+	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_function, pandas_scan_bind, pandas_scan_init,
+	                    nullptr, nullptr, nullptr, pandas_scan_cardinality){};
 
 	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                 unordered_map<string, Value> &named_parameters,
@@ -225,12 +227,9 @@ struct PandasScanFunction : public TableFunction {
 		return make_unique<PandasScanFunctionData>(df, row_count, return_types);
 	}
 
-	static unique_ptr<FunctionOperatorData> pandas_scan_init(
-		ClientContext &context,
-		const FunctionData *bind_data,
-		OperatorTaskInfo *task_info,
-		vector<column_t> &column_ids,
-		unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
+	                                                         OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+	                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 		return make_unique<PandasScanState>();
 	}
 
@@ -254,9 +253,10 @@ struct PandasScanFunction : public TableFunction {
 		}
 	}
 
-	static void pandas_scan_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
-		auto &data = (PandasScanFunctionData &) *bind_data;
-		auto &state = (PandasScanState &) *operator_state;
+	static void pandas_scan_function(ClientContext &context, const FunctionData *bind_data,
+	                                 FunctionOperatorData *operator_state, DataChunk &output) {
+		auto &data = (PandasScanFunctionData &)*bind_data;
+		auto &state = (PandasScanState &)*operator_state;
 
 		if (state.position >= data.row_count) {
 			return;
@@ -523,7 +523,8 @@ struct DuckDBPyResult {
 				col_res = duckdb_py_convert::fetch_column_regular<double>("float64", mres->collection, col_idx);
 				break;
 			case LogicalTypeId::DECIMAL:
-				col_res = duckdb_py_convert::fetch_column_decimal("float64", mres->collection, col_idx, mres->types[col_idx]);
+				col_res =
+				    duckdb_py_convert::fetch_column_decimal("float64", mres->collection, col_idx, mres->types[col_idx]);
 				break;
 			case LogicalTypeId::TIMESTAMP:
 				col_res = duckdb_py_convert::fetch_column<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(

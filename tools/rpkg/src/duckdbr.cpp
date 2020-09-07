@@ -36,14 +36,12 @@ static void vector_to_r(Vector &src_vec, size_t count, void *dest, uint64_t dest
 }
 
 struct RIntegralType {
-	template<class T>
-	static double DoubleCast(T val) {
+	template <class T> static double DoubleCast(T val) {
 		return double(val);
 	}
 };
 
-template<class T>
-static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
+template <class T> static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
 	auto src_ptr = FlatVector::GetData<T>(src_vec);
 	auto &nullmask = FlatVector::Nullmask(src_vec);
 	double division = pow(10, scale);
@@ -557,7 +555,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					auto &decimal_type = result->types[col_idx];
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 					auto dec_scale = decimal_type.scale();
-					switch(decimal_type.InternalType()) {
+					switch (decimal_type.InternalType()) {
 					case PhysicalType::INT16:
 						RDecimalCastLoop<int16_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
 						break;
@@ -636,14 +634,16 @@ struct DataFrameScanFunctionData : public TableFunctionData {
 };
 
 struct DataFrameScanState : public FunctionOperatorData {
-	DataFrameScanState() : position(0) {}
+	DataFrameScanState() : position(0) {
+	}
 
 	idx_t position;
 };
 
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
-	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_function, dataframe_scan_bind, dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality) {};
+	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_function, dataframe_scan_bind,
+	                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality){};
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,
@@ -689,14 +689,16 @@ struct DataFrameScanFunction : public TableFunction {
 		return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
 	}
 
-	static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data, OperatorTaskInfo *task_info,
-		vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	static unique_ptr<FunctionOperatorData>
+	dataframe_scan_init(ClientContext &context, const FunctionData *bind_data, OperatorTaskInfo *task_info,
+	                    vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 		return make_unique<DataFrameScanState>();
 	}
 
-	static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
-		auto &data = (DataFrameScanFunctionData &) *bind_data;
-		auto &state = (DataFrameScanState &) *operator_state;
+	static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data,
+	                                    FunctionOperatorData *operator_state, DataChunk &output) {
+		auto &data = (DataFrameScanFunctionData &)*bind_data;
+		auto &state = (DataFrameScanState &)*operator_state;
 		if (state.position >= data.row_count) {
 			return;
 		}
@@ -750,7 +752,7 @@ struct DataFrameScanFunction : public TableFunction {
 	}
 
 	static idx_t dataframe_scan_cardinality(const FunctionData *bind_data) {
-		auto &data = (DataFrameScanFunctionData &) *bind_data;
+		auto &data = (DataFrameScanFunctionData &)*bind_data;
 		return data.row_count;
 	}
 };

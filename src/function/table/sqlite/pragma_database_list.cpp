@@ -28,17 +28,15 @@ static unique_ptr<FunctionData> pragma_database_list_bind(ClientContext &context
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> pragma_database_list_init(
-    ClientContext &context,
-    const FunctionData *bind_data,
-    OperatorTaskInfo *task_info,
-    vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> pragma_database_list_init(ClientContext &context, const FunctionData *bind_data,
+                                                           OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                           unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<PragmaDatabaseListData>();
 }
 
-void pragma_database_list(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (PragmaDatabaseListData &) *operator_state;
+void pragma_database_list(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                          DataChunk &output) {
+	auto &data = (PragmaDatabaseListData &)*operator_state;
 	if (data.finished) {
 		return;
 	}
@@ -52,8 +50,8 @@ void pragma_database_list(ClientContext &context, const FunctionData *bind_data,
 }
 
 void PragmaDatabaseList::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("pragma_database_list", {}, pragma_database_list, pragma_database_list_bind, pragma_database_list_init));
+	set.AddFunction(TableFunction("pragma_database_list", {}, pragma_database_list, pragma_database_list_bind,
+	                              pragma_database_list_init));
 }
 
 } // namespace duckdb

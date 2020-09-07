@@ -516,7 +516,8 @@ struct Command {
 		}
 	}
 
-	unique_ptr<MaterializedQueryResult> ExecuteQuery(Connection *connection, string file_name, int query_line, string sql_query) {
+	unique_ptr<MaterializedQueryResult> ExecuteQuery(Connection *connection, string file_name, int query_line,
+	                                                 string sql_query) {
 		query_break(query_line);
 		return connection->Query(sql_query);
 	}

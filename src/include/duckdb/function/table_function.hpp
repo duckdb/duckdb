@@ -36,49 +36,47 @@ public:
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> &inputs,
                                                           unordered_map<string, Value> &named_parameters,
                                                           vector<LogicalType> &return_types, vector<string> &names);
-typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext &context, const FunctionData *bind_data, OperatorTaskInfo *task_info, vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters);
-typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output);
-typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state);
-typedef void (*table_function_parallel_t)(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters, std::function<void(unique_ptr<OperatorTaskInfo>)> callback);
+typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(
+    ClientContext &context, const FunctionData *bind_data, OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+    unordered_map<idx_t, vector<TableFilter>> &table_filters);
+typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data,
+                                 FunctionOperatorData *operator_state, DataChunk &output);
+typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data,
+                                         FunctionOperatorData *operator_state);
+typedef void (*table_function_parallel_t)(ClientContext &context, const FunctionData *bind_data,
+                                          vector<column_t> &column_ids,
+                                          unordered_map<idx_t, vector<TableFilter>> &table_filters,
+                                          std::function<void(unique_ptr<OperatorTaskInfo>)> callback);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
 typedef idx_t (*table_function_cardinality_t)(const FunctionData *bind_data);
-typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get, FunctionData *bind_data, vector<unique_ptr<Expression>> &filters);
+typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
+                                                         FunctionData *bind_data,
+                                                         vector<unique_ptr<Expression>> &filters);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 class TableFunction : public SimpleFunction {
 public:
-	TableFunction(string name,
-	              vector<LogicalType> arguments,
-	              table_function_t function,
-	              table_function_bind_t bind = nullptr,
-	              table_function_init_t init = nullptr,
-	              table_function_cleanup_t cleanup = nullptr,
-	              table_function_parallel_t parallel_tasks = nullptr,
-				  table_function_dependency_t dependency = nullptr,
-				  table_function_cardinality_t cardinality = nullptr,
-				  table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
-	              table_function_to_string_t to_string = nullptr,
-	              bool projection_pushdown = false,
+	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_t init = nullptr,
+	              table_function_cleanup_t cleanup = nullptr, table_function_parallel_t parallel_tasks = nullptr,
+	              table_function_dependency_t dependency = nullptr, table_function_cardinality_t cardinality = nullptr,
+	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
+	              table_function_to_string_t to_string = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
 	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), cleanup(cleanup),
-		  parallel_tasks(parallel_tasks), dependency(dependency), cardinality(cardinality),
-		  pushdown_complex_filter(pushdown_complex_filter), to_string(to_string),
-		  projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
+	      parallel_tasks(parallel_tasks), dependency(dependency), cardinality(cardinality),
+	      pushdown_complex_filter(pushdown_complex_filter), to_string(to_string),
+	      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
-	TableFunction(vector<LogicalType> arguments,
-	              table_function_t function,
-	              table_function_bind_t bind = nullptr,
-	              table_function_init_t init = nullptr,
-	              table_function_cleanup_t cleanup = nullptr,
-	              table_function_parallel_t parallel_tasks = nullptr,
-				  table_function_dependency_t dependency = nullptr,
-				  table_function_cardinality_t cardinality = nullptr,
-				  table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
-	              table_function_to_string_t to_string = nullptr,
-	              bool projection_pushdown = false,
+	TableFunction(vector<LogicalType> arguments, table_function_t function, table_function_bind_t bind = nullptr,
+	              table_function_init_t init = nullptr, table_function_cleanup_t cleanup = nullptr,
+	              table_function_parallel_t parallel_tasks = nullptr, table_function_dependency_t dependency = nullptr,
+	              table_function_cardinality_t cardinality = nullptr,
+	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
+	              table_function_to_string_t to_string = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
 	    : TableFunction(string(), move(arguments), function, bind, init, cleanup, parallel_tasks, dependency,
-		  cardinality, pushdown_complex_filter, to_string, projection_pushdown, filter_pushdown) {
+	                    cardinality, pushdown_complex_filter, to_string, projection_pushdown, filter_pushdown) {
 	}
 
 	//! (Optional) Bind function
@@ -86,7 +84,8 @@ public:
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
 	//! (Optional) init function
-	//! Initialize the operator state of the function. The operator state is used to keep track of the progress in the table function.
+	//! Initialize the operator state of the function. The operator state is used to keep track of the progress in the
+	//! table function.
 	table_function_init_t init;
 	//! The main function
 	table_function_t function;

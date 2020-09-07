@@ -155,8 +155,7 @@ bool FilterCombiner::HasFilters() {
 	return has_filters;
 }
 
-vector<TableFilter>
-FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
+vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
 	vector<TableFilter> tableFilters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {

@@ -41,7 +41,8 @@ static unique_ptr<FunctionData> dbgen_bind(ClientContext &context, vector<Value>
 	return move(result);
 }
 
-static void dbgen_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
+static void dbgen_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                           DataChunk &output) {
 	auto &data = (DBGenFunctionData &)*bind_data;
 	if (data.finished) {
 		return;

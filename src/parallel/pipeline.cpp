@@ -31,7 +31,8 @@ public:
 };
 
 Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0), recursive_cte(nullptr) {
+    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0),
+      recursive_cte(nullptr) {
 }
 
 void Pipeline::Execute(TaskContext &task) {
@@ -72,7 +73,7 @@ void Pipeline::FinishTask() {
 	if (current_finished == total_tasks) {
 		try {
 			sink->Finalize(executor.context, move(sink_state));
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {
 			executor.PushError("Unknown exception in Finalize!");

@@ -21,8 +21,8 @@ struct SQLiteMasterData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs,
-													unordered_map<string, Value> &named_parameters,
-													vector<LogicalType> &return_types, vector<string> &names) {
+                                                   unordered_map<string, Value> &named_parameters,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -41,12 +41,9 @@ static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vecto
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> sqlite_master_init(
-    ClientContext &context,
-    const FunctionData *bind_data,
-    OperatorTaskInfo *task_info,
-    vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, const FunctionData *bind_data,
+                                                    OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<SQLiteMasterData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -59,9 +56,9 @@ unique_ptr<FunctionOperatorData> sqlite_master_init(
 	return move(result);
 }
 
-
-void sqlite_master(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (SQLiteMasterData &) *operator_state;
+void sqlite_master(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                   DataChunk &output) {
+	auto &data = (SQLiteMasterData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

@@ -28,18 +28,16 @@ static unique_ptr<FunctionData> repeat_bind(ClientContext &context, vector<Value
 	return make_unique<RepeatFunctionData>(inputs[0], inputs[1].GetValue<int64_t>());
 }
 
-static unique_ptr<FunctionOperatorData> repeat_init(
-    ClientContext &context,
-    const FunctionData *bind_data,
-    OperatorTaskInfo *task_info,
-    vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+static unique_ptr<FunctionOperatorData> repeat_init(ClientContext &context, const FunctionData *bind_data,
+                                                    OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<RepeatOperatorData>();
 }
 
-static void repeat_function(ClientContext &context, const FunctionData *bind_data_, FunctionOperatorData *operator_state, DataChunk &output) {
+static void repeat_function(ClientContext &context, const FunctionData *bind_data_,
+                            FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (RepeatFunctionData &)*bind_data_;
-	auto &state = (RepeatOperatorData &) *operator_state;
+	auto &state = (RepeatOperatorData &)*operator_state;
 
 	idx_t remaining = min<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
 	output.data[0].Reference(bind_data.value);
@@ -53,7 +51,8 @@ static idx_t repeat_cardinality(const FunctionData *bind_data_) {
 }
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, repeat_function, repeat_bind, repeat_init, nullptr, nullptr, nullptr, repeat_cardinality);
+	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, repeat_function, repeat_bind, repeat_init,
+	                     nullptr, nullptr, nullptr, repeat_cardinality);
 	set.AddFunction(repeat);
 }
 

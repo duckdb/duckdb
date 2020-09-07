@@ -27,26 +27,22 @@ static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vect
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> pragma_collate_init(
-    ClientContext &context,
-    const FunctionData *bind_data,
-    OperatorTaskInfo *task_info,
-    vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> pragma_collate_init(ClientContext &context, const FunctionData *bind_data,
+                                                     OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                     unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<PragmaCollateData>();
 
 	auto &transaction = Transaction::GetTransaction(context);
 	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->collations.Scan(transaction, [&](CatalogEntry *entry) {
-			result->entries.push_back(entry->name);
-		});
+		schema->collations.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry->name); });
 	});
 
 	return move(result);
 }
 
-static void pragma_collate(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
+static void pragma_collate(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                           DataChunk &output) {
 	auto &data = (PragmaCollateData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

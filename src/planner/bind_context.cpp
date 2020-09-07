@@ -101,11 +101,13 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	bindings[alias] = move(binding);
 }
 
-void BindContext::AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types, unordered_map<string, column_t> name_map, LogicalGet &get) {
+void BindContext::AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
+                               unordered_map<string, column_t> name_map, LogicalGet &get) {
 	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), move(name_map), get, index));
 }
 
-void BindContext::AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types, LogicalGet &get) {
+void BindContext::AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
+                                   LogicalGet &get) {
 	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index));
 }
 

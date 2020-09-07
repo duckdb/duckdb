@@ -119,13 +119,10 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 	return move(res);
 }
 
-static unique_ptr<FunctionOperatorData> arrow_scan_init(
-    ClientContext &context,
-    const FunctionData *bind_data,
-    OperatorTaskInfo *task_info,
-    vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
-	auto &data = (ArrowScanFunctionData &) *bind_data;
+static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, const FunctionData *bind_data,
+                                                        OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (data.is_consumed) {
 		throw NotImplementedException("FIXME: Arrow streams can only be read once");
 	}
@@ -133,8 +130,9 @@ static unique_ptr<FunctionOperatorData> arrow_scan_init(
 	return nullptr;
 }
 
-static void arrow_scan_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (ArrowScanFunctionData &) *bind_data;
+static void arrow_scan_function(ClientContext &context, const FunctionData *bind_data,
+                                FunctionOperatorData *operator_state, DataChunk &output) {
+	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (!data.stream->release) {
 		// no more chunks
 		return;

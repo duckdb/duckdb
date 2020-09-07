@@ -56,12 +56,9 @@ static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, v
 	return make_unique<PragmaTableFunctionData>(entry);
 }
 
-unique_ptr<FunctionOperatorData> pragma_table_info_init(
-    ClientContext &context,
-    const FunctionData *bind_data,
-    OperatorTaskInfo *task_info,
-    vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> pragma_table_info_init(ClientContext &context, const FunctionData *bind_data,
+                                                        OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<PragmaTableOperatorData>();
 }
 
@@ -132,9 +129,10 @@ static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEnt
 	data.offset = next;
 }
 
-static void pragma_table_info(ClientContext &context, const FunctionData *bind_data_, FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &bind_data = (PragmaTableFunctionData &) *bind_data_;
-	auto &state = (PragmaTableOperatorData &) *operator_state;
+static void pragma_table_info(ClientContext &context, const FunctionData *bind_data_,
+                              FunctionOperatorData *operator_state, DataChunk &output) {
+	auto &bind_data = (PragmaTableFunctionData &)*bind_data_;
+	auto &state = (PragmaTableOperatorData &)*operator_state;
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:
 		pragma_table_info_table(state, (TableCatalogEntry *)bind_data.entry, output);
@@ -148,7 +146,8 @@ static void pragma_table_info(ClientContext &context, const FunctionData *bind_d
 }
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, pragma_table_info, pragma_table_info_bind, pragma_table_info_init));
+	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, pragma_table_info,
+	                              pragma_table_info_bind, pragma_table_info_init));
 }
 
 } // namespace duckdb

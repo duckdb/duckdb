@@ -845,7 +845,8 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
-	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_function, parquet_scan_bind, parquet_scan_init) {
+	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_function, parquet_scan_bind,
+	                    parquet_scan_init) {
 		projection_pushdown = true;
 	}
 
@@ -988,13 +989,10 @@ public:
 		return ReadParquetHeader(file_name, return_types, names);
 	}
 
-	static unique_ptr<FunctionOperatorData> parquet_scan_init(
-		ClientContext &context,
-		const FunctionData *bind_data,
-		OperatorTaskInfo *task_info,
-		vector<column_t> &column_ids,
-		unordered_map<idx_t, vector<TableFilter>> &table_filters) {
-		auto &data = (ParquetScanFunctionData &) *bind_data;
+	static unique_ptr<FunctionOperatorData>
+	parquet_scan_init(ClientContext &context, const FunctionData *bind_data, OperatorTaskInfo *task_info,
+	                  vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+		auto &data = (ParquetScanFunctionData &)*bind_data;
 		data.column_ids = column_ids;
 		return nullptr;
 	}
@@ -1005,12 +1003,13 @@ public:
 
 	static void parquet_read_function(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data,
 	                                  DataChunk &output) {
-		auto &data = (ParquetScanFunctionData &) bind_data;
+		auto &data = (ParquetScanFunctionData &)bind_data;
 		data.ReadChunk(output);
 	}
 
-	static void parquet_scan_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
-		auto &data = (ParquetScanFunctionData &) *bind_data;
+	static void parquet_scan_function(ClientContext &context, const FunctionData *bind_data,
+	                                  FunctionOperatorData *operator_state, DataChunk &output) {
+		auto &data = (ParquetScanFunctionData &)*bind_data;
 		data.ReadChunk(output);
 	}
 };

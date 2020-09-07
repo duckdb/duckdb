@@ -16,7 +16,8 @@ namespace duckdb {
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
 public:
-	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data, vector<LogicalType> returned_types, vector<string> returned_names);
+	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+	           vector<LogicalType> returned_types, vector<string> returned_names);
 
 	//! The table index in the current bind context
 	idx_t table_index;
@@ -34,10 +35,12 @@ public:
 	vector<TableFilter> tableFilters;
 
 	string ParamsToString() const override;
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 
 	idx_t EstimateCardinality() override;
+
 protected:
 	void ResolveTypes() override;
 };

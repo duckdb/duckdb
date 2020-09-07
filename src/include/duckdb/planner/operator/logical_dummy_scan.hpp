@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// src/include/duckdb/planner/operator/logical_dummy_scan.hpp
+// duckdb/planner/operator/logical_dummy_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,7 +15,8 @@ namespace duckdb {
 //! LogicalDummyScan represents a dummy scan returning a single row
 class LogicalDummyScan : public LogicalOperator {
 public:
-	LogicalDummyScan(idx_t table_index) : LogicalOperator(LogicalOperatorType::DUMMY_SCAN), table_index(table_index) {}
+	LogicalDummyScan(idx_t table_index) : LogicalOperator(LogicalOperatorType::DUMMY_SCAN), table_index(table_index) {
+	}
 
 	idx_t table_index;
 
@@ -27,6 +28,7 @@ public:
 	idx_t EstimateCardinality() override {
 		return 1;
 	}
+
 protected:
 	void ResolveTypes() override {
 		if (types.size() == 0) {

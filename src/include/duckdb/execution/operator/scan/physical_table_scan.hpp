@@ -17,11 +17,8 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
 public:
-	PhysicalTableScan(vector<LogicalType> types,
-	                  TableFunction function,
-	                  unique_ptr<FunctionData> bind_data,
-	                  vector<column_t> column_ids,
-	                  unordered_map<idx_t, vector<TableFilter>> table_filters);
+	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
+	                  vector<column_t> column_ids, unordered_map<idx_t, vector<TableFilter>> table_filters);
 
 	//! The table function
 	TableFunction function;
@@ -31,6 +28,7 @@ public:
 	vector<column_t> column_ids;
 	//! The table filters
 	unordered_map<idx_t, vector<TableFilter>> table_filters;
+
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	string ToString(idx_t depth = 0) const override;

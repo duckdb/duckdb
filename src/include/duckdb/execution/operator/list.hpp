@@ -22,6 +22,7 @@
 #include "duckdb/execution/operator/persistent/physical_copy_from_file.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
+#include "duckdb/execution/operator/persistent/physical_export.hpp"
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"

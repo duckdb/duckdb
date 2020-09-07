@@ -67,18 +67,18 @@ public:
 public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
-	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction,
-	                                                         Value value, ExpressionType expressionType) override;
+	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, Value value,
+	                                                         ExpressionType expressionType) override;
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for two predicates
-	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction,
-	                                                       Value low_value, ExpressionType low_expression_type,
-	                                                       Value high_value,
+	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
+	                                                       ExpressionType low_expression_type, Value high_value,
 	                                                       ExpressionType high_expression_type) override;
 
 	//! Perform a lookup on the index
-	bool Scan(Transaction &transaction, DataTable &table, IndexScanState &state, idx_t max_count, vector<row_t> &result_ids) override;
+	bool Scan(Transaction &transaction, DataTable &table, IndexScanState &state, idx_t max_count,
+	          vector<row_t> &result_ids) override;
 	//! Append entries to the index
 	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
@@ -116,11 +116,13 @@ private:
 	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
-	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
+	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
+	                      vector<row_t> &result_ids);
 
 private:
 	template <bool HAS_BOUND, bool INCLUSIVE>
-	bool IteratorScan(ARTIndexScanState *state, Iterator *it, Key *upper_bound, idx_t max_count, vector<row_t> &result_ids);
+	bool IteratorScan(ARTIndexScanState *state, Iterator *it, Key *upper_bound, idx_t max_count,
+	                  vector<row_t> &result_ids);
 
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 };

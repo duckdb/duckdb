@@ -19,17 +19,15 @@ static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vect
 	return nullptr;
 }
 
-static unique_ptr<FunctionOperatorData> pragma_version_init(
-    ClientContext &context,
-    const FunctionData *bind_data,
-    OperatorTaskInfo *task_info,
-    vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+static unique_ptr<FunctionOperatorData> pragma_version_init(ClientContext &context, const FunctionData *bind_data,
+                                                            OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                            unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<PragmaVersionData>();
 }
 
-static void pragma_version(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (PragmaVersionData &) *operator_state;
+static void pragma_version(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                           DataChunk &output) {
+	auto &data = (PragmaVersionData &)*operator_state;
 	if (data.finished) {
 		// finished returning values
 		return;

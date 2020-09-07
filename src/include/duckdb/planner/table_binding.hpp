@@ -39,18 +39,19 @@ struct Binding {
 	vector<string> names;
 	//! Name -> index for the names
 	unordered_map<string, column_t> name_map;
+
 public:
 	bool HasMatchingBinding(const string &column_name);
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
-	void GenerateAllColumnExpressions(BindContext &context,
-	                                          vector<unique_ptr<ParsedExpression>> &select_list);
+	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list);
 };
 
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, LogicalGet &get, idx_t index);
-	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, unordered_map<string, column_t> name_map, LogicalGet &get, idx_t index);
+	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
+	             unordered_map<string, column_t> name_map, LogicalGet &get, idx_t index);
 
 	//! the underlying LogicalGet
 	LogicalGet &get;

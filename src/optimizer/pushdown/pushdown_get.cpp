@@ -15,7 +15,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	if (get.function.pushdown_complex_filter) {
 		// for the remaining filters, check if we can push any of them into the scan as well
 		vector<unique_ptr<Expression>> expressions;
-		for(idx_t i = 0; i < filters.size(); i++) {
+		for (idx_t i = 0; i < filters.size(); i++) {
 			expressions.push_back(move(filters[i]->filter));
 		}
 		filters.clear();
@@ -26,13 +26,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			return move(op);
 		}
 		// re-generate the filters
-		for(auto &expr : expressions) {
+		for (auto &expr : expressions) {
 			auto f = make_unique<Filter>();
 			f->filter = move(expr);
 			f->ExtractBindings();
 			filters.push_back(move(f));
 		}
-
 	}
 	if (!get.tableFilters.empty() || !get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top

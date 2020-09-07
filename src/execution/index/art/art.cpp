@@ -49,17 +49,17 @@ bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 	return true;
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction,
-                                                              Value value, ExpressionType expression_type) {
+unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, Value value,
+                                                              ExpressionType expression_type) {
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return move(result);
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction,
-                                                            Value low_value, ExpressionType low_expression_type,
-                                                            Value high_value, ExpressionType high_expression_type) {
+unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
+                                                            ExpressionType low_expression_type, Value high_value,
+                                                            ExpressionType high_expression_type) {
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
@@ -712,8 +712,8 @@ bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, 
 //===--------------------------------------------------------------------===//
 // Closed Range Query
 //===--------------------------------------------------------------------===//
-bool ART::SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive,
-                           idx_t max_count, vector<row_t> &result_ids) {
+bool ART::SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
+                           vector<row_t> &result_ids) {
 	auto lower_bound = CreateKey(*this, types[0], state->values[0]);
 	auto upper_bound = CreateKey(*this, types[0], state->values[1]);
 	Iterator *it = &state->iterator;
@@ -733,7 +733,8 @@ bool ART::SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool r
 	}
 }
 
-bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table_state, idx_t max_count, vector<row_t> &result_ids) {
+bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table_state, idx_t max_count,
+               vector<row_t> &result_ids) {
 	auto state = (ARTIndexScanState *)&table_state;
 
 	assert(state->values[0].type().InternalType() == types[0]);

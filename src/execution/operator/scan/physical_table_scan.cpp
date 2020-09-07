@@ -22,13 +22,11 @@ public:
 	bool initialized;
 };
 
-PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types,
-					TableFunction function_,
-					unique_ptr<FunctionData> bind_data_,
-					vector<column_t> column_ids,
-					unordered_map<idx_t, vector<TableFilter>> table_filters) :
-	PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
-	bind_data(move(bind_data_)), column_ids(move(column_ids)), table_filters(move(table_filters)) {
+PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_,
+                                     unique_ptr<FunctionData> bind_data_, vector<column_t> column_ids,
+                                     unordered_map<idx_t, vector<TableFilter>> table_filters)
+    : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
+      bind_data(move(bind_data_)), column_ids(move(column_ids)), table_filters(move(table_filters)) {
 }
 
 void PhysicalTableScan::ParallelScanInfo(ClientContext &context,
@@ -40,7 +38,7 @@ void PhysicalTableScan::ParallelScanInfo(ClientContext &context,
 }
 
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto &state = (PhysicalTableScanOperatorState &) *state_;
+	auto &state = (PhysicalTableScanOperatorState &)*state_;
 	if (column_ids.empty()) {
 		return;
 	}
@@ -50,10 +48,12 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			auto task_info = task.task_info.find(this);
 			if (task_info != task.task_info.end()) {
 				// task specific limitations: pass the task information to the init function
-				state.operator_data = function.init(context.client, bind_data.get(), task_info->second.get(), column_ids, table_filters);
+				state.operator_data =
+				    function.init(context.client, bind_data.get(), task_info->second.get(), column_ids, table_filters);
 			} else {
 				// no task specific limitations
-				state.operator_data = function.init(context.client, bind_data.get(), nullptr, column_ids, table_filters);
+				state.operator_data =
+				    function.init(context.client, bind_data.get(), nullptr, column_ids, table_filters);
 			}
 		}
 		state.initialized = true;

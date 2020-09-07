@@ -1,4 +1,4 @@
-# name: test/sql/cte/game_of_life.test
+# name: test/sql/cte/game_of_life.test_slow
 # description: Run conways game of life as a CTE (https://gist.github.com/janickr/58fab629ee3ea7e5638a)
 # group: [cte]
 

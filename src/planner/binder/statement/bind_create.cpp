@@ -87,7 +87,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw BinderException("Can only delete from base table!");
 		}
-		auto &table_binding = (BoundBaseTableRef &) *bound_table;
+		auto &table_binding = (BoundBaseTableRef &)*bound_table;
 		auto table = table_binding.table;
 		// bind the index expressions
 		vector<unique_ptr<Expression>> expressions;

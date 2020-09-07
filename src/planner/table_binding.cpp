@@ -48,8 +48,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
-void Binding::GenerateAllColumnExpressions(BindContext &context,
-                                                  vector<unique_ptr<ParsedExpression>> &select_list) {
+void Binding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column_name : names) {
 		assert(!column_name.empty());
 		if (context.BindingIsHidden(alias, column_name)) {
@@ -59,12 +58,14 @@ void Binding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vector<string> names_, LogicalGet &get, idx_t index) :
-	Binding(alias, move(types_), move(names_), index), get(get) {
+TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vector<string> names_, LogicalGet &get,
+                           idx_t index)
+    : Binding(alias, move(types_), move(names_), index), get(get) {
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, unordered_map<string, column_t> name_map, LogicalGet &get, idx_t index) :
-	TableBinding(alias, move(types), move(names), get, index) {
+TableBinding::TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
+                           unordered_map<string, column_t> name_map, LogicalGet &get, idx_t index)
+    : TableBinding(alias, move(types), move(names), get, index) {
 	this->name_map = move(name_map);
 }
 
