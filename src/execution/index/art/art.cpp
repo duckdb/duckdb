@@ -738,25 +738,26 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 
 	assert(state->values[0].type().InternalType() == types[0]);
 
+	vector<row_t> row_ids;
 	bool success = true;
 	if (state->values[1].is_null) {
 		lock_guard<mutex> l(lock);
 		// single predicate
 		switch (state->expressions[0]) {
 		case ExpressionType::COMPARE_EQUAL:
-			success = SearchEqual(state, max_count, result_ids);
+			success = SearchEqual(state, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			success = SearchGreater(state, true, max_count, result_ids);
+			success = SearchGreater(state, true, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			success = SearchGreater(state, false, max_count, result_ids);
+			success = SearchGreater(state, false, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			success = SearchLess(state, true, max_count, result_ids);
+			success = SearchLess(state, true, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			success = SearchLess(state, false, max_count, result_ids);
+			success = SearchLess(state, false, max_count, row_ids);
 			break;
 		default:
 			throw NotImplementedException("Operation not implemented");
@@ -767,23 +768,23 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 		assert(state->values[1].type().InternalType() == types[0]);
 		bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 		bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
-		success = SearchCloseRange(state, left_inclusive, right_inclusive, max_count, result_ids);
+		success = SearchCloseRange(state, left_inclusive, right_inclusive, max_count, row_ids);
 	}
 	if (!success) {
 		return false;
 	}
-	if (result_ids.size() == 0) {
+	if (row_ids.size() == 0) {
 		return true;
 	}
 	// sort the row ids
-	sort(result_ids.begin(), result_ids.end());
+	sort(row_ids.begin(), row_ids.end());
 	// duplicate eliminate the row ids and append them to the row ids of the state
-	state->result_ids.reserve(result_ids.size());
+	result_ids.reserve(row_ids.size());
 
-	state->result_ids.push_back(result_ids[0]);
-	for (idx_t i = 1; i < result_ids.size(); i++) {
-		if (result_ids[i] != result_ids[i - 1]) {
-			state->result_ids.push_back(result_ids[i]);
+	result_ids.push_back(row_ids[0]);
+	for (idx_t i = 1; i < row_ids.size(); i++) {
+		if (row_ids[i] != row_ids[i - 1]) {
+			result_ids.push_back(row_ids[i]);
 		}
 	}
 	return true;

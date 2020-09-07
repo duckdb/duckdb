@@ -4,6 +4,7 @@
 #include "duckdb/parallel/task_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
@@ -28,6 +29,7 @@ struct TableScanOperatorData : public FunctionOperatorData {
 struct IndexScanOperatorData : public FunctionOperatorData {
 	Vector row_ids;
 	ColumnFetchState fetch_state;
+	LocalScanState local_storage_state;
 	vector<column_t> column_ids;
 	bool finished;
 };
@@ -58,10 +60,13 @@ static void table_scan_function(ClientContext &context, const FunctionData *bind
 static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, const FunctionData *bind_data_,
 	OperatorTaskInfo *task_info, vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<IndexScanOperatorData>();
+	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &) *bind_data_;
 	result->column_ids = column_ids;
 	result->row_ids.type = LOGICAL_ROW_TYPE;
 	FlatVector::SetData(result->row_ids, (data_ptr_t) &bind_data.result_ids[0]);
+	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state);
+
 	result->finished = false;
 	return move(result);
 }
@@ -70,11 +75,13 @@ static void index_scan_function(ClientContext &context, const FunctionData *bind
  	auto &bind_data = (const TableScanBindData &) *bind_data_;
 	auto &state = (IndexScanOperatorData&) *operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
-	if (state.finished) {
-		return;
+	if (!state.finished) {
+		bind_data.table->storage->Fetch(transaction, output, state.column_ids, state.row_ids, bind_data.result_ids.size(), state.fetch_state);
+		state.finished = true;
 	}
-	bind_data.table->storage->Fetch(transaction, output, state.column_ids, state.row_ids, bind_data.result_ids.size(), state.fetch_state);
-	state.finished = true;
+	if (output.size() == 0) {
+		transaction.storage.Scan(state.local_storage_state, state.column_ids, output);
+	}
 }
 
 void table_scan_parallel(ClientContext &context, const FunctionData *bind_data_, vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters, std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
