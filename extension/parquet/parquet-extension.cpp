@@ -301,6 +301,8 @@ struct ParquetScanColumnData {
 
 	idx_t dict_size;
 
+	uint8_t byte_pos = 0; // to decode plain booleans from bit fields
+
 	ResizeableBuffer buf;
 	ResizeableBuffer decompressed_buf; // only used for compressed files
 	ResizeableBuffer dict;
@@ -376,6 +378,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 	col_data.payload.len = 0;
 	col_data.dict_decoder = nullptr;
 	col_data.defined_decoder = nullptr;
+	col_data.byte_pos = 0;
 
 	auto page_header_len = col_data.buf.len;
 	if (page_header_len < 1) {
@@ -771,17 +774,16 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 				case LogicalTypeId::BOOLEAN: {
 					// bit packed this
 					auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
-					int byte_pos = 0;
 					for (idx_t i = 0; i < current_batch_size; i++) {
 						if (!col_data.defined_buf.ptr[i]) {
 							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 							continue;
 						}
 						col_data.payload.available(1);
-						target_ptr[i + output_offset] = (*col_data.payload.ptr >> byte_pos) & 1;
-						byte_pos++;
-						if (byte_pos == 8) {
-							byte_pos = 0;
+						target_ptr[i + output_offset] = (*col_data.payload.ptr >> col_data.byte_pos) & 1;
+						col_data.byte_pos++;
+						if (col_data.byte_pos == 8) {
+							col_data.byte_pos = 0;
 							col_data.payload.inc(1);
 						}
 					}
