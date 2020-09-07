@@ -7,6 +7,7 @@
 
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
+#include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -124,6 +125,9 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 	auto table = bind_data.table;
 	auto &storage = *table->storage;
 
+	if (bind_data.is_index_scan) {
+		return;
+	}
 	if (filters.size() == 0 || storage.info->indexes.size() == 0) {
 		// no indexes or no filters: skip the pushdown
 		return;
@@ -192,6 +196,22 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 					high_value = constant_value;
 					high_comparison_type = comparison_type;
 				}
+			} else if (expr->type == ExpressionType::COMPARE_BETWEEN) {
+				// BETWEEN expression
+				auto &between = (BoundBetweenExpression &) *expr;
+				if (!between.input->Equals(index_expression.get())) {
+					// expression doesn't match the current index expression
+					continue;
+				}
+				if (between.lower->type != ExpressionType::VALUE_CONSTANT || between.upper->type != ExpressionType::VALUE_CONSTANT) {
+					// not a constant comparison
+					continue;
+				}
+				low_value = ((BoundConstantExpression&) *between.lower).value;
+				low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
+				high_value = ((BoundConstantExpression&) *between.upper).value;
+				high_comparison_type = between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+				break;
 			}
 		}
 		if (!equal_value.is_null || !low_value.is_null || !high_value.is_null) {
@@ -217,6 +237,8 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 				get.function.init = index_scan_init;
 				get.function.function = index_scan_function;
 				get.function.filter_pushdown = false;
+			} else {
+				bind_data.result_ids.clear();
 			}
 			return;
 		}
