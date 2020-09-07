@@ -22,7 +22,6 @@ add_library_unity(
   plan_export.cpp
   plan_filter.cpp
   plan_get.cpp
-  plan_index_scan.cpp
   plan_insert.cpp
   plan_limit.cpp
   plan_order.cpp

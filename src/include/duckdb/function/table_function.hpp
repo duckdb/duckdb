@@ -14,6 +14,7 @@
 #include <functional>
 
 namespace duckdb {
+class LogicalGet;
 class OperatorTaskInfo;
 class TableFilter;
 
@@ -41,6 +42,7 @@ typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionD
 typedef void (*table_function_parallel_t)(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters, std::function<void(unique_ptr<OperatorTaskInfo>)> callback);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
 typedef idx_t (*table_function_cardinality_t)(const FunctionData *bind_data);
+typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get, FunctionData *bind_data, vector<unique_ptr<Expression>> &filters);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 class TableFunction : public SimpleFunction {
@@ -54,11 +56,13 @@ public:
 	              table_function_parallel_t parallel_tasks = nullptr,
 				  table_function_dependency_t dependency = nullptr,
 				  table_function_cardinality_t cardinality = nullptr,
+				  table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
 	              table_function_to_string_t to_string = nullptr,
 	              bool projection_pushdown = false,
 	              bool filter_pushdown = false)
 	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), cleanup(cleanup),
-		  parallel_tasks(parallel_tasks), dependency(dependency), cardinality(cardinality), to_string(to_string),
+		  parallel_tasks(parallel_tasks), dependency(dependency), cardinality(cardinality),
+		  pushdown_complex_filter(pushdown_complex_filter), to_string(to_string),
 		  projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
 	TableFunction(vector<LogicalType> arguments,
@@ -69,11 +73,12 @@ public:
 	              table_function_parallel_t parallel_tasks = nullptr,
 				  table_function_dependency_t dependency = nullptr,
 				  table_function_cardinality_t cardinality = nullptr,
+				  table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
 	              table_function_to_string_t to_string = nullptr,
 	              bool projection_pushdown = false,
 	              bool filter_pushdown = false)
 	    : TableFunction(string(), move(arguments), function, bind, init, cleanup, parallel_tasks, dependency,
-		  cardinality, to_string, projection_pushdown, filter_pushdown) {
+		  cardinality, pushdown_complex_filter, to_string, projection_pushdown, filter_pushdown) {
 	}
 
 	//! (Optional) Bind function
@@ -97,6 +102,9 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
+	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
+	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
+	table_function_pushdown_complex_filter_t pushdown_complex_filter;
 	//! (Optional) function for rendering the operator to a string in profiling output
 	table_function_to_string_t to_string;
 

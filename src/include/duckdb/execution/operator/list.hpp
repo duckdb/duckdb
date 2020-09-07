@@ -30,7 +30,6 @@
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_empty_result.hpp"
 #include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
-#include "duckdb/execution/operator/scan/physical_index_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/schema/physical_alter.hpp"
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"

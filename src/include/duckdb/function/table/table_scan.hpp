@@ -14,13 +14,21 @@ namespace duckdb {
 class TableCatalogEntry;
 
 struct TableScanBindData : public FunctionData {
-	TableScanBindData(TableCatalogEntry *table) : table(table) {}
+	TableScanBindData(TableCatalogEntry *table) : table(table), is_index_scan(false) {}
 
 	//! The table to scan
 	TableCatalogEntry *table;
 
+	//! Whether or not the table scan is an index scan
+	bool is_index_scan;
+	//! The row ids to fetch (in case of an index scan)
+	vector<row_t> result_ids;
+
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<TableScanBindData>(table);
+		auto result = make_unique<TableScanBindData>(table);
+		result->is_index_scan = is_index_scan;
+		result->result_ids = result_ids;
+		return move(result);
 	}
 };
 

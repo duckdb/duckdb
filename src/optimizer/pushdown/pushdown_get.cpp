@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -10,20 +11,30 @@ using namespace std;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	assert(op->type == LogicalOperatorType::GET);
 	auto &get = (LogicalGet &)*op;
-	if (!get.tableFilters.empty()) {
-		if (!filters.empty()) {
-			//! We didn't managed to push down all filters to table scan
-			auto logicalFilter = make_unique<LogicalFilter>();
-			for (auto &f : filters) {
-				logicalFilter->expressions.push_back(move(f->filter));
-			}
-			logicalFilter->children.push_back(move(op));
-			return move(logicalFilter);
-		} else {
-			return op;
+	// first push down arbitrary filters
+	if (get.function.pushdown_complex_filter) {
+		// for the remaining filters, check if we can push any of them into the scan as well
+		vector<unique_ptr<Expression>> expressions;
+		for(idx_t i = 0; i < filters.size(); i++) {
+			expressions.push_back(move(filters[i]->filter));
 		}
+		filters.clear();
+
+		get.function.pushdown_complex_filter(optimizer.context, get, get.bind_data.get(), expressions);
+
+		if (expressions.size() == 0) {
+			return move(op);
+		}
+		// re-generate the filters
+		for(auto &expr : expressions) {
+			auto f = make_unique<Filter>();
+			f->filter = move(expr);
+			f->ExtractBindings();
+			filters.push_back(move(f));
+		}
+
 	}
-	if (!get.function.filter_pushdown) {
+	if (!get.tableFilters.empty() || !get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top
 		return FinishPushdown(move(op));
 	}

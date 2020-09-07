@@ -12,8 +12,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "TABLE_SCAN";
 	case PhysicalOperatorType::DUMMY_SCAN:
 		return "DUMMY_SCAN";
-	case PhysicalOperatorType::INDEX_SCAN:
-		return "INDEX_SCAN";
 	case PhysicalOperatorType::CHUNK_SCAN:
 		return "CHUNK_SCAN";
 	case PhysicalOperatorType::DELIM_SCAN:

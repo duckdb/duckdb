@@ -28,7 +28,7 @@ enum class LogicalOperatorType : uint8_t {
 	COPY_FROM_FILE = 9,
 	COPY_TO_FILE = 10,
 	DISTINCT = 11,
-	INDEX_SCAN = 12,
+
 	// -----------------------------
 	// Data sources
 	// -----------------------------

@@ -87,19 +87,9 @@ public:
 	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
 	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
 
-	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
-	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value,
-	                         ExpressionType expr_type, vector<column_t> column_ids);
-	//! Initialize an index scan with two predicates and two comparison types (> >= < <=)
-	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value low_value,
-	                         ExpressionType low_type, Value high_value, ExpressionType high_type,
-	                         vector<column_t> column_ids);
-	//! Scans up to STANDARD_VECTOR_SIZE elements from the table from the given index structure
-	void IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state);
-
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
-	           idx_t fetch_count, TableIndexScanState &state);
+	           idx_t fetch_count, ColumnFetchState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
@@ -139,9 +129,6 @@ private:
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
-
-	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
-	                         vector<column_t> column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
 	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);

@@ -36,7 +36,6 @@ class LogicalExport;
 class LogicalExpressionGet;
 class LogicalFilter;
 class LogicalGet;
-class LogicalIndexScan;
 class LogicalInsert;
 class LogicalJoin;
 class LogicalLimit;

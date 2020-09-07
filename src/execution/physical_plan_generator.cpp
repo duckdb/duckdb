@@ -113,8 +113,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalPrepare &)op);
 	case LogicalOperatorType::EXECUTE:
 		return CreatePlan((LogicalExecute &)op);
-	case LogicalOperatorType::INDEX_SCAN:
-		return CreatePlan((LogicalIndexScan &)op);
 	case LogicalOperatorType::CREATE_VIEW:
 	case LogicalOperatorType::CREATE_SEQUENCE:
 	case LogicalOperatorType::CREATE_SCHEMA:
