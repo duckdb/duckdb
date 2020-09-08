@@ -521,21 +521,11 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 				}
 
 				auto utf_type = Utf8Proc::Analyze(col_data.payload.ptr, str_len);
-				switch (utf_type) {
-				case UnicodeType::ASCII:
-					FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-					    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
-					break;
-				case UnicodeType::UNICODE:
-					// this regrettably copies to normalize
-					FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-					    StringVector::AddString(append_chunk->data[0],
-					                            Utf8Proc::Normalize(string(col_data.payload.ptr, str_len)));
-
-					break;
-				case UnicodeType::INVALID:
+				if (utf_type == UnicodeType::INVALID) {
 					throw runtime_error("invalid string encoding");
 				}
+				FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
+					    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
 
 				append_chunk->SetCardinality(append_chunk->size() + 1);
 				col_data.payload.inc(str_len);
