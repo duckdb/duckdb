@@ -103,6 +103,8 @@ void ListFun::RegisterFunction(BuiltinFunctions &set) {
 	    AggregateFunction::StateInitialize<list_agg_state_t, ListFunction>, list_update, nullptr, list_finalize,
 	    nullptr, list_bind, AggregateFunction::StateDestroy<list_agg_state_t, ListFunction>);
 	set.AddFunction(agg);
+	agg.name = "array_agg";
+	set.AddFunction(agg);
 }
 
 } // namespace duckdb
