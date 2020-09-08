@@ -12,7 +12,7 @@ namespace duckdb {
 
 class PhysicalDelimJoinState : public PhysicalOperatorState {
 public:
-	PhysicalDelimJoinState(PhysicalOperator *left) : PhysicalOperatorState(left) {
+	PhysicalDelimJoinState(PhysicalOperator &op, PhysicalOperator *left) : PhysicalOperatorState(op, left) {
 	}
 
 	unique_ptr<PhysicalOperatorState> join_state;
@@ -102,7 +102,7 @@ void PhysicalDelimJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState() {
-	return make_unique<PhysicalDelimJoinState>(children[0].get());
+	return make_unique<PhysicalDelimJoinState>(*this, children[0].get());
 }
 
 string PhysicalDelimJoin::ExtraRenderInformation() const {

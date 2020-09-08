@@ -10,7 +10,7 @@ namespace duckdb {
 
 class PhysicalCopyFromFileOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalCopyFromFileOperatorState() : PhysicalOperatorState(nullptr) {}
+	PhysicalCopyFromFileOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr) {}
 	//! The global function data
 	unique_ptr<GlobalFunctionData> gdata;
 };
@@ -27,7 +27,7 @@ void PhysicalCopyFromFile::GetChunkInternal(ExecutionContext &context, DataChunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalCopyFromFile::GetOperatorState() {
-	return make_unique<PhysicalCopyFromFileOperatorState>();
+	return make_unique<PhysicalCopyFromFileOperatorState>(*this);
 }
 
 } // namespace duckdb
