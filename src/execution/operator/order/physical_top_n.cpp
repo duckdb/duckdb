@@ -120,7 +120,7 @@ void PhysicalTopN::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSta
 //===--------------------------------------------------------------------===//
 class PhysicalTopNOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTopNOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	PhysicalTopNOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;
@@ -140,7 +140,7 @@ void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
-	return make_unique<PhysicalTopNOperatorState>(children[0].get());
+	return make_unique<PhysicalTopNOperatorState>(*this, children[0].get());
 }
 
 } // namespace duckdb

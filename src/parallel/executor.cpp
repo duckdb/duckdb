@@ -222,7 +222,7 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 
 	auto chunk = make_unique<DataChunk>();
 	// run the plan to get the next chunks
-	physical_plan->InitializeChunk(*chunk);
+	physical_plan->InitializeChunkEmpty(*chunk);
 	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
 	return chunk;
 }
