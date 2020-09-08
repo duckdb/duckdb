@@ -31,6 +31,7 @@ struct UpperFun {
 };
 
 struct StripAccentsFun {
+	static bool IsAscii(const char *input, idx_t n);
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -76,6 +77,11 @@ struct LpadFun {
 };
 
 struct LeftFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct NFCNormalizeFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

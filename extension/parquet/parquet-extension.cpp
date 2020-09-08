@@ -521,21 +521,11 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 				}
 
 				auto utf_type = Utf8Proc::Analyze(col_data.payload.ptr, str_len);
-				switch (utf_type) {
-				case UnicodeType::ASCII:
-					FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-					    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
-					break;
-				case UnicodeType::UNICODE:
-					// this regrettably copies to normalize
-					FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-					    StringVector::AddString(append_chunk->data[0],
-					                            Utf8Proc::Normalize(string(col_data.payload.ptr, str_len)));
-
-					break;
-				case UnicodeType::INVALID:
+				if (utf_type == UnicodeType::INVALID) {
 					throw runtime_error("invalid string encoding");
 				}
+				FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
+					    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
 
 				append_chunk->SetCardinality(append_chunk->size() + 1);
 				col_data.payload.inc(str_len);
@@ -847,8 +837,9 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
-	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr) {
-		supports_projection = true;
+	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_function, parquet_scan_bind,
+	                    parquet_scan_init) {
+		projection_pushdown = true;
 	}
 
 	static unique_ptr<FunctionData> ReadParquetHeader(string file_name, vector<LogicalType> &return_types,
@@ -990,6 +981,14 @@ public:
 		return ReadParquetHeader(file_name, return_types, names);
 	}
 
+	static unique_ptr<FunctionOperatorData>
+	parquet_scan_init(ClientContext &context, const FunctionData *bind_data, OperatorTaskInfo *task_info,
+	                  vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+		auto &data = (ParquetScanFunctionData &)*bind_data;
+		data.column_ids = column_ids;
+		return nullptr;
+	}
+
 	static unique_ptr<GlobalFunctionData> parquet_read_initialize(ClientContext &context, FunctionData &fdata) {
 		return make_unique<GlobalFunctionData>();
 	}
@@ -1000,9 +999,9 @@ public:
 		data.ReadChunk(output);
 	}
 
-	static void parquet_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
-	                                  FunctionData *dataptr) {
-		auto &data = *((ParquetScanFunctionData *)dataptr);
+	static void parquet_scan_function(ClientContext &context, const FunctionData *bind_data,
+	                                  FunctionOperatorData *operator_state, DataChunk &output) {
+		auto &data = (ParquetScanFunctionData &)*bind_data;
 		data.ReadChunk(output);
 	}
 };

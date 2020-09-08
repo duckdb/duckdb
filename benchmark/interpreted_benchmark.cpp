@@ -168,9 +168,9 @@ void InterpretedBenchmark::LoadBenchmark() {
 					}
 					auto result_splits = StringUtil::Split(line, "\t");
 					if ((int64_t)result_splits.size() != result_column_count) {
-						throw std::runtime_error(reader.FormatException("expected " + to_string(result_column_count) +
+						throw std::runtime_error(reader.FormatException("expected " + to_string(result_splits.size()) +
 						                                                " values but got " +
-						                                                to_string(result_splits.size())));
+						                                                to_string(result_column_count)));
 					}
 					result_values.push_back(move(result_splits));
 				}
