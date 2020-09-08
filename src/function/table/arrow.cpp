@@ -218,20 +218,11 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 				auto str_len = offsets[row_idx + 1] - offsets[row_idx];
 
 				auto utf_type = Utf8Proc::Analyze(cptr, str_len);
-				switch (utf_type) {
-				case UnicodeType::ASCII:
-					FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
-					    StringVector::AddString(output.data[col_idx], cptr, str_len);
-					break;
-				case UnicodeType::UNICODE:
-					// this regrettably copies to normalize
-					FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
-					    StringVector::AddString(output.data[col_idx], Utf8Proc::Normalize(string(cptr, str_len)));
-
-					break;
-				case UnicodeType::INVALID:
+				if (utf_type == UnicodeType::INVALID) {
 					throw runtime_error("Invalid UTF8 string encoding");
 				}
+				FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
+					    StringVector::AddString(output.data[col_idx], cptr, str_len);
 			}
 
 			break;

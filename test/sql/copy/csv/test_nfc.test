@@ -11,7 +11,7 @@ COPY nfcstrings FROM 'test/sql/copy/csv/data/test/nfc.csv';
 2
 
 query I
-SELECT COUNT(*) FROM nfcstrings WHERE s = 'ü'
+SELECT COUNT(*) FROM nfcstrings WHERE s COLLATE NFC = 'ü'
 ----
 2
 
