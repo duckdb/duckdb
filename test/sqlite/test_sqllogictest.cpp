@@ -935,7 +935,11 @@ void Query::Execute() {
 			print_line_sep();
 			print_header("Expected result:");
 			print_line_sep();
-			result_label_map[query_label]->Print();
+			if (result_label_map.find(query_label) != result_label_map.end()) {
+				result_label_map[query_label]->Print();
+			} else {
+				std::cerr << "???" << std::endl;
+			}
 			print_header("Actual result:");
 			print_line_sep();
 			result->Print();
