@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -325,6 +326,8 @@ struct ParquetScanFunctionData : public TableFunctionData {
 	static constexpr unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
 
 public:
+	ParquetScanFunctionData(FileSystem &fs) : fs(fs) {}
+
 	void ReadChunk(DataChunk &output);
 	void PrepareChunkBuffer(idx_t col_idx);
 	bool PreparePageBuffers(idx_t col_idx);
@@ -358,10 +361,12 @@ public:
 	}
 
 public:
+	FileSystem &fs;
+
 	int64_t current_group;
 	int64_t group_offset;
 
-	ifstream pfile;
+	unique_ptr<FileHandle> handle;
 
 	FileMetaData file_meta_data;
 	vector<LogicalType> sql_types;
@@ -614,12 +619,8 @@ void ParquetScanFunctionData::PrepareChunkBuffer(idx_t col_idx) {
 	auto chunk_len = chunk.meta_data.total_compressed_size;
 
 	// read entire chunk into RAM
-	pfile.seekg(chunk_start);
 	column_data[col_idx].buf.resize(chunk_len);
-	pfile.read(column_data[col_idx].buf.ptr, chunk_len);
-	if (!pfile) {
-		throw runtime_error("Could not read chunk. File corrupt?");
-	}
+	fs.Read(*handle, column_data[col_idx].buf.ptr, chunk_len, chunk_start);
 }
 
 void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
@@ -842,46 +843,45 @@ public:
 		projection_pushdown = true;
 	}
 
-	static unique_ptr<FunctionData> ReadParquetHeader(string file_name, vector<LogicalType> &return_types,
+	static unique_ptr<FunctionData> ReadParquetHeader(FileSystem &fs, string file_name, vector<LogicalType> &return_types,
 	                                                  vector<string> &names) {
-		auto res = make_unique<ParquetScanFunctionData>();
+		auto res = make_unique<ParquetScanFunctionData>(fs);
 
-		auto &pfile = res->pfile;
+		res->handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 		auto &file_meta_data = res->file_meta_data;
-
-		pfile.open(file_name, std::ios::binary);
 
 		ResizeableBuffer buf;
 		buf.resize(4);
 		memset(buf.ptr, '\0', 4);
 		// check for magic bytes at start of file
-		pfile.read(buf.ptr, 4);
+		fs.Read(*res->handle, buf.ptr, 4);
 		if (strncmp(buf.ptr, "PAR1", 4) != 0) {
 			throw runtime_error("File not found or missing magic bytes");
 		}
 
 		// check for magic bytes at end of file
-		pfile.seekg(-4, ios_base::end);
-		pfile.read(buf.ptr, 4);
+		auto file_size = fs.GetFileSize(*res->handle);
+		if (file_size < 12) {
+			throw runtime_error("File too small to be a Parquet file");
+		}
+		fs.Read(*res->handle, buf.ptr, 4, file_size - 4);
 		if (strncmp(buf.ptr, "PAR1", 4) != 0) {
 			throw runtime_error("No magic bytes found at end of file");
 		}
 
 		// read four-byte footer length from just before the end magic bytes
-		pfile.seekg(-8, ios_base::end);
-		pfile.read(buf.ptr, 4);
+		fs.Read(*res->handle, buf.ptr, 4, file_size - 8);
 		int32_t footer_len = *(uint32_t *)buf.ptr;
 		if (footer_len == 0) {
 			throw runtime_error("Footer length can't be 0");
 		}
+		if (file_size < 12 + footer_len) {
+			throw runtime_error("File too small to be a Parquet file");
+		}
 
 		// read footer into buffer and de-thrift
 		buf.resize(footer_len);
-		pfile.seekg(-(footer_len + 8), ios_base::end);
-		pfile.read(buf.ptr, footer_len);
-		if (!pfile) {
-			throw runtime_error("Could not read footer");
-		}
+		fs.Read(*res->handle, buf.ptr, footer_len, file_size - (footer_len + 8));
 
 		thrift_unpack((const uint8_t *)buf.ptr, (uint32_t *)&footer_len, &file_meta_data);
 
@@ -965,7 +965,8 @@ public:
 		for (auto &option : info.options) {
 			throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 		}
-		auto data = ReadParquetHeader(info.file_path, expected_types, expected_names);
+		FileSystem &fs = FileSystem::GetFileSystem(context);
+		auto data = ReadParquetHeader(fs, info.file_path, expected_types, expected_names);
 		// FIXME: hacky
 		auto &pdata = (ParquetScanFunctionData &)*data;
 		for (idx_t i = 0; i < expected_types.size(); i++) {
@@ -978,7 +979,8 @@ public:
 	                                                  unordered_map<string, Value> &named_parameters,
 	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
-		return ReadParquetHeader(file_name, return_types, names);
+		FileSystem &fs = FileSystem::GetFileSystem(context);
+		return ReadParquetHeader(fs, file_name, return_types, names);
 	}
 
 	static unique_ptr<FunctionOperatorData>
