@@ -51,6 +51,10 @@ CREATE TABLE a (i INTEGER);
 SELECT SUM(i) FROM a;
 ''' % datafile, out='126')
 
+# nested types
+test('select LIST_VALUE(1, 2);', out='[1, 2]')
+test("select STRUCT_PACK(x := 3, y := 3);", out='<x: 3, y: 3>')
+test("select STRUCT_PACK(x := 3, y := LIST_VALUE(1, 2));", out='<x: 3, y: [1, 2]>')
 
 test('''
 CREATE TABLE a (i STRING);
