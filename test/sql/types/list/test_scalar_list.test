@@ -5,6 +5,22 @@
 statement ok
 PRAGMA enable_verification
 
+query T
+SELECT LIST_VALUE('hello')
+----
+[hello]
+
+query T
+SELECT LIST_VALUE('hello')::VARCHAR
+----
+[hello]
+
+query T
+SELECT l::VARChAR FROM (VALUES (LIST_VALUE('hello', 'world')), (LIST_VALUE('a', 'b', 'c'))) t(l)
+----
+[hello, world]
+[a, b, c]
+
 statement ok
 CREATE TABLE list_data (g INTEGER, e INTEGER)
 

@@ -462,6 +462,27 @@ static void blob_cast_switch(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
+static void value_string_cast_switch(Vector &source, Vector &result, idx_t count) {
+	switch(result.type.id()) {
+	case LogicalTypeId::VARCHAR:
+		if (source.vector_type == VectorType::CONSTANT_VECTOR) {
+			result.vector_type = source.vector_type;
+		} else {
+			result.vector_type = VectorType::FLAT_VECTOR;
+		}
+		for(idx_t i = 0; i < count; i++) {
+			auto src_val = source.GetValue(i);
+			auto str_val = src_val.ToString();
+			result.SetValue(i, Value(str_val));
+			break;
+		}
+		break;
+	default:
+		null_cast(source, result, count);
+		break;
+	}
+}
+
 void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool strict) {
 	assert(source.type != result.type);
 	// first switch on source type
@@ -517,6 +538,10 @@ void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool st
 		ConstantVector::SetNull(result, true);
 		break;
 	}
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::LIST:
+		value_string_cast_switch(source, result, count);
+		break;
 	default:
 		throw UnimplementedCast(source.type, result.type);
 	}
