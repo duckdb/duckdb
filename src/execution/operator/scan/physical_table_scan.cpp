@@ -17,6 +17,7 @@ public:
 	PhysicalTableScanOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), initialized(false) {
 	}
 
+	ParallelState *parallel_state;
 	unique_ptr<FunctionOperatorData> operator_data;
 	//! Whether or not the scan has been initialized
 	bool initialized;
@@ -29,14 +30,6 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       bind_data(move(bind_data_)), column_ids(move(column_ids)), table_filters(move(table_filters)) {
 }
 
-void PhysicalTableScan::ParallelScanInfo(ClientContext &context,
-                                         std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
-	// generate parallel scans
-	if (function.parallel_tasks) {
-		function.parallel_tasks(context, bind_data.get(), column_ids, table_filters, callback);
-	}
-}
-
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &state = (PhysicalTableScanOperatorState &)*state_;
 	if (column_ids.empty()) {
@@ -45,21 +38,35 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 	if (!state.initialized) {
 		if (function.init) {
 			auto &task = context.task;
+			// check if there is any parallel state to fetch
+			state.parallel_state = nullptr;
 			auto task_info = task.task_info.find(this);
 			if (task_info != task.task_info.end()) {
-				// task specific limitations: pass the task information to the init function
-				state.operator_data =
-				    function.init(context.client, bind_data.get(), task_info->second.get(), column_ids, table_filters);
-			} else {
-				// no task specific limitations
-				state.operator_data =
-				    function.init(context.client, bind_data.get(), nullptr, column_ids, table_filters);
+				state.parallel_state = task_info->second;
 			}
+			// call the init function
+			state.operator_data =
+				function.init(context.client, bind_data.get(), state.parallel_state, column_ids, table_filters);
 		}
 		state.initialized = true;
 	}
-	function.function(context.client, bind_data.get(), state.operator_data.get(), chunk);
-	if (chunk.size() == 0 && function.cleanup) {
+	do {
+		function.function(context.client, bind_data.get(), state.operator_data.get(), chunk);
+		if (chunk.size() == 0) {
+			// exhausted this chunk: fetch the next parallel state to process (if any)
+			if (state.parallel_state && function.parallel_state_next) {
+				if (function.parallel_state_next(context.client, bind_data.get(), state.operator_data.get(), state.parallel_state)) {
+					continue;
+				}
+			}
+			// no parallel state or exhausted all states: finish processing
+			break;
+		} else {
+			return;
+		}
+	} while(true);
+	assert(chunk.size() == 0);
+	if (function.cleanup) {
 		function.cleanup(context.client, bind_data.get(), state.operator_data.get());
 	}
 }

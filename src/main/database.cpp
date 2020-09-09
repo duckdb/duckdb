@@ -84,4 +84,8 @@ DBConfig &DBConfig::GetConfig(ClientContext &context) {
 	return context.db.config;
 }
 
+idx_t DuckDB::NumberOfThreads() {
+	return scheduler->NumberOfThreads();
+}
+
 } // namespace duckdb

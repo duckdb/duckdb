@@ -33,8 +33,6 @@ public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	string ToString(idx_t depth = 0) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-
-	void ParallelScanInfo(ClientContext &context, std::function<void(unique_ptr<OperatorTaskInfo>)> callback) override;
 };
 
 } // namespace duckdb

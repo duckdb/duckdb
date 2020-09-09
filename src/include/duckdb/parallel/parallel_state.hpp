@@ -1,16 +1,18 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/mutex.hpp
+// duckdb/parallel/parallel_state.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <mutex>
-
 namespace duckdb {
-using std::mutex;
-using std::lock_guard;
-}
+
+struct ParallelState {
+	virtual ~ParallelState() {
+	}
+};
+
+} // namespace duckdb

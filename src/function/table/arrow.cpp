@@ -120,7 +120,7 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 }
 
 static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, const FunctionData *bind_data,
-                                                        OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                        ParallelState *state, vector<column_t> &column_ids,
                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (data.is_consumed) {

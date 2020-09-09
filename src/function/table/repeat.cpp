@@ -29,7 +29,7 @@ static unique_ptr<FunctionData> repeat_bind(ClientContext &context, vector<Value
 }
 
 static unique_ptr<FunctionOperatorData> repeat_init(ClientContext &context, const FunctionData *bind_data,
-                                                    OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                    ParallelState *state, vector<column_t> &column_ids,
                                                     unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<RepeatOperatorData>();
 }
@@ -52,7 +52,7 @@ static idx_t repeat_cardinality(const FunctionData *bind_data_) {
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, repeat_function, repeat_bind, repeat_init,
-	                     nullptr, nullptr, nullptr, repeat_cardinality);
+	                     nullptr, nullptr, repeat_cardinality);
 	set.AddFunction(repeat);
 }
 

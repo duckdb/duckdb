@@ -228,7 +228,7 @@ struct PandasScanFunction : public TableFunction {
 	}
 
 	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
-	                                                         OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+	                                                         ParallelState *state, vector<column_t> &column_ids,
 	                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 		return make_unique<PandasScanState>();
 	}
