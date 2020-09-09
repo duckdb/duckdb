@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/intraquery/test/sql/parallelism/intraquery/test_force_parallelism.test
+# name: test/sql/parallelism/intraquery/test_force_parallelism.test
 # description: Test force parallelism on small-ish tables (few thousand rows)
 # group: [intraquery]
 
@@ -14,7 +14,6 @@ PRAGMA force_parallelism
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(0, 5000) tbl(i)
 
-# perform a query with many pipelines
 query II
 SELECT MIN(i), MAX(i) FROM integers
 ----

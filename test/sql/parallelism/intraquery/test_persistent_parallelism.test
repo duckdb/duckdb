@@ -1,0 +1,44 @@
+# name: test/sql/parallelism/intraquery/test/sql/parallelism/intraquery/test_force_parallelism.test
+# description: Test force parallelism on small-ish tables (few thousand rows)
+# group: [intraquery]
+
+load __TEST_DIR__/test_parallelism.db
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0, 5000) tbl(i)
+
+restart
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+query II
+SELECT MIN(i), MAX(i) FROM integers
+----
+0	4999
+
+# add some transient data
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers SELECT * FROM range(5000, 10000)
+
+query II
+SELECT MIN(i), MAX(i) FROM integers
+----
+0	9999
+
+statement ok
+COMMIT
+
+query II
+SELECT MIN(i), MAX(i) FROM integers
+----
+0	9999
