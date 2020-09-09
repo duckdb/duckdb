@@ -90,6 +90,11 @@ SELECT AVG()
 statement error
 SELECT AVG(1, 2)
 
+query T
+SELECT STRING_AGG('hello')
+----
+hello
+
 query TTTTT
 SELECT STRING_AGG('hello', ' '), STRING_AGG('hello', NULL), STRING_AGG(NULL, ' '), STRING_AGG(NULL, NULL), STRING_AGG('', '')
 ----
@@ -97,9 +102,6 @@ hello	NULL	NULL	NULL	(empty)
 
 statement error
 SELECT STRING_AGG()
-
-statement error
-SELECT STRING_AGG('hello')
 
 statement error
 SELECT STRING_AGG(1, 2, 3)
