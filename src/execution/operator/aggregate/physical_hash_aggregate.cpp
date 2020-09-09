@@ -60,7 +60,7 @@ public:
 	HashAggregateGlobalState(vector<LogicalType> &group_types, vector<LogicalType> &payload_types,
 	                         vector<BoundAggregateExpression *> &bindings)
 	    : is_empty(true) {
-		final_ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE*2, group_types, payload_types, bindings);
+		final_ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE * 2, group_types, payload_types, bindings);
 	}
 
 	unique_ptr<SuperLargeHashTable> final_ht;
@@ -86,7 +86,7 @@ public:
 		if (payload_types.size() > 0) {
 			payload_chunk.Initialize(payload_types);
 		}
-		ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE*2, group_types, payload_types, aggregates);
+		ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE * 2, group_types, payload_types, aggregates);
 	}
 
 	//! Expression executor for the GROUP BY chunk
@@ -151,8 +151,8 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
-	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types, vector<LogicalType> &aggregate_types,
-	                           PhysicalOperator *child)
+	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types,
+	                           vector<LogicalType> &aggregate_types, PhysicalOperator *child)
 	    : PhysicalOperatorState(op, child), ht_scan_position(0) {
 		group_chunk.Initialize(group_types);
 		if (aggregate_types.size() > 0) {
@@ -175,7 +175,7 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 
 	lock_guard<mutex> glock(gstate.lock);
 
-	gstate.is_empty |= source.is_empty;
+	gstate.is_empty &= source.is_empty;
 	gstate.final_ht->Merge(*source.ht);
 }
 

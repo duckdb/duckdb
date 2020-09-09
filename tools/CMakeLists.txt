@@ -1,8 +1,11 @@
 if(NOT SUN)
   add_subdirectory(sqlite3_api_wrapper)
   add_subdirectory(shell)
-  add_subdirectory(rest)
 endif()
 if(JDBC_DRIVER)
   add_subdirectory(jdbc)
+endif()
+
+if(BUILD_REST)
+  add_subdirectory(rest)
 endif()
