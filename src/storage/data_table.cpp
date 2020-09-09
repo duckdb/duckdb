@@ -274,7 +274,10 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		// scan a morsel from the transient rows
 		idx_t vector_offset = 0;
 		if (persistent_manager->max_row > 0) {
-			vector_offset = (persistent_manager->max_row / STANDARD_VECTOR_SIZE) + 1;
+			vector_offset = persistent_manager->max_row / STANDARD_VECTOR_SIZE;
+			if (persistent_manager->max_row % STANDARD_VECTOR_SIZE != 0) {
+				vector_offset++;
+			}
 		}
 		vector_offset += state.transient_row_idx / STANDARD_VECTOR_SIZE;
 
