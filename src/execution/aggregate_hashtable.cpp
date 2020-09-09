@@ -8,6 +8,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 #include <cmath>
 #include <map>
@@ -15,11 +16,11 @@
 namespace duckdb {
 using namespace std;
 
-SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types,
-                                         vector<LogicalType> payload_types, vector<BoundAggregateExpression *> bindings,
-                                         bool parallel)
-    : SuperLargeHashTable(initial_capacity, move(group_types), move(payload_types),
-                          AggregateObject::CreateAggregateObjects(move(bindings)), parallel) {
+SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t initial_capacity,
+                                         vector<LogicalType> group_types, vector<LogicalType> payload_types,
+                                         vector<BoundAggregateExpression *> bindings)
+    : SuperLargeHashTable(buffer_manager, initial_capacity, move(group_types), move(payload_types),
+                          AggregateObject::CreateAggregateObjects(move(bindings))) {
 }
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
@@ -32,11 +33,11 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 	return aggregates;
 }
 
-SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types,
-                                         vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects,
-                                         bool parallel)
-    : aggregates(move(aggregate_objects)), group_types(group_types), payload_types(payload_types), group_width(0),
-      payload_width(0), capacity(0), entries(0) {
+SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t initial_capacity,
+                                         vector<LogicalType> group_types, vector<LogicalType> payload_types,
+                                         vector<AggregateObject> aggregate_objects)
+    : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
+      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0) {
 	// HT tuple layout is as follows:
 	// [FLAG][GROUPS][PAYLOAD]
 	// [FLAG] is the state of the tuple in memory
@@ -71,8 +72,8 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 			vector<LogicalType> distinct_payload_types;
 			vector<BoundAggregateExpression *> distinct_aggregates;
 			distinct_group_types.push_back(payload_types[payload_idx]);
-			distinct_hashes[i] = make_unique<SuperLargeHashTable>(initial_capacity, distinct_group_types,
-			                                                      distinct_payload_types, distinct_aggregates);
+			distinct_hashes[i] = make_unique<SuperLargeHashTable>(
+			    buffer_manager, initial_capacity, distinct_group_types, distinct_payload_types, distinct_aggregates);
 		}
 		if (aggr.child_count) {
 			payload_idx += aggr.child_count;
@@ -153,7 +154,7 @@ void SuperLargeHashTable::Destroy() {
 
 void SuperLargeHashTable::Verify() {
 #ifdef DEBUG
-	auto hash_ptr = (data_ptr_t *)hashes.get();
+	auto hash_ptr = (data_ptr_t *)hashes;
 	idx_t count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		if (hash_ptr[i]) {
@@ -180,9 +181,11 @@ void SuperLargeHashTable::Resize(idx_t size) {
 	assert((size & (size - 1)) == 0);
 	bitmask = size - 1;
 
-	hashes = unique_ptr<data_t[]>(new data_t[size * sizeof(data_ptr_t)]);
-	memset(hashes.get(), 0, size * sizeof(data_ptr_t));
-	endptr = hashes.get() + sizeof(data_ptr_t) * size;
+	hashes_hdl = buffer_manager.Allocate(MaxValue(size * sizeof(data_ptr_t), (idx_t)Storage::BLOCK_ALLOC_SIZE));
+	hashes = hashes_hdl->node->buffer;
+
+	memset(hashes, 0, size * sizeof(data_ptr_t));
+	endptr = hashes + sizeof(data_ptr_t) * size;
 	capacity = size;
 
 	if (entries > 0) {
@@ -193,11 +196,11 @@ void SuperLargeHashTable::Resize(idx_t size) {
 			     ptr += tuple_size) {
 				auto entry_hash = *(hash_t *)ptr;
 				assert((entry_hash & bitmask) == (entry_hash % capacity));
-				auto entry_pointer = (data_ptr_t *)(hashes.get() + ((entry_hash & bitmask) * sizeof(data_ptr_t)));
+				auto entry_pointer = (data_ptr_t *)(hashes + ((entry_hash & bitmask) * sizeof(data_ptr_t)));
 				while (*entry_pointer) {
 					entry_pointer++;
 					if (entry_pointer >= (data_ptr_t *)endptr) {
-						entry_pointer = (data_ptr_t *)hashes.get();
+						entry_pointer = (data_ptr_t *)hashes;
 					}
 				}
 
@@ -311,7 +314,7 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	// multiply the position by the tuple size and add the base address
 	UnaryExecutor::Execute<hash_t, data_ptr_t>(hashes, addresses, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
-		return this->hashes.get() + ((element & bitmask) * sizeof(data_ptr_t));
+		return this->hashes + ((element & bitmask) * sizeof(data_ptr_t));
 	});
 }
 
@@ -513,7 +516,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_h
 	// multiply the position by the tuple size and add the base address
 	UnaryExecutor::Execute<hash_t, data_ptr_t>(group_hashes, addresses, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
-		return this->hashes.get() + ((element & bitmask) * sizeof(data_ptr_t));
+		return this->hashes + ((element & bitmask) * sizeof(data_ptr_t));
 	});
 
 	addresses.Normalify(groups.size());
@@ -609,7 +612,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_h
 			addresses_ptr[index]++;
 			// assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
 			if ((data_ptr_t)addresses_ptr[index] >= endptr) {
-				addresses_ptr[index] = (data_ptr_t *)hashes.get();
+				addresses_ptr[index] = (data_ptr_t *)hashes;
 			}
 		}
 		sel_vector = no_match_vector;

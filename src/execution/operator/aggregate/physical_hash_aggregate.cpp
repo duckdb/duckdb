@@ -57,10 +57,11 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<u
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalOperatorState {
 public:
-	HashAggregateGlobalState(vector<LogicalType> &group_types, vector<LogicalType> &payload_types,
-	                         vector<BoundAggregateExpression *> &bindings)
+	HashAggregateGlobalState(BufferManager &buffer_manager, vector<LogicalType> &group_types,
+	                         vector<LogicalType> &payload_types, vector<BoundAggregateExpression *> &bindings)
 	    : is_empty(true) {
-		final_ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE * 2, group_types, payload_types, bindings);
+		final_ht = make_unique<SuperLargeHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
+		                                            payload_types, bindings);
 	}
 
 	unique_ptr<SuperLargeHashTable> final_ht;
@@ -72,8 +73,9 @@ public:
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
-	HashAggregateLocalState(vector<unique_ptr<Expression>> &groups, vector<BoundAggregateExpression *> &aggregates,
-	                        vector<LogicalType> &group_types, vector<LogicalType> &payload_types)
+	HashAggregateLocalState(BufferManager &buffer_manager, vector<unique_ptr<Expression>> &groups,
+	                        vector<BoundAggregateExpression *> &aggregates, vector<LogicalType> &group_types,
+	                        vector<LogicalType> &payload_types)
 	    : group_executor(groups) {
 		for (auto &aggr : aggregates) {
 			if (aggr->children.size()) {
@@ -86,7 +88,8 @@ public:
 		if (payload_types.size() > 0) {
 			payload_chunk.Initialize(payload_types);
 		}
-		ht = make_unique<SuperLargeHashTable>(STANDARD_VECTOR_SIZE * 2, group_types, payload_types, aggregates);
+		ht = make_unique<SuperLargeHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types, payload_types,
+		                                      aggregates);
 	}
 
 	//! Expression executor for the GROUP BY chunk
@@ -104,11 +107,13 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalHashAggregate::GetGlobalState(ClientContext &context) {
-	return make_unique<HashAggregateGlobalState>(group_types, payload_types, bindings);
+	return make_unique<HashAggregateGlobalState>(BufferManager::GetBufferManager(context), group_types, payload_types,
+	                                             bindings);
 }
 
 unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionContext &context) {
-	return make_unique<HashAggregateLocalState>(groups, bindings, group_types, payload_types);
+	return make_unique<HashAggregateLocalState>(BufferManager::GetBufferManager(context.client), groups, bindings,
+	                                            group_types, payload_types);
 }
 
 void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,

@@ -16,6 +16,8 @@
 
 namespace duckdb {
 class BoundAggregateExpression;
+class BufferManager;
+class BufferHandle;
 
 struct AggregateObject {
 	AggregateObject(AggregateFunction function, idx_t child_count, idx_t payload_size, bool distinct,
@@ -38,15 +40,14 @@ struct AggregateObject {
 /*!
     SuperLargeHashTable is a HT that is used for computing aggregates. It takes
    as input the set of groups and the types of the aggregates to compute and
-   stores them in the HT. It uses linear probing for collision resolution, and
-   supports both parallel and sequential modes.
+   stores them in the HT. It uses linear probing for collision resolution.
 */
 class SuperLargeHashTable {
 public:
-	SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types, vector<LogicalType> payload_types,
-	                    vector<BoundAggregateExpression *> aggregates, bool parallel = false);
-	SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types, vector<LogicalType> payload_types,
-	                    vector<AggregateObject> aggregates, bool parallel = false);
+	SuperLargeHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
+	                    vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates);
+	SuperLargeHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
+	                    vector<LogicalType> payload_types, vector<AggregateObject> aggregates);
 	~SuperLargeHashTable();
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
@@ -74,6 +75,7 @@ public:
 	StringHeap string_heap;
 
 private:
+	BufferManager &buffer_manager;
 	//! The aggregates to be computed
 	vector<AggregateObject> aggregates;
 	//! The types of the group columns stored in the hashtable
@@ -97,8 +99,9 @@ private:
 	//! unique_ptr to indicate the ownership
 	vector<unique_ptr<data_t[]>> payload; //! The data of the HT
 	//! unique_ptr to indicate the ownership
-	unique_ptr<data_t[]> hashes; //! The endptr of the hashtable
-	data_ptr_t endptr;           // of hashes
+	unique_ptr<BufferHandle> hashes_hdl;
+	data_t *hashes;    //! The endptr of the hashtable
+	data_ptr_t endptr; // of hashes
 	data_ptr_t current_payload_offset_ptr;
 
 	//! The empty payload data
