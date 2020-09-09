@@ -5,7 +5,23 @@
 load __TEST_DIR__/test_parallelism.db
 
 statement ok
+BEGIN TRANSACTION
+
+statement ok
 CREATE TABLE integers AS SELECT * FROM range(0, 5000) tbl(i)
+
+query II
+SELECT MIN(i), MAX(i) FROM integers
+----
+0	4999
+
+statement ok
+COMMIT
+
+query II
+SELECT MIN(i), MAX(i) FROM integers
+----
+0	4999
 
 restart
 

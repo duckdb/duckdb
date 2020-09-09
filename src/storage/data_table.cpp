@@ -261,7 +261,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	if (state.persistent_row_idx < persistent_manager->max_row) {
 		idx_t next = MinValue(state.persistent_row_idx + PARALLEL_SCAN_TUPLE_COUNT, persistent_manager->max_row);
 
-		idx_t vector_offset = persistent_manager->max_row / STANDARD_VECTOR_SIZE;
+		idx_t vector_offset = state.persistent_row_idx / STANDARD_VECTOR_SIZE;
 		// scan a morsel from the persistent rows
 		InitializeScanWithOffset(scan_state, column_ids, table_filters, vector_offset);
 		scan_state.current_persistent_row = state.persistent_row_idx;
