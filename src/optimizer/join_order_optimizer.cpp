@@ -143,11 +143,11 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
-	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
+	} else if (op->type == LogicalOperatorType::DUMMY_SCAN) {
 		// table function call, add to set of relations
-		auto table_function = (LogicalTableFunction *)op;
+		auto dummy_scan = (LogicalDummyScan *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		relation_mapping[table_function->table_index] = relations.size();
+		relation_mapping[dummy_scan->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::PROJECTION) {

@@ -30,16 +30,10 @@ Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	auto utf_type = Utf8Proc::Analyze(val);
-	switch (utf_type) {
-	case UnicodeType::INVALID:
+	if (utf_type == UnicodeType::INVALID) {
 		throw Exception("String value is not valid UTF8");
-	case UnicodeType::ASCII:
-		str_value = val;
-		break;
-	case UnicodeType::UNICODE:
-		str_value = Utf8Proc::Normalize(val);
-		break;
 	}
+	str_value = val;
 }
 
 Value Value::MinimumValue(PhysicalType type) {

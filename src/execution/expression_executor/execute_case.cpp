@@ -15,12 +15,15 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 	result->AddChild(expr.check.get());
 	result->AddChild(expr.result_if_true.get());
 	result->AddChild(expr.result_if_false.get());
+	result->Finalize();
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	Vector res_true(expr.result_if_true->return_type), res_false(expr.result_if_false->return_type);
+	Vector res_true, res_false;
+	res_true.Reference(state->intermediate_chunk.data[1]);
+	res_false.Reference(state->intermediate_chunk.data[2]);
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();

@@ -87,6 +87,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw BinderException("Can only delete from base table!");
 		}
+		auto &table_binding = (BoundBaseTableRef &)*bound_table;
+		auto table = table_binding.table;
 		// bind the index expressions
 		vector<unique_ptr<Expression>> expressions;
 		IndexBinder binder(*this, context);
@@ -107,7 +109,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// this gives us a logical table scan
 		// we take the required columns from here
 		// create the logical operator
-		result.plan = make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(expressions),
+		result.plan = make_unique<LogicalCreateIndex>(*table, get.column_ids, move(expressions),
 		                                              unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
 		break;
 	}

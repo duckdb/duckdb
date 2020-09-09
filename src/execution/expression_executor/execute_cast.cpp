@@ -9,13 +9,15 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpress
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.child.get());
+	result->Finalize();
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	// resolve the child
-	Vector child(expr.child->return_type);
+	Vector child;
+	child.Reference(state->intermediate_chunk.data[0]);
 	auto child_state = state->child_states[0].get();
 
 	Execute(*expr.child, child_state, sel, count, child);

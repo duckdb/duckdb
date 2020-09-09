@@ -151,9 +151,9 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
-	PhysicalHashAggregateState(vector<LogicalType> &group_types, vector<LogicalType> &aggregate_types,
+	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types, vector<LogicalType> &aggregate_types,
 	                           PhysicalOperator *child)
-	    : PhysicalOperatorState(child), ht_scan_position(0) {
+	    : PhysicalOperatorState(op, child), ht_scan_position(0) {
 		group_chunk.Initialize(group_types);
 		if (aggregate_types.size() > 0) {
 			aggregate_chunk.Initialize(aggregate_types);
@@ -227,7 +227,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_types,
+	return make_unique<PhysicalHashAggregateState>(*this, group_types, aggregate_types,
 	                                               children.size() == 0 ? nullptr : children[0].get());
 }
 

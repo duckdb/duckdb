@@ -87,6 +87,28 @@ NULL
 NULL
 NULL
 
+# recursive CTE with table-producing function
+query I
+WITH RECURSIVE t AS (
+	SELECT 1 AS i
+	UNION ALL
+	SELECT j
+	FROM t, generate_series(0, 10, 1) series(j)
+	WHERE j=i+1
+)
+SELECT * FROM t;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
 # order by is not allowed in the recursive term of ctes
 statement error
 with recursive t as (select 1 as x union all select x+1 from t where x < 3 order by x) select * from t

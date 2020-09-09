@@ -31,7 +31,8 @@ public:
 };
 
 Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0), recursive_cte(nullptr) {
+    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0),
+      recursive_cte(nullptr) {
 }
 
 void Pipeline::Execute(TaskContext &task) {
@@ -47,7 +48,7 @@ void Pipeline::Execute(TaskContext &task) {
 		auto lstate = sink->GetLocalSinkState(context);
 		// incrementally process the pipeline
 		DataChunk intermediate;
-		child->InitializeChunk(intermediate);
+		child->InitializeChunkEmpty(intermediate);
 		while (true) {
 			child->GetChunk(context, intermediate, state.get());
 			thread.profiler.StartOperator(sink);
@@ -72,7 +73,7 @@ void Pipeline::FinishTask() {
 	if (current_finished == total_tasks) {
 		try {
 			sink->Finalize(executor.context, move(sink_state));
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {
 			executor.PushError("Unknown exception in Finalize!");
@@ -96,7 +97,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::HASH_JOIN:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
-	case PhysicalOperatorType::SEQ_SCAN: {
+	case PhysicalOperatorType::TABLE_SCAN: {
 		// we reached a scan: split it up into parts and schedule the parts
 		auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 

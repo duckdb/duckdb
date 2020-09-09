@@ -1141,18 +1141,9 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
 					auto s = parse_data[i];
 					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
-					switch (utf_type) {
-					case UnicodeType::INVALID:
+					if (utf_type == UnicodeType::INVALID) {
 						throw ParserException("Error between line %d and %d: file is not valid UTF8",
 						                      linenr - parse_chunk.size(), linenr);
-					case UnicodeType::ASCII:
-						break;
-					case UnicodeType::UNICODE: {
-						auto normie = Utf8Proc::Normalize(s.GetData());
-						parse_data[i] = StringVector::AddString(parse_chunk.data[col_idx], normie);
-						free(normie);
-						break;
-					}
 					}
 				}
 			}

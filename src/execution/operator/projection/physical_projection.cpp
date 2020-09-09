@@ -8,8 +8,8 @@ namespace duckdb {
 
 class PhysicalProjectionState : public PhysicalOperatorState {
 public:
-	PhysicalProjectionState(PhysicalOperator *child, vector<unique_ptr<Expression>> &expressions)
-	    : PhysicalOperatorState(child), executor(expressions) {
+	PhysicalProjectionState(PhysicalOperator &op, PhysicalOperator *child, vector<unique_ptr<Expression>> &expressions)
+	    : PhysicalOperatorState(op, child), executor(expressions) {
 		assert(child);
 	}
 
@@ -29,7 +29,7 @@ void PhysicalProjection::GetChunkInternal(ExecutionContext &context, DataChunk &
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
-	return make_unique<PhysicalProjectionState>(children[0].get(), select_list);
+	return make_unique<PhysicalProjectionState>(*this, children[0].get(), select_list);
 }
 
 string PhysicalProjection::ExtraRenderInformation() const {
