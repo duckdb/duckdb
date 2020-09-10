@@ -23,6 +23,7 @@
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 using namespace std;
 
@@ -51,7 +52,7 @@ void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &nam
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : StandardEntry(CatalogType::TABLE, schema, catalog, info->Base().table), storage(inherited_storage),
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(inherited_storage),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
 	this->temporary = info->Base().temporary;
@@ -422,6 +423,53 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	for (auto &constraint : constraints) {
 		constraint->Serialize(serializer);
 	}
+}
+
+string TableCatalogEntry::ToSQL() {
+	stringstream ss;
+	ss << "CREATE TABLE " << name << "(";
+
+	// find all columns that have NOT NULL specified, but are NOT primary key columns
+	unordered_set<idx_t> not_null_columns;
+	unordered_set<string> pk_columns;
+	for (auto &constraint : constraints) {
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			auto &not_null = (NotNullConstraint &)*constraint;
+			not_null_columns.insert(not_null.index);
+		} else if (constraint->type == ConstraintType::UNIQUE) {
+			auto &pk = (UniqueConstraint &)*constraint;
+			if (pk.is_primary_key) {
+				for (auto &col : pk.columns) {
+					pk_columns.insert(col);
+				}
+			}
+		}
+	}
+
+	for (idx_t i = 0; i < columns.size(); i++) {
+		if (i > 0) {
+			ss << ", ";
+		}
+		auto &column = columns[i];
+		ss << column.name << " " << column.type.ToString();
+		if (not_null_columns.find(column.oid) != not_null_columns.end() &&
+		    pk_columns.find(column.name) == pk_columns.end()) {
+			// NOT NULL but not a priamry key column
+			ss << " NOT NULL";
+		}
+	}
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto &constraint = constraints[i];
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			// handled above
+			continue;
+		}
+		ss << ", ";
+		ss << constraint->ToString();
+	}
+
+	ss << ");";
+	return ss.str();
 }
 
 unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source) {

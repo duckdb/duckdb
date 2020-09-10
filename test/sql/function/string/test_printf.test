@@ -53,6 +53,31 @@ SELECT printf('%d %lld %hhd %hd', 33::TINYINT, 12::SMALLINT, 40::INTEGER, 80::BI
 ----
 33 12 40 80
 
+# exotic types
+# dates, times and timestamps are strings
+query T
+SELECT printf('%s %s = %s', DATE '1992-01-01', TIME '12:01:00', TIMESTAMP '1992-01-01 12:01:00')
+----
+1992-01-01 12:01:00 = 1992-01-01 12:01:00
+
+# blob
+query T
+SELECT printf('%s', BLOB '\x01a0')
+----
+\x01A0
+
+# hugeint
+query T
+SELECT printf('%s', 120381902481294715712::HUGEINT)
+----
+120381902481294715712
+
+# decimal
+query T
+SELECT printf('%.3f', '1.234'::DECIMAL)
+----
+1.234
+
 # octal hex etc
 query T
 SELECT printf('%d %x %o %#x %#o', 100, 100, 100, 100, 100)
@@ -158,4 +183,3 @@ SELECT printf('%s: %s', pstring, pstring) FROM strings WHERE idx <> 2 ORDER BY i
 ----
 hello: hello
 abcde: abcde
-

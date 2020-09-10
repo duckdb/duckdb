@@ -1,6 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "compare_result.hpp"
-#include "dbgen.hpp"
+#include "tpch-extension.hpp"
 #include "duckdb_benchmark_macro.hpp"
 
 using namespace duckdb;
@@ -14,7 +14,9 @@ using namespace std;
 		DeleteDatabase(db_path);                                                                                       \
 		{                                                                                                              \
 			DuckDB db(db_path);                                                                                        \
-			tpch::dbgen(SF, db);                                                                                       \
+			db.LoadExtension<TPCHExtension>();                                                                         \
+			Connection con(db);                                                                                        \
+			con.Query("CALL dbgen(sf=" + to_string(SF) + ")");                                                         \
 		}                                                                                                              \
 		{                                                                                                              \
 			auto config = GetConfig();                                                                                 \
@@ -25,6 +27,7 @@ using namespace std;
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
 		auto config = GetConfig();                                                                                     \
 		DuckDB db(db_path, config.get());                                                                              \
+		db.LoadExtension<TPCHExtension>();                                                                             \
 		Connection con(db);                                                                                            \
 		state->result = con.Query(QUERY);                                                                              \
 	}                                                                                                                  \
@@ -66,54 +69,10 @@ TPCHStartup("SELECT SUM(l_extendedprice) FROM lineitem") NormalConfig() string
 FINISH_BENCHMARK(TPCHSimpleAggr)
 
 DUCKDB_BENCHMARK(TPCHQ1, "[startup]")
-TPCHStartup(tpch::get_query(1)) NormalConfig() string VerifyResult(QueryResult *result) override {
+TPCHStartup("PRAGMA tpch(1)") NormalConfig() string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
 		return result->error;
 	}
-	return compare_csv(*result, tpch::get_answer(SF, 1), true);
+	return compare_csv(*result, TPCHExtension::GetAnswer(SF, 1), true);
 }
 FINISH_BENCHMARK(TPCHQ1)
-
-#define DirectIOConfig()                                                                                               \
-	unique_ptr<DBConfig> GetConfig() {                                                                                 \
-		auto config = make_unique<DBConfig>();                                                                         \
-		config->use_direct_io = true;                                                                                  \
-		return config;                                                                                                 \
-	}
-
-DUCKDB_BENCHMARK(TPCHEmptyStartupDirectIO, "[startup]")
-TPCHStartup("SELECT * FROM lineitem WHERE 1=0") DirectIOConfig() string VerifyResult(QueryResult *result) override {
-	if (!result->success) {
-		return result->error;
-	}
-	return string();
-}
-FINISH_BENCHMARK(TPCHEmptyStartupDirectIO)
-
-DUCKDB_BENCHMARK(TPCHCountDirectIO, "[startup]")
-TPCHStartup("SELECT COUNT(*) FROM lineitem") DirectIOConfig() string VerifyResult(QueryResult *result) override {
-	if (!result->success) {
-		return result->error;
-	}
-	return string();
-}
-FINISH_BENCHMARK(TPCHCountDirectIO)
-
-DUCKDB_BENCHMARK(TPCHSimpleAggrDirectIO, "[startup]")
-TPCHStartup("SELECT SUM(l_extendedprice) FROM lineitem") DirectIOConfig() string
-    VerifyResult(QueryResult *result) override {
-	if (!result->success) {
-		return result->error;
-	}
-	return string();
-}
-FINISH_BENCHMARK(TPCHSimpleAggrDirectIO)
-
-DUCKDB_BENCHMARK(TPCHQ1DirectIO, "[startup]")
-TPCHStartup(tpch::get_query(1)) DirectIOConfig() string VerifyResult(QueryResult *result) override {
-	if (!result->success) {
-		return result->error;
-	}
-	return compare_csv(*result, tpch::get_answer(SF, 1), true);
-}
-FINISH_BENCHMARK(TPCHQ1DirectIO)

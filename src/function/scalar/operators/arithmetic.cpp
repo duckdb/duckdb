@@ -1,8 +1,10 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -12,29 +14,28 @@ using namespace std;
 
 namespace duckdb {
 
-template <class OP> static scalar_function_t GetScalarBinaryFunction(LogicalType type) {
+template <class OP> static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 	scalar_function_t function;
-	switch (type.id()) {
-	case LogicalTypeId::TINYINT:
+	switch (type) {
+	case PhysicalType::INT8:
 		function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
 		break;
-	case LogicalTypeId::SMALLINT:
+	case PhysicalType::INT16:
 		function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
 		break;
-	case LogicalTypeId::INTEGER:
+	case PhysicalType::INT32:
 		function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
 		break;
-	case LogicalTypeId::BIGINT:
+	case PhysicalType::INT64:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		break;
-	case LogicalTypeId::HUGEINT:
+	case PhysicalType::INT128:
 		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP, true>;
 		break;
-	case LogicalTypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
 		break;
-	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
 		break;
 	default:
@@ -131,17 +132,72 @@ template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t righ
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(right, left);
 }
 
+template <class OP>
+unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	// get the max width and scale of the input arguments
+	int max_width = 0, max_scale = 0, max_width_over_scale = 0;
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		int width, scale;
+		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		if (!can_convert) {
+			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());
+		}
+		max_width = MaxValue<int>(width, max_width);
+		max_scale = MaxValue<int>(scale, max_scale);
+		max_width_over_scale = MaxValue<int>(width - scale, max_width_over_scale);
+	}
+	// for addition/subtraction, we add 1 to the width to ensure we don't overflow
+	// FIXME: use statistics to determine this
+	max_width = MaxValue(max_scale + max_width_over_scale, max_width) + 1;
+	if (max_width > Decimal::MAX_WIDTH_DECIMAL) {
+		// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
+		max_width = Decimal::MAX_WIDTH_DECIMAL;
+	}
+	// arithmetic between two decimal arguments: check the types of the input arguments
+	LogicalType result_type = LogicalType(LogicalTypeId::DECIMAL, max_width, max_scale);
+	// we cast all input types to the specified type
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		// first check if the cast is necessary
+		// if the argument has a matching scale and internal type as the output type, no casting is necessary
+		auto &argument_type = arguments[i]->return_type;
+		if (argument_type.scale() == result_type.scale() &&
+		    argument_type.InternalType() == result_type.InternalType()) {
+			bound_function.arguments[i] = argument_type;
+		} else {
+			bound_function.arguments[i] = result_type;
+		}
+	}
+	bound_function.return_type = result_type;
+	// now select the physical function to execute
+	bound_function.function = GetScalarBinaryFunction<OP>(result_type.InternalType());
+	return nullptr;
+}
+
+unique_ptr<FunctionData> nop_decimal_bind(ClientContext &context, ScalarFunction &bound_function,
+                                          vector<unique_ptr<Expression>> &arguments) {
+	bound_function.return_type = arguments[0]->return_type;
+	bound_function.arguments[0] = arguments[0]->return_type;
+	return nullptr;
+}
+
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<AddOperator>));
+		} else {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type.InternalType())));
+		}
 	}
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<AddOperator>(LogicalType::INTEGER)));
+	                                     GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
 	functions.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::DATE}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<AddOperator>(LogicalType::INTEGER)));
+	                                     GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
 	// we can add intervals together
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
@@ -167,7 +223,11 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	                   ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>));
 	// unary add function is a nop, but only exists for numeric types
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction, false, nop_decimal_bind));
+		} else {
+			functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
+		}
 	}
 	set.AddFunction(functions);
 }
@@ -224,17 +284,41 @@ template <> interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t
 	return Interval::GetDifference(left, right);
 }
 
+unique_ptr<FunctionData> decimal_negate_bind(ClientContext &context, ScalarFunction &bound_function,
+                                             vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
+		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::SMALLINT);
+	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
+		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::INTEGER);
+	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
+		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::BIGINT);
+	} else {
+		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
+		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT);
+	}
+	bound_function.arguments[0] = decimal_type;
+	bound_function.return_type = decimal_type;
+	return nullptr;
+}
+
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<SubtractOperator>));
+		} else {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type.InternalType())));
+		}
 	}
 	// we can subtract dates from each other
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::DATE}, LogicalType::INTEGER,
-	                                     GetScalarBinaryFunction<SubtractOperator>(LogicalType::INTEGER)));
+	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<SubtractOperator>(LogicalType::INTEGER)));
+	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
 	// we can subtract timestamps from each other
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL,
@@ -255,8 +339,12 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(
-		    ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			functions.AddFunction(ScalarFunction({type}, type, nullptr, false, decimal_negate_bind));
+		} else {
+			functions.AddFunction(
+			    ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
+		}
 	}
 	set.AddFunction(functions);
 }
@@ -291,10 +379,54 @@ template <> interval_t MultiplyOperator::Operation(int64_t left, interval_t righ
 	return MultiplyOperator::Operation<interval_t, int64_t, interval_t>(right, left);
 }
 
+unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFunction &bound_function,
+                                               vector<unique_ptr<Expression>> &arguments) {
+	int result_width = 0, result_scale = 0;
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		int width, scale;
+		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		if (!can_convert) {
+			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());
+		}
+		result_width += width;
+		result_scale += scale;
+	}
+	if (result_scale > Decimal::MAX_WIDTH_DECIMAL) {
+		throw OutOfRangeException(
+		    "Needed scale %d to accurately represent the multiplication result, but this is out of range of the "
+		    "DECIMAL type. Max scale is %d; could not perform an accurate multiplication. Either add a cast to DOUBLE, "
+		    "or add an explicit cast to a decimal with a lower scale.",
+		    result_scale, Decimal::MAX_WIDTH_DECIMAL);
+	}
+	if (result_width > Decimal::MAX_WIDTH_DECIMAL) {
+		result_width = Decimal::MAX_WIDTH_DECIMAL;
+	}
+	LogicalType result_type = LogicalType(LogicalTypeId::DECIMAL, result_width, result_scale);
+	// since our scale is the summation of our input scales, we do not need to cast to the result scale
+	// however, we might need to cast to the correct internal type
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		auto &argument_type = arguments[i]->return_type;
+		if (argument_type.InternalType() == result_type.InternalType()) {
+			bound_function.arguments[i] = argument_type;
+		} else {
+			bound_function.arguments[i] = LogicalType(LogicalTypeId::DECIMAL, result_width, argument_type.scale());
+		}
+	}
+	bound_function.return_type = result_type;
+	// now select the physical function to execute
+	bound_function.function = GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType());
+	return nullptr;
+}
+
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, false, bind_decimal_multiply));
+		} else {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
+		}
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
@@ -375,7 +507,6 @@ template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(Logical
 	case LogicalTypeId::FLOAT:
 		return BinaryScalarFunctionIgnoreZero<float, float, float, OP>;
 	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::DECIMAL:
 		return BinaryScalarFunctionIgnoreZero<double, double, double, OP>;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
@@ -385,7 +516,12 @@ template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(Logical
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("/");
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			continue;
+		} else {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
+		}
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
@@ -410,7 +546,12 @@ template <> double ModuloOperator::Operation(double left, double right) {
 void ModFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("%");
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			continue;
+		} else {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type)));
+		}
 	}
 	set.AddFunction(functions);
 	functions.name = "mod";

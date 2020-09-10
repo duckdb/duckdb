@@ -27,6 +27,8 @@ public:
 
 	//! The query of the view
 	unique_ptr<QueryNode> query;
+	//! The SQL query (if any)
+	string sql;
 	//! The set of aliases associated with the view
 	vector<string> aliases;
 	//! The returned types of the view
@@ -37,6 +39,8 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &source);
+
+	string ToSQL() override;
 
 private:
 	void Initialize(CreateViewInfo *info);

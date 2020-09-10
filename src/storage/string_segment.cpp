@@ -432,7 +432,7 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 			}
 		}
 		idx_t current_tuple_count = tuple_count - vector_index * STANDARD_VECTOR_SIZE;
-		idx_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
+		idx_t append_count = MinValue(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
 		AppendData(stats, handle->node->buffer + vector_size * vector_index, handle->node->buffer + Storage::BLOCK_SIZE,
@@ -564,7 +564,7 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 	if (!head || head->offset + total_length >= head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
-		idx_t alloc_size = std::max((idx_t)total_length, (idx_t)Storage::BLOCK_ALLOC_SIZE);
+		idx_t alloc_size = MaxValue<idx_t>(total_length, Storage::BLOCK_ALLOC_SIZE);
 		auto new_block = make_unique<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
@@ -603,7 +603,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 		offset += sizeof(uint32_t);
 
 		// allocate a buffer to store the string
-		auto alloc_size = std::max((idx_t)Storage::BLOCK_ALLOC_SIZE, (idx_t)length + 1 + sizeof(uint32_t));
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + 1 + sizeof(uint32_t));
 		auto target_handle = manager.Allocate(alloc_size, true);
 		auto target_ptr = target_handle->node->buffer;
 		// write the length in this block as well
@@ -611,7 +611,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 		target_ptr += sizeof(uint32_t);
 		// now append the string to the single buffer
 		while (remaining > 0) {
-			idx_t to_write = std::min((idx_t)remaining, (idx_t)(Storage::BLOCK_SIZE - sizeof(block_id_t) - offset));
+			idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
 			memcpy(target_ptr, handle->node->buffer + offset, to_write);
 
 			remaining -= to_write;

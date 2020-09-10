@@ -1,10 +1,12 @@
 #include "duckdb/common/types.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include <cmath>
 
@@ -63,8 +65,17 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::DOUBLE:
 		return PhysicalType::DOUBLE;
 	case LogicalTypeId::DECIMAL:
-		// FIXME: for now
-		return PhysicalType::DOUBLE;
+		if (width_ <= Decimal::MAX_WIDTH_INT16) {
+			return PhysicalType::INT16;
+		} else if (width_ <= Decimal::MAX_WIDTH_INT32) {
+			return PhysicalType::INT32;
+		} else if (width_ <= Decimal::MAX_WIDTH_INT64) {
+			return PhysicalType::INT64;
+		} else if (width_ <= Decimal::MAX_WIDTH_INT128) {
+			return PhysicalType::INT128;
+		} else {
+			throw NotImplementedException("Widths bigger than 38 are not supported");
+		}
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
@@ -99,6 +110,7 @@ const LogicalType LogicalType::INTEGER = LogicalType(LogicalTypeId::INTEGER);
 const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
 const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
 const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
+const LogicalType LogicalType::DECIMAL = LogicalType(LogicalTypeId::DECIMAL);
 const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
 const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
 const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
@@ -120,7 +132,7 @@ const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
                                                   LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
-                                                  LogicalType::DOUBLE};
+                                                  LogicalType::DOUBLE,  LogicalType::DECIMAL};
 
 const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
                                                    LogicalType::BIGINT, LogicalType::HUGEINT};
@@ -128,7 +140,7 @@ const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, Logical
 const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BOOLEAN, LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
     LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
-    LogicalType::BLOB,    LogicalType::INTERVAL,  LogicalType::HUGEINT};
+    LogicalType::BLOB,    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL};
 // TODO add LIST/STRUCT here
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
@@ -210,7 +222,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 
 bool TypeIsConstantSize(PhysicalType type) {
 	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) ||
-	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::DECIMAL) || type == PhysicalType::HASH ||
+	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::INTERVAL) || type == PhysicalType::HASH ||
 	       type == PhysicalType::POINTER || type == PhysicalType::INTERVAL || type == PhysicalType::INT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
@@ -329,6 +341,12 @@ string LogicalType::ToString() const {
 		}
 		return "LIST<" + child_types_[0].second.ToString() + ">";
 	}
+	case LogicalTypeId::DECIMAL: {
+		if (width_ == 0) {
+			return "DECIMAL";
+		}
+		return StringUtil::Format("DECIMAL(%d,%d)", width_, scale_);
+	}
 	default:
 		return LogicalTypeIdToString(id_);
 	}
@@ -355,7 +373,9 @@ LogicalType TransformStringToLogicalType(string str) {
 		return LogicalType(LogicalTypeId::BOOLEAN);
 	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
 		return LogicalType::FLOAT;
-	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "float8" || lower_str == "decimal") {
+	} else if (lower_str == "decimal" || lower_str == "dec" || lower_str == "numeric") {
+		return LogicalType(LogicalTypeId::DECIMAL, 18, 3);
+	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "decimal") {
 		return LogicalType::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
 		return LogicalType::TINYINT;
@@ -403,25 +423,50 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-int LogicalType::NumericTypeOrder() const {
-	switch (InternalType()) {
-	case PhysicalType::INT8:
-		return 1;
-	case PhysicalType::INT16:
-		return 2;
-	case PhysicalType::INT32:
-		return 3;
-	case PhysicalType::INT64:
-		return 4;
-	case PhysicalType::INT128:
-		return 5;
-	case PhysicalType::FLOAT:
-		return 6;
-	case PhysicalType::DOUBLE:
-		return 7;
+bool LogicalType::GetDecimalProperties(int &width, int &scale) const {
+	switch (id_) {
+	case LogicalTypeId::SQLNULL:
+		width = 0;
+		scale = 0;
+		break;
+	case LogicalTypeId::BOOLEAN:
+		width = 1;
+		scale = 0;
+		break;
+	case LogicalTypeId::TINYINT:
+		// tinyint: [-127, 127] = DECIMAL(3,0)
+		width = 3;
+		scale = 0;
+		break;
+	case LogicalTypeId::SMALLINT:
+		// smallint: [-32767, 32767] = DECIMAL(5,0)
+		width = 5;
+		scale = 0;
+		break;
+	case LogicalTypeId::INTEGER:
+		// integer: [-2147483647, 2147483647] = DECIMAL(10,0)
+		width = 10;
+		scale = 0;
+		break;
+	case LogicalTypeId::BIGINT:
+		// bigint: [-9223372036854775807, 9223372036854775807] = DECIMAL(19,0)
+		width = 19;
+		scale = 0;
+		break;
+	case LogicalTypeId::HUGEINT:
+		// hugeint: max size decimal (38, 0)
+		// note that a hugeint is not guaranteed to fit in this
+		width = 38;
+		scale = 0;
+		break;
+	case LogicalTypeId::DECIMAL:
+		width = width_;
+		scale = scale_;
+		break;
 	default:
-		throw NotImplementedException("Not a numeric type");
+		return false;
 	}
+	return true;
 }
 
 bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
@@ -518,16 +563,38 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	return true;
 }
 
-LogicalType MaxLogicalType(LogicalType left, LogicalType right) {
+LogicalType LogicalType::MaxLogicalType(LogicalType left, LogicalType right) {
 	if (left.id() < right.id()) {
 		return right;
 	} else if (right.id() < left.id()) {
 		return left;
-	} else if (left.width() > right.width() || left.collation() > right.collation()) {
-		return left;
 	} else {
-		return right;
+		if (left.id() == LogicalTypeId::VARCHAR) {
+			// varchar: use type that has collation (if any)
+			if (right.collation().empty()) {
+				return left;
+			} else {
+				return right;
+			}
+		} else if (left.id() == LogicalTypeId::DECIMAL) {
+			// use max width/scale of the two types
+			return LogicalType(LogicalTypeId::DECIMAL, MaxValue<uint8_t>(left.width(), right.width()),
+			                   MaxValue<uint8_t>(left.scale(), right.scale()));
+		} else {
+			// types are equal but no extra specifier: just return the type
+			// FIXME: LIST and STRUCT?
+			return left;
+		}
 	}
+}
+
+void LogicalType::Verify() const {
+#ifdef DEBUG
+	if (id_ == LogicalTypeId::DECIMAL) {
+		assert(width_ >= 1 && width_ <= Decimal::MAX_WIDTH_DECIMAL);
+		assert(scale_ >= 0 && scale_ <= width_);
+	}
+#endif
 }
 
 bool ApproxEqual(float ldecimal, float rdecimal) {

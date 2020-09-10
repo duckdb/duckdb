@@ -1,0 +1,32 @@
+# name: test/sql/table_function/sqlite_master.test
+# description: Test sqlite_master function
+# group: [table_function]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+query IIIII
+SELECT * FROM sqlite_master();
+----
+table	integers	integers	0	CREATE TABLE integers(i INTEGER);
+
+query I
+SELECT EXISTS(SELECT * FROM sqlite_master())
+----
+1
+
+query I
+SELECT EXISTS(SELECT * FROM sqlite_master() OFFSET 1)
+----
+0
+
+
+query I
+SELECT COUNT(*) FROM sqlite_master() WHERE name='test'
+----
+0
+
+query I
+SELECT COUNT(*) FROM sqlite_master() WHERE name='integers'
+----
+1

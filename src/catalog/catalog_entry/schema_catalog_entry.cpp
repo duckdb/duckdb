@@ -9,12 +9,14 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -25,13 +27,15 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 namespace duckdb {
 using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
-    : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
-      copy_functions(*catalog), functions(*catalog), sequences(*catalog), collations(*catalog) {
+    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name), tables(*catalog), indexes(*catalog),
+      table_functions(*catalog), copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog),
+      sequences(*catalog), collations(*catalog) {
 }
 
 CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry,
@@ -113,14 +117,19 @@ CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(ClientContext &context, Cre
 	return AddEntry(context, move(copy_function), info->on_conflict);
 }
 
+CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info) {
+	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
+	return AddEntry(context, move(pragma_function), info->on_conflict);
+}
+
 CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
 	unique_ptr<StandardEntry> function;
-	if (info->type == CatalogType::SCALAR_FUNCTION) {
+	if (info->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
 		// create a scalar function
 		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,
 		                                                                       (CreateScalarFunctionInfo *)info);
 	} else {
-		assert(info->type == CatalogType::AGGREGATE_FUNCTION);
+		assert(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 		// create an aggregate function
 		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
 		                                                                          (CreateAggregateFunctionInfo *)info);
@@ -157,7 +166,7 @@ void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info
 		if (entry == nullptr) {
 			throw CatalogException("Table \"%s\" doesn't exist!", info->table);
 		}
-		assert(entry->type == CatalogType::TABLE);
+		assert(entry->type == CatalogType::TABLE_ENTRY);
 
 		auto copied_entry = entry->Copy(context);
 
@@ -207,23 +216,31 @@ unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &sourc
 	return info;
 }
 
+string SchemaCatalogEntry::ToSQL() {
+	stringstream ss;
+	ss << "CREATE SCHEMA " << name << ";";
+	return ss.str();
+}
+
 CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	switch (type) {
-	case CatalogType::VIEW:
-	case CatalogType::TABLE:
+	case CatalogType::VIEW_ENTRY:
+	case CatalogType::TABLE_ENTRY:
 		return tables;
-	case CatalogType::INDEX:
+	case CatalogType::INDEX_ENTRY:
 		return indexes;
-	case CatalogType::TABLE_FUNCTION:
+	case CatalogType::TABLE_FUNCTION_ENTRY:
 		return table_functions;
-	case CatalogType::COPY_FUNCTION:
+	case CatalogType::COPY_FUNCTION_ENTRY:
 		return copy_functions;
-	case CatalogType::AGGREGATE_FUNCTION:
-	case CatalogType::SCALAR_FUNCTION:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+		return pragma_functions;
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		return functions;
-	case CatalogType::SEQUENCE:
+	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;
-	case CatalogType::COLLATION:
+	case CatalogType::COLLATION_ENTRY:
 		return collations;
 	default:
 		throw CatalogException("Unsupported catalog type in schema");

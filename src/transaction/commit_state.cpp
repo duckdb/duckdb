@@ -28,11 +28,11 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	// look at the type of the parent entry
 	auto parent = entry->parent;
 	switch (parent->type) {
-	case CatalogType::TABLE:
+	case CatalogType::TABLE_ENTRY:
 		if (parent->temporary) {
 			return;
 		}
-		if (entry->type == CatalogType::TABLE) {
+		if (entry->type == CatalogType::TABLE_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = *((idx_t *)dataptr);
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
@@ -46,27 +46,27 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteCreateTable((TableCatalogEntry *)parent);
 		}
 		break;
-	case CatalogType::SCHEMA:
-		if (entry->type == CatalogType::SCHEMA) {
+	case CatalogType::SCHEMA_ENTRY:
+		if (entry->type == CatalogType::SCHEMA_ENTRY) {
 			// ALTER TABLE statement, skip it
 			return;
 		}
 		log->WriteCreateSchema((SchemaCatalogEntry *)parent);
 		break;
-	case CatalogType::VIEW:
+	case CatalogType::VIEW_ENTRY:
 		log->WriteCreateView((ViewCatalogEntry *)parent);
 		break;
-	case CatalogType::SEQUENCE:
+	case CatalogType::SEQUENCE_ENTRY:
 		log->WriteCreateSequence((SequenceCatalogEntry *)parent);
 		break;
 	case CatalogType::DELETED_ENTRY:
-		if (entry->type == CatalogType::TABLE) {
+		if (entry->type == CatalogType::TABLE_ENTRY) {
 			log->WriteDropTable((TableCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::SCHEMA) {
+		} else if (entry->type == CatalogType::SCHEMA_ENTRY) {
 			log->WriteDropSchema((SchemaCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::VIEW) {
+		} else if (entry->type == CatalogType::VIEW_ENTRY) {
 			log->WriteDropView((ViewCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::SEQUENCE) {
+		} else if (entry->type == CatalogType::SEQUENCE_ENTRY) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
 			// do nothing, we log the query to drop this
@@ -75,13 +75,14 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		}
 		break;
 
-	case CatalogType::INDEX:
+	case CatalogType::INDEX_ENTRY:
 	case CatalogType::PREPARED_STATEMENT:
-	case CatalogType::AGGREGATE_FUNCTION:
-	case CatalogType::SCALAR_FUNCTION:
-	case CatalogType::TABLE_FUNCTION:
-	case CatalogType::COPY_FUNCTION:
-	case CatalogType::COLLATION:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
+	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::COPY_FUNCTION_ENTRY:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+	case CatalogType::COLLATION_ENTRY:
 
 		// do nothing, we log the query to recreate this
 		break;

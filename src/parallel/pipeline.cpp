@@ -6,6 +6,7 @@
 #include "duckdb/parallel/task_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/main/database.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -31,15 +32,17 @@ public:
 };
 
 Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0) {
+    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0),
+      recursive_cte(nullptr) {
 }
 
 void Pipeline::Execute(TaskContext &task) {
-	assert(finished_dependencies == dependencies.size());
-
 	auto &client = executor.context;
 	if (client.interrupted) {
 		return;
+	}
+	if (parallel_state) {
+		task.task_info[parallel_node] = parallel_state.get();
 	}
 
 	ThreadContext thread(client);
@@ -49,7 +52,7 @@ void Pipeline::Execute(TaskContext &task) {
 		auto lstate = sink->GetLocalSinkState(context);
 		// incrementally process the pipeline
 		DataChunk intermediate;
-		child->InitializeChunk(intermediate);
+		child->InitializeChunkEmpty(intermediate);
 		while (true) {
 			child->GetChunk(context, intermediate, state.get());
 			thread.profiler.StartOperator(sink);
@@ -74,7 +77,7 @@ void Pipeline::FinishTask() {
 	if (current_finished == total_tasks) {
 		try {
 			sink->Finalize(executor.context, move(sink_state));
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {
 			executor.PushError("Unknown exception in Finalize!");
@@ -98,25 +101,31 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::HASH_JOIN:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
-	case PhysicalOperatorType::SEQ_SCAN: {
+	case PhysicalOperatorType::TABLE_SCAN: {
 		// we reached a scan: split it up into parts and schedule the parts
 		auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-
-		// first we gather all of the tasks of this pipeline
-		// we gather the tasks first because we want to set total_tasks to the actual task amount
-		// otherwise we can encounter race conditions in which a pipeline could finish twice
-		vector<unique_ptr<OperatorTaskInfo>> tasks;
-		op->ParallelScanInfo(executor.context, [&](unique_ptr<OperatorTaskInfo> info) { tasks.push_back(move(info)); });
-		this->total_tasks = tasks.size();
-		if (this->total_tasks == 0) {
-			// could not generate parallel tasks, or parallel tasks were determined as not worthwhile
-			// move on to sequential execution
+		auto &get = (PhysicalTableScan &) *op;
+		if (!get.function.max_threads) {
+			// table function cannot be parallelized
 			return false;
 		}
-		// after we have gathered all the tasks we actually schedule them for execution
-		for (auto &info : tasks) {
+		assert(get.function.init_parallel_state);
+		assert(get.function.parallel_state_next);
+		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
+		if (max_threads > executor.context.db.NumberOfThreads()) {
+			max_threads = executor.context.db.NumberOfThreads();
+		}
+		if (max_threads <= 1) {
+			// table is too small to parallelize
+			return false;
+		}
+		this->parallel_state = get.function.init_parallel_state(executor.context, get.bind_data.get());
+		this->parallel_node = op;
+
+		// launch a task for every thread
+		this->total_tasks = max_threads;
+		for(idx_t i = 0; i < max_threads; i++) {
 			auto task = make_unique<PipelineTask>(this);
-			task->task.task_info[op] = move(info);
 			scheduler.ScheduleTask(*executor.producer, move(task));
 		}
 		return true;
@@ -129,6 +138,13 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		// unknown operator: skip parallel task scheduling
 		return false;
 	}
+}
+
+void Pipeline::Reset(ClientContext &context) {
+	sink_state = sink->GetGlobalState(context);
+	finished_tasks = 0;
+	total_tasks = 1;
+	finished = false;
 }
 
 void Pipeline::Schedule() {

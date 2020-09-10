@@ -25,6 +25,8 @@ public:
 	unique_ptr<QueryNode> left;
 	//! The right side of the set operation
 	unique_ptr<QueryNode> right;
+	//! Aliases of the recursive CTE node
+	vector<string> aliases;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return left->GetSelectList();

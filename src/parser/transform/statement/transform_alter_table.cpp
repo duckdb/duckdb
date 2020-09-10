@@ -1,6 +1,5 @@
 #include "duckdb/parser/statement/alter_table_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -16,10 +15,8 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 
 	auto result = make_unique<AlterTableStatement>();
 
-	auto table = TransformRangeVar(stmt->relation);
-	assert(table->type == TableReferenceType::BASE_TABLE);
+	auto qname = TransformQualifiedName(stmt->relation);
 
-	auto &basetable = (BaseTableRef &)*table;
 	// first we check the type of ALTER
 	for (auto c = stmt->cmds->head; c != NULL; c = c->next) {
 		auto command = reinterpret_cast<PGAlterTableCmd *>(lfirst(c));
@@ -36,18 +33,16 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 					}
 				}
 			}
-			result->info = make_unique<AddColumnInfo>(basetable.schema_name, basetable.table_name, move(centry));
+			result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
 			break;
 		}
 		case PG_AT_DropColumn: {
-			result->info = make_unique<RemoveColumnInfo>(basetable.schema_name, basetable.table_name, command->name,
-			                                             command->missing_ok);
+			result->info = make_unique<RemoveColumnInfo>(qname.schema, qname.name, command->name, command->missing_ok);
 			break;
 		}
 		case PG_AT_ColumnDefault: {
 			auto expr = TransformExpression(command->def);
-			result->info =
-			    make_unique<SetDefaultInfo>(basetable.schema_name, basetable.table_name, command->name, move(expr));
+			result->info = make_unique<SetDefaultInfo>(qname.schema, qname.name, command->name, move(expr));
 			break;
 		}
 		case PG_AT_AlterColumnType: {
@@ -61,7 +56,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 				auto colref = make_unique<ColumnRefExpression>(command->name);
 				expr = make_unique<CastExpression>(column_definition.type, move(colref));
 			}
-			result->info = make_unique<ChangeColumnTypeInfo>(basetable.schema_name, basetable.table_name, command->name,
+			result->info = make_unique<ChangeColumnTypeInfo>(qname.schema, qname.name, command->name,
 			                                                 column_definition.type, move(expr));
 			break;
 		}

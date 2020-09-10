@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
@@ -90,18 +91,18 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto func =
 		    (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
 		        context, window.schema, window.function_name);
-		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
+		if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			throw BinderException("Unknown windowed aggregate");
 		}
 		// bind the aggregate
 		auto best_function = Function::BindFunction(func->name, func->functions, types);
-		// found a matching function!
+		// found a matching function! bind it as an aggregate
 		auto &bound_function = func->functions[best_function];
-		// check if we need to add casts to the children
-		bound_function.CastToFunctionArguments(children, types);
+		auto bound_aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children));
 		// create the aggregate
-		aggregate = make_unique<AggregateFunction>(func->functions[best_function]);
-		sql_type = aggregate->return_type;
+		aggregate = make_unique<AggregateFunction>(bound_aggregate->function);
+		children = move(bound_aggregate->children);
+		sql_type = bound_aggregate->return_type;
 	} else {
 		// fetch the child of the non-aggregate window function (if any)
 		sql_type = ResolveWindowExpressionType(window.type, types.empty() ? LogicalType() : types[0]);

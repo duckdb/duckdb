@@ -55,22 +55,17 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	// the binder should fix this for us.
-	assert(expr.children.size() == 2);
-	assert(expr.arguments.size() == expr.children.size());
-	assert(expr.arguments[0].id() == LogicalTypeId::STRUCT);
-	assert(expr.children[0]->return_type.id() == LogicalTypeId::STRUCT);
-
-	auto &struct_children = expr.arguments[0].child_types();
+static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
+	auto &struct_children = arguments[0]->return_type.child_types();
 	if (struct_children.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");
 	}
 
-	auto &key_child = expr.children[1];
+	auto &key_child = arguments[1];
 
-	if (expr.arguments[1].id() != LogicalTypeId::VARCHAR || key_child->return_type.id() != LogicalTypeId::VARCHAR ||
-	    !key_child->IsScalar()) {
+	if (arguments[1]->return_type.id() != LogicalTypeId::VARCHAR ||
+	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
@@ -97,8 +92,8 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 		throw Exception("Could not find key in struct");
 	}
 
-	expr.return_type = return_type;
-	expr.children.pop_back();
+	bound_function.return_type = return_type;
+	arguments.pop_back();
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 

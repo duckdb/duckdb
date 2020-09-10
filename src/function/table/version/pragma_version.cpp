@@ -3,10 +3,10 @@
 
 namespace duckdb {
 
-struct PragmaVersionData : public TableFunctionData {
-	PragmaVersionData() : done(false) {
+struct PragmaVersionData : public FunctionOperatorData {
+	PragmaVersionData() : finished(false) {
 	}
-	bool done;
+	bool finished;
 };
 
 static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vector<Value> &inputs,
@@ -16,26 +16,30 @@ static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vect
 	return_types.push_back(LogicalType::VARCHAR);
 	names.push_back("source_id");
 	return_types.push_back(LogicalType::VARCHAR);
+	return nullptr;
+}
 
+static unique_ptr<FunctionOperatorData> pragma_version_init(ClientContext &context, const FunctionData *bind_data,
+                                                            ParallelState *state, vector<column_t> &column_ids,
+                                                            unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<PragmaVersionData>();
 }
 
-static void pragma_version_info(ClientContext &context, vector<Value> &input, DataChunk &output,
-                                FunctionData *dataptr) {
-	auto &data = *((PragmaVersionData *)dataptr);
-	assert(input.size() == 0);
-	if (data.done) {
+static void pragma_version(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                           DataChunk &output) {
+	auto &data = (PragmaVersionData &)*operator_state;
+	if (data.finished) {
 		// finished returning values
 		return;
 	}
 	output.SetCardinality(1);
 	output.SetValue(0, 0, DuckDB::LibraryVersion());
 	output.SetValue(1, 0, DuckDB::SourceID());
-	data.done = true;
+	data.finished = true;
 }
 
 void PragmaVersion::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_version", {}, pragma_version_bind, pragma_version_info, nullptr));
+	set.AddFunction(TableFunction("pragma_version", {}, pragma_version, pragma_version_bind, pragma_version_init));
 }
 
 const char *DuckDB::SourceID() {

@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"

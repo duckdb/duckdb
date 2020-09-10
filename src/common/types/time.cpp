@@ -63,7 +63,7 @@ bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool str
 	int sep;
 
 	// skip leading spaces
-	while (std::isspace((unsigned char)buf[pos])) {
+	while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
 		pos++;
 	}
 
@@ -117,7 +117,7 @@ bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool str
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
-		while (std::isspace((unsigned char)buf[pos])) {
+		while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
 			pos++;
 		}
 		// check position. if end was not reached, non-space chars remaining

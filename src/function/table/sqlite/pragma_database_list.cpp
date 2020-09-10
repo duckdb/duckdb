@@ -6,7 +6,7 @@ using namespace std;
 
 namespace duckdb {
 
-struct PragmaDatabaseListData : public TableFunctionData {
+struct PragmaDatabaseListData : public FunctionOperatorData {
 	PragmaDatabaseListData() : finished(false) {
 	}
 
@@ -25,12 +25,18 @@ static unique_ptr<FunctionData> pragma_database_list_bind(ClientContext &context
 	names.push_back("file");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	// initialize the function data structure
+	return nullptr;
+}
+
+unique_ptr<FunctionOperatorData> pragma_database_list_init(ClientContext &context, const FunctionData *bind_data,
+                                                           ParallelState *state, vector<column_t> &column_ids,
+                                                           unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<PragmaDatabaseListData>();
 }
 
-void pragma_database_list(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = *((PragmaDatabaseListData *)dataptr);
+void pragma_database_list(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                          DataChunk &output) {
+	auto &data = (PragmaDatabaseListData &)*operator_state;
 	if (data.finished) {
 		return;
 	}
@@ -44,8 +50,8 @@ void pragma_database_list(ClientContext &context, vector<Value> &input, DataChun
 }
 
 void PragmaDatabaseList::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("pragma_database_list", {}, pragma_database_list_bind, pragma_database_list, nullptr));
+	set.AddFunction(TableFunction("pragma_database_list", {}, pragma_database_list, pragma_database_list_bind,
+	                              pragma_database_list_init));
 }
 
 } // namespace duckdb

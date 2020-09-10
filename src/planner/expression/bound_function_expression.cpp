@@ -8,15 +8,10 @@ namespace duckdb {
 using namespace std;
 
 BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
-                                                 bool is_operator)
+                                                 vector<unique_ptr<Expression>> arguments,
+                                                 unique_ptr<FunctionData> bind_info, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
-      function(bound_function), arguments(bound_function.arguments), is_operator(is_operator) {
-}
-
-BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
-                                                 vector<LogicalType> arguments, bool is_operator)
-    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
-      function(bound_function), arguments(move(arguments)), is_operator(is_operator) {
+      function(bound_function), children(move(arguments)), bind_info(move(bind_info)), is_operator(is_operator) {
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -38,7 +33,7 @@ hash_t BoundFunctionExpression::Hash() const {
 }
 
 bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundFunctionExpression *)other_;
@@ -57,11 +52,14 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, arguments, is_operator);
+	vector<unique_ptr<Expression>> new_children;
 	for (auto &child : children) {
-		copy->children.push_back(child->Copy());
+		new_children.push_back(child->Copy());
 	}
-	copy->bind_info = bind_info ? bind_info->Copy() : nullptr;
+	unique_ptr<FunctionData> new_bind_info = bind_info ? bind_info->Copy() : nullptr;
+
+	auto copy = make_unique<BoundFunctionExpression>(return_type, function, move(new_children), move(new_bind_info),
+	                                                 is_operator);
 	copy->CopyProperties(*this);
 	return move(copy);
 }

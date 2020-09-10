@@ -28,6 +28,8 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 
+#include "duckdb/planner/pragma_handler.hpp"
+
 using namespace std;
 
 namespace duckdb {
@@ -147,6 +149,8 @@ void ClientContext::CleanupInternal() {
 
 	open_result->is_open = false;
 	open_result = nullptr;
+
+	this->query = string();
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal() {
@@ -249,6 +253,20 @@ void ClientContext::InitialCleanup() {
 	interrupted = false;
 }
 
+vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query, idx_t *n_prepared_statements) {
+	Parser parser;
+	parser.ParseQuery(query);
+
+	if (n_prepared_statements) {
+		*n_prepared_statements = parser.n_prepared_parameters;
+	}
+
+	PragmaHandler handler(*this);
+	handler.HandlePragmaStatements(parser.statements);
+
+	return move(parser.statements);
+}
+
 unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 	lock_guard<mutex> client_guard(context_lock);
 	// prepare the query
@@ -256,12 +274,12 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		InitialCleanup();
 
 		// first parse the query
-		Parser parser;
-		parser.ParseQuery(query);
-		if (parser.statements.size() == 0) {
+		idx_t n_prepared_parameters;
+		auto statements = ParseStatements(query, &n_prepared_parameters);
+		if (statements.size() == 0) {
 			throw Exception("No statement to prepare!");
 		}
-		if (parser.statements.size() > 1) {
+		if (statements.size() > 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
 		// now write the prepared statement data into the catalog
@@ -270,7 +288,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		// create a prepare statement out of the underlying statement
 		auto prepare = make_unique<PrepareStatement>();
 		prepare->name = prepare_name;
-		prepare->statement = move(parser.statements[0]);
+		prepare->statement = move(statements[0]);
 
 		// now perform the actual PREPARE query
 		auto result = RunStatement(query, move(prepare), false);
@@ -279,7 +297,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		}
 		auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
 		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared,
-		                                                      parser.n_prepared_parameters);
+		                                                      n_prepared_parameters);
 		prepared_statement_objects.insert(prepared_object.get());
 		return prepared_object;
 	} catch (Exception &ex) {
@@ -337,6 +355,8 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query,
 
 unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_ptr<SQLStatement> statement,
                                                     bool allow_stream_result) {
+	this->query = query;
+
 	unique_ptr<QueryResult> result;
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (transaction.IsAutoCommit()) {
@@ -425,21 +445,21 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		log_query_writer->Flush();
 	}
 
-	Parser parser;
+	vector<unique_ptr<SQLStatement>> statements;
 	try {
 		InitialCleanup();
 		// parse the query and transform it into a set of statements
-		parser.ParseQuery(query.c_str());
+		statements = ParseStatements(query);
 	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
 
-	if (parser.statements.size() == 0) {
+	if (statements.size() == 0) {
 		// no statements, return empty successful result
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
 	}
 
-	return RunStatements(query, parser.statements, allow_stream_result);
+	return RunStatements(query, statements, allow_stream_result);
 }
 
 void ClientContext::Interrupt() {
@@ -619,6 +639,12 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	results.push_back(move(unoptimized_result));
 	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result"};
 	for (idx_t i = 0; i < results.size(); i++) {
+		if (original_result->success != results[i]->success) {
+			string result = names[i] + " differs from original result!\n";
+			result += "Original Result:\n" + original_result->ToString();
+			result += names[i] + ":\n" + results[i]->ToString();
+			return result;
+		}
 		if (!original_result->collection.Equals(results[i]->collection)) {
 			string result = names[i] + " differs from original result!\n";
 			result += "Original Result:\n" + original_result->ToString();
@@ -634,11 +660,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	RunFunctionInTransaction([&]() { temporary_objects.get()->CreateFunction(*this, info); });
 }
 
-template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {
-	lock_guard<mutex> client_guard(context_lock);
-	if (is_invalidated) {
-		throw Exception("Failed: database has been closed!");
-	}
+void ClientContext::RunFunctionInTransactionInternal(std::function<void(void)> fun) {
 	if (transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated) {
 		throw Exception("Failed: transaction has been invalidated!");
 	}
@@ -659,6 +681,14 @@ template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {
 	if (transaction.IsAutoCommit()) {
 		transaction.Commit();
 	}
+}
+
+void ClientContext::RunFunctionInTransaction(std::function<void(void)> fun) {
+	lock_guard<mutex> client_guard(context_lock);
+	if (is_invalidated) {
+		throw Exception("Failed: database has been closed!");
+	}
+	RunFunctionInTransactionInternal(fun);
 }
 
 unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
@@ -723,6 +753,9 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	auto &expected_columns = relation->Columns();
 	auto relation_stmt = make_unique<RelationStatement>(relation);
 	auto result = RunStatement(query, move(relation_stmt), false);
+	if (!result->success) {
+		return result;
+	}
 	// verify that the result types and result names of the query match the expected result types/names
 	if (result->types.size() == expected_columns.size()) {
 		bool mismatch = false;

@@ -12,7 +12,7 @@ namespace duckdb {
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;
@@ -98,7 +98,7 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
-	return make_unique<PhysicalOrderOperatorState>(children[0].get());
+	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
 }
 
 } // namespace duckdb

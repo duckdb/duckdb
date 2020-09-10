@@ -23,6 +23,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 	for (auto &child : expr.children) {
 		result->AddChild(child.get());
 	}
+	result->Finalize();
 	return move(result);
 }
 
@@ -30,7 +31,8 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
                                  idx_t count, Vector &result) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		Vector current_result(LogicalType::BOOLEAN);
+		Vector current_result;
+		current_result.Reference(state->intermediate_chunk.data[i]);
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, current_result);
 		if (i == 0) {
 			// move the result

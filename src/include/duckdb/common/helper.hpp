@@ -30,4 +30,15 @@ template <typename T, typename S> unique_ptr<S> unique_ptr_cast(unique_ptr<T> sr
 	return unique_ptr<S>(static_cast<S *>(src.release()));
 }
 
+template<typename T>
+T MaxValue(T a, T b) {
+	return a > b ? a : b;
+}
+
+template<typename T>
+T MinValue(T a, T b) {
+	return a < b ? a : b;
+}
+
+
 } // namespace duckdb

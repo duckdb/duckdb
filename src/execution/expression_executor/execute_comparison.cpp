@@ -12,13 +12,17 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonE
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.left.get());
 	result->AddChild(expr.right.get());
+	result->Finalize();
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	// resolve the children
-	Vector left(expr.left->return_type), right(expr.right->return_type);
+	Vector left, right;
+	left.Reference(state->intermediate_chunk.data[0]);
+	right.Reference(state->intermediate_chunk.data[1]);
+
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 
@@ -82,7 +86,10 @@ static idx_t templated_select_operation(Vector &left, Vector &right, const Selec
 idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
-	Vector left(expr.left->return_type), right(expr.right->return_type);
+	Vector left, right;
+	left.Reference(state->intermediate_chunk.data[0]);
+	right.Reference(state->intermediate_chunk.data[1]);
+
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 

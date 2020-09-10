@@ -8,12 +8,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 	switch (type) {
 	case PhysicalOperatorType::LEAF:
 		return "LEAF";
+	case PhysicalOperatorType::TABLE_SCAN:
+		return "TABLE_SCAN";
 	case PhysicalOperatorType::DUMMY_SCAN:
 		return "DUMMY_SCAN";
-	case PhysicalOperatorType::SEQ_SCAN:
-		return "SEQ_SCAN";
-	case PhysicalOperatorType::INDEX_SCAN:
-		return "INDEX_SCAN";
 	case PhysicalOperatorType::CHUNK_SCAN:
 		return "CHUNK_SCAN";
 	case PhysicalOperatorType::DELIM_SCAN:
@@ -76,8 +74,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT_EXTERNAL_FILE";
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
-	case PhysicalOperatorType::TABLE_FUNCTION:
-		return "TABLE_FUNCTION";
 	case PhysicalOperatorType::CREATE:
 		return "CREATE";
 	case PhysicalOperatorType::CREATE_INDEX:
@@ -90,6 +86,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "VACUUM";
 	case PhysicalOperatorType::RECURSIVE_CTE:
 		return "REC_CTE";
+	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
+		return "REC_CTE_SCAN";
 	case PhysicalOperatorType::INVALID:
 		return "INVALID";
 	case PhysicalOperatorType::EXPRESSION_SCAN:
@@ -110,6 +108,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "TRANSACTION";
 	case PhysicalOperatorType::PREPARE:
 		return "PREPARE";
+	case PhysicalOperatorType::EXPORT:
+		return "EXPORT";
 	}
 	return "UNDEFINED";
 }

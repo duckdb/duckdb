@@ -58,6 +58,8 @@ public:
 	copy_from_bind_t copy_from_bind;
 	copy_from_initialize_t copy_from_initialize;
 	copy_from_get_chunk_t copy_from_get_chunk;
+
+	string extension;
 };
 
 } // namespace duckdb

@@ -1,12 +1,6 @@
 include_directories(include)
 
-if(${BUILD_ICU_EXTENSION})
-  add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
-endif()
-
-if(${BUILD_PARQUET_EXTENSION})
-  add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
-endif()
+add_extension_definitions()
 
 add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp printf.c)
 target_link_libraries(sqlite3_api_wrapper duckdb Threads::Threads)
@@ -14,17 +8,8 @@ target_link_libraries(sqlite3_api_wrapper duckdb Threads::Threads)
 add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp printf.c)
 target_link_libraries(sqlite3_api_wrapper_static duckdb_static Threads::Threads)
 
-if(${BUILD_PARQUET_EXTENSION})
-  include_directories(../../extension/parquet/include)
-  target_link_libraries(sqlite3_api_wrapper parquet_extension)
-  target_link_libraries(sqlite3_api_wrapper_static parquet_extension)
-endif()
-
-if(${BUILD_ICU_EXTENSION})
-  include_directories(../../extension/icu/include)
-  target_link_libraries(sqlite3_api_wrapper icu_extension)
-  target_link_libraries(sqlite3_api_wrapper_static icu_extension)
-endif()
+link_extension_libraries(sqlite3_api_wrapper)
+link_extension_libraries(sqlite3_api_wrapper_static)
 
 include_directories(../../third_party/catch)
 

@@ -368,6 +368,7 @@ typedef enum PGNodeTag {
 	T_PGAlterOpFamilyStmt,
 	T_PGPrepareStmt,
 	T_PGExecuteStmt,
+	T_PGCallStmt,
 	T_PGDeallocateStmt,
 	T_PGDeclareCursorStmt,
 	T_PGCreateTableSpaceStmt,
@@ -416,6 +417,8 @@ typedef enum PGNodeTag {
 	T_PGCreateStatsStmt,
 	T_PGAlterCollationStmt,
 	T_PGPragmaStmt,
+	T_PGExportStmt,
+	T_PGImportStmt,
 
 	/*
 	 * TAGS FOR PARSE TREE NODES (parsenodes.h)

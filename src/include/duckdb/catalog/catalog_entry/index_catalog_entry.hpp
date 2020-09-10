@@ -21,7 +21,7 @@ class IndexCatalogEntry : public StandardEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
-	    : StandardEntry(CatalogType::INDEX, schema, catalog, info->index_name), index(nullptr) {
+	    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr) {
 	}
 	~IndexCatalogEntry();
 

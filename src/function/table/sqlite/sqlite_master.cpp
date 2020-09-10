@@ -7,43 +7,18 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
-#include <sstream>
 
 using namespace std;
 
 namespace duckdb {
 
-struct SQLiteMasterData : public TableFunctionData {
-	SQLiteMasterData() : initialized(false), offset(0) {
+struct SQLiteMasterData : public FunctionOperatorData {
+	SQLiteMasterData() : offset(0) {
 	}
 
-	bool initialized;
 	vector<CatalogEntry *> entries;
 	idx_t offset;
 };
-
-string GenerateQuery(CatalogEntry *entry) {
-	// generate a query from a catalog entry
-	if (entry->type == CatalogType::TABLE) {
-		// FIXME: constraints
-		stringstream ss;
-		auto table = (TableCatalogEntry *)entry;
-		ss << "CREATE TABLE " << table->name << "(";
-
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			auto &column = table->columns[i];
-			ss << column.name << " " << column.type.ToString();
-			if (i + 1 < table->columns.size()) {
-				ss << ", ";
-			}
-		}
-
-		ss << ");";
-		return ss.str();
-	} else {
-		return "[Unknown]";
-	}
-}
 
 static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs,
                                                    unordered_map<string, Value> &named_parameters,
@@ -63,23 +38,27 @@ static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vecto
 	names.push_back("sql");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	// initialize the function data structure
-	return make_unique<SQLiteMasterData>();
+	return nullptr;
 }
 
-void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = *((SQLiteMasterData *)dataptr);
-	assert(input.size() == 0);
-	if (!data.initialized) {
-		// scan all the schemas
-		auto &transaction = Transaction::GetTransaction(context);
-		Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
-			auto schema = (SchemaCatalogEntry *)entry;
-			schema->tables.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
-		});
-		data.initialized = true;
-	}
+unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, const FunctionData *bind_data,
+                                                    ParallelState *state, vector<column_t> &column_ids,
+                                                    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	auto result = make_unique<SQLiteMasterData>();
 
+	// scan all the schemas for tables and views and collect them
+	auto &transaction = Transaction::GetTransaction(context);
+	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
+		auto schema = (SchemaCatalogEntry *)entry;
+		schema->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	});
+
+	return move(result);
+}
+
+void sqlite_master(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                   DataChunk &output) {
+	auto &data = (SQLiteMasterData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -97,16 +76,16 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 		// "type", PhysicalType::VARCHAR
 		const char *type_str;
 		switch (entry->type) {
-		case CatalogType::TABLE:
+		case CatalogType::TABLE_ENTRY:
 			type_str = "table";
 			break;
-		case CatalogType::SCHEMA:
+		case CatalogType::SCHEMA_ENTRY:
 			type_str = "schema";
 			break;
-		case CatalogType::TABLE_FUNCTION:
+		case CatalogType::TABLE_FUNCTION_ENTRY:
 			type_str = "function";
 			break;
-		case CatalogType::VIEW:
+		case CatalogType::VIEW_ENTRY:
 			type_str = "view";
 			break;
 		default:
@@ -120,13 +99,13 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 		// "rootpage", PhysicalType::INT32
 		output.SetValue(3, index, Value::INTEGER(0));
 		// "sql", PhysicalType::VARCHAR
-		output.SetValue(4, index, Value(GenerateQuery(entry)));
+		output.SetValue(4, index, Value(entry->ToSQL()));
 	}
 	data.offset = next;
 }
 
 void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master, nullptr));
+	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master, sqlite_master_bind, sqlite_master_init));
 }
 
 } // namespace duckdb

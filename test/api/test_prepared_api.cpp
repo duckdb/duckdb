@@ -280,6 +280,19 @@ TEST_CASE("Test ANALYZE", "[api]") {
 	REQUIRE(res->success);
 }
 
+TEST_CASE("Test DECIMAL with PreparedStatement", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto ps = con.Prepare("SELECT $1::DECIMAL(4,1), $2::DECIMAL(9,1), $3::DECIMAL(18,3), $4::DECIMAL(38,8)");
+	result = ps->Execute(1.1, 100.1, 1401.123, "12481204981084098124.12398");
+	REQUIRE(CHECK_COLUMN(result, 0, {1.1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {100.1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1401.123}));
+	REQUIRE(CHECK_COLUMN(result, 3, {12481204981084098124.12398}));
+}
+
 TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

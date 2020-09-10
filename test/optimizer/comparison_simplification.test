@@ -33,3 +33,20 @@ EXPLAIN SELECT * FROM test WHERE 1=0
 query I nosort compnorm2
 EXPLAIN SELECT * FROM test WHERE X=NULL
 ----
+
+# we shift casts from columns to columns when possible
+query I nosort constantshift
+EXPLAIN SELECT X=1::BIGINT FROM test
+----
+
+query I nosort constantshift
+EXPLAIN SELECT X::BIGINT=1::INTEGER FROM test
+----
+
+query I nosort constantshift
+EXPLAIN SELECT X='1' FROM test
+----
+
+query I nosort constantshift
+EXPLAIN SELECT X::BIGINT='1' FROM test
+----

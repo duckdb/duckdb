@@ -41,7 +41,6 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 
 	assert(expressions.size() == result.column_count());
 	assert(expressions.size() > 0);
-	result.Reset();
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}

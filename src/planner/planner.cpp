@@ -10,7 +10,6 @@
 #include "duckdb/planner/operator/logical_prepare.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
-#include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 
 namespace duckdb {
@@ -74,21 +73,11 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::EXPLAIN_STATEMENT:
 	case StatementType::VACUUM_STATEMENT:
 	case StatementType::RELATION_STATEMENT:
+	case StatementType::CALL_STATEMENT:
+	case StatementType::EXPORT_STATEMENT:
+	case StatementType::PRAGMA_STATEMENT:
 		CreatePlan(*statement);
 		break;
-	case StatementType::PRAGMA_STATEMENT: {
-		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());
-		PragmaHandler handler(context);
-		// some pragma statements have a "replacement" SQL statement that will be executed instead
-		// use the PragmaHandler to get the (potential) replacement SQL statement
-		auto new_stmt = handler.HandlePragma(*stmt.info);
-		if (new_stmt) {
-			CreatePlan(move(new_stmt));
-		} else {
-			CreatePlan(stmt);
-		}
-		break;
-	}
 	case StatementType::PREPARE_STATEMENT: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;

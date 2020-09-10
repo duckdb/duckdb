@@ -99,7 +99,8 @@ static bool ParseBoolean(vector<Value> &set) {
 	if (set.size() > 1) {
 		throw BinderException("Expected a single argument as a boolean value (e.g. TRUE or 1)");
 	}
-	if (set[0].type() == LogicalType::FLOAT || set[0].type() == LogicalType::DOUBLE) {
+	if (set[0].type() == LogicalType::FLOAT || set[0].type() == LogicalType::DOUBLE ||
+	    set[0].type().id() == LogicalTypeId::DECIMAL) {
 		throw BinderException("Expected a boolean value (e.g. TRUE or 1)");
 	}
 	return set[0].CastAs(LogicalType::BOOLEAN).value_.boolean;
@@ -121,7 +122,8 @@ static idx_t ParseInteger(vector<Value> &set) {
 		// no option specified or multiple options specified
 		throw BinderException("Expected a single argument as a integer value");
 	}
-	if (set[0].type().id() == LogicalTypeId::FLOAT || set[0].type().id() == LogicalTypeId::DOUBLE) {
+	if (set[0].type().id() == LogicalTypeId::FLOAT || set[0].type().id() == LogicalTypeId::DOUBLE ||
+	    set[0].type().id() == LogicalTypeId::DECIMAL) {
 		throw BinderException("Expected a integer argument!");
 	}
 	return set[0].GetValue<int64_t>();
@@ -603,6 +605,8 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_from_bind = read_csv_bind;
 	info.copy_from_initialize = read_csv_initialize;
 	info.copy_from_get_chunk = read_csv_get_chunk;
+
+	info.extension = "csv";
 
 	set.AddFunction(info);
 }

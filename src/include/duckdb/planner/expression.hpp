@@ -30,6 +30,13 @@ public:
 
 	hash_t Hash() const override;
 
+	virtual bool Equals(const BaseExpression *other) const override {
+		if (!BaseExpression::Equals(other)) {
+			return false;
+		}
+		return return_type == ((Expression *) other)->return_type;
+	}
+
 	static bool Equals(Expression *left, Expression *right) {
 		return BaseExpression::Equals((BaseExpression *)left, (BaseExpression *)right);
 	}

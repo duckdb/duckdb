@@ -32,18 +32,17 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, ClientContext &context) {
+static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
 	set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type
-	assert(expr.arguments.size() == expr.children.size());
-
-	if (expr.arguments.size() == 0) {
+	if (arguments.size() == 0) {
 		throw Exception("Can't pack nothing into a struct");
 	}
 	child_list_t<LogicalType> struct_children;
-	for (idx_t i = 0; i < expr.children.size(); i++) {
-		auto &child = expr.children[i];
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		auto &child = arguments[i];
 		if (child->alias.size() == 0) {
 			throw Exception("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 		}
@@ -51,12 +50,12 @@ static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, 
 			throw Exception("Duplicate struct entry name");
 		}
 		name_collision_set.insert(child->alias);
-		struct_children.push_back(make_pair(child->alias, expr.arguments[i]));
+		struct_children.push_back(make_pair(child->alias, arguments[i]->return_type));
 	}
 
 	// this is more for completeness reasons
-	expr.return_type = LogicalType(LogicalTypeId::STRUCT, move(struct_children));
-	return make_unique<VariableReturnBindData>(expr.return_type);
+	bound_function.return_type = LogicalType(LogicalTypeId::STRUCT, move(struct_children));
+	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {

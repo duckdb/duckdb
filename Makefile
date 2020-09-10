@@ -29,6 +29,9 @@ endif
 ifeq (${BUILD_ICU}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_ICU_EXTENSION=1
 endif
+ifeq (${BUILD_TPCH}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCH_EXTENSION=1
+endif
 ifeq (${BUILD_SQLSMITH}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_SQLSMITH=1
 endif
@@ -88,9 +91,8 @@ doxygen: docs
 
 release:
 	mkdir -p build/release && \
-	python scripts/amalgamation.py && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 reldebug:
