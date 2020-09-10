@@ -13,13 +13,14 @@ struct InformationSchemaSchemataData : public FunctionOperatorData {
 	InformationSchemaSchemataData() : offset(0) {
 	}
 
-	vector<SchemaCatalogEntry *> entries;
+	vector<CatalogEntry *> entries;
 	idx_t offset;
 };
 
 static unique_ptr<FunctionData> information_schema_schemata_bind(ClientContext &context, vector<Value> &inputs,
                                                                  unordered_map<string, Value> &named_parameters,
-                                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                                 vector<LogicalType> &return_types,
+                                                                 vector<string> &names) {
 	names.push_back("catalog_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -44,22 +45,22 @@ static unique_ptr<FunctionData> information_schema_schemata_bind(ClientContext &
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> information_schema_schemata_init(ClientContext &context, const FunctionData *bind_data,
-                                                                  ParallelState *state, vector<column_t> &column_ids,
-                                                                  unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData>
+information_schema_schemata_init(ClientContext &context, const FunctionData *bind_data, ParallelState *state,
+                                 vector<column_t> &column_ids,
+                                 unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<InformationSchemaSchemataData>();
 
 	// scan all the schemas for tables and views and collect them
 	auto &transaction = Transaction::GetTransaction(context);
-	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](SchemaCatalogEntry *entry) {
-                result->entries.push_back(entry);
-	});
+	Catalog::GetCatalog(context).schemas->Scan(transaction,
+	                                           [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 
 	return move(result);
 }
 
-void information_schema_schemata(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                                 DataChunk &output) {
+void information_schema_schemata(ClientContext &context, const FunctionData *bind_data,
+                                 FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (InformationSchemaSchemataData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -76,7 +77,7 @@ void information_schema_schemata(ClientContext &context, const FunctionData *bin
 
 		// return values:
 		// "catalog_name", PhysicalType::VARCHAR
-                // TODO(jwills): how to determine this?
+		// TODO(jwills): how to determine this?
 		output.SetValue(0, index, Value("main"));
 		// "schema_name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(entry->name));
@@ -95,7 +96,8 @@ void information_schema_schemata(ClientContext &context, const FunctionData *bin
 }
 
 void InformationSchemaSchemata::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("information_schema_schemata", {}, information_schema_schemata, information_schema_schemata_bind, information_schema_schemata_init));
+	set.AddFunction(TableFunction("information_schema_schemata", {}, information_schema_schemata,
+	                              information_schema_schemata_bind, information_schema_schemata_init));
 }
 
 } // namespace duckdb
