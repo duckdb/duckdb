@@ -94,6 +94,7 @@ SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t in
 	payload.push_back(payload_hds.back()->node->buffer);
 	current_payload_offset_ptr = payload.back();
 
+	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 	Resize(initial_capacity);
 }
 
@@ -183,9 +184,10 @@ void SuperLargeHashTable::Resize(idx_t size) {
 	assert((size & (size - 1)) == 0);
 	bitmask = size - 1;
 
-	hashes_hdl = buffer_manager.Allocate(MaxValue(size * sizeof(data_ptr_t), (idx_t)Storage::BLOCK_ALLOC_SIZE));
+	if (size * sizeof(data_ptr_t) > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
+		hashes_hdl = buffer_manager.Allocate(size * sizeof(data_ptr_t));
+	}
 	hashes = hashes_hdl->node->buffer;
-
 	memset(hashes, 0, size * sizeof(data_ptr_t));
 	endptr = hashes + sizeof(data_ptr_t) * size;
 	capacity = size;
