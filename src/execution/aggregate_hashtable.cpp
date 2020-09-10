@@ -90,8 +90,9 @@ SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t in
 	hash_prefix_remove_bitmask = ((hash_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
 	hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t) * 8 - 16));
 
-	payload.push_back(unique_ptr<data_t[]>(new data_t[Storage::BLOCK_SIZE]));
-	current_payload_offset_ptr = payload.back().get();
+	payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
+	payload.push_back(payload_hds.back()->node->buffer);
+	current_payload_offset_ptr = payload.back();
 
 	Resize(initial_capacity);
 }
@@ -136,8 +137,8 @@ void SuperLargeHashTable::Destroy() {
 
 	idx_t destroy_entries = entries;
 	for (auto &payload_chunk : payload) {
-		auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, destroy_entries);
-		for (data_ptr_t ptr = payload_chunk.get(), end = payload_chunk.get() + this_entries * tuple_size; ptr < end;
+		auto this_entries = MinValue(Storage::BLOCK_ALLOC_SIZE / tuple_size, destroy_entries);
+		for (data_ptr_t ptr = payload_chunk, end = payload_chunk + this_entries * tuple_size; ptr < end;
 		     ptr += tuple_size) {
 			// found entry
 			data_pointers[count++] = ptr + hash_width + group_width;
@@ -177,6 +178,7 @@ void SuperLargeHashTable::Resize(idx_t size) {
 	if (size < STANDARD_VECTOR_SIZE) {
 		size = STANDARD_VECTOR_SIZE;
 	}
+
 	// size needs to be a power of 2
 	assert((size & (size - 1)) == 0);
 	bitmask = size - 1;
@@ -191,8 +193,8 @@ void SuperLargeHashTable::Resize(idx_t size) {
 	if (entries > 0) {
 		idx_t resize_entries = entries;
 		for (auto &payload_chunk : payload) {
-			auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, resize_entries);
-			for (data_ptr_t ptr = payload_chunk.get(), end = payload_chunk.get() + this_entries * tuple_size; ptr < end;
+			auto this_entries = MinValue(Storage::BLOCK_ALLOC_SIZE / tuple_size, resize_entries);
+			for (data_ptr_t ptr = payload_chunk, end = payload_chunk + this_entries * tuple_size; ptr < end;
 			     ptr += tuple_size) {
 				auto entry_hash = *(hash_t *)ptr;
 				assert((entry_hash & bitmask) == (entry_hash % capacity));
@@ -556,9 +558,10 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_h
 			if (*ht_entry_ptr == nullptr) {
 				// cell is empty; mark the cell as filled
 
-				if (current_payload_offset_ptr + tuple_size > payload.back().get() + Storage::BLOCK_SIZE) {
-					payload.push_back(unique_ptr<data_t[]>(new data_t[Storage::BLOCK_SIZE]));
-					current_payload_offset_ptr = payload.back().get();
+				if (current_payload_offset_ptr + tuple_size > payload.back() + Storage::BLOCK_ALLOC_SIZE) {
+					payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
+					payload.push_back(payload_hds.back()->node->buffer);
+					current_payload_offset_ptr = payload.back();
 				}
 
 				auto new_entry = current_payload_offset_ptr;
@@ -668,7 +671,7 @@ void SuperLargeHashTable::FlushMerge(Vector &source_addresses, Vector &source_ha
 	}
 }
 
-void SuperLargeHashTable::Merge(SuperLargeHashTable &other) {
+void SuperLargeHashTable::Combine(SuperLargeHashTable &other) {
 	assert(other.payload_width == payload_width);
 	// TODO assert other things
 	if (other.entries == 0) {
@@ -686,7 +689,7 @@ void SuperLargeHashTable::Merge(SuperLargeHashTable &other) {
 	idx_t merge_entries = other.entries;
 	for (auto &payload_chunk : other.payload) {
 		auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, merge_entries);
-		for (data_ptr_t ptr = payload_chunk.get(), end = payload_chunk.get() + this_entries * tuple_size; ptr < end;
+		for (data_ptr_t ptr = payload_chunk, end = payload_chunk + this_entries * tuple_size; ptr < end;
 		     ptr += tuple_size) {
 			hashes_ptr[group_idx] = *(hash_t *)ptr;
 			addresses_ptr[group_idx] = ptr + hash_width;
@@ -721,12 +724,12 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 	auto chunk_offset = (scan_position % tuples_per_chunk) * tuple_size;
 	assert(chunk_offset + tuple_size <= Storage::BLOCK_SIZE);
 
-	auto read_ptr = payload[chunk_idx++].get();
+	auto read_ptr = payload[chunk_idx++];
 	for (idx_t i = 0; i < this_n; i++) {
 		data_pointers[i] = read_ptr + chunk_offset + hash_width;
 		chunk_offset += tuple_size;
 		if (chunk_offset >= tuples_per_chunk * tuple_size) {
-			read_ptr = payload[chunk_idx++].get();
+			read_ptr = payload[chunk_idx++];
 			chunk_offset = 0;
 		}
 	}

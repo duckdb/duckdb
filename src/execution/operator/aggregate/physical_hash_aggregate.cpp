@@ -181,7 +181,7 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	lock_guard<mutex> glock(gstate.lock);
 
 	gstate.is_empty &= source.is_empty;
-	gstate.final_ht->Merge(*source.ht);
+	gstate.final_ht->Combine(*source.ht);
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,

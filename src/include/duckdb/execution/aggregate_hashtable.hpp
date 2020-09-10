@@ -69,7 +69,8 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
 
-	void Merge(SuperLargeHashTable &other);
+	void Combine(SuperLargeHashTable &other);
+	void Finalize();
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
@@ -97,7 +98,8 @@ private:
 	idx_t entries;
 	//! The data of the HT
 	//! unique_ptr to indicate the ownership
-	vector<unique_ptr<data_t[]>> payload; //! The data of the HT
+	vector<unique_ptr<BufferHandle>> payload_hds; //! The data of the HT
+	vector<data_t *> payload;                     //! The data of the HT
 	//! unique_ptr to indicate the ownership
 	unique_ptr<BufferHandle> hashes_hdl;
 	data_t *hashes;    //! The endptr of the hashtable
