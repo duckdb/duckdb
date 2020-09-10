@@ -28,7 +28,7 @@ class OperatorTaskInfo;
 //! data source is exhausted.
 class PhysicalOperatorState {
 public:
-	PhysicalOperatorState(PhysicalOperator *child);
+	PhysicalOperatorState(PhysicalOperator &op, PhysicalOperator *child);
 	virtual ~PhysicalOperatorState() = default;
 
 	//! Flag indicating whether or not the operator is finished [note: not all
@@ -38,6 +38,8 @@ public:
 	DataChunk child_chunk;
 	//! State of the child of this operator
 	unique_ptr<PhysicalOperatorState> child_state;
+	//! The initial chunk
+	DataChunk initial_chunk;
 };
 
 //! PhysicalOperator is the base class of the physical operators present in the
@@ -78,6 +80,10 @@ public:
 		auto &types = GetTypes();
 		chunk.Initialize(types);
 	}
+	virtual void InitializeChunkEmpty(DataChunk &chunk) {
+		auto &types = GetTypes();
+		chunk.InitializeEmpty(types);
+	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
 	virtual void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
@@ -86,7 +92,7 @@ public:
 
 	//! Create a new empty instance of the operator state
 	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {
-		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get());
+		return make_unique<PhysicalOperatorState>(*this, children.size() == 0 ? nullptr : children[0].get());
 	}
 
 	virtual string ExtraRenderInformation() const {

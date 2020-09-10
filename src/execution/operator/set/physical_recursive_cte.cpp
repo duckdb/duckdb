@@ -5,6 +5,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 using namespace std;
 
@@ -12,7 +13,7 @@ namespace duckdb {
 
 class PhysicalRecursiveCTEState : public PhysicalOperatorState {
 public:
-	PhysicalRecursiveCTEState() : PhysicalOperatorState(nullptr), top_done(false) {
+	PhysicalRecursiveCTEState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), top_done(false) {
 	}
 	unique_ptr<PhysicalOperatorState> top_state;
 	unique_ptr<PhysicalOperatorState> bottom_state;
@@ -31,12 +32,19 @@ PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<LogicalType> types, bool union
 	children.push_back(move(bottom));
 }
 
-PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {}
+PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
+}
 
 // first exhaust non recursive term, then exhaust recursive term iteratively until no (new) rows are generated.
 void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                             PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
+
+	if (!state->ht) {
+		state->ht =
+		    make_unique<SuperLargeHashTable>(BufferManager::GetBufferManager(context.client), STANDARD_VECTOR_SIZE * 2,
+		                                     types, vector<LogicalType>(), vector<BoundAggregateExpression *>());
+	}
 
 	if (!state->recursing) {
 		do {
@@ -102,7 +110,7 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 }
 
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) {
-	for(auto &pipeline : pipelines) {
+	for (auto &pipeline : pipelines) {
 		pipeline->Reset(context.client);
 		pipeline->Execute(context.task);
 		pipeline->FinishTask();
@@ -111,9 +119,9 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 
 void PhysicalRecursiveCTE::FinalizePipelines() {
 	// re-order the pipelines such that they are executed in the correct order of dependencies
-	for(idx_t i = 0; i < pipelines.size(); i++) {
+	for (idx_t i = 0; i < pipelines.size(); i++) {
 		auto &deps = pipelines[i]->GetDependencies();
-		for(idx_t j = i + 1; j < pipelines.size(); j++) {
+		for (idx_t j = i + 1; j < pipelines.size(); j++) {
 			if (deps.find(pipelines[j].get()) != deps.end()) {
 				// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before pipeline "j"
 				std::swap(pipelines[i], pipelines[j]);
@@ -122,7 +130,7 @@ void PhysicalRecursiveCTE::FinalizePipelines() {
 			}
 		}
 	}
-	for(idx_t i = 0; i < pipelines.size(); i++) {
+	for (idx_t i = 0; i < pipelines.size(); i++) {
 		pipelines[i]->ClearParents();
 	}
 }
@@ -143,11 +151,9 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *sta
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
-	auto state = make_unique<PhysicalRecursiveCTEState>();
+	auto state = make_unique<PhysicalRecursiveCTEState>(*this);
 	state->top_state = children[0]->GetOperatorState();
 	state->bottom_state = children[1]->GetOperatorState();
-	state->ht =
-	    make_unique<SuperLargeHashTable>(1024, types, vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	return (move(state));
 }
 

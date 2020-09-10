@@ -23,7 +23,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		get.function.pushdown_complex_filter(optimizer.context, get, get.bind_data.get(), expressions);
 
 		if (expressions.size() == 0) {
-			return move(op);
+			return op;
 		}
 		// re-generate the filters
 		for (auto &expr : expressions) {

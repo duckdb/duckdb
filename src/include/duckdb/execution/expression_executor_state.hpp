@@ -25,9 +25,12 @@ struct ExpressionState {
 	Expression &expr;
 	ExpressionExecutorState &root;
 	vector<unique_ptr<ExpressionState>> child_states;
+	vector<LogicalType> types;
+	DataChunk intermediate_chunk;
 
 public:
 	void AddChild(Expression *expr);
+	void Finalize();
 };
 
 struct ExpressionExecutorState {

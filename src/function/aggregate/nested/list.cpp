@@ -56,6 +56,23 @@ static void list_update(Vector inputs[], idx_t input_count, Vector &state_vector
 	}
 }
 
+static void list_combine(Vector &state, Vector &combined, idx_t count) {
+	VectorData sdata;
+	state.Orrify(count, sdata);
+	auto states_ptr = (list_agg_state_t **)sdata.data;
+
+	auto combined_ptr = FlatVector::GetData<list_agg_state_t *>(combined);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto state = states_ptr[sdata.sel->get_index(i)];
+		assert(state->cc);
+		if (!combined_ptr[i]->cc) {
+			combined_ptr[i]->cc = new ChunkCollection();
+		}
+		combined_ptr[i]->cc->Append(*state->cc);
+	}
+}
+
 static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
@@ -100,8 +117,10 @@ unique_ptr<FunctionData> list_bind(ClientContext &context, AggregateFunction &fu
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
 	auto agg = AggregateFunction(
 	    "list", {LogicalType::ANY}, LogicalType::LIST, AggregateFunction::StateSize<list_agg_state_t>,
-	    AggregateFunction::StateInitialize<list_agg_state_t, ListFunction>, list_update, nullptr, list_finalize,
+	    AggregateFunction::StateInitialize<list_agg_state_t, ListFunction>, list_update, list_combine, list_finalize,
 	    nullptr, list_bind, AggregateFunction::StateDestroy<list_agg_state_t, ListFunction>);
+	set.AddFunction(agg);
+	agg.name = "array_agg";
 	set.AddFunction(agg);
 }
 

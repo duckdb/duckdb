@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTableScanOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
+	PhysicalTableScanOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), initialized(false) {
 	}
 
 	unique_ptr<FunctionOperatorData> operator_data;
@@ -72,7 +72,7 @@ string PhysicalTableScan::ToString(idx_t depth) const {
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
-	return make_unique<PhysicalTableScanOperatorState>();
+	return make_unique<PhysicalTableScanOperatorState>(*this);
 }
 
 } // namespace duckdb

@@ -1,0 +1,29 @@
+# name: test/sql/copy/parquet/broken_parquet.test
+# description: Read several broken parquet files
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select count(*) from parquet_scan('test/sql/copy/parquet/broken/missingmagicatfront.parquet')
+
+statement error
+select count(*) from parquet_scan('test/sql/copy/parquet/broken/missingmagicatend.parquet')
+
+statement error
+select count(*) from parquet_scan('test/sql/copy/parquet/broken/firstmarker.parquet')
+
+statement error
+select count(*) from parquet_scan('test/sql/copy/parquet/broken/twomarkers.parquet')
+
+statement error
+select count(*) from parquet_scan('test/sql/copy/parquet/broken/footerlengthzero.parquet')
+
+statement error
+select count(*) from parquet_scan('test/sql/copy/parquet/broken/hugefooter.parquet')
+
+statement error
+select count(*) from parquet_scan('test/sql/copy/parquet/broken/garbledfooter.parquet')

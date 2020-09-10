@@ -8,7 +8,7 @@ namespace duckdb {
 
 class PhysicalExpressionScanState : public PhysicalOperatorState {
 public:
-	PhysicalExpressionScanState(PhysicalOperator *child) : PhysicalOperatorState(child), expression_index(0) {
+	PhysicalExpressionScanState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child), expression_index(0) {
 	}
 
 	//! The current position in the scan
@@ -41,7 +41,7 @@ void PhysicalExpressionScan::GetChunkInternal(ExecutionContext &context, DataChu
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalExpressionScan::GetOperatorState() {
-	return make_unique<PhysicalExpressionScanState>(children[0].get());
+	return make_unique<PhysicalExpressionScanState>(*this, children[0].get());
 }
 
 } // namespace duckdb
