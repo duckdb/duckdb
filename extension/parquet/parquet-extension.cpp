@@ -989,7 +989,7 @@ public:
 	}
 
 	static unique_ptr<FunctionOperatorData>
-	parquet_scan_init(ClientContext &context, const FunctionData *bind_data, OperatorTaskInfo *task_info,
+	parquet_scan_init(ClientContext &context, const FunctionData *bind_data, ParallelState *state,
 	                  vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 		auto &data = (ParquetScanFunctionData &)*bind_data;
 		data.column_ids = column_ids;

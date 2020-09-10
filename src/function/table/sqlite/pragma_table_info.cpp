@@ -57,7 +57,7 @@ static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, v
 }
 
 unique_ptr<FunctionOperatorData> pragma_table_info_init(ClientContext &context, const FunctionData *bind_data,
-                                                        OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                        ParallelState *state, vector<column_t> &column_ids,
                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<PragmaTableOperatorData>();
 }

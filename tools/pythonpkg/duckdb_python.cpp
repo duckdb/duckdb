@@ -172,7 +172,7 @@ struct PandasScanState : public FunctionOperatorData {
 struct PandasScanFunction : public TableFunction {
 	PandasScanFunction()
 	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_function, pandas_scan_bind, pandas_scan_init,
-	                    nullptr, nullptr, nullptr, pandas_scan_cardinality){};
+	                    nullptr, nullptr, pandas_scan_cardinality){};
 
 	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                 unordered_map<string, Value> &named_parameters,
@@ -228,7 +228,7 @@ struct PandasScanFunction : public TableFunction {
 	}
 
 	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
-	                                                         OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+	                                                         ParallelState *state, vector<column_t> &column_ids,
 	                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 		return make_unique<PandasScanState>();
 	}

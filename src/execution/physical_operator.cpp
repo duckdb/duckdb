@@ -59,9 +59,4 @@ void PhysicalOperator::Print() {
 	Printer::Print(ToString());
 }
 
-void PhysicalOperator::ParallelScanInfo(ClientContext &context,
-                                        std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
-	throw InternalException("Unsupported operator for parallel scan!");
-}
-
 } // namespace duckdb

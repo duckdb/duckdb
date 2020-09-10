@@ -229,63 +229,78 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	state.max_persistent_row = 0;
 	state.current_transient_row = 0;
 	state.max_transient_row = 0;
-	if (table_filters && table_filters->size() > 0) {
+	if (table_filters && table_filters->size() > 0 && !state.adaptive_filter) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
 	}
 }
 
-void DataTable::InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids,
-                                       unordered_map<idx_t, vector<TableFilter>> *table_filters,
-                                       std::function<void(TableScanState)> callback) {
+idx_t DataTable::MaxThreads(ClientContext &context) {
 	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
+	if (context.force_parallelism) {
+		PARALLEL_SCAN_VECTOR_COUNT = 1;
+	}
 	idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
 
-	idx_t current_offset = 0;
-	// create parallel scans for the persistent rows
-	for (idx_t i = 0; i < persistent_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
-		idx_t current = i;
-		idx_t next = MinValue(i + PARALLEL_SCAN_TUPLE_COUNT, persistent_manager->max_row);
+	return (persistent_manager->max_row + transient_manager->max_row) / PARALLEL_SCAN_TUPLE_COUNT + 1;
+}
 
-		TableScanState state;
-		InitializeScanWithOffset(state, column_ids, table_filters, current_offset);
-		state.current_persistent_row = current;
-		state.max_persistent_row = next;
+void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
+	state.persistent_row_idx = 0;
+	state.transient_row_idx = 0;
+	state.transaction_local_data = false;
+}
 
-		callback(move(state));
-
-		current_offset += PARALLEL_SCAN_VECTOR_COUNT;
-	}
-	if (persistent_manager->max_row > 0) {
-		current_offset = (persistent_manager->max_row / STANDARD_VECTOR_SIZE) + 1;
-	}
-	// now create parallel scans for the transient rows
+bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state, const vector<column_t> &column_ids,
+	                    unordered_map<idx_t, vector<TableFilter>> *table_filters) {
+	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
 	if (context.force_parallelism) {
-		// force parallelism: create one task per vector
 		PARALLEL_SCAN_VECTOR_COUNT = 1;
-		PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
 	}
-	for (idx_t i = 0; i < transient_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
-		idx_t current = i;
-		idx_t next = MinValue(i + PARALLEL_SCAN_TUPLE_COUNT, transient_manager->max_row);
+	idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
 
-		TableScanState state;
-		InitializeScanWithOffset(state, column_ids, table_filters, current_offset);
-		state.current_transient_row = current;
-		state.max_transient_row = next;
+	if (state.persistent_row_idx < persistent_manager->max_row) {
+		idx_t next = MinValue(state.persistent_row_idx + PARALLEL_SCAN_TUPLE_COUNT, persistent_manager->max_row);
 
-		callback(move(state));
+		idx_t vector_offset = state.persistent_row_idx / STANDARD_VECTOR_SIZE;
+		// scan a morsel from the persistent rows
+		InitializeScanWithOffset(scan_state, column_ids, table_filters, vector_offset);
+		scan_state.current_persistent_row = state.persistent_row_idx;
+		scan_state.max_persistent_row = next;
 
-		current_offset += PARALLEL_SCAN_VECTOR_COUNT;
+		state.persistent_row_idx = next;
+		return true;
+	} else if (state.transient_row_idx < transient_manager->max_row) {
+		idx_t next = MinValue(state.transient_row_idx + PARALLEL_SCAN_TUPLE_COUNT, transient_manager->max_row);
+		// scan a morsel from the transient rows
+		idx_t vector_offset = 0;
+		if (persistent_manager->max_row > 0) {
+			vector_offset = persistent_manager->max_row / STANDARD_VECTOR_SIZE;
+			if (persistent_manager->max_row % STANDARD_VECTOR_SIZE != 0) {
+				vector_offset++;
+			}
+		}
+		vector_offset += state.transient_row_idx / STANDARD_VECTOR_SIZE;
+
+		InitializeScanWithOffset(scan_state, column_ids, table_filters, vector_offset);
+		scan_state.current_transient_row = state.transient_row_idx;
+		scan_state.max_transient_row = next;
+
+		state.transient_row_idx = next;
+		return true;
+	} else if (!state.transaction_local_data) {
+		auto &transaction = Transaction::GetTransaction(context);
+		// create a task for scanning the local data
+		// FIXME: this should also be potentially parallelized
+		scan_state.current_persistent_row = scan_state.max_persistent_row = 0;
+		scan_state.current_transient_row = scan_state.max_transient_row = 0;
+		transaction.storage.InitializeScan(this, scan_state.local_state);
+		state.transaction_local_data = true;
+		return true;
+	} else {
+		// finished all scans: no more scans remaining
+		return false;
 	}
 
-	// create a task for scanning the local data
-	// FIXME: this should also be potentially parallelized
-	auto &transaction = Transaction::GetTransaction(context);
-	TableScanState state;
-	state.current_persistent_row = state.max_persistent_row = 0;
-	state.current_transient_row = state.max_transient_row = 0;
-	transaction.storage.InitializeScan(this, state.local_state);
-	callback(move(state));
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
