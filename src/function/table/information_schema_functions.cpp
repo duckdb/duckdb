@@ -5,7 +5,8 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterInformationSchemaFunctions() {
-    InformationSchemaSchemata::RegisterFunction(*this);
+	InformationSchemaSchemata::RegisterFunction(*this);
+	InformationSchemaTables::RegisterFunction(*this);
 }
 
 } // namespace duckdb

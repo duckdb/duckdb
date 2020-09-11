@@ -51,7 +51,7 @@ information_schema_schemata_init(ClientContext &context, const FunctionData *bin
                                  unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<InformationSchemaSchemataData>();
 
-	// scan all the schemas for tables and views and collect them
+	// scan all the schemas and collect them
 	auto &transaction = Transaction::GetTransaction(context);
 	Catalog::GetCatalog(context).schemas->Scan(transaction,
 	                                           [&](CatalogEntry *entry) { result->entries.push_back(entry); });
