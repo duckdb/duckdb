@@ -51,8 +51,11 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &lef
 	if (expression.type == ExpressionType::SUBQUERY) {
 		assert(expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
 		auto &subquery = (BoundSubqueryExpression &)expression;
-		// correlated subquery, check the side of each of correlated columns in the subquery
 		JoinSide side = JoinSide::NONE;
+		if (subquery.child) {
+			side = GetJoinSide(*subquery.child, left_bindings, right_bindings);
+		}
+		// correlated subquery, check the side of each of correlated columns in the subquery
 		for (auto &corr : subquery.binder->correlated_columns) {
 			if (corr.depth > 1) {
 				// correlated column has depth > 1

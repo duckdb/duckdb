@@ -28,7 +28,7 @@ TEST_CASE("Test TPC-DS SF0.1 Query Execution", "[tpcds][.]") {
 	tpcds::dbgen(0.01, db);
 	con.EnableProfiling();
 
-	unordered_set<size_t> missing_queries = {14, 40, 51, 55, 68, 76, 86, 89, 101};
+	unordered_set<size_t> missing_queries = {13, 14, 16, 40, 51, 52, 55, 68, 76, 86, 89, 101};
 	for (size_t q = 1; q < 104; q++) {
 		if (missing_queries.count(q) != 0) {
 			continue;
