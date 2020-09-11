@@ -30,15 +30,22 @@ template <typename T, typename S> unique_ptr<S> unique_ptr_cast(unique_ptr<T> sr
 	return unique_ptr<S>(static_cast<S *>(src.release()));
 }
 
-template<typename T>
-T MaxValue(T a, T b) {
+template <typename T> T MaxValue(T a, T b) {
 	return a > b ? a : b;
 }
 
-template<typename T>
-T MinValue(T a, T b) {
+template <typename T> T MinValue(T a, T b) {
 	return a < b ? a : b;
 }
 
+template <typename T> T Load(const_data_ptr_t ptr) {
+	T ret;
+	memcpy(&ret, ptr, sizeof(ret));
+	return ret;
+}
+
+template <typename T> void Store(T val, data_ptr_t ptr) {
+	memcpy(ptr, (void *)&val, sizeof(val));
+}
 
 } // namespace duckdb

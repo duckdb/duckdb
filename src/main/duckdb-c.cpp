@@ -68,13 +68,18 @@ void duckdb_disconnect(duckdb_connection *connection) {
 	}
 }
 
-template <class T> __attribute__((no_sanitize("undefined"))) void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
+template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	idx_t row = 0;
 	auto target = (T *)out->columns[col].data;
 	for (auto &chunk : source.chunks) {
 		auto source = FlatVector::GetData<T>(chunk->data[col]);
-		for (idx_t k = 0; k < chunk->size(); k++) {
-			target[row++] = source[k];
+		auto &nullmask = FlatVector::Nullmask(chunk->data[col]);
+
+		for (idx_t k = 0; k < chunk->size(); k++, row++) {
+			if (nullmask[k]) {
+				continue;
+			}
+			target[row] = source[k];
 		}
 	}
 }

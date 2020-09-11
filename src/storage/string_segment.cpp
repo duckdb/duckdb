@@ -304,7 +304,7 @@ string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t
 	// look up result in dictionary
 	auto dict_end = baseptr + Storage::BLOCK_SIZE;
 	auto dict_pos = dict_end - dict_offset;
-	auto string_length = *((uint16_t *)dict_pos);
+	auto string_length = Load<uint16_t>(dict_pos);
 	string_location_t result;
 	if (string_length == BIG_STRING_MARKER) {
 		ReadStringMarker(dict_pos, result.block_id, result.offset);
@@ -333,7 +333,7 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 		// normal string: read string from this block
 		auto dict_end = baseptr + Storage::BLOCK_SIZE;
 		auto dict_pos = dict_end - location.offset;
-		auto string_length = *((uint16_t *)dict_pos);
+		auto string_length = Load<uint16_t>(dict_pos);
 
 		auto str_ptr = (char *)(dict_pos + sizeof(uint16_t));
 		return string_t(str_ptr, string_length);
@@ -533,8 +533,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				//! Update min/max of column segment
 				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
 				// first write the length as u16
-				uint16_t string_length_u16 = string_length;
-				memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
+				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
 			}
