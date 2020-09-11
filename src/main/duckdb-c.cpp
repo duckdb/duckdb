@@ -68,7 +68,7 @@ void duckdb_disconnect(duckdb_connection *connection) {
 	}
 }
 
-template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
+template <class T> __attribute__((no_sanitize("undefined"))) void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	idx_t row = 0;
 	auto target = (T *)out->columns[col].data;
 	for (auto &chunk : source.chunks) {

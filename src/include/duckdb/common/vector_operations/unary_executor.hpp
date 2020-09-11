@@ -32,8 +32,8 @@ struct UnaryLambdaWrapper {
 
 struct UnaryExecutor {
 private:
-	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL> __attribute__((no_sanitize("undefined")))
+    static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const SelectionVector *__restrict sel_vector, nullmask_t &nullmask,
 	                               nullmask_t &result_nullmask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
@@ -57,8 +57,8 @@ private:
 		}
 	}
 
-	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static inline void ExecuteFlat(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL> __attribute__((no_sanitize("undefined")))
+    static inline void ExecuteFlat(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 

@@ -41,7 +41,11 @@ void LogicalGet::ResolveTypes() {
 	if (column_ids.size() == 0) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
-	types = table->GetTypes(column_ids);
+	if (table) {
+		types = table->GetTypes(column_ids);
+	} else {
+		types.push_back(LogicalType::SQLNULL);
+	}
 }
 
 idx_t LogicalGet::EstimateCardinality() {

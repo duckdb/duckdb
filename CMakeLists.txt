@@ -80,7 +80,7 @@ if(${ENABLE_SANITIZER})
       message(WARNING "Sanitizers are not supported for the Python build. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled")
     endif()
   else()
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address -fsanitize=undefined")
   endif()
 endif()
 
