@@ -233,6 +233,7 @@ HAVING count(*) > 100
 
 # Q3. Tag evolution
 # make_date -> year,month,day
+# make_interval
 statement ok
 WITH detail AS (
 SELECT t.t_name
