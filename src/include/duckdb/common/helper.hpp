@@ -39,13 +39,13 @@ template <typename T> T MinValue(T a, T b) {
 	return a < b ? a : b;
 }
 
-template <typename T> T Load(const_data_ptr_t ptr) {
+template <typename T> const T Load(const_data_ptr_t ptr) {
 	T ret;
 	memcpy(&ret, ptr, sizeof(ret));
 	return ret;
 }
 
-template <typename T> void Store(T val, data_ptr_t ptr) {
+template <typename T> void Store(const T val, data_ptr_t ptr) {
 	memcpy(ptr, (void *)&val, sizeof(val));
 }
 

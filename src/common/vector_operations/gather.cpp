@@ -17,7 +17,7 @@ template <class T> static void templated_gather_loop(Vector &source, Vector &des
 	auto &nullmask = FlatVector::Nullmask(dest);
 
 	for (idx_t i = 0; i < count; i++) {
-		T val = Load<T>((const_data_ptr_t)addresses[i]);
+		auto val = Load<T>((const_data_ptr_t)addresses[i]);
 		if (IsNullValue<T>(val)) {
 			nullmask[i] = true;
 		} else {
