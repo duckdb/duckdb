@@ -196,7 +196,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 
 		switch (output.data[col_idx].type.id()) {
 		case LogicalTypeId::SQLNULL:
-			FlatVector::Nullmask(output.data[col_idx]).all();
+			output.data[col_idx].Reference(Value());
 			break;
 		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
