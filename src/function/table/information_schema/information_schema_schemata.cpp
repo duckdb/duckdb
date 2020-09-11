@@ -14,7 +14,7 @@ struct InformationSchemaSchemataData : public FunctionOperatorData {
 	InformationSchemaSchemataData() : offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<SchemaCatalogEntry *> entries;
 	idx_t offset;
 };
 
@@ -54,8 +54,8 @@ information_schema_schemata_init(ClientContext &context, const FunctionData *bin
 
 	// scan all the schemas and collect them
 	auto &transaction = Transaction::GetTransaction(context);
-	Catalog::GetCatalog(context).schemas->Scan(transaction,
-	                                           [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	Catalog::GetCatalog(context).schemas->Scan(
+	    transaction, [&](CatalogEntry *entry) { result->entries.push_back((SchemaCatalogEntry *)entry); });
 	// get the temp schema as well
 	result->entries.push_back(context.temporary_objects.get());
 
