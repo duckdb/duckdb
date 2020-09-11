@@ -96,12 +96,10 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 
 		const char *table_type;
 		const char *is_insertable_into = "NO";
-		bool is_temp = false;
 		switch (entry->type) {
 		case CatalogType::TABLE_ENTRY:
 			if (entry->temporary) {
 				table_type = "LOCAL TEMPORARY";
-				is_temp = true;
 			} else {
 				table_type = "BASE TABLE";
 			}
@@ -140,7 +138,7 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 		// "is_typed", PhysicalType::VARCHAR (YES/NO)
 		output.SetValue(10, index, Value("NO"));
 		// "commit_action", PhysicalType::VARCHAR
-		output.SetValue(11, index, is_temp ? Value("PRESERVE") : Value());
+		output.SetValue(11, index, Value());
 	}
 	data.offset = next;
 }
