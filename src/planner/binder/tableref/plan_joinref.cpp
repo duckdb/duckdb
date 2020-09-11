@@ -79,8 +79,30 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		}
 		arbitrary_expressions.push_back(move(expr));
 	}
-	if (conditions.size() > 0) {
-		// we successfully convertedexpressions into JoinConditions
+	if (arbitrary_expressions.size() > 0 || conditions.size() == 0) {
+		if (arbitrary_expressions.size() == 0) {
+			// all conditions were pushed down, add TRUE predicate
+			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
+		}
+		for(auto &condition : conditions) {
+			arbitrary_expressions.push_back(JoinCondition::CreateExpression(move(condition)));
+		}
+		// if we get here we could not create any JoinConditions
+		// turn this into an arbitrary expression join
+		auto any_join = make_unique<LogicalAnyJoin>(type);
+		// create the condition
+		any_join->children.push_back(move(left_child));
+		any_join->children.push_back(move(right_child));
+		// AND all the arbitrary expressions together
+		// do the same with any remaining conditions
+		any_join->condition = move(arbitrary_expressions[0]);
+		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
+			any_join->condition = make_unique<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
+		}
+		return move(any_join);
+	} else {
+		// we successfully converted expressions into JoinConditions
 		// create a LogicalComparisonJoin
 		auto comp_join = make_unique<LogicalComparisonJoin>(type);
 		comp_join->conditions = move(conditions);
@@ -98,25 +120,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			return move(filter);
 		}
 		return move(comp_join);
-	} else {
-		if (arbitrary_expressions.size() == 0) {
-			// all conditions were pushed down, add TRUE predicate
-			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
-		}
-		// if we get here we could not create any JoinConditions
-		// turn this into an arbitrary expression join
-		auto any_join = make_unique<LogicalAnyJoin>(type);
-		// create the condition
-		any_join->children.push_back(move(left_child));
-		any_join->children.push_back(move(right_child));
-		// AND all the arbitrary expressions together
-		// do the same with any remaining conditions
-		any_join->condition = move(arbitrary_expressions[0]);
-		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
-			any_join->condition = make_unique<BoundConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
-		}
-		return move(any_join);
 	}
 }
 
