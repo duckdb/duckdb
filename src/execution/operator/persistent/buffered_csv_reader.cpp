@@ -14,6 +14,7 @@
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 
@@ -37,6 +38,74 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
 	return std::to_string(linenr + 1) + estimated;
+}
+
+static bool is_digit(char c) { return std::isdigit(c); }
+
+static bool StartsWithNumericDate(string& separator, const string_t& value) {
+	auto	begin = value.GetData();
+	auto	end = begin + value.GetSize();
+
+	//	StrpTimeFormat::Parse will skip whitespace, so we can too
+	auto 	field1 = std::find_if_not(begin, end, StringUtil::CharacterIsSpace);
+	if (field1 == end) {
+		return false;
+	}
+
+	//	first numeric field must start immediately
+	if (!std::isdigit(*field1)) {
+		return false;
+	}
+	auto	literal1 = std::find_if_not(field1, end, is_digit);
+	if (literal1 == end) {
+		return false;
+	}
+
+	//	second numeric field must exist
+	auto	field2 = std::find_if(literal1, end, is_digit);
+	if (field2 == end) {
+		return false;
+	}
+	auto	literal2 = std::find_if_not(field2, end, is_digit);
+	if (literal2 == end) {
+		return false;
+	}
+
+	//	third numeric field must exist
+	auto	field3 = std::find_if(literal2, end, is_digit);
+	if (field3 == end) {
+		return false;
+	}
+
+	//	second literal must match first
+	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, (field2 - literal1))) {
+		return false;
+	}
+
+	//	copy the literal as the separator, escaping percent signs
+	separator.clear();
+	while (literal1 < field2) {
+		const auto literal_char = *literal1++;
+		if (literal_char == '%') {
+			separator.push_back(literal_char);
+		}
+		separator.push_back(literal_char);
+	}
+
+	return true;
+}
+
+string GenerateDateFormat(const string& separator, const char* format_template) {
+	string format_specifier = format_template;
+
+	//	replace all dashes with the separator
+	for (auto pos = std::find(format_specifier.begin(), format_specifier.end(), '-');
+	     pos != format_specifier.end();
+         pos = std::find(pos + separator.size(), format_specifier.end(), '-')) {
+		format_specifier.replace(pos, pos + 1, separator);
+	}
+
+	return format_specifier;
 }
 
 TextSearchShiftArray::TextSearchShiftArray() {
@@ -429,15 +498,19 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	vector<LogicalType> type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP,
 	                                   LogicalType::DATE,    LogicalType::TIME,
 	                                   LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	                                   LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
+	                                   LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/
+	                                   LogicalType::BOOLEAN};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
 	vector<vector<LogicalType>> best_sql_types_candidates;
+	vector<string> best_date_format_candidates;
 	for (auto &info_candidate : info_candidates) {
 		options = info_candidate;
 		vector<vector<LogicalType>> info_sql_types_candidates(options.num_cols, type_candidates);
+		bool has_date_format_candidates = false;
+		vector<string> date_format_candidates;
 
 		// set all sql_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		sql_types.clear();
@@ -454,6 +527,53 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
 					auto dummy_val = parse_chunk.GetValue(col, row);
+					// try formatting for date types
+					if (sql_type == LogicalType::DATE && !options.has_date_format) {
+						// generate date format candidates the first time through
+						if (!has_date_format_candidates) {
+							string		separator;
+							if (StartsWithNumericDate(separator, dummy_val.str_value)) {
+								has_date_format_candidates = true;
+								// order by preference
+								date_format_candidates.emplace_back(GenerateDateFormat(separator, "%m-%d-%Y"));
+								date_format_candidates.emplace_back(GenerateDateFormat(separator, "%m-%d-%y"));
+								date_format_candidates.emplace_back(GenerateDateFormat(separator, "%d-%m-%Y"));
+								date_format_candidates.emplace_back(GenerateDateFormat(separator, "%d-%m-%y"));
+								date_format_candidates.emplace_back(GenerateDateFormat(separator, "%y-%m-%d"));
+								// don't parse ISO 8601
+								if (separator != "-") {
+									date_format_candidates.emplace_back(GenerateDateFormat(separator, "%Y-%m-%d"));
+								}
+
+								//	initialise the first candidate
+								options.has_date_format = true;
+								const auto& format_specifier = date_format_candidates.back();
+								options.date_format.format_specifier = format_specifier;
+								//	all formats are constructed to be valid
+								StrTimeFormat::ParseFormatSpecifier(format_specifier, options.date_format);
+							}
+						}
+						// check all formats and keep the first one that works
+						int32_t date_parts[6];
+						string error_msg;
+						idx_t error_pos;
+						while (date_format_candidates.size()) {
+							//	avoid using exceptions for flow control...
+							if (options.date_format.Parse(dummy_val.str_value, date_parts, error_msg, error_pos)) {
+								break;
+							}
+							//	doesn't work - move to the next one
+							date_format_candidates.pop_back();
+							options.has_date_format = (date_format_candidates.size() > 0);
+							if (options.has_date_format) {
+								const auto& format_specifier = date_format_candidates.back();
+								options.date_format.format_specifier = format_specifier;
+								StrTimeFormat::ParseFormatSpecifier(format_specifier, options.date_format);
+							}
+						}
+
+					}
+					// try cast from string to sql_type
 					if (TryCastValue(dummy_val, sql_type)) {
 						break;
 					} else {
@@ -465,6 +585,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			// but only do it if csv has more than one line
 			if (parse_chunk.size() > 1 && row == 0) {
 				info_sql_types_candidates = vector<vector<LogicalType>>(options.num_cols, type_candidates);
+				date_format_candidates.clear();
+				has_date_format_candidates = false;
 			}
 		}
 
@@ -479,14 +601,20 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
 		if (varchar_cols < min_varchar_cols && parse_chunk.column_count() > (best_num_cols * 0.7)) {
-			// we have a new best_info candidate
+			// we have a new best_options candidate
 			best_options = info_candidate;
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates = info_sql_types_candidates;
+			best_date_format_candidates = date_format_candidates;
 		}
 	}
 
 	options = best_options;
+	if (best_date_format_candidates.size()) {
+		options.has_date_format = true;
+		options.date_format.format_specifier = best_date_format_candidates.back();
+		StrTimeFormat::ParseFormatSpecifier(options.date_format.format_specifier, options.date_format);
+	}
 
 	// sql_types and parse_chunk have to be in line with new info
 	sql_types.clear();
@@ -516,6 +644,22 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 				vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
+					//	narrow down the date formats
+					if (sql_type == LogicalType::DATE) {
+						while (best_date_format_candidates.size()) {
+							if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
+								break;
+							}
+							best_date_format_candidates.pop_back();
+							options.has_date_format = (best_date_format_candidates.size() > 0);
+							if (options.has_date_format) {
+								const auto& format_specifier = best_date_format_candidates.back();
+								options.date_format.format_specifier = format_specifier;
+								StrTimeFormat::ParseFormatSpecifier(format_specifier, options.date_format);
+							}
+						}
+					}
+
 					if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 						break;
 					} else {
@@ -533,7 +677,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	}
 
 	// if all rows are of type string, we will currently make the assumption there is no header.
-	// TODO: Do some kind of string-distance based constistency metic between first row and others
+	// TODO: Do some kind of string-distance based constistency metric between first row and others
 	/*bool all_types_string = true;
 	for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
 	    const auto &col_type = best_sql_types_candidates[col].back();

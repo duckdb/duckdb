@@ -44,8 +44,9 @@ SELECT * FROM dates ORDER BY 1
 2019-06-05
 
 # we can also do this for timestamps
+# as long as we make the date format fail
 statement ok
-CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', timestampformat='%m/%d/%Y')
+CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', dateformat='%Y-%m-%d', timestampformat='%m/%d/%Y')
 
 query I
 SELECT * FROM timestamps
