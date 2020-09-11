@@ -49,6 +49,18 @@ enum EmptyOp {
   kEmptyAllFlags         = (1<<6)-1,
 };
 
+struct inst_byte_range_data_t {             // opcode == kInstByteRange
+    uint8_t lo_;       //   byte range is lo_-hi_ inclusive
+    uint8_t hi_;       //
+    uint16_t hint_foldcase_;  // 15 bits: hint, 1 (low) bit: foldcase
+    //   hint to execution engines: the delta to the
+    //   next instruction (in the current list) worth
+    //   exploring iff this instruction matched; 0
+    //   means there are no remaining possibilities,
+    //   which is most likely for character classes.
+    //   foldcase: A-Z -> a-z before checking range.
+} ;
+
 class DFA;
 class Regexp;
 
@@ -145,17 +157,7 @@ class Prog {
       int32_t match_id_;   // opcode == kInstMatch
                            //   Match ID to identify this match (for duckdb_re2::Set).
 
-      struct {             // opcode == kInstByteRange
-        uint8_t lo_;       //   byte range is lo_-hi_ inclusive
-        uint8_t hi_;       //
-        uint16_t hint_foldcase_;  // 15 bits: hint, 1 (low) bit: foldcase
-                           //   hint to execution engines: the delta to the
-                           //   next instruction (in the current list) worth
-                           //   exploring iff this instruction matched; 0
-                           //   means there are no remaining possibilities,
-                           //   which is most likely for character classes.
-                           //   foldcase: A-Z -> a-z before checking range.
-      } inst_byte_range_data_;
+      struct inst_byte_range_data_t inst_byte_range_data_;
 
       EmptyOp empty_;       // opcode == kInstEmptyWidth
                             //   empty_ is bitwise OR of kEmpty* flags above.

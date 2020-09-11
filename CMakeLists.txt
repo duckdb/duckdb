@@ -136,7 +136,7 @@ if(NOT MSVC)
 
   set(
     CXX_EXTRA_DEBUG
-    "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing"
+    "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing -Wnested-anon-types"
     )
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -Werror")
