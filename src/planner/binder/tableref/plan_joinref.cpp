@@ -51,30 +51,28 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 	// first check if we can create
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		auto &expr = expressions[i];
-		if (!expr->HasSubquery()) {
-			auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
-			if (total_side != JoinSide::BOTH) {
-				// join condition does not reference both sides, add it as filter under the join
-				if (type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
-					// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
-					if (right_child->type != LogicalOperatorType::FILTER) {
-						// not a filter yet, push a new empty filter
-						auto filter = make_unique<LogicalFilter>();
-						filter->AddChild(move(right_child));
-						right_child = move(filter);
-					}
-					// push the expression into the filter
-					auto &filter = (LogicalFilter &)*right_child;
-					filter.expressions.push_back(move(expr));
-					continue;
+		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
+		if (total_side != JoinSide::BOTH) {
+			// join condition does not reference both sides, add it as filter under the join
+			if (type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
+				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
+				if (right_child->type != LogicalOperatorType::FILTER) {
+					// not a filter yet, push a new empty filter
+					auto filter = make_unique<LogicalFilter>();
+					filter->AddChild(move(right_child));
+					right_child = move(filter);
 				}
-			} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
-			           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-				// comparison, check if we can create a comparison JoinCondition
-				if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
-					// successfully created the join condition
-					continue;
-				}
+				// push the expression into the filter
+				auto &filter = (LogicalFilter &)*right_child;
+				filter.expressions.push_back(move(expr));
+				continue;
+			}
+		} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
+					expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+			// comparison, check if we can create a comparison JoinCondition
+			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
+				// successfully created the join condition
+				continue;
 			}
 		}
 		arbitrary_expressions.push_back(move(expr));
@@ -168,6 +166,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		join = result->children[0].get();
 	} else {
 		join = result.get();
+	}
+	for(auto &child : join->children) {
+		if (child->type == LogicalOperatorType::FILTER) {
+			auto &filter = (LogicalFilter &) *child;
+			for(auto &expr : filter.expressions) {
+				PlanSubqueries(&expr, &filter.children[0]);
+			}
+		}
 	}
 
 	// we visit the expressions depending on the type of join

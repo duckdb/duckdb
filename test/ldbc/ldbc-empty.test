@@ -294,8 +294,7 @@ SELECT f.f_forumid      AS "forum.id"
 ;
 
 # Q5. Top posters in a country
-# left outer join on subquery not supported
-statement error
+statement ok
 WITH top100_popular_forums AS (
   SELECT fp_forumid AS forumid
     FROM forum_person fp
