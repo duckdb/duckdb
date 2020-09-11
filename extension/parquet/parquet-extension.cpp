@@ -327,7 +327,8 @@ struct ParquetScanFunctionData : public TableFunctionData {
 	static constexpr unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
 
 public:
-	ParquetScanFunctionData(FileSystem &fs) : fs(fs) {}
+	ParquetScanFunctionData(FileSystem &fs) : fs(fs) {
+	}
 
 	void ReadChunk(DataChunk &output);
 	void PrepareChunkBuffer(idx_t col_idx);
@@ -362,8 +363,10 @@ public:
 	}
 
 	template <typename... Args> runtime_error FormatException(const string fmt_str, Args... params) {
-		return runtime_error("Failed to read Parquet file \"" + file_name + "\": " + StringUtil::Format(fmt_str, params...));
+		return runtime_error("Failed to read Parquet file \"" + file_name +
+		                     "\": " + StringUtil::Format(fmt_str, params...));
 	}
+
 public:
 	FileSystem &fs;
 
@@ -535,7 +538,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 					throw FormatException("invalid string encoding");
 				}
 				FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-					    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
+				    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
 
 				append_chunk->SetCardinality(append_chunk->size() + 1);
 				col_data.payload.inc(str_len);
@@ -848,8 +851,8 @@ public:
 		projection_pushdown = true;
 	}
 
-	static unique_ptr<FunctionData> ReadParquetHeader(FileSystem &fs, string file_name, vector<LogicalType> &return_types,
-	                                                  vector<string> &names) {
+	static unique_ptr<FunctionData> ReadParquetHeader(FileSystem &fs, string file_name,
+	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 		auto res = make_unique<ParquetScanFunctionData>(fs);
 
 		res->file_name = file_name;
@@ -870,7 +873,7 @@ public:
 		if (file_size_signed < 12) {
 			throw res->FormatException("File too small to be a Parquet file");
 		}
-		auto file_size = (uint64_t) file_size_signed;
+		auto file_size = (uint64_t)file_size_signed;
 		fs.Read(*res->handle, buf.ptr, 4, file_size - 4);
 		if (strncmp(buf.ptr, "PAR1", 4) != 0) {
 			throw res->FormatException("No magic bytes found at end of file");
@@ -948,7 +951,7 @@ public:
 			if (has_expected_types) {
 				if (return_types[col_idx - 1] != type) {
 					throw res->FormatException("PARQUET file contains type %s, could not auto cast to type %s",
-					                              type.ToString(), return_types[col_idx - 1].ToString());
+					                           type.ToString(), return_types[col_idx - 1].ToString());
 				}
 			} else {
 				names.push_back(s_ele.name);

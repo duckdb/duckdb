@@ -22,7 +22,7 @@ struct CreateScalarFunctionInfo : public CreateFunctionInfo {
 	CreateScalarFunctionInfo(ScalarFunctionSet set)
 	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(move(set.functions)) {
 		this->name = set.name;
-		for(auto &func : functions) {
+		for (auto &func : functions) {
 			func.name = set.name;
 		}
 	}

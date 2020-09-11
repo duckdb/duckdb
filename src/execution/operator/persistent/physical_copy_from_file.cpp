@@ -10,7 +10,8 @@ namespace duckdb {
 
 class PhysicalCopyFromFileOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalCopyFromFileOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr) {}
+	PhysicalCopyFromFileOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr) {
+	}
 	//! The global function data
 	unique_ptr<GlobalFunctionData> gdata;
 };

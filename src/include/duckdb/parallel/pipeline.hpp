@@ -52,7 +52,7 @@ public:
 	void SetRecursiveCTE(PhysicalOperator *op) {
 		this->recursive_cte = op;
 	}
-	PhysicalOperator* GetRecursiveCTE() {
+	PhysicalOperator *GetRecursiveCTE() {
 		return recursive_cte;
 	}
 	unordered_set<Pipeline *> &GetDependencies() {

@@ -143,7 +143,8 @@ void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperato
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public PhysicalOperatorState {
 public:
-	PhysicalHashJoinState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
+	PhysicalHashJoinState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right,
+	                      vector<JoinCondition> &conditions)
 	    : PhysicalOperatorState(op, left) {
 	}
 

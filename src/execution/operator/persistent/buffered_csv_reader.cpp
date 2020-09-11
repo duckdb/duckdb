@@ -103,8 +103,8 @@ void BufferedCSVReader::PrepareComplexParser() {
 
 void BufferedCSVReader::ConfigureSampling() {
 	if (options.sample_size > STANDARD_VECTOR_SIZE) {
-		throw ParserException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)",
-			                    options.sample_size, STANDARD_VECTOR_SIZE);
+		throw ParserException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)", options.sample_size,
+		                      STANDARD_VECTOR_SIZE);
 	} else if (options.sample_size < 1) {
 		throw ParserException("Chunk size cannot be smaller than 1.");
 	}
@@ -426,10 +426,11 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	}
 
 	// type candidates, ordered by descending specificity (~ from high to low)
-	vector<LogicalType> type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP,
-	                                   LogicalType::DATE,    LogicalType::TIME,
-	                                   LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	                                   LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
+	vector<LogicalType> type_candidates = {
+	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
+	    LogicalType::DATE,    LogicalType::TIME,
+	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;

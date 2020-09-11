@@ -1,3 +1,5 @@
+# name: test/sqlserver/sqlserver_cte.test
+# group: [sqlserver]
 
 # https://docs.microsoft.com/en-us/sql/t-sql/queries/with-common-table-expression-transact-sql?view=sql-server-ver15
 

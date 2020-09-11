@@ -38,6 +38,7 @@ UndoChunk::~UndoChunk() {
 }
 
 data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
+	assert(sizeof(UndoFlags) + sizeof(len) == 8);
 	*((UndoFlags *)(data.get() + current_position)) = type;
 	current_position += sizeof(UndoFlags);
 	*((uint32_t *)(data.get() + current_position)) = len;

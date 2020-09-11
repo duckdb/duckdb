@@ -112,8 +112,8 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                                          range_function_bind<true>, range_function_init, nullptr, nullptr,
 	                                          range_cardinality));
 	generate_series.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                          range_function, range_function_bind<true>, range_function_init,
-	                                          nullptr, nullptr, range_cardinality));
+	                                          range_function, range_function_bind<true>, range_function_init, nullptr,
+	                                          nullptr, range_cardinality));
 	set.AddFunction(generate_series);
 }
 

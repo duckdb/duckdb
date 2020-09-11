@@ -23,7 +23,7 @@ struct CreateAggregateFunctionInfo : public CreateFunctionInfo {
 	CreateAggregateFunctionInfo(AggregateFunctionSet set)
 	    : CreateFunctionInfo(CatalogType::AGGREGATE_FUNCTION_ENTRY), functions(move(set)) {
 		this->name = functions.name;
-		for(auto &func : functions.functions) {
+		for (auto &func : functions.functions) {
 			func.name = functions.name;
 		}
 	}
