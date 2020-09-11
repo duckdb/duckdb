@@ -1860,6 +1860,13 @@ namespace Catch {
         INTERNAL_CATCH_REACT( catchAssertionHandler ) \
     } while( false )
 
+#define INTERNAL_CATCH_MSG_LINENR( macroName, messageType, resultDisposition, fname, linenr, ... ) \
+    do { \
+        Catch::AssertionHandler catchAssertionHandler( macroName##_catch_sr, ::Catch::SourceLineInfo(fname.c_str(), linenr), Catch::StringRef(), resultDisposition ); \
+        catchAssertionHandler.handleMessage( messageType, ( Catch::MessageStream() << __VA_ARGS__ + ::Catch::StreamEndStop() ).m_stream.str() ); \
+        INTERNAL_CATCH_REACT( catchAssertionHandler ) \
+    } while( false )
+
 ///////////////////////////////////////////////////////////////////////////////
 #define INTERNAL_CATCH_CAPTURE( varName, macroName, ... ) \
     auto varName = Catch::Capturer( macroName, CATCH_INTERNAL_LINEINFO, Catch::ResultWas::Info, #__VA_ARGS__ ); \
@@ -13778,6 +13785,7 @@ int main (int argc, char * const argv[]) {
 #define SECTION( ... ) INTERNAL_CATCH_SECTION( __VA_ARGS__ )
 #define DYNAMIC_SECTION( ... ) INTERNAL_CATCH_DYNAMIC_SECTION( __VA_ARGS__ )
 #define FAIL( ... ) INTERNAL_CATCH_MSG( "FAIL", Catch::ResultWas::ExplicitFailure, Catch::ResultDisposition::Normal, __VA_ARGS__ )
+#define FAIL_LINE(fname, linenr, ...) INTERNAL_CATCH_MSG_LINENR( "FAIL", Catch::ResultWas::ExplicitFailure, Catch::ResultDisposition::Normal, fname, linenr, __VA_ARGS__ )
 #define FAIL_CHECK( ... ) INTERNAL_CATCH_MSG( "FAIL_CHECK", Catch::ResultWas::ExplicitFailure, Catch::ResultDisposition::ContinueOnFailure, __VA_ARGS__ )
 #define SUCCEED( ... ) INTERNAL_CATCH_MSG( "SUCCEED", Catch::ResultWas::Ok, Catch::ResultDisposition::ContinueOnFailure, __VA_ARGS__ )
 #define ANON_TEST_CASE() INTERNAL_CATCH_TESTCASE()
@@ -13907,6 +13915,7 @@ using Catch::Detail::Approx;
 #define SECTION( ... )
 #define DYNAMIC_SECTION( ... )
 #define FAIL( ... ) (void)(0)
+#define FAIL_LINE( ... ) (void)(0)
 #define FAIL_CHECK( ... ) (void)(0)
 #define SUCCEED( ... ) (void)(0)
 #define ANON_TEST_CASE() INTERNAL_CATCH_TESTCASE_NO_REGISTRATION(INTERNAL_CATCH_UNIQUE_NAME( ____C_A_T_C_H____T_E_S_T____ ))

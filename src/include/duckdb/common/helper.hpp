@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include <string.h>
 
 #ifdef _MSC_VER
 #define suint64_t int64_t

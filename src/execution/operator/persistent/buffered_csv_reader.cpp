@@ -103,8 +103,8 @@ void BufferedCSVReader::PrepareComplexParser() {
 
 void BufferedCSVReader::ConfigureSampling() {
 	if (options.sample_size > STANDARD_VECTOR_SIZE) {
-		throw ParserException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)",
-			                    options.sample_size, STANDARD_VECTOR_SIZE);
+		throw ParserException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)", options.sample_size,
+		                      STANDARD_VECTOR_SIZE);
 	} else if (options.sample_size < 1) {
 		throw ParserException("Chunk size cannot be smaller than 1.");
 	}
@@ -426,10 +426,11 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	}
 
 	// type candidates, ordered by descending specificity (~ from high to low)
-	vector<LogicalType> type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP,
-	                                   LogicalType::DATE,    LogicalType::TIME,
-	                                   LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	                                   LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
+	vector<LogicalType> type_candidates = {
+	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
+	    LogicalType::DATE,    LogicalType::TIME,
+	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
@@ -1141,18 +1142,9 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
 					auto s = parse_data[i];
 					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
-					switch (utf_type) {
-					case UnicodeType::INVALID:
+					if (utf_type == UnicodeType::INVALID) {
 						throw ParserException("Error between line %d and %d: file is not valid UTF8",
 						                      linenr - parse_chunk.size(), linenr);
-					case UnicodeType::ASCII:
-						break;
-					case UnicodeType::UNICODE: {
-						auto normie = Utf8Proc::Normalize(s.GetData());
-						parse_data[i] = StringVector::AddString(parse_chunk.data[col_idx], normie);
-						free(normie);
-						break;
-					}
 					}
 				}
 			}

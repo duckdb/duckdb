@@ -17,12 +17,12 @@ SELECT COUNT(*) FROM nfcstrings
 18819
 
 query I
-SELECT COUNT(*) FROM nfcstrings WHERE source=nfc
+SELECT COUNT(*) FROM nfcstrings WHERE source COLLATE NFC=nfc
 ----
 18819
 
 query I
-SELECT COUNT(*) FROM nfcstrings WHERE nfc=nfd
+SELECT COUNT(*) FROM nfcstrings WHERE nfc COLLATE NFC=nfd
 ----
 18819
 

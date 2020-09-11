@@ -47,17 +47,17 @@ public:
 public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table when we only have one query predicate
-	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction,
-	                                                                 vector<column_t> column_ids, Value value,
+	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, Value value,
 	                                                                 ExpressionType expressionType) = 0;
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for two query predicates
-	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction,
-	                                                               vector<column_t> column_ids, Value low_value,
+	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
 	                                                               ExpressionType low_expression_type, Value high_value,
 	                                                               ExpressionType high_expression_type) = 0;
-	//! Perform a lookup on the index
-	virtual void Scan(Transaction &transaction, DataTable &table, TableIndexScanState &state, DataChunk &result) = 0;
+	//! Perform a lookup on the index, fetching up to max_count result ids. Returns true if all row ids were fetched,
+	//! and false otherwise.
+	virtual bool Scan(Transaction &transaction, DataTable &table, IndexScanState &state, idx_t max_count,
+	                  vector<row_t> &result_ids) = 0;
 
 	//! Obtain a lock on the index
 	virtual void InitializeLock(IndexLock &state);

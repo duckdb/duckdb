@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tokens.hpp"
 
 #include "pg_definitions.hpp"
@@ -22,6 +23,7 @@ namespace duckdb {
 class ColumnDefinition;
 struct OrderByNode;
 struct CopyInfo;
+struct CommonTableExpressionInfo;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -102,6 +104,7 @@ private:
 
 	unique_ptr<PrepareStatement> TransformPrepare(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);
+	unique_ptr<CallStatement> TransformCall(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
 
 	//===--------------------------------------------------------------------===//
@@ -164,7 +167,8 @@ private:
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(duckdb_libpgquery::PGAlias *root);
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, SelectStatement &select);
-	unique_ptr<QueryNode> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node);
+	unique_ptr<QueryNode> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
+	                                            CommonTableExpressionInfo &info);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
 
@@ -188,6 +192,9 @@ private:
 	unique_ptr<TableRef> TransformRangeSubselect(duckdb_libpgquery::PGRangeSubselect *root);
 	//! Transform a VALUES list into a set of expressions
 	unique_ptr<TableRef> TransformValuesList(duckdb_libpgquery::PGList *list);
+
+	//! Transform a range var into a (schema) qualified name
+	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar *root);
 
 	//! Transform a Postgres TypeName string into a LogicalType
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);

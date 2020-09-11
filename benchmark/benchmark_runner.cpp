@@ -273,12 +273,16 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 		for (idx_t index = 0; index < benchmarks.size(); ++index) {
 			if (RE2::FullMatch(benchmarks[index]->name, configuration.name_pattern)) {
 				benchmark_indices.emplace_back(index);
+			} else if (RE2::FullMatch(benchmarks[index]->group, configuration.name_pattern)) {
+				benchmark_indices.emplace_back(index);
 			}
 		}
 		benchmark_indices.shrink_to_fit();
 		if (benchmark_indices.empty()) {
 			return ConfigurationError::BenchmarkNotFound;
 		}
+		std::sort(benchmark_indices.begin(), benchmark_indices.end(),
+		          [&](const int a, const int b) -> bool { return benchmarks[a]->name < benchmarks[b]->name; });
 		if (configuration.meta == BenchmarkMetaType::INFO) {
 			// print info of benchmarks
 			for (const auto &benchmark_index : benchmark_indices) {

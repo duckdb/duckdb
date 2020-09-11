@@ -32,14 +32,13 @@ enum class PhysicalOperatorType : uint8_t {
 	PROJECTION,
 	COPY_FROM_FILE,
 	COPY_TO_FILE,
-	TABLE_FUNCTION,
 	// -----------------------------
 	// Scans
 	// -----------------------------
+	TABLE_SCAN,
 	DUMMY_SCAN,
-	SEQ_SCAN,
-	INDEX_SCAN,
 	CHUNK_SCAN,
+	RECURSIVE_CTE_SCAN,
 	DELIM_SCAN,
 	EXTERNAL_FILE_SCAN,
 	QUERY_DERIVED_SCAN,

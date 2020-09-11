@@ -1,7 +1,5 @@
-# this script generates the csv headers for the copy into test and the TPC-H dbgen
+# this script generates data for the TPC-H dbgen
 import os
-
-csv_dir = 'test/sql/copy'
 
 def get_csv_text(fpath, add_null_terminator = False):
 	with open(fpath, 'rb') as f:
@@ -18,17 +16,7 @@ def get_csv_text(fpath, add_null_terminator = False):
 		result_text += ", 0"
 	return result_text
 
-def write_csv(csv_dir, fname):
-	result_text = get_csv_text(os.path.join(csv_dir, fname))
-	fname = fname.replace(".csv", "").replace("-", "_")
-	return "const uint8_t " + fname + '[] = {' + result_text + '};\n'
-
-def write_binary(csv_dir, fname):
-	result_text = get_csv_text(os.path.join(csv_dir, fname))
-	fname = fname.split(".")[0].replace("-", "_")
-	return "const uint8_t " + fname + '[] = {' + result_text + '};\n'
-
-tpch_dir = 'third_party/dbgen'
+tpch_dir = 'extension/tpch/dbgen'
 tpch_queries = os.path.join(tpch_dir, 'queries')
 tpch_answers_sf001 = os.path.join(tpch_dir, 'answers', 'sf0.01')
 tpch_answers_sf01 = os.path.join(tpch_dir, 'answers', 'sf0.1')

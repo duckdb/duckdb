@@ -10,34 +10,29 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
 
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
 public:
-	PhysicalTableScan(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
-	                  vector<column_t> column_ids, vector<unique_ptr<Expression>> filter,
-	                  unordered_map<idx_t, vector<TableFilter>> table_filters);
+	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
+	                  vector<column_t> column_ids, unordered_map<idx_t, vector<TableFilter>> table_filters);
 
-	//! The table to scan
-	TableCatalogEntry &tableref;
-	//! The physical data table to scan
-	DataTable &table;
-	//! The column ids to project
+	//! The table function
+	TableFunction function;
+	//! Bind data of the function
+	unique_ptr<FunctionData> bind_data;
+	//! The projected-out column ids
 	vector<column_t> column_ids;
-
-	//! The filter expression
-	unique_ptr<Expression> expression;
-	//! Filters pushed down to table scan
+	//! The table filters
 	unordered_map<idx_t, vector<TableFilter>> table_filters;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-	string ExtraRenderInformation() const override;
+	string ToString(idx_t depth = 0) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-
-	void ParallelScanInfo(ClientContext &context, std::function<void(unique_ptr<OperatorTaskInfo>)> callback) override;
 };
 
 } // namespace duckdb

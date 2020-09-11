@@ -61,6 +61,7 @@ struct RestClientState {
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
 template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
+	v.Normalify(count);
 	auto data_ptr = FlatVector::GetData<T>(v);
 	auto &nullmask = FlatVector::Nullmask(v);
 	for (idx_t i = 0; i < count; i++) {

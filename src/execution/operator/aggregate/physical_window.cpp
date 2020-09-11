@@ -16,7 +16,8 @@ namespace duckdb {
 //! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalWindowOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;
@@ -533,7 +534,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
-	return make_unique<PhysicalWindowOperatorState>(children[0].get());
+	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
 }
 
 } // namespace duckdb

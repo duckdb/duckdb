@@ -6,7 +6,7 @@ namespace duckdb {
 
 class PhysicalChunkScanState : public PhysicalOperatorState {
 public:
-	PhysicalChunkScanState() : PhysicalOperatorState(nullptr), chunk_index(0) {
+	PhysicalChunkScanState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), chunk_index(0) {
 	}
 
 	//! The current position in the scan
@@ -29,7 +29,7 @@ void PhysicalChunkScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalChunkScan::GetOperatorState() {
-	return make_unique<PhysicalChunkScanState>();
+	return make_unique<PhysicalChunkScanState>(*this);
 }
 
 } // namespace duckdb

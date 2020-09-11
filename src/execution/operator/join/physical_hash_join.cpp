@@ -143,8 +143,9 @@ void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperato
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public PhysicalOperatorState {
 public:
-	PhysicalHashJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
-	    : PhysicalOperatorState(left) {
+	PhysicalHashJoinState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right,
+	                      vector<JoinCondition> &conditions)
+	    : PhysicalOperatorState(op, left) {
 	}
 
 	DataChunk cached_chunk;
@@ -154,7 +155,7 @@ public:
 };
 
 unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
-	auto state = make_unique<PhysicalHashJoinState>(children[0].get(), children[1].get(), conditions);
+	auto state = make_unique<PhysicalHashJoinState>(*this, children[0].get(), children[1].get(), conditions);
 	state->cached_chunk.Initialize(types);
 	state->join_keys.Initialize(condition_types);
 	for (auto &cond : conditions) {

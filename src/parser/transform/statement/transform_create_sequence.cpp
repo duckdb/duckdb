@@ -1,8 +1,7 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -14,10 +13,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateSequenceInfo>();
 
-	auto sequence_name = TransformRangeVar(stmt->sequence);
-	auto &sequence_ref = (BaseTableRef &)*sequence_name;
-	info->schema = sequence_ref.schema_name;
-	info->name = sequence_ref.table_name;
+	auto qname = TransformQualifiedName(stmt->sequence);
+	info->schema = qname.schema;
+	info->name = qname.name;
 
 	if (stmt->options) {
 		PGListCell *cell = nullptr;

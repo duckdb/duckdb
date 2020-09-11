@@ -1,5 +1,5 @@
 #include "duckdb.hh"
-#include "dbgen.hpp"
+#include "tpch-extension.hpp"
 
 #include <cassert>
 #include <cstring>
@@ -18,6 +18,7 @@ static regex e_syntax("Query Error: syntax error at or near .*");
 duckdb_connection::duckdb_connection(string &conninfo) {
 	// in-memory database
 	database = make_unique<DuckDB>(nullptr);
+	database->LoadExtension<TPCHExtension>();
 	connection = make_unique<Connection>(*database);
 }
 
@@ -30,7 +31,7 @@ void duckdb_connection::q(const char *query) {
 
 schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_connection(conninfo) {
 	// generate empty TPC-H schema
-	tpch::dbgen(0, *database);
+	connection->Query("CALL dbgen(sf=0)");
 
 	cerr << "Loading tables...";
 	auto result = connection->Query("SELECT * FROM sqlite_master() WHERE type IN ('table', 'view')");
@@ -204,7 +205,7 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 
 dut_duckdb::dut_duckdb(std::string &conninfo) : duckdb_connection(conninfo) {
 	cerr << "Generating TPC-H...";
-	tpch::dbgen(0.01, *database);
+	connection->Query("CALL dbgen(sf=0.01)");
 	cerr << "done." << endl;
 	// q("PRAGMA main.auto_vacuum = 2");
 }

@@ -30,16 +30,10 @@ Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	auto utf_type = Utf8Proc::Analyze(val);
-	switch (utf_type) {
-	case UnicodeType::INVALID:
+	if (utf_type == UnicodeType::INVALID) {
 		throw Exception("String value is not valid UTF8");
-	case UnicodeType::ASCII:
-		str_value = val;
-		break;
-	case UnicodeType::UNICODE:
-		str_value = Utf8Proc::Normalize(val);
-		break;
 	}
+	str_value = val;
 }
 
 Value Value::MinimumValue(PhysicalType type) {
@@ -157,7 +151,7 @@ Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
 Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 	LogicalType decimal_type(LogicalTypeId::DECIMAL, width, scale);
 	Value result(decimal_type);
-	switch(decimal_type.InternalType()) {
+	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
 		result.value_.smallint = value;
 		break;
@@ -415,8 +409,8 @@ template <> double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
 template <> uintptr_t Value::GetValue() const {
-	assert(type()== LogicalType::POINTER);
-    return value_.pointer;
+	assert(type() == LogicalType::POINTER);
+	return value_.pointer;
 }
 Value Value::Numeric(LogicalType type, int64_t value) {
 	switch (type.id()) {

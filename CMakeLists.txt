@@ -29,8 +29,12 @@ if(CCACHE_PROGRAM)
 endif()
 
 # Determine install paths
-set(INSTALL_LIB_DIR lib CACHE PATH "Installation directory for libraries")
-set(INSTALL_BIN_DIR bin CACHE PATH "Installation directory for executables")
+set(INSTALL_LIB_DIR
+    lib
+    CACHE PATH "Installation directory for libraries")
+set(INSTALL_BIN_DIR
+    bin
+    CACHE PATH "Installation directory for executables")
 set(INSTALL_INCLUDE_DIR
     include
     CACHE PATH "Installation directory for header files")
@@ -45,11 +49,7 @@ set(INSTALL_CMAKE_DIR
 set(DUCKDB_EXPORT_SET "DuckDBExports")
 
 # Make relative install paths absolute
-foreach(p
-        LIB
-        BIN
-        INCLUDE
-        CMAKE)
+foreach(p LIB BIN INCLUDE CMAKE)
   set(var INSTALL_${p}_DIR)
   if(NOT IS_ABSOLUTE "${${var}}")
     set(${var} "${CMAKE_INSTALL_PREFIX}/${${var}}")
@@ -75,12 +75,15 @@ endif()
 
 option(ENABLE_SANITIZER "Enable sanitizer." TRUE)
 if(${ENABLE_SANITIZER})
-  if (BUILD_PYTHON OR BUILD_R)
-    if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-      message(WARNING "Sanitizers are not supported for the Python build. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled")
+  if(BUILD_PYTHON OR BUILD_R)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+      message(
+        WARNING
+          "Sanitizers are not supported for the Python build. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled"
+      )
     endif()
   else()
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address -fsanitize=undefined")
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
   endif()
 endif()
 
@@ -96,13 +99,11 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-execute_process(COMMAND git
-                        log
-                        -1
-                        --format=%h
-                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                OUTPUT_VARIABLE GIT_COMMIT_HASH
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(
+  COMMAND git log -1 --format=%h
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_COMMIT_HASH
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
@@ -110,6 +111,7 @@ option(AMALGAMATION_BUILD
 
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
+option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -118,9 +120,13 @@ option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 
-if (BUILD_PYTHON OR BUILD_R)
-set(BUILD_ICU_EXTENSION TRUE)
-set(BUILD_PARQUET_EXTENSION TRUE)
+if(BUILD_PYTHON OR BUILD_R)
+  set(BUILD_ICU_EXTENSION TRUE)
+  set(BUILD_PARQUET_EXTENSION TRUE)
+endif()
+
+if(BUILD_SQLSMITH)
+  set(BUILD_TPCH_EXTENSION TRUE)
 endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
@@ -134,16 +140,15 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
-  set(
-    CXX_EXTRA_DEBUG
-    "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing"
-    )
+  set(CXX_EXTRA_DEBUG
+      "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing"
+  )
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -Werror")
   endif()
 
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU"
-     AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
+                                                   VERSION_GREATER 8.0)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
          AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
@@ -158,16 +163,11 @@ else()
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
   # remove warning from CXX flags
-  string(REGEX
-         REPLACE "/W[0-4]"
-                 ""
-                 CMAKE_CXX_FLAGS
-                 "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   # add to-be-ignored warnings
-  set(
-    CMAKE_CXX_FLAGS
-    "${CMAKE_CXX_FLAGS} /wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS"
-    )
+  set(CMAKE_CXX_FLAGS
+      "${CMAKE_CXX_FLAGS} /wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS"
+  )
 endif()
 
 # todo use CHECK_CXX_COMPILER_FLAG(-fsanitize=address SUPPORTS_SANITIZER) etc.
@@ -201,10 +201,7 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
   set(unit_build_file ${CMAKE_CURRENT_BINARY_DIR}/ub_${UB_SUFFIX}.cpp)
   set(temp_unit_build_file ${CMAKE_CURRENT_BINARY_DIR}/ub_${UB_SUFFIX}.cpp.tmp)
   # Exclude all translation units from compilation
-  set_source_files_properties(${files}
-                              PROPERTIES
-                              HEADER_FILE_ONLY
-                              true)
+  set_source_files_properties(${files} PROPERTIES HEADER_FILE_ONLY true)
 
   set(rebuild FALSE)
   # check if any of the source files have changed
@@ -220,17 +217,15 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
     file(
       APPEND ${temp_unit_build_file}
       "#line 0 \"${source_file}\"\n#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
-      )
+    )
   endforeach(source_file)
 
-  execute_process(COMMAND ${CMAKE_COMMAND}
-                          -E
-                          compare_files
-                          ${unit_build_file}
-                          ${temp_unit_build_file}
-                  RESULT_VARIABLE compare_result
-                  OUTPUT_VARIABLE bla
-                  ERROR_VARIABLE bla)
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E compare_files ${unit_build_file}
+            ${temp_unit_build_file}
+    RESULT_VARIABLE compare_result
+    OUTPUT_VARIABLE bla
+    ERROR_VARIABLE bla)
   if(compare_result EQUAL 0)
     # files are identical: do nothing
   elseif(compare_result EQUAL 1)
@@ -247,7 +242,7 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
       file(
         APPEND ${unit_build_file}
         "#line 0 \"${source_file}\"\n#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
-        )
+      )
     endforeach(source_file)
   endif()
 
@@ -274,13 +269,49 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+function(add_extension_definitions)
+  include_directories(${CMAKE_SOURCE_DIR}/extension)
+
+  if(${BUILD_ICU_EXTENSION})
+    include_directories(${CMAKE_SOURCE_DIR}/extension/icu/include)
+    add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
+  endif()
+
+  if(${BUILD_PARQUET_EXTENSION})
+    include_directories(${CMAKE_SOURCE_DIR}/extension/parquet/include)
+    add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
+  endif()
+
+  if(${BUILD_TPCH_EXTENSION})
+    include_directories(${CMAKE_SOURCE_DIR}/extension/tpch/include)
+    add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
+  endif()
+endfunction()
+
+function(link_extension_libraries LIBRARY)
+  if(${BUILD_PARQUET_EXTENSION})
+    target_link_libraries(${LIBRARY} parquet_extension)
+  endif()
+
+  if(${BUILD_ICU_EXTENSION})
+    target_link_libraries(${LIBRARY} icu_extension)
+  endif()
+
+  if(${BUILD_TPCH_EXTENSION})
+    target_link_libraries(${LIBRARY} tpch_extension)
+  endif()
+
+endfunction()
+
 add_subdirectory(extension)
 add_subdirectory(src)
 
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 if(${BUILD_UNITTESTS})
   add_subdirectory(test)
-  if(NOT WIN32 AND NOT SUN AND ${BUILD_BENCHMARKS})
+  if(NOT WIN32
+     AND NOT SUN
+     AND ${BUILD_BENCHMARKS})
     add_subdirectory(benchmark)
   endif()
 endif()
@@ -305,9 +336,7 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
                  "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
 
   # Configure cmake package config for the install tree
-  file(RELATIVE_PATH
-       REL_INCLUDE_DIR
-       "${INSTALL_CMAKE_DIR}"
+  file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}"
        "${INSTALL_INCLUDE_DIR}")
   set(CONF_INCLUDE_DIRS "\${DuckDB_CMAKE_DIR}/${REL_INCLUDE_DIR}")
   configure_file(

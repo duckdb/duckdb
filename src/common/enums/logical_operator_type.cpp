@@ -65,8 +65,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "UPDATE";
 	case LogicalOperatorType::PREPARE:
 		return "PREPARE";
-	case LogicalOperatorType::TABLE_FUNCTION:
-		return "TABLE_FUNCTION";
+	case LogicalOperatorType::DUMMY_SCAN:
+		return "DUMMY_SCAN";
 	case LogicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
 	case LogicalOperatorType::CREATE_TABLE:
@@ -77,8 +77,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXECUTE";
 	case LogicalOperatorType::VACUUM:
 		return "VACUUM";
-	case LogicalOperatorType::INDEX_SCAN:
-		return "INDEX_SCAN";
 	case LogicalOperatorType::RECURSIVE_CTE:
 		return "REC_CTE";
 	case LogicalOperatorType::CTE_REF:

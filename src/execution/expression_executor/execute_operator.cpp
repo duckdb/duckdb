@@ -11,6 +11,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundOperatorExp
 	for (auto &child : expr.children) {
 		result->AddChild(child.get());
 	}
+	result->Finalize();
 	return result;
 }
 
@@ -59,7 +60,9 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 			result.Reference(intermediate);
 		}
 	} else if (expr.children.size() == 1) {
-		Vector child(expr.children[0]->return_type);
+		Vector child;
+		child.Reference(state->intermediate_chunk.data[0]);
+
 		Execute(*expr.children[0], state->child_states[0].get(), sel, count, child);
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_NOT: {

@@ -1,13 +1,13 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_expressionlistref.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
 namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
-	auto root = make_unique_base<LogicalOperator, LogicalGet>(0);
+	auto root = make_unique_base<LogicalOperator, LogicalDummyScan>(0);
 	// values list, first plan any subqueries in the list
 	for (auto &expr_list : ref.values) {
 		for (auto &expr : expr_list) {

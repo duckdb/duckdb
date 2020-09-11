@@ -1,9 +1,8 @@
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/alter_table_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
-#include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/binder.hpp"
 
 using namespace std;
 
@@ -23,14 +22,6 @@ BoundStatement Binder::Bind(AlterTableStatement &stmt) {
 		this->read_only = false;
 	}
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::ALTER, move(stmt.info));
-	return result;
-}
-
-BoundStatement Binder::Bind(PragmaStatement &stmt) {
-	BoundStatement result;
-	result.names = {"Success"};
-	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::PRAGMA, move(stmt.info));
 	return result;
 }
 

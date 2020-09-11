@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include <atomic>
 
@@ -36,6 +38,7 @@ public:
 		return dependencies.size() != 0;
 	}
 
+	void Reset(ClientContext &context);
 	void Schedule();
 
 	//! Finish a single task of this pipeline
@@ -45,6 +48,19 @@ public:
 
 	string ToString() const;
 	void Print() const;
+
+	void SetRecursiveCTE(PhysicalOperator *op) {
+		this->recursive_cte = op;
+	}
+	PhysicalOperator *GetRecursiveCTE() {
+		return recursive_cte;
+	}
+	unordered_set<Pipeline *> &GetDependencies() {
+		return dependencies;
+	}
+	void ClearParents() {
+		parents.clear();
+	}
 
 private:
 	//! The child from which to pull chunks
@@ -61,12 +77,19 @@ private:
 	//! executing)
 	std::atomic<idx_t> finished_dependencies;
 
+	//! The parallel operator (if any)
+	PhysicalOperator *parallel_node;
+	//! The parallel state (if any)
+	unique_ptr<ParallelState> parallel_state;
+
 	//! Whether or not the pipeline is finished executing
 	bool finished;
 	//! The current threads working on the pipeline
 	std::atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
 	idx_t total_tasks;
+	//! The recursive CTE node that this pipeline belongs to, and may be executed multiple times
+	PhysicalOperator *recursive_cte;
 
 private:
 	void ScheduleSequentialTask();

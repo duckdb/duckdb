@@ -8,9 +8,6 @@ statement error
 SELECT STRING_AGG()
 
 statement error
-SELECT STRING_AGG(1)
-
-statement error
 SELECT STRING_AGG(1, 2, 3)
 
 statement error
@@ -73,3 +70,21 @@ SELECT STRING_AGG(1, 2)
 ----
 1
 
+# group concat is an alias for string_agg
+query T
+SELECT GROUP_CONCAT('a', ',')
+----
+a
+
+query T
+SELECT GROUP_CONCAT('a')
+----
+a
+
+query TT
+SELECT g, GROUP_CONCAT(x) FROM strings GROUP BY g ORDER BY g
+----
+1	a,b
+2	i,j
+3	p
+4	x,y,z

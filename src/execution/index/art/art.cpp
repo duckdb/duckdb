@@ -49,18 +49,18 @@ bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 	return true;
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
-                                                              Value value, ExpressionType expression_type) {
-	auto result = make_unique<ARTIndexScanState>(column_ids);
+unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, Value value,
+                                                              ExpressionType expression_type) {
+	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return move(result);
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
-                                                            Value low_value, ExpressionType low_expression_type,
-                                                            Value high_value, ExpressionType high_expression_type) {
-	auto result = make_unique<ARTIndexScanState>(column_ids);
+unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
+                                                            ExpressionType low_expression_type, Value high_value,
+                                                            ExpressionType high_expression_type) {
+	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
@@ -423,16 +423,20 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 	}
 }
 
-void ART::SearchEqual(vector<row_t> &result_ids, ARTIndexScanState *state) {
-	unique_ptr<Key> key = CreateKey(*this, types[0], state->values[0]);
+bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids) {
+	auto key = CreateKey(*this, types[0], state->values[0]);
 	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
 	if (!leaf) {
-		return;
+		return true;
+	}
+	if (leaf->num_elements > max_count) {
+		return false;
 	}
 	for (idx_t i = 0; i < leaf->num_elements; i++) {
 		row_t row_id = leaf->GetRowId(i);
 		result_ids.push_back(row_id);
 	}
+	return true;
 }
 
 Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
@@ -475,7 +479,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 // Iterator scans
 //===--------------------------------------------------------------------===//
 template <bool HAS_BOUND, bool INCLUSIVE>
-void ART::IteratorScan(ARTIndexScanState *state, Iterator *it, vector<row_t> &result_ids, Key *bound) {
+bool ART::IteratorScan(ARTIndexScanState *state, Iterator *it, Key *bound, idx_t max_count, vector<row_t> &result_ids) {
 	bool has_next;
 	do {
 		if (HAS_BOUND) {
@@ -490,12 +494,17 @@ void ART::IteratorScan(ARTIndexScanState *state, Iterator *it, vector<row_t> &re
 				}
 			}
 		}
+		if (result_ids.size() + it->node->num_elements > max_count) {
+			// adding these elements would exceed the max count
+			return false;
+		}
 		for (idx_t i = 0; i < it->node->num_elements; i++) {
 			row_t row_id = it->node->GetRowId(i);
 			result_ids.push_back(row_id);
 		}
 		has_next = ART::IteratorNext(*it);
 	} while (has_next);
+	return true;
 }
 
 bool ART::IteratorNext(Iterator &it) {
@@ -618,7 +627,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 	}
 }
 
-void ART::SearchGreater(vector<row_t> &result_ids, ARTIndexScanState *state, bool inclusive) {
+bool ART::SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids) {
 	Iterator *it = &state->iterator;
 	auto key = CreateKey(*this, types[0], state->values[0]);
 
@@ -627,13 +636,13 @@ void ART::SearchGreater(vector<row_t> &result_ids, ARTIndexScanState *state, boo
 	if (!it->start) {
 		bool found = ART::Bound(tree, *key, *it, inclusive);
 		if (!found) {
-			return;
+			return true;
 		}
 		it->start = true;
 	}
 	// after that we continue the scan; we don't need to check the bounds as any value following this value is
 	// automatically bigger and hence satisfies our predicate
-	IteratorScan<false, false>(state, it, result_ids, nullptr);
+	return IteratorScan<false, false>(state, it, nullptr, max_count, result_ids);
 }
 
 //===--------------------------------------------------------------------===//
@@ -675,9 +684,9 @@ static Leaf &FindMinimum(Iterator &it, Node &node) {
 	return FindMinimum(it, *next);
 }
 
-void ART::SearchLess(vector<row_t> &result_ids, ARTIndexScanState *state, bool inclusive) {
+bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids) {
 	if (!tree) {
-		return;
+		return true;
 	}
 
 	Iterator *it = &state->iterator;
@@ -688,23 +697,23 @@ void ART::SearchLess(vector<row_t> &result_ids, ARTIndexScanState *state, bool i
 		auto &minimum = FindMinimum(state->iterator, *tree);
 		// early out min value higher than upper bound query
 		if (*minimum.value > *upper_bound) {
-			return;
+			return true;
 		}
 		it->start = true;
 	}
 	// now continue the scan until we reach the upper bound
 	if (inclusive) {
-		IteratorScan<true, true>(state, it, result_ids, upper_bound.get());
+		return IteratorScan<true, true>(state, it, upper_bound.get(), max_count, result_ids);
 	} else {
-		IteratorScan<true, false>(state, it, result_ids, upper_bound.get());
+		return IteratorScan<true, false>(state, it, upper_bound.get(), max_count, result_ids);
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // Closed Range Query
 //===--------------------------------------------------------------------===//
-void ART::SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, bool left_inclusive,
-                           bool right_inclusive) {
+bool ART::SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
+                           vector<row_t> &result_ids) {
 	auto lower_bound = CreateKey(*this, types[0], state->values[0]);
 	auto upper_bound = CreateKey(*this, types[0], state->values[1]);
 	Iterator *it = &state->iterator;
@@ -712,88 +721,74 @@ void ART::SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, 
 	if (!it->start) {
 		bool found = ART::Bound(tree, *lower_bound, *it, left_inclusive);
 		if (!found) {
-			return;
+			return true;
 		}
 		it->start = true;
 	}
 	// now continue the scan until we reach the upper bound
 	if (right_inclusive) {
-		IteratorScan<true, true>(state, it, result_ids, upper_bound.get());
+		return IteratorScan<true, true>(state, it, upper_bound.get(), max_count, result_ids);
 	} else {
-		IteratorScan<true, false>(state, it, result_ids, upper_bound.get());
+		return IteratorScan<true, false>(state, it, upper_bound.get(), max_count, result_ids);
 	}
 }
 
-void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &table_state, DataChunk &result) {
-	auto state = (ARTIndexScanState *)table_state.index_state.get();
+bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table_state, idx_t max_count,
+               vector<row_t> &result_ids) {
+	auto state = (ARTIndexScanState *)&table_state;
 
-	// scan the index
-	if (!state->checked) {
-		vector<row_t> result_ids;
-		assert(state->values[0].type().InternalType() == types[0]);
+	assert(state->values[0].type().InternalType() == types[0]);
 
-		if (state->values[1].is_null) {
-			lock_guard<mutex> l(lock);
-			// single predicate
-			switch (state->expressions[0]) {
-			case ExpressionType::COMPARE_EQUAL:
-				SearchEqual(result_ids, state);
-				break;
-			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				SearchGreater(result_ids, state, true);
-				break;
-			case ExpressionType::COMPARE_GREATERTHAN:
-				SearchGreater(result_ids, state, false);
-				break;
-			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-				SearchLess(result_ids, state, true);
-				break;
-			case ExpressionType::COMPARE_LESSTHAN:
-				SearchLess(result_ids, state, false);
-				break;
-			default:
-				throw NotImplementedException("Operation not implemented");
-			}
-		} else {
-			lock_guard<mutex> l(lock);
-			// two predicates
-			assert(state->values[1].type().InternalType() == types[0]);
-			bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
-			bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
-			SearchCloseRange(result_ids, state, left_inclusive, right_inclusive);
+	vector<row_t> row_ids;
+	bool success = true;
+	if (state->values[1].is_null) {
+		lock_guard<mutex> l(lock);
+		// single predicate
+		switch (state->expressions[0]) {
+		case ExpressionType::COMPARE_EQUAL:
+			success = SearchEqual(state, max_count, row_ids);
+			break;
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			success = SearchGreater(state, true, max_count, row_ids);
+			break;
+		case ExpressionType::COMPARE_GREATERTHAN:
+			success = SearchGreater(state, false, max_count, row_ids);
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			success = SearchLess(state, true, max_count, row_ids);
+			break;
+		case ExpressionType::COMPARE_LESSTHAN:
+			success = SearchLess(state, false, max_count, row_ids);
+			break;
+		default:
+			throw NotImplementedException("Operation not implemented");
 		}
-		state->checked = true;
+	} else {
+		lock_guard<mutex> l(lock);
+		// two predicates
+		assert(state->values[1].type().InternalType() == types[0]);
+		bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
+		bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
+		success = SearchCloseRange(state, left_inclusive, right_inclusive, max_count, row_ids);
+	}
+	if (!success) {
+		return false;
+	}
+	if (row_ids.size() == 0) {
+		return true;
+	}
+	// sort the row ids
+	sort(row_ids.begin(), row_ids.end());
+	// duplicate eliminate the row ids and append them to the row ids of the state
+	result_ids.reserve(row_ids.size());
 
-		if (result_ids.size() == 0) {
-			return;
-		}
-
-		// sort the row ids
-		sort(result_ids.begin(), result_ids.end());
-		// duplicate eliminate the row ids and append them to the row ids of the state
-		state->result_ids.reserve(result_ids.size());
-
-		state->result_ids.push_back(result_ids[0]);
-		for (idx_t i = 1; i < result_ids.size(); i++) {
-			if (result_ids[i] != result_ids[i - 1]) {
-				state->result_ids.push_back(result_ids[i]);
-			}
+	result_ids.push_back(row_ids[0]);
+	for (idx_t i = 1; i < row_ids.size(); i++) {
+		if (row_ids[i] != row_ids[i - 1]) {
+			result_ids.push_back(row_ids[i]);
 		}
 	}
-
-	if (state->result_index >= state->result_ids.size()) {
-		// exhausted all row ids
-		return;
-	}
-
-	// create a vector pointing to the current set of row ids
-	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
-	idx_t scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state->result_ids.size() - state->result_index);
-
-	// fetch the actual values from the base table
-	table.Fetch(transaction, result, state->column_ids, row_identifiers, scan_count, table_state);
-
-	// move to the next set of row ids
-	state->result_index += scan_count;
+	return true;
 }
+
 } // namespace duckdb

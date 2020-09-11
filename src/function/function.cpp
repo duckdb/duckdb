@@ -11,8 +11,10 @@
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -41,6 +43,8 @@ void BuiltinFunctions::Initialize() {
 	RegisterNestedFunctions();
 	RegisterTrigonometricsFunctions();
 
+	RegisterPragmaFunctions();
+
 	// binder functions
 	// FIXME shouldn't be here
 	AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
@@ -49,6 +53,7 @@ void BuiltinFunctions::Initialize() {
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
 	AddCollation("noaccent", StripAccentsFun::GetFunction());
+	AddCollation("nfc", NFCNormalizeFun::GetFunction());
 }
 
 BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {
@@ -68,6 +73,16 @@ void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
 void BuiltinFunctions::AddFunction(AggregateFunction function) {
 	CreateAggregateFunctionInfo info(function);
 	catalog.CreateFunction(context, &info);
+}
+
+void BuiltinFunctions::AddFunction(PragmaFunction function) {
+	CreatePragmaFunctionInfo info(function);
+	catalog.CreatePragmaFunction(context, &info);
+}
+
+void BuiltinFunctions::AddFunction(string name, vector<PragmaFunction> functions) {
+	CreatePragmaFunctionInfo info(name, move(functions));
+	catalog.CreatePragmaFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunction function) {
@@ -107,6 +122,17 @@ string Function::CallToString(string name, vector<LogicalType> arguments) {
 	result += StringUtil::Join(arguments, arguments.size(), ", ",
 	                           [](const LogicalType &argument) { return argument.ToString(); });
 	return result + ")";
+}
+
+string TableFunction::ToString() {
+	vector<string> input_arguments;
+	for (auto &arg : arguments) {
+		input_arguments.push_back(arg.ToString());
+	}
+	for (auto &kv : named_parameters) {
+		input_arguments.push_back(StringUtil::Format("%s : %s", kv.first, kv.second.ToString()));
+	}
+	return StringUtil::Format("%s(%s)", name, StringUtil::Join(input_arguments, ", "));
 }
 
 string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
@@ -228,6 +254,51 @@ idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, 
 
 idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments) {
 	return BindFunctionFromArguments(name, functions, arguments);
+}
+
+string PragmaTypeToString(string name, PragmaType type) {
+	switch (type) {
+	case PragmaType::PRAGMA_STATEMENT:
+		return "STATEMENT";
+	case PragmaType::PRAGMA_ASSIGNMENT:
+		return "ASSIGNMENT";
+	case PragmaType::PRAGMA_CALL:
+		return "CALL";
+	}
+	return "UNKNOWN";
+}
+
+idx_t Function::BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info) {
+	vector<PragmaFunction> candidates;
+	vector<idx_t> indexes;
+	for (idx_t i = 0; i < functions.size(); i++) {
+		auto &function = functions[i];
+		if (info.pragma_type == function.type) {
+			candidates.push_back(function);
+			indexes.push_back(i);
+		}
+	}
+	if (candidates.size() == 0) {
+		string candidate_str = "";
+		for (auto &f : functions) {
+			candidate_str += "\t" + f.ToString() + "\n";
+		}
+		throw BinderException("No pragma function matches the given pragma type.\n\tCandidate functions:\n%s",
+		                      candidate_str);
+	}
+	vector<LogicalType> types;
+	for (auto &value : info.parameters) {
+		types.push_back(value.type());
+	}
+	idx_t entry = BindFunctionFromArguments(name, candidates, types);
+	auto &candidate_function = candidates[entry];
+	// cast the input parameters
+	for (idx_t i = 0; i < info.parameters.size(); i++) {
+		auto target_type =
+		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
+		info.parameters[i] = info.parameters[i].CastAs(target_type);
+	}
+	return indexes[entry];
 }
 
 vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {

@@ -85,6 +85,9 @@ def cleanup_file(text):
 # recursively get all includes and write them
 written_files = {}
 
+#licenses
+licenses = []
+
 def need_to_write_file(current_file, ignore_excluded = False):
     if amal_dir in current_file:
         return False
@@ -98,6 +101,26 @@ def need_to_write_file(current_file, ignore_excluded = False):
         return False
     return True
 
+def find_license(original_file):
+    global licenses
+    file = original_file
+    license = ""
+    while True:
+        (file, end) = os.path.split(file)
+        if file == "":
+            break
+        potential_license = os.path.join(file, "LICENSE")
+        if os.path.exists(potential_license):
+            license = potential_license
+    if license == "":
+        raise "Could not find license for %s" % original_file
+
+    if license not in licenses:
+        licenses += [license]
+
+    return licenses.index(license)
+
+
 def write_file(current_file, ignore_excluded = False):
     global linenumbers
     global written_files
@@ -105,9 +128,16 @@ def write_file(current_file, ignore_excluded = False):
         return ""
     written_files[current_file] = True
 
+
+
+
     # first read this file
     with open(current_file, 'r') as f:
         text = f.read()
+
+    if current_file.startswith("third_party") and not current_file.endswith("LICENSE"):
+        lic_idx = find_license(current_file)
+        text = "\n\n// LICENSE_CHANGE_BEGIN\n// The following code up to LICENSE_CHANGE_END is subject to THIRD PARTY LICENSE #%s\n// See the end of this file for a list\n\n" % str(lic_idx + 1) + text + "\n\n// LICENSE_CHANGE_END\n"
 
     (statements, includes) = get_includes(current_file, text)
     # find the linenr of the final #include statement we parsed
@@ -160,19 +190,19 @@ def copy_if_different(src, dest):
 def git_commit_hash():
     return subprocess.check_output(['git','log','-1','--format=%h']).strip()
 
-def write_license(hfile):
-    hfile.write("// See https://raw.githubusercontent.com/cwida/duckdb/master/LICENSE for licensing information\n\n")
-
 
 def generate_duckdb_hpp(header_file):
     print("-----------------------")
     print("-- Writing " + header_file + " --")
     print("-----------------------")
     with open(temp_header, 'w+') as hfile:
-        write_license(hfile)
+        hfile.write("/*\n")
+        hfile.write(write_file("LICENSE"))
+        hfile.write("*/\n\n")
+
         hfile.write("#pragma once\n")
         hfile.write("#define DUCKDB_AMALGAMATION 1\n")
-        hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
+        hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash().decode('utf8'))
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
 
@@ -188,15 +218,22 @@ def generate_amalgamation(source_file, header_file):
     # scan all the .cpp files
     with open(temp_source, 'w+') as sfile:
         header_file_name = header_file.split(os.sep)[-1]
-        write_license(sfile)
         sfile.write('#include "' + header_file_name + '"\n\n')
         sfile.write("#ifndef DUCKDB_AMALGAMATION\n#error header mismatch\n#endif\n\n")
-
         for compile_dir in compile_directories:
             sfile.write(write_dir(compile_dir))
         # for windows we write file_system.cpp last
         # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
         sfile.write(write_file(file_system_cpp, True))
+
+        sfile.write('\n\n/*\n')
+        license_idx = 0
+        for license in licenses:
+            sfile.write("\n\n\n### THIRD PARTY LICENSE #%s ###\n\n" % str(license_idx + 1))
+            sfile.write(write_file(license))
+            license_idx+=1
+        sfile.write('\n\n*/\n')
+
 
     copy_if_different(temp_header, header_file)
     copy_if_different(temp_source, source_file)

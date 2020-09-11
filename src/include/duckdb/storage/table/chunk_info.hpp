@@ -48,15 +48,18 @@ public:
 	ChunkDeleteInfo(VersionManager &manager, idx_t start_row, ChunkInfoType type = ChunkInfoType::DELETE_INFO);
 	ChunkDeleteInfo(ChunkDeleteInfo &info, ChunkInfoType type);
 
-	//! The transaction ids of the transactions that deleted the tuples (if any)
-	transaction_t deleted[STANDARD_VECTOR_SIZE];
-
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 
 	void Delete(Transaction &transaction, row_t rows[], idx_t count) override;
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) override;
+
+protected:
+	//! The transaction ids of the transactions that deleted the tuples (if any)
+	transaction_t deleted[STANDARD_VECTOR_SIZE];
+
+	bool any_deleted;
 };
 
 class ChunkInsertInfo : public ChunkDeleteInfo {
@@ -64,12 +67,18 @@ public:
 	ChunkInsertInfo(VersionManager &manager, idx_t start_row);
 	ChunkInsertInfo(ChunkDeleteInfo &info);
 
-	//! The transaction ids of the transactions that inserted the tuples (if any)
-	transaction_t inserted[STANDARD_VECTOR_SIZE];
-
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
+
+	void Append(idx_t start, idx_t end, transaction_t commit_id);
+
+protected:
+	//! The transaction ids of the transactions that inserted the tuples (if any)
+	transaction_t inserted[STANDARD_VECTOR_SIZE];
+
+	transaction_t same_id;
+	bool all_same_id;
 };
 
 } // namespace duckdb
