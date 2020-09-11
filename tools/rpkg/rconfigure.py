@@ -45,7 +45,9 @@ if not os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
 
 target_dir = os.path.join(os.getcwd(), 'src', 'duckdb')
 
-(source_list, include_list, original_sources) = package_build.build_package(target_dir)
+linenr = bool(os.getenv("DUCKDB_R_LINENR", ""))
+
+(source_list, include_list, original_sources) = package_build.build_package(target_dir, linenr)
 
 # object list, relative paths
 script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\','/')
