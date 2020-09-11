@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 using namespace std;
@@ -62,8 +63,7 @@ static unique_ptr<FunctionData> information_schema_tables_bind(ClientContext &co
 
 unique_ptr<FunctionOperatorData>
 information_schema_tables_init(ClientContext &context, const FunctionData *bind_data, ParallelState *state,
-                               vector<column_t> &column_ids,
-                               unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                               vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<InformationSchemaTablesData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -73,6 +73,8 @@ information_schema_tables_init(ClientContext &context, const FunctionData *bind_
 		schema->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
+	// check the temp schema as well
+	context.temporary_objects->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -90,30 +92,30 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 	// either fill up the chunk or return all the remaining columns
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
-		auto entry = reinterpret_cast<StandardEntry *>(data.entries[i]);
+		auto entry = (StandardEntry *)data.entries[i];
 
-        const char *table_type;
-        const char *is_insertable_into = "NO";
-        bool is_temp = false;
-        switch (entry->type) {
+		const char *table_type;
+		const char *is_insertable_into = "NO";
+		bool is_temp = false;
+		switch (entry->type) {
 		case CatalogType::TABLE_ENTRY:
 			if (entry->temporary) {
-                table_type = "LOCAL TEMPORARY";
-                is_temp = true;
-            } else {
-                table_type = "BASE TABLE";
-            }
-            is_insertable_into = "YES";
+				table_type = "LOCAL TEMPORARY";
+				is_temp = true;
+			} else {
+				table_type = "BASE TABLE";
+			}
+			is_insertable_into = "YES";
 			break;
 		case CatalogType::VIEW_ENTRY:
 			table_type = "VIEW";
 			break;
 		default:
-            table_type = "UNKNOWN";
-            break;
+			table_type = "UNKNOWN";
+			break;
 		}
 
- 		// return values:
+		// return values:
 		// "table_catalog", PhysicalType::VARCHAR
 		// TODO(jwills): how to determine this?
 		output.SetValue(0, index, Value("main"));
@@ -122,11 +124,11 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 		// "table_name", PhysicalType::VARCHAR
 		output.SetValue(2, index, Value(entry->name));
 		// "table_type", PhysicalType::VARCHAR
- 		output.SetValue(3, index, Value(table_type));
-        // "self_referencing_column_name", PhysicalType::VARCHAR
-        output.SetValue(4, index, Value());
-        // "reference_generation", PhysicalType::VARCHAR
-        output.SetValue(5, index, Value());
+		output.SetValue(3, index, Value(table_type));
+		// "self_referencing_column_name", PhysicalType::VARCHAR
+		output.SetValue(4, index, Value());
+		// "reference_generation", PhysicalType::VARCHAR
+		output.SetValue(5, index, Value());
 		// "user_defined_type_catalog", PhysicalType::VARCHAR
 		output.SetValue(6, index, Value());
 		// "user_defined_type_schema", PhysicalType::VARCHAR
@@ -139,7 +141,6 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 		output.SetValue(10, index, Value("NO"));
 		// "commit_action", PhysicalType::VARCHAR
 		output.SetValue(11, index, is_temp ? Value("PRESERVE") : Value());
-
 	}
 	data.offset = next;
 }

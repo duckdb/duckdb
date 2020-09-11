@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 using namespace std;
@@ -55,6 +56,8 @@ information_schema_schemata_init(ClientContext &context, const FunctionData *bin
 	auto &transaction = Transaction::GetTransaction(context);
 	Catalog::GetCatalog(context).schemas->Scan(transaction,
 	                                           [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	// get the temp schema as well
+	result->entries.push_back(context.temporary_objects.get());
 
 	return move(result);
 }
