@@ -80,8 +80,7 @@ void information_schema_schemata(ClientContext &context, const FunctionData *bin
 
 		// return values:
 		// "catalog_name", PhysicalType::VARCHAR
-		// TODO(jwills): how to determine this?
-		output.SetValue(0, index, Value("main"));
+		output.SetValue(0, index, Value());
 		// "schema_name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(entry->name));
 		// "schema_owner", PhysicalType::VARCHAR

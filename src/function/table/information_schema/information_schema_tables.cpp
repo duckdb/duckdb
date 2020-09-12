@@ -115,8 +115,7 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 
 		// return values:
 		// "table_catalog", PhysicalType::VARCHAR
-		// TODO(jwills): how to determine this?
-		output.SetValue(0, index, Value("main"));
+		output.SetValue(0, index, Value());
 		// "table_schema", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(entry->schema->name));
 		// "table_name", PhysicalType::VARCHAR
