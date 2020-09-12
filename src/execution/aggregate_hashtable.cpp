@@ -15,9 +15,11 @@
 namespace duckdb {
 using namespace std;
 
+#ifndef DUCKDB_ALLOW_UNDEFINED
 static idx_t Align(idx_t n) {
 	return ((n + 7) / 8) * 8;
 }
+#endif
 
 SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types,
                                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> bindings,
@@ -29,9 +31,12 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
 	vector<AggregateObject> aggregates;
 	for (auto &binding : bindings) {
-		aggregates.push_back(AggregateObject(binding->function, binding->children.size(),
-		                                     Align(binding->function.state_size()), binding->distinct,
-		                                     binding->return_type.InternalType()));
+		auto payload_width = binding->function.state_size();
+#ifndef DUCKDB_ALLOW_UNDEFINED
+		payload_width = Align(payload_width);
+#endif
+		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_width,
+		                                     binding->distinct, binding->return_type.InternalType()));
 	}
 	return aggregates;
 }
@@ -49,12 +54,17 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
 	}
+
+#ifndef DUCKDB_ALLOW_UNDEFINED
 	auto aligned_flag_and_group_width = Align(FLAG_SIZE + group_width);
 	group_padding = aligned_flag_and_group_width - FLAG_SIZE - group_width;
 	group_width += group_padding;
+#endif
 
 	for (idx_t i = 0; i < aggregates.size(); i++) {
+#ifndef DUCKDB_ALLOW_UNDEFINED
 		assert(aggregates[i].payload_size % 8 == 0);
+#endif
 		payload_width += aggregates[i].payload_size;
 	}
 	empty_payload_data = unique_ptr<data_t[]>(new data_t[payload_width]);
@@ -91,7 +101,9 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 	}
 
 	tuple_size = FLAG_SIZE + (group_width + payload_width);
+#ifndef DUCKDB_ALLOW_UNDEFINED
 	assert(tuple_size % 8 == 0);
+#endif
 	Resize(initial_capacity);
 }
 
@@ -587,10 +599,12 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 		std::swap(next_vector, no_match_vector);
 		remaining_entries = no_match_count;
 	}
+#ifndef DUCKDB_ALLOW_UNDEFINED
 #ifdef DEBUG
 	for (idx_t i = 0; i < groups.size(); i++) {
 		assert((ptrdiff_t)data_pointers[i] % 8 == 0);
 	}
+#endif
 #endif
 
 	return new_group_count;
