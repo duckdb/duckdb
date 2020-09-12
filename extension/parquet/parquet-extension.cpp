@@ -69,7 +69,7 @@ public:
 
 	template <class T> T read() {
 		available(sizeof(T));
-		T val = *(T *)ptr;
+		T val = Load<T>((data_ptr_t)ptr);
 		inc(sizeof(T));
 		return val;
 	}
