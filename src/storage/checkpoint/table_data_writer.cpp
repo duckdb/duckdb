@@ -218,7 +218,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 
 	// write the length field
 	auto string_length = string.GetSize();
-	*((uint32_t *)(handle->node->buffer + offset)) = string_length;
+	Store<uint32_t>(string_length, handle->node->buffer + offset);
 	offset += sizeof(uint32_t);
 	// now write the remainder of the string
 	auto strptr = string.GetData();
@@ -236,7 +236,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 			// there is still remaining stuff to write
 			// first get the new block id and write it to the end of the previous block
 			auto new_block_id = manager.block_manager.GetFreeBlockId();
-			*((block_id_t *)(handle->node->buffer + offset)) = new_block_id;
+			Store<block_id_t>(new_block_id, handle->node->buffer + offset);
 			// now write the current block to disk and allocate a new block
 			AllocateNewBlock(new_block_id);
 		}

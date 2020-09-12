@@ -9,9 +9,9 @@ using namespace std;
 namespace duckdb {
 
 struct string_agg_state_t {
-	char *dataptr;
 	idx_t size;
 	idx_t alloc_size;
+	char *dataptr;
 };
 
 struct StringAggBaseFunction {
