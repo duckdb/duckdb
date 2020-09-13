@@ -5,8 +5,8 @@
 query TTTTTTT
 SELECT * FROM information_schema_schemata();
 ----
-main	main	NULL	NULL	NULL	NULL	NULL				
-main	temp	NULL	NULL	NULL	NULL	NULL
+NULL	main	NULL	NULL	NULL	NULL	NULL				
+NULL	temp	NULL	NULL	NULL	NULL	NULL
 
 statement ok
 CREATE SCHEMA scheme;
