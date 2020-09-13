@@ -314,6 +314,14 @@ void FileSystem::SetWorkingDirectory(string path) {
 	}
 }
 
+idx_t FileSystem::GetAvailableMemory() {
+	errno = 0;
+	idx_t max_memory = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
+	if (errno != 0) {
+		throw IOException("Could not fetch available system memory!");
+	}
+	return max_memory;
+}
 #else
 
 #include <string>
@@ -577,6 +585,14 @@ void FileSystem::SetWorkingDirectory(string path) {
 	if (!SetCurrentDirectory(path.c_str())) {
 		throw IOException("Could not change working directory!");
 	}
+}
+
+idx_t FileSystem::GetAvailableMemory() {
+	ULONGLONG available_memory_kb;
+	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
+		throw IOException("Could not fetch available system memory!");
+	}
+	return available_memory_kb * 1024;
 }
 #endif
 
