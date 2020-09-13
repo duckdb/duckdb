@@ -582,9 +582,9 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 
 	// copy the string and the length there
 	auto ptr = handle->node->buffer + head->offset;
-	memcpy(ptr, &string.length, sizeof(uint32_t));
+	Store<uint32_t>(string.GetSize(), ptr);
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.GetData(), string.length + 1);
+	memcpy(ptr, string.GetData(), string.GetSize() + 1);
 	head->offset += total_length;
 }
 
