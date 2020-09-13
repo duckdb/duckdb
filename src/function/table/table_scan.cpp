@@ -112,7 +112,9 @@ static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, 
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	result->column_ids = column_ids;
 	result->row_ids.type = LOGICAL_ROW_TYPE;
-	FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
+	if (bind_data.result_ids.size() > 0) {
+		FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
+	}
 	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state);
 
 	result->finished = false;
