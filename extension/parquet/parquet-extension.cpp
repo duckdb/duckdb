@@ -507,8 +507,8 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 			col_data.payload.available(dict_byte_size);
 			// immediately convert timestamps to duckdb format, potentially fewer conversions
 			for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
-				((timestamp_t *)col_data.dict.ptr)[dict_index] =
-				    impala_timestamp_to_timestamp_t(((Int96 *)col_data.payload.ptr)[dict_index]);
+				auto impala_ts = Load<Int96>((data_ptr_t)(col_data.payload.ptr + dict_index * sizeof(Int96)));
+				((timestamp_t *)col_data.dict.ptr)[dict_index] = impala_timestamp_to_timestamp_t(impala_ts);
 			}
 
 			break;
