@@ -142,6 +142,9 @@ template <> int64_t Cast::Operation(double input) {
 // Double -> float casts
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(double input, float &result, bool strict) {
+	if (input < (double)NumericLimits<float>::Minimum() || input > (double)NumericLimits<float>::Maximum()) {
+		return false;
+	}
 	auto res = (float)input;
 	if (std::isnan(res) || std::isinf(res)) {
 		return false;
