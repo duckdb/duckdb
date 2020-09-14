@@ -1,0 +1,54 @@
+# name: test/sql/table_function/information_schema.test
+# description: Test information_schema functions
+# group: [table_function]
+
+query TTTTTTT
+SELECT * FROM information_schema_schemata();
+----
+NULL	main	NULL	NULL	NULL	NULL	NULL				
+NULL	temp	NULL	NULL	NULL	NULL	NULL
+
+statement ok
+CREATE SCHEMA scheme;
+
+query I
+SELECT COUNT(*) FROM information_schema_schemata() WHERE schema_name='scheme'
+----
+1
+
+statement ok
+CREATE TABLE scheme.integers (i INTEGER);
+
+query T
+SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' AND table_name='integers'
+----
+BASE TABLE
+
+statement ok
+CREATE TEMPORARY TABLE floats (f FLOAT);
+
+query T
+SELECT table_type FROM information_schema_tables() WHERE table_schema='temp' AND table_name='floats'
+----
+LOCAL TEMPORARY
+
+statement ok
+CREATE VIEW scheme.vintegers AS SELECT * FROM scheme.integers;
+
+query T
+SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' AND table_name='vintegers'
+----
+VIEW
+
+statement ok
+DROP SCHEMA scheme CASCADE;
+
+query I
+SELECT COUNT(*) FROM information_schema_schemata() WHERE schema_name='scheme'
+----
+0
+
+query I
+SELECT COUNT(*) FROM information_schema_tables() WHERE table_schema='scheme'
+----
+0
