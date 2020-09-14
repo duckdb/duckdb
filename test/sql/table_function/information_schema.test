@@ -24,6 +24,11 @@ SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' A
 ----
 BASE TABLE
 
+query ITT
+SELECT ordinal_position, column_name, data_type FROM information_schema_columns() WHERE table_name='integers'
+----
+1	i	INTEGER
+
 statement ok
 CREATE TEMPORARY TABLE floats (f FLOAT);
 
@@ -40,6 +45,11 @@ SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' A
 ----
 VIEW
 
+query ITT
+SELECT ordinal_position, column_name, data_type FROM information_schema_columns() WHERE table_schema='scheme' AND table_name='vintegers'
+----
+1	i	INTEGER
+
 statement ok
 DROP SCHEMA scheme CASCADE;
 
@@ -50,5 +60,10 @@ SELECT COUNT(*) FROM information_schema_schemata() WHERE schema_name='scheme'
 
 query I
 SELECT COUNT(*) FROM information_schema_tables() WHERE table_schema='scheme'
+----
+0
+
+query I
+SELECT COUNT(*) FROM information_schema_columns() WHERE table_schema='scheme'
 ----
 0
