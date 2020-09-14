@@ -578,10 +578,10 @@ unique_ptr<GlobalFunctionData> read_csv_initialize(ClientContext &context, Funct
 	options.force_not_null = bind_data.force_not_null;
 	options.sample_size = bind_data.sample_size;
 	options.num_samples = bind_data.num_samples;
-	options.has_date_format = bind_data.has_date_format;
-	options.date_format = move(bind_data.date_format);
-	options.has_timestamp_format = bind_data.has_timestamp_format;
-	options.timestamp_format = move(bind_data.timestamp_format);
+	options.has_format[LogicalTypeId::DATE] = bind_data.has_date_format;
+	options.date_format[LogicalTypeId::DATE] = move(bind_data.date_format);
+	options.has_format[LogicalTypeId::TIMESTAMP] = bind_data.has_timestamp_format;
+	options.date_format[LogicalTypeId::TIMESTAMP] = move(bind_data.timestamp_format);
 
 	global_data->csv_reader = make_unique<BufferedCSVReader>(context, move(options), bind_data.sql_types);
 	return move(global_data);
