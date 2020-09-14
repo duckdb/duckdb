@@ -30,12 +30,22 @@ SELECT ordinal_position, column_name, data_type FROM information_schema_columns(
 1	i	INTEGER
 
 statement ok
-CREATE TEMPORARY TABLE floats (f FLOAT);
+CREATE TEMPORARY TABLE reals (f FLOAT, dec DECIMAL(16, 4), h HUGEINT, b BIGINT, t TINYINT, d DOUBLE);
 
 query T
-SELECT table_type FROM information_schema_tables() WHERE table_schema='temp' AND table_name='floats'
+SELECT table_type FROM information_schema_tables() WHERE table_schema='temp' AND table_name='reals'
 ----
 LOCAL TEMPORARY
+
+query II
+SELECT numeric_precision, numeric_scale FROM information_schema_columns() WHERE table_name='reals' ORDER BY ordinal_position
+----
+24	0
+16	4
+128	0
+64	0
+8	0
+53	0
 
 statement ok
 CREATE VIEW scheme.vintegers AS SELECT * FROM scheme.integers;

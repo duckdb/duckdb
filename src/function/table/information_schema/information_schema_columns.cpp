@@ -63,27 +63,6 @@ static unique_ptr<FunctionData> information_schema_columns_bind(ClientContext &c
 	names.push_back("datetime_precision");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("character_set_catalog");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.push_back("character_set_schema");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.push_back("character_set_name");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.push_back("collation_catalog");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.push_back("collation_schema");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.push_back("collation_name");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.push_back("is_updatable");
-	return_types.push_back(LogicalType::VARCHAR);
-
 	return nullptr;
 }
 
@@ -115,7 +94,6 @@ public:
 	}
 
 	virtual StandardEntry *Entry() = 0;
-	virtual bool IsUpdatable() = 0;
 	virtual idx_t NumColumns() = 0;
 	virtual const string &ColumnName(idx_t col) = 0;
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
@@ -126,13 +104,11 @@ public:
 
 class TableColumnHelper : public ColumnHelper {
 public:
-	TableColumnHelper(TableCatalogEntry *entry) : entry(entry) {}
+	TableColumnHelper(TableCatalogEntry *entry) : entry(entry) {
+	}
 
 	StandardEntry *Entry() {
 		return entry;
-	}
-	bool IsUpdatable() {
-		return true;
 	}
 	idx_t NumColumns() {
 		return entry->columns.size();
@@ -161,9 +137,6 @@ public:
 
 	StandardEntry *Entry() {
 		return entry;
-	}
-	bool IsUpdatable() {
-		return false;
 	}
 	idx_t NumColumns() {
 		return entry->types.size();
@@ -212,27 +185,79 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		// FIXME: Need to check constraints here and in pragma_table_info
 		output.SetValue(6, index, Value("YES"));
 
-		// Columns 7 ("data_type") through 12 ("datetime_precision") are determined by the LogicalType
-		// of the column.
+		const LogicalType &type = ColumnType(i);
 		// "data_type", PhysicalType::VARCHAR
-		output.SetValue(7, index, Value(ColumnType(i).ToString()));
-		// "character_maximum_length", PhysicalType::INTEGER
-		output.SetValue(8, index, Value());
-		// "character_octet_length", PhysicalType::INTEGER
-		output.SetValue(9, index, Value());
-		// "numeric_precision", PhysicalType::INTEGER
-		output.SetValue(10, index, Value());
-		// "numeric_scale", PhysicalType::INTEGER
-		output.SetValue(11, index, Value());
-		// "datetime_precision", PhysicalType::INTEGER
-		output.SetValue(12, index, Value());
+		output.SetValue(7, index, Value(type.ToString()));
 
-		// Columns 13 ("character_set_catalog") through 18 ("collation_name") are always NULL for DuckDB.
-		for (int value_index = 13; value_index < 19; value_index++) {
-			output.SetValue(value_index, index, Value());
+		if (type == LogicalType::VARCHAR) {
+			// FIXME: need check constraints in place to set this correctly
+			// "character_maximum_length", PhysicalType::INTEGER
+			output.SetValue(8, index, Value());
+			// "character_octet_length", PhysicalType::INTEGER
+			// FIXME: where did this number come from?
+			output.SetValue(9, index, Value::INTEGER(1073741824));
+		} else {
+			// "character_maximum_length", PhysicalType::INTEGER
+			output.SetValue(8, index, Value());
+			// "character_octet_length", PhysicalType::INTEGER
+			output.SetValue(9, index, Value());
 		}
 
-		output.SetValue(19, index, IsUpdatable() ? Value("YES") : Value("NO"));
+		Value numeric_precision, numeric_scale;
+		switch (type.id()) {
+		case LogicalTypeId::DECIMAL:
+			numeric_precision = Value::INTEGER(type.width());
+			numeric_scale = Value::INTEGER(type.scale());
+			break;
+		case LogicalTypeId::HUGEINT:
+			numeric_precision = Value::INTEGER(128);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::BIGINT:
+			numeric_precision = Value::INTEGER(64);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::INTEGER:
+			numeric_precision = Value::INTEGER(32);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::SMALLINT:
+			numeric_precision = Value::INTEGER(16);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::TINYINT:
+			numeric_precision = Value::INTEGER(8);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::FLOAT:
+			numeric_precision = Value::INTEGER(24);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::DOUBLE:
+			numeric_precision = Value::INTEGER(53);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		default:
+			numeric_precision = Value();
+			numeric_scale = Value();
+			break;
+		}
+		output.SetValue(10, index, numeric_precision);
+		output.SetValue(11, index, numeric_scale);
+
+		Value datetime_precision;
+		switch (type.id()) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::INTERVAL:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+			// No fractional seconds are currently supported in DuckDB
+			datetime_precision = Value::INTEGER(0);
+			break;
+		default:
+			datetime_precision = Value();
+		}
+		output.SetValue(12, index, datetime_precision);
 	}
 }
 
