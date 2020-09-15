@@ -54,6 +54,7 @@ public:
 
 	void Delete(Transaction &transaction, row_t rows[], idx_t count) override;
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) override;
+
 protected:
 	//! The transaction ids of the transactions that deleted the tuples (if any)
 	transaction_t deleted[STANDARD_VECTOR_SIZE];
@@ -71,6 +72,7 @@ public:
 	bool Fetch(Transaction &transaction, row_t row) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
+
 protected:
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	transaction_t inserted[STANDARD_VECTOR_SIZE];

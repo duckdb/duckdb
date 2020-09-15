@@ -20,25 +20,25 @@ void SetNullValue(data_ptr_t ptr, PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		*((int8_t *)ptr) = NullValue<int8_t>();
+		Store<int8_t>(NullValue<int8_t>(), ptr);
 		break;
 	case PhysicalType::INT16:
-		*((int16_t *)ptr) = NullValue<int16_t>();
+		Store<int16_t>(NullValue<int16_t>(), ptr);
 		break;
 	case PhysicalType::INT32:
-		*((int32_t *)ptr) = NullValue<int32_t>();
+		Store<int32_t>(NullValue<int32_t>(), ptr);
 		break;
 	case PhysicalType::INT64:
-		*((int64_t *)ptr) = NullValue<int64_t>();
+		Store<int64_t>(NullValue<int64_t>(), ptr);
 		break;
 	case PhysicalType::FLOAT:
-		*((float *)ptr) = NullValue<float>();
+		Store<float>(NullValue<float>(), ptr);
 		break;
 	case PhysicalType::DOUBLE:
-		*((double *)ptr) = NullValue<double>();
+		Store<double>(NullValue<double>(), ptr);
 		break;
 	case PhysicalType::VARCHAR:
-		*((string_t *)ptr) = string_t(NullValue<const char *>());
+		Store<string_t>(string_t(NullValue<const char *>()), ptr);
 		break;
 	default:
 		throw InvalidTypeException(type, "Unsupported type for SetNullValue!");

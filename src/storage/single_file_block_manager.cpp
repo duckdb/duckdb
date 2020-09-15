@@ -15,16 +15,16 @@ using namespace std;
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
 void MainHeader::Serialize(Serializer &ser) {
-	ser.WriteData((data_ptr_t) MAGIC_BYTES, MAGIC_BYTE_SIZE);
+	ser.WriteData((data_ptr_t)MAGIC_BYTES, MAGIC_BYTE_SIZE);
 	ser.Write<uint64_t>(version_number);
-	for(idx_t i = 0; i < FLAG_COUNT; i++) {
+	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
 }
 
 MainHeader MainHeader::Deserialize(Deserializer &source) {
 	char magic_bytes[MAGIC_BYTE_SIZE];
-	source.ReadData((data_ptr_t) magic_bytes, MAGIC_BYTE_SIZE);
+	source.ReadData((data_ptr_t)magic_bytes, MAGIC_BYTE_SIZE);
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
 		throw IOException("The file is not a valid DuckDB database file!");
 	}
@@ -32,7 +32,7 @@ MainHeader MainHeader::Deserialize(Deserializer &source) {
 	MainHeader header;
 	header.version_number = source.Read<uint64_t>();
 	// read the flags
-	for(idx_t i = 0; i < FLAG_COUNT; i++) {
+	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
 	return header;
@@ -54,14 +54,12 @@ DatabaseHeader DatabaseHeader::Deserialize(Deserializer &source) {
 	return header;
 }
 
-template<class T>
-void SerializeHeaderStructure(T header, data_ptr_t ptr) {
+template <class T> void SerializeHeaderStructure(T header, data_ptr_t ptr) {
 	BufferedSerializer ser(ptr, Storage::FILE_HEADER_SIZE);
 	header.Serialize(ser);
 }
 
-template<class T>
-T DeserializeHeaderStructure(data_ptr_t ptr) {
+template <class T> T DeserializeHeaderStructure(data_ptr_t ptr) {
 	BufferedDeserializer source(ptr, Storage::FILE_HEADER_SIZE);
 	return T::Deserialize(source);
 }
@@ -133,15 +131,15 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		// check the version number
 		if (header.version_number != VERSION_NUMBER) {
 			throw IOException(
-				"Trying to read a database file with version number %lld, but we can only read version %lld.\n"
-				"The database file was created with an %s version of DuckDB.\n\n"
-				"The storage of DuckDB is not yet stable; newer versions of DuckDB cannot read old database files and "
-				"vice versa.\n"
-				"The storage will be stabilized when version 1.0 releases.\n\n"
-				"For now, we recommend that you load the database file in a supported version of DuckDB, and use the "
-				"EXPORT DATABASE command "
-				"followed by IMPORT DATABASE on the current version of DuckDB.",
-				header.version_number, VERSION_NUMBER, VERSION_NUMBER > header.version_number ? "older" : "newer");
+			    "Trying to read a database file with version number %lld, but we can only read version %lld.\n"
+			    "The database file was created with an %s version of DuckDB.\n\n"
+			    "The storage of DuckDB is not yet stable; newer versions of DuckDB cannot read old database files and "
+			    "vice versa.\n"
+			    "The storage will be stabilized when version 1.0 releases.\n\n"
+			    "For now, we recommend that you load the database file in a supported version of DuckDB, and use the "
+			    "EXPORT DATABASE command "
+			    "followed by IMPORT DATABASE on the current version of DuckDB.",
+			    header.version_number, VERSION_NUMBER, VERSION_NUMBER > header.version_number ? "older" : "newer");
 		}
 
 		// read the database headers from disk
@@ -263,7 +261,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	// set the header inside the buffer
 	header_buffer.Clear();
-	*((DatabaseHeader *)header_buffer.buffer) = header;
+	Store<DatabaseHeader>(header, header_buffer.buffer);
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
 	header_buffer.Write(*handle, active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);

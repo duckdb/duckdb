@@ -147,8 +147,8 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
-	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types, vector<LogicalType> &aggregate_types,
-	                           PhysicalOperator *child)
+	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types,
+	                           vector<LogicalType> &aggregate_types, PhysicalOperator *child)
 	    : PhysicalOperatorState(op, child), ht_scan_position(0) {
 		group_chunk.Initialize(group_types);
 		if (aggregate_types.size() > 0) {

@@ -26,7 +26,7 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
 	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
-	state.current = (ColumnSegment*) data.GetSegment(row_idx);
+	state.current = (ColumnSegment *)data.GetSegment(row_idx);
 	state.vector_index = (row_idx - state.current->start) / STANDARD_VECTOR_SIZE;
 	state.initialized = false;
 }
@@ -172,7 +172,7 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
                           idx_t result_idx) {
 	// find the segment the row belongs to
-	auto segment = (TransientSegment *)data.GetSegment(row_id);
+	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 	// now perform the fetch within the segment
 	segment->FetchRow(state, transaction, row_id, result, result_idx);
 }

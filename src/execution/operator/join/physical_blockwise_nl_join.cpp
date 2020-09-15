@@ -72,7 +72,8 @@ void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, unique_ptr<Global
 //===--------------------------------------------------------------------===//
 class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
 public:
-	PhysicalBlockwiseNLJoinState(PhysicalOperator &op, PhysicalOperator *left, JoinType join_type, Expression &condition)
+	PhysicalBlockwiseNLJoinState(PhysicalOperator &op, PhysicalOperator *left, JoinType join_type,
+	                             Expression &condition)
 	    : PhysicalOperatorState(op, left), left_position(0), right_position(0), fill_in_rhs(false),
 	      checked_found_match(false), executor(condition) {
 		if (join_type == JoinType::LEFT || join_type == JoinType::OUTER) {

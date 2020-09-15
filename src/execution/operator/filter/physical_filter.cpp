@@ -8,7 +8,8 @@ namespace duckdb {
 
 class PhysicalFilterState : public PhysicalOperatorState {
 public:
-	PhysicalFilterState(PhysicalOperator &op, PhysicalOperator *child, Expression &expr) : PhysicalOperatorState(op, child), executor(expr) {
+	PhysicalFilterState(PhysicalOperator &op, PhysicalOperator *child, Expression &expr)
+	    : PhysicalOperatorState(op, child), executor(expr) {
 	}
 
 	ExpressionExecutor executor;

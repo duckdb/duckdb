@@ -160,7 +160,7 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
 	CTE_bindings[name] = info;
 }
 
-CommonTableExpressionInfo* Binder::FindCTE(const string &name) {
+CommonTableExpressionInfo *Binder::FindCTE(const string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
 		if (parent) {

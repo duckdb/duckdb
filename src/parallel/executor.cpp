@@ -112,7 +112,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			pipeline->child = op->children[0].get();
 			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
 			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
-			for(auto &delim_scan : delim_join.delim_scans) {
+			for (auto &delim_scan : delim_join.delim_scans) {
 				delim_join_dependencies[delim_scan] = pipeline.get();
 			}
 			// recurse into the actual join; any pipelines in there depend on the main pipeline
@@ -124,7 +124,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		}
 		// recurse into the pipeline child
 		BuildPipelines(pipeline->child, pipeline.get());
-		for(auto &dependency : pipeline->GetDependencies()) {
+		for (auto &dependency : pipeline->GetDependencies()) {
 			auto dependency_cte = dependency->GetRecursiveCTE();
 			if (dependency_cte) {
 				pipeline->SetRecursiveCTE(dependency_cte);
@@ -136,7 +136,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			pipelines.push_back(move(pipeline));
 		} else {
 			// add it to the set of dependent pipelines in the CTE
-			auto &cte = (PhysicalRecursiveCTE&) *pipeline_cte;
+			auto &cte = (PhysicalRecursiveCTE &)*pipeline_cte;
 			cte.pipelines.push_back(move(pipeline));
 		}
 	} else {
@@ -170,7 +170,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			recursive_cte = op;
 			BuildPipelines(op->children[1].get(), nullptr);
 			// finalize the pipelines: re-order them so that they are executed in the correct order
-			((PhysicalRecursiveCTE&) *op).FinalizePipelines();
+			((PhysicalRecursiveCTE &)*op).FinalizePipelines();
 
 			recursive_cte = nullptr;
 			return;

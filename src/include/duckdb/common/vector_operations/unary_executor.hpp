@@ -62,7 +62,11 @@ private:
 	                               nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
-		if (IGNORE_NULL && nullmask.any()) {
+		if (
+#ifdef DUCKDB_ALLOW_UNDEFINED
+		    IGNORE_NULL &&
+#endif
+		    nullmask.any()) {
 			result_nullmask = nullmask;
 			for (idx_t i = 0; i < count; i++) {
 				if (!nullmask[i]) {

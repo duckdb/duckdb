@@ -1,0 +1,895 @@
+# name: test/ldbc/ldbc-empty.test
+# description: Run the LDBC benchmark without data
+# group: [ldbc]
+
+# create the schema
+
+statement ok
+create table message (
+    m_creationdate timestamp without time zone not null,
+    m_deletiondate timestamp without time zone not null,
+    m_messageid bigint not null,
+    m_ps_imagefile varchar,
+    m_locationip varchar not null,
+    m_browserused varchar not null,
+    m_ps_language varchar,
+    m_content text not null,
+    m_length int not null,
+    m_creatorid bigint,
+    m_locationid bigint,
+    m_ps_forumid bigint,
+    m_c_replyof bigint
+);
+
+statement ok
+create table forum (
+   f_creationdate timestamp without time zone not null,
+   f_deletiondate timestamp without time zone not null,
+   f_forumid bigint not null,
+   f_title varchar not null,
+   f_moderatorid bigint
+);
+
+statement ok
+create table forum_person (
+   fp_creationdate timestamp without time zone not null,
+   fp_deletiondate timestamp without time zone not null,
+   fp_forumid bigint not null,
+   fp_personid bigint not null
+);
+
+statement ok
+create table forum_tag (
+   ft_creationdate timestamp without time zone not null,
+   ft_deletiondate timestamp without time zone not null,
+   ft_forumid bigint not null,
+   ft_tagid bigint not null
+);
+
+statement ok
+create table organisation (
+   o_organisationid bigint not null,
+   o_type varchar not null,
+   o_name varchar not null,
+   o_url varchar not null,
+   o_placeid bigint
+);
+
+statement ok
+create table person (
+   p_creationdate timestamp without time zone not null,
+   p_deletiondate timestamp without time zone not null,
+   p_personid bigint not null,
+   p_firstname varchar not null,
+   p_lastname varchar not null,
+   p_gender varchar not null,
+   p_birthday timestamp without time zone not null,
+   p_locationip varchar not null,
+   p_browserused varchar not null,
+   p_placeid bigint
+);
+
+statement ok
+create table person_email (
+   pe_creationdate timestamp without time zone not null,
+   pe_deletiondate timestamp without time zone not null,
+   pe_personid bigint not null,
+   pe_email varchar not null
+);
+
+statement ok
+create table person_tag (
+   pt_creationdate timestamp without time zone not null,
+   pt_deletiondate timestamp without time zone not null,
+   pt_personid bigint not null,
+   pt_tagid bigint not null
+);
+
+statement ok
+create table knows (
+   k_creationdate timestamp without time zone not null,
+   k_deletiondate timestamp without time zone not null,
+   k_person1id bigint not null,
+   k_person2id bigint not null
+);
+
+statement ok
+create table likes (
+   l_creationdate timestamp without time zone not null,
+   l_deletiondate timestamp without time zone not null,
+   l_personid bigint not null,
+   l_messageid bigint not null
+);
+
+statement ok
+create table person_language (
+   plang_creationdate timestamp without time zone not null,
+   plang_deletiondate timestamp without time zone not null,
+   plang_personid bigint not null,
+   plang_language varchar not null
+);
+
+statement ok
+create table person_university (
+   pu_creationdate timestamp without time zone not null,
+   pu_deletiondate timestamp without time zone not null,
+   pu_personid bigint not null,
+   pu_organisationid bigint not null,
+   pu_classyear int not null
+);
+
+statement ok
+create table person_company (
+   pc_creationdate timestamp without time zone not null,
+   pc_deletiondate timestamp without time zone not null,
+   pc_personid bigint not null,
+   pc_organisationid bigint not null,
+   pc_workfrom int not null
+);
+
+statement ok
+create table place (
+   pl_placeid bigint not null,
+   pl_name varchar not null,
+   pl_url varchar not null,
+   pl_type varchar not null,
+   pl_containerplaceid bigint
+);
+
+statement ok
+create table message_tag (
+   mt_creationdate timestamp without time zone not null,
+   mt_deletiondate timestamp without time zone not null,
+   mt_messageid bigint not null,
+   mt_tagid bigint not null
+);
+
+statement ok
+create table tagclass (
+   tc_tagclassid bigint not null,
+   tc_name varchar not null,
+   tc_url varchar not null,
+   tc_subclassoftagclassid bigint
+);
+
+statement ok
+create table tag (
+   t_tagid bigint not null,
+   t_name varchar not null,
+   t_url varchar not null,
+   t_tagclassid bigint not null
+);
+
+# run the queries
+
+#  Q1. Posting summary
+statement ok
+WITH
+  message_count AS (
+    SELECT 0.0 + count(*) AS cnt
+      FROM message
+     WHERE 1=1
+       AND m_creationdate < DATE '2011-07-21'
+)
+, message_prep AS (
+    SELECT extract(year from m_creationdate) AS messageYear
+         , m_c_replyof IS NOT NULL AS isComment
+         , CASE
+             WHEN m_length <  40 THEN 0 -- short
+             WHEN m_length <  80 THEN 1 -- one liner
+             WHEN m_length < 160 THEN 2 -- tweet
+             ELSE                     3 -- long
+           END AS lengthCategory
+         , m_length
+      FROM message
+     WHERE 1=1
+       AND m_creationdate < DATE '2011-07-21'
+       --AND m_content IS NOT NULL
+       AND m_ps_imagefile IS NULL -- FIXME CHECKME: posts w/ m_ps_imagefile IS NOT NULL should have m_content IS NULL
+)
+SELECT messageYear, isComment, lengthCategory
+     , count(*) AS messageCount
+     , avg(m_length) AS averageMessageLength
+     , sum(m_length) AS sumMessageLength
+     , count(*) / mc.cnt AS percentageOfMessages
+  FROM message_prep
+     , message_count mc
+ GROUP BY messageYear, isComment, lengthCategory, mc.cnt
+ ORDER BY messageYear DESC, isComment ASC, lengthCategory ASC
+;
+
+# Q2. Top tags for country, age, gender, time
+# FIXME: date_part from interval
+mode skip
+
+statement ok
+SELECT co.pl_name AS "country.name"
+     , extract(MONTH FROM p.m_creationdate) as messageMonth
+     , cr.p_gender AS "person.gender"
+     , floor(extract(YEARS FROM age('2013-01-01'::date, cr.p_birthday))/5) AS ageGroup
+     , t.t_name AS "tag.name"
+     , count(*) AS messageCount
+  FROM message p
+     , message_tag pt
+     , tag t
+     , person cr -- creator
+     , place  ci  -- city
+     , place  co  -- country
+ WHERE 1=1
+    -- join
+   AND p.m_messageid = pt.mt_messageid
+   AND pt.mt_tagid = t.t_tagid
+   AND p.m_creatorid = cr.p_personid
+   AND cr.p_placeid = ci.pl_placeid
+   AND ci.pl_containerplaceid = co.pl_placeid
+    -- filter
+   AND co.pl_name in ('Ethiopia', 'Belarus')
+   AND p.m_creationdate BETWEEN DATE '2010-01-01' AND DATE '2010-11-08'
+ GROUP BY co.pl_name, messageMonth, cr.p_gender, t.t_name, ageGroup
+HAVING count(*) > 100
+ LIMIT 100
+;
+
+
+# Q3. Tag evolution
+# make_date -> year,month,day
+# make_interval
+statement ok
+WITH detail AS (
+SELECT t.t_name
+     , count(DISTINCT CASE WHEN extract(MONTH FROM m.m_creationdate)  = 11 THEN m.m_messageid ELSE NULL END) AS countMonth1
+     , count(DISTINCT CASE WHEN extract(MONTH FROM m.m_creationdate) != 11 THEN m.m_messageid ELSE NULL END) AS countMonth2
+  FROM message m
+     , message_tag mt
+     , tag t
+ WHERE 1=1
+    -- join
+   AND m.m_messageid = mt.mt_messageid
+   AND mt.mt_tagid = t.t_tagid
+    -- filter
+   AND m.m_creationdate >= make_date(2011, 11, 1)
+   AND m.m_creationdate <  make_date(2011, 11, 1) + make_interval(months => 2)
+ GROUP BY t.t_name
+)
+SELECT t_name as "tag.name"
+     , countMonth1
+     , countMonth2
+     , abs(countMonth1-countMonth2) AS diff
+  FROM detail d
+ ORDER BY diff desc, t_name
+ LIMIT 100
+;
+
+mode unskip
+
+# Q4. Popular topics in a country
+statement ok
+SELECT f.f_forumid      AS "forum.id"
+     , f.f_title        AS "forum.title"
+     , f.f_creationdate AS "forum.creationDate"
+     , f.f_moderatorid  AS "person.id"
+     , count(DISTINCT p.m_messageid) AS postCount
+  FROM tagClass tc
+     , tag t
+     , message_tag pt
+     , message p
+     , forum f
+     , person m   -- moderator
+     , place  ci  -- city
+     , place  co  -- country
+ WHERE 1=1
+    -- join
+   AND tc.tc_tagclassid = t.t_tagclassid
+   AND t.t_tagid = pt.mt_tagid
+   AND pt.mt_messageid = p.m_messageid
+   AND p.m_ps_forumid = f.f_forumid
+   AND f.f_moderatorid = m.p_personid
+   AND m.p_placeid = ci.pl_placeid
+   AND ci.pl_containerplaceid = co.pl_placeid
+    -- filter
+   AND tc.tc_name = 'MusicalArtist'
+   AND co.pl_name = 'Burma'
+ GROUP BY f.f_forumid, f.f_title, f.f_creationdate, f.f_moderatorid
+ ORDER BY postCount DESC, f.f_forumid
+ LIMIT 20
+;
+
+# Q5. Top posters in a country
+statement ok
+WITH top100_popular_forums AS (
+  SELECT fp_forumid AS forumid
+    FROM forum_person fp
+       , person p
+       , place ci -- city
+       , place co -- country
+   WHERE 1=1
+      -- join
+     AND fp.fp_personid = p.p_personid
+     AND p.p_placeid = ci.pl_placeid
+     AND ci.pl_containerplaceid = co.pl_placeid
+      -- filter
+     AND co.pl_name = 'Belarus'
+   GROUP BY fp_forumid
+   ORDER BY count(*) DESC, fp_forumid
+   LIMIT 100
+)
+SELECT au.p_personid AS "person.id"
+     , au.p_firstname AS "person.firstName"
+     , au.p_lastname AS "person.lastName"
+     , au.p_creationdate
+     -- a single person might be member of more than 1 of the top100 forums, so their posts should be DISTINCT counted
+     , count(DISTINCT p.m_messageid) AS postCount
+  FROM top100_popular_forums t
+       INNER JOIN forum_person fp ON (t.forumid = fp.fp_forumid)
+       -- author of the post
+       INNER JOIN person au ON (fp.fp_personid = au.p_personid)
+       LEFT JOIN message p ON (1=1
+                        AND au.p_personid = p.m_creatorid
+                        AND p.m_ps_forumid IN (SELECT forumid from top100_popular_forums)
+                        AND p.m_c_replyof IS NULL
+                           )
+ GROUP BY au.p_personid, au.p_firstname, au.p_lastname, au.p_creationdate
+ ORDER BY postCount DESC, au.p_personid
+ LIMIT 100
+;
+
+# Q6. Most active Posters of a given Topic
+statement ok
+WITH detail AS (
+SELECT cr.p_personid AS person_id
+     , count(DISTINCT r.m_messageid)  AS replyCount
+     , count(DISTINCT l.l_messageid||' '||l.l_personid) AS likeCount
+     , count(DISTINCT m.m_messageid)  AS messageCount
+     , null as score
+  FROM tag t
+     , message_tag pt
+     , message m LEFT JOIN message  r ON (m.m_messageid = r.m_c_replyof) -- m: all messages, not just posts; r: direct reply to m
+              LEFT JOIN likes l ON (m.m_messageid = l.l_messageid)  -- l: likes to m
+     , person cr -- creator
+ WHERE 1=1
+    -- join
+   AND t.t_tagid = pt.mt_tagid
+   AND pt.mt_messageid = m.m_messageid
+   AND m.m_creatorid = cr.p_personid
+    -- filter
+   AND t.t_name = 'Abbas_I_of_Persia'
+ GROUP BY cr.p_personid
+)
+SELECT person_id AS "person.id"
+     , replyCount
+     , likeCount
+     , messageCount
+     , 1*messageCount + 2*replyCount + 10*likeCount AS score
+  FROM detail
+ ORDER BY score DESC, person_id
+ LIMIT 100
+;
+
+# Q7. Most authoritative users on a given topic
+statement ok
+WITH poster_w_liker AS (
+  SELECT DISTINCT
+         m1.m_creatorid posterPersonid
+       , l2.l_personid as likerPersonid
+    FROM tag t
+       , message_tag pt
+       -- as an optimization, we use that the set of message1 is the same as message2
+       , message m1 LEFT JOIN likes l2 ON (m1.m_messageid = l2.l_messageid)
+       --, person p2 -- we don't need the person itself as its ID is in the like l2
+   WHERE 1=1
+      -- join
+     AND t.t_tagid = pt.mt_tagid
+     AND pt.mt_messageid = m1.m_messageid
+      -- filter
+     AND t.t_name = 'Arnold_Schwarzenegger'
+)
+, popularity_score AS (
+  SELECT m3.m_creatorid as personid, count(*) as popularityScore
+    FROM message m3
+       , likes l3
+   WHERE 1=1
+      -- join
+     AND m3.m_messageid = l3.l_messageid
+   GROUP BY personId
+)
+SELECT pl.posterPersonid as "person1.id"
+     , sum(coalesce(ps.popularityScore, 0)) as authorityScore
+  FROM poster_w_liker pl LEFT JOIN popularity_score ps ON (pl.likerPersonid = ps.personid)
+ GROUP BY pl.posterPersonid
+ ORDER BY authorityScore DESC, pl.posterPersonid ASC
+ LIMIT 100
+;
+
+# Q8. Related Topics
+statement ok
+SELECT t2.t_name AS "relatedTag.name"
+     , count(*) AS count
+  FROM tag t INNER JOIN message_tag pt ON (t.t_tagid = pt.mt_tagid)
+             -- as an optimization, we don't need message here as it's ID is in message_tag pt
+             -- so proceed to the comment directly
+             INNER JOIN message c      ON (pt.mt_messageid = c.m_c_replyof)
+             -- comment's tag
+             INNER JOIN message_tag ct ON (c.m_messageid = ct.mt_messageid)
+             INNER JOIN tag t2      ON (ct.mt_tagid = t2.t_tagid)
+             -- comment doesn't have the given tag: antijoin in the where clause
+             LEFT  JOIN message_tag nt ON (c.m_messageid = nt.mt_messageid AND nt.mt_tagid = pt.mt_tagid)
+ WHERE 1=1
+    -- join
+   AND nt.mt_messageid IS NULL -- antijoin: comment (c) does not have the given tag
+    -- filter
+   AND t.t_name = 'Enrique_Iglesias'
+ GROUP BY t2.t_name
+ ORDER BY count DESC, t2.t_name
+ LIMIT 100
+;
+
+# Q9. Forum with related Tags
+statement ok
+WITH popular_forums AS (
+  SELECT fp_forumid as forumid
+    FROM forum_person
+   GROUP BY fp_forumid
+  HAVING count(*) > 200
+)
+SELECT f.f_forumid AS "forum.id"
+     , count(DISTINCT p1.m_messageid) AS count1
+     , count(DISTINCT p2.m_messageid) AS count2
+  FROM tagclass tc1
+     , tag t1
+     , message_tag pt1
+     , message p1
+     , tagclass tc2
+     , tag t2
+     , message_tag pt2
+     , message p2
+     , forum f
+     , popular_forums pf
+ WHERE 1=1
+    -- join
+    -- tagClass1 to forum
+   AND tc1.tc_tagclassid = t1.t_tagclassid
+   AND t1.t_tagid = pt1.mt_tagid
+   AND pt1.mt_messageid = p1.m_messageid
+   AND p1.m_ps_forumid = f.f_forumid
+   AND f.f_forumid = pf.forumid
+    -- tagClass2 to forum
+   AND tc2.tc_tagclassid = t2.t_tagclassid
+   AND t2.t_tagid = pt2.mt_tagid
+   AND pt2.mt_messageid = p2.m_messageid
+   AND p2.m_ps_forumid = f.f_forumid
+    -- filter
+   AND tc1.tc_name = 'BaseballPlayer'
+   AND tc2.tc_name = 'ChristianBishop'
+   AND p1.m_c_replyof IS NULL
+   AND p2.m_c_replyof IS NULL
+ GROUP BY f.f_forumid
+ ORDER BY abs(count(DISTINCT p2.m_messageid) - count(DISTINCT p1.m_messageid) ) DESC, f.f_forumid
+ LIMIT 100
+;
+
+# Q10. Central Person for a Tag
+statement ok
+WITH person_tag_interest AS (
+    SELECT p.p_personid AS personid
+      FROM person p
+         , person_tag pt
+         , tag t
+     WHERE 1=1
+        -- join
+       AND p.p_personid = pt.pt_personid
+       AND pt.pt_tagid = t.t_tagid
+        -- filter
+       AND t.t_name = 'Che_Guevara'
+)
+   , person_message_score AS (
+    SELECT p.p_personid AS personid
+         , count(*) AS message_score
+      FROM message m
+         , person p
+         , message_tag pt
+         , tag t
+     WHERE 1=1
+        -- join
+       AND m.m_creatorid = p.p_personid
+       AND m.m_messageid = pt.mt_messageid
+       AND pt.mt_tagid = t.t_tagid
+        -- filter
+       AND m.m_creationdate > DATE '2011-07-22'
+       AND t.t_name = 'Che_Guevara'
+     GROUP BY p.p_personid
+)
+   , person_score AS (
+    SELECT coalesce(pti.personid, pms.personid) AS personid
+         , CASE WHEN pti.personid IS NULL then 0 ELSE 100 END -- scored from interest in the given tag
+         + coalesce(pms.message_score, 0) AS score
+      FROM person_tag_interest pti
+           FULL JOIN person_message_score pms ON (pti.personid = pms.personid)
+)
+SELECT p.personid AS "person.id"
+     , p.score AS score
+     , sum(f.score) AS friendsScore
+  FROM person_score p
+     , knows k
+     , person_score f -- the friend
+ WHERE 1=1
+    -- join
+   AND p.personid = k.k_person1id
+   AND k.k_person2id = f.personid
+ GROUP BY p.personid, p.score
+ ORDER BY p.score + sum(f.score) DESC, p.personid
+ LIMIT 100
+;
+
+
+mode skip
+#  Q11. Unrelated replies
+# not supported: several array/string array stuff
+statement ok
+WITH replies_w_tags AS (
+    SELECT p.p_personid AS creatorid
+         , r.m_messageid AS replyid
+         , r.m_c_replyof AS replyof
+         , r.m_content AS content
+         , CASE
+             WHEN count(pt.mt_tagid)=0 THEN ARRAY[]::bigint[] -- no tags for the message, so we return an empty array
+             ELSE array_agg(pt.mt_tagid)
+           END AS replyTags
+      FROM place co -- country
+         , place ci -- city
+         , person p
+         , message r -- reply
+           LEFT JOIN message_tag pt ON (r.m_messageid = pt.mt_messageid)
+     WHERE 1=1
+        -- join
+       AND co.pl_placeid = ci.pl_containerplaceid
+       AND ci.pl_placeid = p.p_placeid
+       AND p.p_personid = r.m_creatorid
+        -- filter
+       AND co.pl_name = 'Germany'
+       AND r.m_c_replyof IS NOT NULL
+       -- exclude messages by the blacklist.
+       -- Note: we use string_to_array(trim(regexp_replace(...))) instead regexp_split_to_array to avoid translating "Foo." into {Foo,""},
+       -- i.e. remove possible empty firts/last elements
+       --AND NOT string_to_array(trim(regexp_replace(r.m_content, E'[[:space:],.?!()\r\n]+', ' ', 'g')), ' ') && :blacklist
+     GROUP BY p.p_personid, r.m_messageid, r.m_c_replyof, r.m_content
+)
+-- blacklisting is done after the joins and country filter above as it tured out to be an expensive operation (in 1st option)
+ -- first blacklisting option is to tokenize message as words and use word-based search
+   , replies_blacklist_excluded_1 AS (
+    SELECT *
+      FROM replies_w_tags
+     WHERE 1=1
+        -- filter
+       -- exclude messages by the blacklist.
+       -- Note: we use string_to_array(trim(regexp_replace(...))) instead regexp_split_to_array to avoid translating "Foo." into {Foo,""},
+       -- i.e. remove possible empty firts/last elements
+       AND NOT string_to_array(trim(regexp_replace(content, E'[[:space:],.?!()\r\n]+', ' ', 'g')), ' ') && '\'{"also","Pope","that","James","Henry","one","Green"}\''::text[]
+)
+ -- second blacklisting option is done using pure string contains
+   , replies_blacklist_excluded_2 AS (
+    SELECT *
+      FROM replies_w_tags r
+           LEFT JOIN unnest(:blacklist) AS bl(word) ON (r.content like '%'||bl.word||'%')
+     WHERE 1=1
+       -- exclude messages by the blacklist.
+       AND bl.word IS NULL
+)
+   , replies_not_sharing_tags_w_base_message AS (
+    SELECT r.replyid
+         , r.creatorid
+      FROM replies_blacklist_excluded_2 r
+         , message b -- base message of the reply
+           LEFT JOIN message_tag pt ON (b.m_messageid = pt.mt_messageid)
+     WHERE 1=1
+        -- join
+       AND r.replyof = b.m_messageid
+        -- filter
+     GROUP BY r.replyid, r.creatorid, r.replyTags
+    HAVING NOT r.replyTags &&
+           CASE
+             WHEN count(pt.mt_tagid)=0 THEN ARRAY[]::bigint[] -- no tags for the message, so we return an empty array
+             ELSE array_agg(pt.mt_tagid)
+           END
+)
+SELECT r.creatorid AS "person.id"
+     , t.t_name AS "tag.name"
+     , count(l.l_messageid) as likeCount
+     , count(DISTINCT r.replyid) as replyCount
+     --, array_agg(DISTINCT r.replyid ORDER BY r.replyid) AS affectedReplyIds -- for debugging purposes
+  FROM replies_not_sharing_tags_w_base_message r
+       LEFT JOIN likes l ON (r.replyid = l.l_messageid)
+     , message_tag pt
+     , tag t
+ WHERE 1=1
+    -- join
+   AND r.replyid = pt.mt_messageid
+   AND pt.mt_tagid = t.t_tagid
+ GROUP BY r.creatorid, t.t_name
+ ORDER BY likeCount DESC, r.creatorid, t.t_name
+ LIMIT 100
+;
+
+mode unskip
+
+# Q12. Trending Posts
+statement ok
+SELECT m.m_messageid AS "message.id"
+     , m.m_creationdate AS "message.creationDate"
+     , c.p_firstname AS "creator.firstName"
+     , c.p_lastname AS "creator.lastName"
+     , count(*) as likeCount
+  FROM message m
+     , person c -- creator
+     , likes l
+ WHERE 1=1
+    -- join
+   AND m.m_creatorid = c.p_personid
+   AND m.m_messageid = l.l_messageid
+    -- filter
+   AND m.m_creationdate > DATE '2011-07-22'
+ GROUP BY m.m_messageid
+        , m.m_creationdate
+        , c.p_firstname
+        , c.p_lastname
+HAVING count(*) > 400
+ ORDER BY likeCount DESC, m.m_messageid
+ LIMIT 100
+;
+
+mode skip
+# Q13. Popular Tags per month in a country
+# unsupported: ARRAY syntax
+statement ok
+WITH detail AS (
+SELECT extract(YEAR FROM m.m_creationdate) as year
+     , extract(MONTH FROM m.m_creationdate) as month
+     , t.t_name as tagName
+     , count(DISTINCT m.m_messageid) as popularity
+     , row_number() OVER (PARTITION BY extract(YEAR FROM m.m_creationdate), extract(MONTH FROM m.m_creationdate)
+                          ORDER BY t.t_name IS NULL -- sort order is: false, true i.e. first the given, then missing tags
+                                 , count(DISTINCT m.m_messageid) DESC
+                                 , t.t_name
+                         ) as rn
+  FROM place c -- country
+     , message m
+       LEFT JOIN message_tag pt ON (m.m_messageid = pt.mt_messageid)
+       LEFT JOIN tag t ON (pt.mt_tagid = t.t_tagid)
+ WHERE 1=1
+    -- join
+   AND c.pl_placeid = m.m_locationid
+    -- filter
+   AND c.pl_name = 'Belarus'
+ GROUP BY year, month, t.t_name
+)
+SELECT year, month
+     , CASE
+       WHEN count(tagName)=0 THEN ARRAY[]::varchar[][] -- for the given month, no messages have any tags, so we return an empty array
+            -- we have non-missing tags, and also the missing tag might show up, so we filter it out
+       ELSE array_agg(ARRAY[tagName, cast(popularity AS VARCHAR)] ORDER BY popularity DESC, tagName) FILTER (WHERE tagName IS NOT NULL)
+       END AS popularTags
+  FROM detail
+ WHERE rn <= 5
+ GROUP BY year, month
+ ORDER BY year DESC, month
+ LIMIT 100
+;
+
+mode unskip
+
+#  Q14. Top thread initiators
+statement ok
+WITH RECURSIVE post_all(psa_threadid
+                      , psa_thread_creatorid
+                      , psa_messageid
+                      , psa_creationdate
+                      , psa_messagetype
+                       ) AS (
+    SELECT m_messageid AS psa_threadid
+         , m_creatorid AS psa_thread_creatorid
+         , m_messageid AS psa_messageid
+         , m_creationdate
+         , 'Post'
+      FROM message
+     WHERE 1=1
+       AND m_c_replyof IS NULL -- post, not comment
+       AND m_creationdate BETWEEN DATE '2012-06-01' AND DATE '2012-07-01'
+  UNION ALL
+    SELECT psa.psa_threadid AS psa_threadid
+         , psa.psa_thread_creatorid AS psa_thread_creatorid
+         , m_messageid
+         , m_creationdate
+         , 'Comment'
+      FROM message p
+         , post_all psa
+     WHERE 1=1
+       AND p.m_c_replyof = psa.psa_messageid
+        -- this is a performance optimisation only
+       AND m_creationdate BETWEEN DATE '2012-06-01' AND DATE '2012-07-01'
+)
+SELECT p.p_personid AS "person.id"
+     , p.p_firstname AS "person.firstName"
+     , p.p_lastname AS "person.lastName"
+     , count(DISTINCT psa.psa_threadid) AS threadCount
+     -- if the thread initiator message does not count as a reply
+     --, count(DISTINCT CASE WHEN psa.psa_messagetype = 'Comment' then psa.psa_messageid ELSE null END) AS messageCount
+     , count(DISTINCT psa.psa_messageid) AS messageCount
+  FROM person p left join post_all psa on (
+       1=1
+   AND p.p_personid = psa.psa_thread_creatorid
+   AND psa_creationdate BETWEEN DATE '2012-06-01' AND DATE '2012-07-01'
+   )
+ GROUP BY p.p_personid, p.p_firstname, p.p_lastname
+ ORDER BY messageCount DESC, p.p_personid
+ LIMIT 100
+;
+
+# Q15. Social normals
+statement ok
+WITH persons_of_country AS (
+    SELECT p.p_personid AS personid
+      FROM person p
+         , place ci -- city
+         , place co -- country
+     WHERE 1=1
+        -- join
+       AND p.p_placeid = ci.pl_placeid
+       AND ci.pl_containerplaceid = co.pl_placeid
+        -- filter
+       AND co.pl_name = 'Belarus'
+)
+, persons_w_friendcount AS (
+    SELECT p.personid
+         , count(f.personid) AS friendCount
+         , floor(avg(count(f.personid)) OVER ()) AS avgFriendCount
+      FROM persons_of_country p -- persons to find
+           LEFT JOIN (knows k INNER JOIN persons_of_country f -- friend
+                                      ON (k.k_person2id = f.personid))
+                  ON (p.personid = k.k_person1id)
+     WHERE 1=1
+        -- join given in the FROM clause
+        -- filter
+     GROUP BY p.personid
+)
+SELECT personid AS "person.id"
+     , friendCount AS count
+  FROM persons_w_friendcount
+ WHERE 1=1
+    -- filter
+   AND friendCount = avgFriendCount
+ ORDER BY personid
+ LIMIT 100
+;
+
+mode skip
+# Q16. Experts in social circle
+# FIXME: array syntax, ROW syntax
+statement ok
+WITH RECURSIVE friends(startPerson, path, friend) AS (
+    SELECT p_personid, ARRAY[]::record[], p_personid
+      FROM person
+     WHERE 1=1
+       AND p_personid = :personId
+  UNION ALL
+    SELECT f.startPerson
+         , f.path || ROW(k.k_person1id, k.k_person2id)
+         , CASE WHEN f.friend = k.k_person1id then k.k_person2id ELSE k.k_person1id END
+      FROM friends f
+         , knows k
+     WHERE 1=1
+        -- join
+       AND f.friend = k.k_person1id -- note, that knows table have both (p1, p2) and (p2, p1)
+        -- filter
+       -- knows edge can't be traversed twice
+       AND NOT ARRAY[ROW(k.k_person1id, k.k_person2id), ROW(k.k_person2id, k.k_person1id)] && f.path
+        -- stop condition
+       AND coalesce(array_length(f.path, 1), 0) < 3
+)
+   , friend_list AS (
+    SELECT DISTINCT f.friend AS friendid
+      FROM friends f
+         , person tf -- the friend's preson record
+         , place ci -- city
+         , place co -- country
+     WHERE 1=1
+        -- join
+       AND f.friend = tf.p_personid
+       AND tf.p_placeid = ci.pl_placeid
+       AND ci.pl_containerplaceid = co.pl_placeid
+        -- filter
+       AND coalesce(array_length(f.path, 1), 0) BETWEEN 2 AND 3
+       AND co.pl_name = 'Pakistan'
+)
+   , messages_of_tagclass_by_friends AS (
+    SELECT DISTINCT f.friendid
+         , m.m_messageid AS messageid
+      FROM friend_list f
+         , message m
+         , message_tag pt
+         , tag t
+         , tagclass tc
+     WHERE 1=1
+        -- join
+       AND f.friendid = m.m_creatorid
+       AND m.m_messageid = pt.mt_messageid
+       AND pt.mt_tagid = t.t_tagid
+       AND t.t_tagclassid = tc.tc_tagclassid
+        -- filter
+       AND tc.tc_name = 'MusicalArtist'
+)
+SELECT m.friendid AS "person.id"
+     , t.t_name AS "tag.name"
+     , count(*) AS messageCount
+  FROM messages_of_tagclass_by_friends m
+     , message_tag pt
+     , tag t
+ WHERE 1=1
+    -- join
+   AND m.messageid = pt.mt_messageid
+   AND pt.mt_tagid = t.t_tagid
+ GROUP BY m.friendid, t.t_name
+ ORDER BY messageCount DESC, t.t_name, m.friendid
+ LIMIT 100
+;
+
+mode unskip
+
+# Q17. Friend triangles
+statement ok
+WITH persons_of_country_w_friends AS (
+    SELECT p.p_personid AS personid
+         , k.k_person2id as friendid
+      FROM person p
+         , place ci -- city
+         , place co -- country
+         , knows k
+     WHERE 1=1
+        -- join
+       AND p.p_placeid = ci.pl_placeid
+       AND ci.pl_containerplaceid = co.pl_placeid
+       AND p.p_personid = k.k_person1id
+        -- filter
+       AND co.pl_name = 'Belarus'
+)
+SELECT count(*)
+  FROM persons_of_country_w_friends p1
+     , persons_of_country_w_friends p2
+     , persons_of_country_w_friends p3
+ WHERE 1=1
+    -- join
+   AND p1.friendid = p2.personid
+   AND p2.friendid = p3.personid
+   AND p3.friendid = p1.personid
+    -- filter: unique trinagles only
+   AND p1.personid < p2.personid
+   AND p2.personid < p3.personid
+;
+
+# Q20. High-level topics
+statement ok
+WITH RECURSIVE tagclass_tree(root_tagclassid, root_tagclassname, tagclassid) AS (
+    SELECT tc.tc_tagclassid AS root_tagclassid
+         , tc.tc_name AS root_tagclassname
+         , tc.tc_tagclassid AS tagclassid
+      FROM tagclass tc
+     WHERE 1=1
+       AND tc.tc_name IN ('Album','Person','OfficeHolder','MusicalArtist','Single','Country')
+  UNION ALL
+    SELECT tt.root_tagclassid
+         , tt.root_tagclassname
+         , tc.tc_tagclassid AS tagclassid
+      FROM tagclass tc
+         , tagclass_tree tt
+     WHERE 1=1
+        -- join
+       AND tt.tagclassid = tc.tc_subclassoftagclassid
+)
+SELECT tt.root_tagclassname AS "tagClass.name"
+     , count(DISTINCT mt.mt_messageid) AS messageCount
+  FROM tagclass_tree tt INNER JOIN tag      t  ON (tt.tagclassid = t.t_tagclassid)
+                        LEFT  JOIN message_tag mt ON (t.t_tagid = mt.mt_tagid)
+ WHERE 1=1
+ GROUP BY tt.root_tagclassname
+ ORDER BY messageCount DESC, tt.root_tagclassname
+ LIMIT 100
+;
+

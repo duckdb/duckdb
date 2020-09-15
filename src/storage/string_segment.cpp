@@ -304,7 +304,7 @@ string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t
 	// look up result in dictionary
 	auto dict_end = baseptr + Storage::BLOCK_SIZE;
 	auto dict_pos = dict_end - dict_offset;
-	auto string_length = *((uint16_t *)dict_pos);
+	auto string_length = Load<uint16_t>(dict_pos);
 	string_location_t result;
 	if (string_length == BIG_STRING_MARKER) {
 		ReadStringMarker(dict_pos, result.block_id, result.offset);
@@ -333,7 +333,7 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 		// normal string: read string from this block
 		auto dict_end = baseptr + Storage::BLOCK_SIZE;
 		auto dict_pos = dict_end - location.offset;
-		auto string_length = *((uint16_t *)dict_pos);
+		auto string_length = Load<uint16_t>(dict_pos);
 
 		auto str_ptr = (char *)(dict_pos + sizeof(uint16_t));
 		return string_t(str_ptr, string_length);
@@ -533,8 +533,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				//! Update min/max of column segment
 				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
 				// first write the length as u16
-				uint16_t string_length_u16 = string_length;
-				memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
+				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
 			}
@@ -583,9 +582,9 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 
 	// copy the string and the length there
 	auto ptr = handle->node->buffer + head->offset;
-	memcpy(ptr, &string.length, sizeof(uint32_t));
+	Store<uint32_t>(string.GetSize(), ptr);
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.GetData(), string.length + 1);
+	memcpy(ptr, string.GetData(), string.GetSize() + 1);
 	head->offset += total_length;
 }
 
@@ -598,7 +597,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 		// read the overflow string from disk
 		// pin the initial handle and read the length
 		auto handle = manager.Pin(block);
-		uint32_t length = *((uint32_t *)(handle->node->buffer + offset));
+		uint32_t length = Load<uint32_t>(handle->node->buffer + offset);
 		uint32_t remaining = length + 1;
 		offset += sizeof(uint32_t);
 
@@ -607,7 +606,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 		auto target_handle = manager.Allocate(alloc_size, true);
 		auto target_ptr = target_handle->node->buffer;
 		// write the length in this block as well
-		*((uint32_t *)target_ptr) = length;
+		Store<uint32_t>(length, target_ptr);
 		target_ptr += sizeof(uint32_t);
 		// now append the string to the single buffer
 		while (remaining > 0) {
@@ -619,7 +618,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 			target_ptr += to_write;
 			if (remaining > 0) {
 				// read the next block
-				block_id_t next_block = *((block_id_t *)(handle->node->buffer + offset));
+				block_id_t next_block = Load<block_id_t>(handle->node->buffer + offset);
 				handle = manager.Pin(next_block);
 				offset = 0;
 			}
@@ -647,7 +646,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 
 string_t StringSegment::ReadString(data_ptr_t target, int32_t offset) {
 	auto ptr = target + offset;
-	auto str_length = *((uint32_t *)ptr);
+	auto str_length = Load<uint32_t>(ptr);
 	auto str_ptr = (char *)(ptr + sizeof(uint32_t));
 	return string_t(str_ptr, str_length);
 }

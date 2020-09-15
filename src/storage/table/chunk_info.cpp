@@ -74,7 +74,8 @@ ChunkInsertInfo::ChunkInsertInfo(VersionManager &manager, idx_t start_row)
 	}
 }
 
-ChunkInsertInfo::ChunkInsertInfo(ChunkDeleteInfo &info) : ChunkDeleteInfo(info, ChunkInfoType::INSERT_INFO), all_same_id(true) {
+ChunkInsertInfo::ChunkInsertInfo(ChunkDeleteInfo &info)
+    : ChunkDeleteInfo(info, ChunkInfoType::INSERT_INFO), all_same_id(true) {
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		inserted[i] = NOT_DELETED_ID;
 	}
@@ -130,7 +131,7 @@ void ChunkInsertInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 		all_same_id = false;
 		same_id = NOT_DELETED_ID;
 	}
-	for(idx_t i = start; i < end; i++) {
+	for (idx_t i = start; i < end; i++) {
 		inserted[i] = commit_id;
 	}
 }
