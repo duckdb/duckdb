@@ -412,7 +412,11 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
+				if (result > NumericLimits<T>::Maximum() / pow(10, exponent)) {
+					return false;
+				}
 				result = result * pow(10, exponent);
+
 				return true;
 			} else {
 				return false;
