@@ -142,6 +142,9 @@ template <> int64_t Cast::Operation(double input) {
 // Double -> float casts
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(double input, float &result, bool strict) {
+	if (input < (double)NumericLimits<float>::Minimum() || input > (double)NumericLimits<float>::Maximum()) {
+		return false;
+	}
 	auto res = (float)input;
 	if (std::isnan(res) || std::isinf(res)) {
 		return false;
@@ -409,7 +412,11 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
+				if (result > NumericLimits<T>::Maximum() / pow(10, exponent)) {
+					return false;
+				}
 				result = result * pow(10, exponent);
+
 				return true;
 			} else {
 				return false;
