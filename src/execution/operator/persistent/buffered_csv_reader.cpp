@@ -511,10 +511,10 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
-	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%y-%m-%d", "%Y-%m-%d"}},
+	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
 	    {LogicalTypeId::TIMESTAMP,
-	     {"%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S", "%d-%m-%y %H:%M:%S", "%y-%m-%d %H:%M:%S",
-	      "%Y-%m-%d %H:%M:%S"}},
+	     {"%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S", "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S",
+	      "%y-%m-%d %H:%M:%S"}},
 	};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
@@ -561,11 +561,10 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 							has_format_candidates[sql_type.id()] = true;
 							// order by preference
 							for (const auto &t : format_template_candidates[sql_type.id()]) {
-								type_format_candidates.emplace_back(GenerateDateFormat(separator, t));
-							}
-							// don't parse ISO 8601
-							if (separator == "-") {
-								type_format_candidates.pop_back();
+								const auto format_string = GenerateDateFormat(separator, t);
+								// don't parse ISO 8601
+								if (format_string.find("%Y-%m-%d") == string::npos)
+									type_format_candidates.emplace_back(format_string);
 							}
 
 							//	initialise the first candidate
