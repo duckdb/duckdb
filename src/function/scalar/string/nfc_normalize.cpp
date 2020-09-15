@@ -29,4 +29,4 @@ void NFCNormalizeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(NFCNormalizeFun::GetFunction());
 }
 
-}
+} // namespace duckdb

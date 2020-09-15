@@ -21,7 +21,7 @@ namespace duckdb {
 // Table Scan
 //===--------------------------------------------------------------------===//
 bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, ParallelState* parallel_state_);
+                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_);
 
 struct TableScanOperatorData : public FunctionOperatorData {
 	//! The current position in the scan
@@ -73,13 +73,14 @@ unique_ptr<ParallelState> table_scan_init_parallel_state(ClientContext &context,
 }
 
 bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_,
-                                    FunctionOperatorData *operator_state, ParallelState* parallel_state_) {
+                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
-	auto &parallel_state = (ParallelTableFunctionScanState &) *parallel_state_;
+	auto &parallel_state = (ParallelTableFunctionScanState &)*parallel_state_;
 	auto &state = (TableScanOperatorData &)*operator_state;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
-	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state, state.column_ids, &state.table_filters);
+	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state, state.column_ids,
+	                                                  &state.table_filters);
 }
 
 void table_scan_dependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_) {
@@ -111,7 +112,9 @@ static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, 
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	result->column_ids = column_ids;
 	result->row_ids.type = LOGICAL_ROW_TYPE;
-	FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
+	if (bind_data.result_ids.size() > 0) {
+		FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
+	}
 	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state);
 
 	result->finished = false;

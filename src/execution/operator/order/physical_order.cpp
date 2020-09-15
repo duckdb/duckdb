@@ -12,7 +12,8 @@ namespace duckdb {
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child), position(0) {
+	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;

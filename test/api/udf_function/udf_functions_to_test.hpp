@@ -152,10 +152,13 @@ template <typename TYPE> static void udf_unary_function(DataChunk &input, Expres
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[0]);
-
-		FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[0]));
+		auto nullmask = FlatVector::Nullmask(input.data[0]);
+		FlatVector::SetNullmask(result, nullmask);
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (nullmask[i]) {
+				continue;
+			}
 			result_data[i] = ldata[i];
 		}
 	}
@@ -188,10 +191,13 @@ template <typename TYPE> static void udf_binary_function(DataChunk &input, Expre
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[1]);
-
-		FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[1]));
+		auto &nullmask = FlatVector::Nullmask(input.data[1]);
+		FlatVector::SetNullmask(result, nullmask);
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (nullmask[i]) {
+				continue;
+			}
 			result_data[i] = ldata[i];
 		}
 	}
@@ -224,10 +230,13 @@ template <typename TYPE> static void udf_ternary_function(DataChunk &input, Expr
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[2]);
-
-		FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[2]));
+		auto &nullmask = FlatVector::Nullmask(input.data[2]);
+		FlatVector::SetNullmask(result, nullmask);
 
 		for (idx_t i = 0; i < input.size(); i++) {
+			if (nullmask[i]) {
+				continue;
+			}
 			result_data[i] = ldata[i];
 		}
 	}
@@ -432,8 +441,7 @@ struct UDFSum {
 		((STATE *)state)->isset = false;
 	}
 
-	template <class INPUT_TYPE, class STATE>
-	static void Operation(STATE *state, INPUT_TYPE *input, idx_t idx) {
+	template <class INPUT_TYPE, class STATE> static void Operation(STATE *state, INPUT_TYPE *input, idx_t idx) {
 		state->isset = true;
 		state->value += input[idx];
 	}
@@ -483,35 +491,35 @@ struct UDFSum {
 	static void SimpleUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
 		assert(input_count == 1);
 		switch (inputs[0].vector_type) {
-			case VectorType::CONSTANT_VECTOR: {
-				if (ConstantVector::IsNull(inputs[0])) {
-					return;
-				}
-				auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
-				UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, idata, count);
-				break;
+		case VectorType::CONSTANT_VECTOR: {
+			if (ConstantVector::IsNull(inputs[0])) {
+				return;
 			}
-			case VectorType::FLAT_VECTOR: {
-				auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
-				auto nullmask = FlatVector::Nullmask(inputs[0]);
-				if (nullmask.any()) {
-					// potential NULL values and NULL values are ignored
-					for (idx_t i = 0; i < count; i++) {
-						if (!nullmask[i]) {
-							UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, idata, i);
-						}
-					}
-				} else {
-					// quick path: no NULL values or NULL values are not ignored
-					for (idx_t i = 0; i < count; i++) {
+			auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
+			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, idata, count);
+			break;
+		}
+		case VectorType::FLAT_VECTOR: {
+			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
+			auto nullmask = FlatVector::Nullmask(inputs[0]);
+			if (nullmask.any()) {
+				// potential NULL values and NULL values are ignored
+				for (idx_t i = 0; i < count; i++) {
+					if (!nullmask[i]) {
 						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, idata, i);
 					}
 				}
-				break;
+			} else {
+				// quick path: no NULL values or NULL values are not ignored
+				for (idx_t i = 0; i < count; i++) {
+					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, idata, i);
+				}
 			}
-			default: {
-				throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
-			}
+			break;
+		}
+		default: {
+			throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
+		}
 		}
 	}
 
@@ -535,8 +543,7 @@ struct UDFSum {
 		}
 	}
 
-	template <class STATE_TYPE, class RESULT_TYPE>
-	static void Finalize(Vector &states, Vector &result, idx_t count) {
+	template <class STATE_TYPE, class RESULT_TYPE> static void Finalize(Vector &states, Vector &result, idx_t count) {
 		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
 			result.vector_type = VectorType::CONSTANT_VECTOR;
 

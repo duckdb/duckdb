@@ -85,9 +85,8 @@ public:
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context);
 	void InitializeParallelScan(ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state, const vector<column_t> &column_ids,
-	                    unordered_map<idx_t, vector<TableFilter>> *table_filters);
-
+	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+	                      const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many

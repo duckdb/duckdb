@@ -31,7 +31,8 @@ PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<LogicalType> types, bool union
 	children.push_back(move(bottom));
 }
 
-PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {}
+PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
+}
 
 // first exhaust non recursive term, then exhaust recursive term iteratively until no (new) rows are generated.
 void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
@@ -102,7 +103,7 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 }
 
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) {
-	for(auto &pipeline : pipelines) {
+	for (auto &pipeline : pipelines) {
 		pipeline->Reset(context.client);
 		pipeline->Execute(context.task);
 		pipeline->FinishTask();
@@ -111,9 +112,9 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 
 void PhysicalRecursiveCTE::FinalizePipelines() {
 	// re-order the pipelines such that they are executed in the correct order of dependencies
-	for(idx_t i = 0; i < pipelines.size(); i++) {
+	for (idx_t i = 0; i < pipelines.size(); i++) {
 		auto &deps = pipelines[i]->GetDependencies();
-		for(idx_t j = i + 1; j < pipelines.size(); j++) {
+		for (idx_t j = i + 1; j < pipelines.size(); j++) {
 			if (deps.find(pipelines[j].get()) != deps.end()) {
 				// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before pipeline "j"
 				std::swap(pipelines[i], pipelines[j]);
@@ -122,7 +123,7 @@ void PhysicalRecursiveCTE::FinalizePipelines() {
 			}
 		}
 	}
-	for(idx_t i = 0; i < pipelines.size(); i++) {
+	for (idx_t i = 0; i < pipelines.size(); i++) {
 		pipelines[i]->ClearParents();
 	}
 }

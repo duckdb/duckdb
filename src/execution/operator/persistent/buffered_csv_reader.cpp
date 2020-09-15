@@ -503,11 +503,11 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	}
 
 	// type candidates, ordered by descending specificity (~ from high to low)
-	vector<LogicalType> type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP,
-	                                       LogicalType::DATE,    LogicalType::TIME,
-	                                       LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	                                       LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/
-	                                       LogicalType::BOOLEAN};
+	vector<LogicalType> type_candidates = {
+	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
+	    LogicalType::DATE,    LogicalType::TIME,
+	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
 
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {

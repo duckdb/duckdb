@@ -47,7 +47,8 @@ duckdb_execute <- function(res) {
 setMethod(
   "show", "duckdb_result",
   function(object) {
-    cat(sprintf("<duckdb_result %s connection=%s statement='%s'>\n", extptr_str(object@stmt_lst$ref), extptr_str(object@connection@conn_ref), object@stmt_lst$str))
+    message(sprintf("<duckdb_result %s connection=%s statement='%s'>", extptr_str(object@stmt_lst$ref), extptr_str(object@connection@conn_ref), object@stmt_lst$str))
+    invisible(NULL)
   }
 )
 

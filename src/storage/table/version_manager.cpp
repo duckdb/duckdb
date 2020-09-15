@@ -118,7 +118,7 @@ void VersionManager::Append(Transaction &transaction, row_t row_start, idx_t cou
 	auto write_lock = lock.GetExclusiveLock();
 	auto current_info = GetInsertInfo(chunk_idx);
 	idx_t remaining = count;
-	while(true) {
+	while (true) {
 		idx_t start = idx_in_chunk;
 		idx_t to_process = MinValue<idx_t>(STANDARD_VECTOR_SIZE - start, remaining);
 		idx_t end = start + to_process;

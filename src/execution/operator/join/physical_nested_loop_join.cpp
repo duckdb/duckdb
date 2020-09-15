@@ -188,8 +188,8 @@ unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ExecutionCo
 class PhysicalNestedLoopJoinState : public PhysicalOperatorState {
 public:
 	PhysicalNestedLoopJoinState(PhysicalOperator &op, PhysicalOperator *left, vector<JoinCondition> &conditions)
-	    : PhysicalOperatorState(op, left), fetch_next_left(true), fetch_next_right(false), right_chunk(0), left_tuple(0),
-	      right_tuple(0) {
+	    : PhysicalOperatorState(op, left), fetch_next_left(true), fetch_next_right(false), right_chunk(0),
+	      left_tuple(0), right_tuple(0) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(*cond.left);

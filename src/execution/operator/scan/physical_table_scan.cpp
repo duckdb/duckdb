@@ -46,7 +46,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			}
 			// call the init function
 			state.operator_data =
-				function.init(context.client, bind_data.get(), state.parallel_state, column_ids, table_filters);
+			    function.init(context.client, bind_data.get(), state.parallel_state, column_ids, table_filters);
 		}
 		state.initialized = true;
 	}
@@ -55,7 +55,8 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 		if (chunk.size() == 0) {
 			// exhausted this chunk: fetch the next parallel state to process (if any)
 			if (state.parallel_state && function.parallel_state_next) {
-				if (function.parallel_state_next(context.client, bind_data.get(), state.operator_data.get(), state.parallel_state)) {
+				if (function.parallel_state_next(context.client, bind_data.get(), state.operator_data.get(),
+				                                 state.parallel_state)) {
 					continue;
 				}
 			}
@@ -64,7 +65,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 		} else {
 			return;
 		}
-	} while(true);
+	} while (true);
 	assert(chunk.size() == 0);
 	if (function.cleanup) {
 		function.cleanup(context.client, bind_data.get(), state.operator_data.get());

@@ -15,6 +15,12 @@
 namespace duckdb {
 using namespace std;
 
+#ifndef DUCKDB_ALLOW_UNDEFINED
+static idx_t Align(idx_t n) {
+	return ((n + 7) / 8) * 8;
+}
+#endif
+
 SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types,
                                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> bindings,
                                          bool parallel)
@@ -25,8 +31,11 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
 	vector<AggregateObject> aggregates;
 	for (auto &binding : bindings) {
-		auto payload_size = binding->function.state_size();
-		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
+		auto payload_width = binding->function.state_size();
+#ifndef DUCKDB_ALLOW_UNDEFINED
+		payload_width = Align(payload_width);
+#endif
+		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_width,
 		                                     binding->distinct, binding->return_type.InternalType()));
 	}
 	return aggregates;
@@ -36,7 +45,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
                                          vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects,
                                          bool parallel)
     : aggregates(move(aggregate_objects)), group_types(group_types), payload_types(payload_types), group_width(0),
-      payload_width(0), capacity(0), entries(0), data(nullptr), parallel(parallel) {
+      group_padding(0), payload_width(0), capacity(0), entries(0), data(nullptr), parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][GROUPS][PAYLOAD]
 	// [FLAG] is the state of the tuple in memory
@@ -45,7 +54,17 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
 	}
+
+#ifndef DUCKDB_ALLOW_UNDEFINED
+	auto aligned_flag_and_group_width = Align(FLAG_SIZE + group_width);
+	group_padding = aligned_flag_and_group_width - FLAG_SIZE - group_width;
+	group_width += group_padding;
+#endif
+
 	for (idx_t i = 0; i < aggregates.size(); i++) {
+#ifndef DUCKDB_ALLOW_UNDEFINED
+		assert(aggregates[i].payload_size % 8 == 0);
+#endif
 		payload_width += aggregates[i].payload_size;
 	}
 	empty_payload_data = unique_ptr<data_t[]>(new data_t[payload_width]);
@@ -82,6 +101,9 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalT
 	}
 
 	tuple_size = FLAG_SIZE + (group_width + payload_width);
+#ifndef DUCKDB_ALLOW_UNDEFINED
+	assert(tuple_size % 8 == 0);
+#endif
 	Resize(initial_capacity);
 }
 
@@ -186,6 +208,8 @@ void SuperLargeHashTable::Resize(idx_t size) {
 			assert(groups.size() == found_entries);
 			Vector new_addresses(LogicalType::POINTER);
 			new_table->FindOrCreateGroups(groups, new_addresses);
+
+			VectorOperations::AddInPlace(addresses, group_padding, groups.size());
 
 			// NB: both address vectors already point to the payload start
 			assert(addresses.type == new_addresses.type && addresses.type == LogicalType::POINTER);
@@ -327,12 +351,8 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
 			auto ptr = (T *)pointers[pointer_idx];
-
-			if ((*gdata.nullmask)[group_idx]) {
-				*ptr = NullValue<T>();
-			} else {
-				*ptr = data[group_idx];
-			}
+			T store_value = (*gdata.nullmask)[group_idx] ? NullValue<T>() : data[group_idx];
+			Store<T>(store_value, (data_ptr_t)ptr);
 			pointers[pointer_idx] += type_size;
 		}
 	} else {
@@ -340,8 +360,7 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
 			auto ptr = (T *)pointers[pointer_idx];
-
-			*ptr = data[group_idx];
+			Store<T>(data[group_idx], (data_ptr_t)ptr);
 			pointers[pointer_idx] += type_size;
 		}
 	}
@@ -417,10 +436,10 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = (T *)pointers[idx];
+			auto value = Load<T>((data_ptr_t)pointers[idx]);
 
 			if ((*gdata.nullmask)[group_idx]) {
-				if (IsNullValue<T>(*value)) {
+				if (IsNullValue<T>(value)) {
 					// match: move to next value to compare
 					sel.set_index(match_count++, idx);
 					pointers[idx] += type_size;
@@ -428,7 +447,7 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 					no_match.set_index(no_match_count++, idx);
 				}
 			} else {
-				if (Equals::Operation<T>(data[group_idx], *value)) {
+				if (Equals::Operation<T>(data[group_idx], value)) {
 					sel.set_index(match_count++, idx);
 					pointers[idx] += type_size;
 				} else {
@@ -440,9 +459,9 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = (T *)pointers[idx];
+			auto value = Load<T>((data_ptr_t)pointers[idx]);
 
-			if (Equals::Operation<T>(data[group_idx], *value)) {
+			if (Equals::Operation<T>(data[group_idx], value)) {
 				sel.set_index(match_count++, idx);
 				pointers[idx] += type_size;
 			} else {
@@ -580,6 +599,14 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 		std::swap(next_vector, no_match_vector);
 		remaining_entries = no_match_count;
 	}
+#ifndef DUCKDB_ALLOW_UNDEFINED
+#ifdef DEBUG
+	for (idx_t i = 0; i < groups.size(); i++) {
+		assert((ptrdiff_t)data_pointers[i] % 8 == 0);
+	}
+#endif
+#endif
+
 	return new_group_count;
 }
 
@@ -619,11 +646,12 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 		VectorOperations::Gather::Set(addresses, column, groups.size());
 	}
 
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &target = result.data[i];
-		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, target, groups.size());
+	// there might be some padding, increment pointers further to addresss this
+	VectorOperations::AddInPlace(addresses, group_padding, groups.size());
 
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggr = aggregates[i];
+		aggr.function.finalize(addresses, result.data[i], groups.size());
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, groups.size());
 	}
 	scan_position = ptr - data;

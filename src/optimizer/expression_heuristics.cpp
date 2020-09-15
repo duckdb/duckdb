@@ -184,7 +184,7 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 		return ExpressionCost(const_expr.return_type.InternalType(), 1);
 	}
 	case ExpressionClass::BOUND_PARAMETER: {
-		auto &const_expr = (BoundConstantExpression &)expr;
+		auto &const_expr = (BoundParameterExpression &)expr;
 		return ExpressionCost(const_expr.return_type.InternalType(), 1);
 	}
 	case ExpressionClass::BOUND_REF: {

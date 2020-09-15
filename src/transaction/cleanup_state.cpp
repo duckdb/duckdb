@@ -21,7 +21,7 @@ CleanupState::~CleanupState() {
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
-		CatalogEntry *catalog_entry = *((CatalogEntry **)data);
+		auto catalog_entry = Load<CatalogEntry *>(data);
 		// destroy the backed up entry: it is no longer required
 		assert(catalog_entry->parent);
 		if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {

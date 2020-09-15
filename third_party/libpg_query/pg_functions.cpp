@@ -49,13 +49,15 @@ static void allocate_new(parser_state *state, size_t n) {
 }
 
 void *palloc(size_t n) {
-	if (pg_parser_state.malloc_pos + n > PG_MALLOC_SIZE) {
-		allocate_new(&pg_parser_state, n);
+	// we need to align our pointers for the sanitizer
+	auto aligned_n = ((n + 7) / 8) * 8;
+	if (pg_parser_state.malloc_pos + aligned_n > PG_MALLOC_SIZE) {
+		allocate_new(&pg_parser_state, aligned_n);
 	}
 
 	void *ptr = pg_parser_state.malloc_ptrs[pg_parser_state.malloc_ptr_idx - 1] + pg_parser_state.malloc_pos;
 	memset(ptr, 0, n);
-	pg_parser_state.malloc_pos += n;
+	pg_parser_state.malloc_pos += aligned_n;
 	return ptr;
 }
 

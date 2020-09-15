@@ -271,6 +271,29 @@ class CharClass {
   CharClass& operator=(const CharClass&) = delete;
 };
 
+struct repeat_t {  // Repeat
+    int max_;
+    int min_;
+};
+
+struct capture_t {  // Capture
+    int cap_;
+    std::string* name_;
+};
+
+struct literal_string_t{  // LiteralString
+    int nrunes_;
+    Rune* runes_;
+};
+
+struct char_class_t {  // CharClass
+    // These two could be in separate union members,
+    // but it wouldn't save any space (there are other two-word structs)
+    // and keeping them separate avoids confusion during parsing.
+    CharClass* cc_;
+    CharClassBuilder* ccb_;
+};
+
 class Regexp {
  public:
 
@@ -558,25 +581,10 @@ class Regexp {
 
   // Arguments to operator.  See description of operators above.
   union {
-    struct {  // Repeat
-      int max_;
-      int min_;
-    } repeat_;
-    struct {  // Capture
-      int cap_;
-      std::string* name_;
-    } capture_;
-    struct {  // LiteralString
-      int nrunes_;
-      Rune* runes_;
-	} literal_string_;
-    struct {  // CharClass
-      // These two could be in separate union members,
-      // but it wouldn't save any space (there are other two-word structs)
-      // and keeping them separate avoids confusion during parsing.
-      CharClass* cc_;
-      CharClassBuilder* ccb_;
-    } char_class_;
+    repeat_t repeat_;
+    capture_t capture_;
+    literal_string_t literal_string_;
+    char_class_t char_class_;
     Rune rune_;  // Literal
     int match_id_;  // HaveMatch
     void *the_union_[2];  // as big as any other element, for memset

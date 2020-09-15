@@ -173,7 +173,7 @@
 
 #if MINIZ_X86_OR_X64_CPU
 /* Set MINIZ_USE_UNALIGNED_LOADS_AND_STORES to 1 on CPU's that permit efficient integer loads and stores from unaligned addresses. */
-#define MINIZ_USE_UNALIGNED_LOADS_AND_STORES 1
+#define MINIZ_USE_UNALIGNED_LOADS_AND_STORES 0 // always 0 because alignment
 #else
 #define MINIZ_USE_UNALIGNED_LOADS_AND_STORES 0
 #endif

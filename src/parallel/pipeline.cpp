@@ -104,7 +104,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::TABLE_SCAN: {
 		// we reached a scan: split it up into parts and schedule the parts
 		auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-		auto &get = (PhysicalTableScan &) *op;
+		auto &get = (PhysicalTableScan &)*op;
 		if (!get.function.max_threads) {
 			// table function cannot be parallelized
 			return false;
@@ -124,7 +124,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 
 		// launch a task for every thread
 		this->total_tasks = max_threads;
-		for(idx_t i = 0; i < max_threads; i++) {
+		for (idx_t i = 0; i < max_threads; i++) {
 			auto task = make_unique<PipelineTask>(this);
 			scheduler.ScheduleTask(*executor.producer, move(task));
 		}

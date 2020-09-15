@@ -23,7 +23,6 @@ struct FunctionOperatorData {
 	}
 };
 
-
 //! TableFilter represents a filter pushed down into the table scan.
 class TableFilter {
 public:
@@ -45,11 +44,10 @@ typedef void (*table_function_t)(ClientContext &context, const FunctionData *bin
 typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data,
                                          FunctionOperatorData *operator_state);
 typedef idx_t (*table_function_max_threads_t)(ClientContext &context, const FunctionData *bind_data);
-typedef unique_ptr<ParallelState> (*table_function_init_parallel_state_t)(ClientContext &context, const FunctionData *bind_data);
-typedef bool (*table_function_parallel_state_next_t)(ClientContext &context,
-                                                     const FunctionData *bind_data,
-                                                     FunctionOperatorData *state,
-                                                     ParallelState* parallel_state);
+typedef unique_ptr<ParallelState> (*table_function_init_parallel_state_t)(ClientContext &context,
+                                                                          const FunctionData *bind_data);
+typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
+                                                     FunctionOperatorData *state, ParallelState *parallel_state);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
 typedef idx_t (*table_function_cardinality_t)(const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
@@ -61,35 +59,30 @@ class TableFunction : public SimpleFunction {
 public:
 	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_t init = nullptr,
-	              table_function_cleanup_t cleanup = nullptr,
-	              table_function_dependency_t dependency = nullptr, table_function_cardinality_t cardinality = nullptr,
+	              table_function_cleanup_t cleanup = nullptr, table_function_dependency_t dependency = nullptr,
+	              table_function_cardinality_t cardinality = nullptr,
 	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
-	              table_function_to_string_t to_string = nullptr,
-				  table_function_max_threads_t max_threads = nullptr,
-				  table_function_init_parallel_state_t init_parallel_state = nullptr,
-				  table_function_parallel_state_next_t parallel_state_next = nullptr,
-				  bool projection_pushdown = false,
+	              table_function_to_string_t to_string = nullptr, table_function_max_threads_t max_threads = nullptr,
+	              table_function_init_parallel_state_t init_parallel_state = nullptr,
+	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
 	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), cleanup(cleanup),
-	      dependency(dependency), cardinality(cardinality),
-	      pushdown_complex_filter(pushdown_complex_filter), to_string(to_string),
-		  max_threads(max_threads), init_parallel_state(init_parallel_state), parallel_state_next(parallel_state_next),
-		  projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
+	      dependency(dependency), cardinality(cardinality), pushdown_complex_filter(pushdown_complex_filter),
+	      to_string(to_string), max_threads(max_threads), init_parallel_state(init_parallel_state),
+	      parallel_state_next(parallel_state_next), projection_pushdown(projection_pushdown),
+	      filter_pushdown(filter_pushdown) {
 	}
 	TableFunction(vector<LogicalType> arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_t init = nullptr, table_function_cleanup_t cleanup = nullptr,
-	              table_function_dependency_t dependency = nullptr,
-	              table_function_cardinality_t cardinality = nullptr,
+	              table_function_dependency_t dependency = nullptr, table_function_cardinality_t cardinality = nullptr,
 	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
-	              table_function_to_string_t to_string = nullptr,
-				  table_function_max_threads_t max_threads = nullptr,
-				  table_function_init_parallel_state_t init_parallel_state = nullptr,
-				  table_function_parallel_state_next_t parallel_state_next = nullptr,
-				  bool projection_pushdown = false,
+	              table_function_to_string_t to_string = nullptr, table_function_max_threads_t max_threads = nullptr,
+	              table_function_init_parallel_state_t init_parallel_state = nullptr,
+	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
-	    : TableFunction(string(), move(arguments), function, bind, init, cleanup, dependency,
-	                    cardinality, pushdown_complex_filter, to_string, max_threads, init_parallel_state,
-						parallel_state_next, projection_pushdown, filter_pushdown) {
+	    : TableFunction(string(), move(arguments), function, bind, init, cleanup, dependency, cardinality,
+	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_state_next,
+	                    projection_pushdown, filter_pushdown) {
 	}
 
 	//! (Optional) Bind function

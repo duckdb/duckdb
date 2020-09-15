@@ -68,13 +68,13 @@ struct StringComparisonOperators {
 			// prefix and length are equal
 			if (a.IsInlined()) {
 				// small string: compare entire inlined string
-				if (memcmp(a.prefix, b.prefix, a.length) == 0) {
+				if (memcmp(a.value.inlined.inlined, b.value.inlined.inlined, a.GetSize()) == 0) {
 					// entire string is equal
 					return INVERSE ? false : true;
 				}
 			} else {
 				// large string: check main data source
-				if (memcmp(a.value_.data, b.value_.data, a.length) == 0) {
+				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
 					// entire string is equal
 					return INVERSE ? false : true;
 				}

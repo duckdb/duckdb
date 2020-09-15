@@ -40,9 +40,9 @@ struct ColumnScanState {
 	//! The locks that are held during the scan, only used by the index scan
 	vector<unique_ptr<StorageLockKey>> locks;
 	//! Whether or not InitializeState has been called for this segment
-	bool initialized;
+	bool initialized = false;
 	//! If this segment has already been checked for skipping puorposes
-	bool segment_checked;
+	bool segment_checked = false;
 
 public:
 	//! Move on to the next vector in the scan

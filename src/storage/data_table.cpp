@@ -250,8 +250,9 @@ void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
 	state.transaction_local_data = false;
 }
 
-bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state, const vector<column_t> &column_ids,
-	                    unordered_map<idx_t, vector<TableFilter>> *table_filters) {
+bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+                                 const vector<column_t> &column_ids,
+                                 unordered_map<idx_t, vector<TableFilter>> *table_filters) {
 	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
 	if (context.force_parallelism) {
 		PARALLEL_SCAN_VECTOR_COUNT = 1;
@@ -300,7 +301,6 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		// finished all scans: no more scans remaining
 		return false;
 	}
-
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
