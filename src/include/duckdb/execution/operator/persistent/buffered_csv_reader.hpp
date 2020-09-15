@@ -166,6 +166,8 @@ private:
 	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<LogicalType> SniffCSV(vector<LogicalType> requested_types);
+	//! Change the date format for the type to the string
+	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
 	//! Try to cast a string value to the specified sql type
 	bool TryCastValue(Value value, LogicalType sql_type);
 	//! Try to cast a vector of values to the specified sql type
