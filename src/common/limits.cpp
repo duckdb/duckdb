@@ -8,7 +8,7 @@ using namespace std;
 namespace duckdb {
 
 int8_t NumericLimits<int8_t>::Minimum() {
-	return numeric_limits<int8_t>::min() + 1;
+	return numeric_limits<int8_t>::lowest() + 1;
 }
 
 int8_t NumericLimits<int8_t>::Maximum() {
@@ -16,7 +16,7 @@ int8_t NumericLimits<int8_t>::Maximum() {
 }
 
 int16_t NumericLimits<int16_t>::Minimum() {
-	return numeric_limits<int16_t>::min() + 1;
+	return numeric_limits<int16_t>::lowest() + 1;
 }
 
 int16_t NumericLimits<int16_t>::Maximum() {
@@ -24,7 +24,7 @@ int16_t NumericLimits<int16_t>::Maximum() {
 }
 
 int32_t NumericLimits<int32_t>::Minimum() {
-	return numeric_limits<int32_t>::min() + 1;
+	return numeric_limits<int32_t>::lowest() + 1;
 }
 
 int32_t NumericLimits<int32_t>::Maximum() {
@@ -32,7 +32,7 @@ int32_t NumericLimits<int32_t>::Maximum() {
 }
 
 int64_t NumericLimits<int64_t>::Minimum() {
-	return numeric_limits<int64_t>::min() + 1;
+	return numeric_limits<int64_t>::lowest() + 1;
 }
 
 int64_t NumericLimits<int64_t>::Maximum() {
@@ -40,7 +40,7 @@ int64_t NumericLimits<int64_t>::Maximum() {
 }
 
 float NumericLimits<float>::Minimum() {
-	return numeric_limits<float>::min();
+	return numeric_limits<float>::lowest();
 }
 
 float NumericLimits<float>::Maximum() {
@@ -48,7 +48,7 @@ float NumericLimits<float>::Maximum() {
 }
 
 double NumericLimits<double>::Minimum() {
-	return numeric_limits<double>::min();
+	return numeric_limits<double>::lowest();
 }
 
 double NumericLimits<double>::Maximum() {
@@ -56,7 +56,7 @@ double NumericLimits<double>::Maximum() {
 }
 
 uint16_t NumericLimits<uint16_t>::Minimum() {
-	return numeric_limits<uint16_t>::min();
+	return numeric_limits<uint16_t>::lowest();
 }
 
 uint16_t NumericLimits<uint16_t>::Maximum() {
@@ -64,7 +64,7 @@ uint16_t NumericLimits<uint16_t>::Maximum() {
 }
 
 uint32_t NumericLimits<uint32_t>::Minimum() {
-	return numeric_limits<uint32_t>::min();
+	return numeric_limits<uint32_t>::lowest();
 }
 
 uint32_t NumericLimits<uint32_t>::Maximum() {
@@ -72,7 +72,7 @@ uint32_t NumericLimits<uint32_t>::Maximum() {
 }
 
 uint64_t NumericLimits<uint64_t>::Minimum() {
-	return numeric_limits<uint64_t>::min();
+	return numeric_limits<uint64_t>::lowest();
 }
 
 uint64_t NumericLimits<uint64_t>::Maximum() {
@@ -82,7 +82,7 @@ uint64_t NumericLimits<uint64_t>::Maximum() {
 hugeint_t NumericLimits<hugeint_t>::Minimum() {
 	hugeint_t result;
 	result.lower = 1;
-	result.upper = numeric_limits<int64_t>::min() + 1;
+	result.upper = numeric_limits<int64_t>::lowest() + 1;
 	return result;
 }
 
