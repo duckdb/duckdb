@@ -269,7 +269,7 @@ static constexpr int64_t kNanosecondsInADay = kMillisecondsInADay * 1000LL * 100
 
 static int64_t impala_timestamp_to_nanoseconds(const Int96 &impala_timestamp) {
 	int64_t days_since_epoch = impala_timestamp.value[2] - kJulianToUnixEpochDays;
-	int64_t nanoseconds = *(reinterpret_cast<const int64_t *>(&(impala_timestamp.value)));
+	auto nanoseconds = Load<int64_t>((data_ptr_t)impala_timestamp.value);
 	return days_since_epoch * kNanosecondsInADay + nanoseconds;
 }
 
@@ -290,7 +290,7 @@ static Int96 timestamp_t_to_impala_timestamp(timestamp_t &ts) {
 	// first two uint32 in Int96 are nanoseconds since midnights
 	// last uint32 is number of days since year 4713 BC ("Julian date")
 	Int96 impala_ts;
-	*((uint64_t *)impala_ts.value) = ms_since_midnight * 1000000;
+	Store<uint64_t>(ms_since_midnight * 1000000, (data_ptr_t)impala_ts.value);
 	impala_ts.value[2] = days_since_epoch + kJulianToUnixEpochDays;
 	return impala_ts;
 }

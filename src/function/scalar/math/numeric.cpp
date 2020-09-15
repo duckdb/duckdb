@@ -90,7 +90,7 @@ template <class OP>
 unique_ptr<FunctionData> decimal_unary_op_bind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	switch(decimal_type.InternalType()) {
+	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::SMALLINT);
 		break;
@@ -189,7 +189,7 @@ template <class T, class POWERS_OF_TEN, class OP>
 static void generic_round_function_decimal(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	OP::template Operation<T, POWERS_OF_TEN>(input, func_expr.children[0]->return_type.scale(), result);
-};
+}
 
 template <class OP>
 unique_ptr<FunctionData> bind_generic_round_function_decimal(ClientContext &context, ScalarFunction &bound_function,
@@ -199,7 +199,7 @@ unique_ptr<FunctionData> bind_generic_round_function_decimal(ClientContext &cont
 	if (decimal_type.scale() == 0) {
 		bound_function.function = ScalarFunction::NopFunction;
 	} else {
-		switch(decimal_type.InternalType()) {
+		switch (decimal_type.InternalType()) {
 		case PhysicalType::INT16:
 			bound_function.function = generic_round_function_decimal<int16_t, NumericHelper, OP>;
 			break;
@@ -420,7 +420,7 @@ static void decimal_round_positive_precision_function(DataChunk &input, Expressi
 		}
 		return input / power_of_ten;
 	});
-};
+}
 
 unique_ptr<FunctionData> bind_decimal_round_precision(ClientContext &context, ScalarFunction &bound_function,
                                                       vector<unique_ptr<Expression>> &arguments) {
@@ -441,7 +441,7 @@ unique_ptr<FunctionData> bind_decimal_round_precision(ClientContext &context, Sc
 	uint8_t target_scale;
 	if (round_value < 0) {
 		target_scale = 0;
-		switch(decimal_type.InternalType()) {
+		switch (decimal_type.InternalType()) {
 		case PhysicalType::INT16:
 			bound_function.function = decimal_round_negative_precision_function<int16_t, NumericHelper>;
 			break;
@@ -462,7 +462,7 @@ unique_ptr<FunctionData> bind_decimal_round_precision(ClientContext &context, Sc
 			target_scale = decimal_type.scale();
 		} else {
 			target_scale = round_value;
-			switch(decimal_type.InternalType()) {
+			switch (decimal_type.InternalType()) {
 			case PhysicalType::INT16:
 				bound_function.function = decimal_round_positive_precision_function<int16_t, NumericHelper>;
 				break;

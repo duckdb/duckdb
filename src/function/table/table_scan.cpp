@@ -186,7 +186,7 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 		}
 
 		Value low_value, high_value, equal_value;
-		ExpressionType low_comparison_type, high_comparison_type;
+		ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
 		// try to find a matching index for any of the filter expressions
 		for (idx_t i = 0; i < filters.size(); i++) {
 			auto expr = filters[i].get();

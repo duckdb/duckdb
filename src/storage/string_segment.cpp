@@ -74,7 +74,7 @@ void StringSegment::read_string(string_t *result_data, buffer_handle_set_t &hand
                                 size_t vector_index) {
 	if (string_updates && string_updates[vector_index]) {
 		auto &info = *string_updates[vector_index];
-		while (info.ids[update_idx] < src_idx) {
+		while (update_idx < STANDARD_VECTOR_SIZE && info.ids[update_idx] < src_idx) {
 			//! We need to catch the update_idx up to the src_idx
 			update_idx++;
 		}

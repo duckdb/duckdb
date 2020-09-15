@@ -186,14 +186,15 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 
-			auto target = (string_t *)key_locations[i];
+			string_t new_val;
 			if ((*vdata.nullmask)[source_idx]) {
-				*target = NullValue<string_t>();
+				new_val = NullValue<string_t>();
 			} else if (source[source_idx].IsInlined()) {
-				*target = source[source_idx];
+				new_val = source[source_idx];
 			} else {
-				*target = local_heap.AddString(source[source_idx]);
+				new_val = local_heap.AddString(source[source_idx]);
 			}
+			Store<string_t>(new_val, key_locations[i]);
 			key_locations[i] += sizeof(string_t);
 		}
 		lock_guard<mutex> append_lock(ht_lock);
