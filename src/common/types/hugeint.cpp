@@ -292,12 +292,12 @@ bool Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 	int overflow = lhs.lower + rhs.lower < lhs.lower;
 	if (rhs.upper >= 0) {
 		// RHS is positive: check for overflow
-		if (lhs.upper > (std::numeric_limits<int64_t>::max() - (rhs.upper + overflow))) {
+		if (lhs.upper > (std::numeric_limits<int64_t>::max() - rhs.upper - overflow)) {
 			return false;
 		}
 	} else {
 		// RHS is negative: check for underflow
-		if (lhs.upper < std::numeric_limits<int64_t>::min() - (rhs.upper + overflow)) {
+		if (lhs.upper < std::numeric_limits<int64_t>::min() - rhs.upper - overflow) {
 			return false;
 		}
 	}
