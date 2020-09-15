@@ -57,6 +57,12 @@ debug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
+ubsandebug:
+	mkdir -p build/ubsandebug && \
+	cd build/ubsandebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DENABLE_SANITIZER=0 -DENABLE_UBSAN=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build .
+
 release_expanded:
 	mkdir -p build/release_expanded && \
 	cd build/release_expanded && \

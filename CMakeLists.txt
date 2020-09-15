@@ -73,17 +73,31 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
-option(ENABLE_SANITIZER "Enable sanitizer." TRUE)
+option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 if(${ENABLE_SANITIZER})
   if(BUILD_PYTHON OR BUILD_R)
     if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
       message(
         WARNING
-          "Sanitizers are not supported for the Python build. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled"
+          "Sanitizers are not supported for the Python/R builds. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled"
       )
     endif()
   else()
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+  endif()
+endif()
+
+option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
+if(${ENABLE_UBSAN})
+  if(BUILD_PYTHON OR BUILD_R)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+      message(
+        WARNING
+          "Sanitizers are not supported for the Python/R builds. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled"
+      )
+    endif()
+  else()
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined")
   endif()
 endif()
 
