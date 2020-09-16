@@ -101,12 +101,9 @@ public:
 	virtual const string &ColumnName(idx_t col) = 0;
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
 	virtual const char *ColumnDefault(idx_t col) = 0;
-	virtual bool IsNullable(idx_t col) {
-		return true;
-	}
+	virtual bool IsNullable(idx_t col) = 0;
 
 	void WriteColumns(idx_t index, idx_t start_col, idx_t end_col, DataChunk &output);
-	static void WriteTypeInfo(idx_t index, const LogicalType &type, DataChunk &output);
 };
 
 class TableColumnHelper : public ColumnHelper {
@@ -167,6 +164,9 @@ public:
 	const char *ColumnDefault(idx_t col) {
 		return nullptr;
 	}
+	bool IsNullable(idx_t col) {
+		return true;
+	}
 
 private:
 	ViewCatalogEntry *entry;
@@ -201,84 +201,80 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		// "is_nullable", PhysicalType::VARCHAR YES/NO
 		output.SetValue(6, index, Value(IsNullable(i) ? "YES" : "NO"));
 
-		// Write the type-related output columns
-		WriteTypeInfo(index, ColumnType(i), output);
-	}
-}
+		// "data_type", PhysicalType::VARCHAR
+		const LogicalType &type = ColumnType(i);
+		output.SetValue(7, index, Value(type.ToString()));
 
-void ColumnHelper::WriteTypeInfo(idx_t index, const LogicalType &type, DataChunk &output) {
-	// "data_type", PhysicalType::VARCHAR
-	output.SetValue(7, index, Value(type.ToString()));
+		if (type == LogicalType::VARCHAR) {
+			// FIXME: need check constraints in place to set this correctly
+			// "character_maximum_length", PhysicalType::INTEGER
+			output.SetValue(8, index, Value());
+			// "character_octet_length", PhysicalType::INTEGER
+			// FIXME: where did this number come from?
+			output.SetValue(9, index, Value::INTEGER(1073741824));
+		} else {
+			// "character_maximum_length", PhysicalType::INTEGER
+			output.SetValue(8, index, Value());
+			// "character_octet_length", PhysicalType::INTEGER
+			output.SetValue(9, index, Value());
+		}
 
-	if (type == LogicalType::VARCHAR) {
-		// FIXME: need check constraints in place to set this correctly
-		// "character_maximum_length", PhysicalType::INTEGER
-		output.SetValue(8, index, Value());
-		// "character_octet_length", PhysicalType::INTEGER
-		// FIXME: where did this number come from?
-		output.SetValue(9, index, Value::INTEGER(1073741824));
-	} else {
-		// "character_maximum_length", PhysicalType::INTEGER
-		output.SetValue(8, index, Value());
-		// "character_octet_length", PhysicalType::INTEGER
-		output.SetValue(9, index, Value());
-	}
+		Value numeric_precision, numeric_scale;
+		switch (type.id()) {
+		case LogicalTypeId::DECIMAL:
+			numeric_precision = Value::INTEGER(type.width());
+			numeric_scale = Value::INTEGER(type.scale());
+			break;
+		case LogicalTypeId::HUGEINT:
+			numeric_precision = Value::INTEGER(128);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::BIGINT:
+			numeric_precision = Value::INTEGER(64);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::INTEGER:
+			numeric_precision = Value::INTEGER(32);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::SMALLINT:
+			numeric_precision = Value::INTEGER(16);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::TINYINT:
+			numeric_precision = Value::INTEGER(8);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::FLOAT:
+			numeric_precision = Value::INTEGER(24);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		case LogicalTypeId::DOUBLE:
+			numeric_precision = Value::INTEGER(53);
+			numeric_scale = Value::INTEGER(0);
+			break;
+		default:
+			numeric_precision = Value();
+			numeric_scale = Value();
+			break;
+		}
+		output.SetValue(10, index, numeric_precision);
+		output.SetValue(11, index, numeric_scale);
 
-	Value numeric_precision, numeric_scale;
-	switch (type.id()) {
-	case LogicalTypeId::DECIMAL:
-		numeric_precision = Value::INTEGER(type.width());
-		numeric_scale = Value::INTEGER(type.scale());
-		break;
-	case LogicalTypeId::HUGEINT:
-		numeric_precision = Value::INTEGER(128);
-		numeric_scale = Value::INTEGER(0);
-		break;
-	case LogicalTypeId::BIGINT:
-		numeric_precision = Value::INTEGER(64);
-		numeric_scale = Value::INTEGER(0);
-		break;
-	case LogicalTypeId::INTEGER:
-		numeric_precision = Value::INTEGER(32);
-		numeric_scale = Value::INTEGER(0);
-		break;
-	case LogicalTypeId::SMALLINT:
-		numeric_precision = Value::INTEGER(16);
-		numeric_scale = Value::INTEGER(0);
-		break;
-	case LogicalTypeId::TINYINT:
-		numeric_precision = Value::INTEGER(8);
-		numeric_scale = Value::INTEGER(0);
-		break;
-	case LogicalTypeId::FLOAT:
-		numeric_precision = Value::INTEGER(24);
-		numeric_scale = Value::INTEGER(0);
-		break;
-	case LogicalTypeId::DOUBLE:
-		numeric_precision = Value::INTEGER(53);
-		numeric_scale = Value::INTEGER(0);
-		break;
-	default:
-		numeric_precision = Value();
-		numeric_scale = Value();
-		break;
+		Value datetime_precision;
+		switch (type.id()) {
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::INTERVAL:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+			// No fractional seconds are currently supported in DuckDB
+			datetime_precision = Value::INTEGER(0);
+			break;
+		default:
+			datetime_precision = Value();
+		}
+		output.SetValue(12, index, datetime_precision);
 	}
-	output.SetValue(10, index, numeric_precision);
-	output.SetValue(11, index, numeric_scale);
-
-	Value datetime_precision;
-	switch (type.id()) {
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::INTERVAL:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIMESTAMP:
-		// No fractional seconds are currently supported in DuckDB
-		datetime_precision = Value::INTEGER(0);
-		break;
-	default:
-		datetime_precision = Value();
-	}
-	output.SetValue(12, index, datetime_precision);
 }
 
 } // anonymous namespace
