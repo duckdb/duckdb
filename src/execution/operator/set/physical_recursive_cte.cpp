@@ -17,7 +17,7 @@ public:
 	}
 	unique_ptr<PhysicalOperatorState> top_state;
 	unique_ptr<PhysicalOperatorState> bottom_state;
-	unique_ptr<SuperLargeHashTable> ht;
+	unique_ptr<GroupedAggregateHashTable> ht;
 
 	bool top_done = false;
 
@@ -41,9 +41,9 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
 	if (!state->ht) {
-		state->ht =
-		    make_unique<SuperLargeHashTable>(BufferManager::GetBufferManager(context.client), STANDARD_VECTOR_SIZE * 2,
-		                                     types, vector<LogicalType>(), vector<BoundAggregateExpression *>());
+		state->ht = make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client),
+		                                                   STANDARD_VECTOR_SIZE * 2, types, vector<LogicalType>(),
+		                                                   vector<BoundAggregateExpression *>());
 	}
 
 	if (!state->recursing) {

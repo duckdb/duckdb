@@ -35,20 +35,20 @@ struct AggregateObject {
 	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
 };
 
-//! SuperLargeHashTable is a linear probing HT that is used for computing
+//! GroupedAggregateHashTable is a linear probing HT that is used for computing
 //! aggregates
 /*!
-    SuperLargeHashTable is a HT that is used for computing aggregates. It takes
+    GroupedAggregateHashTable is a HT that is used for computing aggregates. It takes
    as input the set of groups and the types of the aggregates to compute and
    stores them in the HT. It uses linear probing for collision resolution.
 */
-class SuperLargeHashTable {
+class GroupedAggregateHashTable {
 public:
-	SuperLargeHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
-	                    vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates);
-	SuperLargeHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
-	                    vector<LogicalType> payload_types, vector<AggregateObject> aggregates);
-	~SuperLargeHashTable();
+	GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
+	                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates);
+	GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
+	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates);
+	~GroupedAggregateHashTable();
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
@@ -69,7 +69,7 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
 
-	void Combine(SuperLargeHashTable &other);
+	void Combine(GroupedAggregateHashTable &other);
 	void Finalize();
 
 	//! The stringheap of the AggregateHashTable
@@ -94,7 +94,7 @@ private:
 	//! The total tuple size
 	idx_t tuple_size;
 	//! The capacity of the HT. This can be increased using
-	//! SuperLargeHashTable::Resize
+	//! GroupedAggregateHashTable::Resize
 	idx_t capacity;
 	//! The amount of entries stored in the HT currently
 	idx_t entries;
@@ -117,16 +117,11 @@ private:
 
 	const uint8_t hash_prefix_bits = 16;
 
-	vector<unique_ptr<SuperLargeHashTable>> distinct_hashes;
-	//
-	//	//! The size of the initial flag for each cell
-	//	static constexpr int FLAG_SIZE = sizeof(uint8_t);
-	//	//! Flag indicating a cell is empty
-	//	static constexpr int EMPTY_CELL = 0x00;
-	//	//! Flag indicating a cell is full
-	//	static constexpr int FULL_CELL = 0xFF;
+	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 
-	SuperLargeHashTable(const SuperLargeHashTable &) = delete;
+	bool finalized;
+
+	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
 
 private:
 	//! Resize the HT to the specified size. Must be larger than the current

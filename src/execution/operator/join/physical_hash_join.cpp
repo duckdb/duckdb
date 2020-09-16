@@ -83,9 +83,9 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 				info.correlated_aggregates.push_back(move(aggr));
 				payload_types.push_back(aggregate_functions[i].return_type);
 			}
-			info.correlated_counts =
-			    make_unique<SuperLargeHashTable>(BufferManager::GetBufferManager(context), STANDARD_VECTOR_SIZE * 2,
-			                                     delim_types, payload_types, correlated_aggregates);
+			info.correlated_counts = make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context),
+			                                                                STANDARD_VECTOR_SIZE * 2, delim_types,
+			                                                                payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
 			// FIXME: these can be initialized "empty" (without allocating empty vectors)
 			info.group_chunk.Initialize(delim_types);

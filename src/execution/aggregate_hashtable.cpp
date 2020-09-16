@@ -16,11 +16,11 @@
 namespace duckdb {
 using namespace std;
 
-SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t initial_capacity,
-                                         vector<LogicalType> group_types, vector<LogicalType> payload_types,
-                                         vector<BoundAggregateExpression *> bindings)
-    : SuperLargeHashTable(buffer_manager, initial_capacity, move(group_types), move(payload_types),
-                          AggregateObject::CreateAggregateObjects(move(bindings))) {
+GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity,
+                                                     vector<LogicalType> group_types, vector<LogicalType> payload_types,
+                                                     vector<BoundAggregateExpression *> bindings)
+    : GroupedAggregateHashTable(buffer_manager, initial_capacity, move(group_types), move(payload_types),
+                                AggregateObject::CreateAggregateObjects(move(bindings))) {
 }
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
@@ -33,11 +33,11 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 	return aggregates;
 }
 
-SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t initial_capacity,
-                                         vector<LogicalType> group_types, vector<LogicalType> payload_types,
-                                         vector<AggregateObject> aggregate_objects)
+GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity,
+                                                     vector<LogicalType> group_types, vector<LogicalType> payload_types,
+                                                     vector<AggregateObject> aggregate_objects)
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
-      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0) {
+      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), finalized(false) {
 	// HT tuple layout is as follows:
 	// [FLAG][GROUPS][PAYLOAD]
 	// [FLAG] is the state of the tuple in memory
@@ -72,7 +72,7 @@ SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t in
 			vector<LogicalType> distinct_payload_types;
 			vector<BoundAggregateExpression *> distinct_aggregates;
 			distinct_group_types.push_back(payload_types[payload_idx]);
-			distinct_hashes[i] = make_unique<SuperLargeHashTable>(
+			distinct_hashes[i] = make_unique<GroupedAggregateHashTable>(
 			    buffer_manager, initial_capacity, distinct_group_types, distinct_payload_types, distinct_aggregates);
 		}
 		if (aggr.child_count) {
@@ -96,17 +96,17 @@ SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t in
 	Resize(initial_capacity);
 }
 
-SuperLargeHashTable::~SuperLargeHashTable() {
+GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 	Destroy();
 }
 
-void SuperLargeHashTable::NewBlock() {
+void GroupedAggregateHashTable::NewBlock() {
 	payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
 	current_payload_offset_ptr = payload_hds.back()->Ptr();
 	current_payload_end_ptr = current_payload_offset_ptr + Storage::BLOCK_ALLOC_SIZE;
 }
 
-void SuperLargeHashTable::CallDestructors(Vector &state_vector, idx_t count) {
+void GroupedAggregateHashTable::CallDestructors(Vector &state_vector, idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -120,7 +120,7 @@ void SuperLargeHashTable::CallDestructors(Vector &state_vector, idx_t count) {
 	}
 }
 
-void SuperLargeHashTable::Destroy() {
+void GroupedAggregateHashTable::Destroy() {
 	if (!hashes_hdl) {
 		return;
 	}
@@ -158,7 +158,7 @@ void SuperLargeHashTable::Destroy() {
 	CallDestructors(state_vector, count);
 }
 
-void SuperLargeHashTable::Verify() {
+void GroupedAggregateHashTable::Verify() {
 #ifdef DEBUG
 	auto hash_ptr = (data_ptr_t *)hashes_hdl->Ptr();
 	idx_t count = 0;
@@ -174,7 +174,7 @@ void SuperLargeHashTable::Verify() {
 #endif
 }
 
-void SuperLargeHashTable::Resize(idx_t size) {
+void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 
 	if (size <= capacity) {
@@ -223,7 +223,11 @@ void SuperLargeHashTable::Resize(idx_t size) {
 	Verify();
 }
 
-void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+void GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+	if (finalized) {
+		throw InternalException("HT already finalized");
+	}
+
 	if (groups.size() == 0) {
 		return;
 	}
@@ -291,7 +295,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	Verify();
 }
 
-void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
+void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 	groups.Verify();
 	assert(groups.column_count() == group_types.size());
 	for (idx_t i = 0; i < result.column_count(); i++) {
@@ -313,7 +317,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	}
 }
 
-void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
+void GroupedAggregateHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	// create a set of hashes for the groups
 	Vector hashes(LogicalType::HASH);
 	groups.Hash(hashes);
@@ -356,8 +360,8 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 	}
 }
 
-void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
-                                        const SelectionVector &sel, idx_t count) {
+void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data,
+                                              Vector &addresses, const SelectionVector &sel, idx_t count) {
 	for (idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
 		auto &data = groups.data[grp_idx];
 		auto &gdata = group_data[grp_idx];
@@ -505,8 +509,8 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
-idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses,
-                                              SelectionVector &new_groups) {
+idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses,
+                                                    SelectionVector &new_groups) {
 	// resize at 50% capacity, also need to fit the entire vector
 	if (entries > capacity / 2 || capacity - entries <= groups.size()) {
 		Resize(capacity * 2);
@@ -635,19 +639,19 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_h
 	return new_group_count;
 }
 
-void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses) {
+void GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses) {
 	// create a dummy new_groups sel vector
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 	FindOrCreateGroups(groups, addresses, new_groups);
 }
 
-idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups) {
+idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups) {
 	Vector hashes(LogicalType::HASH);
 	groups.Hash(hashes);
 	return FindOrCreateGroups(groups, hashes, addresses, new_groups);
 }
 
-void SuperLargeHashTable::FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count) {
+void GroupedAggregateHashTable::FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count) {
 	assert(source_addresses.type == LogicalType::POINTER);
 	assert(source_hashes.type == LogicalType::HASH);
 
@@ -675,7 +679,10 @@ void SuperLargeHashTable::FlushMerge(Vector &source_addresses, Vector &source_ha
 	}
 }
 
-void SuperLargeHashTable::Combine(SuperLargeHashTable &other) {
+void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
+	if (finalized) {
+		throw InternalException("HT already finalized");
+	}
 	assert(other.payload_width == payload_width);
 	// TODO assert other things
 	if (other.entries == 0) {
@@ -713,7 +720,10 @@ void SuperLargeHashTable::Combine(SuperLargeHashTable &other) {
 	Verify();
 }
 
-idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
+idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
+	if (!finalized) {
+		throw InternalException("HT not finalized");
+	}
 	Vector addresses(LogicalType::POINTER);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
@@ -755,4 +765,9 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 	scan_position += this_n;
 	return this_n;
 }
+
+void GroupedAggregateHashTable::Finalize() {
+	finalized = true;
+}
+
 } // namespace duckdb

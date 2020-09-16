@@ -60,11 +60,11 @@ public:
 	HashAggregateGlobalState(BufferManager &buffer_manager, vector<LogicalType> &group_types,
 	                         vector<LogicalType> &payload_types, vector<BoundAggregateExpression *> &bindings)
 	    : is_empty(true) {
-		final_ht = make_unique<SuperLargeHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
-		                                            payload_types, bindings);
+		final_ht = make_unique<GroupedAggregateHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
+		                                                  payload_types, bindings);
 	}
 
-	unique_ptr<SuperLargeHashTable> final_ht;
+	unique_ptr<GroupedAggregateHashTable> final_ht;
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
 	//! The lock for updating the global aggregate state
@@ -88,8 +88,8 @@ public:
 		if (payload_types.size() > 0) {
 			payload_chunk.Initialize(payload_types);
 		}
-		ht = make_unique<SuperLargeHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types, payload_types,
-		                                      aggregates);
+		ht = make_unique<GroupedAggregateHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
+		                                            payload_types, aggregates);
 	}
 
 	//! Expression executor for the GROUP BY chunk
@@ -101,7 +101,7 @@ public:
 	//! The payload chunk
 	DataChunk payload_chunk;
 	//! The aggregate HT
-	unique_ptr<SuperLargeHashTable> ht;
+	unique_ptr<GroupedAggregateHashTable> ht;
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
 };
@@ -182,6 +182,13 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 
 	gstate.is_empty &= source.is_empty;
 	gstate.final_ht->Combine(*source.ht);
+}
+
+void PhysicalHashAggregate::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+	auto gstate = (HashAggregateGlobalState *)state.get();
+	assert(gstate->final_ht);
+	gstate->final_ht->Finalize();
+	this->sink_state = move(state);
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
