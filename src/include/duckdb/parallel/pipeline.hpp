@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include <atomic>
 
@@ -50,7 +52,7 @@ public:
 	void SetRecursiveCTE(PhysicalOperator *op) {
 		this->recursive_cte = op;
 	}
-	PhysicalOperator* GetRecursiveCTE() {
+	PhysicalOperator *GetRecursiveCTE() {
 		return recursive_cte;
 	}
 	unordered_set<Pipeline *> &GetDependencies() {
@@ -74,6 +76,11 @@ private:
 	//! The amount of completed dependencies (the pipeline can only be started after the dependencies have finished
 	//! executing)
 	std::atomic<idx_t> finished_dependencies;
+
+	//! The parallel operator (if any)
+	PhysicalOperator *parallel_node;
+	//! The parallel state (if any)
+	unique_ptr<ParallelState> parallel_state;
 
 	//! Whether or not the pipeline is finished executing
 	bool finished;

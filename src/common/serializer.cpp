@@ -13,7 +13,7 @@ template <> string Deserializer::Read() {
 void Deserializer::ReadStringVector(vector<string> &list) {
 	uint32_t sz = Read<uint32_t>();
 	list.resize(sz);
-	for(idx_t i = 0; i < sz; i++) {
+	for (idx_t i = 0; i < sz; i++) {
 		list[i] = Read<string>();
 	}
 }

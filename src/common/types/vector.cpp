@@ -179,7 +179,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		break;
 	case LogicalTypeId::DECIMAL:
 		assert(type.width() == val.type().width() && type.scale() == val.type().scale());
-		switch(type.InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::INT16:
 			((int16_t *)data)[index] = val.value_.smallint;
 			break;
@@ -314,7 +314,7 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {
-		switch(type.InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::INT16:
 			return Value::DECIMAL(((int16_t *)data)[index], type.width(), type.scale());
 		case PhysicalType::INT32:
@@ -441,7 +441,7 @@ void Vector::Print() {
 }
 
 template <class T> static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count) {
-	auto constant = *((T *)old_data);
+	auto constant = Load<T>(old_data);
 	auto output = (T *)data;
 	for (idx_t i = 0; i < count; i++) {
 		output[i] = constant;

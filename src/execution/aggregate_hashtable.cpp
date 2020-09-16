@@ -90,16 +90,20 @@ SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t in
 	hash_prefix_remove_bitmask = ((hash_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
 	hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t) * 8 - 16));
 
-	payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
-	payload.push_back(payload_hds.back()->node->buffer);
-	current_payload_offset_ptr = payload.back();
-
-	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+    hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+    // allocate initial payload block. TODO: should we? We might never see any values.
+    NewBlock();
 	Resize(initial_capacity);
 }
 
 SuperLargeHashTable::~SuperLargeHashTable() {
 	Destroy();
+}
+
+void SuperLargeHashTable::NewBlock() {
+    payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
+    payload.push_back(payload_hds.back()->node->buffer);
+    current_payload_offset_ptr = payload.back();
 }
 
 void SuperLargeHashTable::CallDestructors(Vector &state_vector, idx_t count) {
@@ -561,9 +565,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_h
 				// cell is empty; mark the cell as filled
 
 				if (current_payload_offset_ptr + tuple_size > payload.back() + Storage::BLOCK_ALLOC_SIZE) {
-					payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
-					payload.push_back(payload_hds.back()->node->buffer);
-					current_payload_offset_ptr = payload.back();
+					NewBlock();
 				}
 
 				auto new_entry = current_payload_offset_ptr;

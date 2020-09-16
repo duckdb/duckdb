@@ -9,8 +9,8 @@ using namespace std;
 namespace duckdb {
 
 template <class T> struct FirstState {
-	bool is_set;
 	T value;
+	bool is_set;
 };
 
 struct FirstFunctionBase {
@@ -106,7 +106,7 @@ template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalTy
 
 AggregateFunction GetDecimalFirstFunction(LogicalType type) {
 	assert(type.id() == LogicalTypeId::DECIMAL);
-	switch(type.InternalType()) {
+	switch (type.InternalType()) {
 	case PhysicalType::INT16:
 		return FirstFun::GetFunction(LogicalType::SMALLINT);
 	case PhysicalType::INT32:

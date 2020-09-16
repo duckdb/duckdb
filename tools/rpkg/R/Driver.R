@@ -24,8 +24,8 @@ drv_to_string <- function(drv) {
 setMethod(
   "show", "duckdb_driver",
   function(object) {
-    cat(drv_to_string(object))
-    cat("\n")
+    message(drv_to_string(object))
+    invisible(NULL)
   }
 )
 

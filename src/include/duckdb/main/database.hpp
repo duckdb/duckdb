@@ -45,6 +45,7 @@ public:
 
 	FileSystem &GetFileSystem();
 
+	idx_t NumberOfThreads();
 	static const char *SourceID();
 	static const char *LibraryVersion();
 

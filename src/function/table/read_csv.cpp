@@ -105,7 +105,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 }
 
 static unique_ptr<FunctionOperatorData> read_csv_init(ClientContext &context, const FunctionData *bind_data_,
-                                                      OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                      ParallelState *state, vector<column_t> &column_ids,
                                                       unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto &bind_data = (ReadCSVFunctionData &)*bind_data_;
 	if (bind_data.is_consumed) {

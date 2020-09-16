@@ -85,6 +85,8 @@ private:
 	vector<LogicalType> payload_types;
 	//! The size of the groups in bytes
 	idx_t group_width;
+	//! some optional padding to align payload
+	idx_t group_padding;
 	//! The size of the payload (aggregations) in bytes
 	idx_t payload_width;
 

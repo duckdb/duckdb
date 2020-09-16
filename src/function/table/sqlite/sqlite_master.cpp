@@ -42,7 +42,7 @@ static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vecto
 }
 
 unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, const FunctionData *bind_data,
-                                                    OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                    ParallelState *state, vector<column_t> &column_ids,
                                                     unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<SQLiteMasterData>();
 

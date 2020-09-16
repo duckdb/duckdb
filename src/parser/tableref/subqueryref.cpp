@@ -42,4 +42,4 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 	return move(result);
 }
 
-}
+} // namespace duckdb

@@ -65,7 +65,7 @@ def get_relative_path(source_dir, target_file):
         target_file = target_file.replace(source_dir, "").lstrip('/')
     return target_file
 
-def build_package(target_dir):
+def build_package(target_dir, linenumbers = False):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
 
@@ -139,15 +139,16 @@ def build_package(target_dir):
                 return True
         return False
 
-    def generate_unity_build(entries, idx):
+    def generate_unity_build(entries, idx, linenumbers):
         ub_file = os.path.join(target_dir, 'amalgamation-{}.cpp'.format(str(idx)))
         with open(ub_file, 'w+') as f:
             for entry in entries:
-                f.write('#line 0 "{}"\n'.format(convert_backslashes(entry)))
+                if linenumbers:
+                    f.write('#line 0 "{}"\n'.format(convert_backslashes(entry)))
                 f.write('#include "{}"\n\n'.format(convert_backslashes(entry)))
         return ub_file
 
-    def generate_unity_builds(source_list, nsplits):
+    def generate_unity_builds(source_list, nsplits, linenumbers):
         source_list.sort()
 
         files_per_split = len(source_list) / nsplits
@@ -161,18 +162,18 @@ def build_package(target_dir):
 
             current_files.append(entry)
             if len(current_files) > files_per_split:
-                new_source_files.append(generate_unity_build(current_files, idx))
+                new_source_files.append(generate_unity_build(current_files, idx, linenumbers))
                 current_files = []
                 idx += 1
         if len(current_files) > 0:
-            new_source_files.append(generate_unity_build(current_files, idx))
+            new_source_files.append(generate_unity_build(current_files, idx, linenumbers))
             current_files = []
             idx += 1
 
         return new_source_files
 
     original_sources = source_list
-    source_list = generate_unity_builds(source_list, 8)
+    source_list = generate_unity_builds(source_list, 8, linenumbers)
 
     os.chdir(prev_wd)
     return ([convert_backslashes(x) for x in source_list if not file_is_excluded(x)],

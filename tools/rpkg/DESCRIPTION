@@ -1,6 +1,6 @@
 Package: duckdb
 Title: DBI Package for the DuckDB Database Management System
-Version: 0.2.1
+Version: 0.2.1-1
 Authors@R: 
     c(person(given = "Hannes",
              family = "Mühleisen",
@@ -13,10 +13,26 @@ Authors@R:
              email = "mark.raasveldt@cwi.nl",
              comment = c(ORCID = "0000-0001-5005-6844")),
       person(given = "DuckDB Contributors",
-             role = "aut"))
+             role = "aut"),
+      person("Apache Software Foundation", role = "cph"),
+      person("PostgreSQL Global Development Group", role = "cph"),
+      person("The Regents of the University of California", role = "cph"),
+      person("Cameron Desrochers", role = "cph"),
+      person("Victor Zverovich", role = "cph"),
+      person("RAD Game Tools", role = "cph"),
+      person("Valve Software", role = "cph"),
+      person("Rich Geldreich", role = "cph"),
+      person("Tenacious Software LLC", role = "cph"),
+      person("The RE2 Authors", role = "cph"),
+      person("Google Inc.", role = "cph"),
+      person("Steven G. Johnson", role = "cph"),
+      person("Jiahao Chen", role = "cph"),
+      person("Tony Kelman", role = "cph"),
+      person("Jonas Fonseca", role = "cph"),
+      person("Lukas Fittl", role = "cph"))
 Description: The DuckDB project is an embedded analytical data
-    management system with SQL support. This package includes all of
-    DuckDB and a DBI connector.
+    management system with support for the Structured Query Language (SQL). This package includes all of
+    DuckDB and a R Database Interface (DBI) connector.
 License: MPL
 URL: https://duckdb.org/, https://github.com/cwida/duckdb
 BugReports: https://github.com/cwida/duckdb/issues
@@ -36,4 +52,4 @@ Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
-SystemRequirements: C++11
+SystemRequirements: C++11, GCC on Solaris

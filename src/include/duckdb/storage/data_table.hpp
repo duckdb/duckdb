@@ -51,6 +51,12 @@ struct DataTableInfo {
 	}
 };
 
+struct ParallelTableScanState {
+	idx_t persistent_row_idx;
+	idx_t transient_row_idx;
+	bool transaction_local_data;
+};
+
 //! DataTable represents a physical table on disk
 class DataTable {
 public:
@@ -76,9 +82,11 @@ public:
 	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
 	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
 
-	void InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids,
-	                            unordered_map<idx_t, vector<TableFilter>> *table_filters,
-	                            std::function<void(TableScanState)> callback);
+	//! Returns the maximum amount of threads that should be assigned to scan this data table
+	idx_t MaxThreads(ClientContext &context);
+	void InitializeParallelScan(ParallelTableScanState &state);
+	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+	                      const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many

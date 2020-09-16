@@ -70,4 +70,4 @@ bool SelectStatement::Equals(const SQLStatement *other_) const {
 	return node->Equals(other->node.get());
 }
 
-}
+} // namespace duckdb

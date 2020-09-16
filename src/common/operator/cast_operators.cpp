@@ -32,7 +32,7 @@ template <class SRC, class DST> static bool try_cast_with_overflow_check(SRC val
 template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 	DST result;
 	if (!try_cast_with_overflow_check<SRC, DST>(value, result)) {
-		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(), GetTypeId<DST>());
+		throw ValueOutOfRangeException((double)value, GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 	return result;
 }
@@ -142,6 +142,9 @@ template <> int64_t Cast::Operation(double input) {
 // Double -> float casts
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(double input, float &result, bool strict) {
+	if (input < (double)NumericLimits<float>::Minimum() || input > (double)NumericLimits<float>::Maximum()) {
+		return false;
+	}
 	auto res = (float)input;
 	if (std::isnan(res) || std::isinf(res)) {
 		return false;
@@ -409,7 +412,11 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
+				if (result > NumericLimits<T>::Maximum() / pow(10, exponent)) {
+					return false;
+				}
 				result = result * pow(10, exponent);
+
 				return true;
 			} else {
 				return false;
@@ -1264,15 +1271,15 @@ template <> int16_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t 
 }
 
 template <> int32_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
-    return input ? NumericHelper::PowersOfTen[scale] : 0;
+	return input ? NumericHelper::PowersOfTen[scale] : 0;
 }
 
 template <> int64_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
-    return input ? NumericHelper::PowersOfTen[scale] : 0;
+	return input ? NumericHelper::PowersOfTen[scale] : 0;
 }
 
 template <> hugeint_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
-    return input ? Hugeint::PowersOfTen[scale] : 0;
+	return input ? Hugeint::PowersOfTen[scale] : 0;
 }
 
 template <> bool CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
@@ -1308,7 +1315,7 @@ template <class SRC> hugeint_t NumericToHugeDecimalCast(SRC input, uint8_t width
 	hugeint_t max_width = Hugeint::PowersOfTen[width - scale];
 	hugeint_t hinput = hugeint_t(input);
 	if (hinput >= max_width || hinput <= -max_width) {
-		throw OutOfRangeException("Could not cast value %s to DECIMAL(%d,%d)", hinput.ToString() , width, scale);
+		throw OutOfRangeException("Could not cast value %s to DECIMAL(%d,%d)", hinput.ToString(), width, scale);
 	}
 	return hinput * Hugeint::PowersOfTen[scale];
 }

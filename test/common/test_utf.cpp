@@ -31,4 +31,3 @@ TEST_CASE("UTF8 error checking", "[utf8]") {
 	REQUIRE_THROWS(a.SetValue(0, Value("\xf8\xa1\xa1\xa1\xa1")));
 	REQUIRE_THROWS(a.SetValue(0, Value("\xfc\xa1\xa1\xa1\xa1\xa1")));
 }
-

@@ -28,7 +28,7 @@ static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vect
 }
 
 unique_ptr<FunctionOperatorData> pragma_collate_init(ClientContext &context, const FunctionData *bind_data,
-                                                     OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                     ParallelState *state, vector<column_t> &column_ids,
                                                      unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<PragmaCollateData>();
 

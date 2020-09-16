@@ -86,7 +86,9 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
 		}
 		auto format = string(schema.format);
-		if (format == "b") {
+		if (format == "n") {
+			return_types.push_back(LogicalType::SQLNULL);
+		} else if (format == "b") {
 			return_types.push_back(LogicalType::BOOLEAN);
 		} else if (format == "c") {
 			return_types.push_back(LogicalType::TINYINT);
@@ -120,7 +122,7 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 }
 
 static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, const FunctionData *bind_data,
-                                                        OperatorTaskInfo *task_info, vector<column_t> &column_ids,
+                                                        ParallelState *state, vector<column_t> &column_ids,
                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (data.is_consumed) {
@@ -193,6 +195,9 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 		}
 
 		switch (output.data[col_idx].type.id()) {
+		case LogicalTypeId::SQLNULL:
+			output.data[col_idx].Reference(Value());
+			break;
 		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
@@ -222,7 +227,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 					throw runtime_error("Invalid UTF8 string encoding");
 				}
 				FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
-					    StringVector::AddString(output.data[col_idx], cptr, str_len);
+				    StringVector::AddString(output.data[col_idx], cptr, str_len);
 			}
 
 			break;

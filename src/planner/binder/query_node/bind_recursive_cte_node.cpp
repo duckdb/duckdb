@@ -28,7 +28,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	result->types = result->left->types;
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result->names = result->left->names;
-	for(idx_t i = 0; i < statement.aliases.size() && i < result->names.size(); i++) {
+	for (idx_t i = 0; i < statement.aliases.size() && i < result->names.size(); i++) {
 		result->names[i] = statement.aliases[i];
 	}
 
@@ -42,7 +42,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	                                                 result->types);
 	result->right = result->right_binder->BindNode(*statement.right);
 
-
 	// move the correlated expressions from the child binders to this binder
 	MoveCorrelatedExpressions(*result->left_binder);
 	MoveCorrelatedExpressions(*result->right_binder);
@@ -50,7 +49,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// now both sides have been bound we can resolve types
 	if (result->left->types.size() != result->right->types.size()) {
 		throw BinderException("Set operations can only apply to expressions with the "
-		                "same number of result columns");
+		                      "same number of result columns");
 	}
 
 	if (statement.modifiers.size() > 0) {

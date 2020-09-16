@@ -16,7 +16,8 @@ namespace duckdb {
 //! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child), position(0) {
+	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;

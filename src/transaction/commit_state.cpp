@@ -34,7 +34,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		}
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
-			auto extra_data_size = *((idx_t *)dataptr);
+			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
 			// deserialize it
 			BufferedDeserializer source(extra_data, extra_data_size);
@@ -139,7 +139,7 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
-		CatalogEntry *catalog_entry = *((CatalogEntry **)data);
+		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
 		catalog_entry->parent->timestamp = commit_id;
 
@@ -179,7 +179,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
-		CatalogEntry *catalog_entry = *((CatalogEntry **)data);
+		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
 		catalog_entry->parent->timestamp = transaction_id;
 		break;

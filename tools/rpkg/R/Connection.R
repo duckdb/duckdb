@@ -34,7 +34,8 @@ duckdb_connection <- function(duckdb_driver, debug) {
 setMethod(
   "show", "duckdb_connection",
   function(object) {
-    cat(sprintf("<duckdb_connection %s driver=%s>\n", extptr_str(object@conn_ref), drv_to_string(object@driver)))
+    message(sprintf("<duckdb_connection %s driver=%s>", extptr_str(object@conn_ref), drv_to_string(object@driver)))
+    invisible(NULL)
   }
 )
 
@@ -64,7 +65,7 @@ setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
   function(conn, statement, ...) {
     if (conn@debug) {
-      cat("Q ", statement, "\n")
+      message("Q ", statement)
     }
     statement <- enc2utf8(statement)
     stmt_lst <- .Call(duckdb_prepare_R, conn@conn_ref, statement)

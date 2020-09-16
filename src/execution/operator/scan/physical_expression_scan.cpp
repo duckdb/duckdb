@@ -8,7 +8,8 @@ namespace duckdb {
 
 class PhysicalExpressionScanState : public PhysicalOperatorState {
 public:
-	PhysicalExpressionScanState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child), expression_index(0) {
+	PhysicalExpressionScanState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), expression_index(0) {
 	}
 
 	//! The current position in the scan

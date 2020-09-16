@@ -151,7 +151,7 @@ Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
 Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 	LogicalType decimal_type(LogicalTypeId::DECIMAL, width, scale);
 	Value result(decimal_type);
-	switch(decimal_type.InternalType()) {
+	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
 		result.value_.smallint = value;
 		break;
@@ -409,8 +409,8 @@ template <> double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
 template <> uintptr_t Value::GetValue() const {
-	assert(type()== LogicalType::POINTER);
-    return value_.pointer;
+	assert(type() == LogicalType::POINTER);
+	return value_.pointer;
 }
 Value Value::Numeric(LogicalType type, int64_t value) {
 	switch (type.id()) {

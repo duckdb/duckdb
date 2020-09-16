@@ -120,7 +120,8 @@ void PhysicalTopN::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSta
 //===--------------------------------------------------------------------===//
 class PhysicalTopNOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTopNOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child), position(0) {
+	PhysicalTopNOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;

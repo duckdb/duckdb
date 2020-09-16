@@ -173,3 +173,8 @@ SELECT * FROM integers LEFT OUTER JOIN (SELECT * FROM integers2 WHERE k=100) int
 2	3	NULL	NULL
 3	4	NULL	NULL
 
+query II
+select * from (values(1), (2)) t1(i) left join (values (2), (3)) t2(i) on t1.i=t2.i AND t1.i+t2.i=4 ORDER BY 1, 2;
+----
+1	NULL
+2	2
