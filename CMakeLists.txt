@@ -87,7 +87,7 @@ if(${ENABLE_SANITIZER})
   endif()
 endif()
 
-option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
+option(ENABLE_UBSAN "Enable undefined behavior sanitizer." FALSE)
 if(${ENABLE_UBSAN})
   if(BUILD_PYTHON OR BUILD_R)
     if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")

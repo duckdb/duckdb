@@ -90,9 +90,9 @@ SuperLargeHashTable::SuperLargeHashTable(BufferManager &buffer_manager, idx_t in
 	hash_prefix_remove_bitmask = ((hash_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
 	hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t) * 8 - 16));
 
-    hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
-    // allocate initial payload block. TODO: should we? We might never see any values.
-    NewBlock();
+	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	// allocate initial payload block. TODO: should we? We might never see any values.
+	NewBlock();
 	Resize(initial_capacity);
 }
 
@@ -101,9 +101,9 @@ SuperLargeHashTable::~SuperLargeHashTable() {
 }
 
 void SuperLargeHashTable::NewBlock() {
-    payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
-    payload.push_back(payload_hds.back()->node->buffer);
-    current_payload_offset_ptr = payload.back();
+	payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
+	current_payload_offset_ptr = payload_hds.back()->Ptr();
+	current_payload_end_ptr = current_payload_offset_ptr + Storage::BLOCK_ALLOC_SIZE;
 }
 
 void SuperLargeHashTable::CallDestructors(Vector &state_vector, idx_t count) {
@@ -121,7 +121,7 @@ void SuperLargeHashTable::CallDestructors(Vector &state_vector, idx_t count) {
 }
 
 void SuperLargeHashTable::Destroy() {
-	if (!hashes) {
+	if (!hashes_hdl) {
 		return;
 	}
 	// check if there is a destructor
@@ -141,9 +141,9 @@ void SuperLargeHashTable::Destroy() {
 	idx_t count = 0;
 
 	idx_t destroy_entries = entries;
-	for (auto &payload_chunk : payload) {
+	for (auto &payload_chunk : payload_hds) {
 		auto this_entries = MinValue(Storage::BLOCK_ALLOC_SIZE / tuple_size, destroy_entries);
-		for (data_ptr_t ptr = payload_chunk, end = payload_chunk + this_entries * tuple_size; ptr < end;
+		for (data_ptr_t ptr = payload_chunk->Ptr(), end = payload_chunk->Ptr() + this_entries * tuple_size; ptr < end;
 		     ptr += tuple_size) {
 			// found entry
 			data_pointers[count++] = ptr + hash_width + group_width;
@@ -160,7 +160,7 @@ void SuperLargeHashTable::Destroy() {
 
 void SuperLargeHashTable::Verify() {
 #ifdef DEBUG
-	auto hash_ptr = (data_ptr_t *)hashes;
+	auto hash_ptr = (data_ptr_t *)hashes_hdl->Ptr();
 	idx_t count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		if (hash_ptr[i]) {
@@ -191,23 +191,23 @@ void SuperLargeHashTable::Resize(idx_t size) {
 	if (size * sizeof(data_ptr_t) > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
 		hashes_hdl = buffer_manager.Allocate(size * sizeof(data_ptr_t));
 	}
-	hashes = hashes_hdl->node->buffer;
+	auto hashes = hashes_hdl->Ptr();
 	memset(hashes, 0, size * sizeof(data_ptr_t));
-	endptr = hashes + sizeof(data_ptr_t) * size;
+	hashes_end_ptr = hashes + sizeof(data_ptr_t) * size;
 	capacity = size;
 
 	if (entries > 0) {
 		idx_t resize_entries = entries;
-		for (auto &payload_chunk : payload) {
+		for (auto &payload_chunk : payload_hds) {
 			auto this_entries = MinValue(Storage::BLOCK_ALLOC_SIZE / tuple_size, resize_entries);
-			for (data_ptr_t ptr = payload_chunk, end = payload_chunk + this_entries * tuple_size; ptr < end;
-			     ptr += tuple_size) {
+			for (data_ptr_t ptr = payload_chunk->Ptr(), end = payload_chunk->Ptr() + this_entries * tuple_size;
+			     ptr < end; ptr += tuple_size) {
 				auto entry_hash = *(hash_t *)ptr;
 				assert((entry_hash & bitmask) == (entry_hash % capacity));
 				auto entry_pointer = (data_ptr_t *)(hashes + ((entry_hash & bitmask) * sizeof(data_ptr_t)));
 				while (*entry_pointer) {
 					entry_pointer++;
-					if (entry_pointer >= (data_ptr_t *)endptr) {
+					if (entry_pointer >= (data_ptr_t *)hashes_end_ptr) {
 						entry_pointer = (data_ptr_t *)hashes;
 					}
 				}
@@ -322,7 +322,7 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	// multiply the position by the tuple size and add the base address
 	UnaryExecutor::Execute<hash_t, data_ptr_t>(hashes, addresses, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
-		return this->hashes + ((element & bitmask) * sizeof(data_ptr_t));
+		return this->hashes_hdl->Ptr() + ((element & bitmask) * sizeof(data_ptr_t));
 	});
 }
 
@@ -524,7 +524,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_h
 	// multiply the position by the tuple size and add the base address
 	UnaryExecutor::Execute<hash_t, data_ptr_t>(group_hashes, addresses, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
-		return this->hashes + ((element & bitmask) * sizeof(data_ptr_t));
+		return this->hashes_hdl->Ptr() + ((element & bitmask) * sizeof(data_ptr_t));
 	});
 
 	addresses.Normalify(groups.size());
@@ -564,7 +564,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_h
 			if (*ht_entry_ptr == nullptr) {
 				// cell is empty; mark the cell as filled
 
-				if (current_payload_offset_ptr + tuple_size > payload.back() + Storage::BLOCK_ALLOC_SIZE) {
+				if (current_payload_offset_ptr + tuple_size > current_payload_end_ptr) {
 					NewBlock();
 				}
 
@@ -618,8 +618,8 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_h
 			idx_t index = no_match_vector->get_index(i);
 			addresses_ptr[index]++;
 			// assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
-			if ((data_ptr_t)addresses_ptr[index] >= endptr) {
-				addresses_ptr[index] = (data_ptr_t *)hashes;
+			if ((data_ptr_t)addresses_ptr[index] >= hashes_end_ptr) {
+				addresses_ptr[index] = (data_ptr_t *)hashes_hdl->Ptr();
 			}
 		}
 		sel_vector = no_match_vector;
@@ -691,9 +691,9 @@ void SuperLargeHashTable::Combine(SuperLargeHashTable &other) {
 
 	idx_t group_idx = 0;
 	idx_t merge_entries = other.entries;
-	for (auto &payload_chunk : other.payload) {
+	for (auto &payload_chunk : other.payload_hds) {
 		auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, merge_entries);
-		for (data_ptr_t ptr = payload_chunk, end = payload_chunk + this_entries * tuple_size; ptr < end;
+		for (data_ptr_t ptr = payload_chunk->Ptr(), end = payload_chunk->Ptr() + this_entries * tuple_size; ptr < end;
 		     ptr += tuple_size) {
 			hashes_ptr[group_idx] = *(hash_t *)ptr;
 			addresses_ptr[group_idx] = ptr + hash_width;
@@ -728,12 +728,12 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 	auto chunk_offset = (scan_position % tuples_per_chunk) * tuple_size;
 	assert(chunk_offset + tuple_size <= Storage::BLOCK_SIZE);
 
-	auto read_ptr = payload[chunk_idx++];
+	auto read_ptr = payload_hds[chunk_idx++]->Ptr();
 	for (idx_t i = 0; i < this_n; i++) {
 		data_pointers[i] = read_ptr + chunk_offset + hash_width;
 		chunk_offset += tuple_size;
 		if (chunk_offset >= tuples_per_chunk * tuple_size) {
-			read_ptr = payload[chunk_idx++];
+			read_ptr = payload_hds[chunk_idx++]->Ptr();
 			chunk_offset = 0;
 		}
 	}

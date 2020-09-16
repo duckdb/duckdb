@@ -101,12 +101,11 @@ private:
 	//! The data of the HT
 	//! unique_ptr to indicate the ownership
 	vector<unique_ptr<BufferHandle>> payload_hds; //! The data of the HT
-	vector<data_t *> payload;                     //! The data of the HT
 	//! unique_ptr to indicate the ownership
 	unique_ptr<BufferHandle> hashes_hdl;
-	data_t *hashes;    //! The endptr of the hashtable
-	data_ptr_t endptr; // of hashes
+	data_ptr_t hashes_end_ptr; // of hashes
 	data_ptr_t current_payload_offset_ptr;
+	data_ptr_t current_payload_end_ptr;
 
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
@@ -141,6 +140,7 @@ private:
 
 	void Verify();
 	void FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count);
+	void NewBlock();
 };
 
 } // namespace duckdb
