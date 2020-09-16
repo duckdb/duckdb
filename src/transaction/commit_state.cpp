@@ -8,6 +8,8 @@
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
+#include "duckdb/storage/table/chunk_info.hpp"
+
 namespace duckdb {
 using namespace std;
 
@@ -157,7 +159,8 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 			WriteDelete(info);
 		}
 		// mark the tuples as committed
-		info->vinfo->CommitDelete(commit_id, info->rows, info->count);
+		throw NotImplementedException("FIXME: commit delete");
+		// info->vinfo->CommitDelete(commit_id, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -189,7 +192,8 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		auto info = (DeleteInfo *)data;
 		info->table->info->cardinality += info->count;
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
-		info->vinfo->CommitDelete(transaction_id, info->rows, info->count);
+		throw NotImplementedException("FIXME: commit delete");
+		// info->vinfo->CommitDelete(transaction_id, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {

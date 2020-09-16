@@ -70,7 +70,8 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 		if (count == STANDARD_VECTOR_SIZE) {
 			Flush();
 		}
-		row_numbers[count++] = info->vinfo->start + info->rows[i];
+		throw NotImplementedException("FIXME: cleanup delete");
+		// row_numbers[count++] = info->vinfo->start + info->rows[i];
 	}
 }
 

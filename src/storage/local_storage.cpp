@@ -297,7 +297,7 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 		auto &append_state = *append_state_ptr;
 		// add it to the set of append states
 		commit_state.append_states[table] = move(append_state_ptr);
-		table->InitializeAppend(append_state);
+		table->InitializeAppend(transaction, append_state, commit_id, storage->collection.count);
 
 		if (log && !table->info->IsTemporary()) {
 			log->WriteSetTable(table->info->schema, table->info->table);
@@ -311,7 +311,7 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 			}
 
 			// append to base table
-			table->Append(transaction, commit_id, chunk, append_state);
+			table->Append(transaction, chunk, append_state);
 			// if there is a WAL, write the chunk to there as well
 			if (log && !table->info->IsTemporary()) {
 				log->WriteInsert(chunk);

@@ -18,6 +18,7 @@
 namespace duckdb {
 class LocalTableStorage;
 class Index;
+class MorselInfo;
 class PersistentSegment;
 class TransientSegment;
 
@@ -71,6 +72,7 @@ public:
 	idx_t column_count;
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	LocalScanState local_state;
+	MorselInfo *version_info;
 
 	//! Move to the next vector
 	void NextVector();
