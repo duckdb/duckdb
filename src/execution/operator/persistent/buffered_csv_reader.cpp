@@ -573,7 +573,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 							SetDateFormat(type_format_candidates.back(), sql_type.id());
 						}
 						// check all formats and keep the first one that works
-						int32_t date_parts[6];
+						int32_t date_parts[7];
 						string error_msg;
 						idx_t error_pos;
 						auto save_format_candidates = type_format_candidates;
