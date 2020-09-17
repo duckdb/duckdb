@@ -868,6 +868,10 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 	group_offset += output.size();
 }
 
+struct ParquetCopyFunctionData : GlobalFunctionData {
+	unique_ptr<ParquetScanStateData> scan_state;
+};
+
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
@@ -1035,12 +1039,20 @@ public:
 	}
 
 	static unique_ptr<GlobalFunctionData> parquet_read_initialize(ClientContext &context, FunctionData &fdata) {
-		throw NotImplementedException("eek");
+		auto &bind_data = (ParquetScanBindData &)fdata;
+		auto result = make_unique<ParquetCopyFunctionData>();
+		result->scan_state = make_unique<ParquetScanStateData>(bind_data);
+		for (idx_t i = 0; i < bind_data.file_meta_data.row_groups.size(); i++) {
+			result->scan_state->group_idx_list.push_back(i);
+		}
+		return move(result);
 	}
 
 	static void parquet_read_function(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data,
 	                                  DataChunk &output) {
-		throw NotImplementedException("eek");
+
+		auto &scan_state = (ParquetCopyFunctionData &)gstate;
+		scan_state.scan_state->ReadChunk(output);
 	}
 
 	static void parquet_scan_function(ClientContext &context, const FunctionData *bind_data,
