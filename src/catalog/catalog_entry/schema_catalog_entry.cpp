@@ -166,7 +166,7 @@ void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info
 		if (entry == nullptr) {
 			throw CatalogException("Table \"%s\" doesn't exist!", info->table);
 		}
-		assert(entry->type == CatalogType::TABLE_ENTRY);
+		assert(entry->type == CatalogType::TABLE_ENTRY || entry->type == CatalogType::VIEW_ENTRY);
 
 		auto copied_entry = entry->Copy(context);
 
