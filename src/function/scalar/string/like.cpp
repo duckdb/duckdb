@@ -33,7 +33,6 @@ struct LikeOperator {
 struct NotLikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
 		return !like_operator(str.GetData(), pattern.GetData(), nullptr);
-		;
 	}
 };
 
@@ -77,7 +76,49 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 		return true;
 	}
 	return *t == 0 && *p == 0;
-} // namespace duckdb
+}
+
+bool LikeFun::Glob(const char *s, const char *pattern, const char *escape) {
+	const char *t, *p;
+
+	t = s;
+	for (p = pattern; *p && *t; p++) {
+		if (escape && *p == *escape) {
+			p++;
+			if (*p != *t) {
+				return false;
+			}
+			t++;
+		} else if (*p == '?') {
+			t++;
+		} else if (*p == '*') {
+			p++;
+			while (*p == '*') {
+				p++;
+			}
+			if (*p == 0) {
+				return true; /* tail is acceptable */
+			}
+			for (; *p && *t; t++) {
+				if (LikeFun::Glob(t, p, escape)) {
+					return true;
+				}
+			}
+			if (*p == 0 && *t == 0) {
+				return true;
+			}
+			return false;
+		} else if (*p == *t) {
+			t++;
+		} else {
+			return false;
+		}
+	}
+	if (*p == '*' && *(p + 1) == 0) {
+		return true;
+	}
+	return *t == 0 && *p == 0;
+}
 
 // This can be moved to the scalar_function class
 template <typename Func> static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {

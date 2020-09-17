@@ -974,7 +974,13 @@ public:
 			throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		auto data = ReadParquetHeader(fs, info.file_path, expected_types, expected_names);
+		auto results = fs.Glob(info.file_path);
+		if (results.empty()) {
+			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
+		}
+		auto data = ReadParquetHeader(fs, results[0], expected_types, expected_names);
+		// FIXME: use all matching files, not just first
+		info.file_path = results[0];
 		// FIXME: hacky
 		auto &pdata = (ParquetScanFunctionData &)*data;
 		for (idx_t i = 0; i < expected_types.size(); i++) {
@@ -988,7 +994,12 @@ public:
 	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		return ReadParquetHeader(fs, file_name, return_types, names);
+		auto results = fs.Glob(file_name);
+		if (results.empty()) {
+			throw IOException("No files found that match the pattern \"%s\"", file_name);
+		}
+		// FIXME: use all files
+		return ReadParquetHeader(fs, results[0], return_types, names);
 	}
 
 	static unique_ptr<FunctionOperatorData>
