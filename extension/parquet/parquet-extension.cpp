@@ -295,6 +295,25 @@ static Int96 timestamp_t_to_impala_timestamp(timestamp_t &ts) {
 	return impala_ts;
 }
 
+struct ParquetScanBindData : public TableFunctionData {
+
+	template <typename... Args> runtime_error FormatException(const string fmt_str, Args... params) {
+		return runtime_error("Failed to read Parquet file \"" + file_name +
+		                     "\": " + StringUtil::Format(fmt_str, params...));
+	}
+
+public:
+	ParquetScanBindData(FileSystem &fs) : fs(fs) {
+	}
+
+public:
+	FileSystem &fs;
+	string file_name;
+
+	FileMetaData file_meta_data;
+	vector<LogicalType> sql_types;
+};
+
 struct ParquetScanColumnData {
 	idx_t chunk_offset;
 
@@ -321,18 +340,7 @@ struct ParquetScanColumnData {
 	unique_ptr<ChunkCollection> string_collection;
 };
 
-struct ParquetScanFunctionData : public TableFunctionData {
-	static constexpr uint8_t GZIP_HEADER_MINSIZE = 10;
-	static constexpr uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
-	static constexpr unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
-
-public:
-	ParquetScanFunctionData(FileSystem &fs) : fs(fs) {
-	}
-
-	void ReadChunk(DataChunk &output);
-	void PrepareChunkBuffer(idx_t col_idx);
-	bool PreparePageBuffers(idx_t col_idx);
+struct ParquetScanStateData : public FunctionOperatorData {
 
 	template <class T>
 	static void _fill_from_dict(ParquetScanColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
@@ -362,29 +370,45 @@ public:
 		}
 	}
 
-	template <typename... Args> runtime_error FormatException(const string fmt_str, Args... params) {
-		return runtime_error("Failed to read Parquet file \"" + file_name +
-		                     "\": " + StringUtil::Format(fmt_str, params...));
+public:
+	ParquetScanStateData(ParquetScanBindData &bind_data)
+	    : bind_data(bind_data), current_group(-1), group_offset(0), finished(false) {
+		column_data.resize(bind_data.sql_types.size());
 	}
+	RowGroup &GetGroup();
+
+	void ReadChunk(DataChunk &output);
+	void PrepareChunkBuffer(idx_t col_idx);
+	bool PreparePageBuffers(idx_t col_idx);
 
 public:
-	FileSystem &fs;
+	static constexpr uint8_t GZIP_HEADER_MINSIZE = 10;
+	static constexpr uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
+	static constexpr unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
 
+	ParquetScanBindData &bind_data;
+	vector<idx_t> group_idx_list;
 	int64_t current_group;
-	int64_t group_offset;
-
-	string file_name;
-	unique_ptr<FileHandle> handle;
-
-	FileMetaData file_meta_data;
-	vector<LogicalType> sql_types;
+	idx_t group_offset;
 	vector<ParquetScanColumnData> column_data;
 	bool finished;
 };
 
-bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
+RowGroup &ParquetScanStateData::GetGroup() {
+	assert(current_group >= 0 && current_group < group_idx_list.size());
+	assert(group_idx_list[current_group] >= 0 &&
+	       group_idx_list[current_group] < bind_data.file_meta_data.row_groups.size());
+	return bind_data.file_meta_data.row_groups[group_idx_list[current_group]];
+}
+
+struct ParallelParquetFunctionScanState : public ParallelState {
+	idx_t row_group_idx;
+	std::mutex lock;
+};
+
+bool ParquetScanStateData::PreparePageBuffers(idx_t col_idx) {
 	auto &col_data = column_data[col_idx];
-	auto &chunk = file_meta_data.row_groups[current_group].columns[col_idx];
+	auto &chunk = GetGroup().columns[col_idx];
 
 	// clean up a bit to avoid nasty surprises
 	col_data.payload.ptr = nullptr;
@@ -395,7 +419,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 
 	auto page_header_len = col_data.buf.len;
 	if (page_header_len < 1) {
-		throw FormatException("Ran out of bytes to read header from. File corrupt?");
+		throw bind_data.FormatException("Ran out of bytes to read header from. File corrupt?");
 	}
 	PageHeader page_hdr;
 	thrift_unpack((const uint8_t *)col_data.buf.ptr + col_data.chunk_offset, (uint32_t *)&page_header_len, &page_hdr);
@@ -416,7 +440,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 		auto res =
 		    snappy::RawUncompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr);
 		if (!res) {
-			throw FormatException("Decompression failure");
+			throw bind_data.FormatException("Decompression failure");
 		}
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
 		break;
@@ -437,7 +461,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 
 		auto mz_ret = mz_inflateInit2(&stream, -MZ_DEFAULT_WINDOW_BITS);
 		if (mz_ret != MZ_OK) {
-			throw FormatException("Failed to initialize miniz");
+			throw bind_data.FormatException("Failed to initialize miniz");
 		}
 		s.init = true;
 
@@ -446,7 +470,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 
 		if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B || gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE ||
 		    gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
-			throw FormatException("Input is invalid/unsupported GZIP stream");
+			throw bind_data.FormatException("Input is invalid/unsupported GZIP stream");
 		}
 
 		col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
@@ -458,14 +482,14 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 
 		mz_ret = mz_inflate(&stream, MZ_FINISH);
 		if (mz_ret != MZ_OK && mz_ret != MZ_STREAM_END) {
-			throw FormatException("Decompression failure: " + string(mz_error(mz_ret)));
+			throw bind_data.FormatException("Decompression failure: " + string(mz_error(mz_ret)));
 		}
 
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
 		break;
 	}
 	default:
-		throw FormatException("Unsupported compression codec. Try uncompressed, gzip or snappy");
+		throw bind_data.FormatException("Unsupported compression codec. Try uncompressed, gzip or snappy");
 	}
 	col_data.buf.inc(page_hdr.compressed_page_size);
 
@@ -475,7 +499,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 		// fill the dictionary vector
 
 		if (page_hdr.__isset.data_page_header || !page_hdr.__isset.dictionary_page_header) {
-			throw FormatException("Dictionary page header mismatch");
+			throw bind_data.FormatException("Dictionary page header mismatch");
 		}
 
 		// make sure we like the encoding
@@ -485,15 +509,15 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 			break;
 
 		default:
-			throw FormatException("Dictionary page has unsupported/invalid encoding");
+			throw bind_data.FormatException("Dictionary page has unsupported/invalid encoding");
 		}
 
 		col_data.dict_size = page_hdr.dictionary_page_header.num_values;
-		auto dict_byte_size = col_data.dict_size * GetTypeIdSize(sql_types[col_idx].InternalType());
+		auto dict_byte_size = col_data.dict_size * GetTypeIdSize(bind_data.sql_types[col_idx].InternalType());
 
 		col_data.dict.resize(dict_byte_size);
 
-		switch (sql_types[col_idx].id()) {
+		switch (bind_data.sql_types[col_idx].id()) {
 		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::BIGINT:
@@ -535,7 +559,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 
 				auto utf_type = Utf8Proc::Analyze(col_data.payload.ptr, str_len);
 				if (utf_type == UnicodeType::INVALID) {
-					throw FormatException("invalid string encoding");
+					throw bind_data.FormatException("invalid string encoding");
 				}
 				FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
 				    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
@@ -551,18 +575,18 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 			col_data.string_collection->Verify();
 		} break;
 		default:
-			throw FormatException(sql_types[col_idx].ToString());
+			throw bind_data.FormatException(bind_data.sql_types[col_idx].ToString());
 		}
 		// important, move to next page which should be a data page
 		return false;
 	}
 	case PageType::DATA_PAGE: {
 		if (!page_hdr.__isset.data_page_header || page_hdr.__isset.dictionary_page_header) {
-			throw FormatException("Data page header mismatch");
+			throw bind_data.FormatException("Data page header mismatch");
 		}
 
 		if (page_hdr.__isset.data_page_header_v2) {
-			throw FormatException("v2 data page format is not supported");
+			throw bind_data.FormatException("v2 data page format is not supported");
 		}
 
 		col_data.page_value_count = page_hdr.data_page_header.num_values;
@@ -578,7 +602,7 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 			col_data.payload.inc(def_length);
 		} break;
 		default:
-			throw FormatException("Definition levels have unsupported/invalid encoding");
+			throw bind_data.FormatException("Definition levels have unsupported/invalid encoding");
 		}
 
 		switch (page_hdr.data_page_header.encoding) {
@@ -594,13 +618,13 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 			break;
 
 		default:
-			throw FormatException("Data page has unsupported/invalid encoding");
+			throw bind_data.FormatException("Data page has unsupported/invalid encoding");
 		}
 
 		break;
 	}
 	case PageType::DATA_PAGE_V2:
-		throw FormatException("v2 data page format is not supported");
+		throw bind_data.FormatException("v2 data page format is not supported");
 
 	default:
 		break; // ignore INDEX page type and any other custom extensions
@@ -608,14 +632,14 @@ bool ParquetScanFunctionData::PreparePageBuffers(idx_t col_idx) {
 	return true;
 }
 
-void ParquetScanFunctionData::PrepareChunkBuffer(idx_t col_idx) {
-	auto &chunk = file_meta_data.row_groups[current_group].columns[col_idx];
+void ParquetScanStateData::PrepareChunkBuffer(idx_t col_idx) {
+	auto &chunk = GetGroup().columns[col_idx];
 	if (chunk.__isset.file_path) {
-		throw FormatException("Only inlined data files are supported (no references)");
+		throw bind_data.FormatException("Only inlined data files are supported (no references)");
 	}
 
 	if (chunk.meta_data.path_in_schema.size() != 1) {
-		throw FormatException("Only flat tables are supported (no nesting)");
+		throw bind_data.FormatException("Only flat tables are supported (no nesting)");
 	}
 
 	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
@@ -625,30 +649,32 @@ void ParquetScanFunctionData::PrepareChunkBuffer(idx_t col_idx) {
 		chunk_start = chunk.meta_data.dictionary_page_offset;
 	}
 	auto chunk_len = chunk.meta_data.total_compressed_size;
+	auto handle = bind_data.fs.OpenFile(bind_data.file_name, FileFlags::FILE_FLAGS_READ);
 
 	// read entire chunk into RAM
 	column_data[col_idx].buf.resize(chunk_len);
-	fs.Read(*handle, column_data[col_idx].buf.ptr, chunk_len, chunk_start);
+	bind_data.fs.Read(*handle, column_data[col_idx].buf.ptr, chunk_len, chunk_start);
 }
 
-void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
+void ParquetScanStateData::ReadChunk(DataChunk &output) {
+
 	if (finished) {
 		return;
 	}
 
 	// see if we have to switch to the next row group in the parquet file
-	if (current_group < 0 || group_offset >= file_meta_data.row_groups[current_group].num_rows) {
+	if (current_group < 0 || group_offset >= GetGroup().num_rows) {
 
 		current_group++;
 		group_offset = 0;
 
-		if ((idx_t)current_group == file_meta_data.row_groups.size()) {
+		if ((idx_t)current_group == group_idx_list.size()) {
 			finished = true;
 			return;
 		}
 
 		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
-			auto file_col_idx = column_ids[out_col_idx];
+			auto file_col_idx = bind_data.column_ids[out_col_idx];
 
 			// this is a special case where we are not interested in the actual contents of the file
 			if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
@@ -661,15 +687,14 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 		}
 	}
 
-	auto current_row_group = file_meta_data.row_groups[current_group];
-	output.SetCardinality(std::min<int64_t>(STANDARD_VECTOR_SIZE, current_row_group.num_rows - group_offset));
+	output.SetCardinality(std::min<int64_t>(STANDARD_VECTOR_SIZE, GetGroup().num_rows - group_offset));
 
 	if (output.size() == 0) {
 		return;
 	}
 
 	for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
-		auto file_col_idx = column_ids[out_col_idx];
+		auto file_col_idx = bind_data.column_ids[out_col_idx];
 		if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			Value constant_42 = Value::BIGINT(42);
 			output.data[out_col_idx].Reference(constant_42);
@@ -715,7 +740,7 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 
 				// TODO ensure we had seen a dict page IN THIS CHUNK before getting here
 
-				switch (sql_types[file_col_idx].id()) {
+				switch (bind_data.sql_types[file_col_idx].id()) {
 				case LogicalTypeId::BOOLEAN:
 					_fill_from_dict<bool>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
@@ -736,7 +761,7 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 					break;
 				case LogicalTypeId::VARCHAR: {
 					if (!col_data.string_collection) {
-						throw FormatException("Did not see a dictionary for strings. Corrupt file?");
+						throw bind_data.FormatException("Did not see a dictionary for strings. Corrupt file?");
 					}
 
 					// the strings can be anywhere in the collection so just reference it all
@@ -749,7 +774,7 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 						if (col_data.defined_buf.ptr[i]) {
 							auto offset = col_data.offset_buf.read<uint32_t>();
 							if (offset >= col_data.string_collection->count) {
-								throw FormatException("string dictionary offset out of bounds");
+								throw bind_data.FormatException("string dictionary offset out of bounds");
 							}
 							auto &chunk = col_data.string_collection->chunks[offset / STANDARD_VECTOR_SIZE];
 							auto &vec = chunk->data[0];
@@ -762,14 +787,14 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 					}
 				} break;
 				default:
-					throw FormatException(sql_types[file_col_idx].ToString());
+					throw bind_data.FormatException(bind_data.sql_types[file_col_idx].ToString());
 				}
 
 				break;
 			}
 			case Encoding::PLAIN:
 				assert(col_data.payload.ptr);
-				switch (sql_types[file_col_idx].id()) {
+				switch (bind_data.sql_types[file_col_idx].id()) {
 				case LogicalTypeId::BOOLEAN: {
 					// bit packed this
 					auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
@@ -827,13 +852,13 @@ void ParquetScanFunctionData::ReadChunk(DataChunk &output) {
 					break;
 				}
 				default:
-					throw FormatException(sql_types[file_col_idx].ToString());
+					throw bind_data.FormatException(bind_data.sql_types[file_col_idx].ToString());
 				}
 
 				break;
 
 			default:
-				throw FormatException("Data page has unsupported/invalid encoding");
+				throw bind_data.FormatException("Data page has unsupported/invalid encoding");
 			}
 
 			output_offset += current_batch_size;
@@ -847,40 +872,42 @@ class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
 	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_function, parquet_scan_bind,
-	                    parquet_scan_init) {
+	                    parquet_scan_init, /* cleanup */ nullptr, /* dependency */ nullptr, parquet_cardinality,
+	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, parquet_max_threads,
+	                    parquet_init_parallel_state, parquet_parallel_state_next) {
 		projection_pushdown = true;
 	}
 
 	static unique_ptr<FunctionData> ReadParquetHeader(FileSystem &fs, string file_name,
 	                                                  vector<LogicalType> &return_types, vector<string> &names) {
-		auto res = make_unique<ParquetScanFunctionData>(fs);
+		auto res = make_unique<ParquetScanBindData>(fs);
 
 		res->file_name = file_name;
-		res->handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 		auto &file_meta_data = res->file_meta_data;
 
 		ResizeableBuffer buf;
 		buf.resize(4);
 		memset(buf.ptr, '\0', 4);
 		// check for magic bytes at start of file
-		fs.Read(*res->handle, buf.ptr, 4);
+		fs.Read(*handle, buf.ptr, 4);
 		if (strncmp(buf.ptr, "PAR1", 4) != 0) {
 			throw res->FormatException("Missing magic bytes in front of Parquet file");
 		}
 
 		// check for magic bytes at end of file
-		auto file_size_signed = fs.GetFileSize(*res->handle);
+		auto file_size_signed = fs.GetFileSize(*handle);
 		if (file_size_signed < 12) {
 			throw res->FormatException("File too small to be a Parquet file");
 		}
 		auto file_size = (uint64_t)file_size_signed;
-		fs.Read(*res->handle, buf.ptr, 4, file_size - 4);
+		fs.Read(*handle, buf.ptr, 4, file_size - 4);
 		if (strncmp(buf.ptr, "PAR1", 4) != 0) {
 			throw res->FormatException("No magic bytes found at end of file");
 		}
 
 		// read four-byte footer length from just before the end magic bytes
-		fs.Read(*res->handle, buf.ptr, 4, file_size - 8);
+		fs.Read(*handle, buf.ptr, 4, file_size - 8);
 		auto footer_len = *(uint32_t *)buf.ptr;
 		if (footer_len <= 0) {
 			throw res->FormatException("Footer length can't be 0");
@@ -891,7 +918,7 @@ public:
 
 		// read footer into buffer and de-thrift
 		buf.resize(footer_len);
-		fs.Read(*res->handle, buf.ptr, footer_len, file_size - (footer_len + 8));
+		fs.Read(*handle, buf.ptr, footer_len, file_size - (footer_len + 8));
 
 		thrift_unpack((const uint8_t *)buf.ptr, &footer_len, &file_meta_data);
 
@@ -960,10 +987,7 @@ public:
 
 			res->sql_types.push_back(type);
 		}
-		res->group_offset = 0;
-		res->current_group = -1;
-		res->column_data.resize(return_types.size());
-		res->finished = false;
+
 		return move(res);
 	}
 
@@ -976,7 +1000,7 @@ public:
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		auto data = ReadParquetHeader(fs, info.file_path, expected_types, expected_names);
 		// FIXME: hacky
-		auto &pdata = (ParquetScanFunctionData &)*data;
+		auto &pdata = (ParquetScanBindData &)*data;
 		for (idx_t i = 0; i < expected_types.size(); i++) {
 			pdata.column_ids.push_back(i);
 		}
@@ -992,27 +1016,73 @@ public:
 	}
 
 	static unique_ptr<FunctionOperatorData>
-	parquet_scan_init(ClientContext &context, const FunctionData *bind_data, ParallelState *state,
+	parquet_scan_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *parallel_state_,
 	                  vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
-		auto &data = (ParquetScanFunctionData &)*bind_data;
-		data.column_ids = column_ids;
-		return nullptr;
+		auto &bind_data = (ParquetScanBindData &)*bind_data_;
+		bind_data.column_ids = column_ids;
+
+		auto result = make_unique<ParquetScanStateData>(bind_data);
+
+		if (parallel_state_) {
+			parquet_parallel_state_next(context, bind_data_, result.get(), parallel_state_);
+		} else {
+			// one thread has to read all groups
+			for (idx_t i = 0; i < bind_data.file_meta_data.row_groups.size(); i++) {
+				result->group_idx_list.push_back(i);
+			}
+		}
+		return move(result);
 	}
 
 	static unique_ptr<GlobalFunctionData> parquet_read_initialize(ClientContext &context, FunctionData &fdata) {
-		return make_unique<GlobalFunctionData>();
+		throw NotImplementedException("eek");
 	}
 
 	static void parquet_read_function(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data,
 	                                  DataChunk &output) {
-		auto &data = (ParquetScanFunctionData &)bind_data;
-		data.ReadChunk(output);
+		throw NotImplementedException("eek");
 	}
 
 	static void parquet_scan_function(ClientContext &context, const FunctionData *bind_data,
 	                                  FunctionOperatorData *operator_state, DataChunk &output) {
-		auto &data = (ParquetScanFunctionData &)*bind_data;
+		auto &data = (ParquetScanStateData &)*operator_state;
 		data.ReadChunk(output);
+	}
+
+	static idx_t parquet_cardinality(const FunctionData *bind_data) {
+		auto &data = (ParquetScanBindData &)*bind_data;
+		return data.file_meta_data.num_rows;
+	}
+
+	static idx_t parquet_max_threads(ClientContext &context, const FunctionData *bind_data) {
+		auto &data = (ParquetScanBindData &)*bind_data;
+		return data.file_meta_data.row_groups.size();
+	}
+
+	static unique_ptr<ParallelState> parquet_init_parallel_state(ClientContext &context,
+	                                                             const FunctionData *bind_data) {
+		auto result = make_unique<ParallelParquetFunctionScanState>();
+		result->row_group_idx = 0;
+		return move(result);
+	}
+
+	static bool parquet_parallel_state_next(ClientContext &context, const FunctionData *bind_data_,
+	                                        FunctionOperatorData *state_, ParallelState *parallel_state_) {
+
+		auto &bind_data = (ParquetScanBindData &)*bind_data_;
+		auto &parallel_state = (ParallelParquetFunctionScanState &)*parallel_state_;
+		auto &scan_data = (ParquetScanStateData &)*state_;
+
+		lock_guard<mutex> parallel_lock(parallel_state.lock);
+		if (parallel_state.row_group_idx < bind_data.file_meta_data.row_groups.size()) {
+			scan_data.current_group = -1;
+			scan_data.finished = false;
+			scan_data.group_offset = 0;
+			scan_data.group_idx_list = {parallel_state.row_group_idx};
+			parallel_state.row_group_idx++;
+			return true;
+		}
+		return false;
 	}
 };
 
