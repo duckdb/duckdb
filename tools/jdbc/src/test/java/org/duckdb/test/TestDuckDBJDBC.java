@@ -7,6 +7,7 @@ import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.Date;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -21,7 +22,6 @@ import java.util.Properties;
 
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDriver;
-
 
 public class TestDuckDBJDBC {
 
@@ -712,27 +712,24 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getObject("te"), Time.valueOf("21:11:00"));
 		assertEquals(rs.getTime("te"), Time.valueOf("21:11:00"));
 
-
 		assertFalse(rs.next());
 		rs.close();
 		stmt.close();
 		conn.close();
 	}
 
-	
 	public static void test_exotic_nulls() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		ResultSet rs = stmt.executeQuery(
-				"SELECT NULL::timestamp ts, NULL::date dt, NULL::time te");
+		ResultSet rs = stmt.executeQuery("SELECT NULL::timestamp ts, NULL::date dt, NULL::time te");
 		assertTrue(rs.next());
 		assertNull(rs.getObject("ts"));
 		assertNull(rs.getTimestamp("ts"));
 
 		assertNull(rs.getObject("dt"));
 		assertNull(rs.getDate("dt"));
-		
+
 		assertNull(rs.getObject("te"));
 		assertNull(rs.getTime("te"));
 
@@ -742,14 +739,12 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
-	
 	public static void test_evil_date() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		ResultSet rs = stmt.executeQuery(
-				"SELECT '513125-08-05 (BC)'::date d");
-	
+		ResultSet rs = stmt.executeQuery("SELECT '513125-08-05 (BC)'::date d");
+
 		assertTrue(rs.next());
 		assertNull(rs.getDate("d"));
 
@@ -758,14 +753,13 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
-	
+
 	public static void test_decimal() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		ResultSet rs = stmt.executeQuery(
-				"SELECT '1.23'::decimal(3,2) d");
-	
+		ResultSet rs = stmt.executeQuery("SELECT '1.23'::decimal(3,2) d");
+
 		assertTrue(rs.next());
 		assertEquals(rs.getDouble("d"), 1.23);
 
@@ -775,7 +769,68 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
-	
+	public static void test_schema_reflection() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE a (i INTEGER)");
+		stmt.execute("CREATE VIEW b AS SELECT i AS j FROM a");
+
+		DatabaseMetaData md = conn.getMetaData();
+		ResultSet rs;
+
+		rs = md.getTableTypes();
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
+		assertEquals(rs.getString(1), "BASE TABLE");
+
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
+		assertEquals(rs.getString(1), "VIEW");
+
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getCatalogs();
+		assertTrue(rs.next());
+		assertNull(rs.getObject("TABLE_CAT"));
+		assertNull(rs.getObject(1));
+
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getSchemas();
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_SCHEM"), "main");
+		assertNull(rs.getObject("TABLE_CATALOG"));
+		assertEquals(rs.getString(1), "main");
+		assertNull(rs.getObject(2));
+
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_SCHEM"), "temp");
+		assertNull(rs.getObject("TABLE_CATALOG"));
+		assertEquals(rs.getString(1), "temp");
+		assertNull(rs.getObject(2));
+
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getSchemas(null, "ma%");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_SCHEM"), "main");
+		assertNull(rs.getObject("TABLE_CATALOG"));
+		assertEquals(rs.getString(1), "main");
+		assertNull(rs.getObject(2));
+
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getTables(null, null, "%", null);
+		assertTrue(rs.next());
+		// assertEquals(rs.getString("TABLE_NAME"), "a");
+
+		conn.close();
+	}
+
 	public static void test_connect_wrong_url_bug848() throws Exception {
 		Driver d = new DuckDBDriver();
 		assertNull(d.connect("jdbc:h2:", null));

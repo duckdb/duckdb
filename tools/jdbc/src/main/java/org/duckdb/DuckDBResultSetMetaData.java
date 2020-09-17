@@ -1,6 +1,5 @@
 package org.duckdb;
 
-import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
