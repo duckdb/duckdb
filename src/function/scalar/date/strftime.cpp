@@ -694,7 +694,11 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
 }
 
 //! Parses a timestamp using the given specifier
-bool StrpTimeFormat::Parse(string_t str, int32_t result_data[], string &error_message, idx_t &error_position) {
+bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
+	auto &result_data = result.data;
+	auto &error_message = result.error_message;
+	auto &error_position = result.error_position;
+
 	// initialize the result
 	result_data[0] = 1900;
 	result_data[1] = 1;
@@ -972,30 +976,26 @@ string StrpTimeFormat::FormatStrpTimeError(string input, idx_t position) {
 }
 
 date_t StrpTimeFormat::ParseDate(string_t input) {
-	string error_message;
-	idx_t error_position = INVALID_INDEX;
-	int32_t result_data[7];
-	if (!Parse(input, result_data, error_message, error_position)) {
-		throw InvalidInputException("Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s",
-		                            input.GetData(), format_specifier,
-		                            FormatStrpTimeError(string(input.GetData(), input.GetSize()), error_position),
-		                            error_message);
+	ParseResult result;
+	if (!Parse(input, result)) {
+		throw InvalidInputException(
+		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetData(),
+		    format_specifier, FormatStrpTimeError(string(input.GetData(), input.GetSize()), result.error_position),
+		    result.error_message);
 	}
-	return Date::FromDate(result_data[0], result_data[1], result_data[2]);
+	return Date::FromDate(result.data[0], result.data[1], result.data[2]);
 }
 
 timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
-	string error_message;
-	idx_t error_position = INVALID_INDEX;
-	int32_t result_data[7];
-	if (!Parse(input, result_data, error_message, error_position)) {
-		throw InvalidInputException("Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s",
-		                            input.GetData(), format_specifier,
-		                            FormatStrpTimeError(string(input.GetData(), input.GetSize()), error_position),
-		                            error_message);
+	ParseResult result;
+	if (!Parse(input, result)) {
+		throw InvalidInputException(
+		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetData(),
+		    format_specifier, FormatStrpTimeError(string(input.GetData(), input.GetSize()), result.error_position),
+		    result.error_message);
 	}
-	date_t date = Date::FromDate(result_data[0], result_data[1], result_data[2]);
-	dtime_t time = Time::FromTime(result_data[3], result_data[4], result_data[5], result_data[6]);
+	date_t date = Date::FromDate(result.data[0], result.data[1], result.data[2]);
+	dtime_t time = Time::FromTime(result.data[3], result.data[4], result.data[5], result.data[6]);
 	return Timestamp::FromDatetime(date, time);
 }
 
