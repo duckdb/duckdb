@@ -664,7 +664,6 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 
 	// see if we have to switch to the next row group in the parquet file
 	if (current_group < 0 || group_offset >= GetGroup().num_rows) {
-
 		current_group++;
 		group_offset = 0;
 
@@ -708,7 +707,6 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 		while (output_offset < output.size()) {
 			// do this unpack business only if we run out of stuff from the current page
 			if (col_data.page_offset >= col_data.page_value_count) {
-
 				// read dictionaries and data page headers so that we are ready to go for scan
 				if (!PreparePageBuffers(file_col_idx)) {
 					continue;
@@ -727,7 +725,6 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 			switch (col_data.page_encoding) {
 			case Encoding::RLE_DICTIONARY:
 			case Encoding::PLAIN_DICTIONARY: {
-
 				idx_t null_count = 0;
 				for (idx_t i = 0; i < current_batch_size; i++) {
 					if (!col_data.defined_buf.ptr[i]) {
@@ -1050,7 +1047,6 @@ public:
 
 	static void parquet_read_function(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data,
 	                                  DataChunk &output) {
-
 		auto &scan_state = (ParquetCopyFunctionData &)gstate;
 		scan_state.scan_state->ReadChunk(output);
 	}
@@ -1080,7 +1076,6 @@ public:
 
 	static bool parquet_parallel_state_next(ClientContext &context, const FunctionData *bind_data_,
 	                                        FunctionOperatorData *state_, ParallelState *parallel_state_) {
-
 		auto &bind_data = (ParquetScanBindData &)*bind_data_;
 		auto &parallel_state = (ParallelParquetFunctionScanState &)*parallel_state_;
 		auto &scan_data = (ParquetScanStateData &)*state_;
