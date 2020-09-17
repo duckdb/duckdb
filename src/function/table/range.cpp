@@ -118,6 +118,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void BuiltinFunctions::RegisterTableFunctions() {
+	GlobTableFunction::RegisterFunction(*this);
 	RangeTableFunction::RegisterFunction(*this);
 	RepeatTableFunction::RegisterFunction(*this);
 }

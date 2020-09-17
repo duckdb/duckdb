@@ -632,13 +632,17 @@ static bool HasGlob(const string &str) {
 }
 
 
-static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory, vector<string> &result) {
+static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory, vector<string> &result, bool join_path) {
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
 		if (is_directory != match_directory) {
 			return;
 		}
 		if (LikeFun::Glob(fname.c_str(), glob.c_str(), "\\")) {
-			result.push_back(fs.JoinPath(path, fname));
+			if (join_path) {
+				result.push_back(fs.JoinPath(path, fname));
+			} else {
+				result.push_back(fname);
+			}
 		}
 	});
 }
@@ -672,12 +676,12 @@ vector<string> FileSystem::Glob(string path) {
 		vector<string> result;
 		if (previous_directories.empty()) {
 			// no previous directories: list in the current path
-			GlobFiles(*this, ".", splits[i], !is_last_chunk, result);
+			GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
 		} else {
 			// previous directories
 			// we iterate over each of the previous directories, and apply the glob of the current directory
 			for(auto &prev_directory : previous_directories) {
-				GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result);
+				GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
 			}
 		}
 		if (is_last_chunk || result.size() == 0) {

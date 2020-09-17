@@ -1330,8 +1330,8 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					auto s = parse_data[i];
 					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
 					if (utf_type == UnicodeType::INVALID) {
-						throw ParserException("Error between line %d and %d: file is not valid UTF8",
-						                      linenr - parse_chunk.size(), linenr);
+						throw ParserException("Error in file \"%s\" between line %d and %d: file is not valid UTF8",
+						                      options.file_path, linenr - parse_chunk.size(), linenr);
 					}
 				}
 			}
@@ -1343,7 +1343,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
 			} catch (const Exception &e) {
-				throw ParserException("Error between line %llu and %llu: %s", linenr - parse_chunk.size(), linenr,
+				throw ParserException("Error in file \"%s\" between line %llu and %llu: %s", options.file_path, linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
@@ -1355,7 +1355,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
 				    });
 			} catch (const Exception &e) {
-				throw ParserException("Error between line %llu and %llu: %s", linenr - parse_chunk.size(), linenr,
+				throw ParserException("Error in file \"%s\" between line %llu and %llu: %s", options.file_path, linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
 		} else {
@@ -1363,7 +1363,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				// target type is not varchar: perform a cast
 				VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
 			} catch (const Exception &e) {
-				throw ParserException("Error between line %llu and %llu: %s", linenr - parse_chunk.size(), linenr,
+				throw ParserException("Error in file \"%s\" between line %llu and %llu: %s", options.file_path, linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
 		}

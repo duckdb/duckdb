@@ -14,6 +14,8 @@ struct ReadCSVFunctionData : public TableFunctionData {
 
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
+	vector<string> files;
+	idx_t file_index;
 	//! Whether or not the CSV has already been read completely
 	bool is_consumed;
 };
@@ -23,8 +25,17 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
                                               vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<ReadCSVFunctionData>();
 
+	string file_pattern = inputs[0].str_value;
+
+	auto &fs = FileSystem::GetFileSystem(context);
+	result->files = fs.Glob(file_pattern);
+	if (result->files.empty()) {
+		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+	}
+	result->file_index = 1;
+
 	BufferedCSVReaderOptions options;
-	options.file_path = inputs[0].str_value;
+	options.file_path = result->files[0];
 	options.auto_detect = false;
 	options.header = false;
 	options.delimiter = ",";
@@ -113,6 +124,7 @@ static unique_ptr<FunctionOperatorData> read_csv_init(ClientContext &context, co
 	if (bind_data.is_consumed) {
 		bind_data.csv_reader =
 		    make_unique<BufferedCSVReader>(context, bind_data.csv_reader->options, bind_data.csv_reader->sql_types);
+		bind_data.file_index = 1;
 	}
 	bind_data.is_consumed = true;
 	return nullptr;
@@ -128,7 +140,18 @@ static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vecto
 static void read_csv_function(ClientContext &context, const FunctionData *bind_data,
                               FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ReadCSVFunctionData &)*bind_data;
-	data.csv_reader->ParseCSV(output);
+	do {
+		data.csv_reader->ParseCSV(output);
+		if (output.size() == 0 && data.file_index < data.files.size()) {
+			// exhausted this file, but we have more files we can read
+			// open the next file and increment the counter
+			data.csv_reader->options.file_path = data.files[data.file_index];
+			data.csv_reader = make_unique<BufferedCSVReader>(context, data.csv_reader->options, data.csv_reader->sql_types);
+			data.file_index++;
+		} else {
+			break;
+		}
+	} while(true);
 }
 
 static void add_named_parameters(TableFunction &table_function) {
