@@ -911,7 +911,7 @@ in_quotes:
 		}
 	} while (ReadBuffer(start));
 	// still in quoted state at the end of the file, error:
-	throw ParserException("Error on line %s: unterminated quotes", GetLineNumberStr(linenr, linenr_estimated).c_str());
+	throw ParserException("Error in file \"%s\" on line %s: unterminated quotes", options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 unquote:
 	/* state: unquote */
 	// this state handles the state directly after we unquote
@@ -938,8 +938,8 @@ unquote:
 			count++;
 			if (count > delimiter_pos && count > quote_pos) {
 				throw ParserException(
-				    "Error on line %s: quote should be followed by end of value, end of row or another quote",
-				    GetLineNumberStr(linenr, linenr_estimated).c_str());
+				    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of row or another quote",
+				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 			}
 			if (delimiter_pos == options.delimiter.size()) {
 				// quote followed by delimiter, add value
@@ -953,8 +953,8 @@ unquote:
 			}
 		}
 	} while (ReadBuffer(start));
-	throw ParserException("Error on line %s: quote should be followed by end of value, end of row or another quote",
-	                      GetLineNumberStr(linenr, linenr_estimated).c_str());
+	throw ParserException("Error in file \"%s\" on line %s: quote should be followed by end of value, end of row or another quote",
+	                      options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 handle_escape:
 	escape_pos = 0;
 	quote_pos = 0;
@@ -966,8 +966,8 @@ handle_escape:
 			escape_search.Match(escape_pos, buffer[position]);
 			count++;
 			if (count > escape_pos && count > quote_pos) {
-				throw ParserException("Error on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
-				                      GetLineNumberStr(linenr, linenr_estimated).c_str());
+				throw ParserException("Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
+				                      options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 			}
 			if (quote_pos == options.quote.size() || escape_pos == options.escape.size()) {
 				// found quote or escape: move back to quoted state
@@ -975,8 +975,8 @@ handle_escape:
 			}
 		}
 	} while (ReadBuffer(start));
-	throw ParserException("Error on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
-	                      GetLineNumberStr(linenr, linenr_estimated).c_str());
+	throw ParserException("Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
+	                      options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 carriage_return:
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
@@ -1105,7 +1105,7 @@ in_quotes:
 		}
 	} while (ReadBuffer(start));
 	// still in quoted state at the end of the file, error:
-	throw ParserException("Error on line %s: unterminated quotes", GetLineNumberStr(linenr, linenr_estimated).c_str());
+	throw ParserException("Error in file \"%s\" on line %s: unterminated quotes", options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 unquote:
 	/* state: unquote */
 	// this state handles the state directly after we unquote
@@ -1129,20 +1129,20 @@ unquote:
 		offset = 1;
 		goto add_row;
 	} else {
-		throw ParserException("Error on line %s: quote should be followed by end of value, end of row or another quote",
-		                      GetLineNumberStr(linenr, linenr_estimated).c_str());
+		throw ParserException("Error in file \"%s\" on line %s: quote should be followed by end of value, end of row or another quote",
+		                      options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 	}
 handle_escape:
 	/* state: handle_escape */
 	// escape should be followed by a quote or another escape character
 	position++;
 	if (position >= buffer_size && !ReadBuffer(start)) {
-		throw ParserException("Error on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
-		                      GetLineNumberStr(linenr, linenr_estimated).c_str());
+		throw ParserException("Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
+		                      options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 	}
 	if (buffer[position] != options.quote[0] && buffer[position] != options.escape[0]) {
-		throw ParserException("Error on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
-		                      GetLineNumberStr(linenr, linenr_estimated).c_str());
+		throw ParserException("Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE",
+		                      options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str());
 	}
 	// escape was followed by quote or escape, go back to quoted state
 	goto in_quotes;
