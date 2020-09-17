@@ -14,6 +14,7 @@
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 
@@ -37,6 +38,75 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
 	return std::to_string(linenr + 1) + estimated;
+}
+
+static bool is_digit(char c) {
+	return std::isdigit(c);
+}
+
+static bool StartsWithNumericDate(string &separator, const string_t &value) {
+	auto begin = value.GetData();
+	auto end = begin + value.GetSize();
+
+	//	StrpTimeFormat::Parse will skip whitespace, so we can too
+	auto field1 = std::find_if_not(begin, end, StringUtil::CharacterIsSpace);
+	if (field1 == end) {
+		return false;
+	}
+
+	//	first numeric field must start immediately
+	if (!std::isdigit(*field1)) {
+		return false;
+	}
+	auto literal1 = std::find_if_not(field1, end, is_digit);
+	if (literal1 == end) {
+		return false;
+	}
+
+	//	second numeric field must exist
+	auto field2 = std::find_if(literal1, end, is_digit);
+	if (field2 == end) {
+		return false;
+	}
+	auto literal2 = std::find_if_not(field2, end, is_digit);
+	if (literal2 == end) {
+		return false;
+	}
+
+	//	third numeric field must exist
+	auto field3 = std::find_if(literal2, end, is_digit);
+	if (field3 == end) {
+		return false;
+	}
+
+	//	second literal must match first
+	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, (field2 - literal1))) {
+		return false;
+	}
+
+	//	copy the literal as the separator, escaping percent signs
+	separator.clear();
+	while (literal1 < field2) {
+		const auto literal_char = *literal1++;
+		if (literal_char == '%') {
+			separator.push_back(literal_char);
+		}
+		separator.push_back(literal_char);
+	}
+
+	return true;
+}
+
+string GenerateDateFormat(const string &separator, const char *format_template) {
+	string format_specifier = format_template;
+
+	//	replace all dashes with the separator
+	for (auto pos = std::find(format_specifier.begin(), format_specifier.end(), '-'); pos != format_specifier.end();
+	     pos = std::find(pos + separator.size(), format_specifier.end(), '-')) {
+		format_specifier.replace(pos, pos + 1, separator);
+	}
+
+	return format_specifier;
 }
 
 TextSearchShiftArray::TextSearchShiftArray() {
@@ -271,12 +341,19 @@ bool BufferedCSVReader::JumpToNextSample() {
 	return true;
 }
 
+void BufferedCSVReader::SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type) {
+	options.has_format[sql_type] = true;
+	auto &date_format = options.date_format[sql_type];
+	date_format.format_specifier = format_specifier;
+	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
+}
+
 bool BufferedCSVReader::TryCastValue(Value value, LogicalType sql_type) {
 	try {
-		if (options.has_date_format && sql_type.id() == LogicalTypeId::DATE) {
-			options.date_format.ParseDate(value.str_value);
-		} else if (options.has_timestamp_format && sql_type.id() == LogicalTypeId::TIMESTAMP) {
-			options.timestamp_format.ParseTimestamp(value.str_value);
+		if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
+			options.date_format[LogicalTypeId::DATE].ParseDate(value.str_value);
+		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
+			options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(value.str_value);
 		} else {
 			value.CastAs(sql_type, true);
 		}
@@ -291,16 +368,16 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, Logic
 	try {
 		// try vector-cast from string to sql_type
 		Vector dummy_result(sql_type);
-		if (options.has_date_format && sql_type == LogicalTypeId::DATE) {
+		if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			UnaryExecutor::Execute<string_t, date_t, true>(parse_chunk_col, dummy_result, size, [&](string_t input) {
-				return options.date_format.ParseDate(input);
+				return options.date_format[LogicalTypeId::DATE].ParseDate(input);
 			});
-		} else if (options.has_timestamp_format && sql_type == LogicalTypeId::TIMESTAMP) {
+		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
 			UnaryExecutor::Execute<string_t, timestamp_t, true>(
 			    parse_chunk_col, dummy_result, size,
-			    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
+			    [&](string_t input) { return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input); });
 		} else {
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk_col, dummy_result, size, true);
@@ -432,13 +509,31 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
 	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
 
+	// format template candidates, ordered by descending specificity (~ from high to low)
+	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
+	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
+	    {LogicalTypeId::TIMESTAMP,
+	     {"%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S", "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S",
+	      "%y-%m-%d %H:%M:%S"}},
+	};
+
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
 	vector<vector<LogicalType>> best_sql_types_candidates;
+	std::map<LogicalTypeId, vector<string>> best_format_candidates;
+	for (const auto &t : format_template_candidates) {
+		best_format_candidates[t.first].clear();
+	}
 	for (auto &info_candidate : info_candidates) {
 		options = info_candidate;
 		vector<vector<LogicalType>> info_sql_types_candidates(options.num_cols, type_candidates);
+		std::map<LogicalTypeId, bool> has_format_candidates;
+		std::map<LogicalTypeId, vector<string>> format_candidates;
+		for (const auto &t : format_template_candidates) {
+			has_format_candidates[t.first] = false;
+			format_candidates[t.first].clear();
+		}
 
 		// set all sql_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		sql_types.clear();
@@ -455,6 +550,61 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
 					auto dummy_val = parse_chunk.GetValue(col, row);
+					// try formatting for date types if the user did not specify one and it starts with numeric values.
+					string separator;
+					if (has_format_candidates.count(sql_type.id()) && !original_options.has_format[sql_type.id()] &&
+					    StartsWithNumericDate(separator, dummy_val.str_value)) {
+						// generate date format candidates the first time through
+						auto &type_format_candidates = format_candidates[sql_type.id()];
+						const auto had_format_candidates = has_format_candidates[sql_type.id()];
+						if (!has_format_candidates[sql_type.id()]) {
+							has_format_candidates[sql_type.id()] = true;
+							// order by preference
+							for (const auto &t : format_template_candidates[sql_type.id()]) {
+								const auto format_string = GenerateDateFormat(separator, t);
+								// don't parse ISO 8601
+								if (format_string.find("%Y-%m-%d") == string::npos)
+									type_format_candidates.emplace_back(format_string);
+							}
+
+							//	initialise the first candidate
+							options.has_format[sql_type.id()] = true;
+							//	all formats are constructed to be valid
+							SetDateFormat(type_format_candidates.back(), sql_type.id());
+						}
+						// check all formats and keep the first one that works
+						int32_t date_parts[7];
+						string error_msg;
+						idx_t error_pos;
+						auto save_format_candidates = type_format_candidates;
+						while (type_format_candidates.size()) {
+							//	avoid using exceptions for flow control...
+							auto &current_format = options.date_format[sql_type.id()];
+							if (current_format.Parse(dummy_val.str_value, date_parts, error_msg, error_pos)) {
+								break;
+							}
+							//	doesn't work - move to the next one
+							type_format_candidates.pop_back();
+							options.has_format[sql_type.id()] = (type_format_candidates.size() > 0);
+							if (type_format_candidates.size() > 0) {
+								SetDateFormat(type_format_candidates.back(), sql_type.id());
+							}
+						}
+						//	if none match, then this is not a value of type sql_type,
+						if (!type_format_candidates.size()) {
+							//	so restore the candidates that did work.
+							//	or throw them out if they were generated by this value.
+							if (had_format_candidates) {
+								type_format_candidates.swap(save_format_candidates);
+								if (type_format_candidates.size()) {
+									SetDateFormat(type_format_candidates.back(), sql_type.id());
+								}
+							} else {
+								has_format_candidates[sql_type.id()] = false;
+							}
+						}
+					}
+					// try cast from string to sql_type
 					if (TryCastValue(dummy_val, sql_type)) {
 						break;
 					} else {
@@ -466,6 +616,12 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			// but only do it if csv has more than one line
 			if (parse_chunk.size() > 1 && row == 0) {
 				info_sql_types_candidates = vector<vector<LogicalType>>(options.num_cols, type_candidates);
+				for (auto &f : format_candidates) {
+					f.second.clear();
+				}
+				for (auto &h : has_format_candidates) {
+					h.second = false;
+				}
 			}
 		}
 
@@ -480,14 +636,20 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
 		if (varchar_cols < min_varchar_cols && parse_chunk.column_count() > (best_num_cols * 0.7)) {
-			// we have a new best_info candidate
+			// we have a new best_options candidate
 			best_options = info_candidate;
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates = info_sql_types_candidates;
+			best_format_candidates = format_candidates;
 		}
 	}
 
 	options = best_options;
+	for (const auto &best : best_format_candidates) {
+		if (best.second.size()) {
+			SetDateFormat(best.second.back(), best.first);
+		}
+	}
 
 	// sql_types and parse_chunk have to be in line with new info
 	sql_types.clear();
@@ -517,6 +679,31 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 				vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
+					//	narrow down the date formats
+					if (best_format_candidates.count(sql_type.id())) {
+						auto &best_type_format_candidates = best_format_candidates[sql_type.id()];
+						auto save_format_candidates = best_type_format_candidates;
+						while (best_type_format_candidates.size()) {
+							if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
+								break;
+							}
+							//	doesn't work - move to the next one
+							best_type_format_candidates.pop_back();
+							options.has_format[sql_type.id()] = (best_type_format_candidates.size() > 0);
+							if (best_type_format_candidates.size() > 0) {
+								SetDateFormat(best_type_format_candidates.back(), sql_type.id());
+							}
+						}
+						//	if none match, then this is not a column of type sql_type,
+						if (!best_type_format_candidates.size()) {
+							//	so restore the candidates that did work.
+							best_type_format_candidates.swap(save_format_candidates);
+							if (best_type_format_candidates.size()) {
+								SetDateFormat(best_type_format_candidates.back(), sql_type.id());
+							}
+						}
+					}
+
 					if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 						break;
 					} else {
@@ -534,7 +721,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	}
 
 	// if all rows are of type string, we will currently make the assumption there is no header.
-	// TODO: Do some kind of string-distance based constistency metic between first row and others
+	// TODO: Do some kind of string-distance based constistency metric between first row and others
 	/*bool all_types_string = true;
 	for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
 	    const auto &col_type = best_sql_types_candidates[col].back();
@@ -1149,22 +1336,24 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				}
 			}
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
-		} else if (options.has_date_format && sql_types[col_idx].id() == LogicalTypeId::DATE) {
+		} else if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 			try {
 				// use the date format to cast the chunk
 				UnaryExecutor::Execute<string_t, date_t, true>(
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
-				    [&](string_t input) { return options.date_format.ParseDate(input); });
+				    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
 			} catch (const Exception &e) {
 				throw ParserException("Error between line %llu and %llu: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
-		} else if (options.has_timestamp_format && sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+		           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 			try {
 				// use the date format to cast the chunk
 				UnaryExecutor::Execute<string_t, timestamp_t, true>(
-				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
-				    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
+				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
+					    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
+				    });
 			} catch (const Exception &e) {
 				throw ParserException("Error between line %llu and %llu: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
