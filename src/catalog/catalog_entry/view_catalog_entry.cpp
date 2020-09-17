@@ -5,7 +5,6 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/planner/binder.hpp"
 
 #include <algorithm>
 
@@ -68,10 +67,10 @@ string ViewCatalogEntry::ToSQL() {
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
 	auto create_info = make_unique<CreateViewInfo>(schema->name, name);
 	create_info->query = move(query);
-	for (int i = 0; i < aliases.size(); i++) {
+	for (idx_t i = 0; i < aliases.size(); i++) {
 		create_info->aliases.push_back(aliases[i]);
 	}
-	for (int i = 0; i < types.size(); i++) {
+	for (idx_t i = 0; i < types.size(); i++) {
 		create_info->types.push_back(types[i]);
 	}
 	create_info->temporary = temporary;

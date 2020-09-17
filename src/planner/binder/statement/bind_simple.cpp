@@ -15,16 +15,8 @@ BoundStatement Binder::Bind(AlterTableStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	auto table = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, stmt.info->schema,
-	                                                   stmt.info->table, true);
-	if (!table) {
-		// Check for a view with that name
-		table = Catalog::GetCatalog(context).GetEntry(context, CatalogType::VIEW_ENTRY, stmt.info->schema,
-		                                              stmt.info->table, true);
-		if (!table) {
-			throw new CatalogException("Table or view %s not found", stmt.info->table);
-		}
-	}
+	auto table =
+	    Catalog::GetCatalog(context).GetEntry<StandardEntry>(context, stmt.info->schema, stmt.info->table, true);
 	if (table && !table->temporary) {
 		// we can only alter temporary tables in read-only mode
 		this->read_only = false;

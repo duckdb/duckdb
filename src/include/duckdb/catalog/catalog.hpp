@@ -30,6 +30,7 @@ class Transaction;
 class AggregateFunctionCatalogEntry;
 class CollateCatalogEntry;
 class SchemaCatalogEntry;
+class StandardEntry;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
@@ -100,6 +101,8 @@ private:
 	void DropSchema(ClientContext &context, DropInfo *info);
 };
 
+template <>
+StandardEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 template <>
 TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 template <>

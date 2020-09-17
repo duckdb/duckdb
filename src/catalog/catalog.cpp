@@ -158,6 +158,21 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
 }
 
 template <>
+StandardEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
+	auto entry = GetEntry(context, CatalogType::TABLE_ENTRY, move(schema_name), name, if_exists);
+	if (!entry) {
+		entry = GetEntry(context, CatalogType::VIEW_ENTRY, move(schema_name), name, if_exists);
+		if (!entry) {
+			return nullptr;
+		}
+	}
+	if (entry->type != CatalogType::TABLE_ENTRY && entry->type != CatalogType::VIEW_ENTRY) {
+		throw CatalogException("%s is not a table or view", name);
+	}
+	return (StandardEntry *)entry;
+}
+
+template <>
 TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
 	auto entry = GetEntry(context, CatalogType::TABLE_ENTRY, move(schema_name), name, if_exists);
 	if (!entry) {
