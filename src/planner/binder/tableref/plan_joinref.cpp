@@ -77,7 +77,18 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		}
 		arbitrary_expressions.push_back(move(expr));
 	}
-	if (arbitrary_expressions.size() > 0 || conditions.size() == 0) {
+	bool need_to_consider_arbitrary_expressions = true;
+	if (type == JoinType::INNER) {
+		// for inner joins we can push arbitrary expressions as a filter
+		// here we prefer to create a comparison join if possible
+		// that way we can use the much faster hash join to process the main join
+		// rather than doing a nested loop join to handle arbitrary expressions
+
+		// for left and full outer joins we HAVE to process all join conditions
+		// because pushing a filter will lead to an incorrect result, as non-matching tuples cannot be filtered out
+		need_to_consider_arbitrary_expressions = false;
+	}
+	if ((need_to_consider_arbitrary_expressions && arbitrary_expressions.size() > 0) || conditions.size() == 0) {
 		if (arbitrary_expressions.size() == 0) {
 			// all conditions were pushed down, add TRUE predicate
 			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
