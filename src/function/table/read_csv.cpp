@@ -9,15 +9,19 @@ using namespace std;
 namespace duckdb {
 
 struct ReadCSVFunctionData : public TableFunctionData {
-	ReadCSVFunctionData() : is_consumed(false) {
+	ReadCSVFunctionData() : is_consumed(false), include_file_name(false) {
 	}
 
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
+	//! The list of files to read
 	vector<string> files;
+	//! The index of the next file to read (i.e. current file + 1)
 	idx_t file_index;
 	//! Whether or not the CSV has already been read completely
 	bool is_consumed;
+	//! Whether or not the file name should be included as an additional column
+	bool include_file_name;
 };
 
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,
@@ -99,6 +103,8 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 			if (names.size() == 0) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
+		} else if (kv.first == "filename") {
+			result->include_file_name = kv.second.value_.boolean;
 		}
 	}
 	if (!options.auto_detect && return_types.size() == 0) {
@@ -113,6 +119,10 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 
 		return_types.assign(result->csv_reader->sql_types.begin(), result->csv_reader->sql_types.end());
 		names.assign(result->csv_reader->col_names.begin(), result->csv_reader->col_names.end());
+	}
+	if (result->include_file_name) {
+		return_types.push_back(LogicalType::VARCHAR);
+		names.push_back("filename");
 	}
 	return move(result);
 }
@@ -152,6 +162,11 @@ static void read_csv_function(ClientContext &context, const FunctionData *bind_d
 			break;
 		}
 	} while(true);
+	if (data.include_file_name) {
+		auto &col = output.data.back();
+		col.SetValue(0, Value(data.csv_reader->options.file_path));
+		col.vector_type = VectorType::CONSTANT_VECTOR;
+	}
 }
 
 static void add_named_parameters(TableFunction &table_function) {
@@ -167,6 +182,7 @@ static void add_named_parameters(TableFunction &table_function) {
 	table_function.named_parameters["num_samples"] = LogicalType::BIGINT;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {

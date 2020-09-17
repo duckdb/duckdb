@@ -37,6 +37,16 @@ SELECT * FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_detect=1) ORDER BY 
 2019-07-15
 2019-07-25
 
+query II
+SELECT a, b LIKE '%a1.csv%' FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_detect=1, filename=1) t1(a,b) ORDER BY 1
+----
+2019-06-05	1
+2019-06-15	1
+2019-06-25	1
+2019-07-05	0
+2019-07-15	0
+2019-07-25	0
+
 # read-csv auto fails here because of a type mismatch: most files contain dates, but one file contains integers
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', auto_detect=1) ORDER BY 1
@@ -58,6 +68,23 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PAC
 2019-08-25
 3
 
+query II
+SELECT a, b LIKE '%a_.csv' FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1, filename=1) t(a,b) ORDER BY 1
+----
+1	0
+2	0
+2019-06-05	1
+2019-06-15	1
+2019-06-25	1
+2019-07-05	1
+2019-07-15	1
+2019-07-25	1
+2019-08-05	0
+2019-08-15	0
+2019-08-25	0
+3	0
+
+# test glob parsing
 query I
 SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/*.csv')
 ----
