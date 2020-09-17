@@ -6,7 +6,56 @@ using namespace std;
 
 namespace duckdb {
 
-static bool like_operator(const char *s, const char *pattern, const char *escape);
+template<char PERCENTAGE, char UNDERSCORE>
+bool templated_like_operator(const char *s, const char *pattern, const char *escape) {
+	const char *t, *p;
+
+	t = s;
+	for (p = pattern; *p && *t; p++) {
+		if (escape && *p == *escape) {
+			p++;
+			if (*p != *t) {
+				return false;
+			}
+			t++;
+		} else if (*p == UNDERSCORE) {
+			t++;
+		} else if (*p == PERCENTAGE) {
+			p++;
+			while (*p == PERCENTAGE) {
+				p++;
+			}
+			if (*p == 0) {
+				return true; /* tail is acceptable */
+			}
+			for (; *p && *t; t++) {
+				if (templated_like_operator<PERCENTAGE, UNDERSCORE>(t, p, escape)) {
+					return true;
+				}
+			}
+			if (*p == 0 && *t == 0) {
+				return true;
+			}
+			return false;
+		} else if (*p == *t) {
+			t++;
+		} else {
+			return false;
+		}
+	}
+	if (*p == PERCENTAGE && *(p + 1) == 0) {
+		return true;
+	}
+	return *t == 0 && *p == 0;
+}
+
+bool like_operator(const char *s, const char *pattern, const char *escape) {
+	return templated_like_operator<'%', '_'>(s, pattern, escape);
+}
+
+bool LikeFun::Glob(const char *s, const char *pattern, const char *escape) {
+	return templated_like_operator<'*', '?'>(s, pattern, escape);
+}
 
 struct LikeEscapeOperator {
 	template <class TA, class TB, class TC> static inline bool Operation(TA str, TB pattern, TC escape) {
@@ -36,89 +85,11 @@ struct NotLikeOperator {
 	}
 };
 
-bool like_operator(const char *s, const char *pattern, const char *escape) {
-	const char *t, *p;
-
-	t = s;
-	for (p = pattern; *p && *t; p++) {
-		if (escape && *p == *escape) {
-			p++;
-			if (*p != *t) {
-				return false;
-			}
-			t++;
-		} else if (*p == '_') {
-			t++;
-		} else if (*p == '%') {
-			p++;
-			while (*p == '%') {
-				p++;
-			}
-			if (*p == 0) {
-				return true; /* tail is acceptable */
-			}
-			for (; *p && *t; t++) {
-				if (like_operator(t, p, escape)) {
-					return true;
-				}
-			}
-			if (*p == 0 && *t == 0) {
-				return true;
-			}
-			return false;
-		} else if (*p == *t) {
-			t++;
-		} else {
-			return false;
-		}
+struct GlobOperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		return LikeFun::Glob(str.GetData(), pattern.GetData(), nullptr);
 	}
-	if (*p == '%' && *(p + 1) == 0) {
-		return true;
-	}
-	return *t == 0 && *p == 0;
-}
-
-bool LikeFun::Glob(const char *s, const char *pattern, const char *escape) {
-	const char *t, *p;
-
-	t = s;
-	for (p = pattern; *p && *t; p++) {
-		if (escape && *p == *escape) {
-			p++;
-			if (*p != *t) {
-				return false;
-			}
-			t++;
-		} else if (*p == '?') {
-			t++;
-		} else if (*p == '*') {
-			p++;
-			while (*p == '*') {
-				p++;
-			}
-			if (*p == 0) {
-				return true; /* tail is acceptable */
-			}
-			for (; *p && *t; t++) {
-				if (LikeFun::Glob(t, p, escape)) {
-					return true;
-				}
-			}
-			if (*p == 0 && *t == 0) {
-				return true;
-			}
-			return false;
-		} else if (*p == *t) {
-			t++;
-		} else {
-			return false;
-		}
-	}
-	if (*p == '*' && *(p + 1) == 0) {
-		return true;
-	}
-	return *t == 0 && *p == 0;
-}
+};
 
 // This can be moved to the scalar_function class
 template <typename Func> static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -135,6 +106,9 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
 	set.AddFunction(ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeOperator, true>));
+	// glob function
+	set.AddFunction(ScalarFunction("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator, true>));
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
