@@ -18,6 +18,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.Properties;
 
 import org.duckdb.DuckDBConnection;
@@ -773,7 +774,7 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE a (i INTEGER)");
-		stmt.execute("CREATE VIEW b AS SELECT i AS j FROM a");
+		stmt.execute("CREATE VIEW b AS SELECT i::STRING AS j FROM a");
 
 		DatabaseMetaData md = conn.getMetaData();
 		ResultSet rs;
@@ -824,9 +825,147 @@ public class TestDuckDBJDBC {
 		assertFalse(rs.next());
 		rs.close();
 
+		rs = md.getSchemas(null, "xxx");
+		assertFalse(rs.next());
+		rs.close();
+
 		rs = md.getTables(null, null, "%", null);
+
 		assertTrue(rs.next());
-		// assertEquals(rs.getString("TABLE_NAME"), "a");
+		assertNull(rs.getObject("TABLE_CAT"));
+		assertNull(rs.getObject(1));
+		assertEquals(rs.getString("TABLE_SCHEM"), "main");
+		assertEquals(rs.getString(2), "main");
+		assertEquals(rs.getString("TABLE_NAME"), "a");
+		assertEquals(rs.getString(3), "a");
+		assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
+		assertEquals(rs.getString(4), "BASE TABLE");
+		assertNull(rs.getObject("REMARKS"));
+		assertNull(rs.getObject(5));
+		assertNull(rs.getObject("TYPE_CAT"));
+		assertNull(rs.getObject(6));
+		assertNull(rs.getObject("TYPE_SCHEM"));
+		assertNull(rs.getObject(7));
+		assertNull(rs.getObject("TYPE_NAME"));
+		assertNull(rs.getObject(8));
+		assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
+		assertNull(rs.getObject(9));
+		assertNull(rs.getObject("REF_GENERATION"));
+		assertNull(rs.getObject(10));
+
+		assertTrue(rs.next());
+		assertNull(rs.getObject("TABLE_CAT"));
+		assertNull(rs.getObject(1));
+		assertEquals(rs.getString("TABLE_SCHEM"), "main");
+		assertEquals(rs.getString(2), "main");
+		assertEquals(rs.getString("TABLE_NAME"), "b");
+		assertEquals(rs.getString(3), "b");
+		assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
+		assertEquals(rs.getString(4), "VIEW");
+		assertNull(rs.getObject("REMARKS"));
+		assertNull(rs.getObject(5));
+		assertNull(rs.getObject("TYPE_CAT"));
+		assertNull(rs.getObject(6));
+		assertNull(rs.getObject("TYPE_SCHEM"));
+		assertNull(rs.getObject(7));
+		assertNull(rs.getObject("TYPE_NAME"));
+		assertNull(rs.getObject(8));
+		assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
+		assertNull(rs.getObject(9));
+		assertNull(rs.getObject("REF_GENERATION"));
+		assertNull(rs.getObject(10));
+
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getTables(null, "main", "a", null);
+
+		assertTrue(rs.next());
+		assertNull(rs.getObject("TABLE_CAT"));
+		assertNull(rs.getObject(1));
+		assertEquals(rs.getString("TABLE_SCHEM"), "main");
+		assertEquals(rs.getString(2), "main");
+		assertEquals(rs.getString("TABLE_NAME"), "a");
+		assertEquals(rs.getString(3), "a");
+		assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
+		assertEquals(rs.getString(4), "BASE TABLE");
+		assertNull(rs.getObject("REMARKS"));
+		assertNull(rs.getObject(5));
+		assertNull(rs.getObject("TYPE_CAT"));
+		assertNull(rs.getObject(6));
+		assertNull(rs.getObject("TYPE_SCHEM"));
+		assertNull(rs.getObject(7));
+		assertNull(rs.getObject("TYPE_NAME"));
+		assertNull(rs.getObject(8));
+		assertNull(rs.getObject("SELF_REFERENCING_COL_NAME"));
+		assertNull(rs.getObject(9));
+		assertNull(rs.getObject("REF_GENERATION"));
+		assertNull(rs.getObject(10));
+		assertFalse(rs.next());
+
+		rs.close();
+
+		rs = md.getTables(null, "main", "xxx", null);
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getColumns(null, null, null, null);
+		assertTrue(rs.next());
+		assertNull(rs.getObject("TABLE_CAT"));
+		assertNull(rs.getObject(1));
+		assertEquals(rs.getString("TABLE_SCHEM"), "main");
+		assertEquals(rs.getString(2), "main");
+		assertEquals(rs.getString("TABLE_NAME"), "a");
+		assertEquals(rs.getString(3), "a");
+		assertEquals(rs.getString("COLUMN_NAME"), "i");
+		assertEquals(rs.getString(4), "i");
+		assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
+		assertEquals(rs.getInt(5), Types.INTEGER);
+		assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
+		assertEquals(rs.getString(6), "INTEGER");
+		assertNull(rs.getObject("COLUMN_SIZE"));
+		assertNull(rs.getObject(7));
+		assertNull(rs.getObject("BUFFER_LENGTH"));
+		assertNull(rs.getObject(8));
+
+		// and so on but whatever
+
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getColumns(null, "main", "a", "i");
+		assertTrue(rs.next());
+		assertNull(rs.getObject("TABLE_CAT"));
+		assertNull(rs.getObject(1));
+		assertEquals(rs.getString("TABLE_SCHEM"), "main");
+		assertEquals(rs.getString(2), "main");
+		assertEquals(rs.getString("TABLE_NAME"), "a");
+		assertEquals(rs.getString(3), "a");
+		assertEquals(rs.getString("COLUMN_NAME"), "i");
+		assertEquals(rs.getString(4), "i");
+		assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
+		assertEquals(rs.getInt(5), Types.INTEGER);
+		assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
+		assertEquals(rs.getString(6), "INTEGER");
+		assertNull(rs.getObject("COLUMN_SIZE"));
+		assertNull(rs.getObject(7));
+		assertNull(rs.getObject("BUFFER_LENGTH"));
+		assertNull(rs.getObject(8));
+
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getColumns(null, "xxx", "a", "i");
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getColumns(null, "main", "xxx", "i");
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = md.getColumns(null, "main", "a", "xxx");
+		assertFalse(rs.next());
+		rs.close();
 
 		conn.close();
 	}
