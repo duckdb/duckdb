@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 
+#include <map>
 #include <sstream>
 
 #define DEFAULT_SAMPLE_CHUNK_SIZE 100
@@ -84,13 +85,9 @@ struct BufferedCSVReaderOptions {
 	//! Number of sample chunks used for type detection
 	idx_t num_samples = 10;
 	//! The date format to use (if any is specified)
-	StrpTimeFormat date_format;
-	//! Whether or not a date format is specified
-	bool has_date_format = false;
-	//! The timestamp format to use (if any is specified)
-	StrpTimeFormat timestamp_format;
-	//! Whether or not a timestamp format is specified
-	bool has_timestamp_format = false;
+	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	//! Whether or not a type format is specified
+	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 };
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
@@ -169,6 +166,8 @@ private:
 	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<LogicalType> SniffCSV(vector<LogicalType> requested_types);
+	//! Change the date format for the type to the string
+	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
 	//! Try to cast a string value to the specified sql type
 	bool TryCastValue(Value value, LogicalType sql_type);
 	//! Try to cast a vector of values to the specified sql type

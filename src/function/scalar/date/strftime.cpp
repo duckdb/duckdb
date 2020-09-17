@@ -376,6 +376,9 @@ void StrfTimeFormat::FormatString(date_t date, time_t time, char *target) {
 }
 
 string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &format) {
+	format.specifiers.clear();
+	format.literals.clear();
+	format.is_numeric.clear();
 	format.constant_size = 0;
 	idx_t pos = 0;
 	string current_literal;

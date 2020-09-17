@@ -62,16 +62,18 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
 			}
 		} else if (kv.first == "dateformat") {
-			options.has_date_format = true;
-			options.date_format.format_specifier = kv.second.str_value;
-			string error = StrTimeFormat::ParseFormatSpecifier(kv.second.str_value, options.date_format);
+			options.has_format[LogicalTypeId::DATE] = true;
+			auto &date_format = options.date_format[LogicalTypeId::DATE];
+			date_format.format_specifier = kv.second.str_value;
+			string error = StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
 			}
 		} else if (kv.first == "timestampformat") {
-			options.has_timestamp_format = true;
-			options.timestamp_format.format_specifier = kv.second.str_value;
-			string error = StrTimeFormat::ParseFormatSpecifier(kv.second.str_value, options.timestamp_format);
+			options.has_format[LogicalTypeId::TIMESTAMP] = true;
+			auto &timestamp_format = options.date_format[LogicalTypeId::TIMESTAMP];
+			timestamp_format.format_specifier = kv.second.str_value;
+			string error = StrTimeFormat::ParseFormatSpecifier(timestamp_format.format_specifier, timestamp_format);
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
