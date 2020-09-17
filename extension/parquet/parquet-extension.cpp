@@ -395,7 +395,7 @@ public:
 };
 
 RowGroup &ParquetScanStateData::GetGroup() {
-	assert(current_group >= 0 && current_group < group_idx_list.size());
+	assert(current_group >= 0 && (idx_t) current_group < group_idx_list.size());
 	assert(group_idx_list[current_group] >= 0 &&
 	       group_idx_list[current_group] < bind_data.file_meta_data.row_groups.size());
 	return bind_data.file_meta_data.row_groups[group_idx_list[current_group]];
@@ -663,7 +663,7 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 	}
 
 	// see if we have to switch to the next row group in the parquet file
-	if (current_group < 0 || group_offset >= GetGroup().num_rows) {
+	if (current_group < 0 || (int64_t) group_offset >= GetGroup().num_rows) {
 		current_group++;
 		group_offset = 0;
 
