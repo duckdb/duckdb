@@ -605,9 +605,10 @@ idx_t ParquetReader::NumRowGroups() {
 	return file_meta_data.row_groups.size();
 }
 
-void ParquetReader::Initialize(ParquetReaderScanState &state, vector<idx_t> groups_to_read) {
+void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read) {
 	state.current_group = -1;
 	state.finished = false;
+	state.column_ids = move(column_ids);
 	state.group_offset = 0;
 	state.group_idx_list = move(groups_to_read);
 	for(idx_t i = 0; i < return_types.size(); i++) {
@@ -631,7 +632,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 		}
 
 		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
-			auto file_col_idx = column_ids[out_col_idx];
+			auto file_col_idx = state.column_ids[out_col_idx];
 
 			// this is a special case where we are not interested in the actual contents of the file
 			if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
@@ -651,7 +652,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 	}
 
 	for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
-		auto file_col_idx = column_ids[out_col_idx];
+		auto file_col_idx = state.column_ids[out_col_idx];
 		if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			Value constant_42 = Value::BIGINT(42);
 			output.data[out_col_idx].Reference(constant_42);

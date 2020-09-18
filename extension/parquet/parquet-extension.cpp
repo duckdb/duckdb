@@ -35,6 +35,7 @@ struct ParquetReadOperatorData : public FunctionOperatorData {
 	ParquetReaderScanState scan_state;
 	bool is_parallel;
 	idx_t file_index;
+	vector<column_t> column_ids;
 };
 
 struct ParquetReadParallelState : public ParallelState {
@@ -68,11 +69,6 @@ public:
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types);
-		// FIXME: hacky
-		for (idx_t i = 0; i < expected_types.size(); i++) {
-			result->initial_reader->column_ids.push_back(i);
-		}
-		result->column_ids = result->initial_reader->column_ids;
 		return move(result);
 	}
 
@@ -97,13 +93,14 @@ public:
 	parquet_scan_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *parallel_state_,
 	                  vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_;
-		bind_data.initial_reader->column_ids = column_ids;
-		bind_data.column_ids = column_ids;
 
 		auto result = make_unique<ParquetReadOperatorData>();
+		result->column_ids = column_ids;
 
 		if (parallel_state_) {
 			result->is_parallel = true;
+			// FIXME: should not be called here
+			// FIXME: what if this returns false?
 			parquet_parallel_state_next(context, bind_data_, result.get(), parallel_state_);
 		} else {
 			result->is_parallel = false;
@@ -114,7 +111,7 @@ public:
 				group_ids.push_back(i);
 			}
 			result->reader = bind_data.initial_reader;
-			result->reader->Initialize(result->scan_state, move(group_ids));
+			result->reader->Initialize(result->scan_state, column_ids, move(group_ids));
 		}
 		return move(result);
 	}
@@ -140,6 +137,10 @@ public:
 	static void parquet_scan_function(ClientContext &context, const FunctionData *bind_data_,
 	                                  FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
+		if (!data.reader) {
+			// FIXME: hacky
+			return;
+		}
 		do {
 			data.reader->ReadChunk(data.scan_state, output);
 			if (output.size() == 0 && !data.is_parallel) {
@@ -150,12 +151,11 @@ public:
 					string file = bind_data.files[data.file_index];
 					// move to the next file
 					data.reader = make_shared<ParquetReader>(context, file, data.reader->return_types);
-					data.reader->column_ids = bind_data.column_ids;
 					vector<idx_t> group_ids;
 					for (idx_t i = 0; i < data.reader->NumRowGroups(); i++) {
 						group_ids.push_back(i);
 					}
-					data.reader->Initialize(data.scan_state, move(group_ids));
+					data.reader->Initialize(data.scan_state, data.column_ids, move(group_ids));
 				} else {
 					// exhausted all the files: done
 					break;
@@ -197,7 +197,7 @@ public:
 			// groups remain in the current parquet file: read the next group
 			scan_data.reader = parallel_state.current_reader;
 			vector<idx_t> group_indexes { parallel_state.row_group_index };
-			scan_data.reader->Initialize(scan_data.scan_state, group_indexes);
+			scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes);
 			parallel_state.row_group_index++;
 			return true;
 		} else {
@@ -210,11 +210,10 @@ public:
 					// empty parquet file, move to next file
 					continue;
 				}
-				parallel_state.current_reader->column_ids = bind_data.column_ids;
 				// set up the scan state to read the first group
 				scan_data.reader = parallel_state.current_reader;
 				vector<idx_t> group_indexes { 0 };
-				scan_data.reader->Initialize(scan_data.scan_state, group_indexes);
+				scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes);
 				parallel_state.row_group_index = 1;
 				return true;
 			}

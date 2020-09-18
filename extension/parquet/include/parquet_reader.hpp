@@ -54,6 +54,7 @@ struct ParquetReaderColumnData {
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
+	vector<column_t> column_ids;
 	idx_t group_offset;
 	vector<unique_ptr<ParquetReaderColumnData>> column_data;
 	bool finished;
@@ -69,9 +70,8 @@ public:
 	string file_name;
 	vector<LogicalType> return_types;
 	vector<string> names;
-	vector<column_t> column_ids;
 public:
-	void Initialize(ParquetReaderScanState &state, vector<idx_t> groups_to_read);
+	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read);
 	void ReadChunk(ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows();
