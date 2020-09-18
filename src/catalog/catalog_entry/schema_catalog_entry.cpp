@@ -160,13 +160,16 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 
 void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info) {
 	switch (info->alter_table_type) {
-	case AlterTableType::RENAME_TABLE: {
+	case AlterTableType::RENAME_TABLE:
+	case AlterTableType::RENAME_VIEW: {
 		auto &transaction = Transaction::GetTransaction(context);
 		auto entry = tables.GetEntry(transaction, info->table);
 		if (entry == nullptr) {
-			throw CatalogException("Table \"%s\" doesn't exist!", info->table);
+			throw CatalogException("Relation \"%s\" doesn't exist!", info->table);
 		}
-		assert(entry->type == CatalogType::TABLE_ENTRY || entry->type == CatalogType::VIEW_ENTRY);
+		CatalogType expected_type =
+		    info->alter_table_type == AlterTableType::RENAME_VIEW ? CatalogType::VIEW_ENTRY : CatalogType::TABLE_ENTRY;
+		assert(entry->type == expected_type);
 
 		auto copied_entry = entry->Copy(context);
 

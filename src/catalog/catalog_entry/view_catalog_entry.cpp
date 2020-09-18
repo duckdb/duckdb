@@ -66,7 +66,7 @@ string ViewCatalogEntry::ToSQL() {
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
 	auto create_info = make_unique<CreateViewInfo>(schema->name, name);
-	create_info->query = move(query);
+	create_info->query = query->Copy();
 	for (idx_t i = 0; i < aliases.size(); i++) {
 		create_info->aliases.push_back(aliases[i]);
 	}

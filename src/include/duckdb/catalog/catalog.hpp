@@ -30,8 +30,8 @@ class Transaction;
 class AggregateFunctionCatalogEntry;
 class CollateCatalogEntry;
 class SchemaCatalogEntry;
-class StandardEntry;
 class TableCatalogEntry;
+class ViewCatalogEntry;
 class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
 class CopyFunctionCatalogEntry;
@@ -102,9 +102,9 @@ private:
 };
 
 template <>
-StandardEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
-template <>
 TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
+template <>
+ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 template <>
 SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 template <>
