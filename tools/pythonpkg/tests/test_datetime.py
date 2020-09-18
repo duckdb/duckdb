@@ -15,4 +15,3 @@ class TestDatetime(object):
         duckdb_cursor.execute("INSERT INTO t2 VALUES (?)", (now, ))
         result = duckdb_cursor.execute("SELECT * FROM t2").fetchone()
         assert result == (now, )
-
