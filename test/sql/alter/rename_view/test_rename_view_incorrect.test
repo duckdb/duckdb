@@ -1,6 +1,6 @@
-# name: test/sql/alter/rename_table/test_rename_table_incorrect.test
-# description: Test RENAME TABLE: table does not exist and rename to an already existing table
-# group: [rename_table]
+# name: test/sql/alter/rename_view/test_rename_view_incorrect.test
+# description: Test RENAME VIEW: view does not exist and rename to an already existing view
+# group: [rename_view]
 
 statement ok
 CREATE TABLE tbl(i INTEGER)

@@ -1,6 +1,6 @@
-# name: test/sql/alter/rename_table/test_rename_table_view.test
-# description: Test RENAME TABLE with a view as entry
-# group: [rename_table]
+# name: test/sql/alter/rename_view/test_rename_view_table.test
+# description: Test RENAME VIEW with a table as entry
+# group: [rename_view]
 
 statement ok
 CREATE TABLE tbl(i INTEGER)

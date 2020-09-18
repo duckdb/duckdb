@@ -1,6 +1,6 @@
-# name: test/sql/alter/rename_table/test_rename_table_transactions.test
-# description: Test RENAME TABLE two parallel transactions
-# group: [rename_table]
+# name: test/sql/alter/rename_view/test_rename_view_transactions.test
+# description: Test RENAME VIEW two parallel transactions
+# group: [rename_view]
 
 statement ok con1
 CREATE TABLE tbl(i INTEGER)
