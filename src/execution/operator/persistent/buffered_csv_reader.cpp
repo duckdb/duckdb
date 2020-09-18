@@ -573,14 +573,12 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 							SetDateFormat(type_format_candidates.back(), sql_type.id());
 						}
 						// check all formats and keep the first one that works
-						int32_t date_parts[7];
-						string error_msg;
-						idx_t error_pos;
+						StrpTimeFormat::ParseResult result;
 						auto save_format_candidates = type_format_candidates;
 						while (type_format_candidates.size()) {
 							//	avoid using exceptions for flow control...
 							auto &current_format = options.date_format[sql_type.id()];
-							if (current_format.Parse(dummy_val.str_value, date_parts, error_msg, error_pos)) {
+							if (current_format.Parse(dummy_val.str_value, result)) {
 								break;
 							}
 							//	doesn't work - move to the next one
