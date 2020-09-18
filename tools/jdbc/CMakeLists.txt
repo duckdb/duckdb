@@ -19,9 +19,6 @@ file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
 
 set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7)
 
-set(BUILD_PARQUET_EXTENSION TRUE)
-
-
 add_jar(duckdb_jdbc
         ${JAVA_SRC_FILES}
         ${JAVA_TEST_FILES} META-INF/services/java.sql.Driver
