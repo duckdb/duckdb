@@ -975,6 +975,18 @@ public class TestDuckDBJDBC {
 		assertNull(d.connect("jdbc:h2:", null));
 	}
 
+	public static void test_parquet_reader() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs = stmt
+				.executeQuery("SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet')");
+		assertTrue(rs.next());
+		assertEquals(rs.getInt(1), 1000);
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
