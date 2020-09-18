@@ -14,4 +14,7 @@ add_library(
   ../../third_party/thrift/thrift/transport/TBufferTransports.cpp
   ../../third_party/snappy/snappy.cc
   ../../third_party/snappy/snappy-sinksource.cc
-  parquet-extension.cpp)
+  parquet-extension.cpp
+  parquet_reader.cpp
+  parquet_timestamp.cpp
+  parquet_writer.cpp)

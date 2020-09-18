@@ -4,11 +4,11 @@
 
 require parquet
 
-# statement ok
-# PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 query I
-select count(*) from parquet_scan('*/sql/*/parquet/*/*/t?.parquet')
+select count(*) from parquet_scan('*/sql/*/parquet/*/glob/t?.parquet')
 ----
 2
 
