@@ -1,5 +1,6 @@
 #simple DB API testcase
 
+from datetime import date
 
 class TestSimpleDBAPI(object):
 	def test_prepare(self, duckdb_cursor):
@@ -10,7 +11,7 @@ class TestSimpleDBAPI(object):
 		
 		# from python docs
 		c.execute('''CREATE TABLE stocks
-			 (date text, trans text, symbol text, qty real, price real)''')
+			 (date date, trans text, symbol text, qty real, price real)''')
 		c.execute("INSERT INTO stocks VALUES ('2006-01-05','BUY','RHAT',100,35.14)")
 
 		t = ('RHAT',)
@@ -23,11 +24,14 @@ class TestSimpleDBAPI(object):
 		assert result == (1,)
 
 		# Larger example that inserts many records at a time
-		purchases = [('2006-03-28', 'BUY', 'IBM', 1000, 45.00),
-					 ('2006-04-05', 'BUY', 'MSFT', 1000, 72.00),
-					 ('2006-04-06', 'SELL', 'IBM', 500, 53.00),
+		purchases = [(date(2006, 3, 28), 'BUY', 'IBM', 1000, 45.00),
+					 (date(2006, 4, 5), 'BUY', 'MSFT', 1000, 72.00),
+					 (date(2006, 4, 6), 'SELL', 'IBM', 500, 53.00),
 					]
 		c.executemany('INSERT INTO stocks VALUES (?,?,?,?,?)', purchases)
 
 		result = c.execute('SELECT count(*) FROM stocks').fetchone()
 		assert result == (4, )
+
+		result = c.execute('SELECT date FROM stocks ORDER BY date DESC LIMIT 1').fetchone()
+		assert result == (date(2006, 4, 6), )

@@ -950,8 +950,8 @@ struct DuckDBPyConnection {
 		vector<Value> args;
 
 		auto datetime_mod = py::module::import("datetime");
-		auto datetime_date = datetime_mod.attr("datetime");
-		auto datetime_datetime = datetime_mod.attr("date");
+		auto datetime_date = datetime_mod.attr("date");
+		auto datetime_datetime = datetime_mod.attr("datetime");
 
 		for (auto &ele : params) {
 			if (ele.is_none()) {
@@ -965,11 +965,19 @@ struct DuckDBPyConnection {
 			} else if (py::isinstance<py::str>(ele)) {
 				args.push_back(Value(ele.cast<string>()));
 			} else if (ele.get_type().is(datetime_date)) {
-				throw runtime_error("date parameters not supported yet :/");
-				// args.push_back(Value::DATE(1984, 4, 24));
+				auto year = PyDateTime_GET_YEAR(ele.ptr());
+				auto month = PyDateTime_GET_MONTH(ele.ptr());
+				auto day = PyDateTime_GET_DAY(ele.ptr());
+				args.push_back(Value::DATE(year, month, day));
 			} else if (ele.get_type().is(datetime_datetime)) {
-				throw runtime_error("datetime parameters not supported yet :/");
-				// args.push_back(Value::TIMESTAMP(1984, 4, 24, 14, 42, 0, 0));
+				auto year = PyDateTime_GET_YEAR(ele.ptr());
+				auto month = PyDateTime_GET_MONTH(ele.ptr());
+				auto day = PyDateTime_GET_DAY(ele.ptr());
+				auto hour = PyDateTime_DATE_GET_HOUR(ele.ptr());
+				auto mins = PyDateTime_DATE_GET_MINUTE(ele.ptr());
+				auto secs = PyDateTime_DATE_GET_SECOND(ele.ptr());
+				// FIXME: add in microseconds -> milliseconds conversion
+				args.push_back(Value::TIMESTAMP(year, month, day, hour, mins, secs, 0));
 			} else {
 				throw runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
 			}
@@ -1189,6 +1197,10 @@ struct DuckDBPyRelation {
 };
 
 PYBIND11_MODULE(duckdb, m) {
+	m.attr("apilevel") = "1.0";
+	m.attr("threadsafety") = 1;
+	m.attr("paramstyle") = "qmark";
+
 	m.def("connect", &DuckDBPyConnection::connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
