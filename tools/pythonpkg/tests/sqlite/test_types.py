@@ -165,15 +165,3 @@ class DateTimeTests(unittest.TestCase):
         self.assertEqual(ts.year, ts2.year)
         # this is modified because DuckDB only has millisecond precision
         self.assertEqual(ts2.microsecond, 510000)
-
-def suite():
-    duckdb_type_suite = unittest.makeSuite(DuckDBTypeTests, "Check")
-    date_suite = unittest.makeSuite(DateTimeTests, "Check")
-    cte_suite = unittest.makeSuite(CommonTableExpressionTests, "Check")
-    return unittest.TestSuite((duckdb_type_suite, date_suite, cte_suite))
-
-def test():
-    print("I'm running")
-    runner = unittest.TextTestRunner()
-    runner.run(suite())
-    print("I'm done")
