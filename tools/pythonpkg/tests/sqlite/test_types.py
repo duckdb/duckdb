@@ -40,10 +40,10 @@ class DuckDBTypeTests(unittest.TestCase):
         self.con.close()
 
     def test_CheckString(self):
-        self.cur.execute("insert into test(s) values (?)", ("�sterreich",))
+        self.cur.execute("insert into test(s) values (?)", (u"�sterreich",))
         self.cur.execute("select s from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], "�sterreich")
+        self.assertEqual(row[0], u"�sterreich")
 
     def test_CheckSmallInt(self):
         self.cur.execute("insert into test(i) values (?)", (42,))
@@ -68,7 +68,7 @@ class DuckDBTypeTests(unittest.TestCase):
     def test_CheckUnicodeExecute(self):
         self.cur.execute("select '�sterreich'")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], "�sterreich")
+        self.assertEqual(row[0], u"�sterreich")
 
 
 
