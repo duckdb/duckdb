@@ -16,7 +16,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(PGNode *node) {
 		throw NotImplementedException("Unimplemented features for CREATE TABLE as");
 	}
 	auto qname = TransformQualifiedName(stmt->into->rel);
-	auto query = TransformSelect(stmt->query);
+	auto query = TransformSelect(stmt->query, false);
 
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTableInfo>();
