@@ -1,0 +1,41 @@
+# name: test/sql/setops/union_all_projection_pushdown.test
+# description: Test projection pushdown in UNION ALL
+# group: [setops]
+
+statement ok
+CREATE TABLE a AS SELECT i, i+1 AS j, i+2 AS k, i+3 AS l FROM range(42,43) t(i)
+
+statement ok
+CREATE TABLE b AS SELECT i, i+1 AS j, i+2 AS k, i+3 AS l FROM range(40,41) t(i)
+
+query I
+select COUNT(*) from (SELECT * FROM a UNION ALL SELECT * FROM b) t1
+----
+2
+
+query I
+select COUNT(*) from (SELECT i, j, MIN(k), MIN(l) FROM a GROUP BY i, j UNION ALL SELECT * FROM b) t1
+----
+2
+
+query I
+select COUNT(*) from (SELECT DISTINCT i, j, k, l FROM a UNION ALL SELECT * FROM b) t1
+----
+2
+
+query I
+select COUNT(*) from (SELECT DISTINCT * FROM (SELECT DISTINCT i, j, k, l FROM a UNION ALL SELECT * FROM b) t1) t2
+----
+2
+
+# multiple unions
+query I
+select COUNT(*) from (SELECT * FROM a UNION ALL SELECT * FROM b UNION ALL SELECT a.i,a.j,a.k,a.l FROM a,b) t1
+----
+3
+
+# union
+query I
+select COUNT(*) from (SELECT * FROM a UNION SELECT * FROM b UNION SELECT a.i,a.j,a.k,a.l FROM a,b) t1
+----
+2

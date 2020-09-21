@@ -11,6 +11,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -107,11 +108,42 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::ANY_JOIN:
 		break;
 	case LogicalOperatorType::UNION:
+		if (everything_referenced) {
+			for (auto &child : op.children) {
+				assert(child->type == LogicalOperatorType::PROJECTION);
+				RemoveUnusedColumns remove(context, true);
+				remove.VisitOperator(*child);
+			}
+		} else {
+			// for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
+			// encounter a UNION node that is not preceded by a DISTINCT)
+			// this happens when UNION ALL is used
+
+			auto &setop = (LogicalSetOperation &) op;
+			vector<idx_t> entries;
+			for(idx_t i = 0; i < setop.column_count; i++) {
+				entries.push_back(i);
+			}
+			ClearUnusedExpressions(entries, setop.table_index);
+
+			for (auto &child : op.children) {
+				assert(child->type == LogicalOperatorType::PROJECTION);
+				auto &projection = (LogicalProjection &) *child;
+
+				RemoveUnusedColumns remove(context, false);
+				for(auto &column_idx : entries) {
+					ColumnBinding binding;
+					binding.table_index = projection.table_index;
+					binding.column_index = column_idx;
+					remove.column_references.insert(make_pair(binding, vector<BoundColumnRefExpression *>()));
+				}
+				remove.VisitOperator(*child);
+			}
+		}
+		return;
 	case LogicalOperatorType::EXCEPT:
 	case LogicalOperatorType::INTERSECT:
-		// for set operations we don't remove anything, just recursively visit the children
-		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
-		// encounter a UNION node that is not preceded by a DISTINCT)
+		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
 		for (auto &child : op.children) {
 			RemoveUnusedColumns remove(context, true);
 			remove.VisitOperator(*child);
