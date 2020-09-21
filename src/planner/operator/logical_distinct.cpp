@@ -12,7 +12,7 @@ string LogicalDistinct::ParamsToString() const {
 	if (distinct_targets.size() > 0) {
 		result += "[";
 		result += StringUtil::Join(distinct_targets, distinct_targets.size(), ", ",
-		                 [](const unique_ptr<Expression> &child) { return child->GetName(); });
+		                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
 		result += "]";
 	}
 

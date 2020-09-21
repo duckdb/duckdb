@@ -21,10 +21,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	unordered_map<idx_t, idx_t> group_by_references;
 	vector<LogicalType> aggregate_types;
 	// creates one group per distinct_target
-	for(idx_t i = 0; i < distinct_targets.size(); i++) {
+	for (idx_t i = 0; i < distinct_targets.size(); i++) {
 		auto &target = distinct_targets[i];
 		if (target->type == ExpressionType::BOUND_REF) {
-			auto &bound_ref = (BoundReferenceExpression &) *target;
+			auto &bound_ref = (BoundReferenceExpression &)*target;
 			group_by_references[bound_ref.index] = i;
 		}
 		aggregate_types.push_back(target->return_type);
@@ -52,8 +52,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 			auto bound = make_unique<BoundReferenceExpression>(logical_type, i);
 			vector<unique_ptr<Expression>> first_children;
 			first_children.push_back(move(bound));
-			auto first_aggregate = AggregateFunction::BindAggregateFunction(context, FirstFun::GetFunction(logical_type),
-																			move(first_children), false);
+			auto first_aggregate = AggregateFunction::BindAggregateFunction(
+			    context, FirstFun::GetFunction(logical_type), move(first_children), false);
 			// add the projection
 			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
 			// push it to the list of aggregates
@@ -64,8 +64,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	}
 
 	// we add a physical hash aggregation in the plan to select the distinct groups
-	auto groupby =
-	    make_unique<PhysicalHashAggregate>(aggregate_types, move(aggregates), move(groups), PhysicalOperatorType::DISTINCT);
+	auto groupby = make_unique<PhysicalHashAggregate>(aggregate_types, move(aggregates), move(groups),
+	                                                  PhysicalOperatorType::DISTINCT);
 	groupby->children.push_back(move(child));
 	if (!requires_projection) {
 		return move(groupby);

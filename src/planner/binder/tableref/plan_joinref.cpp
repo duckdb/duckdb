@@ -68,7 +68,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 				continue;
 			}
 		} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
-					expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+		           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 			// comparison, check if we can create a comparison JoinCondition
 			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				// successfully created the join condition
@@ -93,7 +93,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			// all conditions were pushed down, add TRUE predicate
 			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
-		for(auto &condition : conditions) {
+		for (auto &condition : conditions) {
 			arbitrary_expressions.push_back(JoinCondition::CreateExpression(move(condition)));
 		}
 		// if we get here we could not create any JoinConditions
@@ -178,10 +178,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	} else {
 		join = result.get();
 	}
-	for(auto &child : join->children) {
+	for (auto &child : join->children) {
 		if (child->type == LogicalOperatorType::FILTER) {
-			auto &filter = (LogicalFilter &) *child;
-			for(auto &expr : filter.expressions) {
+			auto &filter = (LogicalFilter &)*child;
+			for (auto &expr : filter.expressions) {
 				PlanSubqueries(&expr, &filter.children[0]);
 			}
 		}

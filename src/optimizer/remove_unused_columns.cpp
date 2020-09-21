@@ -119,9 +119,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// encounter a UNION node that is not preceded by a DISTINCT)
 			// this happens when UNION ALL is used
 
-			auto &setop = (LogicalSetOperation &) op;
+			auto &setop = (LogicalSetOperation &)op;
 			vector<idx_t> entries;
-			for(idx_t i = 0; i < setop.column_count; i++) {
+			for (idx_t i = 0; i < setop.column_count; i++) {
 				entries.push_back(i);
 			}
 			ClearUnusedExpressions(entries, setop.table_index);
@@ -129,10 +129,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 
 			for (auto &child : op.children) {
 				assert(child->type == LogicalOperatorType::PROJECTION);
-				auto &projection = (LogicalProjection &) *child;
+				auto &projection = (LogicalProjection &)*child;
 
 				RemoveUnusedColumns remove(context, false);
-				for(auto &column_idx : entries) {
+				for (auto &column_idx : entries) {
 					ColumnBinding binding;
 					binding.table_index = projection.table_index;
 					binding.column_index = column_idx;

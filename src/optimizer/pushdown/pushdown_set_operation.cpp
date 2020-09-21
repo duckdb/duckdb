@@ -65,16 +65,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	bool right_empty = op->children[1]->type == LogicalOperatorType::EMPTY_RESULT;
 	if (left_empty && right_empty) {
 		// both empty: return empty result
-		return make_unique<LogicalEmptyResult>(move(op));
+		return make_unique_base<LogicalEmptyResult>(move(op));
 	}
 	assert(left_empty || op->children[0]->type == LogicalOperatorType::PROJECTION);
 	assert(right_empty || op->children[1]->type == LogicalOperatorType::PROJECTION);
 	if (left_empty) {
 		// left child is empty result
-		switch(op->type) {
+		switch (op->type) {
 		case LogicalOperatorType::UNION: {
 			// union with empty left side: return right child
-			auto &projection = (LogicalProjection &) *op->children[1];
+			auto &projection = (LogicalProjection &)*op->children[1];
 			projection.table_index = setop.table_index;
 			return move(op->children[1]);
 		}
@@ -88,11 +88,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		}
 	} else if (right_empty) {
 		// right child is empty result
-		switch(op->type) {
+		switch (op->type) {
 		case LogicalOperatorType::UNION:
 		case LogicalOperatorType::EXCEPT: {
 			// union or except with empty right child: return left child
-			auto &projection = (LogicalProjection &) *op->children[0];
+			auto &projection = (LogicalProjection &)*op->children[0];
 			projection.table_index = setop.table_index;
 			return move(op->children[0]);
 		}
@@ -102,7 +102,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		default:
 			throw InternalException("Unsupported set operation");
 		}
-
 	}
 	return op;
 }

@@ -20,9 +20,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 		// this happens if a projection simply emits the columns in the same order
 		// e.g. PROJECTION(#0, #1, #2, #3, ...)
 		bool omit_projection = true;
-		for(idx_t i = 0; i < op.types.size(); i++) {
+		for (idx_t i = 0; i < op.types.size(); i++) {
 			if (op.expressions[i]->type == ExpressionType::BOUND_REF) {
-				auto &bound_ref = (BoundReferenceExpression &) *op.expressions[i];
+				auto &bound_ref = (BoundReferenceExpression &)*op.expressions[i];
 				if (bound_ref.index == i) {
 					continue;
 				}
