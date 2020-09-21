@@ -34,7 +34,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &source) {
 	case AlterTableType::RENAME_COLUMN:
 		return RenameColumnInfo::Deserialize(source, schema, table);
 	case AlterTableType::RENAME_TABLE:
-		return RenameTableInfo::Deserialize(source, schema, table);
+		return RenameTableInfo::Deserialize(source, schema, table, false);
+	case AlterTableType::RENAME_VIEW:
+		return RenameTableInfo::Deserialize(source, schema, table, true);
 	case AlterTableType::ADD_COLUMN:
 		return AddColumnInfo::Deserialize(source, schema, table);
 	case AlterTableType::REMOVE_COLUMN:
@@ -71,9 +73,9 @@ void RenameTableInfo::Serialize(Serializer &serializer) {
 	serializer.WriteString(new_table_name);
 }
 
-unique_ptr<AlterInfo> RenameTableInfo::Deserialize(Deserializer &source, string schema, string table) {
+unique_ptr<AlterInfo> RenameTableInfo::Deserialize(Deserializer &source, string schema, string table, bool is_view) {
 	auto new_name = source.Read<string>();
-	return make_unique<RenameTableInfo>(schema, table, new_name);
+	return make_unique<RenameTableInfo>(schema, table, new_name, is_view);
 }
 
 //===--------------------------------------------------------------------===//

@@ -1,0 +1,101 @@
+# name: test/sql/alter/rename_view/test_rename_view_many_transactions.test
+# description: Test RENAME VIEW four view renames and four parallel transactions
+# group: [rename_view]
+
+statement ok con1
+CREATE TABLE tbl1(i INTEGER)
+
+statement ok con1
+INSERT INTO tbl1 VALUES (999), (100)
+
+statement ok con1
+CREATE VIEW vw1 AS SELECT * FROM tbl1
+
+# rename chain
+# con2 starts a transaction now
+statement ok con2
+BEGIN TRANSACTION
+
+# rename in con1, con2 should still see "vw1"
+statement ok con1
+ALTER VIEW vw1 RENAME TO vw2
+
+# con3 starts a transaction now
+statement ok con3
+BEGIN TRANSACTION
+
+# rename in con1, con3 should still see "vw2"
+statement ok con1
+ALTER VIEW vw2 RENAME TO vw3
+
+# con4 starts a transaction now
+statement ok con4
+BEGIN TRANSACTION
+
+# rename in con1, con4 should still see "vw3"
+statement ok con1
+ALTER VIEW vw3 RENAME TO vw4
+
+# con2 sees ONLY vw1
+query I con2
+SELECT * FROM vw1
+----
+999
+100
+
+statement error con2
+SELECT * FROM vw2
+
+statement error con2
+SELECT * FROM vw3
+
+statement error con2
+SELECT * FROM vw4
+
+# con3 sees ONLY vw2
+statement error con3
+SELECT * FROM vw1
+
+query I con3
+SELECT * FROM vw2
+----
+999
+100
+
+statement error con3
+SELECT * FROM vw3
+
+statement error con3
+SELECT * FROM vw4
+
+# con4 sees ONLY vw3
+statement error con4
+SELECT * FROM vw1
+
+statement error con4
+SELECT * FROM vw2
+
+query I con4
+SELECT * FROM vw3
+----
+999
+100
+
+statement error con4
+SELECT * FROM vw4
+
+# con1 sees ONLY vw4
+statement error con1
+SELECT * FROM vw1
+
+statement error con1
+SELECT * FROM vw2
+
+statement error con1
+SELECT * FROM vw3
+
+query I con1
+SELECT * FROM vw4
+----
+999
+100

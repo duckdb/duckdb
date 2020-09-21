@@ -1,0 +1,21 @@
+# name: test/sql/alter/rename_view/test_rename_view_incorrect.test
+# description: Test RENAME VIEW: view does not exist and rename to an already existing view
+# group: [rename_view]
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok
+CREATE VIEW vw AS SELECT * FROM tbl
+
+statement ok
+CREATE VIEW vw2 AS SELECT 1729 AS i
+
+# Renaming a non existing view
+statement error
+ALTER VIEW non_view RENAME TO vw
+
+# rename to an already existing view
+statement error
+ALTER VIEW vw2 RENAME TO vw
+
