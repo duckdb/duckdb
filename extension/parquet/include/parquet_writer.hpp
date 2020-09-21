@@ -28,7 +28,6 @@ public:
 	void Flush(ChunkCollection &buffer);
 	void Finalize();
 private:
-	FileSystem &fs;
 	string file_name;
 	vector<LogicalType> sql_types;
 	vector<string> column_names;

@@ -2,7 +2,6 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/planner/operator/logical_copy_from_file.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
@@ -96,11 +95,11 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	auto function_data =
 	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
-
-	// now create the copy statement and set it as a child of the insert statement
-	auto copy =
-	    make_unique<LogicalCopyFromFile>(0, copy_function->function, move(function_data), bound_insert.expected_types);
-	insert_statement.plan->children.push_back(move(copy));
+	auto get = make_unique<LogicalGet>(0, copy_function->function.copy_from_function, move(function_data), bound_insert.expected_types, expected_names);
+	for(idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
+		get->column_ids.push_back(i);
+	}
+	insert_statement.plan->children.push_back(move(get));
 	result.plan = move(insert_statement.plan);
 	return result;
 }

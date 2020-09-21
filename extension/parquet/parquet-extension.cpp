@@ -116,24 +116,6 @@ public:
 		return move(result);
 	}
 
-	static unique_ptr<GlobalFunctionData> parquet_read_initialize(ClientContext &context, FunctionData &fdata) {
-		throw NotImplementedException("FIXME: COPY ");
-		// auto &bind_data = (ParquetReadBindData &)fdata;
-		// auto result = make_unique<ParquetCopyFunctionData>();
-		// result->scan_state = make_unique<ParquetScanStateData>(bind_data);
-		// for (idx_t i = 0; i < bind_data.file_meta_data.row_groups.size(); i++) {
-		// 	result->scan_state->group_idx_list.push_back(i);
-		// }
-		// return move(result);
-	}
-
-	static void parquet_read_function(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data,
-	                                  DataChunk &output) {
-		throw NotImplementedException("FIXME: COPY ");
-		// auto &scan_state = (ParquetCopyFunctionData &)gstate;
-		// scan_state.scan_state->ReadChunk(output);
-	}
-
 	static void parquet_scan_function(ClientContext &context, const FunctionData *bind_data_,
 	                                  FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
@@ -307,8 +289,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_combine = parquet_write_combine;
 	function.copy_to_finalize = parquet_write_finalize;
 	function.copy_from_bind = ParquetScanFunction::parquet_read_bind;
-	function.copy_from_initialize = ParquetScanFunction::parquet_read_initialize;
-	function.copy_from_get_chunk = ParquetScanFunction::parquet_read_function;
+	function.copy_from_function = scan_fun;
 
 	function.extension = "parquet";
 	CreateCopyFunctionInfo info(function);

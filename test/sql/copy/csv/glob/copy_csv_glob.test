@@ -1,0 +1,28 @@
+# name: test/sql/copy/csv/glob/copy_csv_glob.test
+# description: Test globbing CSVs
+# group: [csv]
+
+statement ok
+CREATE TABLE dates(d DATE);
+
+# simple globbing
+statement ok
+COPY dates FROM 'test/sql/copy/csv/data/glob/a?/*.csv';
+
+query I
+SELECT * FROM dates ORDER BY 1
+----
+2019-06-05
+2019-06-15
+2019-06-25
+2019-07-05
+2019-07-15
+2019-07-25
+2019-08-05
+2019-08-15
+2019-08-25
+
+# nothing matches the glob
+statement error
+COPY dates FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1)
+

@@ -5,7 +5,6 @@ add_library_unity(
   plan_any_join.cpp
   plan_chunk_get.cpp
   plan_comparison_join.cpp
-  plan_copy_from_file.cpp
   plan_copy_to_file.cpp
   plan_create.cpp
   plan_create_index.cpp

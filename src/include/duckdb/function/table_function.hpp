@@ -84,6 +84,7 @@ public:
 	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_state_next,
 	                    projection_pushdown, filter_pushdown) {
 	}
+	TableFunction() : SimpleFunction("", {}) {}
 
 	//! (Optional) Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data

@@ -25,7 +25,6 @@ enum class LogicalOperatorType : uint8_t {
 	LIMIT = 6,
 	ORDER_BY = 7,
 	TOP_N = 8,
-	COPY_FROM_FILE = 9,
 	COPY_TO_FILE = 10,
 	DISTINCT = 11,
 

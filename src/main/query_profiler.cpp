@@ -50,7 +50,6 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::SORT_GROUP_BY:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
-	case PhysicalOperatorType::COPY_FROM_FILE:
 	case PhysicalOperatorType::COPY_TO_FILE:
 	case PhysicalOperatorType::TABLE_SCAN:
 	case PhysicalOperatorType::CHUNK_SCAN:

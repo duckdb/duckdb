@@ -71,8 +71,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalOrder &)op);
 	case LogicalOperatorType::TOP_N:
 		return CreatePlan((LogicalTopN &)op);
-	case LogicalOperatorType::COPY_FROM_FILE:
-		return CreatePlan((LogicalCopyFromFile &)op);
 	case LogicalOperatorType::COPY_TO_FILE:
 		return CreatePlan((LogicalCopyToFile &)op);
 	case LogicalOperatorType::DUMMY_SCAN:

@@ -30,7 +30,6 @@ enum class PhysicalOperatorType : uint8_t {
 	SORT_GROUP_BY,
 	FILTER,
 	PROJECTION,
-	COPY_FROM_FILE,
 	COPY_TO_FILE,
 	// -----------------------------
 	// Scans

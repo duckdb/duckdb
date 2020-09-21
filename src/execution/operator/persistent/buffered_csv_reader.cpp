@@ -6,7 +6,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/persistent/physical_copy_from_file.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -406,6 +405,12 @@ void BufferedCSVReader::PrepareCandidateSets() {
 }
 
 vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_types) {
+	for(auto &type : requested_types) {
+		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
+		if (type.id() == LogicalTypeId::BLOB) {
+			return requested_types;
+		}
+	}
 	ConfigureSampling();
 	PrepareCandidateSets();
 

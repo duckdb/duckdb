@@ -16,7 +16,6 @@ class LogicalAggregate;
 class LogicalAnyJoin;
 class LogicalChunkGet;
 class LogicalComparisonJoin;
-class LogicalCopyFromFile;
 class LogicalCopyToFile;
 class LogicalCreate;
 class LogicalCreateTable;

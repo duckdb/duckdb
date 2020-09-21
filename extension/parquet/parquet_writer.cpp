@@ -116,7 +116,7 @@ static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serial
 }
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_, vector<string> names_)
-	: fs(fs), file_name(file_name_), sql_types(move(types_)), column_names(move(names_)) {
+	: file_name(file_name_), sql_types(move(types_)), column_names(move(names_)) {
 	// initialize the file writer
 	writer =
 	    make_unique<BufferedFileWriter>(fs, file_name.c_str(),
