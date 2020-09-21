@@ -63,8 +63,6 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1com
 	if (!conn_ref || !conn_ref->context || conn_ref->context->is_invalidated) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Invalid connection");
 	}
-	if (!conn_ref->context->transaction.HasActiveTransaction()) {
-	}
 	conn_ref->context->RunFunctionInTransaction([&]() { conn_ref->context->transaction.SetAutoCommit(auto_commit); });
 }
 
