@@ -1,6 +1,7 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/file_system.hpp"
 
 using namespace std;
 
