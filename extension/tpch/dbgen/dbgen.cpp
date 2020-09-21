@@ -540,7 +540,7 @@ template <class T> static void CreateTPCHTable(ClientContext &context, string sc
 	auto info = make_unique<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
-	info->on_conflict = OnCreateConflict::ERROR;
+	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
 		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));

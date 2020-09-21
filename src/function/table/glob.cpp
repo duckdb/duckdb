@@ -41,7 +41,8 @@ static void glob_function(ClientContext &context, const FunctionData *bind_data_
 	auto &state = (GlobFunctionState &)*state_;
 
 	idx_t count = 0;
-	for (; state.current_idx < bind_data.files.size(); state.current_idx++) {
+	idx_t next_idx = MinValue<idx_t>(state.current_idx + STANDARD_VECTOR_SIZE, bind_data.files.size());
+	for (; state.current_idx < next_idx; state.current_idx++) {
 		output.data[0].SetValue(count, bind_data.files[state.current_idx]);
 		count++;
 	}
