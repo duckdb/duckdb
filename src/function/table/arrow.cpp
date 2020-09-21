@@ -129,7 +129,7 @@ static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, 
 		throw NotImplementedException("FIXME: Arrow streams can only be read once");
 	}
 	data.is_consumed = true;
-	return nullptr;
+	return make_unique<FunctionOperatorData>();
 }
 
 static void arrow_scan_function(ClientContext &context, const FunctionData *bind_data,
