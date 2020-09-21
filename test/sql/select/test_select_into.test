@@ -1,0 +1,13 @@
+# name: test/sql/select/test_select_into.test
+# description: Select INTO
+# group: [select]
+
+statement ok
+CREATE TABLE t (t TEXT);
+
+statement ok
+INSERT INTO t VALUES ('foo'), ('bar'), ('baz');
+
+# unsupported
+statement error
+SELECT * INTO t2 FROM t WHERE t LIKE 'b%';

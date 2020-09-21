@@ -950,8 +950,9 @@ struct DuckDBPyConnection {
 		vector<Value> args;
 
 		auto datetime_mod = py::module::import("datetime");
-		auto datetime_date = datetime_mod.attr("datetime");
-		auto datetime_datetime = datetime_mod.attr("date");
+		auto datetime_date = datetime_mod.attr("date");
+		auto datetime_datetime = datetime_mod.attr("datetime");
+		auto datetime_time = datetime_mod.attr("time");
 
 		for (auto &ele : params) {
 			if (ele.is_none()) {
@@ -964,12 +965,26 @@ struct DuckDBPyConnection {
 				args.push_back(Value::DOUBLE(ele.cast<double>()));
 			} else if (py::isinstance<py::str>(ele)) {
 				args.push_back(Value(ele.cast<string>()));
-			} else if (ele.get_type().is(datetime_date)) {
-				throw runtime_error("date parameters not supported yet :/");
-				// args.push_back(Value::DATE(1984, 4, 24));
-			} else if (ele.get_type().is(datetime_datetime)) {
-				throw runtime_error("datetime parameters not supported yet :/");
-				// args.push_back(Value::TIMESTAMP(1984, 4, 24, 14, 42, 0, 0));
+			} else if (py::isinstance(ele, datetime_datetime)) {
+                                auto year = PyDateTime_GET_YEAR(ele.ptr());
+                                auto month = PyDateTime_GET_MONTH(ele.ptr());
+                                auto day = PyDateTime_GET_DAY(ele.ptr());
+                                auto hour = PyDateTime_DATE_GET_HOUR(ele.ptr());
+                                auto minute = PyDateTime_DATE_GET_MINUTE(ele.ptr());
+                                auto second = PyDateTime_DATE_GET_SECOND(ele.ptr());
+                                auto millis = PyDateTime_DATE_GET_MICROSECOND(ele.ptr()) / 1000;
+                                args.push_back(Value::TIMESTAMP(year, month, day, hour, minute, second, millis));
+			} else if (py::isinstance(ele, datetime_time)) {
+				auto hour = PyDateTime_TIME_GET_HOUR(ele.ptr());
+				auto minute = PyDateTime_TIME_GET_MINUTE(ele.ptr());
+				auto second = PyDateTime_TIME_GET_SECOND(ele.ptr());
+				auto millis = PyDateTime_TIME_GET_MICROSECOND(ele.ptr()) / 1000;
+				args.push_back(Value::TIME(hour, minute, second, millis));
+			} else if (py::isinstance(ele, datetime_date)) {
+				auto year = PyDateTime_GET_YEAR(ele.ptr());
+				auto month = PyDateTime_GET_MONTH(ele.ptr());
+				auto day = PyDateTime_GET_DAY(ele.ptr());
+				args.push_back(Value::DATE(year, month, day));
 			} else {
 				throw runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
 			}

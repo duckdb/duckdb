@@ -1,6 +1,5 @@
 package org.duckdb;
 
-import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -38,8 +37,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		return column_names[column - 1];
 	}
 
-	public int getColumnType(int column) throws SQLException {
-		String type_name = getColumnTypeName(column);
+	public static int type_to_int(String type_name) throws SQLException {
 		if (type_name.equals("BOOLEAN")) {
 			return Types.BOOLEAN;
 		} else if (type_name.equals("TINYINT")) {
@@ -56,17 +54,21 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.DOUBLE;
 		} else if (type_name.equals("VARCHAR")) {
 			return Types.VARCHAR;
-		}  else if (type_name.equals("TIME")) {
+		} else if (type_name.equals("TIME")) {
 			return Types.TIME;
-		}  else if (type_name.equals("DATE")) {
+		} else if (type_name.equals("DATE")) {
 			return Types.DATE;
-		}  else if (type_name.equals("TIMESTAMP")) {
+		} else if (type_name.equals("TIMESTAMP")) {
 			return Types.TIMESTAMP;
-		}  else if (type_name.equals("INTERVAL")) {
+		} else if (type_name.equals("INTERVAL")) {
 			return Types.VARCHAR;
 		} else {
 			throw new SQLException("Unknown type " + type_name);
 		}
+	}
+
+	public int getColumnType(int column) throws SQLException {
+		return type_to_int(getColumnTypeName(column));
 	}
 
 	public String getColumnClassName(int column) throws SQLException {

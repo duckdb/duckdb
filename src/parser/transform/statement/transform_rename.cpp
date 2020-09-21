@@ -47,10 +47,27 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
 			schema = stmt->relation->schemaname;
 		}
 		string new_name = stmt->newname;
-		info = make_unique<RenameTableInfo>(schema, table, new_name);
+		info = make_unique<RenameTableInfo>(schema, table, new_name, false /* is_view */);
 		break;
 	}
 
+	case PG_OBJECT_VIEW: {
+		// change view name
+
+		// get the view and schema
+		string schema = DEFAULT_SCHEMA;
+		string view;
+		assert(stmt->relation->relname);
+		if (stmt->relation->relname) {
+			view = stmt->relation->relname;
+		}
+		if (stmt->relation->schemaname) {
+			schema = stmt->relation->schemaname;
+		}
+		string new_name = stmt->newname;
+		info = make_unique<RenameTableInfo>(schema, view, new_name, true /* is_view */);
+		break;
+	}
 	case PG_OBJECT_DATABASE:
 	default:
 		throw NotImplementedException("Schema element not supported yet!");
