@@ -29,7 +29,7 @@ struct GlobFunctionState : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> glob_function_init(ClientContext &context, const FunctionData *bind_data,
-                                                            ParallelState *state, vector<column_t> &column_ids,
+                                                            vector<column_t> &column_ids,
                                                             unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	return make_unique<GlobFunctionState>();
 }

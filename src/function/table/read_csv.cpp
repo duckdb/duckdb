@@ -118,7 +118,7 @@ struct ReadCSVOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> read_csv_init(ClientContext &context, const FunctionData *bind_data_,
-                                                      ParallelState *state, vector<column_t> &column_ids,
+                                                      vector<column_t> &column_ids,
                                                       unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto &bind_data = (ReadCSVData &)*bind_data_;
 	auto result = make_unique<ReadCSVOperatorData>();

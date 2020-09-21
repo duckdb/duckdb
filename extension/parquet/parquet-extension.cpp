@@ -51,7 +51,7 @@ public:
 	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_function, parquet_scan_bind,
 	                    parquet_scan_init, /* cleanup */ nullptr, /* dependency */ nullptr, parquet_cardinality,
 	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, parquet_max_threads,
-	                    parquet_init_parallel_state, parquet_parallel_state_next) {
+	                    parquet_init_parallel_state, parquet_scan_parallel_init, parquet_parallel_state_next) {
 		projection_pushdown = true;
 	}
 
@@ -90,28 +90,35 @@ public:
 	}
 
 	static unique_ptr<FunctionOperatorData>
-	parquet_scan_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *parallel_state_,
+	parquet_scan_init(ClientContext &context, const FunctionData *bind_data_,
 	                  vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_;
 
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 
-		if (parallel_state_) {
-			result->is_parallel = true;
-			// FIXME: should not be called here
-			// FIXME: what if this returns false?
-			parquet_parallel_state_next(context, bind_data_, result.get(), parallel_state_);
-		} else {
-			result->is_parallel = false;
-			result->file_index = 0;
-			// single-threaded: one thread has to read all groups
-			vector<idx_t> group_ids;
-			for (idx_t i = 0; i < bind_data.initial_reader->NumRowGroups(); i++) {
-				group_ids.push_back(i);
-			}
-			result->reader = bind_data.initial_reader;
-			result->reader->Initialize(result->scan_state, column_ids, move(group_ids));
+		result->is_parallel = false;
+		result->file_index = 0;
+		// single-threaded: one thread has to read all groups
+		vector<idx_t> group_ids;
+		for (idx_t i = 0; i < bind_data.initial_reader->NumRowGroups(); i++) {
+			group_ids.push_back(i);
+		}
+		result->reader = bind_data.initial_reader;
+		result->reader->Initialize(result->scan_state, column_ids, move(group_ids));
+		return move(result);
+	}
+
+	static unique_ptr<FunctionOperatorData>
+	parquet_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *parallel_state_,
+	                  vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+		auto &bind_data = (ParquetReadBindData &)*bind_data_;
+
+		auto result = make_unique<ParquetReadOperatorData>();
+		result->column_ids = column_ids;
+		result->is_parallel = true;
+		if (!parquet_parallel_state_next(context, bind_data_, result.get(), parallel_state_)) {
+			return nullptr;
 		}
 		return move(result);
 	}
@@ -119,10 +126,6 @@ public:
 	static void parquet_scan_function(ClientContext &context, const FunctionData *bind_data_,
 	                                  FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
-		if (!data.reader) {
-			// FIXME: hacky
-			return;
-		}
 		do {
 			data.reader->ReadChunk(data.scan_state, output);
 			if (output.size() == 0 && !data.is_parallel) {
