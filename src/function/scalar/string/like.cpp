@@ -6,7 +6,7 @@ using namespace std;
 
 namespace duckdb {
 
-template<char PERCENTAGE, char UNDERSCORE>
+template <char PERCENTAGE, char UNDERSCORE>
 bool templated_like_operator(const char *s, const char *pattern, const char *escape) {
 	const char *t, *p;
 

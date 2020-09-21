@@ -63,19 +63,21 @@ struct ParquetReaderScanState {
 class ParquetReader {
 public:
 	ParquetReader(ClientContext &context, string file_name, vector<LogicalType> expected_types);
-	ParquetReader(ClientContext &context, string file_name) :
-		ParquetReader(context, file_name, vector<LogicalType>()) {}
+	ParquetReader(ClientContext &context, string file_name) : ParquetReader(context, file_name, vector<LogicalType>()) {
+	}
 	~ParquetReader();
 
 	string file_name;
 	vector<LogicalType> return_types;
 	vector<string> names;
+
 public:
 	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read);
 	void ReadChunk(ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows();
 	idx_t NumRowGroups();
+
 private:
 	parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	void PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
@@ -83,13 +85,14 @@ private:
 
 	template <typename... Args> std::runtime_error FormatException(const string fmt_str, Args... params) {
 		return std::runtime_error("Failed to read Parquet file \"" + file_name +
-		                     "\": " + StringUtil::Format(fmt_str, params...));
+		                          "\": " + StringUtil::Format(fmt_str, params...));
 	}
 
 	template <class T>
 	void fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset);
 	template <class T>
 	void fill_from_plain(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset);
+
 private:
 	static constexpr uint8_t GZIP_HEADER_MINSIZE = 10;
 	static constexpr uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
@@ -99,4 +102,4 @@ private:
 	parquet::format::FileMetaData file_meta_data;
 };
 
-}
+} // namespace duckdb

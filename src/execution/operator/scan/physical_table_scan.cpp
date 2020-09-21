@@ -45,7 +45,8 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			if (task_info != task.task_info.end()) {
 				// parallel scan init
 				state.parallel_state = task_info->second;
-				state.operator_data = function.parallel_init(context.client, bind_data.get(), state.parallel_state, column_ids, table_filters);
+				state.operator_data = function.parallel_init(context.client, bind_data.get(), state.parallel_state,
+				                                             column_ids, table_filters);
 			} else {
 				// sequential scan init
 				state.operator_data = function.init(context.client, bind_data.get(), column_ids, table_filters);
@@ -70,7 +71,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			if (chunk.size() == 0) {
 				assert(function.parallel_state_next);
 				if (function.parallel_state_next(context.client, bind_data.get(), state.operator_data.get(),
-												state.parallel_state)) {
+				                                 state.parallel_state)) {
 					continue;
 				} else {
 					break;

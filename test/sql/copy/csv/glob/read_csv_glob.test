@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/glob/read_csv_glob.test
 # description: Test globbing CSVs
-# group: [csv]
+# group: [glob]
 
 # simple globbing
 query I

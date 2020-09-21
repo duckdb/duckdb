@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/glob/copy_csv_glob.test
 # description: Test globbing CSVs
-# group: [csv]
+# group: [glob]
 
 statement ok
 CREATE TABLE dates(d DATE);

@@ -38,4 +38,4 @@ Int96 timestamp_t_to_impala_timestamp(timestamp_t &ts) {
 	return impala_ts;
 }
 
-}
+} // namespace duckdb

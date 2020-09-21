@@ -198,8 +198,8 @@ template <class T> static void thrift_unpack(const uint8_t *buf, uint32_t *len, 
 	*len = *len - bytes_left;
 }
 
-ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types) :
-        file_name(move(file_name_)), context(context) {
+ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types)
+    : file_name(move(file_name_)), context(context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
@@ -296,8 +296,8 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		}
 		if (has_expected_types) {
 			if (return_types[col_idx - 1] != type) {
-				throw FormatException("PARQUET file contains type %s, could not auto cast to type %s",
-											type.ToString(), return_types[col_idx - 1].ToString());
+				throw FormatException("PARQUET file contains type %s, could not auto cast to type %s", type.ToString(),
+				                      return_types[col_idx - 1].ToString());
 			}
 		} else {
 			names.push_back(s_ele.name);
@@ -306,19 +306,22 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	}
 }
 
-ParquetReader::~ParquetReader(){}
+ParquetReader::~ParquetReader() {
+}
 
-ParquetReaderColumnData::~ParquetReaderColumnData() {}
+ParquetReaderColumnData::~ParquetReaderColumnData() {
+}
 
 template <class T>
-void ParquetReader::fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
+void ParquetReader::fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, Vector &target,
+                                   idx_t target_offset) {
 	for (idx_t i = 0; i < count; i++) {
 		if (col_data.defined_buf.ptr[i]) {
 			auto offset = col_data.offset_buf.read<uint32_t>();
 			if (offset > col_data.dict_size) {
 				throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
-									to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
-									". Corrupt file?");
+				                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
+				                    ". Corrupt file?");
 			}
 			((T *)FlatVector::GetData(target))[i + target_offset] = ((const T *)col_data.dict.ptr)[offset];
 		} else {
@@ -328,7 +331,8 @@ void ParquetReader::fill_from_dict(ParquetReaderColumnData &col_data, idx_t coun
 }
 
 template <class T>
-void ParquetReader::fill_from_plain(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
+void ParquetReader::fill_from_plain(ParquetReaderColumnData &col_data, idx_t count, Vector &target,
+                                    idx_t target_offset) {
 	for (idx_t i = 0; i < count; i++) {
 		if (col_data.defined_buf.ptr[i]) {
 			((T *)FlatVector::GetData(target))[i + target_offset] = col_data.payload.read<T>();
@@ -339,7 +343,7 @@ void ParquetReader::fill_from_plain(ParquetReaderColumnData &col_data, idx_t cou
 }
 
 RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
-	assert(state.current_group >= 0 && (idx_t) state.current_group < state.group_idx_list.size());
+	assert(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
 	assert(state.group_idx_list[state.current_group] >= 0 &&
 	       state.group_idx_list[state.current_group] < file_meta_data.row_groups.size());
 	return file_meta_data.row_groups[state.group_idx_list[state.current_group]];
@@ -605,13 +609,14 @@ idx_t ParquetReader::NumRowGroups() {
 	return file_meta_data.row_groups.size();
 }
 
-void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read) {
+void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> column_ids,
+                               vector<idx_t> groups_to_read) {
 	state.current_group = -1;
 	state.finished = false;
 	state.column_ids = move(column_ids);
 	state.group_offset = 0;
 	state.group_idx_list = move(groups_to_read);
-	for(idx_t i = 0; i < return_types.size(); i++) {
+	for (idx_t i = 0; i < return_types.size(); i++) {
 		state.column_data.push_back(make_unique<ParquetReaderColumnData>());
 	}
 }
@@ -622,7 +627,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 	}
 
 	// see if we have to switch to the next row group in the parquet file
-	if (state.current_group < 0 || (int64_t) state.group_offset >= GetGroup(state).num_rows) {
+	if (state.current_group < 0 || (int64_t)state.group_offset >= GetGroup(state).num_rows) {
 		state.current_group++;
 		state.group_offset = 0;
 
@@ -824,5 +829,4 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 	state.group_offset += output.size();
 }
 
-}
-
+} // namespace duckdb

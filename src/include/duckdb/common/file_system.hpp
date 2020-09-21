@@ -118,6 +118,7 @@ public:
 
 	//! Runs a glob on the file system, returning a list of matching files
 	virtual vector<string> Glob(string path);
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);

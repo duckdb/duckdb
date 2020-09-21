@@ -116,11 +116,10 @@ static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serial
 }
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_, vector<string> names_)
-	: file_name(file_name_), sql_types(move(types_)), column_names(move(names_)) {
+    : file_name(file_name_), sql_types(move(types_)), column_names(move(names_)) {
 	// initialize the file writer
-	writer =
-	    make_unique<BufferedFileWriter>(fs, file_name.c_str(),
-	                                    FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	writer = make_unique<BufferedFileWriter>(fs, file_name.c_str(),
+	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	// parquet files start with the string "PAR1"
 	writer->WriteData((const_data_ptr_t) "PAR1", 4);
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
@@ -301,7 +300,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		size_t compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
 		auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 		snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
-							(char *)compressed_buf.get(), &compressed_size);
+		                    (char *)compressed_buf.get(), &compressed_size);
 
 		hdr.compressed_page_size = compressed_size;
 
@@ -339,5 +338,4 @@ void ParquetWriter::Finalize() {
 	writer.reset();
 }
 
-}
-
+} // namespace duckdb

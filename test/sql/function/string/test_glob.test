@@ -1,4 +1,4 @@
-# name: test/sql/function/string/test?glob.test
+# name: test/sql/function/string/test_glob.test
 # description: Test GLOB statement
 # group: [string]
 

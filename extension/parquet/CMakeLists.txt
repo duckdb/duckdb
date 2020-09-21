@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 2.8.7)
 
 project(ParquetExtension)
 
-include_directories(include ../../third_party/parquet ../../third_party/snappy ../../third_party/miniz
-                    ../../third_party/thrift)
+include_directories(include ../../third_party/parquet ../../third_party/snappy
+                    ../../third_party/miniz ../../third_party/thrift)
 
 add_library(
   parquet_extension STATIC

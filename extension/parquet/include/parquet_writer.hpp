@@ -27,6 +27,7 @@ public:
 public:
 	void Flush(ChunkCollection &buffer);
 	void Finalize();
+
 private:
 	string file_name;
 	vector<LogicalType> sql_types;
@@ -38,4 +39,4 @@ private:
 	std::mutex lock;
 };
 
-}
+} // namespace duckdb

@@ -623,7 +623,7 @@ void FileHandle::Truncate(int64_t new_size) {
 }
 
 static bool HasGlob(const string &str) {
-	for(idx_t i = 0; i < str.size(); i++) {
+	for (idx_t i = 0; i < str.size(); i++) {
 		if (str[i] == '*' || str[i] == '?') {
 			return true;
 		}
@@ -631,8 +631,8 @@ static bool HasGlob(const string &str) {
 	return false;
 }
 
-
-static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory, vector<string> &result, bool join_path) {
+static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory,
+                      vector<string> &result, bool join_path) {
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
 		if (is_directory != match_directory) {
 			return;
@@ -660,7 +660,7 @@ vector<string> FileSystem::Glob(string path) {
 	// split up the path into separate chunks
 	vector<string> splits;
 	idx_t last_pos = 0;
-	for(idx_t i = 0; i < path.size(); i++) {
+	for (idx_t i = 0; i < path.size(); i++) {
 		if (path[i] == '\\' || path[i] == '/') {
 			splits.push_back(path.substr(last_pos, i - last_pos));
 			last_pos = i + 1;
@@ -669,7 +669,7 @@ vector<string> FileSystem::Glob(string path) {
 	splits.push_back(path.substr(last_pos, path.size() - last_pos));
 	// now iterate over the chunks
 	vector<string> previous_directories;
-	for(idx_t i = 0; i < splits.size(); i++) {
+	for (idx_t i = 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern
@@ -680,7 +680,7 @@ vector<string> FileSystem::Glob(string path) {
 		} else {
 			// previous directories
 			// we iterate over each of the previous directories, and apply the glob of the current directory
-			for(auto &prev_directory : previous_directories) {
+			for (auto &prev_directory : previous_directories) {
 				GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
 			}
 		}

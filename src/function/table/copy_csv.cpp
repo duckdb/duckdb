@@ -183,8 +183,8 @@ static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo 
 		bind_data->force_quote.resize(names.size(), false);
 	}
 	bind_data->Finalize();
-	bind_data->is_simple =
-	    bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 && bind_data->options.quote.size() == 1;
+	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
+	                       bind_data->options.quote.size() == 1;
 	return move(bind_data);
 }
 

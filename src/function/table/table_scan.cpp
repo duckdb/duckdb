@@ -39,13 +39,13 @@ static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, 
 	result->column_ids = column_ids;
 	result->table_filters = table_filters;
 	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
-												&result->table_filters);
+	                                         &result->table_filters);
 	return move(result);
 }
 
-static unique_ptr<FunctionOperatorData> table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        ParallelState *state, vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+static unique_ptr<FunctionOperatorData>
+table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *state,
+                         vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
 	result->table_filters = table_filters;

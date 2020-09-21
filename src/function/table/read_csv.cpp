@@ -142,7 +142,7 @@ static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vecto
 static void read_csv_function(ClientContext &context, const FunctionData *bind_data_,
                               FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*bind_data_;
-	auto &data = (ReadCSVOperatorData &) *operator_state;
+	auto &data = (ReadCSVOperatorData &)*operator_state;
 	do {
 		data.csv_reader->ParseCSV(output);
 		if (output.size() == 0 && data.file_index < bind_data.files.size()) {
@@ -154,7 +154,7 @@ static void read_csv_function(ClientContext &context, const FunctionData *bind_d
 		} else {
 			break;
 		}
-	} while(true);
+	} while (true);
 	if (bind_data.include_file_name) {
 		auto &col = output.data.back();
 		col.SetValue(0, Value(data.csv_reader->options.file_path));

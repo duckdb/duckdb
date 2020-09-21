@@ -60,4 +60,4 @@ private:
 	std::unique_ptr<char[]> holder = nullptr;
 };
 
-}
+} // namespace duckdb

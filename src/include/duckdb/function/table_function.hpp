@@ -67,14 +67,14 @@ public:
 	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
 	              table_function_to_string_t to_string = nullptr, table_function_max_threads_t max_threads = nullptr,
 	              table_function_init_parallel_state_t init_parallel_state = nullptr,
-				  table_function_init_parallel_t parallel_init = nullptr,
+	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
 	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), cleanup(cleanup),
 	      dependency(dependency), cardinality(cardinality), pushdown_complex_filter(pushdown_complex_filter),
 	      to_string(to_string), max_threads(max_threads), init_parallel_state(init_parallel_state),
-		  parallel_init(parallel_init), parallel_state_next(parallel_state_next), projection_pushdown(projection_pushdown),
-	      filter_pushdown(filter_pushdown) {
+	      parallel_init(parallel_init), parallel_state_next(parallel_state_next),
+	      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
 	TableFunction(vector<LogicalType> arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_t init = nullptr, table_function_cleanup_t cleanup = nullptr,
@@ -82,14 +82,15 @@ public:
 	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
 	              table_function_to_string_t to_string = nullptr, table_function_max_threads_t max_threads = nullptr,
 	              table_function_init_parallel_state_t init_parallel_state = nullptr,
-				  table_function_init_parallel_t parallel_init = nullptr,
+	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
 	    : TableFunction(string(), move(arguments), function, bind, init, cleanup, dependency, cardinality,
 	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_init,
 	                    parallel_state_next, projection_pushdown, filter_pushdown) {
 	}
-	TableFunction() : SimpleFunction("", {}) {}
+	TableFunction() : SimpleFunction("", {}) {
+	}
 
 	//! (Optional) Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
@@ -119,7 +120,8 @@ public:
 	table_function_max_threads_t max_threads;
 	//! (Optional) initialize the parallel scan state, called once in total.
 	table_function_init_parallel_state_t init_parallel_state;
-	//! (Optional) initialize the parallel scan given the parallel state. Called once per task. Return nullptr if there is nothing left to scan.
+	//! (Optional) initialize the parallel scan given the parallel state. Called once per task. Return nullptr if there
+	//! is nothing left to scan.
 	table_function_init_parallel_t parallel_init;
 	//! (Optional) return the next chunk to process in the parallel scan, or return nullptr if there is none
 	table_function_parallel_state_next_t parallel_state_next;
