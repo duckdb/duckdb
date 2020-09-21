@@ -31,3 +31,16 @@ query I
 select count(*) from parquet_scan('test/sql/copy/parquet/data/g*/t1.parquet')
 ----
 2
+
+# parquet glob with COPY FROM
+statement ok
+CREATE TABLE vals (i INTEGER, j VARCHAR)
+
+statement ok
+COPY vals FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);
+
+query II
+SELECT * FROM vals ORDER BY 1, 2
+----
+1	hello
+1	hello
