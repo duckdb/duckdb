@@ -3,6 +3,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
