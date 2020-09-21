@@ -7,7 +7,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/table/read_csv.hpp"
 
 using namespace std;
 
