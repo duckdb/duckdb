@@ -22,7 +22,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(PGNode *node) {
 	auto info = make_unique<CreateTableInfo>();
 	info->schema = qname.schema;
 	info->table = qname.name;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE : OnCreateConflict::ERROR;
+	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->query = move(query);
 	result->info = move(info);
 	return result;

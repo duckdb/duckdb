@@ -88,10 +88,10 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {
-		if (info->on_conflict == OnCreateConflict::ERROR) {
+		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("Schema with name %s already exists!", info->schema);
 		} else {
-			assert(info->on_conflict == OnCreateConflict::IGNORE);
+			assert(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
 		}
 		return nullptr;
 	}

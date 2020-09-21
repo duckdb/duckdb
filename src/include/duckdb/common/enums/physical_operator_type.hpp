@@ -63,7 +63,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	INSERT,
 	INSERT_SELECT,
-	DELETE,
+	DELETE_OPERATOR,
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
 

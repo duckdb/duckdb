@@ -64,7 +64,7 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "INSERT";
 	case PhysicalOperatorType::INSERT_SELECT:
 		return "INSERT_SELECT";
-	case PhysicalOperatorType::DELETE:
+	case PhysicalOperatorType::DELETE_OPERATOR:
 		return "DELETE";
 	case PhysicalOperatorType::UPDATE:
 		return "UPDATE";

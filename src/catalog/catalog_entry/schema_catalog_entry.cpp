@@ -53,7 +53,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	} else {
 		entry->temporary = true;
 	}
-	if (on_conflict == OnCreateConflict::REPLACE) {
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
@@ -67,7 +67,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	// now try to add the entry
 	if (!set.CreateEntry(transaction, entry_name, move(entry), dependencies)) {
 		// entry already exists!
-		if (on_conflict == OnCreateConflict::ERROR) {
+		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type), entry_name);
 		} else {
 			return nullptr;
