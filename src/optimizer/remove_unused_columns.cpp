@@ -125,6 +125,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				entries.push_back(i);
 			}
 			ClearUnusedExpressions(entries, setop.table_index);
+			setop.column_count = entries.size();
 
 			for (auto &child : op.children) {
 				assert(child->type == LogicalOperatorType::PROJECTION);

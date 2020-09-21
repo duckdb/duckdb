@@ -3,6 +3,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
 namespace duckdb {
@@ -58,6 +59,50 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 
 	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
+
+	bool left_empty = op->children[0]->type == LogicalOperatorType::EMPTY_RESULT;
+	bool right_empty = op->children[1]->type == LogicalOperatorType::EMPTY_RESULT;
+	if (left_empty && right_empty) {
+		// both empty: return empty result
+		return make_unique<LogicalEmptyResult>(move(op));
+	}
+	assert(left_empty || op->children[0]->type == LogicalOperatorType::PROJECTION);
+	assert(right_empty || op->children[1]->type == LogicalOperatorType::PROJECTION);
+	if (left_empty) {
+		// left child is empty result
+		switch(op->type) {
+		case LogicalOperatorType::UNION: {
+			// union with empty left side: return right child
+			auto &projection = (LogicalProjection &) *op->children[1];
+			projection.table_index = setop.table_index;
+			return move(op->children[1]);
+		}
+		case LogicalOperatorType::EXCEPT:
+			// except: if left child is empty, return empty result
+		case LogicalOperatorType::INTERSECT:
+			// intersect: if any child is empty, return empty result itself
+			return make_unique<LogicalEmptyResult>(move(op));
+		default:
+			throw InternalException("Unsupported set operation");
+		}
+	} else if (right_empty) {
+		// right child is empty result
+		switch(op->type) {
+		case LogicalOperatorType::UNION:
+		case LogicalOperatorType::EXCEPT: {
+			// union or except with empty right child: return left child
+			auto &projection = (LogicalProjection &) *op->children[0];
+			projection.table_index = setop.table_index;
+			return move(op->children[0]);
+		}
+		case LogicalOperatorType::INTERSECT:
+			// intersect: if any child is empty, return empty result itself
+			return make_unique<LogicalEmptyResult>(move(op));
+		default:
+			throw InternalException("Unsupported set operation");
+		}
+
+	}
 	return op;
 }
 
