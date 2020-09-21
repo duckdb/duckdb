@@ -73,7 +73,7 @@ public:
 	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), cleanup(cleanup),
 	      dependency(dependency), cardinality(cardinality), pushdown_complex_filter(pushdown_complex_filter),
 	      to_string(to_string), max_threads(max_threads), init_parallel_state(init_parallel_state),
-	      parallel_state_next(parallel_state_next), projection_pushdown(projection_pushdown),
+		  parallel_init(parallel_init), parallel_state_next(parallel_state_next), projection_pushdown(projection_pushdown),
 	      filter_pushdown(filter_pushdown) {
 	}
 	TableFunction(vector<LogicalType> arguments, table_function_t function, table_function_bind_t bind = nullptr,
