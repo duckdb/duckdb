@@ -62,7 +62,7 @@ private:
 	// Statement transformation
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres T_PGSelectStmt node into a SelectStatement
-	unique_ptr<SelectStatement> TransformSelect(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SelectStatement> TransformSelect(duckdb_libpgquery::PGNode *node, bool isSelect = true);
 	//! Transform a Postgres T_AlterStmt node into a AlterTableStatement
 	unique_ptr<AlterTableStatement> TransformAlter(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGRenameStmt node into a RenameStatement
