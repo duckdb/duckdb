@@ -525,13 +525,6 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	}
 	case PageType::DATA_PAGE:
 	case PageType::DATA_PAGE_V2: {
-		if (!page_hdr.__isset.data_page_header || page_hdr.__isset.dictionary_page_header) {
-			throw FormatException("Data page header mismatch");
-		}
-
-		if (page_hdr.__isset.data_page_header_v2) {
-			throw FormatException("v2 data page format is not supported");
-		}
 
 		col_data.page_value_count = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.num_values
 		                                                                 : page_hdr.data_page_header_v2.num_values;
