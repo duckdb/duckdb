@@ -49,6 +49,8 @@ struct ParquetReaderColumnData {
 	unique_ptr<RleBpDecoder> dict_decoder;
 
 	unique_ptr<ChunkCollection> string_collection;
+
+	bool has_nulls;
 };
 
 struct ParquetReaderScanState {
