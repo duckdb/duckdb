@@ -73,6 +73,8 @@ public:
 
 	//! Prepare the specified query, returning a prepared statement object
 	unique_ptr<PreparedStatement> Prepare(string query);
+    unique_ptr<PreparedStatement> PrepareStatements(vector<unique_ptr<SQLStatement>> *statements,
+	                                                idx_t n_prepared_parameters);
 
 	//! Get the table info of a specific table (in the default schema), or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string table_name);
@@ -80,7 +82,8 @@ public:
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
 
 	//! Extract a set of SQL statements from a specific query
-	vector<unique_ptr<SQLStatement>> ExtractStatements(string query);
+	vector<unique_ptr<SQLStatement>> ExtractStatements(string query,
+                                                       idx_t *n_prepared_statements = nullptr) const;
 
 	//! Appends a DataChunk to the specified table
 	void Append(TableDescription &description, DataChunk &chunk);

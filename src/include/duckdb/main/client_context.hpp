@@ -107,6 +107,10 @@ public:
 
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
+
+	unique_ptr<PreparedStatement> PrepareParsedStatement(vector<unique_ptr<SQLStatement>> *statements,
+                                                         idx_t parsed_parameters);
+
 	//! Execute a prepared statement with the given name and set of parameters
 	unique_ptr<QueryResult> Execute(string name, vector<Value> &values, bool allow_stream_result = true,
 	                                string query = string());

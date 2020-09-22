@@ -132,8 +132,9 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 	try {
 		// extract the statements from the SQL query
-		auto statements = db->con->ExtractStatements(query);
-		if (statements.size() == 0) {
+        idx_t n_prepared_parameters;
+		auto statements = db->con->ExtractStatements(query, &n_prepared_parameters);
+		if (statements.empty()) {
 			// no statements to prepare!
 			return SQLITE_OK;
 		}
@@ -145,7 +146,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		query = query.substr(statement->stmt_location, statement->stmt_length);
 
 		// now prepare the query
-		auto prepared = db->con->Prepare(query);
+		auto prepared = db->con->PrepareStatements(&statements, n_prepared_parameters);
 		if (!prepared->success) {
 			// failed to prepare: set the error message
 			db->last_error = prepared->error;

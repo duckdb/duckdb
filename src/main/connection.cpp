@@ -78,6 +78,11 @@ unique_ptr<PreparedStatement> Connection::Prepare(string query) {
 	return context->Prepare(query);
 }
 
+unique_ptr<PreparedStatement> Connection::PrepareStatements(vector<unique_ptr<SQLStatement>> *statements,
+                                                            idx_t n_prepared_parameters) {
+	return context->PrepareParsedStatement(statements, n_prepared_parameters);
+}
+
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Value> &values) {
 	auto statement = Prepare(query);
 	if (!statement->success) {
@@ -94,8 +99,9 @@ unique_ptr<TableDescription> Connection::TableInfo(string schema_name, string ta
 	return context->TableInfo(schema_name, table_name);
 }
 
-vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query) {
-	return context->ParseStatements(query);
+vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query,
+                                                               idx_t *n_prepared_statements) const {
+	return context->ParseStatements(query, n_prepared_statements);
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {

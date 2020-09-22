@@ -253,12 +253,12 @@ void ClientContext::InitialCleanup() {
 	interrupted = false;
 }
 
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query, idx_t *n_prepared_statements) {
+vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query, idx_t *n_prepared_parameters) {
 	Parser parser;
 	parser.ParseQuery(query);
 
-	if (n_prepared_statements) {
-		*n_prepared_statements = parser.n_prepared_parameters;
+	if (n_prepared_parameters) {
+		*n_prepared_parameters = parser.n_prepared_parameters;
 	}
 
 	PragmaHandler handler(*this);
@@ -272,37 +272,39 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 	// prepare the query
 	try {
 		InitialCleanup();
-
-		// first parse the query
-		idx_t n_prepared_parameters;
-		auto statements = ParseStatements(query, &n_prepared_parameters);
-		if (statements.size() == 0) {
-			throw Exception("No statement to prepare!");
-		}
-		if (statements.size() > 1) {
-			throw Exception("Cannot prepare multiple statements at once!");
-		}
-		// now write the prepared statement data into the catalog
-		string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
-		prepare_count++;
-		// create a prepare statement out of the underlying statement
-		auto prepare = make_unique<PrepareStatement>();
-		prepare->name = prepare_name;
-		prepare->statement = move(statements[0]);
-
-		// now perform the actual PREPARE query
-		auto result = RunStatement(query, move(prepare), false);
-		if (!result->success) {
-			throw Exception(result->error);
-		}
-		auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
-		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared,
-		                                                      n_prepared_parameters);
-		prepared_statement_objects.insert(prepared_object.get());
-		return prepared_object;
+        idx_t n_prepared_parameters;
+        auto statements = ParseStatements(query, &n_prepared_parameters);
+        if (statements.empty()) {
+            throw Exception("No statement to prepare!");
+        }
+        return this->PrepareParsedStatement(&statements, n_prepared_parameters);
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
+}
+unique_ptr<PreparedStatement> ClientContext::PrepareParsedStatement(vector<unique_ptr<SQLStatement>> *statements,
+                                                                    idx_t n_prepared_parameters) {
+    if (statements->size() > 1) {
+        throw Exception("Cannot prepare multiple statements at once!");
+    }
+    // now write the prepared statement data into the catalog
+    string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
+    prepare_count++;
+    // create a prepare statement out of the underlying statement
+    auto prepare = make_unique<PrepareStatement>();
+    prepare->name = prepare_name;
+    prepare->statement = move(statements->front());
+
+    // now perform the actual PREPARE query
+    auto result = RunStatement(query, move(prepare), false);
+    if (!result->success) {
+        throw Exception(result->error);
+    }
+    auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
+    auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared,
+                                                          n_prepared_parameters);
+    prepared_statement_objects.insert(prepared_object.get());
+    return prepared_object;
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values, bool allow_stream_result,
