@@ -14,6 +14,11 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 	assert(op);
 	// first check if we even need to cast
 	assert(source_types.size() == target_types.size());
+	if (source_types == target_types) {
+		// source and target types are equal: don't need to cast
+		return op;
+	}
+	// otherwise add casts
 	auto node = op.get();
 	if (node->type == LogicalOperatorType::PROJECTION) {
 		// "node" is a projection; we can just do the casts in there
@@ -30,7 +35,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 		return op;
 	} else {
 		// found a non-projection operator
-		// push a new projection (optionally containing casts)
+		// push a new projection containing the casts
 
 		// fetch the set of column bindings
 		auto setop_columns = op->GetColumnBindings();

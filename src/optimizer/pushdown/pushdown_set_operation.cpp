@@ -67,17 +67,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		// both empty: return empty result
 		return make_unique<LogicalEmptyResult>(move(op));
 	}
-	assert(left_empty || op->children[0]->type == LogicalOperatorType::PROJECTION);
-	assert(right_empty || op->children[1]->type == LogicalOperatorType::PROJECTION);
 	if (left_empty) {
 		// left child is empty result
 		switch (op->type) {
-		case LogicalOperatorType::UNION: {
-			// union with empty left side: return right child
-			auto &projection = (LogicalProjection &)*op->children[1];
-			projection.table_index = setop.table_index;
-			return move(op->children[1]);
-		}
+		case LogicalOperatorType::UNION:
+			if (op->children[1]->type == LogicalOperatorType::PROJECTION) {
+				// union with empty left side: return right child
+				auto &projection = (LogicalProjection &)*op->children[1];
+				projection.table_index = setop.table_index;
+				return move(op->children[1]);
+			}
+			break;
 		case LogicalOperatorType::EXCEPT:
 			// except: if left child is empty, return empty result
 		case LogicalOperatorType::INTERSECT:
@@ -90,12 +90,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		// right child is empty result
 		switch (op->type) {
 		case LogicalOperatorType::UNION:
-		case LogicalOperatorType::EXCEPT: {
-			// union or except with empty right child: return left child
-			auto &projection = (LogicalProjection &)*op->children[0];
-			projection.table_index = setop.table_index;
-			return move(op->children[0]);
-		}
+		case LogicalOperatorType::EXCEPT:
+			if (op->children[0]->type == LogicalOperatorType::PROJECTION) {
+				// union or except with empty right child: return left child
+				auto &projection = (LogicalProjection &)*op->children[0];
+				projection.table_index = setop.table_index;
+				return move(op->children[0]);
+			}
+			break;
 		case LogicalOperatorType::INTERSECT:
 			// intersect: if any child is empty, return empty result itself
 			return make_unique<LogicalEmptyResult>(move(op));
