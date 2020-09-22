@@ -6,6 +6,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -619,6 +620,76 @@ void FileHandle::Sync() {
 
 void FileHandle::Truncate(int64_t new_size) {
 	file_system.Truncate(*this, new_size);
+}
+
+static bool HasGlob(const string &str) {
+	for (idx_t i = 0; i < str.size(); i++) {
+		if (str[i] == '*' || str[i] == '?') {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory,
+                      vector<string> &result, bool join_path) {
+	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
+		if (is_directory != match_directory) {
+			return;
+		}
+		if (LikeFun::Glob(fname.c_str(), glob.c_str(), nullptr)) {
+			if (join_path) {
+				result.push_back(fs.JoinPath(path, fname));
+			} else {
+				result.push_back(fname);
+			}
+		}
+	});
+}
+
+vector<string> FileSystem::Glob(string path) {
+	// first check if the path has a glob at all
+	if (!HasGlob(path)) {
+		// no glob: return only the file (if it exists)
+		vector<string> result;
+		if (FileExists(path)) {
+			result.push_back(path);
+		}
+		return result;
+	}
+	// split up the path into separate chunks
+	vector<string> splits;
+	idx_t last_pos = 0;
+	for (idx_t i = 0; i < path.size(); i++) {
+		if (path[i] == '\\' || path[i] == '/') {
+			splits.push_back(path.substr(last_pos, i - last_pos));
+			last_pos = i + 1;
+		}
+	}
+	splits.push_back(path.substr(last_pos, path.size() - last_pos));
+	// now iterate over the chunks
+	vector<string> previous_directories;
+	for (idx_t i = 0; i < splits.size(); i++) {
+		bool is_last_chunk = i + 1 == splits.size();
+		// if it's the last chunk we need to find files, otherwise we find directories
+		// not the last chunk: gather a list of all directories that match the glob pattern
+		vector<string> result;
+		if (previous_directories.empty()) {
+			// no previous directories: list in the current path
+			GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+		} else {
+			// previous directories
+			// we iterate over each of the previous directories, and apply the glob of the current directory
+			for (auto &prev_directory : previous_directories) {
+				GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+			}
+		}
+		if (is_last_chunk || result.size() == 0) {
+			return result;
+		}
+		previous_directories = move(result);
+	}
+	throw InternalException("Eeek");
 }
 
 } // namespace duckdb

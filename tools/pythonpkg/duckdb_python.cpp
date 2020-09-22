@@ -228,7 +228,7 @@ struct PandasScanFunction : public TableFunction {
 	}
 
 	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
-	                                                         ParallelState *state, vector<column_t> &column_ids,
+	                                                         vector<column_t> &column_ids,
 	                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 		return make_unique<PandasScanState>();
 	}
@@ -966,14 +966,14 @@ struct DuckDBPyConnection {
 			} else if (py::isinstance<py::str>(ele)) {
 				args.push_back(Value(ele.cast<string>()));
 			} else if (py::isinstance(ele, datetime_datetime)) {
-                                auto year = PyDateTime_GET_YEAR(ele.ptr());
-                                auto month = PyDateTime_GET_MONTH(ele.ptr());
-                                auto day = PyDateTime_GET_DAY(ele.ptr());
-                                auto hour = PyDateTime_DATE_GET_HOUR(ele.ptr());
-                                auto minute = PyDateTime_DATE_GET_MINUTE(ele.ptr());
-                                auto second = PyDateTime_DATE_GET_SECOND(ele.ptr());
-                                auto millis = PyDateTime_DATE_GET_MICROSECOND(ele.ptr()) / 1000;
-                                args.push_back(Value::TIMESTAMP(year, month, day, hour, minute, second, millis));
+				auto year = PyDateTime_GET_YEAR(ele.ptr());
+				auto month = PyDateTime_GET_MONTH(ele.ptr());
+				auto day = PyDateTime_GET_DAY(ele.ptr());
+				auto hour = PyDateTime_DATE_GET_HOUR(ele.ptr());
+				auto minute = PyDateTime_DATE_GET_MINUTE(ele.ptr());
+				auto second = PyDateTime_DATE_GET_SECOND(ele.ptr());
+				auto millis = PyDateTime_DATE_GET_MICROSECOND(ele.ptr()) / 1000;
+				args.push_back(Value::TIMESTAMP(year, month, day, hour, minute, second, millis));
 			} else if (py::isinstance(ele, datetime_time)) {
 				auto hour = PyDateTime_TIME_GET_HOUR(ele.ptr());
 				auto minute = PyDateTime_TIME_GET_MINUTE(ele.ptr());

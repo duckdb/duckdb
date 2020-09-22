@@ -15,16 +15,16 @@ namespace duckdb {
 
 enum class OnCreateConflict : uint8_t {
 	// Standard: throw error
-	ERROR,
+	ERROR_ON_CONFLICT,
 	// CREATE IF NOT EXISTS, silently do nothing on conflict
-	IGNORE,
+	IGNORE_ON_CONFLICT,
 	// CREATE OR REPLACE
-	REPLACE
+	REPLACE_ON_CONFLICT
 };
 
 struct CreateInfo : public ParseInfo {
 	CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
-	    : type(type), schema(schema), on_conflict(OnCreateConflict::ERROR), temporary(false) {
+	    : type(type), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false) {
 	}
 	virtual ~CreateInfo() {
 	}

@@ -131,7 +131,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	// read the schema and create it in the catalog
 	auto info = SchemaCatalogEntry::Deserialize(reader);
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
-	info->on_conflict = OnCreateConflict::IGNORE;
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	database.catalog->CreateSchema(context, info.get());
 
 	// read the sequences
