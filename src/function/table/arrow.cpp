@@ -108,6 +108,8 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 			return_types.push_back(LogicalType::VARCHAR);
 		} else if (format == "tsn:") {
 			return_types.push_back(LogicalType::TIMESTAMP);
+		} else if (format == "tdD") {
+			return_types.push_back(LogicalType::DATE);
 		} else {
 			throw NotImplementedException("Unsupported Arrow type %s", format);
 		}
@@ -244,6 +246,16 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 				date_t date = Date::EpochToDate(ms / 1000);
 				dtime_t time = (dtime_t)(ms % ms_per_day);
 				tgt_ptr[row] = Timestamp::FromDatetime(date, time);
+			}
+			break;
+		}
+		case LogicalTypeId::DATE: {
+			auto src_ptr = (int32_t *)array.buffers[1] + data.chunk_offset;
+			auto tgt_ptr = (date_t *)FlatVector::GetData(output.data[col_idx]);
+
+			for (idx_t row = 0; row < output.size(); row++) {
+				auto source_idx = data.chunk_offset + row;
+				tgt_ptr[row] = src_ptr[source_idx] - 719528; //EPOCH_DATE
 			}
 			break;
 		}

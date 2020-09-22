@@ -263,6 +263,16 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				break;
 
+			case LogicalTypeId::DATE: {
+				child.n_buffers = 2;
+				child.buffers[1] = (void *)FlatVector::GetData(vector);
+				auto target_ptr = (uint32_t *)child.buffers[1];
+				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+					target_ptr[row_idx] -= 719528; //EPOCH_DATE;
+				}
+				break;
+			}
+
 			case LogicalTypeId::VARCHAR: {
 				child.n_buffers = 3;
 				holder->string_offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
