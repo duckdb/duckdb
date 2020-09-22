@@ -338,6 +338,8 @@ struct ParquetScanColumnData {
 	unique_ptr<RleBpDecoder> dict_decoder;
 
 	unique_ptr<ChunkCollection> string_collection;
+
+	bool has_nulls;
 };
 
 struct ParquetScanStateData : public FunctionOperatorData {
@@ -345,7 +347,7 @@ struct ParquetScanStateData : public FunctionOperatorData {
 	template <class T>
 	static void _fill_from_dict(ParquetScanColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
 		for (idx_t i = 0; i < count; i++) {
-			if (col_data.defined_buf.ptr[i]) {
+			if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 				auto offset = col_data.offset_buf.read<uint32_t>();
 				if (offset > col_data.dict_size) {
 					throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
@@ -362,7 +364,7 @@ struct ParquetScanStateData : public FunctionOperatorData {
 	template <class T>
 	static void _fill_from_plain(ParquetScanColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
 		for (idx_t i = 0; i < count; i++) {
-			if (col_data.defined_buf.ptr[i]) {
+			if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 				((T *)FlatVector::GetData(target))[i + target_offset] = col_data.payload.read<T>();
 			} else {
 				FlatVector::SetNull(target, i + target_offset, true);
@@ -395,7 +397,7 @@ public:
 };
 
 RowGroup &ParquetScanStateData::GetGroup() {
-	assert(current_group >= 0 && (idx_t) current_group < group_idx_list.size());
+	assert(current_group >= 0 && (idx_t)current_group < group_idx_list.size());
 	assert(group_idx_list[current_group] >= 0 &&
 	       group_idx_list[current_group] < bind_data.file_meta_data.row_groups.size());
 	return bind_data.file_meta_data.row_groups[group_idx_list[current_group]];
@@ -580,32 +582,30 @@ bool ParquetScanStateData::PreparePageBuffers(idx_t col_idx) {
 		// important, move to next page which should be a data page
 		return false;
 	}
-	case PageType::DATA_PAGE: {
-		if (!page_hdr.__isset.data_page_header || page_hdr.__isset.dictionary_page_header) {
-			throw bind_data.FormatException("Data page header mismatch");
+	case PageType::DATA_PAGE:
+	case PageType::DATA_PAGE_V2: {
+		col_data.page_value_count = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.num_values
+		                                                                 : page_hdr.data_page_header_v2.num_values;
+		col_data.page_encoding = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.encoding
+		                                                              : page_hdr.data_page_header_v2.encoding;
+
+		if (col_data.has_nulls) {
+			// we have to first decode the define levels
+			switch (page_hdr.data_page_header.definition_level_encoding) {
+			case Encoding::RLE: {
+				// read length of define payload, always
+				uint32_t def_length = col_data.payload.read<uint32_t>();
+				col_data.payload.available(def_length);
+				col_data.defined_decoder =
+				    make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
+				col_data.payload.inc(def_length);
+			} break;
+			default:
+				throw bind_data.FormatException("Definition levels have unsupported/invalid encoding");
+			}
 		}
 
-		if (page_hdr.__isset.data_page_header_v2) {
-			throw bind_data.FormatException("v2 data page format is not supported");
-		}
-
-		col_data.page_value_count = page_hdr.data_page_header.num_values;
-		col_data.page_encoding = page_hdr.data_page_header.encoding;
-
-		// we have to first decode the define levels
-		switch (page_hdr.data_page_header.definition_level_encoding) {
-		case Encoding::RLE: {
-			// read length of define payload, always
-			uint32_t def_length = col_data.payload.read<uint32_t>();
-			col_data.payload.available(def_length);
-			col_data.defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
-			col_data.payload.inc(def_length);
-		} break;
-		default:
-			throw bind_data.FormatException("Definition levels have unsupported/invalid encoding");
-		}
-
-		switch (page_hdr.data_page_header.encoding) {
+		switch (col_data.page_encoding) {
 		case Encoding::RLE_DICTIONARY:
 		case Encoding::PLAIN_DICTIONARY: {
 			auto enc_length = col_data.payload.read<uint8_t>();
@@ -623,8 +623,6 @@ bool ParquetScanStateData::PreparePageBuffers(idx_t col_idx) {
 
 		break;
 	}
-	case PageType::DATA_PAGE_V2:
-		throw bind_data.FormatException("v2 data page format is not supported");
 
 	default:
 		break; // ignore INDEX page type and any other custom extensions
@@ -651,6 +649,9 @@ void ParquetScanStateData::PrepareChunkBuffer(idx_t col_idx) {
 	auto chunk_len = chunk.meta_data.total_compressed_size;
 	auto handle = bind_data.fs.OpenFile(bind_data.file_name, FileFlags::FILE_FLAGS_READ);
 
+	column_data[col_idx].has_nulls =
+	    bind_data.file_meta_data.schema[col_idx + 1].repetition_type == FieldRepetitionType::OPTIONAL;
+
 	// read entire chunk into RAM
 	column_data[col_idx].buf.resize(chunk_len);
 	bind_data.fs.Read(*handle, column_data[col_idx].buf.ptr, chunk_len, chunk_start);
@@ -663,7 +664,7 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 	}
 
 	// see if we have to switch to the next row group in the parquet file
-	if (current_group < 0 || (int64_t) group_offset >= GetGroup().num_rows) {
+	if (current_group < 0 || (int64_t)group_offset >= GetGroup().num_rows) {
 		current_group++;
 		group_offset = 0;
 
@@ -719,16 +720,19 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 
 			assert(current_batch_size > 0);
 
-			col_data.defined_buf.resize(current_batch_size);
-			col_data.defined_decoder->GetBatch<uint8_t>(col_data.defined_buf.ptr, current_batch_size);
-
+			if (col_data.has_nulls) {
+				col_data.defined_buf.resize(current_batch_size);
+				col_data.defined_decoder->GetBatch<uint8_t>(col_data.defined_buf.ptr, current_batch_size);
+			}
 			switch (col_data.page_encoding) {
 			case Encoding::RLE_DICTIONARY:
 			case Encoding::PLAIN_DICTIONARY: {
 				idx_t null_count = 0;
-				for (idx_t i = 0; i < current_batch_size; i++) {
-					if (!col_data.defined_buf.ptr[i]) {
-						null_count++;
+				if (col_data.has_nulls) {
+					for (idx_t i = 0; i < current_batch_size; i++) {
+						if (!col_data.defined_buf.ptr[i]) {
+							null_count++;
+						}
 					}
 				}
 
@@ -768,7 +772,7 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 
 					auto out_data_ptr = FlatVector::GetData<string_t>(output.data[out_col_idx]);
 					for (idx_t i = 0; i < current_batch_size; i++) {
-						if (col_data.defined_buf.ptr[i]) {
+						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 							auto offset = col_data.offset_buf.read<uint32_t>();
 							if (offset >= col_data.string_collection->count) {
 								throw bind_data.FormatException("string dictionary offset out of bounds");
@@ -824,7 +828,7 @@ void ParquetScanStateData::ReadChunk(DataChunk &output) {
 					break;
 				case LogicalTypeId::TIMESTAMP: {
 					for (idx_t i = 0; i < current_batch_size; i++) {
-						if (col_data.defined_buf.ptr[i]) {
+						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 							((timestamp_t *)FlatVector::GetData(output.data[out_col_idx]))[i + output_offset] =
 							    impala_timestamp_to_timestamp_t(col_data.payload.read<Int96>());
 						} else {
@@ -944,8 +948,8 @@ public:
 			}
 			// if this is REQUIRED, there are no defined levels in file, seems unused
 			// if field is REPEATED, no bueno
-			if (s_ele.repetition_type != FieldRepetitionType::OPTIONAL) {
-				throw res->FormatException("Only OPTIONAL fields support");
+			if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+				throw res->FormatException("REPEATED fields are not supported");
 			}
 
 			LogicalType type;
