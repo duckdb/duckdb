@@ -2,14 +2,17 @@ package org.duckdb;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Statement;
 
 public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	DuckDBConnection conn;
-	
+
 	public DuckDBDatabaseMetaData(DuckDBConnection conn) {
 		this.conn = conn;
 	}
@@ -76,7 +79,13 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public String getDatabaseProductVersion() throws SQLException {
-		return "42";
+		Statement s = conn.createStatement();
+		ResultSet rs = s.executeQuery("PRAGMA version");
+		rs.next();
+		String result = rs.getString(1);
+		rs.close();
+		s.close();
+		return result;
 	}
 
 	@Override
@@ -616,42 +625,95 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	}
 
 	@Override
-	public ResultSet getProcedures(String catalog, String schemaPattern, String procedureNamePattern)
-			throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+	public ResultSet getCatalogs() throws SQLException {
+		return conn.createStatement().executeQuery(
+				"SELECT DISTINCT catalog_name AS 'TABLE_CAT' FROM information_schema_schemata() ORDER BY \"TABLE_CAT\"");
 	}
 
 	@Override
-	public ResultSet getProcedureColumns(String catalog, String schemaPattern, String procedureNamePattern,
-			String columnNamePattern) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+	public ResultSet getSchemas() throws SQLException {
+		return conn.createStatement().executeQuery(
+				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema_schemata() ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+	}
+
+	@Override
+	public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
+		if (catalog != null) {
+			throw new SQLException("catalog argument is not supported");
+		}
+		PreparedStatement ps = conn.prepareStatement(
+				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema_schemata() WHERE schema_name LIKE ? ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+		ps.setString(1, schemaPattern);
+		return ps.executeQuery();
+	}
+
+	@Override
+	public ResultSet getTableTypes() throws SQLException {
+		return conn.createStatement().executeQuery(
+				"SELECT DISTINCT table_type AS 'TABLE_TYPE' FROM information_schema_tables() ORDER BY \"TABLE_TYPE\"");
 	}
 
 	@Override
 	public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern, String[] types)
 			throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
+		if (catalog != null) {
+			throw new SQLException("catalog argument is not supported");
+		}
+		if (types != null) {
+			throw new SQLException("types argument is not supported");
+		}
+		if (schemaPattern == null) {
+			schemaPattern = "%";
+		}
+		if (tableNamePattern == null) {
+			tableNamePattern = "%";
+		}
+		PreparedStatement ps = conn.prepareStatement(
+				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema_tables() WHERE table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
+		ps.setString(1, schemaPattern);
+		ps.setString(2, tableNamePattern);
+		return ps.executeQuery();
 
-	@Override
-	public ResultSet getSchemas() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	@Override
-	public ResultSet getCatalogs() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	@Override
-	public ResultSet getTableTypes() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern)
 			throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		if (catalog != null) {
+			throw new SQLException("catalog argument is not supported");
+		}
+		if (schemaPattern == null) {
+			schemaPattern = "%";
+		}
+		if (tableNamePattern == null) {
+			tableNamePattern = "%";
+		}
+		if (columnNamePattern == null) {
+			columnNamePattern = "%";
+		}
+
+		// need to figure out the java types for the sql types :/
+		String values_str = "VALUES(NULL::STRING, NULL::INTEGER)";
+		Statement gunky_statement = conn.createStatement();
+		// TODO this could get slow with many many columns and we really only need the
+		// types :/
+		ResultSet rs = gunky_statement
+				.executeQuery("SELECT DISTINCT data_type FROM information_schema_columns() ORDER BY data_type");
+		rs.next();
+		values_str += ", ('" + rs.getString(1) + "', "
+				+ Integer.toString(DuckDBResultSetMetaData.type_to_int(rs.getString(1))) + ")";
+		rs.close();
+		gunky_statement.close();
+
+		PreparedStatement ps = conn.prepareStatement(
+				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', column_name as 'COLUMN_NAME', type_id AS 'DATA_TYPE', c.data_type AS 'TYPE_NAME', NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', numeric_precision AS 'DECIMAL_DIGITS', 10 AS 'NUM_PREC_RADIX', CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', NULL as 'REMARKS', column_default AS 'COLUMN_DEF', NULL AS 'SQL_DATA_TYPE', NULL AS 'SQL_DATETIME_SUB', character_octet_length AS 'CHAR_OCTET_LENGTH', ordinal_position AS 'ORDINAL_POSITION', is_nullable AS 'IS_NULLABLE', NULL AS 'SCOPE_CATALOG', NULL AS 'SCOPE_SCHEMA', NULL AS 'SCOPE_TABLE', NULL AS 'SOURCE_DATA_TYPE', '' AS 'IS_AUTOINCREMENT', '' AS 'IS_GENERATEDCOLUMN'  FROM information_schema_columns() c JOIN ("
+						+ values_str
+						+ ") t(type_name, type_id) ON c.data_type = t.type_name WHERE table_schema LIKE ? AND table_name LIKE ? AND column_name LIKE ? ORDER BY \"TABLE_CAT\",\"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"");
+		ps.setString(1, schemaPattern);
+		ps.setString(2, tableNamePattern);
+		ps.setString(3, columnNamePattern);
+		return ps.executeQuery();
+
 	}
 
 	@Override
@@ -663,6 +725,18 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getTablePrivileges(String catalog, String schemaPattern, String tableNamePattern)
 			throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	@Override
+	public ResultSet getProcedures(String catalog, String schemaPattern, String procedureNamePattern)
+			throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	@Override
+	public ResultSet getProcedureColumns(String catalog, String schemaPattern, String procedureNamePattern,
+			String columnNamePattern) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -711,12 +785,12 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsResultSetType(int type) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return type == ResultSet.TYPE_FORWARD_ONLY;
 	}
 
 	@Override
 	public boolean supportsResultSetConcurrency(int type, int concurrency) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return type == ResultSet.TYPE_FORWARD_ONLY && concurrency == ResultSet.CONCUR_READ_ONLY;
 	}
 
 	@Override
@@ -777,7 +851,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public Connection getConnection() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return conn;
 	}
 
 	@Override
@@ -792,7 +866,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsMultipleOpenResults() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -863,11 +937,6 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public RowIdLifetime getRowIdLifetime() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	@Override
-	public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 

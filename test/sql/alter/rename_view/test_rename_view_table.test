@@ -1,6 +1,6 @@
-# name: test/sql/alter/rename_table/test_rename_table_view.test
-# description: Test RENAME TABLE with a view as entry
-# group: [rename_table]
+# name: test/sql/alter/rename_view/test_rename_view_table.test
+# description: Test RENAME VIEW with a table as entry
+# group: [rename_view]
 
 statement ok
 CREATE TABLE tbl(i INTEGER)
@@ -12,7 +12,7 @@ statement ok
 CREATE VIEW v1 AS SELECT * FROM tbl
 
 statement error
-ALTER TABLE v1 RENAME TO v2
+ALTER VIEW tbl RENAME TO tbl2
 
 query I
 SELECT * FROM v1

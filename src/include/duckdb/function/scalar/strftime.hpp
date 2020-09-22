@@ -98,10 +98,16 @@ protected:
 
 struct StrpTimeFormat : public StrTimeFormat {
 public:
+	//! Type-safe parsing argument
+	struct ParseResult {
+		int32_t data[7];
+		string error_message;
+		idx_t error_position = INVALID_INDEX;
+	};
 	//! The full format specifier, for error messages
 	string format_specifier;
 
-	bool Parse(string_t str, int32_t result_data[], string &error_message, idx_t &error_position);
+	bool Parse(string_t str, ParseResult &result);
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
 

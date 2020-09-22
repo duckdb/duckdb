@@ -32,9 +32,11 @@ endif()
 set(JVM_BITNESS "amd64")
 # TODO handle 32 bit architectures
 
+include_directories(../../extension/parquet/include)
+
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
-target_link_libraries(duckdb_java duckdb-native duckdb_static)
+target_link_libraries(duckdb_java duckdb-native duckdb_static parquet_extension)
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${JVM_BITNESS})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
