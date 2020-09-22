@@ -47,8 +47,7 @@ static unique_ptr<FunctionData> information_schema_schemata_bind(ClientContext &
 }
 
 unique_ptr<FunctionOperatorData>
-information_schema_schemata_init(ClientContext &context, const FunctionData *bind_data, ParallelState *state,
-                                 vector<column_t> &column_ids,
+information_schema_schemata_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
                                  unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<InformationSchemaSchemataData>();
 

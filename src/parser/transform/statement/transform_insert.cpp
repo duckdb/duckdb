@@ -39,7 +39,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(PGNode *node) {
 			result->columns.push_back(string(target->name));
 		}
 	}
-	result->select_statement = TransformSelect(stmt->selectStmt);
+	result->select_statement = TransformSelect(stmt->selectStmt, false);
 
 	auto qname = TransformQualifiedName(stmt->relation);
 	result->table = qname.name;

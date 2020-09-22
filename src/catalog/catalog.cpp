@@ -88,10 +88,10 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {
-		if (info->on_conflict == OnCreateConflict::ERROR) {
+		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("Schema with name %s already exists!", info->schema);
 		} else {
-			assert(info->on_conflict == OnCreateConflict::IGNORE);
+			assert(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
 		}
 		return nullptr;
 	}
@@ -155,6 +155,18 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
 	}
 	auto schema = GetSchema(context, schema_name);
 	return schema->GetEntry(context, type, name, if_exists);
+}
+
+template <>
+ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
+	auto entry = GetEntry(context, CatalogType::VIEW_ENTRY, move(schema_name), name, if_exists);
+	if (!entry) {
+		return nullptr;
+	}
+	if (entry->type != CatalogType::VIEW_ENTRY) {
+		throw CatalogException("%s is not a view", name);
+	}
+	return (ViewCatalogEntry *)entry;
 }
 
 template <>

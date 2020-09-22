@@ -62,7 +62,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalTopN &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalProjection &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalInsert &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyFromFile &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyToFile &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExplain &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);

@@ -19,7 +19,7 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 
 	idx_t max_element = limit + offset;
-	if (state->current_offset >= max_element) {
+	if (limit == 0 || state->current_offset >= max_element) {
 		return;
 	}
 

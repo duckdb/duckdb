@@ -1,0 +1,46 @@
+# name: test/sql/copy/parquet/parquet_glob.test
+# description: Test basic globbing of parquet files
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(*) from parquet_scan('*/sql/*/parquet/*/glob/t?.parquet')
+----
+2
+
+query I
+select count(*) from parquet_scan('test/sql/copy/parquet/data/glob/*')
+----
+2
+
+query I
+select count(*) from parquet_scan('test/sql/copy/parquet/data/glob/*.parquet')
+----
+2
+
+query I
+select count(*) from parquet_scan('test/sql/copy/parquet/data/g*/*.parquet')
+----
+3
+
+query I
+select count(*) from parquet_scan('test/sql/copy/parquet/data/g*/t1.parquet')
+----
+2
+
+# parquet glob with COPY FROM
+statement ok
+CREATE TABLE vals (i INTEGER, j VARCHAR)
+
+statement ok
+COPY vals FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);
+
+query II
+SELECT * FROM vals ORDER BY 1, 2
+----
+1	hello
+1	hello

@@ -34,7 +34,8 @@ enum class AlterTableType : uint8_t {
 	ADD_COLUMN = 3,
 	REMOVE_COLUMN = 4,
 	ALTER_COLUMN_TYPE = 5,
-	SET_DEFAULT = 6
+	SET_DEFAULT = 6,
+	RENAME_VIEW = 7
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -79,18 +80,19 @@ public:
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
 struct RenameTableInfo : public AlterTableInfo {
-	RenameTableInfo(string schema, string table, string new_name)
-	    : AlterTableInfo(AlterTableType::RENAME_TABLE, schema, table), new_table_name(new_name) {
+	RenameTableInfo(string schema, string table, string new_name, bool is_view)
+	    : AlterTableInfo(is_view ? AlterTableType::RENAME_VIEW : AlterTableType::RENAME_TABLE, schema, table),
+	      new_table_name(new_name) {
 	}
 	~RenameTableInfo() override {
 	}
 
-	//! Table new name
+	//! Relation new name
 	string new_table_name;
 
 public:
 	void Serialize(Serializer &serializer) override;
-	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table, bool is_view);
 };
 
 //===--------------------------------------------------------------------===//

@@ -43,8 +43,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "TOP_N";
 	case LogicalOperatorType::COPY_TO_FILE:
 		return "COPY_TO_FILE";
-	case LogicalOperatorType::COPY_FROM_FILE:
-		return "COPY_FROM_FILE";
 	case LogicalOperatorType::JOIN:
 		return "JOIN";
 	case LogicalOperatorType::CROSS_PRODUCT:

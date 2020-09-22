@@ -9,6 +9,7 @@ temp_source = 'parquet-extension.cpp.tmp'
 
 include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/include', 'third_party/parquet', 'third_party/snappy', 'third_party/thrift']]
 source_files = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/parquet-extension.cpp', 'third_party/parquet/parquet_constants.cpp',  'third_party/parquet/parquet_types.cpp',  'third_party/thrift/thrift/protocol/TProtocol.cpp',  'third_party/thrift/thrift/transport/TTransportException.cpp',  'third_party/thrift/thrift/transport/TBufferTransports.cpp',  'third_party/snappy/snappy.cc',  'third_party/snappy/snappy-sinksource.cc']]
+source_files += [os.path.sep.join(x.split('/')) for x in ['extension/parquet/parquet_reader.cpp', 'extension/parquet/parquet_timestamp.cpp', 'extension/parquet/parquet_writer.cpp']]
 
 def generate_amalgamation(source_file, header_file):
     def copy_if_different(src, dest):

@@ -25,7 +25,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 	if (info->temporary) {
 		info->schema = TEMP_SCHEMA;
 	}
-	info->on_conflict = stmt->replace ? OnCreateConflict::REPLACE : OnCreateConflict::ERROR;
+	info->on_conflict = stmt->replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
 	info->query = TransformSelectNode((PGSelectStmt *)stmt->query);
 

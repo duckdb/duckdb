@@ -64,4 +64,19 @@ string ViewCatalogEntry::ToSQL() {
 	return sql + "\n;";
 }
 
+unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
+	auto create_info = make_unique<CreateViewInfo>(schema->name, name);
+	create_info->query = query->Copy();
+	for (idx_t i = 0; i < aliases.size(); i++) {
+		create_info->aliases.push_back(aliases[i]);
+	}
+	for (idx_t i = 0; i < types.size(); i++) {
+		create_info->types.push_back(types[i]);
+	}
+	create_info->temporary = temporary;
+	create_info->sql = sql;
+
+	return make_unique<ViewCatalogEntry>(catalog, schema, create_info.get());
+}
+
 } // namespace duckdb
