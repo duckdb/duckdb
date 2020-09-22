@@ -78,7 +78,7 @@ unique_ptr<PreparedStatement> Connection::Prepare(string query) {
 	return context->Prepare(query);
 }
 
-unique_ptr<PreparedStatement> Connection::PrepareStatements(vector<unique_ptr<SQLStatement>> *statements,
+unique_ptr<PreparedStatement> Connection::PrepareStatements(vector<unique_ptr<SQLStatement>> &statements,
                                                             idx_t n_prepared_parameters) {
 	return context->PrepareParsedStatement(statements, n_prepared_parameters);
 }

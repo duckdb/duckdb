@@ -73,7 +73,7 @@ public:
 
 	//! Prepare the specified query, returning a prepared statement object
 	unique_ptr<PreparedStatement> Prepare(string query);
-    unique_ptr<PreparedStatement> PrepareStatements(vector<unique_ptr<SQLStatement>> *statements,
+    unique_ptr<PreparedStatement> PrepareStatements(vector<unique_ptr<SQLStatement>> &statements,
 	                                                idx_t n_prepared_parameters);
 
 	//! Get the table info of a specific table (in the default schema), or nullptr if it cannot be found

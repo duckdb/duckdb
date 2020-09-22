@@ -108,7 +108,7 @@ public:
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
 
-	unique_ptr<PreparedStatement> PrepareParsedStatement(vector<unique_ptr<SQLStatement>> *statements,
+	unique_ptr<PreparedStatement> PrepareParsedStatement(vector<unique_ptr<SQLStatement>> &statements,
                                                          idx_t parsed_parameters);
 
 	//! Execute a prepared statement with the given name and set of parameters

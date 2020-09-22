@@ -146,7 +146,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		query = query.substr(statement->stmt_location, statement->stmt_length);
 
 		// now prepare the query
-		auto prepared = db->con->PrepareStatements(&statements, n_prepared_parameters);
+		auto prepared = db->con->PrepareStatements(statements, n_prepared_parameters);
 		if (!prepared->success) {
 			// failed to prepare: set the error message
 			db->last_error = prepared->error;

@@ -277,14 +277,14 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
         if (statements.empty()) {
             throw Exception("No statement to prepare!");
         }
-        return this->PrepareParsedStatement(&statements, n_prepared_parameters);
+        return this->PrepareParsedStatement(statements, n_prepared_parameters);
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
 }
-unique_ptr<PreparedStatement> ClientContext::PrepareParsedStatement(vector<unique_ptr<SQLStatement>> *statements,
+unique_ptr<PreparedStatement> ClientContext::PrepareParsedStatement(vector<unique_ptr<SQLStatement>> &statements,
                                                                     idx_t n_prepared_parameters) {
-    if (statements->size() > 1) {
+    if (statements.size() > 1) {
         throw Exception("Cannot prepare multiple statements at once!");
     }
     // now write the prepared statement data into the catalog
@@ -293,7 +293,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareParsedStatement(vector<uniqu
     // create a prepare statement out of the underlying statement
     auto prepare = make_unique<PrepareStatement>();
     prepare->name = prepare_name;
-    prepare->statement = move(statements->front());
+    prepare->statement = move(statements[0]);
 
     // now perform the actual PREPARE query
     auto result = RunStatement(query, move(prepare), false);
