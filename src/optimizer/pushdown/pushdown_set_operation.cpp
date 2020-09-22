@@ -65,7 +65,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	bool right_empty = op->children[1]->type == LogicalOperatorType::EMPTY_RESULT;
 	if (left_empty && right_empty) {
 		// both empty: return empty result
-		return make_unique_base<LogicalEmptyResult>(move(op));
+		return make_unique<LogicalEmptyResult>(move(op));
 	}
 	assert(left_empty || op->children[0]->type == LogicalOperatorType::PROJECTION);
 	assert(right_empty || op->children[1]->type == LogicalOperatorType::PROJECTION);
