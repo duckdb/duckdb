@@ -12,78 +12,6 @@ using namespace std;
 
 namespace duckdb {
 
-struct BaseCSVData : public FunctionData {
-	BaseCSVData(string file_path) : file_path(move(file_path)) {
-	}
-
-	//! The file path of the CSV file to read or write
-	string file_path;
-	//! Whether or not a header information was given by the user
-	bool has_header = false;
-	//! Whether or not to write a header in the file
-	bool header = false;
-	//! Whether or not a delimiter was defined by the user
-	bool has_delimiter = false;
-	//! Delimiter to separate columns within each line
-	string delimiter = ",";
-	//! Whether or not a quote sign was defined by the user
-	bool has_quote = false;
-	//! Quote used for columns that contain reserved characters, e.g., delimiter
-	string quote = "\"";
-	//! Quote used for columns that contain reserved characters, e.g., delimiter
-	bool has_escape = false;
-	//! Escape character to escape quote charaƒcter
-	string escape;
-	//! Specifies the string that represents a null value
-	string null_str;
-	//! Whether or not the options are specified; if not we default to auto detect
-	bool is_auto_detect = false;
-
-	void Finalize();
-};
-
-struct WriteCSVData : public BaseCSVData {
-	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names)
-	    : BaseCSVData(move(file_path)), sql_types(move(sql_types)), names(move(names)) {
-	}
-
-	//! The SQL types to write
-	vector<LogicalType> sql_types;
-	//! The column names of the columns to write
-	vector<string> names;
-	//! True, if column with that index must be quoted
-	vector<bool> force_quote;
-	//! The newline string to write
-	string newline = "\n";
-	//! Whether or not we are writing a simple CSV (delimiter, quote and escape are all 1 byte in length)
-	bool is_simple;
-	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
-	idx_t flush_size = 4096 * 8;
-};
-
-struct ReadCSVData : public BaseCSVData {
-	ReadCSVData(string file_path, vector<LogicalType> sql_types)
-	    : BaseCSVData(move(file_path)), sql_types(move(sql_types)) {
-	}
-
-	//! The expected SQL types to read
-	vector<LogicalType> sql_types;
-	//! True, if column with that index must be quoted
-	vector<bool> force_not_null;
-	//! The size of a sample for format/data type detection (csv)
-	int sample_size = DEFAULT_SAMPLE_CHUNK_SIZE;
-	//! The number of samples for data type detection (csv)
-	int num_samples = 10;
-	//! The DATE_FORMAT to use to read or write dates
-	StrpTimeFormat date_format;
-	//! Whether or not there is a date format specified
-	bool has_date_format = false;
-	//! The DATE_FORMAT to use to read or write dates
-	StrpTimeFormat timestamp_format;
-	//! Whether or not there is a date format specified
-	bool has_timestamp_format = false;
-};
-
 void SubstringDetection(string &str_1, string &str_2, string name_str_1, string name_str_2) {
 	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
 		throw BinderException("COPY " + name_str_1 + " must not appear in the " + name_str_2 +
@@ -132,30 +60,30 @@ static idx_t ParseInteger(vector<Value> &set) {
 //===--------------------------------------------------------------------===//
 // Bind
 //===--------------------------------------------------------------------===//
-static bool ParseBaseOption(BaseCSVData &bind_data, string &loption, vector<Value> &set) {
+static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, vector<Value> &set) {
 	if (StringUtil::StartsWith(loption, "delim") || StringUtil::StartsWith(loption, "sep")) {
-		bind_data.delimiter = ParseString(set);
-		bind_data.has_delimiter = true;
-		if (bind_data.delimiter.length() == 0) {
+		options.delimiter = ParseString(set);
+		options.has_delimiter = true;
+		if (options.delimiter.length() == 0) {
 			throw BinderException("DELIM or SEP must not be empty");
 		}
 	} else if (loption == "quote") {
-		bind_data.quote = ParseString(set);
-		bind_data.has_quote = true;
-		if (bind_data.quote.length() == 0) {
+		options.quote = ParseString(set);
+		options.has_quote = true;
+		if (options.quote.length() == 0) {
 			throw BinderException("QUOTE must not be empty");
 		}
 	} else if (loption == "escape") {
-		bind_data.escape = ParseString(set);
-		bind_data.has_escape = true;
-		if (bind_data.escape.length() == 0) {
+		options.escape = ParseString(set);
+		options.has_escape = true;
+		if (options.escape.length() == 0) {
 			throw BinderException("ESCAPE must not be empty");
 		}
 	} else if (loption == "header") {
-		bind_data.header = ParseBoolean(set);
-		bind_data.has_header = true;
+		options.header = ParseBoolean(set);
+		options.has_header = true;
 	} else if (loption == "null") {
-		bind_data.null_str = ParseString(set);
+		options.null_str = ParseString(set);
 	} else if (loption == "encoding") {
 		auto encoding = StringUtil::Lower(ParseString(set));
 		if (encoding != "utf8" && encoding != "utf-8") {
@@ -170,23 +98,33 @@ static bool ParseBaseOption(BaseCSVData &bind_data, string &loption, vector<Valu
 
 void BaseCSVData::Finalize() {
 	// verify that the options are correct in the final pass
-	if (escape.empty()) {
-		escape = quote;
+	if (options.escape.empty()) {
+		options.escape = options.quote;
 	}
 	// escape and delimiter must not be substrings of each other
-	SubstringDetection(delimiter, escape, "DELIMITER", "ESCAPE");
-	// delimiter and quote must not be substrings of each other
-	SubstringDetection(quote, delimiter, "DELIMITER", "QUOTE");
-	// escape and quote must not be substrings of each other (but can be the same)
-	if (quote != escape) {
-		SubstringDetection(quote, escape, "QUOTE", "ESCAPE");
+	if (options.has_delimiter && options.has_escape) {
+		SubstringDetection(options.delimiter, options.escape, "DELIMITER", "ESCAPE");
 	}
-	if (null_str != "") {
+	// delimiter and quote must not be substrings of each other
+	if (options.has_quote && options.has_delimiter) {
+		SubstringDetection(options.quote, options.delimiter, "DELIMITER", "QUOTE");
+	}
+	// escape and quote must not be substrings of each other (but can be the same)
+	if (options.quote != options.escape && options.has_quote && options.has_escape) {
+		SubstringDetection(options.quote, options.escape, "QUOTE", "ESCAPE");
+	}
+	if (options.null_str != "") {
 		// null string and delimiter must not be substrings of each other
-		SubstringDetection(delimiter, null_str, "DELIMITER", "NULL");
+		if (options.has_delimiter) {
+			SubstringDetection(options.delimiter, options.null_str, "DELIMITER", "NULL");
+		}
 		// quote/escape and nullstr must not be substrings of each other
-		SubstringDetection(quote, null_str, "QUOTE", "NULL");
-		SubstringDetection(escape, null_str, "ESCAPE", "NULL");
+		if (options.has_quote) {
+			SubstringDetection(options.quote, options.null_str, "QUOTE", "NULL");
+		}
+		if (options.has_escape) {
+			SubstringDetection(options.escape, options.null_str, "ESCAPE", "NULL");
+		}
 	}
 }
 
@@ -229,7 +167,7 @@ static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo 
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		if (ParseBaseOption(*bind_data, loption, set)) {
+		if (ParseBaseOption(bind_data->options, loption, set)) {
 			// parsed option in base CSV options: continue
 			continue;
 		} else if (loption == "force_quote") {
@@ -244,64 +182,77 @@ static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo 
 		bind_data->force_quote.resize(names.size(), false);
 	}
 	bind_data->Finalize();
-	bind_data->is_simple =
-	    bind_data->delimiter.size() == 1 && bind_data->escape.size() == 1 && bind_data->quote.size() == 1;
+	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
+	                       bind_data->options.quote.size() == 1;
 	return move(bind_data);
 }
 
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                               vector<LogicalType> &expected_types) {
-	auto bind_data = make_unique<ReadCSVData>(info.file_path, expected_types);
+	auto bind_data = make_unique<ReadCSVData>();
+	bind_data->sql_types = expected_types;
+
+	string file_pattern = info.file_path;
+
+	auto &fs = FileSystem::GetFileSystem(context);
+	bind_data->files = fs.Glob(file_pattern);
+	if (bind_data->files.empty()) {
+		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+	}
+
+	auto &options = bind_data->options;
 
 	// check all the options in the copy info
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
 		if (loption == "auto_detect") {
-			bind_data->is_auto_detect = ParseBoolean(set);
-		} else if (ParseBaseOption(*bind_data, loption, set)) {
+			options.auto_detect = ParseBoolean(set);
+		} else if (ParseBaseOption(options, loption, set)) {
 			// parsed option in base CSV options: continue
 			continue;
 		} else if (loption == "sample_size") {
-			bind_data->sample_size = ParseInteger(set);
-			if (bind_data->sample_size > STANDARD_VECTOR_SIZE) {
+			options.sample_size = ParseInteger(set);
+			if (options.sample_size > STANDARD_VECTOR_SIZE) {
 				throw BinderException(
 				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
 				    STANDARD_VECTOR_SIZE);
-			} else if (bind_data->sample_size < 1) {
+			} else if (options.sample_size < 1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
 		} else if (loption == "num_samples") {
-			bind_data->num_samples = ParseInteger(set);
-			if (bind_data->num_samples < 1) {
+			options.num_samples = ParseInteger(set);
+			if (options.num_samples < 1) {
 				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
 			}
 		} else if (loption == "force_not_null") {
-			bind_data->force_not_null = ParseColumnList(set, expected_names);
+			options.force_not_null = ParseColumnList(set, expected_names);
 		} else if (loption == "date_format" || loption == "dateformat") {
 			string format = ParseString(set);
-			string error = StrTimeFormat::ParseFormatSpecifier(format, bind_data->date_format);
-			bind_data->date_format.format_specifier = format;
+			auto &date_format = options.date_format[LogicalTypeId::DATE];
+			string error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+			date_format.format_specifier = format;
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
 			}
-			bind_data->has_date_format = true;
+			options.has_format[LogicalTypeId::DATE] = true;
 		} else if (loption == "timestamp_format" || loption == "timestampformat") {
 			string format = ParseString(set);
-			string error = StrTimeFormat::ParseFormatSpecifier(format, bind_data->timestamp_format);
-			bind_data->timestamp_format.format_specifier = format;
+			auto &timestamp_format = options.date_format[LogicalTypeId::TIMESTAMP];
+			string error = StrTimeFormat::ParseFormatSpecifier(format, timestamp_format);
+			timestamp_format.format_specifier = format;
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
-			bind_data->has_timestamp_format = true;
+			options.has_format[LogicalTypeId::TIMESTAMP] = true;
 		} else {
 			throw NotImplementedException("Unrecognized option for CSV: %s", option.first.c_str());
 		}
 	}
 	// verify the parsed options
-	if (bind_data->force_not_null.size() == 0) {
+	if (options.force_not_null.size() == 0) {
 		// no FORCE_QUOTE specified: initialize to false
-		bind_data->force_not_null.resize(expected_types.size(), false);
+		options.force_not_null.resize(expected_types.size(), false);
 	}
 	bind_data->Finalize();
 	return move(bind_data);
@@ -330,12 +281,13 @@ static string AddEscapes(string &to_be_escaped, string escape, string val) {
 	return new_val;
 }
 
-static bool RequiresQuotes(WriteCSVData &options, const char *str, idx_t len) {
+static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
+	auto &options = csv_data.options;
 	// check if the string is equal to the null string
 	if (len == options.null_str.size() && memcmp(str, options.null_str.c_str(), len) == 0) {
 		return true;
 	}
-	if (options.is_simple) {
+	if (csv_data.is_simple) {
 		// simple CSV: check for newlines, quotes and delimiter all at once
 		for (idx_t i = 0; i < len; i++) {
 			if (str[i] == '\n' || str[i] == '\r' || str[i] == options.quote[0] || str[i] == options.delimiter[0]) {
@@ -369,16 +321,17 @@ static bool RequiresQuotes(WriteCSVData &options, const char *str, idx_t len) {
 	}
 }
 
-static void WriteQuotedString(Serializer &serializer, WriteCSVData &options, const char *str, idx_t len,
+static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, const char *str, idx_t len,
                               bool force_quote) {
+	auto &options = csv_data.options;
 	if (!force_quote) {
 		// force quote is disabled: check if we need to add quotes anyway
-		force_quote = RequiresQuotes(options, str, len);
+		force_quote = RequiresQuotes(csv_data, str, len);
 	}
 	if (force_quote) {
 		// quoting is enabled: we might need to escape things in the string
 		bool requires_escape = false;
-		if (options.is_simple) {
+		if (csv_data.is_simple) {
 			// simple CSV
 			// do a single loop to check for a quote or escape value
 			for (idx_t i = 0; i < len; i++) {
@@ -461,14 +414,15 @@ static unique_ptr<LocalFunctionData> write_csv_initialize_local(ClientContext &c
 
 static unique_ptr<GlobalFunctionData> write_csv_initialize_global(ClientContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
-	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.file_path);
+	auto &options = csv_data.options;
+	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0]);
 
-	if (csv_data.header) {
+	if (options.header) {
 		BufferedSerializer serializer;
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.names.size(); i++) {
 			if (i != 0) {
-				serializer.WriteBufferData(csv_data.delimiter);
+				serializer.WriteBufferData(options.delimiter);
 			}
 			WriteQuotedString(serializer, csv_data, csv_data.names[i].c_str(), csv_data.names[i].size(), false);
 		}
@@ -482,6 +436,7 @@ static unique_ptr<GlobalFunctionData> write_csv_initialize_global(ClientContext 
 static void write_csv_sink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                            LocalFunctionData &lstate, DataChunk &input) {
 	auto &csv_data = (WriteCSVData &)bind_data;
+	auto &options = csv_data.options;
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;
 
@@ -508,11 +463,11 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 		// write values
 		for (idx_t col_idx = 0; col_idx < cast_chunk.column_count(); col_idx++) {
 			if (col_idx != 0) {
-				writer.WriteBufferData(csv_data.delimiter);
+				writer.WriteBufferData(options.delimiter);
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value
-				writer.WriteBufferData(csv_data.null_str);
+				writer.WriteBufferData(options.null_str);
 				continue;
 			}
 
@@ -549,51 +504,6 @@ static void write_csv_combine(ClientContext &context, FunctionData &bind_data, G
 	}
 }
 
-//===--------------------------------------------------------------------===//
-// Read CSV
-//===--------------------------------------------------------------------===//
-struct GlobalReadCSVData : public GlobalFunctionData {
-	unique_ptr<BufferedCSVReader> csv_reader;
-};
-
-unique_ptr<GlobalFunctionData> read_csv_initialize(ClientContext &context, FunctionData &fdata) {
-	auto global_data = make_unique<GlobalReadCSVData>();
-	auto &bind_data = (ReadCSVData &)fdata;
-
-	// set up the CSV reader with the parsed options
-	BufferedCSVReaderOptions options;
-	options.file_path = bind_data.file_path;
-	options.auto_detect = bind_data.is_auto_detect;
-	options.has_delimiter = bind_data.has_delimiter;
-	options.delimiter = bind_data.delimiter;
-	options.has_quote = bind_data.has_quote;
-	options.quote = bind_data.quote;
-	options.has_escape = bind_data.has_escape;
-	options.escape = bind_data.escape;
-	options.has_header = bind_data.has_header;
-	options.header = bind_data.header;
-	options.null_str = bind_data.null_str;
-	options.skip_rows = 0;
-	options.num_cols = bind_data.sql_types.size();
-	options.force_not_null = bind_data.force_not_null;
-	options.sample_size = bind_data.sample_size;
-	options.num_samples = bind_data.num_samples;
-	options.has_date_format = bind_data.has_date_format;
-	options.date_format = move(bind_data.date_format);
-	options.has_timestamp_format = bind_data.has_timestamp_format;
-	options.timestamp_format = move(bind_data.timestamp_format);
-
-	global_data->csv_reader = make_unique<BufferedCSVReader>(context, move(options), bind_data.sql_types);
-	return move(global_data);
-}
-
-void read_csv_get_chunk(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data,
-                        DataChunk &chunk) {
-	// read a chunk from the CSV reader
-	auto &gdata = (GlobalReadCSVData &)gstate;
-	gdata.csv_reader->ParseCSV(chunk);
-}
-
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	CopyFunction info("csv");
 	info.copy_to_bind = write_csv_bind;
@@ -603,8 +513,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_to_combine = write_csv_combine;
 
 	info.copy_from_bind = read_csv_bind;
-	info.copy_from_initialize = read_csv_initialize;
-	info.copy_from_get_chunk = read_csv_get_chunk;
+	info.copy_from_function = ReadCSVTableFunction::GetFunction();
 
 	info.extension = "csv";
 

@@ -8,23 +8,20 @@ using namespace std;
 
 namespace duckdb {
 
-struct ReadCSVFunctionData : public TableFunctionData {
-	ReadCSVFunctionData() : is_consumed(false) {
-	}
-
-	//! The CSV reader
-	unique_ptr<BufferedCSVReader> csv_reader;
-	//! Whether or not the CSV has already been read completely
-	bool is_consumed;
-};
-
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,
                                               unordered_map<string, Value> &named_parameters,
                                               vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<ReadCSVFunctionData>();
+	auto result = make_unique<ReadCSVData>();
+	auto &options = result->options;
 
-	BufferedCSVReaderOptions options;
-	options.file_path = inputs[0].str_value;
+	string file_pattern = inputs[0].str_value;
+
+	auto &fs = FileSystem::GetFileSystem(context);
+	result->files = fs.Glob(file_pattern);
+	if (result->files.empty()) {
+		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+	}
+
 	options.auto_detect = false;
 	options.header = false;
 	options.delimiter = ",";
@@ -62,16 +59,18 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
 			}
 		} else if (kv.first == "dateformat") {
-			options.has_date_format = true;
-			options.date_format.format_specifier = kv.second.str_value;
-			string error = StrTimeFormat::ParseFormatSpecifier(kv.second.str_value, options.date_format);
+			options.has_format[LogicalTypeId::DATE] = true;
+			auto &date_format = options.date_format[LogicalTypeId::DATE];
+			date_format.format_specifier = kv.second.str_value;
+			string error = StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
 			}
 		} else if (kv.first == "timestampformat") {
-			options.has_timestamp_format = true;
-			options.timestamp_format.format_specifier = kv.second.str_value;
-			string error = StrTimeFormat::ParseFormatSpecifier(kv.second.str_value, options.timestamp_format);
+			options.has_format[LogicalTypeId::TIMESTAMP] = true;
+			auto &timestamp_format = options.date_format[LogicalTypeId::TIMESTAMP];
+			timestamp_format.format_specifier = kv.second.str_value;
+			string error = StrTimeFormat::ParseFormatSpecifier(timestamp_format.format_specifier, timestamp_format);
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
@@ -86,34 +85,51 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 			if (names.size() == 0) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
+		} else if (kv.first == "filename") {
+			result->include_file_name = kv.second.value_.boolean;
 		}
 	}
 	if (!options.auto_detect && return_types.size() == 0) {
 		throw BinderException("Specifying CSV options requires columns to be specified as well (for now)");
 	}
-	if (return_types.size() > 0) {
-		// return types specified: no auto detect
-		result->csv_reader = make_unique<BufferedCSVReader>(context, move(options), return_types);
-	} else {
-		// auto detect options
-		result->csv_reader = make_unique<BufferedCSVReader>(context, move(options));
+	if (options.auto_detect) {
+		options.file_path = result->files[0];
+		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
 
-		return_types.assign(result->csv_reader->sql_types.begin(), result->csv_reader->sql_types.end());
-		names.assign(result->csv_reader->col_names.begin(), result->csv_reader->col_names.end());
+		return_types.assign(initial_reader->sql_types.begin(), initial_reader->sql_types.end());
+		names.assign(initial_reader->col_names.begin(), initial_reader->col_names.end());
+		result->initial_reader = move(initial_reader);
+	} else {
+		result->sql_types = return_types;
+		assert(return_types.size() == names.size());
+	}
+	if (result->include_file_name) {
+		return_types.push_back(LogicalType::VARCHAR);
+		names.push_back("filename");
 	}
 	return move(result);
 }
 
+struct ReadCSVOperatorData : public FunctionOperatorData {
+	//! The CSV reader
+	unique_ptr<BufferedCSVReader> csv_reader;
+	//! The index of the next file to read (i.e. current file + 1)
+	idx_t file_index;
+};
+
 static unique_ptr<FunctionOperatorData> read_csv_init(ClientContext &context, const FunctionData *bind_data_,
-                                                      ParallelState *state, vector<column_t> &column_ids,
+                                                      vector<column_t> &column_ids,
                                                       unordered_map<idx_t, vector<TableFilter>> &table_filters) {
-	auto &bind_data = (ReadCSVFunctionData &)*bind_data_;
-	if (bind_data.is_consumed) {
-		bind_data.csv_reader =
-		    make_unique<BufferedCSVReader>(context, bind_data.csv_reader->options, bind_data.csv_reader->sql_types);
+	auto &bind_data = (ReadCSVData &)*bind_data_;
+	auto result = make_unique<ReadCSVOperatorData>();
+	if (bind_data.initial_reader) {
+		result->csv_reader = move(bind_data.initial_reader);
+	} else {
+		bind_data.options.file_path = bind_data.files[0];
+		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
 	}
-	bind_data.is_consumed = true;
-	return nullptr;
+	result->file_index = 1;
+	return move(result);
 }
 
 static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs,
@@ -123,10 +139,27 @@ static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vecto
 	return read_csv_bind(context, inputs, named_parameters, return_types, names);
 }
 
-static void read_csv_function(ClientContext &context, const FunctionData *bind_data,
+static void read_csv_function(ClientContext &context, const FunctionData *bind_data_,
                               FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (ReadCSVFunctionData &)*bind_data;
-	data.csv_reader->ParseCSV(output);
+	auto &bind_data = (ReadCSVData &)*bind_data_;
+	auto &data = (ReadCSVOperatorData &)*operator_state;
+	do {
+		data.csv_reader->ParseCSV(output);
+		if (output.size() == 0 && data.file_index < bind_data.files.size()) {
+			// exhausted this file, but we have more files we can read
+			// open the next file and increment the counter
+			bind_data.options.file_path = bind_data.files[data.file_index];
+			data.csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, data.csv_reader->sql_types);
+			data.file_index++;
+		} else {
+			break;
+		}
+	} while (true);
+	if (bind_data.include_file_name) {
+		auto &col = output.data.back();
+		col.SetValue(0, Value(data.csv_reader->options.file_path));
+		col.vector_type = VectorType::CONSTANT_VECTOR;
+	}
 }
 
 static void add_named_parameters(TableFunction &table_function) {
@@ -142,13 +175,17 @@ static void add_named_parameters(TableFunction &table_function) {
 	table_function.named_parameters["num_samples"] = LogicalType::BIGINT;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+}
+
+TableFunction ReadCSVTableFunction::GetFunction() {
+	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, read_csv_function, read_csv_bind, read_csv_init);
+	add_named_parameters(read_csv);
+	return read_csv;
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-
-	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, read_csv_function, read_csv_bind, read_csv_init);
-	add_named_parameters(read_csv);
-	set.AddFunction(read_csv);
+	set.AddFunction(ReadCSVTableFunction::GetFunction());
 
 	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, read_csv_function, read_csv_auto_bind,
 	                            read_csv_init);

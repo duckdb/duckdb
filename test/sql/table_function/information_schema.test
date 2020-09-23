@@ -24,13 +24,28 @@ SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' A
 ----
 BASE TABLE
 
+query ITT
+SELECT ordinal_position, column_name, data_type FROM information_schema_columns() WHERE table_name='integers'
+----
+1	i	INTEGER
+
 statement ok
-CREATE TEMPORARY TABLE floats (f FLOAT);
+CREATE TEMPORARY TABLE reals (f FLOAT PRIMARY KEY, dec DECIMAL(16, 4), h HUGEINT, b BIGINT, t TINYINT, d DOUBLE NOT NULL)
 
 query T
-SELECT table_type FROM information_schema_tables() WHERE table_schema='temp' AND table_name='floats'
+SELECT table_type FROM information_schema_tables() WHERE table_schema='temp' AND table_name='reals'
 ----
 LOCAL TEMPORARY
+
+query IIT
+SELECT numeric_precision, numeric_scale, is_nullable FROM information_schema_columns() WHERE table_name='reals' ORDER BY ordinal_position
+----
+24	0	NO
+16	4	YES
+128	0	YES
+64	0	YES
+8	0	YES
+53	0	NO
 
 statement ok
 CREATE VIEW scheme.vintegers AS SELECT * FROM scheme.integers;
@@ -39,6 +54,11 @@ query T
 SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' AND table_name='vintegers'
 ----
 VIEW
+
+query ITT
+SELECT ordinal_position, column_name, data_type FROM information_schema_columns() WHERE table_schema='scheme' AND table_name='vintegers'
+----
+1	i	INTEGER
 
 statement ok
 DROP SCHEMA scheme CASCADE;
@@ -50,5 +70,10 @@ SELECT COUNT(*) FROM information_schema_schemata() WHERE schema_name='scheme'
 
 query I
 SELECT COUNT(*) FROM information_schema_tables() WHERE table_schema='scheme'
+----
+0
+
+query I
+SELECT COUNT(*) FROM information_schema_columns() WHERE table_schema='scheme'
 ----
 0

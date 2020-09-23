@@ -40,6 +40,8 @@ public:
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &source);
 
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
+
 	string ToSQL() override;
 
 private:

@@ -31,18 +31,26 @@ struct TableScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        ParallelState *state, vector<column_t> &column_ids,
+                                                        vector<column_t> &column_ids,
                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	result->column_ids = column_ids;
 	result->table_filters = table_filters;
-	if (state) {
-		table_scan_parallel_state_next(context, bind_data_, result.get(), state);
-	} else {
-		bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
-		                                         &result->table_filters);
+	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
+	                                         &result->table_filters);
+	return move(result);
+}
+
+static unique_ptr<FunctionOperatorData>
+table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *state,
+                         vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	auto result = make_unique<TableScanOperatorData>();
+	result->column_ids = column_ids;
+	result->table_filters = table_filters;
+	if (!table_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
+		return nullptr;
 	}
 	return move(result);
 }
@@ -105,7 +113,7 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        ParallelState *state, vector<column_t> &column_ids,
+                                                        vector<column_t> &column_ids,
                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<IndexScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
@@ -305,6 +313,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.to_string = table_scan_to_string;
 	scan_function.max_threads = table_scan_max_threads;
 	scan_function.init_parallel_state = table_scan_init_parallel_state;
+	scan_function.parallel_init = table_scan_parallel_init;
 	scan_function.parallel_state_next = table_scan_parallel_state_next;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;

@@ -83,7 +83,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		}
 		switch (op->type) {
 		case PhysicalOperatorType::INSERT:
-		case PhysicalOperatorType::DELETE:
+		case PhysicalOperatorType::DELETE_OPERATOR:
 		case PhysicalOperatorType::UPDATE:
 		case PhysicalOperatorType::CREATE:
 		case PhysicalOperatorType::HASH_GROUP_BY:

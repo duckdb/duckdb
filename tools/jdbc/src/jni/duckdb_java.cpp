@@ -1,6 +1,7 @@
 #include "org_duckdb_DuckDBNative.h"
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "parquet-extension.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,6 +30,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 	}
 	try {
 		auto db = new DuckDB(database, &config);
+		db->LoadExtension<ParquetExtension>();
 		return env->NewDirectByteBuffer(db, 0);
 	} catch (exception &e) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), e.what());
@@ -61,7 +63,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1com
 	if (!conn_ref || !conn_ref->context || conn_ref->context->is_invalidated) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Invalid connection");
 	}
-	conn_ref->context->transaction.SetAutoCommit(auto_commit);
+	conn_ref->context->RunFunctionInTransaction([&]() { conn_ref->context->transaction.SetAutoCommit(auto_commit); });
 }
 
 JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit(JNIEnv *env, jclass,
