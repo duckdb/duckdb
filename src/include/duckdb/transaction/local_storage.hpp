@@ -28,8 +28,8 @@ public:
 	vector<unique_ptr<Index>> indexes;
 	//! The set of deleted entries
 	unordered_map<idx_t, unique_ptr<bool[]>> deleted_entries;
-	//! The max row
-	row_t max_row;
+	//! The number of deleted rows
+	idx_t deleted_rows;
 
 public:
 	void InitializeScan(LocalScanState &state);

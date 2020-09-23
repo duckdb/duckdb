@@ -14,18 +14,8 @@
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
-
-enum class VersionNodeType : uint8_t {
-	VERSION_NODE_LEAF,
-	VERSION_NODE_INTERNAL
-};
-
-struct VersionNode {
-	VersionNode(VersionNodeType type) : type(type) {}
-	virtual ~VersionNode() {}
-
-	VersionNodeType type;
-};
+class DataTable;
+struct VersionNode;
 
 class MorselInfo : public SegmentBase {
 public:
@@ -46,22 +36,17 @@ public:
 
 	//! Append count rows to the morsel info
 	void Append(Transaction &transaction, idx_t start, idx_t count, transaction_t commit_id);
+
+	//! Delete the given set of rows in the version manager
+	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 private:
 	mutex morsel_lock;
 };
 
-struct VersionNodeInternal : public VersionNode {
-	VersionNodeInternal() : VersionNode(VersionNodeType::VERSION_NODE_INTERNAL) {}
-
-	unique_ptr<VersionNode> children[MorselInfo::MORSEL_LAYER_COUNT];
-};
-
-struct VersionNodeLeaf : public VersionNode {
-	VersionNodeLeaf() : VersionNode(VersionNodeType::VERSION_NODE_LEAF) {}
-
-	unique_ptr<ChunkInfo> info;
+struct VersionNode {
+	unique_ptr<ChunkInfo> info[MorselInfo::MORSEL_VECTOR_COUNT];
 };
 
 }

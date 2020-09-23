@@ -18,8 +18,7 @@ class Transaction;
 
 enum class ChunkInfoType : uint8_t {
 	CONSTANT_INFO,
-	DELETE_INFO,
-	INSERT_INFO
+	VECTOR_INFO
 };
 
 class ChunkInfo {
@@ -42,7 +41,6 @@ public:
 	virtual bool Fetch(Transaction &transaction, row_t row) = 0;
 };
 
-
 class ChunkConstantInfo : public ChunkInfo {
 public:
 	ChunkConstantInfo(MorselInfo &morsel);
@@ -54,38 +52,25 @@ public:
 	bool Fetch(Transaction &transaction, row_t row) override;
 };
 
-// class ChunkDeleteInfo : public ChunkInfo {
-// public:
-// 	ChunkDeleteInfo(VersionManager &manager, idx_t start_row, ChunkInfoType type = ChunkInfoType::DELETE_INFO);
-// 	ChunkDeleteInfo(ChunkDeleteInfo &info, ChunkInfoType type);
-
-// public:
-// 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
-// 	bool Fetch(Transaction &transaction, row_t row) override;
-
-// 	void Delete(Transaction &transaction, row_t rows[], idx_t count) override;
-// 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) override;
-
-// protected:
-// 	//! The transaction ids of the transactions that deleted the tuples (if any)
-// 	transaction_t deleted[STANDARD_VECTOR_SIZE];
-
-// 	bool any_deleted;
-// };
-
-class ChunkInsertInfo : public ChunkInfo {
+class ChunkVectorInfo : public ChunkInfo {
 public:
-	ChunkInsertInfo(MorselInfo &morsel);
+	ChunkVectorInfo(MorselInfo &morsel);
 
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	transaction_t inserted[STANDARD_VECTOR_SIZE];
-	transaction_t same_id;
-	bool all_same_id;
+	transaction_t insert_id;
+	bool same_inserted_id;
+
+	//! The transaction ids of the transactions that deleted the tuples (if any)
+	transaction_t deleted[STANDARD_VECTOR_SIZE];
+	bool any_deleted;
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
+	void Delete(Transaction &transaction, row_t rows[], idx_t count);
+	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 };
 
 } // namespace duckdb

@@ -38,7 +38,7 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, i
 	}
 }
 
-void Transaction::PushDelete(DataTable *table, ChunkInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
+void Transaction::PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
 	auto delete_info =
 	    (DeleteInfo *)undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;

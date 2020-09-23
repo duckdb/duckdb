@@ -845,8 +845,10 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 	if (first_id >= MAX_ROW_ID) {
 		// deletion is in transaction-local storage: push delete into local chunk collection
 		transaction.storage.Delete(this, row_identifiers, count);
+	} else {
+		auto morsel = (MorselInfo*) versions->GetSegment(first_id);
+		morsel->Delete(transaction, this, row_identifiers, count);
 	}
-	throw NotImplementedException("FIXME: delete");
 
 	// else if ((idx_t)first_id < persistent_manager->max_row) {
 		// deletion is in persistent storage: delete in the persistent version manager

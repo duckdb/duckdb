@@ -23,8 +23,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		auto info = (DeleteInfo *)data;
 		// reset the deleted flag on rollback
-		throw NotImplementedException("FIXME: commit delete");
-		// info->vinfo->CommitDelete(NOT_DELETED_ID, info->rows, info->count);
+		info->vinfo->CommitDelete(NOT_DELETED_ID, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {

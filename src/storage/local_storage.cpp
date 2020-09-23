@@ -8,7 +8,7 @@
 namespace duckdb {
 using namespace std;
 
-LocalTableStorage::LocalTableStorage(DataTable &table) : max_row(0) {
+LocalTableStorage::LocalTableStorage(DataTable &table) : deleted_rows(0) {
 	for (auto &index : table.info->indexes) {
 		assert(index->type == IndexType::ART);
 		auto &art = (ART &)*index;
@@ -187,6 +187,7 @@ void LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	} else {
 		deleted = entry->second.get();
 	}
+	storage->deleted_rows += count;
 
 	// now actually mark the entries as deleted in the deleted vector
 	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
@@ -297,7 +298,7 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 		auto &append_state = *append_state_ptr;
 		// add it to the set of append states
 		commit_state.append_states[table] = move(append_state_ptr);
-		table->InitializeAppend(transaction, append_state, commit_id, storage->collection.count);
+		table->InitializeAppend(transaction, append_state, commit_id, storage->collection.count - storage->deleted_rows);
 
 		if (log && !table->info->IsTemporary()) {
 			log->WriteSetTable(table->info->schema, table->info->table);

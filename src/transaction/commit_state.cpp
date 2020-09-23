@@ -159,8 +159,7 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 			WriteDelete(info);
 		}
 		// mark the tuples as committed
-		throw NotImplementedException("FIXME: commit delete");
-		// info->vinfo->CommitDelete(commit_id, info->rows, info->count);
+		info->vinfo->CommitDelete(commit_id, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -192,8 +191,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		auto info = (DeleteInfo *)data;
 		info->table->info->cardinality += info->count;
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
-		throw NotImplementedException("FIXME: commit delete");
-		// info->vinfo->CommitDelete(transaction_id, info->rows, info->count);
+		info->vinfo->CommitDelete(transaction_id, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
