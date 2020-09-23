@@ -157,6 +157,9 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 		case LogicalTypeId::TIME:
 			child.format = "ttm";
 			break;
+		case LogicalTypeId::TIMESTAMP:
+			child.format = "tsn:";
+			break;
 		default:
 			throw NotImplementedException("Unsupported Arrow type " + types[col_idx].ToString());
 		}
