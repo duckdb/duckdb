@@ -132,11 +132,11 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	sink.hash_table->Finalize();
 
-	PhysicalSink::Finalize(context, move(state));
+	PhysicalSink::Finalize(pipeline, context, move(state));
 }
 
 //===--------------------------------------------------------------------===//

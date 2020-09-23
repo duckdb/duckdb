@@ -76,13 +76,15 @@ void Pipeline::FinishTask() {
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
 		try {
-			sink->Finalize(executor.context, move(sink_state));
+			sink->Finalize(*this, executor.context, move(sink_state));
 		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {
 			executor.PushError("Unknown exception in Finalize!");
 		}
-		Finish();
+		if (current_finished == total_tasks) {
+			Finish();
+		}
 	}
 }
 

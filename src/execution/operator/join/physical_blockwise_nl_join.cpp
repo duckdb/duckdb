@@ -58,13 +58,14 @@ void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorStat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &context,
+                                       unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
 	if (join_type == JoinType::OUTER) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.count);
 	}
-	PhysicalSink::Finalize(context, move(state));
+	PhysicalSink::Finalize(pipeline, context, move(state));
 }
 
 //===--------------------------------------------------------------------===//

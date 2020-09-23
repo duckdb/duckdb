@@ -184,7 +184,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	gstate.final_ht->Combine(*source.ht);
 }
 
-void PhysicalHashAggregate::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
+                                     unique_ptr<GlobalOperatorState> state) {
 	auto gstate = (HashAggregateGlobalState *)state.get();
 	assert(gstate->final_ht);
 	gstate->final_ht->Finalize();

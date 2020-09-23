@@ -71,10 +71,10 @@ void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalOperatorState &sta
 	distinct->Sink(context, *state.distinct_state, lstate, input);
 }
 
-void PhysicalDelimJoin::Finalize(ClientContext &client, unique_ptr<GlobalOperatorState> state) {
+void PhysicalDelimJoin::Finalize(Pipeline &pipeline, ClientContext &client, unique_ptr<GlobalOperatorState> state) {
 	auto &dstate = (DelimJoinGlobalState &)*state;
 	// finalize the distinct HT
-	distinct->Finalize(client, move(dstate.distinct_state));
+	distinct->Finalize(pipeline, client, move(dstate.distinct_state));
 	// materialize the distinct collection
 	DataChunk delim_chunk;
 	distinct->InitializeChunk(delim_chunk);
@@ -89,7 +89,7 @@ void PhysicalDelimJoin::Finalize(ClientContext &client, unique_ptr<GlobalOperato
 		}
 		dstate.delim_data.Append(delim_chunk);
 	}
-	PhysicalSink::Finalize(client, move(state));
+	PhysicalSink::Finalize(pipeline, client, move(state));
 }
 
 void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
