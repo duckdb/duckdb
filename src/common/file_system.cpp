@@ -593,12 +593,12 @@ string FileSystem::GetWorkingDirectory() {
 	if (count == 0) {
 		throw IOException("Could not get working directory!");
 	}
-	auto buffer = unique_ptr<char[]>(new char[count + 1]);
-	idx_t ret = SetCurrentDirectory(count, buffer.get());
-	if (count != ret) {
+	auto buffer = unique_ptr<char[]>(new char[count]);
+	idx_t ret = GetCurrentDirectory(count, buffer.get());
+	if (count != ret + 1) {
 		throw IOException("Could not get working directory!");
 	}
-	return string(buffer.get(), count);
+	return string(buffer.get(), ret);
 }
 #endif
 
