@@ -126,3 +126,21 @@ NULL
 NULL
 NULL
 
+# fixed slice
+query T
+SELECT substring(s from -2 for 2) FROM strings
+----
+lo
+ld
+b
+NULL
+
+# zero offset (this is accepted by SQLite)
+query T
+SELECT substring(s from 0 for length) FROM strings
+----
+h
+wo
+(empty)
+NULL
+
