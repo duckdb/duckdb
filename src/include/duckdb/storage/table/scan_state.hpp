@@ -66,8 +66,8 @@ struct LocalScanState {
 class TableScanState {
 public:
 	TableScanState(){};
-	idx_t current_persistent_row, max_persistent_row;
-	idx_t current_transient_row, max_transient_row;
+	idx_t current_row, max_row;
+	idx_t base_row;
 	unique_ptr<ColumnScanState[]> column_scans;
 	idx_t column_count;
 	unique_ptr<AdaptiveFilter> adaptive_filter;

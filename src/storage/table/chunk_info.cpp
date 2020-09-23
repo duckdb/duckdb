@@ -31,10 +31,10 @@ bool ChunkConstantInfo::Fetch(Transaction &transaction, row_t row) {
 // Vector info
 //===--------------------------------------------------------------------===//
 ChunkVectorInfo::ChunkVectorInfo(MorselInfo &morsel) :
-	ChunkInfo(morsel, ChunkInfoType::VECTOR_INFO), insert_id(NOT_DELETED_ID),
+	ChunkInfo(morsel, ChunkInfoType::VECTOR_INFO), insert_id(0),
 	same_inserted_id(true), any_deleted(false) {
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		inserted[i] = NOT_DELETED_ID;
+		inserted[i] = 0;
 		deleted[i] = NOT_DELETED_ID;
 	}
 }

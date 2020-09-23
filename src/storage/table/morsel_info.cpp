@@ -46,7 +46,7 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 		root = make_unique<VersionNode>();
 	}
 	idx_t start_vector_idx = morsel_start / STANDARD_VECTOR_SIZE;
-	idx_t end_vector_idx = morsel_end / STANDARD_VECTOR_SIZE;
+	idx_t end_vector_idx = (morsel_end - 1) / STANDARD_VECTOR_SIZE;
 	for(idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
 		idx_t start = vector_idx == start_vector_idx ? morsel_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
 		idx_t end = vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
@@ -59,15 +59,14 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 		} else {
 			// part of a vector is encapsulated: append to that part
 			ChunkVectorInfo *info;
-			if (start == 0) {
-				assert(!root->info[vector_idx]);
+			if (!root->info[vector_idx]) {
 				// first time appending to this vector: create new info
 				auto insert_info = make_unique<ChunkVectorInfo>(*this);
 				info = insert_info.get();
 				root->info[vector_idx] = move(insert_info);
 			} else {
+				assert(root->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 				// use existing vector
-				assert(root->info[vector_idx]);
 				info = (ChunkVectorInfo*) root->info[vector_idx].get();
 			}
 			info->Append(start, end, commit_id);

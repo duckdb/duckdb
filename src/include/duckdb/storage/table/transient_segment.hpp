@@ -15,10 +15,12 @@
 
 namespace duckdb {
 struct ColumnAppendState;
+class PersistentSegment;
 
 class TransientSegment : public ColumnSegment {
 public:
 	TransientSegment(BufferManager &manager, PhysicalType type, idx_t start);
+	TransientSegment(PersistentSegment &segment);
 
 	//! The buffer manager
 	BufferManager &manager;

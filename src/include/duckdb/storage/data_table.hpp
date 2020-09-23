@@ -51,8 +51,7 @@ struct DataTableInfo {
 };
 
 struct ParallelTableScanState {
-	idx_t current_persistent_row;
-	idx_t current_transient_row;
+	idx_t current_row;
 	bool transaction_local_data;
 };
 
@@ -142,10 +141,10 @@ private:
 	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
 	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
-	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row, idx_t base_row,
+	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row,
 	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
 	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-	                     idx_t &current_row, idx_t max_row, idx_t base_row);
+	                     idx_t &current_row, idx_t max_row);
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
 	//! the amount of rows to use and places the row_ids in the result_rows array.
@@ -158,12 +157,10 @@ private:
 private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;
-	//! The segment tree holding the morsel versions
+	//! The segment tree holding the persistent versions
 	shared_ptr<SegmentTree> versions;
-	//! The number of persistent rows in the table
-	idx_t persistent_rows;
-	//! The number of transient rows in the table
-	idx_t transient_rows;
+	//! The number of rows in the table
+	idx_t total_rows;
 	//! The physical columns of the table
 	vector<shared_ptr<ColumnData>> columns;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version

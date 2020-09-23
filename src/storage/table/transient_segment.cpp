@@ -5,6 +5,7 @@
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/persistent_segment.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -16,6 +17,17 @@ TransientSegment::TransientSegment(BufferManager &manager, PhysicalType type, id
 	} else {
 		data = make_unique<NumericSegment>(manager, type, start);
 	}
+}
+
+TransientSegment::TransientSegment(PersistentSegment &segment)
+    : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), manager(segment.manager) {
+	if (segment.block_id == segment.data->block_id) {
+		segment.data->ToTemporary();
+	}
+	data = move(segment.data);
+	stats = move(segment.stats);
+	count = segment.count;
+	assert(!segment.next);
 }
 
 void TransientSegment::InitializeScan(ColumnScanState &state) {
