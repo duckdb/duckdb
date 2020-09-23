@@ -64,6 +64,7 @@ public:
 	void LoadDatabase(string dbpath);
 
 	string ReplaceKeywords(string input);
+
 public:
 	string dbpath;
 	unique_ptr<DuckDB> db;
