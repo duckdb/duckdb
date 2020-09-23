@@ -63,6 +63,7 @@ public:
 	void ExecuteFile(string script);
 	void LoadDatabase(string dbpath);
 
+	string ReplaceKeywords(string input);
 public:
 	string dbpath;
 	unique_ptr<DuckDB> db;
@@ -969,6 +970,13 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	}
 }
 
+string SQLLogicTestRunner::ReplaceKeywords(string input) {
+	FileSystem fs;
+	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
+	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs.GetWorkingDirectory());
+	return input;
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	int haltOnError = 0; /* Stop on first error if true */
 	const char *zDbEngine = "DuckDB";
@@ -1085,7 +1093,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			zScript[k] = 0;
 
 			// perform any renames in zScript
-			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
+			command->sql_query = ReplaceKeywords(zScript);
 
 			// skip CREATE INDEX (for now...)
 			if (skip_index && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
@@ -1158,7 +1166,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			zScript[k] = 0;
 
 			// perform any renames in zScript
-			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
+			command->sql_query = ReplaceKeywords(zScript);
 
 			// figure out the sort style/connection style
 			command->sort_style = SortStyle::NO_SORT;
@@ -1308,7 +1316,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				FAIL();
 			}
 			bool readonly = string(sScript.azToken[2]) == "readonly";
-			dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
+			dbpath = ReplaceKeywords(sScript.azToken[1]);
 			if (dbpath.empty() || dbpath == ":memory:") {
 				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n",
 				        zScriptFile, sScript.startLine);
