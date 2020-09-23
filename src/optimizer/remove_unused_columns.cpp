@@ -148,7 +148,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				return;
 			}
 		}
-		// fallthrough on purpose
+		for (auto &child : op.children) {
+			RemoveUnusedColumns remove(binder, context, true);
+			remove.VisitOperator(*child);
+		}
+		return;
 	case LogicalOperatorType::EXCEPT:
 	case LogicalOperatorType::INTERSECT:
 		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
