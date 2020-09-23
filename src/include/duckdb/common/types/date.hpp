@@ -52,6 +52,12 @@ public:
 	static int64_t Epoch(date_t date);
 	//! Convert the epoch (seconds since 1970-01-01) to a date_t
 	static date_t EpochToDate(int64_t epoch);
+
+	//! Extract the number of days since epoch (days since 1970-01-01)
+	static int32_t EpochDays(date_t date);
+	//! Convert the epoch number of days to a date_t
+	static date_t EpochDaysToDate(int32_t epoch);
+
 	//! Extract year of a date entry
 	static int32_t ExtractYear(date_t date);
 	//! Extract month of a date entry

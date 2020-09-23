@@ -255,7 +255,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 
 			for (idx_t row = 0; row < output.size(); row++) {
 				auto source_idx = data.chunk_offset + row;
-				tgt_ptr[row] = src_ptr[source_idx] - 719528; //EPOCH_DATE
+				tgt_ptr[row] = Date::EpochDaysToDate(src_ptr[source_idx]);
 			}
 			break;
 		}
