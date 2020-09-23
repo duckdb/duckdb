@@ -191,7 +191,6 @@ public:
 	MyTask(Pipeline &parent) : parent(parent) {
 	}
 	void Execute() {
-		printf("eek\n");
 		parent.finished_tasks++;
 		parent.Finish();
 	}
@@ -208,6 +207,7 @@ void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
 	gstate->final_ht->Finalize();
 	this->sink_state = move(state);
 
+	// schedule additional tasks to combine the partial HTs
 	pipeline.total_tasks += 1;
 	auto t = make_unique<MyTask>(pipeline);
 	TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(t));
