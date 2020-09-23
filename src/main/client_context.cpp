@@ -277,6 +277,9 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
         if (statements.empty()) {
             throw Exception("No statement to prepare!");
         }
+        if (statements.size() > 1) {
+            throw Exception("Cannot prepare multiple statements at once!");
+        }
         return this->PrepareParsedStatement(statements, n_prepared_parameters);
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
@@ -284,9 +287,6 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 }
 unique_ptr<PreparedStatement> ClientContext::PrepareParsedStatement(vector<unique_ptr<SQLStatement>> &statements,
                                                                     idx_t n_prepared_parameters) {
-    if (statements.size() > 1) {
-        throw Exception("Cannot prepare multiple statements at once!");
-    }
     // now write the prepared statement data into the catalog
     string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
     prepare_count++;
