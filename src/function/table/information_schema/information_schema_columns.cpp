@@ -99,7 +99,7 @@ public:
 	virtual idx_t NumColumns() = 0;
 	virtual const string &ColumnName(idx_t col) = 0;
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
-	virtual const char *ColumnDefault(idx_t col) = 0;
+	virtual const string ColumnDefault(idx_t col) = 0;
 	virtual bool IsNullable(idx_t col) = 0;
 
 	void WriteColumns(idx_t index, idx_t start_col, idx_t end_col, DataChunk &output);
@@ -128,9 +128,9 @@ public:
 	const LogicalType &ColumnType(idx_t col) {
 		return entry->columns[col].type;
 	}
-	const char *ColumnDefault(idx_t col) {
+	const string ColumnDefault(idx_t col) {
 		if (entry->columns[col].default_value) {
-			return entry->columns[col].default_value->ToString().c_str();
+			return entry->columns[col].default_value->ToString();
 		}
 		return nullptr;
 	}
@@ -160,7 +160,7 @@ public:
 	const LogicalType &ColumnType(idx_t col) {
 		return entry->types[col];
 	}
-	const char *ColumnDefault(idx_t col) {
+	const string ColumnDefault(idx_t col) {
 		return nullptr;
 	}
 	bool IsNullable(idx_t col) {
