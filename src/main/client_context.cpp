@@ -23,7 +23,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/relation.hpp"
-#include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"

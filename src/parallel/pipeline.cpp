@@ -31,8 +31,8 @@ public:
 	}
 };
 
-Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0),
+Pipeline::Pipeline(Executor &executor_, ProducerToken &token_)
+    : executor(executor_), token(token_), finished_tasks(0), total_tasks(0), finished_dependencies(0), finished(false),
       recursive_cte(nullptr) {
 }
 

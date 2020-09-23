@@ -12,7 +12,7 @@
 #include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/function/table_function.hpp"
-
+#include "duckdb/parallel/task_scheduler.hpp"
 #include <atomic>
 
 namespace duckdb {
@@ -24,9 +24,10 @@ class Pipeline {
 	friend class Executor;
 
 public:
-	Pipeline(Executor &execution_context);
+	Pipeline(Executor &execution_context, ProducerToken &token);
 
 	Executor &executor;
+	ProducerToken &token;
 
 public:
 	//! Execute a task within the pipeline on a single thread
@@ -62,6 +63,16 @@ public:
 		parents.clear();
 	}
 
+	void IncrementTasks(idx_t amount) {
+		this->total_tasks += amount;
+	}
+
+public:
+	//! The current threads working on the pipeline
+	std::atomic<idx_t> finished_tasks;
+	//! The maximum amount of threads that can work on the pipeline
+	idx_t total_tasks;
+
 private:
 	//! The child from which to pull chunks
 	PhysicalOperator *child;
@@ -84,10 +95,6 @@ private:
 
 	//! Whether or not the pipeline is finished executing
 	bool finished;
-	//! The current threads working on the pipeline
-	std::atomic<idx_t> finished_tasks;
-	//! The maximum amount of threads that can work on the pipeline
-	idx_t total_tasks;
 	//! The recursive CTE node that this pipeline belongs to, and may be executed multiple times
 	PhysicalOperator *recursive_cte;
 

@@ -30,11 +30,11 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	physical_state = physical_plan->GetOperatorState();
 
 	context.profiler.Initialize(physical_plan.get());
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	this->producer = scheduler.CreateProducer();
 
 	BuildPipelines(physical_plan.get(), nullptr);
 
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	this->producer = scheduler.CreateProducer();
 	this->total_pipelines = pipelines.size();
 
 	// schedule pipelines that do not have dependents
@@ -74,7 +74,7 @@ void Executor::Reset() {
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_unique<Pipeline>(*this);
+		auto pipeline = make_unique<Pipeline>(*this, *producer);
 		pipeline->sink = (PhysicalSink *)op;
 		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
 		if (parent) {

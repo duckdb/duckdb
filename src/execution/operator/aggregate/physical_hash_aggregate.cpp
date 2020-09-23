@@ -2,6 +2,8 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -184,12 +186,31 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	gstate.final_ht->Combine(*source.ht);
 }
 
+class MyTask : public Task {
+public:
+	MyTask(Pipeline &parent) : parent(parent) {
+	}
+	void Execute() {
+		printf("eek\n");
+		parent.finished_tasks++;
+		parent.Finish();
+	}
+
+private:
+	Pipeline &parent;
+};
+
 void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
                                      unique_ptr<GlobalOperatorState> state) {
+
 	auto gstate = (HashAggregateGlobalState *)state.get();
 	assert(gstate->final_ht);
 	gstate->final_ht->Finalize();
 	this->sink_state = move(state);
+
+	pipeline.total_tasks += 1;
+	auto t = make_unique<MyTask>(pipeline);
+	TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(t));
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
