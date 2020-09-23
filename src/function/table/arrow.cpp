@@ -110,6 +110,8 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 			return_types.push_back(LogicalType::TIMESTAMP);
 		} else if (format == "tdD") {
 			return_types.push_back(LogicalType::DATE);
+		} else if (format == "ttm") {
+			return_types.push_back(LogicalType::TIME);
 		} else {
 			throw NotImplementedException("Unsupported Arrow type %s", format);
 		}
@@ -208,6 +210,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 		case LogicalTypeId::DOUBLE:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::TIME:
 			FlatVector::SetData(output.data[col_idx],
 			                    (data_ptr_t)array.buffers[1] + GetTypeIdSize(output.data[col_idx].type.InternalType()) *
 			                                                       (data.chunk_offset + array.offset));

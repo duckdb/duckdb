@@ -260,6 +260,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 			case LogicalTypeId::FLOAT:
 			case LogicalTypeId::DOUBLE:
 			case LogicalTypeId::HUGEINT:
+			case LogicalTypeId::TIME:
 				child.n_buffers = 2;
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				break;
