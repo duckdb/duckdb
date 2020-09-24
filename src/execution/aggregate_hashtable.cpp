@@ -706,7 +706,6 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	assert(other.tuple_size == tuple_size);
 	assert(other.tuples_per_block == tuples_per_block);
 
-	// TODO assert other things
 	if (other.entries == 0) {
 		return;
 	}
@@ -740,8 +739,6 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	string_heap.MergeHeap(other.string_heap);
 	// need to set the size to 0 since otherwise the destructors would be called and we took that stuff over
 	other.entries = 0;
-
-	printf("entries=%lld\n", entries);
 
 	Verify();
 }
