@@ -144,3 +144,6 @@ wo
 (empty)
 NULL
 
+# Negative length is invalid
+statement error
+SELECT substr('SQLite substr', 4, -1)
