@@ -186,30 +186,33 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	gstate.final_ht->Combine(*source.ht);
 }
 
-class MyTask : public Task {
+class PhysicalHashAggregateFinalizeTask : public Task {
 public:
-	MyTask(Pipeline &parent) : parent(parent) {
+	PhysicalHashAggregateFinalizeTask(Pipeline &parent_, HashAggregateGlobalState &state_)
+	    : parent(parent_), state(state_) {
 	}
 	void Execute() {
+		state.final_ht->Finalize();
+
 		parent.finished_tasks++;
 		parent.Finish();
 	}
 
 private:
 	Pipeline &parent;
+	HashAggregateGlobalState &state;
 };
 
 void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
                                      unique_ptr<GlobalOperatorState> state) {
 
-	auto gstate = (HashAggregateGlobalState *)state.get();
-	assert(gstate->final_ht);
-	gstate->final_ht->Finalize();
 	this->sink_state = move(state);
+	auto gstate = (HashAggregateGlobalState *)this->sink_state.get();
+	assert(gstate->final_ht);
 
 	// schedule additional tasks to combine the partial HTs
 	pipeline.total_tasks += 1;
-	auto t = make_unique<MyTask>(pipeline);
+	auto t = make_unique<PhysicalHashAggregateFinalizeTask>(pipeline, *gstate);
 	TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(t));
 }
 

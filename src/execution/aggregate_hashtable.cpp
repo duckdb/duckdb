@@ -85,7 +85,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	hash_width = sizeof(hash_t);
 	tuple_size = hash_width + group_width + payload_width;
 
-	assert(tuple_size <= Storage::BLOCK_SIZE);
+	assert(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 
 	hash_prefix_remove_bitmask = ((hash_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
 	hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t) * 8 - 16));
@@ -699,7 +699,7 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	idx_t group_idx = 0;
 	idx_t merge_entries = other.entries;
 	for (auto &payload_chunk : other.payload_hds) {
-		auto this_entries = MinValue(Storage::BLOCK_SIZE / tuple_size, merge_entries);
+		auto this_entries = MinValue(Storage::BLOCK_ALLOC_SIZE / tuple_size, merge_entries);
 		for (data_ptr_t ptr = payload_chunk->Ptr(), end = payload_chunk->Ptr() + this_entries * tuple_size; ptr < end;
 		     ptr += tuple_size) {
 			hashes_ptr[group_idx] = *(hash_t *)ptr;
@@ -733,10 +733,10 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, D
 	}
 	auto this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
 
-	auto tuples_per_chunk = Storage::BLOCK_SIZE / tuple_size;
+	auto tuples_per_chunk = Storage::BLOCK_ALLOC_SIZE / tuple_size;
 	auto chunk_idx = scan_position / tuples_per_chunk;
 	auto chunk_offset = (scan_position % tuples_per_chunk) * tuple_size;
-	assert(chunk_offset + tuple_size <= Storage::BLOCK_SIZE);
+	assert(chunk_offset + tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 
 	auto read_ptr = payload_hds[chunk_idx++]->Ptr();
 	for (idx_t i = 0; i < this_n; i++) {
