@@ -17,6 +17,21 @@ SELECT DISTINCT ON (i) i, j FROM integers WHERE i <> 2
 4	5
 
 query II
+SELECT DISTINCT ON (j) i, j FROM integers WHERE i <> 2
+----
+4	5
+
+query II
+SELECT DISTINCT ON (j, i) i, j FROM integers WHERE i <> 2
+----
+4	5
+
+query II
+SELECT DISTINCT ON (j + 1, i * 3) i, j FROM integers WHERE i <> 2
+----
+4	5
+
+query II
 SELECT DISTINCT ON (1) i, j FROM integers ORDER BY i
 ----
 2	3
