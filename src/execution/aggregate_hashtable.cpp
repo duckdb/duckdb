@@ -37,7 +37,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
                                                      vector<AggregateObject> aggregate_objects)
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
-      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), finalized(false) {
+      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), payload_idx(0),
+      payload_end(0), finalized(false) {
 	// HT tuple layout is as follows:
 	// [FLAG][GROUPS][PAYLOAD]
 	// [FLAG] is the state of the tuple in memory
@@ -58,11 +59,22 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		pointer += aggr.payload_size;
 	}
 
-	// FIXME: this always creates this vector, even if no distinct if present.
-	// it likely does not matter.
-	distinct_hashes.resize(aggregates.size());
+	// HT layout
+	hash_width = sizeof(AHT_VAL_TPE);
+	tuple_size = sizeof(AHT_VAL_TPE) + group_width + payload_width;
+	assert(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
+
+	tuples_per_block = Storage::BLOCK_ALLOC_SIZE / tuple_size;
+
+	hash_prefix_remove_bitmask = ((AHT_VAL_TPE)1 << (hash_width * 8 - sizeof(AHT_PFX_TPE) - 1)) - 1;
+	hash_prefix_get_bitmask = ((AHT_VAL_TPE)-1 << (hash_width * 8 - sizeof(AHT_PFX_TPE)));
+
+	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	Resize(initial_capacity);
 
 	// create additional hash tables for distinct aggrs
+	distinct_hashes.resize(aggregates.size());
+
 	idx_t payload_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
@@ -81,19 +93,6 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 			payload_idx += 1;
 		}
 	}
-
-	hash_width = sizeof(hash_t);
-	tuple_size = hash_width + group_width + payload_width;
-
-	assert(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
-
-	hash_prefix_remove_bitmask = ((hash_t)1 << (sizeof(hash_t) * 8 - hash_prefix_bits - 1)) - 1;
-	hash_prefix_get_bitmask = ((hash_t)-1 << (sizeof(hash_t) * 8 - 16));
-
-	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
-	// allocate initial payload block. TODO: should we? We might never see any values.
-	NewBlock();
-	Resize(initial_capacity);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
@@ -102,8 +101,7 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 
 void GroupedAggregateHashTable::NewBlock() {
 	payload_hds.push_back(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true));
-	current_payload_offset_ptr = payload_hds.back()->Ptr();
-	current_payload_end_ptr = current_payload_offset_ptr + Storage::BLOCK_ALLOC_SIZE;
+	payload_end = payload_idx + tuples_per_block;
 }
 
 void GroupedAggregateHashTable::CallDestructors(Vector &state_vector, idx_t count) {
@@ -188,12 +186,14 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	assert((size & (size - 1)) == 0);
 	bitmask = size - 1;
 
+	auto byte_size = size * sizeof(AHT_VAL_TPE);
+
 	if (size * sizeof(data_ptr_t) > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
-		hashes_hdl = buffer_manager.Allocate(size * sizeof(data_ptr_t));
+		hashes_hdl = buffer_manager.Allocate(byte_size);
 	}
 	auto hashes = hashes_hdl->Ptr();
-	memset(hashes, 0, size * sizeof(data_ptr_t));
-	hashes_end_ptr = hashes + sizeof(data_ptr_t) * size;
+	memset(hashes, 0, byte_size);
+	hashes_end_ptr = hashes + byte_size;
 	capacity = size;
 
 	if (entries > 0) {
@@ -204,7 +204,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 			     ptr < end; ptr += tuple_size) {
 				auto entry_hash = *(hash_t *)ptr;
 				assert((entry_hash & bitmask) == (entry_hash % capacity));
-				auto entry_pointer = (data_ptr_t *)(hashes + ((entry_hash & bitmask) * sizeof(data_ptr_t)));
+				auto entry_pointer = (data_ptr_t *)(hashes + ((entry_hash & bitmask) * sizeof(AHT_VAL_TPE)));
 				while (*entry_pointer) {
 					entry_pointer++;
 					if (entry_pointer >= (data_ptr_t *)hashes_end_ptr) {
@@ -362,6 +362,9 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 
 void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data,
                                               Vector &addresses, const SelectionVector &sel, idx_t count) {
+	if (count == 0) {
+		return;
+	}
 	for (idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
 		auto &data = groups.data[grp_idx];
 		auto &gdata = group_data[grp_idx];
@@ -509,8 +512,8 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
-idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses,
-                                                    SelectionVector &new_groups) {
+idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses_out,
+                                                    SelectionVector &new_groups_out) {
 	// resize at 50% capacity, also need to fit the entire vector
 	if (entries > capacity / 2 || capacity - entries <= groups.size()) {
 		Resize(capacity * 2);
@@ -518,21 +521,22 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 
 	// we need to be able to fit at least one vector of data
 	assert(capacity - entries >= groups.size());
-	assert(addresses.type == LogicalType::POINTER);
 	assert(group_hashes.type == LogicalType::HASH);
 
 	group_hashes.Normalify(groups.size());
-	auto hashes_pointer = FlatVector::GetData<hash_t>(group_hashes);
+	auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
+
+	Vector ht_offsets(LogicalTypeId::BIGINT);
+	assert(ht_offsets.vector_type == VectorType::FLAT_VECTOR);
 
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
-	UnaryExecutor::Execute<hash_t, data_ptr_t>(group_hashes, addresses, groups.size(), [&](hash_t element) {
+	UnaryExecutor::Execute<hash_t, AHT_VAL_TPE>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
-		return this->hashes_hdl->Ptr() + ((element & bitmask) * sizeof(data_ptr_t));
+		return (element & bitmask);
 	});
 
-	addresses.Normalify(groups.size());
-	auto addresses_ptr = FlatVector::GetData<data_ptr_t *>(addresses);
+	auto ht_offsets_ptr = FlatVector::GetData<AHT_VAL_TPE>(ht_offsets);
 
 	Vector group_pointers(LogicalType::POINTER);
 	auto group_pointers_ptr = FlatVector::GetData<data_ptr_t>(group_pointers);
@@ -563,38 +567,40 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 		// first figure out for each remaining whether or not it belongs to a full or empty group
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			idx_t index = sel_vector->get_index(i);
-			auto &ht_entry_ptr = addresses_ptr[index];
-
-			if (*ht_entry_ptr == nullptr) {
+			auto ht_entry_ptr = (AHT_VAL_TPE *)this->hashes_hdl->Ptr() + ht_offsets_ptr[index];
+			if (*ht_entry_ptr == 0) {
 				// cell is empty; mark the cell as filled
-
-				if (current_payload_offset_ptr + tuple_size > current_payload_end_ptr) {
+				assert(payload_idx <= payload_end);
+				if (payload_idx == payload_end) {
 					NewBlock();
 				}
 
-				auto new_entry = current_payload_offset_ptr;
-				current_payload_offset_ptr += tuple_size;
+				auto entry_payload_idx = payload_idx++;
+				auto entry_payload_ptr =
+				    payload_hds.back()->Ptr() + ((entry_payload_idx % tuples_per_block) * tuple_size);
+
+				// STILL TODO: Use index in actual ht
 				empty_vector.set_index(new_entry_count++, index);
-				new_groups.set_index(new_group_count++, index);
+				new_groups_out.set_index(new_group_count++, index);
 				// copy the group hash to the payload for use in resize
-				memcpy(new_entry, &hashes_pointer[index], hash_width);
+				memcpy(entry_payload_ptr, &group_hashes_ptr[index], hash_width);
 				// initialize the payload info for the column
-				memcpy(new_entry + hash_width + group_width, empty_payload_data.get(), payload_width);
+				memcpy(entry_payload_ptr + hash_width + group_width, empty_payload_data.get(), payload_width);
 
 				// only 48 bits are used as actual addresses, expect top 16 bits to be 0
-				assert(((hash_t)new_entry & hash_prefix_get_bitmask) == 0);
-				assert(((hash_t)new_entry & hash_prefix_remove_bitmask) == (hash_t)new_entry);
+				assert(((hash_t)entry_payload_ptr & hash_prefix_get_bitmask) == 0);
+				assert(((hash_t)entry_payload_ptr & hash_prefix_remove_bitmask) == (hash_t)entry_payload_ptr);
 
 				// so we can use them for mischief
-				*ht_entry_ptr =
-				    (data_ptr_t)((ptrdiff_t)new_entry | ((hash_t)hashes_pointer[index] & hash_prefix_get_bitmask));
+				*ht_entry_ptr = (AHT_VAL_TPE)((ptrdiff_t)entry_payload_ptr |
+				                              ((hash_t)group_hashes_ptr[index] & hash_prefix_get_bitmask));
 
 			} else {
 				// cell is occupied: add to check list
 				// only need to check if hash salt in ptr == prefix of hash in payload
 				if (((hash_t)*ht_entry_ptr & hash_prefix_get_bitmask) == 0 ||
 				    ((hash_t)*ht_entry_ptr & hash_prefix_get_bitmask) ==
-				        (hashes_pointer[index] & hash_prefix_get_bitmask)) {
+				        (group_hashes_ptr[index] & hash_prefix_get_bitmask)) {
 					group_compare_vector->set_index(need_compare_count++, index);
 				} else {
 					no_match_vector->set_index(no_match_count++, index);
@@ -620,21 +626,26 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
 			idx_t index = no_match_vector->get_index(i);
-			addresses_ptr[index]++;
-			// assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
-			if ((data_ptr_t)addresses_ptr[index] >= hashes_end_ptr) {
-				addresses_ptr[index] = (data_ptr_t *)hashes_hdl->Ptr();
+			ht_offsets_ptr[index]++;
+			if (index > capacity) {
+				ht_offsets_ptr[index] = 0;
 			}
 		}
 		sel_vector = no_match_vector;
 		remaining_entries = no_match_count;
 	}
 
-	// deref everyting so others can actually use those pointers
-	for (idx_t i = 0; i < groups.size(); i++) {
-		addresses_ptr[i] =
-		    (data_ptr_t *)(((ptrdiff_t)*addresses_ptr[i] & hash_prefix_remove_bitmask) + hash_width + group_width);
-	}
+	assert(addresses_out.type == LogicalType::POINTER);
+
+	// finally we create a bunch of pointers into the payload based on our offsets for callers to use
+	addresses_out.Normalify(groups.size());
+
+	UnaryExecutor::Execute<AHT_VAL_TPE, data_ptr_t *>(
+	    ht_offsets, addresses_out, groups.size(), [&](AHT_VAL_TPE element) {
+		    auto ht_entry_ptr = (AHT_VAL_TPE *)this->hashes_hdl->Ptr() + element;
+		    //  TODO verify here that the hash prefix matches, too?
+		    return (data_ptr_t *)(((ptrdiff_t)*ht_entry_ptr & hash_prefix_remove_bitmask) + hash_width + group_width);
+	    });
 
 	return new_group_count;
 }

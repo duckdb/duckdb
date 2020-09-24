@@ -157,7 +157,20 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	payload_chunk.Verify();
 	assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
-	if (llstate.hts[0].back()->Size() > 20000) /* FIXME what limit */ {
+	// intermediate ht
+
+	// 32 bit ht entry
+	// 8 bits salt
+	// 24 bit payload idx
+	// 2^24 = 16777216 or 2^24/32 = 524288 entries max
+
+	// final ht
+	// 64 bit ht
+	// 16 bit salt
+	// 48 bit payload idx
+
+	if (llstate.hts[0].back()->Size() > 50000) /* FIXME what limit */ {
+		// FIXME this code is duplicated from llstate constructor
 		llstate.hts[0].push_back(make_unique<GroupedAggregateHashTable>(
 		    llstate.buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types, payload_types, llstate.bound_aggregates));
 	}
