@@ -165,32 +165,37 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public String getSQLKeywords() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		System.out.println("DuckDBDatabaseMetaData.getSQLKeywords");
+	    throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public String getNumericFunctions() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getNumericFunctions");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public String getStringFunctions() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getStringFunctions");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public String getSystemFunctions() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getSystemFunctions");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public String getTimeDateFunctions() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getTimeDateFunctions");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public String getSearchStringEscape() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return null;
 	}
 
 	@Override
@@ -225,16 +230,19 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsConvert(int fromType, int toType) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.supportsConvert");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean supportsTableCorrelationNames() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.supportsTableCorrelationNames");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean supportsDifferentTableCorrelationNames() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.supportsDifferentTableCorrelationNames");
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -656,9 +664,6 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern, String[] types)
 			throws SQLException {
-		if (catalog != null) {
-			throw new SQLException("catalog argument is not supported");
-		}
 		if (types != null) {
 			throw new SQLException("types argument is not supported");
 		}
@@ -719,67 +724,79 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getColumnPrivileges(String catalog, String schema, String table, String columnNamePattern)
 			throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getColumnPrivileges");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getTablePrivileges(String catalog, String schemaPattern, String tableNamePattern)
 			throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getTablePrivileges");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getProcedures(String catalog, String schemaPattern, String procedureNamePattern)
 			throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		PreparedStatement ps = conn.prepareStatement("SELECT NULL");
+		return ps.executeQuery();
 	}
 
 	@Override
 	public ResultSet getProcedureColumns(String catalog, String schemaPattern, String procedureNamePattern,
 			String columnNamePattern) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getProcedureColumns");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getBestRowIdentifier(String catalog, String schema, String table, int scope, boolean nullable)
 			throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getBestRowIdentifier");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getVersionColumns(String catalog, String schema, String table) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getVersionColumns");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getPrimaryKeys(String catalog, String schema, String table) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getPrimaryKeys");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getImportedKeys(String catalog, String schema, String table) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getImportedKeys");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getExportedKeys(String catalog, String schema, String table) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getExportedKeys");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getCrossReference(String parentCatalog, String parentSchema, String parentTable,
 			String foreignCatalog, String foreignSchema, String foreignTable) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getCrossReference");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getTypeInfo() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getTypeInfo");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique, boolean approximate)
 			throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getIndexInfo");
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -795,57 +812,68 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean ownUpdatesAreVisible(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.ownUpdatesAreVisible");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean ownDeletesAreVisible(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.ownDeletesAreVisible");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean ownInsertsAreVisible(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.ownInsertsAreVisible");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean othersUpdatesAreVisible(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.othersUpdatesAreVisible");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean othersDeletesAreVisible(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.othersDeletesAreVisible");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean othersInsertsAreVisible(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.othersInsertsAreVisible");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean updatesAreDetected(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.updatesAreDetected");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean deletesAreDetected(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.deletesAreDetected");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean insertsAreDetected(int type) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.insertsAreDetected");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean supportsBatchUpdates() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.supportsBatchUpdates");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getUDTs(String catalog, String schemaPattern, String typeNamePattern, int[] types)
 			throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getUDTs");
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -876,27 +904,32 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public ResultSet getSuperTypes(String catalog, String schemaPattern, String typeNamePattern) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getSuperTypes");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getSuperTables(String catalog, String schemaPattern, String tableNamePattern) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getSuperTables");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getAttributes(String catalog, String schemaPattern, String typeNamePattern,
 			String attributeNamePattern) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getAttributes");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean supportsResultSetHoldability(int holdability) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.supportsResultSetHoldability");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public int getResultSetHoldability() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getResultSetHoldability");
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -922,59 +955,70 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public int getSQLStateType() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getSQLStateType");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean locatorsUpdateCopy() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.locatorsUpdateCopy");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean supportsStatementPooling() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.supportsStatementPooling");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public RowIdLifetime getRowIdLifetime() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getRowIdLifetime");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean supportsStoredFunctionsUsingCallSyntax() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.supportsStoredFunctionsUsingCallSyntax");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean autoCommitFailureClosesAllResultSets() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.autoCommitFailureClosesAllResultSets");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getClientInfoProperties() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getClientInfoProperties");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getFunctions(String catalog, String schemaPattern, String functionNamePattern)
 			throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getFunctions");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getFunctionColumns(String catalog, String schemaPattern, String functionNamePattern,
 			String columnNamePattern) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getFunctionColumns");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public ResultSet getPseudoColumns(String catalog, String schemaPattern, String tableNamePattern,
 			String columnNamePattern) throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.getPseudoColumns");
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean generatedKeyAlwaysReturned() throws SQLException {
+		System.out.println("DuckDBDatabaseMetaData.generatedKeyAlwaysReturned");
 		throw new SQLFeatureNotSupportedException();
 	}
 
