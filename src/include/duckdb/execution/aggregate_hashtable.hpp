@@ -72,6 +72,10 @@ public:
 	void Combine(GroupedAggregateHashTable &other);
 	void Finalize();
 
+	idx_t Size() {
+		return entries;
+	}
+
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
 

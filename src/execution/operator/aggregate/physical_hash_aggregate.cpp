@@ -73,13 +73,15 @@ public:
 	std::mutex lock;
 };
 
+typedef uint64_t radix_t;
+
 class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(BufferManager &buffer_manager, vector<unique_ptr<Expression>> &groups,
-	                        vector<BoundAggregateExpression *> &aggregates, vector<LogicalType> &group_types,
+	                        vector<BoundAggregateExpression *> &bound_aggregates, vector<LogicalType> &group_types,
 	                        vector<LogicalType> &payload_types)
-	    : group_executor(groups) {
-		for (auto &aggr : aggregates) {
+	    : buffer_manager(buffer_manager), bound_aggregates(bound_aggregates), group_executor(groups) {
+		for (auto &aggr : bound_aggregates) {
 			if (aggr->children.size()) {
 				for (idx_t i = 0; i < aggr->children.size(); ++i) {
 					payload_executor.AddExpression(*aggr->children[i]);
@@ -90,9 +92,13 @@ public:
 		if (payload_types.size() > 0) {
 			payload_chunk.Initialize(payload_types);
 		}
-		ht = make_unique<GroupedAggregateHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
-		                                            payload_types, aggregates);
+		hts[0].push_back(make_unique<GroupedAggregateHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
+		                                                        payload_types, bound_aggregates));
 	}
+
+	BufferManager &buffer_manager;
+
+	vector<BoundAggregateExpression *> &bound_aggregates;
 
 	//! Expression executor for the GROUP BY chunk
 	ExpressionExecutor group_executor;
@@ -103,7 +109,9 @@ public:
 	//! The payload chunk
 	DataChunk payload_chunk;
 	//! The aggregate HT
-	unique_ptr<GroupedAggregateHashTable> ht;
+
+	unordered_map<radix_t, vector<unique_ptr<GroupedAggregateHashTable>>> hts;
+
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
 };
@@ -149,7 +157,12 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	payload_chunk.Verify();
 	assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
-	llstate.ht->AddChunk(group_chunk, payload_chunk);
+	if (llstate.hts[0].back()->Size() > 20000) /* FIXME what limit */ {
+		llstate.hts[0].push_back(make_unique<GroupedAggregateHashTable>(
+		    llstate.buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types, payload_types, llstate.bound_aggregates));
+	}
+
+	llstate.hts[0].back()->AddChunk(group_chunk, payload_chunk);
 	llstate.is_empty = false;
 }
 
@@ -183,7 +196,9 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	lock_guard<mutex> glock(gstate.lock);
 
 	gstate.is_empty &= source.is_empty;
-	gstate.final_ht->Combine(*source.ht);
+	for (auto &ht : source.hts[0]) {
+		gstate.final_ht->Combine(*ht);
+	}
 }
 
 class PhysicalHashAggregateFinalizeTask : public Task {
