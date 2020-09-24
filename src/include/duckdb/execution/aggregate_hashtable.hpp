@@ -113,8 +113,7 @@ private:
 	unique_ptr<BufferHandle> hashes_hdl;
 	data_ptr_t hashes_end_ptr; // of hashes
 
-	idx_t payload_idx;
-	idx_t payload_end;
+	idx_t payload_end_idx;
 
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
@@ -143,6 +142,7 @@ private:
 	void Verify();
 	void FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
+	data_ptr_t GetPtr(AHT_VAL_TPE ht_entry_val);
 };
 
 } // namespace duckdb
