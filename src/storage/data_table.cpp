@@ -279,6 +279,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		scan_state.current_row = state.current_row;
 		scan_state.base_row = scan_state.current_row;
 		scan_state.max_row = next;
+		scan_state.version_info = (MorselInfo*) versions->GetSegment(scan_state.current_row);
 
 		state.current_row = next;
 		return true;
@@ -695,6 +696,7 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 			break;
 		}
 	}
+	info->cardinality += append_count;
 	total_rows += append_count;
 }
 
@@ -712,6 +714,9 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 }
 
 void DataTable::RevertAppend(TableAppendState &state) {
+	// adjust the cardinality
+	info->cardinality = state.row_start;
+	total_rows = state.row_start;
 	if (state.row_start == state.current_row) {
 		// nothing to revert!
 		return;
@@ -721,11 +726,19 @@ void DataTable::RevertAppend(TableAppendState &state) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns[i]->RevertAppend(state.row_start);
 	}
-	// adjust the cardinality
-	info->cardinality -= state.current_row - state.row_start;
-	total_rows = state.row_start;
-	// revert changes in the transient manager
-	throw NotImplementedException("FIXME: revert append in morsel info's");
+	// revert appends made to morsels
+	lock_guard<mutex> tree_lock(versions->node_lock);
+	// find the segment index that the current row belongs to
+	idx_t segment_index = versions->GetSegmentIndex(state.row_start);
+	auto segment = versions->nodes[segment_index].node;
+	auto &info = (MorselInfo &)*segment;
+
+	// remove any segments AFTER this segment: they should be deleted entirely
+	if (segment_index < versions->nodes.size() - 1) {
+		versions->nodes.erase(versions->nodes.begin() + segment_index + 1, versions->nodes.end());
+	}
+	info.next = nullptr;
+	info.RevertAppend(state.row_start);
 }
 
 //===--------------------------------------------------------------------===//
@@ -950,11 +963,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
 	state.append_lock = unique_lock<mutex>(append_lock);
-
-	throw NotImplementedException("FIXME: lock against deletes");
-	// // get a read lock on the VersionManagers to prevent any further deletions
-	// state.locks.push_back(persistent_manager->lock.GetSharedLock());
-	// state.locks.push_back(transient_manager->lock.GetSharedLock());
+	state.delete_lock = unique_lock<mutex>(versions->node_lock);
 
 	InitializeScan(state, column_ids);
 }

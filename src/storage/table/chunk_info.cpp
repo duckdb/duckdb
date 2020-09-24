@@ -11,8 +11,8 @@ static bool UseVersion(Transaction &transaction, transaction_t id) {
 //===--------------------------------------------------------------------===//
 // Constant info
 //===--------------------------------------------------------------------===//
-ChunkConstantInfo::ChunkConstantInfo(MorselInfo &morsel) :
-    ChunkInfo(morsel, ChunkInfoType::CONSTANT_INFO), insert_id(0), delete_id(NOT_DELETED_ID) {
+ChunkConstantInfo::ChunkConstantInfo(idx_t start, MorselInfo &morsel) :
+    ChunkInfo(start, morsel, ChunkInfoType::CONSTANT_INFO), insert_id(0), delete_id(NOT_DELETED_ID) {
 }
 
 
@@ -30,8 +30,8 @@ bool ChunkConstantInfo::Fetch(Transaction &transaction, row_t row) {
 //===--------------------------------------------------------------------===//
 // Vector info
 //===--------------------------------------------------------------------===//
-ChunkVectorInfo::ChunkVectorInfo(MorselInfo &morsel) :
-	ChunkInfo(morsel, ChunkInfoType::VECTOR_INFO), insert_id(0),
+ChunkVectorInfo::ChunkVectorInfo(idx_t start, MorselInfo &morsel) :
+	ChunkInfo(start, morsel, ChunkInfoType::VECTOR_INFO), insert_id(0),
 	same_inserted_id(true), any_deleted(false) {
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		inserted[i] = 0;
@@ -77,7 +77,7 @@ idx_t ChunkVectorInfo::GetSelVector(Transaction &transaction, SelectionVector &s
 }
 
 bool ChunkVectorInfo::Fetch(Transaction &transaction, row_t row) {
-	return UseVersion(transaction, inserted[row]);
+	return UseVersion(transaction, inserted[row]) && !UseVersion(transaction, deleted[row]);
 }
 
 void ChunkVectorInfo::Delete(Transaction &transaction, row_t rows[], idx_t count) {

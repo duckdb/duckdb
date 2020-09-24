@@ -39,6 +39,8 @@ public:
 
 	//! Delete the given set of rows in the version manager
 	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
+
+	void RevertAppend(idx_t start);
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 private:

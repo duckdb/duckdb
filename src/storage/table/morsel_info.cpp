@@ -52,7 +52,7 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 		idx_t end = vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
-			auto constant_info = make_unique<ChunkConstantInfo>(*this);
+			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE, *this);
 			constant_info->insert_id = commit_id;
 			constant_info->delete_id = NOT_DELETED_ID;
 			root->info[vector_idx] = move(constant_info);
@@ -61,7 +61,7 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 			ChunkVectorInfo *info;
 			if (!root->info[vector_idx]) {
 				// first time appending to this vector: create new info
-				auto insert_info = make_unique<ChunkVectorInfo>(*this);
+				auto insert_info = make_unique<ChunkVectorInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE, *this);
 				info = insert_info.get();
 				root->info[vector_idx] = move(insert_info);
 			} else {
@@ -71,6 +71,16 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 			}
 			info->Append(start, end, commit_id);
 		}
+	}
+}
+
+void MorselInfo::RevertAppend(idx_t morsel_start) {
+	if (!root) {
+		return;
+	}
+	idx_t start_vector_idx = (morsel_start + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
+	for(idx_t vector_idx = start_vector_idx; vector_idx < MorselInfo::MORSEL_VECTOR_COUNT; vector_idx++) {
+		root->info[vector_idx].reset();
 	}
 }
 
@@ -123,11 +133,11 @@ void VersionDeleteState::Delete(row_t row_id) {
 
 		if (!info.root->info[vector_idx]) {
 			// no info yet: create it
-			info.root->info[vector_idx] = make_unique<ChunkVectorInfo>(info);
+			info.root->info[vector_idx] = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
 		} else if (info.root->info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
 			auto &constant = (ChunkConstantInfo &) *info.root->info[vector_idx];
 			// info exists but it's a constant info: convert to a vector info
-			auto new_info = make_unique<ChunkVectorInfo>(info);
+			auto new_info = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
 			new_info->insert_id = constant.insert_id;
 			info.root->info[vector_idx] = move(new_info);
 		}

@@ -23,12 +23,15 @@ enum class ChunkInfoType : uint8_t {
 
 class ChunkInfo {
 public:
-	ChunkInfo(MorselInfo &morsel, ChunkInfoType type)
-	    : morsel(morsel), type(type) {
+	ChunkInfo(idx_t start, MorselInfo &morsel, ChunkInfoType type)
+	    : start(start), morsel(morsel), type(type) {
 	}
 	virtual ~ChunkInfo() {
 	}
 
+	//! The row index of the first row
+	idx_t start;
+	//! The morsel the chunk info belongs to
 	MorselInfo &morsel;
 	//! The ChunkInfo type
 	ChunkInfoType type;
@@ -43,7 +46,7 @@ public:
 
 class ChunkConstantInfo : public ChunkInfo {
 public:
-	ChunkConstantInfo(MorselInfo &morsel);
+	ChunkConstantInfo(idx_t start, MorselInfo &morsel);
 
 	transaction_t insert_id;
 	transaction_t delete_id;
@@ -54,7 +57,7 @@ public:
 
 class ChunkVectorInfo : public ChunkInfo {
 public:
-	ChunkVectorInfo(MorselInfo &morsel);
+	ChunkVectorInfo(idx_t start, MorselInfo &morsel);
 
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	transaction_t inserted[STANDARD_VECTOR_SIZE];

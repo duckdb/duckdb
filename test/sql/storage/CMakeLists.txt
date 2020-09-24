@@ -4,7 +4,6 @@ if(NOT WIN32 AND NOT SUN)
                     OBJECT
                     test_buffer_manager.cpp
                     test_checksum.cpp
-                    test_commit_abort.cpp
                     test_shutdown.cpp
                     test_big_storage.cpp
                     test_storage.cpp

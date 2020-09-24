@@ -23,7 +23,28 @@ SELECT * FROM test ORDER BY 1
 12	21
 13	22
 
+statement ok
+INSERT INTO test VALUES (10, 'hello')
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+10	hello
+11	22
+12	21
+13	22
+
+statement ok
+DELETE FROM test WHERE b='hello'
+
 restart
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+11	22
+12	21
+13	22
 
 statement ok
 INSERT INTO test VALUES (10, 'hello')
