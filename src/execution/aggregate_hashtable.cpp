@@ -229,6 +229,13 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 }
 
 void GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+	Vector hashes(LogicalType::HASH);
+	groups.Hash(hashes);
+
+	return AddChunk(groups, hashes, payload);
+}
+
+void GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
 	if (finalized) {
 		throw InternalException("HT already finalized");
 	}
@@ -236,9 +243,11 @@ void GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	if (groups.size() == 0) {
 		return;
 	}
+	// dummy
+	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 
 	Vector addresses(LogicalType::POINTER);
-	FindOrCreateGroups(groups, addresses);
+	FindOrCreateGroups(groups, group_hashes, addresses, new_groups);
 
 	// now every cell has an entry
 	// update the aggregates
@@ -663,10 +672,11 @@ void GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &ad
 	FindOrCreateGroups(groups, addresses, new_groups);
 }
 
-idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups) {
+idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses_out,
+                                                    SelectionVector &new_groups_out) {
 	Vector hashes(LogicalType::HASH);
 	groups.Hash(hashes);
-	return FindOrCreateGroups(groups, hashes, addresses, new_groups);
+	return FindOrCreateGroups(groups, hashes, addresses_out, new_groups_out);
 }
 
 void GroupedAggregateHashTable::FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count) {
@@ -789,6 +799,7 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, D
 }
 
 void GroupedAggregateHashTable::Finalize() {
+	hashes_hdl.reset();
 	finalized = true;
 }
 
