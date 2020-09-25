@@ -39,11 +39,20 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
       payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), payload_end_idx(0),
       finalized(false) {
-	// HT tuple layout is as follows:
-	// [FLAG][GROUPS][PAYLOAD]
-	// [FLAG] is the state of the tuple in memory
-	// [GROUPS] is the groups
+	// two part hash table
+	// hashes and payload
+	// hashes layout:
+	// [SALT][OFFSET]
+	// [SALT] are the high bits of the hash value, e.g. 16 for 64 bit hashes
+	// [OFFSET] is the index into the payload blocks (below)
+
+	// payload layout
+	// [HASH][GROUPS][PADDING][PAYLOAD]
+	// [HASH] is the hash of the groups
+	// [GROUPS] is the group data, could be multiple values, fixed size, strings are elsewhere
+	// [PADDING] is gunk data to align payload properly
 	// [PAYLOAD] is the payload (i.e. the aggregate states)
+
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
 	}
