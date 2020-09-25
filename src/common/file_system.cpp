@@ -315,6 +315,14 @@ void FileSystem::SetWorkingDirectory(string path) {
 	}
 }
 
+string FileSystem::GetWorkingDirectory() {
+	auto buffer = unique_ptr<char[]>(new char[PATH_MAX]);
+	char *ret = getcwd(buffer.get(), PATH_MAX);
+	if (!ret) {
+		throw IOException("Could not get working directory!");
+	}
+	return string(buffer.get());
+}
 #else
 
 #include <string>
@@ -579,6 +587,19 @@ void FileSystem::SetWorkingDirectory(string path) {
 		throw IOException("Could not change working directory!");
 	}
 }
+
+string FileSystem::GetWorkingDirectory() {
+	idx_t count = GetCurrentDirectory(0, nullptr);
+	if (count == 0) {
+		throw IOException("Could not get working directory!");
+	}
+	auto buffer = unique_ptr<char[]>(new char[count]);
+	idx_t ret = GetCurrentDirectory(count, buffer.get());
+	if (count != ret + 1) {
+		throw IOException("Could not get working directory!");
+	}
+	return string(buffer.get(), ret);
+}
 #endif
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -648,6 +669,9 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 }
 
 vector<string> FileSystem::Glob(string path) {
+	if (path.size() == 0) {
+		return vector<string>();
+	}
 	// first check if the path has a glob at all
 	if (!HasGlob(path)) {
 		// no glob: return only the file (if it exists)
@@ -662,14 +686,30 @@ vector<string> FileSystem::Glob(string path) {
 	idx_t last_pos = 0;
 	for (idx_t i = 0; i < path.size(); i++) {
 		if (path[i] == '\\' || path[i] == '/') {
+			if (i == last_pos) {
+				// empty: skip this position
+				continue;
+			}
 			splits.push_back(path.substr(last_pos, i - last_pos));
 			last_pos = i + 1;
 		}
 	}
 	splits.push_back(path.substr(last_pos, path.size() - last_pos));
-	// now iterate over the chunks
+	// handle absolute paths
+	bool absolute_path = false;
+	if (path[0] == '/') {
+		// first character is a slash -  unix absolute path
+		absolute_path = true;
+	} else if (StringUtil::Contains(splits[0], ":")) {
+		// first split has a colon -  windows absolute path
+		absolute_path = true;
+	}
 	vector<string> previous_directories;
-	for (idx_t i = 0; i < splits.size(); i++) {
+	if (absolute_path) {
+		// for absolute paths, we don't start by scanning the current directory
+		previous_directories.push_back(splits[0]);
+	}
+	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern

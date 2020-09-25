@@ -75,7 +75,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
 
-	unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child);
 	unique_ptr<PhysicalOperator> CreateDistinctOn(unique_ptr<PhysicalOperator> child,
 	                                              vector<unique_ptr<Expression>> distinct_targets);
 

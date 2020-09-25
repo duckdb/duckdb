@@ -68,7 +68,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 				continue;
 			}
 		} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
-					expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+		           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 			// comparison, check if we can create a comparison JoinCondition
 			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				// successfully created the join condition
@@ -77,12 +77,23 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		}
 		arbitrary_expressions.push_back(move(expr));
 	}
-	if (arbitrary_expressions.size() > 0 || conditions.size() == 0) {
+	bool need_to_consider_arbitrary_expressions = true;
+	if (type == JoinType::INNER) {
+		// for inner joins we can push arbitrary expressions as a filter
+		// here we prefer to create a comparison join if possible
+		// that way we can use the much faster hash join to process the main join
+		// rather than doing a nested loop join to handle arbitrary expressions
+
+		// for left and full outer joins we HAVE to process all join conditions
+		// because pushing a filter will lead to an incorrect result, as non-matching tuples cannot be filtered out
+		need_to_consider_arbitrary_expressions = false;
+	}
+	if ((need_to_consider_arbitrary_expressions && arbitrary_expressions.size() > 0) || conditions.size() == 0) {
 		if (arbitrary_expressions.size() == 0) {
 			// all conditions were pushed down, add TRUE predicate
 			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
-		for(auto &condition : conditions) {
+		for (auto &condition : conditions) {
 			arbitrary_expressions.push_back(JoinCondition::CreateExpression(move(condition)));
 		}
 		// if we get here we could not create any JoinConditions
@@ -167,10 +178,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	} else {
 		join = result.get();
 	}
-	for(auto &child : join->children) {
+	for (auto &child : join->children) {
 		if (child->type == LogicalOperatorType::FILTER) {
-			auto &filter = (LogicalFilter &) *child;
-			for(auto &expr : filter.expressions) {
+			auto &filter = (LogicalFilter &)*child;
+			for (auto &expr : filter.expressions) {
 				PlanSubqueries(&expr, &filter.children[0]);
 			}
 		}

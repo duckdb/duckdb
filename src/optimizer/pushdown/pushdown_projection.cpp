@@ -43,6 +43,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	child_pushdown.GenerateFilters();
 	// now push into children
 	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
+	if (op->children[0]->type == LogicalOperatorType::EMPTY_RESULT) {
+		// child returns an empty result: generate an empty result here too
+		return make_unique<LogicalEmptyResult>(move(op));
+	}
 	return op;
 }
 

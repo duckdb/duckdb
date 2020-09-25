@@ -1,0 +1,50 @@
+# name: test/sql/setops/setops_pushdown.test
+# description: Test pushdown into UNION/EXCEPT/INTERSECT
+# group: [setops]
+
+# EXCEPT, but LHS is empty
+query I
+SELECT 42 WHERE 1=0 EXCEPT SELECT 42
+----
+
+# EXCEPT, but RHS is empty
+query I
+SELECT 42 EXCEPT SELECT 42 WHERE 1=0
+----
+42
+
+# EXCEPT, both sides empty
+query I
+SELECT 42 WHERE 1=0 EXCEPT SELECT 42 WHERE 1=0
+----
+
+# INTERSECT, but LHS is empty
+query I
+SELECT 42 WHERE 1=0 INTERSECT SELECT 42
+----
+
+# INTERSECT, but RHS is empty
+query I
+SELECT 42 INTERSECT SELECT 42 WHERE 1=0
+----
+
+# INTERSECT, both sides empty
+query I
+SELECT 42 WHERE 1=0 INTERSECT SELECT 42 WHERE 1=0
+----
+
+# UNION, but LHS is empty
+query I
+SELECT 42 WHERE 1=0 UNION ALL SELECT 42
+----
+42
+
+# UNION, but RHS is empty
+query I
+SELECT 42 UNION ALL SELECT 42 WHERE 1=0
+----
+42
+
+query I
+SELECT 42 WHERE 1=0 UNION ALL SELECT 42 WHERE 1=0
+----
