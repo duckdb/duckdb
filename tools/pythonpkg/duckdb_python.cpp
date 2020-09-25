@@ -165,7 +165,8 @@ enum class PandasType : uint8_t {
 	BIGINT_OBJECT,
 	FLOAT,
 	DOUBLE,
-	TIMESTAMP,
+	TIMESTAMP_NATIVE,
+	TIMESTAMP_OBJECT,
 	VARCHAR
 };
 
@@ -253,7 +254,10 @@ struct PandasScanFunction : public TableFunction {
 				pandas_type = PandasType::DOUBLE;
 			} else if (col_type == "datetime64[ns]") {
 				duckdb_col_type = LogicalType::TIMESTAMP;
-				pandas_type = PandasType::TIMESTAMP;
+				pandas_type = PandasType::TIMESTAMP_NATIVE;
+			} else if (StringUtil::StartsWith(col_type, "datetime64[ns")) {
+				duckdb_col_type = LogicalType::TIMESTAMP;
+				pandas_type = PandasType::TIMESTAMP_OBJECT;
 			} else if (col_type == "object") {
 				// this better be strings
 				duckdb_col_type = LogicalType::VARCHAR;
@@ -362,9 +366,9 @@ struct PandasScanFunction : public TableFunction {
 				scan_pandas_fp_column<double>((double *)numpy_col.data(), this_count, state.position,
 				                              output.data[col_idx]);
 				break;
-			case PandasType::TIMESTAMP: {
+			case PandasType::TIMESTAMP_NATIVE: {
 				auto src_ptr = (int64_t *)numpy_col.data();
-				auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
+				auto tgt_ptr = FlatVector::GetData<timestamp_t>(output.data[col_idx]);
 				auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
@@ -381,15 +385,37 @@ struct PandasScanFunction : public TableFunction {
 					tgt_ptr[row] = Timestamp::FromDatetime(date, time);
 				}
 				break;
-			} break;
-			case PandasType::VARCHAR: {
+			}
+			case PandasType::TIMESTAMP_OBJECT: {
 				auto src_ptr = (PyObject **)numpy_col.data();
-				auto tgt_ptr = (string_t *)FlatVector::GetData(output.data[col_idx]);
-
+				auto tgt_ptr = FlatVector::GetData<timestamp_t>(output.data[col_idx]);
+				auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
+				auto pandas_mod = py::module::import("pandas");
+				auto pandas_datetime = pandas_mod.attr("Timestamp");
 				for (idx_t row = 0; row < this_count; row++) {
 					auto source_idx = state.position + row;
 					auto val = src_ptr[source_idx];
-
+					auto &py_obj = *((py::object *)&val);
+					if (!py::isinstance(py_obj, pandas_datetime)) {
+						nullmask[row] = true;
+						continue;
+					}
+					// FIXME: consider timezone
+					auto epoch = py_obj.attr("timestamp")();
+					auto seconds = int64_t(epoch.cast<double>());
+					auto seconds_per_day = (int64_t)60 * 60 * 24;
+					date_t date = Date::EpochToDate(seconds);
+					dtime_t time = (dtime_t)(seconds % seconds_per_day) * 1000;
+					tgt_ptr[row] = Timestamp::FromDatetime(date, time);
+				}
+				break;
+			}
+			case PandasType::VARCHAR: {
+				auto src_ptr = (PyObject **)numpy_col.data();
+				auto tgt_ptr = FlatVector::GetData<string_t>(output.data[col_idx]);
+				for (idx_t row = 0; row < this_count; row++) {
+					auto source_idx = state.position + row;
+					auto val = src_ptr[source_idx];
 #if PY_MAJOR_VERSION >= 3
 					if (!PyUnicode_Check(val)) {
 						FlatVector::SetNull(output.data[col_idx], row, true);

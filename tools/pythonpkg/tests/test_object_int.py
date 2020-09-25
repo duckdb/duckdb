@@ -18,7 +18,6 @@ class TestPandasObjectInteger(object):
                 'int32': np.ma.masked_array([0,1,-1], mask=[True,False,False], dtype='float64'),
                 'int64': np.ma.masked_array([0,1,-1], mask=[True,False,False], dtype='float64'),}
         )
-        # RuntimeError: unsupported python type Int64
         df_out = duckdb.query(df_in, "data", "SELECT * FROM data").df()
         assert_frame_equal(df_expected_res, df_out)
 
