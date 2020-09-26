@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import datetime
 import duckdb
-from pandas._testing import assert_frame_equal
 
 class TestPandasObjectInteger(object):
     def test_object_integer(self, duckdb_cursor):
@@ -19,5 +18,5 @@ class TestPandasObjectInteger(object):
                 'int64': np.ma.masked_array([0,1,-1], mask=[True,False,False], dtype='float64'),}
         )
         df_out = duckdb.query(df_in, "data", "SELECT * FROM data").df()
-        assert_frame_equal(df_expected_res, df_out)
+        pd.testing.assert_frame_equal(df_expected_res, df_out)
 

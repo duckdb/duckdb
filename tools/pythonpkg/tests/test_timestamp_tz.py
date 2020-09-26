@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import datetime
 import duckdb
-from pandas._testing import assert_frame_equal
 
 class TestPandasTimestampTz(object):
     def test_timestamp_tz(self, duckdb_cursor):
@@ -18,5 +17,4 @@ class TestPandasTimestampTz(object):
         print(df_expected_res)
         df_out = duckdb.query(df_in, "data", "SELECT * FROM data").df()
         print(df_out)
-        assert_frame_equal(df_expected_res, df_out)
-
+        pd.testing.assert_frame_equal(df_expected_res, df_out)
