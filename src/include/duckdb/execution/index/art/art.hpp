@@ -25,6 +25,9 @@
 
 namespace duckdb {
 struct IteratorEntry {
+	IteratorEntry(){}
+	IteratorEntry(Node *node, idx_t pos) : node(node), pos(pos) {}
+
 	Node *node = nullptr;
 	idx_t pos = 0;
 };
@@ -34,10 +37,12 @@ struct Iterator {
 	Leaf *node = nullptr;
 	//! The current depth
 	int32_t depth = 0;
-	//! Stack, actually the size is determined at runtime
-	IteratorEntry stack[9];
+	//! Stack, the size is determined at runtime
+	vector<IteratorEntry> stack;
 
 	bool start = false;
+
+	void SetEntry(idx_t depth, IteratorEntry entry);
 };
 
 struct ARTIndexScanState : public IndexScanState {
