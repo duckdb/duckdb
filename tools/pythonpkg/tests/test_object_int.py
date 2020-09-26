@@ -6,10 +6,10 @@ import duckdb
 class TestPandasObjectInteger(object):
     def test_object_integer(self, duckdb_cursor):
         df_in = pd.DataFrame({
-                'int8': pd.Series([pd.NA, 1, -1], dtype="Int8"),
-                'int16': pd.Series([pd.NA, 1, -1], dtype="Int16"),
-                'int32': pd.Series([pd.NA, 1, -1], dtype="Int32"),
-                'int64': pd.Series([pd.NA, 1, -1], dtype="Int64")}
+                'int8': pd.Series([None, 1, -1], dtype="Int8"),
+                'int16': pd.Series([None, 1, -1], dtype="Int16"),
+                'int32': pd.Series([None, 1, -1], dtype="Int32"),
+                'int64': pd.Series([None, 1, -1], dtype="Int64")}
         )
         df_expected_res = pd.DataFrame({
                 'int8': np.ma.masked_array([0,1,-1], mask=[True,False,False], dtype='float64'),
