@@ -72,6 +72,15 @@ class DuckDBTypeTests(unittest.TestCase):
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
         self.assertEqual(row[0], val)
+
+    def test_CheckNaN(self):
+        with self.assertRaises(RuntimeError) as context:
+            self.cur.execute("insert into test(f) values (?)", (decimal.Decimal('nan'),))
+
+    def test_CheckInf(self):
+        with self.assertRaises(RuntimeError) as context:
+            self.cur.execute("insert into test(f) values (?)", (decimal.Decimal('inf'),))
+
  
     def test_CheckUnicodeExecute(self):
         self.cur.execute(u"select 'Österreich'")
