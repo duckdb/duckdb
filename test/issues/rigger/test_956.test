@@ -1,0 +1,13 @@
+# name: test/issues/rigger/test_956.test
+# description: Issue 956
+# group: [rigger]
+
+# Buffer overflow in duckdb::ART::IteratorNext
+statement ok
+CREATE TABLE t0(c0 VARCHAR UNIQUE);
+
+statement ok
+INSERT INTO t0 VALUES('19691214 051350'), (1), ('19700118'), (0), ('1969-1214 102704'), ('1969-12-14'), ('1969-12-14 114142'), ('1969-12-30 040325'), ('1969-12-18 044750'), ('1969-12-14 100915');
+
+statement ok
+SELECT * FROM t0 WHERE '19691' > c0;
