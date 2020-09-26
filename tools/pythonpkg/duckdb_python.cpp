@@ -968,7 +968,7 @@ struct DuckDBPyConnection {
 			} else if (py::isinstance<py::str>(ele)) {
 				args.push_back(Value(ele.cast<string>()));
 			} else if (py::isinstance(ele, decimal_decimal)) {
-				args.push_back(Value(ele.cast<string>()));
+				args.push_back(Value(py::str(ele).cast<string>()));
 			} else if (py::isinstance(ele, datetime_datetime)) {
 				auto year = PyDateTime_GET_YEAR(ele.ptr());
 				auto month = PyDateTime_GET_MONTH(ele.ptr());
