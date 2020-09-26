@@ -560,8 +560,8 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 
 	idx_t depth = 0;
 	while (true) {
+		it.SetEntry(it.depth, IteratorEntry(node, 0));
 		auto &top = it.stack[it.depth];
-		top.node = node;
 		it.depth++;
 		if (!equal) {
 			while (node->type != NodeType::NLeaf) {
