@@ -21,6 +21,7 @@ BoundStatement WriteCSVRelation::Bind(Binder &binder) {
 	auto info = make_unique<CopyInfo>();
 	info->is_from = false;
 	info->file_path = csv_file;
+	info->format = "csv";
 	copy.info = move(info);
 	return binder.Bind((SQLStatement &)copy);
 }

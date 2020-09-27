@@ -5,8 +5,9 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundStatement Binder::Bind(DeleteStatement &stmt) {
@@ -17,11 +18,14 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only delete from base table!");
 	}
+	auto &table_binding = (BoundBaseTableRef &)*bound_table;
+	auto table = table_binding.table;
+
 	auto root = CreatePlan(*bound_table);
 	auto &get = (LogicalGet &)*root;
-	assert(root->type == LogicalOperatorType::GET && get.table);
+	assert(root->type == LogicalOperatorType::GET);
 
-	if (!get.table->temporary) {
+	if (!table->temporary) {
 		// delete from persistent table: not read only!
 		this->read_only = false;
 	}
@@ -37,16 +41,18 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		root = move(filter);
 	}
 	// create the delete node
-	auto del = make_unique<LogicalDelete>(get.table);
+	auto del = make_unique<LogicalDelete>(table);
 	del->AddChild(move(root));
 
 	// set up the delete expression
 	del->expressions.push_back(
-	    make_unique<BoundColumnRefExpression>(TypeId::INT64, ColumnBinding(get.table_index, get.column_ids.size())));
+	    make_unique<BoundColumnRefExpression>(LOGICAL_ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	result.plan = move(del);
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 	return result;
 }
+
+} // namespace duckdb

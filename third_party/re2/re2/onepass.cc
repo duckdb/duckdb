@@ -71,7 +71,7 @@
 //#pragma warning(disable: 4200)
 #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // The key insight behind this implementation is that the
 // non-determinism in an NFA for a one-pass regular expression
@@ -143,7 +143,7 @@ namespace re2 {
 // the memory footprint.)
 struct OneState {
   uint32_t matchcond;   // conditions to match right now.
-  uint32_t action[];
+  uint32_t action[1];
 };
 
 // The uint32_t conditions in the action are a combination of
@@ -572,4 +572,4 @@ fail:
   return false;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

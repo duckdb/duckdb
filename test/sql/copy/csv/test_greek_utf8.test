@@ -1,0 +1,49 @@
+# name: test/sql/copy/csv/test_greek_utf8.test
+# description: Test copy from greek-utf8 csv
+# group: [csv]
+
+statement ok
+CREATE TABLE greek_utf8 AS SELECT i, nfc_normalize(j) j, k FROM read_csv('test/sql/copy/csv/data/real/greek_utf8.csv', columns=STRUCT_PACK(i := 'INTEGER', j := 'VARCHAR', k := 'INTEGER'), delim='|')
+
+query ITI
+SELECT * FROM greek_utf8 ORDER BY 1;
+----
+1689	00i\047m	2
+1690	00i\047v	2
+41561	2015‎	1
+45804	21π	1
+51981	24hours‬	1
+171067	ardèch	2
+182773	aﬁ	1
+607808	poverty‪	1
+
+query I
+COPY greek_utf8 TO '__TEST_DIR__/greek_utf8.csv' DELIMITER ' ' HEADER;
+----
+8
+
+# clear the table
+statement ok
+DELETE FROM greek_utf8;
+
+query ITI
+SELECT * FROM greek_utf8;
+----
+
+# now copy back into the table
+query I
+COPY greek_utf8 FROM '__TEST_DIR__/greek_utf8.csv' DELIMITER ' ' HEADER;
+----
+8
+
+query ITI
+SELECT * FROM greek_utf8 ORDER BY 1;
+----
+1689	00i\047m	2
+1690	00i\047v	2
+41561	2015‎	1
+45804	21π	1
+51981	24hours‬	1
+171067	ardèch	2
+182773	aﬁ	1
+607808	poverty‪	1

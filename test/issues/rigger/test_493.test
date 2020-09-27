@@ -1,0 +1,13 @@
+# name: test/issues/rigger/test_493.test
+# description: Issue 493
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# SIMILAR TO results in an 'Unknown error -1'
+query T
+SELECT '' SIMILAR TO '';
+----
+1
+

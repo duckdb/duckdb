@@ -3,7 +3,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf, 0) {
@@ -42,3 +42,5 @@ void Leaf::Remove(row_t row_id) {
 		row_ids[j] = row_ids[j + 1];
 	}
 }
+
+} // namespace duckdb

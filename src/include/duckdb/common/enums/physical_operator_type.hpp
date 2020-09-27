@@ -30,16 +30,14 @@ enum class PhysicalOperatorType : uint8_t {
 	SORT_GROUP_BY,
 	FILTER,
 	PROJECTION,
-	COPY_FROM_FILE,
 	COPY_TO_FILE,
-	TABLE_FUNCTION,
 	// -----------------------------
 	// Scans
 	// -----------------------------
+	TABLE_SCAN,
 	DUMMY_SCAN,
-	SEQ_SCAN,
-	INDEX_SCAN,
 	CHUNK_SCAN,
+	RECURSIVE_CTE_SCAN,
 	DELIM_SCAN,
 	EXTERNAL_FILE_SCAN,
 	QUERY_DERIVED_SCAN,
@@ -65,7 +63,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	INSERT,
 	INSERT_SELECT,
-	DELETE,
+	DELETE_OPERATOR,
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
 
@@ -89,7 +87,8 @@ enum class PhysicalOperatorType : uint8_t {
 	EMPTY_RESULT,
 	EXECUTE,
 	PREPARE,
-	VACUUM
+	VACUUM,
+	EXPORT
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

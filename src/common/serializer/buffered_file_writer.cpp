@@ -3,20 +3,20 @@
 #include "duckdb/common/algorithm.hpp"
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const char *path, bool append)
-    : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0) {
-	uint8_t flags = FileFlags::WRITE | FileFlags::CREATE;
-	if (append) {
-		flags |= FileFlags::APPEND;
-	}
-	handle = fs.OpenFile(path, flags, FileLockType::WRITE_LOCK);
+BufferedFileWriter::BufferedFileWriter(FileSystem &fs, string path, uint8_t open_flags)
+    : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), total_written(0) {
+	handle = fs.OpenFile(path, open_flags, FileLockType::WRITE_LOCK);
 }
 
 int64_t BufferedFileWriter::GetFileSize() {
 	return fs.GetFileSize(*handle);
+}
+
+idx_t BufferedFileWriter::GetTotalWritten() {
+	return total_written + offset;
 }
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, uint64_t write_size) {
@@ -39,6 +39,7 @@ void BufferedFileWriter::Flush() {
 		return;
 	}
 	fs.Write(*handle, data.get(), offset);
+	total_written += offset;
 	offset = 0;
 }
 
@@ -53,3 +54,5 @@ void BufferedFileWriter::Truncate(int64_t size) {
 	// reset anything written in the buffer
 	offset = 0;
 }
+
+} // namespace duckdb

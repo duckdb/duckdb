@@ -20,22 +20,8 @@ string_t SubstringFun::substring_ascii_only(Vector &result, const char *input_da
 
 string_t SubstringFun::substring_scalar_function(Vector &result, string_t input, int offset, int length,
                                                  unique_ptr<char[]> &output, idx_t &current_len) {
-	// reduce offset by one because SQL starts counting at 1
-	offset--;
-	if (offset < 0 || length < 0) {
-		throw Exception("SUBSTRING cannot handle negative offsets");
-	}
-	auto input_data = input.GetData();
-	auto input_size = input.GetSize();
-
-	// check if there is any non-ascii
-	bool ascii_only = true;
-	int ascii_end = min(offset + length + 1, (int)input_size);
-	for (int i = 0; i < ascii_end; i++) {
-		if (input_data[i] & 0x80) {
-			ascii_only = false;
-			break;
-		}
+	if (length < 0) {
+		throw Exception("SUBSTRING cannot handle negative lengths");
 	}
 
 	if (length == 0) {
@@ -44,9 +30,38 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 		return result_string;
 	}
 
+	// reduce offset by one because SQL starts counting at 1
+	// special case: if offset is zero, reduce length by 1 to avoid copying uninitialised memory
+	if (offset > 0) {
+		--offset;
+	} else if (offset == 0) {
+		--length;
+	}
+	auto input_data = input.GetData();
+	auto input_size = input.GetSize();
+
+	// check if there is any non-ascii
+	bool ascii_only = true;
+	int ascii_begin = 0;
+	int ascii_end = (int)input_size;
+	if (offset < 0) {
+		ascii_begin = MaxValue<int>(input_size + offset, ascii_begin);
+	} else {
+		// scan one further to check for a grapheme cluster
+		ascii_end = MinValue<int>(offset + length + 1, ascii_end);
+	}
+	for (auto i = ascii_begin; i < ascii_end; ++i) {
+		if (input_data[i] & 0x80) {
+			ascii_only = false;
+			break;
+		}
+	}
+
 	if (ascii_only) {
-		// ascii only
-		length = std::min(offset + length, (int)input_size);
+		if (offset < 0) {
+			offset = ascii_begin;
+		}
+		length = MinValue<int>(offset + length, input_size);
 		if (offset >= length) {
 			return string_t((uint32_t)0);
 		}
@@ -59,6 +74,15 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 		// need a resize
 		current_len = required_len;
 		output = unique_ptr<char[]>{new char[required_len]};
+	}
+
+	// if we are slicing Unicode, get the positive offset by computing the length
+	if (offset < 0) {
+		utf8proc_grapheme_callback(input_data, input_size, [&](size_t start, size_t end) {
+			++offset;
+			return true;
+		});
+		offset = MaxValue<int>(offset, 0);
 	}
 
 	// use grapheme iterator to iterate over the characters
@@ -79,24 +103,23 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 }
 
 static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT32 &&
-	       args.data[2].type == TypeId::INT32);
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	auto &length_vector = args.data[2];
 
 	idx_t current_len = 0;
 	unique_ptr<char[]> output;
-	TernaryExecutor::Execute<string_t, int, int, string_t>(
+	TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
 	    input_vector, offset_vector, length_vector, result, args.size(),
-	    [&](string_t input_string, int offset, int length) {
+	    [&](string_t input_string, int32_t offset, int32_t length) {
 		    return SubstringFun::substring_scalar_function(result, input_string, offset, length, output, current_len);
 	    });
 }
 
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"substring", "substr"}, ScalarFunction({SQLType::VARCHAR, SQLType::INTEGER, SQLType::INTEGER},
-	                                                        SQLType::VARCHAR, substring_function));
+	set.AddFunction({"substring", "substr"},
+	                ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::INTEGER},
+	                               LogicalType::VARCHAR, substring_function));
 }
 
 } // namespace duckdb

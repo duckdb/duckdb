@@ -1,0 +1,17 @@
+# name: test/sql/alter/rename_col/test_rename_col.test
+# description: Test ALTER TABLE RENAME COLUMN
+# group: [rename_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+# rename the column
+statement ok
+ALTER TABLE test RENAME COLUMN i TO k
+
+statement ok
+SELECT * FROM test
+
+statement ok
+DROP TABLE IF EXISTS test
+

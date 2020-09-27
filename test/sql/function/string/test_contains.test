@@ -1,0 +1,119 @@
+# name: test/sql/function/string/test_contains.test
+# description: Contains test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 1, 2), ('world', 2, 3), ('b', 1, 1), (NULL, 2, 2)
+
+# Test first letter
+query T
+SELECT contains(s,'h') FROM strings
+----
+1
+0
+0
+NULL
+
+# Test second letter
+query T
+SELECT contains(s,'e') FROM strings
+----
+1
+0
+0
+NULL
+
+# Test last letter
+query T
+SELECT contains(s,'d') FROM strings
+----
+0
+1
+0
+NULL
+
+# Test multiple letters
+query T
+SELECT contains(s,'he') FROM strings
+----
+1
+0
+0
+NULL
+
+# Test multiple letters in the middle
+query T
+SELECT contains(s,'ello') FROM strings
+----
+1
+0
+0
+NULL
+
+# Test multiple letters at the end
+query T
+SELECT contains(s,'lo') FROM strings
+----
+1
+0
+0
+NULL
+
+# Test no match
+query T
+SELECT contains(s,'he-man') FROM strings
+----
+0
+0
+0
+NULL
+
+# Test matching needle in multiple rows
+query T
+SELECT contains(s,'o') FROM strings
+----
+1
+1
+0
+NULL
+
+# Test NULL constant in different places
+query T
+SELECT contains(NULL,'o') FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT contains(s,NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT contains(NULL,NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+# Test empty pattern
+query T
+SELECT contains(s,'') FROM strings
+----
+1
+1
+1
+NULL
+

@@ -2,7 +2,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 idx_t VersionManager::GetSelVector(Transaction &transaction, idx_t index, SelectionVector &sel_vector,
@@ -117,13 +117,21 @@ void VersionManager::Append(Transaction &transaction, row_t row_start, idx_t cou
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
 	auto current_info = GetInsertInfo(chunk_idx);
-	for (idx_t i = 0; i < count; i++) {
-		current_info->inserted[idx_in_chunk] = commit_id;
-		idx_in_chunk++;
-		if (idx_in_chunk == STANDARD_VECTOR_SIZE) {
+	idx_t remaining = count;
+	while (true) {
+		idx_t start = idx_in_chunk;
+		idx_t to_process = MinValue<idx_t>(STANDARD_VECTOR_SIZE - start, remaining);
+		idx_t end = start + to_process;
+		current_info->Append(start, end, commit_id);
+		remaining -= to_process;
+		if (remaining > 0) {
 			chunk_idx++;
 			idx_in_chunk = 0;
+			// more to be inserted
 			current_info = GetInsertInfo(chunk_idx);
+			continue;
+		} else {
+			break;
 		}
 	}
 	max_row += count;
@@ -162,3 +170,5 @@ void VersionManager::RevertAppend(row_t row_start, row_t row_end) {
 		info.erase(chunk_start);
 	}
 }
+
+} // namespace duckdb

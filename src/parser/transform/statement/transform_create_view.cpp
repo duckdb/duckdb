@@ -2,8 +2,9 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 	assert(node);
@@ -24,7 +25,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 	if (info->temporary) {
 		info->schema = TEMP_SCHEMA;
 	}
-	info->on_conflict = stmt->replace ? OnCreateConflict::REPLACE : OnCreateConflict::ERROR;
+	info->on_conflict = stmt->replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
 	info->query = TransformSelectNode((PGSelectStmt *)stmt->query);
 
@@ -56,3 +57,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

@@ -2,7 +2,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimGet &op) {
@@ -12,3 +12,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimGet &
 	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::DELIM_SCAN);
 	return move(chunk_scan);
 }
+
+} // namespace duckdb

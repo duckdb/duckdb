@@ -7,7 +7,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_)
@@ -54,9 +54,13 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((ExplainStatement &)statement);
 	case StatementType::VACUUM_STATEMENT:
 		return Bind((VacuumStatement &)statement);
+	case StatementType::CALL_STATEMENT:
+		return Bind((CallStatement &)statement);
+	case StatementType::EXPORT_STATEMENT:
+		return Bind((ExportStatement &)statement);
 	default:
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
-		                              StatementTypeToString(statement.type).c_str());
+		                              StatementTypeToString(statement.type));
 	}
 }
 
@@ -146,17 +150,17 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	}
 }
 
-void Binder::AddCTE(const string &name, QueryNode *cte) {
-	assert(cte);
+void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
+	assert(info);
 	assert(!name.empty());
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
-		throw BinderException("Duplicate CTE \"%s\" in query!", name.c_str());
+		throw BinderException("Duplicate CTE \"%s\" in query!", name);
 	}
-	CTE_bindings[name] = cte;
+	CTE_bindings[name] = info;
 }
 
-unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
+CommonTableExpressionInfo *Binder::FindCTE(const string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
 		if (parent) {
@@ -164,7 +168,7 @@ unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
 		}
 		return nullptr;
 	}
-	return entry->second->Copy();
+	return entry->second;
 }
 
 idx_t Binder::GenerateTableIndex() {
@@ -220,3 +224,5 @@ void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
 		correlated_columns.push_back(info);
 	}
 }
+
+} // namespace duckdb

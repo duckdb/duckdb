@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -28,6 +28,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	auto constant = (BoundConstantExpression *)bindings[1];
 	int constant_child = root->children[0].get() == constant ? 0 : 1;
 	assert(root->children.size() == 2);
+	(void)root;
 	// any arithmetic operator involving NULL is always NULL
 	if (constant->value.is_null) {
 		return make_unique<BoundConstantExpression>(Value(root->return_type));
@@ -64,3 +65,4 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	}
 	return nullptr;
 }
+} // namespace duckdb

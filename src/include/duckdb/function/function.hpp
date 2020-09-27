@@ -22,15 +22,22 @@ class Transaction;
 
 class AggregateFunction;
 class AggregateFunctionSet;
+class CopyFunction;
+class PragmaFunction;
 class ScalarFunctionSet;
 class ScalarFunction;
+class TableFunctionSet;
 class TableFunction;
+
+struct PragmaInfo;
 
 struct FunctionData {
 	virtual ~FunctionData() {
 	}
 
-	virtual unique_ptr<FunctionData> Copy() = 0;
+	virtual unique_ptr<FunctionData> Copy() {
+		return make_unique<FunctionData>();
+	};
 };
 
 struct TableFunctionData : public FunctionData {
@@ -54,47 +61,74 @@ public:
 
 public:
 	//! Returns the formatted string name(arg1, arg2, ...)
-	static string CallToString(string name, vector<SQLType> arguments);
+	static string CallToString(string name, vector<LogicalType> arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
-	static string CallToString(string name, vector<SQLType> arguments, SQLType return_type);
+	static string CallToString(string name, vector<LogicalType> arguments, LogicalType return_type);
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions,
+	                          vector<unique_ptr<Expression>> &arguments);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments);
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions,
+	                          vector<unique_ptr<Expression>> &arguments);
+	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
+	//! function, or throws an exception if none could be found.
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments);
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments);
+	//! Bind a pragma function from the set of functions and input arguments
+	static idx_t BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info);
 };
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects, SQLType varargs = SQLType::INVALID)
-	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(varargs),
-	      has_side_effects(has_side_effects) {
+	SimpleFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID)
+	    : Function(name), arguments(move(arguments)), varargs(varargs) {
 	}
 	virtual ~SimpleFunction() {
 	}
 
 	//! The set of arguments of the function
-	vector<SQLType> arguments;
+	vector<LogicalType> arguments;
+	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
+	//! arguments
+	LogicalType varargs;
+
+public:
+	virtual string ToString() {
+		return Function::CallToString(name, arguments);
+	}
+
+	bool HasVarArgs() {
+		return varargs.id() != LogicalTypeId::INVALID;
+	}
+};
+
+class BaseScalarFunction : public SimpleFunction {
+public:
+	BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, bool has_side_effects,
+	                   LogicalType varargs = LogicalType::INVALID)
+	    : SimpleFunction(move(name), move(arguments), move(varargs)), return_type(return_type),
+	      has_side_effects(has_side_effects) {
+	}
+	virtual ~BaseScalarFunction() {
+	}
+
 	//! Return type of the function
-	SQLType return_type;
-	//! The type of varargs to support, or SQLTypeId::INVALID if the function does not accept variable length arguments
-	SQLType varargs;
+	LogicalType return_type;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
 
 public:
 	//! Cast a set of expressions to the arguments of this function
-	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types);
+	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children);
 
-	string ToString() {
+	string ToString() override {
 		return Function::CallToString(name, arguments, return_type);
-	}
-
-	bool HasVarArgs() {
-		return varargs.id != SQLTypeId::INVALID;
 	}
 };
 
@@ -109,9 +143,13 @@ public:
 	void AddFunction(AggregateFunctionSet set);
 	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunctionSet set);
+	void AddFunction(PragmaFunction function);
+	void AddFunction(string name, vector<PragmaFunction> functions);
 	void AddFunction(ScalarFunction function);
 	void AddFunction(vector<string> names, ScalarFunction function);
+	void AddFunction(TableFunctionSet set);
 	void AddFunction(TableFunction function);
+	void AddFunction(CopyFunction function);
 
 	void AddCollation(string name, ScalarFunction function, bool combinable = false,
 	                  bool not_required_for_equality = false);
@@ -128,6 +166,9 @@ private:
 	// table-producing functions
 	void RegisterSQLiteFunctions();
 	void RegisterReadFunctions();
+	void RegisterTableFunctions();
+	void RegisterArrowFunctions();
+	void RegisterInformationSchemaFunctions();
 
 	// aggregates
 	void RegisterAlgebraicAggregates();
@@ -143,6 +184,9 @@ private:
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
+
+	// pragmas
+	void RegisterPragmaFunctions();
 };
 
 } // namespace duckdb

@@ -1,0 +1,24 @@
+# name: test/issues/rigger/test_549.test
+# description: Issue 549
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Nested CASE expression results in Assertion `other.auxiliary->type == VectorBufferType::STRING_BUFFER' failed
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0 VALUES (NULL), (0), (1); 
+
+statement error
+SELECT * FROM t0 WHERE CASE WHEN c0 THEN 0 ELSE CASE '0.1' WHEN c0 THEN '' END END;
+
+query T
+SELECT CASE WHEN c0 THEN 0 ELSE (CASE '0' WHEN c0 THEN '0.6' END) END FROM t0;
+----
+NULL
+0.6
+0
+

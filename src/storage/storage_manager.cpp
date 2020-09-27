@@ -13,7 +13,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 StorageManager::StorageManager(DuckDB &db, string path, bool read_only)
@@ -21,6 +21,10 @@ StorageManager::StorageManager(DuckDB &db, string path, bool read_only)
 }
 
 StorageManager::~StorageManager() {
+}
+
+StorageManager &StorageManager::GetStorageManager(ClientContext &context) {
+	return *context.db.storage;
 }
 
 BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
@@ -57,13 +61,13 @@ void StorageManager::Initialize() {
 	} else {
 		block_manager = make_unique<InMemoryBlockManager>();
 		buffer_manager =
-		    make_unique<BufferManager>(database.GetFileSystem(), *block_manager,
-		                               database.config.temporary_directory, database.config.maximum_memory);
+		    make_unique<BufferManager>(database.GetFileSystem(), *block_manager, database.config.temporary_directory,
+		                               database.config.maximum_memory);
 	}
 }
 
 void StorageManager::Checkpoint(string wal_path) {
-    auto &fs = database.GetFileSystem();
+	auto &fs = database.GetFileSystem();
 	if (!fs.FileExists(wal_path)) {
 		// no WAL to checkpoint
 		return;
@@ -96,8 +100,7 @@ void StorageManager::LoadDatabase() {
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
 		if (read_only) {
-			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist",
-			                       path.c_str());
+			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 		}
 		// check if the WAL exists
 		if (fs.FileExists(wal_path)) {
@@ -106,19 +109,17 @@ void StorageManager::LoadDatabase() {
 			fs.RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager = make_unique<SingleFileBlockManager>(fs, path, read_only, true,
-		                                                    database.config.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(
-		    fs, *block_manager, database.config.temporary_directory, database.config.maximum_memory);
+		block_manager = make_unique<SingleFileBlockManager>(fs, path, read_only, true, database.config.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(fs, *block_manager, database.config.temporary_directory,
+		                                            database.config.maximum_memory);
 	} else {
 		if (!database.config.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
-		auto sf = make_unique<SingleFileBlockManager>(fs, path, read_only, false,
-		                                              database.config.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(fs, *sf, database.config.temporary_directory,
-		                                            database.config.maximum_memory);
+		auto sf = make_unique<SingleFileBlockManager>(fs, path, read_only, false, database.config.use_direct_io);
+		buffer_manager =
+		    make_unique<BufferManager>(fs, *sf, database.config.temporary_directory, database.config.maximum_memory);
 		sf->LoadFreeList(*buffer_manager);
 		block_manager = move(sf);
 
@@ -143,3 +144,5 @@ void StorageManager::LoadDatabase() {
 		wal.Initialize(wal_path);
 	}
 }
+
+} // namespace duckdb

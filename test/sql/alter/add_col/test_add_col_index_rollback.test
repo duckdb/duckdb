@@ -1,0 +1,35 @@
+# name: test/sql/alter/add_col/test_add_col_index_rollback.test
+# description: Test ALTER TABLE ADD COLUMN: ADD COLUMN rollback with index
+# group: [add_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER
+
+statement ok
+CREATE INDEX i_index ON test(k)
+
+statement ok
+ROLLBACK
+
+statement ok
+INSERT INTO test VALUES (3, 3)
+
+query II
+SELECT * FROM test
+----
+1
+1
+2
+2
+3
+3
+

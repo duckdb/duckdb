@@ -5,7 +5,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
@@ -34,3 +34,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 
 	return VisitQueryNode(node, move(root));
 }
+
+} // namespace duckdb

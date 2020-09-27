@@ -1,0 +1,48 @@
+# name: test/sql/subquery/scalar/test_complex_nested_correlated_subquery.test
+# description: Test nested correlated subqueries with multiple columns
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e VARCHAR, f DATE, g TIMESTAMP)
+
+statement ok
+INSERT INTO tbl VALUES (1, 2, 3, 4, '5', DATE '1992-01-01', TIMESTAMP '1992-01-01 00:00:00')
+
+query T
+SELECT EXISTS(SELECT t1.b+t1.c) FROM tbl t1
+----
+1
+
+query I
+SELECT t1.c+(SELECT t1.b FROM tbl t2 WHERE EXISTS(SELECT t1.b+t2.a)) FROM tbl t1
+----
+5
+
+query I
+SELECT 1 FROM tbl t1 JOIN tbl t2 ON (t1.d=t2.d) WHERE EXISTS(SELECT t1.c FROM tbl t3 WHERE t1.d+t3.c<100 AND EXISTS(SELECT t2.f < DATE '2000-01-01'))
+----
+1
+
+query T
+SELECT EXISTS(SELECT 1 WHERE (t1.c>100 OR 1) AND t1.d<100) FROM tbl t1
+----
+1
+
+query T
+SELECT EXISTS(SELECT t1.c,t1.d WHERE t1.d<100) FROM tbl t1
+----
+1
+
+query TTTTTTTTTTTTTT
+SELECT * FROM tbl t1 LEFT JOIN tbl t2 ON (SELECT t2.a)<100
+----
+1	2	3	4	5	1992-01-01	1992-01-01 00:00:00	1	2	3	4	5	1992-01-01	1992-01-01 00:00:00
+
+query TTTTTTTTTTTTTT
+SELECT * FROM tbl t1 LEFT JOIN tbl t2 ON (SELECT t2.a)>100
+----
+1	2	3	4	5	1992-01-01	1992-01-01 00:00:00	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+

@@ -12,11 +12,11 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 using namespace chrono;
 
-DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_,
+DataTable::DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types_,
                      unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
     : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage),
       persistent_manager(make_shared<VersionManager>(*info)), transient_manager(make_shared<VersionManager>(*info)),
@@ -49,7 +49,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
-	auto new_column_type = GetInternalType(new_column.type);
+	auto new_column_type = new_column.type;
 	idx_t new_column_idx = columns.size();
 
 	types.push_back(new_column_type);
@@ -73,7 +73,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 		ColumnAppendState state;
 		columns[new_column_idx]->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
-			idx_t rows_in_this_vector = std::min(rows_to_write - i, (idx_t)STANDARD_VECTOR_SIZE);
+			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
 			if (default_value) {
 				dummy_chunk.SetCardinality(rows_in_this_vector);
 				executor.ExecuteExpression(dummy_chunk, result);
@@ -112,7 +112,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	parent.is_root = false;
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type,
+DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
     : info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager),
       transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
@@ -130,12 +130,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		}
 	}
 	// change the type in this DataTable
-	auto new_type = GetInternalType(target_type);
-	types[changed_idx] = new_type;
+	types[changed_idx] = target_type;
 
 	// construct a new column data for this type
 	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
-	column_data->type = new_type;
+	column_data->type = target_type;
 	column_data->column_idx = changed_idx;
 
 	ColumnAppendState append_state;
@@ -144,10 +143,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	// scan the original table, and fill the new column with the transformed value
 	auto &transaction = Transaction::GetTransaction(context);
 
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
-			types.push_back(ROW_TYPE);
+			types.push_back(LOGICAL_ROW_TYPE);
 		} else {
 			types.push_back(parent.types[bound_columns[i]]);
 		}
@@ -159,7 +158,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	ExpressionExecutor executor;
 	executor.AddExpression(cast_expr);
 
-	Vector append_vector(new_type);
+	Vector append_vector(target_type);
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
@@ -230,63 +229,78 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	state.max_persistent_row = 0;
 	state.current_transient_row = 0;
 	state.max_transient_row = 0;
-	if (table_filters && table_filters->size() > 0) {
+	if (table_filters && table_filters->size() > 0 && !state.adaptive_filter) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
 	}
 }
 
-void DataTable::InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids,
-                                       unordered_map<idx_t, vector<TableFilter>> *table_filters,
-                                       std::function<void(TableScanState)> callback) {
+idx_t DataTable::MaxThreads(ClientContext &context) {
 	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
+	if (context.force_parallelism) {
+		PARALLEL_SCAN_VECTOR_COUNT = 1;
+	}
 	idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
 
-	idx_t current_offset = 0;
-	// create parallel scans for the persistent rows
-	for (idx_t i = 0; i < persistent_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
-		idx_t current = i;
-		idx_t next = std::min(i + PARALLEL_SCAN_TUPLE_COUNT, persistent_manager->max_row);
+	return (persistent_manager->max_row + transient_manager->max_row) / PARALLEL_SCAN_TUPLE_COUNT + 1;
+}
 
-		TableScanState state;
-		InitializeScanWithOffset(state, column_ids, table_filters, current_offset);
-		state.current_persistent_row = current;
-		state.max_persistent_row = next;
+void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
+	state.persistent_row_idx = 0;
+	state.transient_row_idx = 0;
+	state.transaction_local_data = false;
+}
 
-		callback(move(state));
-
-		current_offset += PARALLEL_SCAN_VECTOR_COUNT;
-	}
-	if (persistent_manager->max_row > 0) {
-		current_offset = (persistent_manager->max_row / STANDARD_VECTOR_SIZE) + 1;
-	}
-	// now create parallel scans for the transient rows
+bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+                                 const vector<column_t> &column_ids,
+                                 unordered_map<idx_t, vector<TableFilter>> *table_filters) {
+	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
 	if (context.force_parallelism) {
-		// force parallelism: create one task per vector
 		PARALLEL_SCAN_VECTOR_COUNT = 1;
-		PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
 	}
-	for (idx_t i = 0; i < transient_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
-		idx_t current = i;
-		idx_t next = std::min(i + PARALLEL_SCAN_TUPLE_COUNT, transient_manager->max_row);
+	idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
 
-		TableScanState state;
-		InitializeScanWithOffset(state, column_ids, table_filters, current_offset);
-		state.current_transient_row = current;
-		state.max_transient_row = next;
+	if (state.persistent_row_idx < persistent_manager->max_row) {
+		idx_t next = MinValue(state.persistent_row_idx + PARALLEL_SCAN_TUPLE_COUNT, persistent_manager->max_row);
 
-		callback(move(state));
+		idx_t vector_offset = state.persistent_row_idx / STANDARD_VECTOR_SIZE;
+		// scan a morsel from the persistent rows
+		InitializeScanWithOffset(scan_state, column_ids, table_filters, vector_offset);
+		scan_state.current_persistent_row = state.persistent_row_idx;
+		scan_state.max_persistent_row = next;
 
-		current_offset += PARALLEL_SCAN_VECTOR_COUNT;
+		state.persistent_row_idx = next;
+		return true;
+	} else if (state.transient_row_idx < transient_manager->max_row) {
+		idx_t next = MinValue(state.transient_row_idx + PARALLEL_SCAN_TUPLE_COUNT, transient_manager->max_row);
+		// scan a morsel from the transient rows
+		idx_t vector_offset = 0;
+		if (persistent_manager->max_row > 0) {
+			vector_offset = persistent_manager->max_row / STANDARD_VECTOR_SIZE;
+			if (persistent_manager->max_row % STANDARD_VECTOR_SIZE != 0) {
+				vector_offset++;
+			}
+		}
+		vector_offset += state.transient_row_idx / STANDARD_VECTOR_SIZE;
+
+		InitializeScanWithOffset(scan_state, column_ids, table_filters, vector_offset);
+		scan_state.current_transient_row = state.transient_row_idx;
+		scan_state.max_transient_row = next;
+
+		state.transient_row_idx = next;
+		return true;
+	} else if (!state.transaction_local_data) {
+		auto &transaction = Transaction::GetTransaction(context);
+		// create a task for scanning the local data
+		// FIXME: this should also be potentially parallelized
+		scan_state.current_persistent_row = scan_state.max_persistent_row = 0;
+		scan_state.current_transient_row = scan_state.max_transient_row = 0;
+		transaction.storage.InitializeScan(this, scan_state.local_state);
+		state.transaction_local_data = true;
+		return true;
+	} else {
+		// finished all scans: no more scans remaining
+		return false;
 	}
-
-	// create a task for scanning the local data
-	// FIXME: this should also be potentially parallelized
-	auto &transaction = Transaction::GetTransaction(context);
-	TableScanState state;
-	state.current_persistent_row = state.max_persistent_row = 0;
-	state.current_transient_row = state.max_transient_row = 0;
-	transaction.storage.InitializeScan(this, state.local_state);
-	callback(move(state));
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
@@ -352,46 +366,52 @@ bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const 
 
 bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
                              idx_t &current_row) {
-	bool readSegment = true;
 	for (auto &table_filter : table_filters) {
 		for (auto &predicate_constant : table_filter.second) {
+			bool readSegment = true;
+
 			if (!state.column_scans[predicate_constant.column_index].segment_checked) {
 				state.column_scans[predicate_constant.column_index].segment_checked = true;
 				if (!state.column_scans[predicate_constant.column_index].current) {
 					return true;
 				}
 				switch (state.column_scans[predicate_constant.column_index].current->type) {
-				case TypeId::INT8: {
+				case PhysicalType::INT8: {
 					int8_t constant = predicate_constant.constant.value_.tinyint;
-					readSegment &= checkZonemap<int8_t>(state, predicate_constant, constant);
+					readSegment = checkZonemap<int8_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::INT16: {
+				case PhysicalType::INT16: {
 					int16_t constant = predicate_constant.constant.value_.smallint;
-					readSegment &= checkZonemap<int16_t>(state, predicate_constant, constant);
+					readSegment = checkZonemap<int16_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::INT32: {
+				case PhysicalType::INT32: {
 					int32_t constant = predicate_constant.constant.value_.integer;
-					readSegment &= checkZonemap<int32_t>(state, predicate_constant, constant);
+					readSegment = checkZonemap<int32_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::INT64: {
+				case PhysicalType::INT64: {
 					int64_t constant = predicate_constant.constant.value_.bigint;
-					readSegment &= checkZonemap<int64_t>(state, predicate_constant, constant);
+					readSegment = checkZonemap<int64_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::FLOAT: {
+				case PhysicalType::INT128: {
+					auto constant = predicate_constant.constant.value_.hugeint;
+					readSegment = checkZonemap<hugeint_t>(state, predicate_constant, constant);
+					break;
+				}
+				case PhysicalType::FLOAT: {
 					float constant = predicate_constant.constant.value_.float_;
-					readSegment &= checkZonemap<float>(state, predicate_constant, constant);
+					readSegment = checkZonemap<float>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::DOUBLE: {
+				case PhysicalType::DOUBLE: {
 					double constant = predicate_constant.constant.value_.double_;
-					readSegment &= checkZonemap<double>(state, predicate_constant, constant);
+					readSegment = checkZonemap<double>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::VARCHAR: {
+				case PhysicalType::VARCHAR: {
 					//! we can only compare the first 7 bytes
 					size_t value_size = predicate_constant.constant.str_value.size() > 7
 					                        ? 7
@@ -400,7 +420,7 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 					for (size_t i = 0; i < value_size; i++) {
 						constant += predicate_constant.constant.str_value[i];
 					}
-					readSegment &= checkZonemapString(state, predicate_constant, constant.c_str());
+					readSegment = checkZonemapString(state, predicate_constant, constant.c_str());
 					break;
 				}
 				default:
@@ -432,7 +452,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		// exceeded the amount of rows to scan
 		return false;
 	}
-	idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, max_row - current_row);
+	idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = current_row / STANDARD_VECTOR_SIZE;
 	//! first check the zonemap if we have to scan this partition
 	if (!CheckZonemap(state, table_filters, current_row)) {
@@ -454,7 +474,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			auto column = column_ids[i];
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
 				// scan row id
-				assert(result.data[i].type == ROW_TYPE);
+				assert(result.data[i].type.InternalType() == ROW_TYPE);
 				result.data[i].Sequence(base_row + current_row, 1);
 			} else {
 				columns[column]->Scan(transaction, state.column_scans[i], result.data[i]);
@@ -485,7 +505,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			if (table_filters.find(i) == table_filters.end()) {
 				auto column = column_ids[i];
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
-					assert(result.data[i].type == TypeId::INT64);
+					assert(result.data[i].type.InternalType() == PhysicalType::INT64);
 					result.data[i].vector_type = VectorType::FLAT_VECTOR;
 					auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
 					for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
@@ -510,50 +530,13 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 }
 
 //===--------------------------------------------------------------------===//
-// Index Scan
-//===--------------------------------------------------------------------===//
-void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
-                                    vector<column_t> column_ids) {
-	state.index = &index;
-	state.column_ids = move(column_ids);
-	transaction.storage.InitializeScan(this, state.local_state);
-}
-
-void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value,
-                                    ExpressionType expr_type, vector<column_t> column_ids) {
-	InitializeIndexScan(transaction, state, index, move(column_ids));
-	state.index_state = index.InitializeScanSinglePredicate(transaction, state.column_ids, value, expr_type);
-}
-
-void DataTable::InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value low_value,
-                                    ExpressionType low_type, Value high_value, ExpressionType high_type,
-                                    vector<column_t> column_ids) {
-	InitializeIndexScan(transaction, state, index, move(column_ids));
-	state.index_state =
-	    index.InitializeScanTwoPredicates(transaction, state.column_ids, low_value, low_type, high_value, high_type);
-}
-
-void DataTable::IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state) {
-	// clear any previously pinned blocks
-	state.fetch_state.handles.clear();
-	// scan the index
-	state.index->Scan(transaction, *this, state, result);
-	if (result.size() > 0) {
-		return;
-	}
-	// scan the local structure
-	transaction.storage.Scan(state.local_state, state.column_ids, result);
-}
-
-//===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
-                      Vector &row_identifiers, idx_t fetch_count, TableIndexScanState &state) {
+                      Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	// first figure out which row identifiers we should use for this transaction by looking at the VersionManagers
 	row_t rows[STANDARD_VECTOR_SIZE];
 	idx_t count = FetchRows(transaction, row_identifiers, fetch_count, rows);
-
 	if (count == 0) {
 		// no rows to use
 		return;
@@ -564,7 +547,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		auto column = column_ids[col_idx];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			assert(result.data[col_idx].type == TypeId::INT64);
+			assert(result.data[col_idx].type.InternalType() == PhysicalType::INT64);
 			result.data[col_idx].vector_type = VectorType::FLAT_VECTOR;
 			auto data = FlatVector::GetData<row_t>(result.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
@@ -574,14 +557,14 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 			// regular column: fetch data from the base column
 			for (idx_t i = 0; i < count; i++) {
 				auto row_id = rows[i];
-				columns[column]->FetchRow(state.fetch_state, transaction, row_id, result.data[col_idx], i);
+				columns[column]->FetchRow(state, transaction, row_id, result.data[col_idx], i);
 			}
 		}
 	}
 }
 
 idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]) {
-	assert(row_identifiers.type == ROW_TYPE);
+	assert(row_identifiers.type.InternalType() == ROW_TYPE);
 
 	// obtain a read lock on the version managers
 	auto l1 = persistent_manager->lock.GetSharedLock();
@@ -614,19 +597,19 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, id
 //===--------------------------------------------------------------------===//
 static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, string &col_name) {
 	if (VectorOperations::HasNull(vector, count)) {
-		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name.c_str(), col_name.c_str());
+		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
 	}
 }
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
 	ExpressionExecutor executor(expr);
-	Vector result(TypeId::INT32);
+	Vector result(LogicalType::INTEGER);
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (Exception &ex) {
-		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(), ex.what());
+		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, ex.what());
 	} catch (...) {
-		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
+		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
 	}
 	VectorData vdata;
 	result.Orrify(chunk.size(), vdata);
@@ -635,7 +618,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!(*vdata.nullmask)[idx] && dataptr[idx] == 0) {
-			throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
+			throw ConstraintException("CHECK constraint failed: %s", table.name);
 		}
 	}
 }
@@ -751,7 +734,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 		return true;
 	}
 	// first generate the vector of row identifiers
-	Vector row_identifiers(ROW_TYPE);
+	Vector row_identifiers(LOGICAL_ROW_TYPE);
 	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
 	idx_t failed_index = INVALID_INDEX;
@@ -779,7 +762,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 		return;
 	}
 	// first generate the vector of row identifiers
-	Vector row_identifiers(ROW_TYPE);
+	Vector row_identifiers(LOGICAL_ROW_TYPE);
 	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
 	// now remove the entries from the indices
@@ -820,7 +803,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 // Delete
 //===--------------------------------------------------------------------===//
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers, idx_t count) {
-	assert(row_identifiers.type == ROW_TYPE);
+	assert(row_identifiers.type.InternalType() == ROW_TYPE);
 	if (count == 0) {
 		return;
 	}
@@ -846,7 +829,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void CreateMockChunk(vector<TypeId> &types, vector<column_t> &column_ids, DataChunk &chunk,
+static void CreateMockChunk(vector<LogicalType> &types, vector<column_t> &column_ids, DataChunk &chunk,
                             DataChunk &mock_chunk) {
 	// construct a mock DataChunk
 	mock_chunk.InitializeEmpty(types);
@@ -923,7 +906,7 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
                        DataChunk &updates) {
-	assert(row_ids.type == ROW_TYPE);
+	assert(row_ids.type.InternalType() == ROW_TYPE);
 
 	updates.Verify();
 	if (updates.size() == 0) {
@@ -983,7 +966,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 	if (current_row >= max_row) {
 		return false;
 	}
-	idx_t count = std::min((idx_t)STANDARD_VECTOR_SIZE, max_row - current_row);
+	idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 
 	// scan the base columns to fetch the actual data
 	// note that we insert all data into the index, even if it is marked as deleted
@@ -992,7 +975,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 		auto column = column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type == ROW_TYPE);
+			assert(result.data[i].type.InternalType() == ROW_TYPE);
 			result.data[i].Sequence(base_row + current_row, 1);
 		} else {
 			// scan actual base column
@@ -1007,16 +990,16 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 
 void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions) {
 	DataChunk result;
-	result.Initialize(index->types);
+	result.Initialize(index->logical_types);
 
 	DataChunk intermediate;
-	vector<TypeId> intermediate_types;
+	vector<LogicalType> intermediate_types;
 	auto column_ids = index->column_ids;
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	for (auto &id : index->column_ids) {
 		intermediate_types.push_back(types[id]);
 	}
-	intermediate_types.push_back(ROW_TYPE);
+	intermediate_types.push_back(LOGICAL_ROW_TYPE);
 	intermediate.Initialize(intermediate_types);
 
 	// initialize an index scan
@@ -1050,3 +1033,5 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	}
 	info->indexes.push_back(move(index));
 }
+
+} // namespace duckdb

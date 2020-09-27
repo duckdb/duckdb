@@ -2,14 +2,19 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/limits.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 unique_ptr<SelectStatement> SelectStatement::Copy() {
 	auto result = make_unique<SelectStatement>();
 	for (auto &cte : cte_map) {
-		result->cte_map[cte.first] = cte.second->Copy();
+		auto info = make_unique<CommonTableExpressionInfo>();
+		info->aliases = cte.second->aliases;
+		info->query = cte.second->query->Copy();
+		result->cte_map[cte.first] = move(info);
 	}
 	result->node = node->Copy();
 	return result;
@@ -17,11 +22,12 @@ unique_ptr<SelectStatement> SelectStatement::Copy() {
 
 void SelectStatement::Serialize(Serializer &serializer) {
 	// with clauses
-	assert(cte_map.size() <= numeric_limits<uint32_t>::max());
+	assert(cte_map.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)cte_map.size());
 	for (auto &cte : cte_map) {
 		serializer.WriteString(cte.first);
-		cte.second->Serialize(serializer);
+		serializer.WriteStringVector(cte.second->aliases);
+		cte.second->query->Serialize(serializer);
 	}
 	node->Serialize(serializer);
 }
@@ -31,8 +37,10 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto cte_count = source.Read<uint32_t>();
 	for (idx_t i = 0; i < cte_count; i++) {
 		auto name = source.Read<string>();
-		auto statement = QueryNode::Deserialize(source);
-		result->cte_map[name] = move(statement);
+		auto info = make_unique<CommonTableExpressionInfo>();
+		source.ReadStringVector(info->aliases);
+		info->query = QueryNode::Deserialize(source);
+		result->cte_map[name] = move(info);
 	}
 	result->node = QueryNode::Deserialize(source);
 	return result;
@@ -52,9 +60,14 @@ bool SelectStatement::Equals(const SQLStatement *other_) const {
 		if (other_entry == other->cte_map.end()) {
 			return false;
 		}
-		if (!entry.second->Equals(other_entry->second.get())) {
+		if (entry.second->aliases != other_entry->second->aliases) {
+			return false;
+		}
+		if (!entry.second->query->Equals(other_entry->second->query.get())) {
 			return false;
 		}
 	}
 	return node->Equals(other->node.get());
 }
+
+} // namespace duckdb

@@ -1,0 +1,29 @@
+# name: test/sql/constraints/primarykey/test_pk_multi_column.test
+# description: Multi-column PRIMARY KEY constraint
+# group: [primarykey]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j VARCHAR, PRIMARY KEY(i, j))
+
+statement ok
+INSERT INTO integers VALUES (3, 'hello'), (3, 'world')
+
+query IT
+SELECT * FROM integers
+----
+3	hello
+3	world
+
+statement error
+INSERT INTO integers VALUES (6, 'bla'), (3, 'hello');
+
+statement ok
+INSERT INTO integers VALUES (6, 'bla');
+
+query IT
+SELECT * FROM integers
+----
+3	hello
+3	world
+6	bla
+

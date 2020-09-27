@@ -1,0 +1,85 @@
+# name: test/sql/function/string/test_instr_utf8.test
+# description: Instr test with UTF8
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES ('átomo')
+
+statement ok
+INSERT INTO strings VALUES ('olá mundo')
+
+statement ok
+INSERT INTO strings VALUES ('你好世界')
+
+statement ok
+INSERT INTO strings VALUES ('two ñ three ₡ four 🦆 end')
+
+# Test one matching UTF8 letter
+query I
+SELECT INSTR(s,'á') FROM strings
+----
+1
+3
+0
+0
+
+# Test a sentence with UTF-8
+query I
+SELECT INSTR(s,'olá mundo') FROM strings
+----
+0
+1
+0
+0
+
+# Test an entire UTF-8 word
+query I
+SELECT INSTR(s,'你好世界') FROM strings
+----
+0
+0
+1
+0
+
+# Test a substring of the haystack from the beginning
+query I
+SELECT instr(s,'two ñ thr') FROM strings
+----
+0
+0
+0
+1
+
+# Test a single UTF8 substring of the haystack in the middle
+query I
+SELECT instr(s,'ñ') FROM strings
+----
+0
+0
+0
+5
+
+# Test a multiple UTF8 substring of the haystack in the middle
+query I
+SELECT instr(s,'₡ four 🦆 e') FROM strings
+----
+0
+0
+0
+13
+
+# Test a substring of the haystack from the middle to the end
+query I
+SELECT instr(s,'🦆 end') FROM strings
+----
+0
+0
+0
+20
+

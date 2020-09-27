@@ -2,8 +2,9 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 bool Transformer::TransformOrderBy(PGList *order, vector<OrderByNode> &result) {
 	if (!order) {
@@ -43,3 +44,5 @@ bool Transformer::TransformOrderBy(PGList *order, vector<OrderByNode> &result) {
 	}
 	return true;
 }
+
+} // namespace duckdb

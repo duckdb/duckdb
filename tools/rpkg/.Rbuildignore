@@ -1,8 +1,11 @@
 .*\.sh
 .*\.tar.gz
-dependencies\.R
+.*\.tgz
+.*\.zip
 git
 configure
+dependencies.R
+src/Makevars.in
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^build-win$
@@ -10,3 +13,4 @@ configure
 ^_pkgdown\.yml$
 ^docs$
 build-*
+deploy-*

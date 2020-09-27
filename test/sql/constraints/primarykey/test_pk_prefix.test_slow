@@ -1,0 +1,47 @@
+# name: test/sql/constraints/primarykey/test_pk_prefix.test_slow
+# description: PRIMARY KEY prefix stress test multiple columns
+# group: [primarykey]
+
+# create a table with a primary key on (a, b) (int + varchar)
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));
+
+# insert 300 values
+loop i 1 300
+
+statement ok
+INSERT INTO test VALUES (${i}, 'hello');
+
+endloop
+
+# now inserting the same values should fail
+loop i 1 300
+
+statement error
+INSERT INTO test VALUES (${i}, 'hello');
+
+endloop
+
+# Update integer a to a+ 1000 should work since there are no duplicates
+statement ok
+UPDATE test SET a=a+1000;
+
+# Now inserting the original 300 values should work again
+loop i 1 300
+
+statement ok
+INSERT INTO test VALUES (${i}, 'hello');
+
+endloop
+
+# This update should fail and stress test the deletes on hello_ prefixes
+statement error
+UPDATE test SET a=a+1000;
+
+# Should fail for same reason as above, just checking element per element to see if no one is escaping
+loop i 1 300
+
+statement error
+INSERT INTO test VALUES (1000+${i}, 'hello');
+
+endloop

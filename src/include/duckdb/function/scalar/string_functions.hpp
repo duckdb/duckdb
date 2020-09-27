@@ -31,6 +31,7 @@ struct UpperFun {
 };
 
 struct StripAccentsFun {
+	static bool IsAscii(const char *input, idx_t n);
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -65,6 +66,7 @@ struct LengthFun {
 
 struct LikeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static bool Glob(const char *s, const char *pattern, const char *escape);
 };
 
 struct LikeEscapeFun {
@@ -76,6 +78,11 @@ struct LpadFun {
 };
 
 struct LeftFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct NFCNormalizeFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

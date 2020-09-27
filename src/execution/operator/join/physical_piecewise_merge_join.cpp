@@ -31,7 +31,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 class MergeJoinLocalState : public LocalSinkState {
 public:
 	MergeJoinLocalState(vector<JoinCondition> &conditions) {
-		vector<TypeId> condition_types;
+		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);
 			condition_types.push_back(cond.right->return_type);
@@ -128,10 +128,10 @@ void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, unique_ptr<Glo
 //===--------------------------------------------------------------------===//
 class PhysicalPiecewiseMergeJoinState : public PhysicalOperatorState {
 public:
-	PhysicalPiecewiseMergeJoinState(PhysicalOperator *left, vector<JoinCondition> &conditions)
-	    : PhysicalOperatorState(left), fetch_next_left(true), left_position(0), right_position(0),
+	PhysicalPiecewiseMergeJoinState(PhysicalOperator &op, PhysicalOperator *left, vector<JoinCondition> &conditions)
+	    : PhysicalOperatorState(op, left), fetch_next_left(true), left_position(0), right_position(0),
 	      right_chunk_index(0) {
-		vector<TypeId> condition_types;
+		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(*cond.left);
 			condition_types.push_back(cond.left->return_type);
@@ -315,7 +315,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ExecutionContext &context, Dat
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState() {
-	return make_unique<PhysicalPiecewiseMergeJoinState>(children[0].get(), conditions);
+	return make_unique<PhysicalPiecewiseMergeJoinState>(*this, children[0].get(), conditions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -420,30 +420,33 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 
 	order.count = not_null_count;
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
-	switch (vector.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (vector.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		templated_quicksort<int8_t>(vdata, not_null, not_null_count, order.order);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_quicksort<int16_t>(vdata, not_null, not_null_count, order.order);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_quicksort<int32_t>(vdata, not_null, not_null_count, order.order);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_quicksort<int64_t>(vdata, not_null, not_null_count, order.order);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::INT128:
+		templated_quicksort<hugeint_t>(vdata, not_null, not_null_count, order.order);
+		break;
+	case PhysicalType::FLOAT:
 		templated_quicksort<float>(vdata, not_null, not_null_count, order.order);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_quicksort<double>(vdata, not_null, not_null_count, order.order);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		templated_quicksort<interval_t>(vdata, not_null, not_null_count, order.order);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		templated_quicksort<string_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	default:

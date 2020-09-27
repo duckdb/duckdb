@@ -9,19 +9,18 @@
 
 #include "duckdb/common/operator/cast_operators.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), column(0) {
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found
-		throw CatalogException(
-		    StringUtil::Format("Table \"%s.%s\" could not be found", schema_name.c_str(), table_name.c_str()));
+		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	} else {
-		vector<TypeId> types;
+		vector<LogicalType> types;
 		for (auto &column : description->columns) {
-			types.push_back(GetInternalType(column.type));
+			types.push_back(column.type);
 		}
 		chunk.Initialize(types);
 		con.context->RegisterAppender(this);
@@ -73,26 +72,26 @@ template <class T> void Appender::AppendValueInternal(T input) {
 		InvalidateException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column];
-	switch (col.type) {
-	case TypeId::BOOL:
+	switch (col.type.InternalType()) {
+	case PhysicalType::BOOL:
 		AppendValueInternal<T, bool>(col, input);
 		break;
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		AppendValueInternal<T, int8_t>(col, input);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		AppendValueInternal<T, int16_t>(col, input);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		AppendValueInternal<T, int32_t>(col, input);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		AppendValueInternal<T, int64_t>(col, input);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		AppendValueInternal<T, float>(col, input);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		AppendValueInternal<T, double>(col, input);
 		break;
 	default:
@@ -204,3 +203,4 @@ void Appender::Invalidate(string msg, bool close) {
 	assert(!msg.empty());
 	invalidated_msg = msg;
 }
+} // namespace duckdb

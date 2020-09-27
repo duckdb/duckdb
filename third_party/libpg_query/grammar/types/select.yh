@@ -95,6 +95,7 @@
 %type <ival>	Iconst
 %type <str>		Sconst
 %type <str>		ColId ColLabel type_function_name param_name
+%type <str>		ColIdOrString ColLabelOrString
 
 %type <keyword> unreserved_keyword type_func_name_keyword
 %type <keyword> col_name_keyword reserved_keyword

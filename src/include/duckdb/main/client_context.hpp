@@ -26,6 +26,7 @@ class Catalog;
 class DuckDB;
 class PreparedStatementData;
 class Relation;
+class BufferedFileWriter;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -45,6 +46,8 @@ public:
 	bool is_invalidated = false;
 	//! Lock on using the ClientContext in parallel
 	std::mutex context_lock;
+	//! The current query being executed by the client context
+	string query;
 
 	//! The query executor
 	Executor executor;
@@ -59,6 +62,10 @@ public:
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
 	bool force_parallelism = false;
+	//! Output only the logical_opt explain output, used for optimization verification
+	bool explain_output_optimized_only = false;
+	//! The writer used to log queries (if logging is enabled)
+	unique_ptr<BufferedFileWriter> log_query_writer;
 
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
@@ -112,6 +119,15 @@ public:
 	//! Register function in the temporary schema
 	void RegisterFunction(CreateFunctionInfo *info);
 
+	//! Parse statements from a query
+	vector<unique_ptr<SQLStatement>> ParseStatements(string query, idx_t *n_prepared_parameters = nullptr);
+
+	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
+	//! commit mode.
+	void RunFunctionInTransaction(std::function<void(void)> fun);
+	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
+	void RunFunctionInTransactionInternal(std::function<void(void)> fun);
+
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
@@ -138,8 +154,6 @@ private:
 	//! Call CreatePreparedStatement() and ExecutePreparedStatement() without any bound values
 	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
 	                                             bool allow_stream_result);
-
-	template <class T> void RunFunctionInTransaction(T &&fun);
 
 private:
 	idx_t prepare_count = 0;

@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <algorithm>
 
@@ -12,37 +13,56 @@ using namespace std;
 namespace duckdb {
 
 struct PragmaTableFunctionData : public TableFunctionData {
-	PragmaTableFunctionData() : entry(nullptr), offset(0) {
+	PragmaTableFunctionData(CatalogEntry *entry_) : entry(entry_) {
 	}
 
 	CatalogEntry *entry;
+};
+
+struct PragmaTableOperatorData : public FunctionOperatorData {
+	PragmaTableOperatorData() : offset(0) {
+	}
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> inputs,
-                                                       vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> &inputs,
+                                                       unordered_map<string, Value> &named_parameters,
+                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("cid");
-	return_types.push_back(SQLType::INTEGER);
+	return_types.push_back(LogicalType::INTEGER);
 
 	names.push_back("name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("type");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("notnull");
-	return_types.push_back(SQLType::BOOLEAN);
+	return_types.push_back(LogicalType::BOOLEAN);
 
 	names.push_back("dflt_value");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("pk");
-	return_types.push_back(SQLType::BOOLEAN);
+	return_types.push_back(LogicalType::BOOLEAN);
 
-	return make_unique<PragmaTableFunctionData>();
+	string schema, table_name;
+	auto range_var = inputs[0].GetValue<string>();
+	Catalog::ParseRangeVar(range_var, schema, table_name);
+
+	// look up the table name in the catalog
+	auto &catalog = Catalog::GetCatalog(context);
+	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema, table_name);
+	return make_unique<PragmaTableFunctionData>(entry);
 }
 
-static void pragma_table_info_table(PragmaTableFunctionData &data, TableCatalogEntry *table, DataChunk &output) {
+unique_ptr<FunctionOperatorData> pragma_table_info_init(ClientContext &context, const FunctionData *bind_data,
+                                                        vector<column_t> &column_ids,
+                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	return make_unique<PragmaTableOperatorData>();
+}
+
+static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
 	if (data.offset >= table->columns.size()) {
 		// finished returning values
 		return;
@@ -56,28 +76,28 @@ static void pragma_table_info_table(PragmaTableFunctionData &data, TableCatalogE
 		auto index = i - data.offset;
 		auto &column = table->columns[i];
 		// return values:
-		// "cid", TypeId::INT32
-		assert(column.oid < (idx_t)std::numeric_limits<int32_t>::max());
+		// "cid", PhysicalType::INT32
+		assert(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
 
 		output.SetValue(0, index, Value::INTEGER((int32_t)column.oid));
-		// "name", TypeId::VARCHAR
+		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(column.name));
-		// "type", TypeId::VARCHAR
-		output.SetValue(2, index, Value(SQLTypeToString(column.type)));
-		// "notnull", TypeId::BOOL
+		// "type", PhysicalType::VARCHAR
+		output.SetValue(2, index, Value(column.type.ToString()));
+		// "notnull", PhysicalType::BOOL
 		// FIXME: look at constraints
 		output.SetValue(3, index, Value::BOOLEAN(false));
-		// "dflt_value", TypeId::VARCHAR
+		// "dflt_value", PhysicalType::VARCHAR
 		Value def_value = column.default_value ? Value(column.default_value->ToString()) : Value();
 		output.SetValue(4, index, def_value);
-		// "pk", TypeId::BOOL
+		// "pk", PhysicalType::BOOL
 		// FIXME: look at constraints
 		output.SetValue(5, index, Value::BOOLEAN(false));
 	}
 	data.offset = next;
 }
 
-static void pragma_table_info_view(PragmaTableFunctionData &data, ViewCatalogEntry *view, DataChunk &output) {
+static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEntry *view, DataChunk &output) {
 	if (data.offset >= view->types.size()) {
 		// finished returning values
 		return;
@@ -92,43 +112,33 @@ static void pragma_table_info_view(PragmaTableFunctionData &data, ViewCatalogEnt
 		auto type = view->types[index];
 		auto &name = view->aliases[index];
 		// return values:
-		// "cid", TypeId::INT32
+		// "cid", PhysicalType::INT32
 
 		output.SetValue(0, index, Value::INTEGER((int32_t)index));
-		// "name", TypeId::VARCHAR
+		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(name));
-		// "type", TypeId::VARCHAR
-		output.SetValue(2, index, Value(SQLTypeToString(type)));
-		// "notnull", TypeId::BOOL
+		// "type", PhysicalType::VARCHAR
+		output.SetValue(2, index, Value(type.ToString()));
+		// "notnull", PhysicalType::BOOL
 		output.SetValue(3, index, Value::BOOLEAN(false));
-		// "dflt_value", TypeId::VARCHAR
+		// "dflt_value", PhysicalType::VARCHAR
 		output.SetValue(4, index, Value());
-		// "pk", TypeId::BOOL
+		// "pk", PhysicalType::BOOL
 		output.SetValue(5, index, Value::BOOLEAN(false));
 	}
 	data.offset = next;
 }
 
-static void pragma_table_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = *((PragmaTableFunctionData *)dataptr);
-	if (!data.entry) {
-		// first call: load the entry from the catalog
-		assert(input.size() == 1);
-
-		string schema, table_name;
-		auto range_var = input[0].GetValue<string>();
-		Catalog::ParseRangeVar(range_var, schema, table_name);
-
-		// look up the table name in the catalog
-		auto &catalog = Catalog::GetCatalog(context);
-		data.entry = catalog.GetEntry(context, CatalogType::TABLE, schema, table_name);
-	}
-	switch (data.entry->type) {
-	case CatalogType::TABLE:
-		pragma_table_info_table(data, (TableCatalogEntry *)data.entry, output);
+static void pragma_table_info(ClientContext &context, const FunctionData *bind_data_,
+                              FunctionOperatorData *operator_state, DataChunk &output) {
+	auto &bind_data = (PragmaTableFunctionData &)*bind_data_;
+	auto &state = (PragmaTableOperatorData &)*operator_state;
+	switch (bind_data.entry->type) {
+	case CatalogType::TABLE_ENTRY:
+		pragma_table_info_table(state, (TableCatalogEntry *)bind_data.entry, output);
 		break;
-	case CatalogType::VIEW:
-		pragma_table_info_view(data, (ViewCatalogEntry *)data.entry, output);
+	case CatalogType::VIEW_ENTRY:
+		pragma_table_info_view(state, (ViewCatalogEntry *)bind_data.entry, output);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");
@@ -136,8 +146,8 @@ static void pragma_table_info(ClientContext &context, vector<Value> &input, Data
 }
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("pragma_table_info", {SQLType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
+	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, pragma_table_info,
+	                              pragma_table_info_bind, pragma_table_info_init));
 }
 
 } // namespace duckdb

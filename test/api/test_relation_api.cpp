@@ -69,7 +69,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 	// we can check the column names
 	REQUIRE(proj->Columns()[0].name == "a");
-	REQUIRE(proj->Columns()[0].type == SQLType::INTEGER);
+	REQUIRE(proj->Columns()[0].type == LogicalType::INTEGER);
 
 	// we can also alias like this
 	REQUIRE_NOTHROW(proj = filter->Project("i + 1", "a"));
@@ -77,7 +77,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 	// we can check the column names
 	REQUIRE(proj->Columns()[0].name == "a");
-	REQUIRE(proj->Columns()[0].type == SQLType::INTEGER);
+	REQUIRE(proj->Columns()[0].type == LogicalType::INTEGER);
 
 	// now we can use that column to perform additional projections
 	REQUIRE_NOTHROW(result = proj->Project("a + 1")->Execute());
@@ -722,4 +722,22 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 
 	// non-existant table function
 	REQUIRE_THROWS(con.TableFunction("blabla"));
+}
+
+TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	// write a bunch of values to a CSV
+	auto csv_file = TestCreatePath("relationtest.csv");
+
+	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file);
+
+	// now scan the CSV file
+	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});
+	result = csv_scan->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER); SELECT 42;--"}));
 }

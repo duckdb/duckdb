@@ -1,6 +1,3 @@
-if(NOT WIN32)
-  add_subdirectory(dbtransfer)
-endif()
 if(NOT SUN)
   add_subdirectory(sqlite3_api_wrapper)
   add_subdirectory(shell)

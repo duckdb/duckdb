@@ -93,6 +93,7 @@ template <> bool TryCast::Operation(string_t input, int8_t &result, bool strict)
 template <> bool TryCast::Operation(string_t input, int16_t &result, bool strict);
 template <> bool TryCast::Operation(string_t input, int32_t &result, bool strict);
 template <> bool TryCast::Operation(string_t input, int64_t &result, bool strict);
+template <> bool TryCast::Operation(string_t input, hugeint_t &result, bool strict);
 template <> bool TryCast::Operation(string_t input, float &result, bool strict);
 template <> bool TryCast::Operation(string_t input, double &result, bool strict);
 
@@ -101,6 +102,7 @@ template <> int8_t Cast::Operation(string_t input);
 template <> int16_t Cast::Operation(string_t input);
 template <> int32_t Cast::Operation(string_t input);
 template <> int64_t Cast::Operation(string_t input);
+template <> hugeint_t Cast::Operation(string_t input);
 template <> float Cast::Operation(string_t input);
 template <> double Cast::Operation(string_t input);
 template <> string Cast::Operation(string_t input);
@@ -110,9 +112,49 @@ template <> int8_t StrictCast::Operation(string_t input);
 template <> int16_t StrictCast::Operation(string_t input);
 template <> int32_t StrictCast::Operation(string_t input);
 template <> int64_t StrictCast::Operation(string_t input);
+template <> hugeint_t StrictCast::Operation(string_t input);
 template <> float StrictCast::Operation(string_t input);
 template <> double StrictCast::Operation(string_t input);
 template <> string StrictCast::Operation(string_t input);
+
+//===--------------------------------------------------------------------===//
+// Hugeint casts
+//===--------------------------------------------------------------------===//
+// Numeric -> Hugeint casts
+template <> bool TryCast::Operation(bool input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(int8_t input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(int16_t input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(int32_t input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(int64_t input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(float input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(double input, hugeint_t &result, bool strict);
+
+template <> hugeint_t Cast::Operation(bool input);
+template <> hugeint_t Cast::Operation(int8_t input);
+template <> hugeint_t Cast::Operation(int16_t input);
+template <> hugeint_t Cast::Operation(int32_t input);
+template <> hugeint_t Cast::Operation(int64_t input);
+template <> hugeint_t Cast::Operation(float input);
+template <> hugeint_t Cast::Operation(double input);
+// Hugeint -> numeric casts
+template <> bool TryCast::Operation(hugeint_t input, bool &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, int8_t &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, int16_t &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, int32_t &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, int64_t &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, float &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, double &result, bool strict);
+
+template <> bool Cast::Operation(hugeint_t input);
+template <> int8_t Cast::Operation(hugeint_t input);
+template <> int16_t Cast::Operation(hugeint_t input);
+template <> int32_t Cast::Operation(hugeint_t input);
+template <> int64_t Cast::Operation(hugeint_t input);
+template <> float Cast::Operation(hugeint_t input);
+template <> double Cast::Operation(hugeint_t input);
+// nop cast
+template <> bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict);
+template <> hugeint_t Cast::Operation(hugeint_t input);
 
 //===--------------------------------------------------------------------===//
 // Interval -> String Casts
@@ -130,6 +172,7 @@ template <> string Cast::Operation(int8_t input);
 template <> string Cast::Operation(int16_t input);
 template <> string Cast::Operation(int32_t input);
 template <> string Cast::Operation(int64_t input);
+template <> string Cast::Operation(hugeint_t input);
 template <> string Cast::Operation(float input);
 template <> string Cast::Operation(double input);
 template <> string Cast::Operation(string_t input);
@@ -147,10 +190,134 @@ template <> duckdb::string_t StringCast::Operation(int16_t input, Vector &result
 template <> duckdb::string_t StringCast::Operation(int32_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(int64_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(uint64_t input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(float input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(double input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(interval_t input, Vector &result);
 
+//===--------------------------------------------------------------------===//
+// Decimal Casts
+//===--------------------------------------------------------------------===//
+struct CastToDecimal {
+	template <class SRC, class DST> static inline DST Operation(SRC input, uint8_t width, uint8_t scale) {
+		throw NotImplementedException("Unimplemented type for CastToDecimal!");
+	}
+};
+
+struct CastFromDecimal {
+	template <class SRC, class DST> static inline DST Operation(SRC input, uint8_t width, uint8_t scale) {
+		throw NotImplementedException("Unimplemented type for CastFromDecimal!");
+	}
+};
+
+// BOOLEAN
+template <> int16_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
+
+template <> bool CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> bool CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> bool CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> bool CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// TINYINT
+template <> int16_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
+
+template <> int8_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> int8_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> int8_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> int8_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// SMALLINT
+template <> int16_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+
+template <> int16_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> int16_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> int16_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> int16_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// INTEGER
+template <> int16_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+
+template <> int32_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// BIGINT
+template <> int16_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+
+template <> int64_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// HUGEINT
+template <> int16_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+template <> hugeint_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// FLOAT
+template <> int16_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale);
+
+template <> float CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> float CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> float CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> float CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// DOUBLE
+template <> int16_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale);
+
+template <> double CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> double CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> double CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> double CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// VARCHAR
+template <> int16_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale);
+
+struct StringCastFromDecimal {
+	template <class SRC> static inline string_t Operation(SRC input, uint8_t width, uint8_t scale, Vector &result) {
+		throw NotImplementedException("Unimplemented type for string cast!");
+	}
+};
+
+template <> string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, Vector &result);
+template <> string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, Vector &result);
+template <> string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result);
+template <> string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result);
+
+//===--------------------------------------------------------------------===//
+// Date Casts
+//===--------------------------------------------------------------------===//
 struct CastFromDate {
 	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
 		throw duckdb::NotImplementedException("Cast from date could not be performed!");

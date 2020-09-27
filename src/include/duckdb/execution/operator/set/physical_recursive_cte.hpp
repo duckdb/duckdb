@@ -12,22 +12,30 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
+class Pipeline;
+
 class PhysicalRecursiveCTE : public PhysicalOperator {
 public:
-	PhysicalRecursiveCTE(vector<TypeId> types, bool union_all, unique_ptr<PhysicalOperator> top,
+	PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
 	                     unique_ptr<PhysicalOperator> bottom);
+	~PhysicalRecursiveCTE();
 
 	bool union_all;
 	std::shared_ptr<ChunkCollection> working_table;
 	ChunkCollection intermediate_table;
+	vector<unique_ptr<Pipeline>> pipelines;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
+	void FinalizePipelines();
+
 private:
 	//! Probe Hash Table and eliminate duplicate rows
 	idx_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);
+
+	void ExecuteRecursivePipelines(ExecutionContext &context);
 };
 
-}; // namespace duckdb
+} // namespace duckdb

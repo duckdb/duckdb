@@ -11,6 +11,8 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
+struct ArrowSchema;
+
 namespace duckdb {
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT };
@@ -23,8 +25,7 @@ public:
 	//! Creates an successful empty query result
 	QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	QueryResult(QueryResultType type, StatementType statement_type, vector<SQLType> sql_types, vector<TypeId> types,
-	            vector<string> names);
+	QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	QueryResult(QueryResultType type, string error);
 	virtual ~QueryResult() {
@@ -35,9 +36,7 @@ public:
 	//! The type of the statement that created this result
 	StatementType statement_type;
 	//! The SQL types of the result
-	vector<SQLType> sql_types;
-	//! The types of the result
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	//! The names of the result
 	vector<string> names;
 	//! Whether or not execution was successful
@@ -57,6 +56,12 @@ public:
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	bool Equals(QueryResult &other);
+
+	idx_t column_count() {
+		return types.size();
+	}
+
+	void ToArrowSchema(ArrowSchema *out_array);
 
 private:
 	//! The current chunk used by the iterator

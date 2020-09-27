@@ -24,22 +24,22 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	Value(TypeId type = TypeId::INT32) : type(type), is_null(true) {
+	explicit Value(LogicalType type = LogicalType::SQLNULL) : type_(type), is_null(true) {
 	}
 	//! Create a BIGINT value
-	Value(int32_t val) : type(TypeId::INT32), is_null(false) {
+	Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 		value_.integer = val;
 	}
 	//! Create a BIGINT value
-	Value(int64_t val) : type(TypeId::INT64), is_null(false) {
+	Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 		value_.bigint = val;
 	}
 	//! Create a FLOAT value
-	Value(float val) : type(TypeId::FLOAT), is_null(false) {
+	Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
 		value_.float_ = val;
 	}
 	//! Create a DOUBLE value
-	Value(double val) : type(TypeId::DOUBLE), is_null(false) {
+	Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 		value_.double_ = val;
 	}
 	//! Create a VARCHAR value
@@ -49,12 +49,17 @@ public:
 	//! Create a VARCHAR value
 	Value(string val);
 
+	LogicalType type() const {
+		return type_;
+	}
+
 	//! Create the lowest possible value of a given type (numeric only)
-	static Value MinimumValue(TypeId type);
+	static Value MinimumValue(PhysicalType type);
 	//! Create the highest possible value of a given type (numeric only)
-	static Value MaximumValue(TypeId type);
+	static Value MaximumValue(PhysicalType type);
 	//! Create a Numeric value of the specified type with the specified value
-	static Value Numeric(TypeId id, int64_t value);
+	static Value Numeric(LogicalType type, int64_t value);
+	static Value Numeric(LogicalType type, hugeint_t value);
 
 	//! Create a tinyint Value from a specified value
 	static Value BOOLEAN(int8_t value);
@@ -66,6 +71,8 @@ public:
 	static Value INTEGER(int32_t value);
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
+	//! Create a hugeint Value from a specified value
+	static Value HUGEINT(hugeint_t value);
 	//! Create a hash Value from a specified value
 	static Value HASH(hash_t value);
 	//! Create a pointer Value from a specified value
@@ -74,7 +81,9 @@ public:
 	static Value DATE(date_t date);
 	//! Create a date Value from a specified date
 	static Value DATE(int32_t year, int32_t month, int32_t day);
-	//! Create a time Value from a specified date
+	//! Create a time Value from a specified time
+	static Value TIME(dtime_t time);
+	//! Create a time Value from a specified time
 	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec);
 	//! Create a timestamp Value from a specified date/time combination
 	static Value TIMESTAMP(date_t date, dtime_t time);
@@ -86,6 +95,11 @@ public:
 	static Value INTERVAL(int32_t months, int32_t days, int64_t msecs);
 	static Value INTERVAL(interval_t interval);
 
+	// Decimal values
+	static Value DECIMAL(int16_t value, uint8_t width, uint8_t scale);
+	static Value DECIMAL(int32_t value, uint8_t width, uint8_t scale);
+	static Value DECIMAL(int64_t value, uint8_t width, uint8_t scale);
+	static Value DECIMAL(hugeint_t value, uint8_t width, uint8_t scale);
 	//! Create a float Value from a specified value
 	static Value FLOAT(float value);
 	//! Create a double Value from a specified value
@@ -98,7 +112,7 @@ public:
 	//! Create a blob Value from a specified value
 	static Value BLOB(string data, bool must_cast = true);
 
-	template <class T> T GetValue() {
+	template <class T> T GetValue() const {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
 	template <class T> static Value CreateValue(T value) {
@@ -112,44 +126,11 @@ public:
 
 	//! Convert this value to a string
 	string ToString() const;
-	//! Convert this value to a string, with the given display format
-	string ToString(SQLType type) const;
 
 	//! Cast this value to another type
-	Value CastAs(TypeId target_type, bool strict = false) const;
-	//! Cast this value to another type
-	Value CastAs(SQLType source_type, SQLType target_type, bool strict = false);
+	Value CastAs(LogicalType target_type, bool strict = false) const;
 	//! Tries to cast value to another type, throws exception if its not possible
-	bool TryCastAs(SQLType source_type, SQLType target_type, bool strict = false);
-
-	//! The type of the value
-	TypeId type;
-	//! Whether or not the value is NULL
-	bool is_null;
-
-	SQLType GetSQLType() {
-		return sql_type.id == SQLTypeId::INVALID ? SQLTypeFromInternalType(type) : sql_type;
-	}
-
-	//! The value of the object, if it is of a constant size Type
-	union Val {
-		int8_t boolean;
-		int8_t tinyint;
-		int16_t smallint;
-		int32_t integer;
-		int64_t bigint;
-		float float_;
-		double double_;
-		uintptr_t pointer;
-		uint64_t hash;
-		interval_t interval;
-	} value_;
-
-	//! The value of the object, if it is of a variable size type
-	string str_value;
-
-	child_list_t<Value> struct_value;
-	std::vector<Value> list_value;
+	bool TryCastAs(LogicalType target_type, bool strict = false);
 
 	//! Serializes a Value to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
@@ -195,10 +176,36 @@ public:
 	void Print();
 
 private:
-	SQLType sql_type = SQLType(SQLTypeId::INVALID);
+	//! The logical of the value
+	LogicalType type_;
+
+public:
+	//! Whether or not the value is NULL
+	bool is_null;
+
+	//! The value of the object, if it is of a constant size Type
+	union Val {
+		int8_t boolean;
+		int8_t tinyint;
+		int16_t smallint;
+		int32_t integer;
+		int64_t bigint;
+		hugeint_t hugeint;
+		float float_;
+		double double_;
+		uintptr_t pointer;
+		uint64_t hash;
+		interval_t interval;
+	} value_;
+
+	//! The value of the object, if it is of a variable size type
+	string str_value;
+
+	child_list_t<Value> struct_value;
+	std::vector<Value> list_value;
 
 private:
-	template <class T> T GetValueInternal();
+	template <class T> T GetValueInternal() const;
 	//! Templated helper function for casting
 	template <class DST, class OP> static DST _cast(const Value &v);
 
@@ -215,6 +222,7 @@ template <> Value Value::CreateValue(int8_t value);
 template <> Value Value::CreateValue(int16_t value);
 template <> Value Value::CreateValue(int32_t value);
 template <> Value Value::CreateValue(int64_t value);
+template <> Value Value::CreateValue(hugeint_t value);
 template <> Value Value::CreateValue(const char *value);
 template <> Value Value::CreateValue(string value);
 template <> Value Value::CreateValue(string_t value);
@@ -222,13 +230,16 @@ template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
 template <> Value Value::CreateValue(Value value);
 
-template <> bool Value::GetValue();
-template <> int8_t Value::GetValue();
-template <> int16_t Value::GetValue();
-template <> int32_t Value::GetValue();
-template <> int64_t Value::GetValue();
-template <> string Value::GetValue();
-template <> float Value::GetValue();
-template <> double Value::GetValue();
+template <> bool Value::GetValue() const;
+template <> int8_t Value::GetValue() const;
+template <> int16_t Value::GetValue() const;
+template <> int32_t Value::GetValue() const;
+template <> int64_t Value::GetValue() const;
+template <> hugeint_t Value::GetValue() const;
+template <> string Value::GetValue() const;
+template <> float Value::GetValue() const;
+template <> double Value::GetValue() const;
+template <> uintptr_t Value::GetValue() const;
+
 
 } // namespace duckdb

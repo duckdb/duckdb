@@ -1,0 +1,53 @@
+# name: test/sql/constraints/primarykey/test_pk_append_many_duplicates.test_slow
+# description: Test appending the same value many times to a primary key column
+# group: [primarykey]
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY);
+
+# insert a bunch of values into the index and query the index
+
+loop val 0 100
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = ${val}
+----
+0
+
+#then we insert $val
+statement ok
+INSERT INTO integers VALUES (${val});
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = ${val}
+----
+1
+
+endloop
+
+loop val 0 100
+
+# hack: use a complex expression to prevent index lookup
+query I
+SELECT COUNT(*) FROM integers WHERE i+i = ${val}*2
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = ${val}
+----
+1
+
+endloop
+
+# now insert the same values: this should fail this time
+loop it 0 10
+
+statement error
+INSERT INTO integers VALUES ($val)
+
+endloop
+
+# now test that the counts are correct 
+statement ok
+SELECT COUNT(*), COUNT(DISTINCT i) FROM integers

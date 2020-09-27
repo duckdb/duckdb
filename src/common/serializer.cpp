@@ -1,6 +1,6 @@
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <> string Deserializer::Read() {
@@ -9,3 +9,13 @@ template <> string Deserializer::Read() {
 	ReadData(buffer.get(), size);
 	return string((char *)buffer.get(), size);
 }
+
+void Deserializer::ReadStringVector(vector<string> &list) {
+	uint32_t sz = Read<uint32_t>();
+	list.resize(sz);
+	for (idx_t i = 0; i < sz; i++) {
+		list[i] = Read<string>();
+	}
+}
+
+} // namespace duckdb

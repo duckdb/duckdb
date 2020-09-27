@@ -2,7 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <class T, class OP>
@@ -36,21 +36,21 @@ static void mark_join_templated(Vector &left, Vector &right, idx_t lcount, idx_t
 
 template <class OP>
 static void mark_join_operator(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
-	switch (left.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (left.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return mark_join_templated<int8_t, OP>(left, right, lcount, rcount, found_match);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return mark_join_templated<int16_t, OP>(left, right, lcount, rcount, found_match);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return mark_join_templated<int32_t, OP>(left, right, lcount, rcount, found_match);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return mark_join_templated<int64_t, OP>(left, right, lcount, rcount, found_match);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return mark_join_templated<float, OP>(left, right, lcount, rcount, found_match);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return mark_join_templated<double, OP>(left, right, lcount, rcount, found_match);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return mark_join_templated<string_t, OP>(left, right, lcount, rcount, found_match);
 	default:
 		throw NotImplementedException("Unimplemented type for join!");
@@ -90,3 +90,5 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
 		}
 	}
 }
+
+} // namespace duckdb

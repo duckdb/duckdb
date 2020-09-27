@@ -2,7 +2,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ExpressionExecutor::ExpressionExecutor() {
@@ -41,7 +41,6 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 
 	assert(expressions.size() == result.column_count());
 	assert(expressions.size() > 0);
-	result.Reset();
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
@@ -80,7 +79,9 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	executor.ExecuteExpression(result);
 
 	assert(result.vector_type == VectorType::CONSTANT_VECTOR);
-	return result.GetValue(0);
+	auto result_value = result.GetValue(0);
+	assert(result_value.type() == expr.return_type);
+	return result_value;
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
@@ -163,7 +164,7 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 		return 0;
 	}
 	assert(true_sel || false_sel);
-	assert(expr.return_type == TypeId::BOOL);
+	assert(expr.return_type.id() == LogicalTypeId::BOOLEAN);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select((BoundBetweenExpression &)expr, state, sel, count, true_sel, false_sel);
@@ -177,14 +178,14 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 }
 
 template <bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, bool *__restrict bdata, nullmask_t &nullmask,
+static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, uint8_t *__restrict bdata, nullmask_t &nullmask,
                                       const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                       SelectionVector *false_sel) {
 	idx_t true_count = 0, false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto bidx = bsel->get_index(i);
 		auto result_idx = sel->get_index(i);
-		if (bdata[bidx] && (NO_NULL || !nullmask[bidx])) {
+		if (bdata[bidx] > 0 && (NO_NULL || !nullmask[bidx])) {
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count++, result_idx);
 			}
@@ -205,14 +206,14 @@ template <bool NO_NULL>
 static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
-		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
 		                                              true_sel, false_sel);
 	} else if (true_sel) {
-		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
 		                                               true_sel, false_sel);
 	} else {
 		assert(false_sel);
-		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
 		                                               true_sel, false_sel);
 	}
 }
@@ -223,7 +224,7 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(TypeId::BOOL, (data_ptr_t)intermediate_bools);
+	Vector intermediate(LogicalType::BOOLEAN, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, sel, count, intermediate);
 
 	VectorData idata;
@@ -237,3 +238,5 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);
 	}
 }
+
+} // namespace duckdb

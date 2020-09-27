@@ -1,0 +1,52 @@
+# name: test/sql/types/timestamp/test_incorrect_timestamp.test
+# description: Test out of range/incorrect timestamp formats
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timestamp(t TIMESTAMP)
+
+statement error
+INSERT INTO timestamp VALUES ('blabla')
+
+statement error
+INSERT INTO timestamp VALUES ('1993-20-14 00:00:00')
+
+statement error
+INSERT INTO timestamp VALUES ('1993-08-99 00:00:00')
+
+statement error
+INSERT INTO timestamp VALUES ('1993-02-29 00:00:00')
+
+statement error
+INSERT INTO timestamp VALUES ('1900-02-29 00:00:00')
+
+statement ok
+INSERT INTO timestamp VALUES ('1992-02-29 00:00:00')
+
+statement ok
+INSERT INTO timestamp VALUES ('2000-02-29 00:00:00')
+
+statement error
+INSERT INTO timestamp VALUES ('02-02-1992 00:00:00')
+
+statement error
+INSERT INTO timestamp VALUES ('1900-1-1 59:59:23')
+
+statement error
+INSERT INTO timestamp VALUES ('1900a01a01 00:00:00')
+
+statement error
+INSERT INTO timestamp VALUES ('1900-1-1 00;00;00')
+
+statement error
+INSERT INTO timestamp VALUES ('1900-1-1 00a00a00')
+
+statement error
+INSERT INTO timestamp VALUES ('1900-1-1 00/00/00')
+
+statement error
+INSERT INTO timestamp VALUES ('1900-1-1 00-00-00')
+

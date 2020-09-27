@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BufferEntry> BufferList::Pop() {
@@ -69,3 +69,5 @@ void BufferList::Append(unique_ptr<BufferEntry> entry) {
 	}
 	count++;
 }
+
+} // namespace duckdb

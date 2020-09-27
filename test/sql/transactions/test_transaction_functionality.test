@@ -1,0 +1,26 @@
+# name: test/sql/transactions/test_transaction_functionality.test
+# description: Test basic transaction functionality
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+# cannot commit or rollback in auto commit mode
+statement error
+COMMIT
+
+statement error
+ROLLBACK
+
+# we can start a transaction
+statement ok
+START TRANSACTION
+
+# but we cannot start a transaction within a transaction!
+statement error
+START TRANSACTION
+
+# now we can rollback
+statement ok
+ROLLBACK
+

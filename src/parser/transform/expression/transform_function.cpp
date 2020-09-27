@@ -7,8 +7,9 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 static ExpressionType WindowToExpressionType(string &fun_name) {
 	if (fun_name == "rank") {
@@ -100,7 +101,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		function_name = reinterpret_cast<PGValue *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
-//		schema = DEFAULT_SCHEMA;
+		//		schema = DEFAULT_SCHEMA;
 		schema = INVALID_SCHEMA;
 		function_name = reinterpret_cast<PGValue *>(name->head->data.ptr_value)->val.str;
 	}
@@ -246,3 +247,5 @@ unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(PGSQLValueFu
 	auto fname = SQLValueOpToString(node->op);
 	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, children);
 }
+
+} // namespace duckdb

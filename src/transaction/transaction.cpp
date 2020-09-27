@@ -12,7 +12,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Transaction &Transaction::GetTransaction(ClientContext &context) {
@@ -26,12 +26,12 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, i
 	}
 	auto baseptr = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
 	// store the pointer to the catalog entry
-	*((CatalogEntry **)baseptr) = entry;
+	Store<CatalogEntry *>(entry, baseptr);
 	if (extra_data_size > 0) {
 		// copy the extra data behind the catalog entry pointer (if any)
 		baseptr += sizeof(CatalogEntry *);
 		// first store the extra data size
-		*((idx_t *)baseptr) = extra_data_size;
+		Store<idx_t>(extra_data_size, baseptr);
 		baseptr += sizeof(idx_t);
 		// then copy over the actual data
 		memcpy(baseptr, extra_data, extra_data_size);
@@ -94,3 +94,5 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 		return ex.what();
 	}
 }
+
+} // namespace duckdb

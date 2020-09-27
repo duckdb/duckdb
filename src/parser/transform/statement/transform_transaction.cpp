@@ -1,8 +1,9 @@
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TransactionStatement> Transformer::TransformTransaction(PGNode *node) {
 	auto stmt = reinterpret_cast<PGTransactionStmt *>(node);
@@ -19,3 +20,5 @@ unique_ptr<TransactionStatement> Transformer::TransformTransaction(PGNode *node)
 		throw NotImplementedException("Transaction type %d not implemented yet", stmt->kind);
 	}
 }
+
+} // namespace duckdb

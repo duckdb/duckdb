@@ -1,0 +1,17 @@
+# name: benchmark/micro/string/like_regular.benchmark
+# description: Contains word 'regular' in the l_comment (11.5%~)
+# group: [string]
+
+require tpch
+
+cache tpch-sf2
+
+load
+CALL dbgen(2);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%regular%'
+
+# FIXME, 11.5%
+result I
+1

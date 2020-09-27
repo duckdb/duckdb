@@ -12,7 +12,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 TableDataReader::TableDataReader(CheckpointManager &manager, MetaBlockReader &reader, BoundCreateTableInfo &info)
@@ -40,13 +40,13 @@ void TableDataReader::ReadTableData() {
 			data_pointer.tuple_count = reader.Read<idx_t>();
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();
-			reader.ReadData(data_pointer.min_stats, 8);
-			reader.ReadData(data_pointer.max_stats, 8);
+			reader.ReadData(data_pointer.min_stats, 16);
+			reader.ReadData(data_pointer.max_stats, 16);
 
 			column_count += data_pointer.tuple_count;
 			// create a persistent segment
 			auto segment = make_unique<PersistentSegment>(
-			    manager.buffer_manager, data_pointer.block_id, data_pointer.offset, GetInternalType(column.type),
+			    manager.buffer_manager, data_pointer.block_id, data_pointer.offset, column.type.InternalType(),
 			    data_pointer.row_start, data_pointer.tuple_count, data_pointer.min_stats, data_pointer.max_stats);
 			info.data[col].push_back(move(segment));
 		}
@@ -59,3 +59,5 @@ void TableDataReader::ReadTableData() {
 		}
 	}
 }
+
+} // namespace duckdb

@@ -1,0 +1,143 @@
+# name: test/sql/types/timestamp/test_timestamp.test
+# description: Test TIMESTAMP type
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE IF NOT EXISTS timestamp (t TIMESTAMP);
+
+statement ok
+INSERT INTO timestamp VALUES ('2008-01-01 00:00:01'), (NULL), ('2007-01-01 00:00:01'), ('2008-02-01 00:00:01'), ('2008-01-02 00:00:01'), ('2008-01-01 10:00:00'), ('2008-01-01 00:10:00'), ('2008-01-01 00:00:10')
+
+query T
+SELECT timestamp '2017-07-23 13:10:11';
+----
+2017-07-23 13:10:11
+
+# iso timestamps
+query TT
+SELECT timestamp '2017-07-23T13:10:11', timestamp '2017-07-23T13:10:11Z';
+----
+2017-07-23 13:10:11
+2017-07-23 13:10:11
+
+# spaces everywhere
+query T
+SELECT timestamp '    2017-07-23     13:10:11    ';
+----
+2017-07-23 13:10:11
+
+# other trailing, preceding, or middle gunk is not accepted
+statement error
+SELECT timestamp '    2017-07-23     13:10:11    AA';
+
+statement error
+SELECT timestamp 'AA2017-07-23 13:10:11';
+
+statement error
+SELECT timestamp '2017-07-23A13:10:11';
+
+query T
+SELECT t FROM timestamp ORDER BY t;
+----
+NULL
+2007-01-01 00:00:01
+2008-01-01 00:00:01
+2008-01-01 00:00:10
+2008-01-01 00:10:00
+2008-01-01 10:00:00
+2008-01-02 00:00:01
+2008-02-01 00:00:01
+
+query T
+SELECT MIN(t) FROM timestamp;
+----
+2007-01-01 00:00:01
+
+query T
+SELECT MAX(t) FROM timestamp;
+----
+2008-02-01 00:00:01
+
+statement error
+SELECT SUM(t) FROM timestamp
+
+statement error
+SELECT AVG(t) FROM timestamp
+
+statement error
+SELECT t+t FROM timestamp
+
+statement error
+SELECT t*t FROM timestamp
+
+statement error
+SELECT t/t FROM timestamp
+
+statement error
+SELECT t%t FROM timestamp
+
+query T
+SELECT t-t FROM timestamp
+----
+00:00:00
+NULL
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+00:00:00
+
+query I
+SELECT YEAR(TIMESTAMP '1992-01-01 01:01:01');
+----
+1992
+
+query I
+SELECT YEAR(TIMESTAMP '1992-01-01 01:01:01'::DATE);
+----
+1992
+
+query T
+SELECT (TIMESTAMP '1992-01-01 01:01:01')::DATE;
+----
+1992-01-01
+
+query T
+SELECT (TIMESTAMP '1992-01-01 01:01:01')::TIME;
+----
+01:01:01
+
+query T
+SELECT t::DATE FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1
+----
+2007-01-01
+
+query T
+SELECT t::TIME FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1
+----
+00:00:01
+
+query T
+SELECT (DATE '1992-01-01')::TIMESTAMP;
+----
+1992-01-01 00:00:00
+
+query T
+SELECT TIMESTAMP '2008-01-01 00:00:01.5'::VARCHAR
+----
+2008-01-01 00:00:01.500
+
+query T
+SELECT TIMESTAMP '-8-01-01 00:00:01.5'::VARCHAR
+----
+0008-01-01 (BC) 00:00:01.500
+
+# FIXME: timestamp with large date
+# query T
+# SELECT TIMESTAMP '100000-01-01 00:00:01.5'::VARCHAR
+# ----
+# 100000-01-01 00:00:01.500

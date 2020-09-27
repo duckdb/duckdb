@@ -1,0 +1,88 @@
+# name: test/sql/types/null/test_null.test
+# description: Test standard NULL handling
+# group: [null]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar NULL
+query I
+SELECT NULL
+----
+NULL
+
+# scalar NULL addition
+query I
+SELECT 3 + NULL
+----
+NULL
+
+query I
+SELECT NULL + 3
+----
+NULL
+
+# NULL on both sides
+query I
+SELECT NULL + NULL
+----
+NULL
+
+# nested NULL addition
+query I
+SELECT 1 + (NULL + NULL)
+----
+NULL
+
+# division by zero
+query I
+SELECT 4 / 0
+----
+NULL
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)
+
+# NULL selection
+query I
+SELECT a FROM test
+----
+11
+NULL
+13
+
+# cast NULL
+query I
+SELECT cast(a AS BIGINT) FROM test;
+----
+11
+NULL
+13
+
+# division by constant zero is NULL
+query I
+SELECT a / 0 FROM test;
+----
+NULL
+NULL
+NULL
+
+# division by non-constant zero as well
+query I
+SELECT a / (a - a) FROM test;
+----
+NULL
+NULL
+NULL
+
+# NULL addition results in NULL
+query I
+SELECT a + b FROM test
+----
+33
+NULL
+35
+

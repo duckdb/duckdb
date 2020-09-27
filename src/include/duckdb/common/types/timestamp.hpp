@@ -27,7 +27,8 @@ class Timestamp {
 public:
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss" to a timestamp object
 	static timestamp_t FromString(string str);
-	//! Convert a date object to a string in the format "YYYY-MM-DDThh:mm:ssZ"
+	static timestamp_t FromCString(const char *str, idx_t len);
+	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
 	static string ToString(timestamp_t timestamp);
 
 	static date_t GetDate(timestamp_t timestamp);

@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
@@ -15,12 +15,15 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 	result->AddChild(expr.check.get());
 	result->AddChild(expr.result_if_true.get());
 	result->AddChild(expr.result_if_false.get());
+	result->Finalize();
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	Vector res_true(expr.result_if_true->return_type), res_false(expr.result_if_false->return_type);
+	Vector res_true, res_false;
+	res_true.Reference(state->intermediate_chunk.data[1]);
+	res_false.Reference(state->intermediate_chunk.data[2]);
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
@@ -87,32 +90,35 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
           SelectionVector &fside, idx_t fcount) {
 	assert(res_true.type == res_false.type && res_true.type == result.type);
 
-	switch (result.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (result.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		case_loop<int8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		case_loop<int16_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		case_loop<int32_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		case_loop<int64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::INT128:
+		case_loop<hugeint_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
+	case PhysicalType::FLOAT:
 		case_loop<float>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		case_loop<double>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		case_loop<string_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		StringVector::AddHeapReference(result, res_true);
 		StringVector::AddHeapReference(result, res_false);
 		break;
-	case TypeId::LIST: {
+	case PhysicalType::LIST: {
 		auto result_cc = make_unique<ChunkCollection>();
 		ListVector::SetEntry(result, move(result_cc));
 
@@ -155,7 +161,8 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for case expression: %s",
-		                              TypeIdToString(result.type).c_str());
+		throw NotImplementedException("Unimplemented type for case expression: %s", result.type.ToString());
 	}
 }
+
+} // namespace duckdb

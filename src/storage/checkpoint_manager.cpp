@@ -27,7 +27,7 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 // constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
@@ -53,7 +53,7 @@ void CheckpointManager::CreateCheckpoint() {
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the schemas
 	database.catalog->schemas->Scan(*transaction,
-	                               [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	                                [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());
@@ -98,9 +98,9 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
 	schema.tables.Scan(transaction, [&](CatalogEntry *entry) {
-		if (entry->type == CatalogType::TABLE) {
+		if (entry->type == CatalogType::TABLE_ENTRY) {
 			tables.push_back((TableCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::VIEW) {
+		} else if (entry->type == CatalogType::VIEW_ENTRY) {
 			views.push_back((ViewCatalogEntry *)entry);
 		} else {
 			throw NotImplementedException("Catalog type for entries");
@@ -131,7 +131,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	// read the schema and create it in the catalog
 	auto info = SchemaCatalogEntry::Deserialize(reader);
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
-	info->on_conflict = OnCreateConflict::IGNORE;
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	database.catalog->CreateSchema(context, info.get());
 
 	// read the sequences
@@ -210,3 +210,5 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// finally create the table in the catalog
 	database.catalog->CreateTable(context, bound_info.get());
 }
+
+} // namespace duckdb

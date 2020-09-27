@@ -6,8 +6,9 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	unique_ptr<QueryNode> node;
@@ -26,7 +27,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 
 				auto it = window_clauses.find(window_name);
 				if (it != window_clauses.end()) {
-					throw ParserException("window \"%s\" is already defined", window_name.c_str());
+					throw ParserException("window \"%s\" is already defined", window_name);
 				}
 				window_clauses[window_name] = window_def;
 			}
@@ -124,3 +125,5 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	}
 	return node;
 }
+
+} // namespace duckdb

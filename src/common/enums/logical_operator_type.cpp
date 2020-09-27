@@ -43,8 +43,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "TOP_N";
 	case LogicalOperatorType::COPY_TO_FILE:
 		return "COPY_TO_FILE";
-	case LogicalOperatorType::COPY_FROM_FILE:
-		return "COPY_FROM_FILE";
 	case LogicalOperatorType::JOIN:
 		return "JOIN";
 	case LogicalOperatorType::CROSS_PRODUCT:
@@ -65,8 +63,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "UPDATE";
 	case LogicalOperatorType::PREPARE:
 		return "PREPARE";
-	case LogicalOperatorType::TABLE_FUNCTION:
-		return "TABLE_FUNCTION";
+	case LogicalOperatorType::DUMMY_SCAN:
+		return "DUMMY_SCAN";
 	case LogicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
 	case LogicalOperatorType::CREATE_TABLE:
@@ -77,16 +75,30 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXECUTE";
 	case LogicalOperatorType::VACUUM:
 		return "VACUUM";
-	case LogicalOperatorType::INDEX_SCAN:
-		return "INDEX_SCAN";
 	case LogicalOperatorType::RECURSIVE_CTE:
 		return "REC_CTE";
 	case LogicalOperatorType::CTE_REF:
 		return "CTE_SCAN";
 	case LogicalOperatorType::INVALID:
-	default:
 		return "INVALID";
+	case LogicalOperatorType::ALTER:
+		return "ALTER";
+	case LogicalOperatorType::CREATE_SEQUENCE:
+		return "CREATE_SEQUENCE";
+	case LogicalOperatorType::CREATE_VIEW:
+		return "CREATE_VIEW";
+	case LogicalOperatorType::CREATE_SCHEMA:
+		return "CREATE_SCHEMA";
+	case LogicalOperatorType::DROP:
+		return "DROP";
+	case LogicalOperatorType::PRAGMA:
+		return "PRAGMA";
+	case LogicalOperatorType::TRANSACTION:
+		return "TRANSACTION";
+	case LogicalOperatorType::EXPORT:
+		return "EXPORT";
 	}
+	return "UNDEFINED";
 }
 
 } // namespace duckdb

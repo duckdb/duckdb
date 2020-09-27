@@ -1,0 +1,149 @@
+# name: test/sql/function/string/test_substring.test
+# description: Substring test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 1, 2), ('world', 2, 3), ('b', 1, 1), (NULL, 2, 2)
+
+# test zero length
+query TT
+SELECT SUBSTRING('🦆ab', 1, 0), SUBSTRING('abc', 1, 0)
+----
+(empty)	(empty)
+
+# constant offset/length
+# normal substring
+query T
+SELECT substring(s from 1 for 2) FROM strings
+----
+he
+wo
+b
+NULL
+
+# substring out of range
+query T
+SELECT substring(s from 2 for 2) FROM strings
+----
+el
+or
+(empty)
+NULL
+
+# variable length offset/length
+query T
+SELECT substring(s from off for length) FROM strings
+----
+he
+orl
+b
+NULL
+
+query T
+SELECT substring(s from off for 2) FROM strings
+----
+he
+or
+b
+NULL
+
+query T
+SELECT substring(s from 1 for length) FROM strings
+----
+he
+wor
+b
+NULL
+
+query T
+SELECT substring('hello' from off for length) FROM strings
+----
+he
+ell
+h
+el
+
+# test substrings with constant nulls in different places
+query T
+SELECT substring(NULL from off for length) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring('hello' from NULL for length) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring('hello' from off for NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring(NULL from NULL for length) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring('hello' from NULL for NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring(NULL from off for NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring(NULL from NULL for NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+# fixed slice
+query T
+SELECT substring(s from -2 for 2) FROM strings
+----
+lo
+ld
+b
+NULL
+
+# zero offset (this is accepted by SQLite)
+query T
+SELECT substring(s from 0 for length) FROM strings
+----
+h
+wo
+(empty)
+NULL
+
+# Negative length is invalid
+statement error
+SELECT substr('SQLite substr', 4, -1)

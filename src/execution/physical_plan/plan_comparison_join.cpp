@@ -5,7 +5,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
@@ -23,7 +23,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	bool has_equality = false;
 	bool has_inequality = false;
+#ifndef NDEBUG
 	bool has_null_equal_conditions = false;
+#endif
 	for (auto &cond : op.conditions) {
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
@@ -32,7 +34,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			has_inequality = true;
 		}
 		if (cond.null_values_are_equal) {
+#ifndef NDEBUG
 			has_null_equal_conditions = true;
+#endif
 			assert(cond.comparison == ExpressionType::COMPARE_EQUAL);
 		}
 	}
@@ -54,3 +58,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	}
 	return plan;
 }
+
+} // namespace duckdb

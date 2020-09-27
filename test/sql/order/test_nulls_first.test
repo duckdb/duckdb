@@ -1,0 +1,124 @@
+# name: test/sql/order/test_nulls_first.test
+# description: Test NULLS FIRST/NULLS LAST
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (NULL)
+
+# default is NULLS FIRST
+query I
+SELECT * FROM integers ORDER BY i
+----
+NULL
+1
+
+query I
+SELECT * FROM integers ORDER BY i NULLS FIRST
+----
+NULL
+1
+
+query I
+SELECT * FROM integers ORDER BY i NULLS LAST
+----
+1
+NULL
+
+query II
+SELECT 10 AS j, i FROM integers ORDER BY j, i NULLS LAST
+----
+10	1
+10	NULL
+
+# multiple columns with a mix
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (NULL, 1), (1, NULL)
+
+query II
+SELECT * FROM test ORDER BY i NULLS FIRST, j NULLS LAST
+----
+NULL	1
+1	1
+1	NULL
+
+query II
+SELECT * FROM test ORDER BY i NULLS FIRST, j NULLS FIRST
+----
+NULL	1
+1	NULL
+1	1
+
+query II
+SELECT * FROM test ORDER BY i NULLS LAST, j NULLS FIRST
+----
+1	NULL
+1	1
+NULL	1
+
+# now in window functions
+query III
+SELECT i, j, row_number() OVER (PARTITION BY i ORDER BY j NULLS FIRST) FROM test ORDER BY i NULLS FIRST, j NULLS FIRST;
+----
+NULL	1	1
+1	NULL	1
+1	1	2
+
+query III
+SELECT i, j, row_number() OVER (PARTITION BY i ORDER BY j NULLS LAST) FROM test ORDER BY i NULLS FIRST, j NULLS FIRST;
+----
+NULL	1	1
+1	NULL	2
+1	1	1
+
+# TOP N
+query II
+SELECT * FROM test ORDER BY i NULLS FIRST, j NULLS LAST LIMIT 2
+----
+NULL	1
+1	1
+
+query II
+SELECT * FROM test ORDER BY i NULLS LAST, j NULLS LAST LIMIT 2
+----
+1	1
+1	NULL
+
+# Test NULLS FIRST/NULLS LAST PRAGMA
+# default is NULLS FIRST
+query I
+SELECT * FROM integers ORDER BY i
+----
+NULL
+1
+
+# changed default now
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+query I
+SELECT * FROM integers ORDER BY i
+----
+1
+NULL
+
+statement ok
+PRAGMA default_null_order='NULLS FIRST'
+
+statement error
+PRAGMA default_null_order())
+
+statement error
+PRAGMA default_null_order=UNKNOWN)
+
+statement error
+PRAGMA default_null_order=3)
+

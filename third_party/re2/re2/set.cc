@@ -16,7 +16,7 @@
 #include "re2/re2.h"
 #include "re2/regexp.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 RE2::Set::Set(const RE2::Options& options, RE2::Anchor anchor) {
   options_.Copy(options);
@@ -42,7 +42,7 @@ int RE2::Set::Add(const StringPiece& pattern, std::string* error) {
   Regexp::ParseFlags pf = static_cast<Regexp::ParseFlags>(
     options_.ParseFlags());
   RegexpStatus status;
-  re2::Regexp* re = Regexp::Parse(pattern, pf, &status);
+  duckdb_re2::Regexp* re = Regexp::Parse(pattern, pf, &status);
   if (re == NULL) {
     if (error != NULL)
       *error = status.Text();
@@ -53,20 +53,20 @@ int RE2::Set::Add(const StringPiece& pattern, std::string* error) {
 
   // Concatenate with match index and push on vector.
   int n = static_cast<int>(elem_.size());
-  re2::Regexp* m = re2::Regexp::HaveMatch(n, pf);
+  duckdb_re2::Regexp* m = duckdb_re2::Regexp::HaveMatch(n, pf);
   if (re->op() == kRegexpConcat) {
     int nsub = re->nsub();
-    PODArray<re2::Regexp*> sub(nsub + 1);
+    PODArray<duckdb_re2::Regexp*> sub(nsub + 1);
     for (int i = 0; i < nsub; i++)
       sub[i] = re->sub()[i]->Incref();
     sub[nsub] = m;
     re->Decref();
-    re = re2::Regexp::Concat(sub.data(), nsub + 1, pf);
+    re = duckdb_re2::Regexp::Concat(sub.data(), nsub + 1, pf);
   } else {
-    re2::Regexp* sub[2];
+    duckdb_re2::Regexp* sub[2];
     sub[0] = re;
     sub[1] = m;
-    re = re2::Regexp::Concat(sub, 2, pf);
+    re = duckdb_re2::Regexp::Concat(sub, 2, pf);
   }
   elem_.emplace_back(std::string(pattern), re);
   return n;
@@ -87,7 +87,7 @@ bool RE2::Set::Compile() {
               return a.first < b.first;
             });
 
-  PODArray<re2::Regexp*> sub(size_);
+  PODArray<duckdb_re2::Regexp*> sub(size_);
   for (int i = 0; i < size_; i++)
     sub[i] = elem_[i].second;
   elem_.clear();
@@ -95,7 +95,7 @@ bool RE2::Set::Compile() {
 
   Regexp::ParseFlags pf = static_cast<Regexp::ParseFlags>(
     options_.ParseFlags());
-  re2::Regexp* re = re2::Regexp::Alternate(sub.data(), size_, pf);
+  duckdb_re2::Regexp* re = duckdb_re2::Regexp::Alternate(sub.data(), size_, pf);
 
   prog_ = Prog::CompileSet(re, anchor_, options_.max_mem());
   re->Decref();
@@ -150,4 +150,4 @@ bool RE2::Set::Match(const StringPiece& text, std::vector<int>* v,
   return true;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

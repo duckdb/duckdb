@@ -1,16 +1,16 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type)
-    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOL) {
+    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, LogicalType::BOOLEAN) {
 }
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left,
                                                        unique_ptr<Expression> right)
-    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOL) {
+    : BoundConjunctionExpression(type) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }
@@ -24,7 +24,7 @@ string BoundConjunctionExpression::ToString() const {
 }
 
 bool BoundConjunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundConjunctionExpression *)other_;
@@ -39,3 +39,5 @@ unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

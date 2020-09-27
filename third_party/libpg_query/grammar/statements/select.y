@@ -835,7 +835,7 @@ alias_clause:
 					$$->aliasname = $2;
 					$$->colnames = $4;
 				}
-			| AS ColId
+			| AS ColIdOrString
 				{
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $2;
@@ -1279,7 +1279,7 @@ opt_float:	'(' Iconst ')'
 				}
 			| /*EMPTY*/
 				{
-					$$ = SystemTypeName("float8");
+					$$ = SystemTypeName("float4");
 				}
 		;
 
@@ -1633,6 +1633,11 @@ a_expr:		c_expr									{ $$ = $1; }
 			| NOT_LA a_expr						%prec NOT
 				{ $$ = makeNotExpr($2, @1); }
 
+			| a_expr GLOB a_expr %prec GLOB
+				{
+					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_GLOB, "~~~",
+												   $1, $3, @2);
+				}
 			| a_expr LIKE a_expr
 				{
 					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_LIKE, "~~",
@@ -2682,6 +2687,10 @@ subquery_Op:
 					{ $$ = list_make1(makeString("~~")); }
 			| NOT_LA LIKE
 					{ $$ = list_make1(makeString("!~~")); }
+			| GLOB
+					{ $$ = list_make1(makeString("~~~")); }
+			| NOT_LA GLOB
+					{ $$ = list_make1(makeString("!~~~")); }
 			| ILIKE
 					{ $$ = list_make1(makeString("~~*")); }
 			| NOT_LA ILIKE
@@ -2992,7 +3001,7 @@ target_list:
 			| target_list ',' target_el				{ $$ = lappend($1, $3); }
 		;
 
-target_el:	a_expr AS ColLabel
+target_el:	a_expr AS ColLabelOrString
 				{
 					$$ = makeNode(PGResTarget);
 					$$->name = $3;
@@ -3251,6 +3260,10 @@ ColId:		IDENT									{ $$ = $1; }
 			| col_name_keyword						{ $$ = pstrdup($1); }
 		;
 
+ColIdOrString:	ColId											{ $$ = $1; }
+				| SCONST										{ $$ = $1; }
+		;
+
 /* Type/function identifier --- names that can be type or function names.
  */
 type_function_name:	IDENT							{ $$ = $1; }
@@ -3286,4 +3299,8 @@ ColLabel:	IDENT									{ $$ = $1; }
 			| col_name_keyword						{ $$ = pstrdup($1); }
 			| type_func_name_keyword				{ $$ = pstrdup($1); }
 			| reserved_keyword						{ $$ = pstrdup($1); }
+		;
+
+ColLabelOrString:	ColLabel						{ $$ = $1; }
+					| SCONST						{ $$ = $1; }
 		;

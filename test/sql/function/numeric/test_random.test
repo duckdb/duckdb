@@ -1,0 +1,98 @@
+# name: test/sql/function/numeric/test_random.test
+# description: Test random & setseed functions
+# group: [numeric]
+
+# we need to be a bit more clever here for testing random
+# it's very unlikely that three random variables are exactly equivalent
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TEMPORARY TABLE t1 AS SELECT RANDOM() a;
+
+statement ok
+CREATE TEMPORARY TABLE t2 AS SELECT RANDOM() b;
+
+statement ok
+CREATE TEMPORARY TABLE t3 AS SELECT RANDOM() c;
+
+# empty result on this join
+query I
+SELECT COUNT(*) FROM (SELECT a FROM t1 JOIN t2 ON (a=b) JOIN t3 ON (b=c)) s1
+----
+0
+
+statement ok
+ROLLBACK
+
+# with setseed we can enforce the equivalence of these values
+statement ok
+select setseed(0.1)
+
+statement ok
+CREATE TEMPORARY TABLE t1 AS SELECT RANDOM() a;
+
+statement ok
+select setseed(0.1)
+
+statement ok
+CREATE TEMPORARY TABLE t2 AS SELECT RANDOM() b;
+
+statement ok
+select setseed(0.1)
+
+statement ok
+CREATE TEMPORARY TABLE t3 AS SELECT RANDOM() c;
+
+# now the join has one value
+query I
+SELECT COUNT(*) FROM (SELECT a FROM t1 JOIN t2 ON (a=b) JOIN t3 ON (b=c)) s1
+----
+1
+
+# incorrect usage of setseed
+statement error
+select setseed(1.1)
+
+statement error
+select setseed(-1.1)
+
+# we can use setseed with a table as well
+statement ok
+CREATE TABLE seeds(a DOUBLE)
+
+statement ok
+INSERT INTO seeds VALUES (-0.1), (0.0), (0.1)
+
+query IR
+select setseed(a), a from seeds;
+----
+NULL	-0.100000
+NULL	0.000000
+NULL	0.100000
+
+# use random in some complicated expressions
+statement ok
+CREATE TABLE numbers(a INTEGER)
+
+statement ok
+INSERT INTO numbers VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)
+
+query I
+select case when min(random()) >= 0 then 1 else 0 end from numbers;
+----
+1
+
+query I
+select case when max(random()) < 1 then 1 else 0 end from numbers;
+----
+1
+
+# we can order by random
+statement ok
+select * from numbers order by random()
+
+# we can select random
+statement ok
+select random() from numbers

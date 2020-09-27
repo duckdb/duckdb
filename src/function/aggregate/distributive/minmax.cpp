@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/planner/expression.hpp"
 
 using namespace std;
 
@@ -15,32 +16,28 @@ template <class T> struct min_max_state_t {
 	bool isset;
 };
 
-template <class OP> static AggregateFunction GetUnaryAggregate(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::BOOLEAN:
+template <class OP> static AggregateFunction GetUnaryAggregate(LogicalType type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int8_t>, int8_t, int8_t, OP>(type, type);
-	case SQLTypeId::TINYINT:
+	case LogicalTypeId::TINYINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int8_t>, int8_t, int8_t, OP>(type, type);
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int16_t>, int16_t, int16_t, OP>(type, type);
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::INTEGER:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int32_t>, int32_t, int32_t, OP>(type, type);
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::BIGINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int64_t>, int64_t, int64_t, OP>(type, type);
-	case SQLTypeId::FLOAT:
+	case LogicalTypeId::HUGEINT:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+	case LogicalTypeId::FLOAT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<float>, float, float, OP>(type, type);
-	case SQLTypeId::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<double>, double, double, OP>(type, type);
-	case SQLTypeId::DECIMAL:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<double>, double, double, OP>(type, type);
-	case SQLTypeId::DATE:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<date_t>, date_t, date_t, OP>(type, type);
-	case SQLTypeId::TIMESTAMP:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<timestamp_t>, timestamp_t, timestamp_t, OP>(type,
-		                                                                                                     type);
-	case SQLTypeId::INTERVAL:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<interval_t>, interval_t, interval_t, OP>(type,
-		                                                                                                     type);
+	case LogicalTypeId::INTERVAL:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<interval_t>, interval_t, interval_t, OP>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented type for min/max aggregate");
 	}
@@ -55,8 +52,8 @@ struct MinMaxBase {
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		assert(!nullmask[0]);
 		if (!state->isset) {
-			state->isset = true;
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
+			state->isset = true;
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[0]);
 		}
@@ -65,8 +62,8 @@ struct MinMaxBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->isset) {
-			state->isset = true;
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
+			state->isset = true;
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[idx]);
 		}
@@ -139,6 +136,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE> static void Assign(STATE *state, INPUT_TYPE input) {
+		Destroy(state);
 		if (input.IsInlined()) {
 			state->value = input;
 		} else {
@@ -156,7 +154,7 @@ struct StringMinMaxBase : public MinMaxBase {
 		if (!state->isset) {
 			nullmask[idx] = true;
 		} else {
-			target[idx] = StringVector::AddString(result, state->value);
+			target[idx] = StringVector::AddStringOrBlob(result, state->value);
 		}
 	}
 
@@ -190,12 +188,38 @@ struct MaxOperationString : public StringMinMaxBase {
 	}
 };
 
+template <class OP>
+unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateFunction &function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	switch(decimal_type.InternalType()) {
+	case PhysicalType::INT16:
+		function = GetUnaryAggregate<OP>(LogicalType::SMALLINT);
+		break;
+	case PhysicalType::INT32:
+		function = GetUnaryAggregate<OP>(LogicalType::INTEGER);
+		break;
+	case PhysicalType::INT64:
+		function = GetUnaryAggregate<OP>(LogicalType::BIGINT);
+		break;
+	default:
+		function = GetUnaryAggregate<OP>(LogicalType::HUGEINT);
+		break;
+	}
+	function.arguments[0] = decimal_type;
+	function.return_type = decimal_type;
+	return nullptr;
+}
+
 template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	for (auto type : SQLType::ALL_TYPES) {
-		if (type.id == SQLTypeId::VARCHAR || type.id == SQLTypeId::BLOB) {
+	for (auto type : LogicalType::ALL_TYPES) {
+		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
-			    	type.id, type.id));
+			        type.id(), type.id()));
+		} else if (type.id() == LogicalTypeId::DECIMAL) {
+			set.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+			                                  bind_decimal_min_max<OP>));
 		} else {
 			set.AddFunction(GetUnaryAggregate<OP>(type));
 		}

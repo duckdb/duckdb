@@ -1,0 +1,51 @@
+# name: test/sql/constraints/primarykey/test_pk_update_delete.test
+# description: PRIMARY KEY and update/delete
+# group: [primarykey]
+
+statement ok
+CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+UPDATE test SET b=2 WHERE b=3;
+
+statement error
+UPDATE test SET a=a+1 WHERE b=1;
+
+statement error
+UPDATE test SET a=4;
+
+query II
+SELECT * FROM test;
+----
+11	1
+12	2
+13	2
+
+statement ok
+DELETE FROM test WHERE a=11
+
+statement ok
+INSERT INTO test VALUES (11, 1);
+
+statement error
+INSERT INTO test VALUES (11, 1);
+
+statement ok
+UPDATE test SET a=4 WHERE b=1;
+
+query II
+SELECT * FROM test ORDER BY a;
+----
+4	1
+12	2
+13	2
+
+statement error
+UPDATE test SET a=NULL WHERE b=1;
+
+statement error
+UPDATE test SET a=NULL;
+

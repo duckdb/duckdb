@@ -125,7 +125,7 @@ extern "C" {
 */
 #define SQLITE_VERSION        "3.23.0"
 #define SQLITE_VERSION_NUMBER 3023000
-#define SQLITE_SOURCE_ID      DUCKDB_SOURCE_ID
+#define SQLITE_SOURCE_ID      sqlite3_sourceid()
 
 
 /*

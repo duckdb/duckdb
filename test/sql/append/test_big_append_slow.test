@@ -1,0 +1,82 @@
+# name: test/sql/append/test_big_append_slow.test
+# description: Test big append
+# group: [append]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+# append entries bigger than one block
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# 8 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 16 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 32 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 64 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 128 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 256 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 512 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 1024 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 2048 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 4096 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 8192 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 16384 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 32768 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 65536 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 131072 entries
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM integers
+----
+131072
+98304
+196608
+

@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 MetaBlockWriter::MetaBlockWriter(BlockManager &manager) : manager(manager) {
@@ -36,7 +36,7 @@ void MetaBlockWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		// now we need to get a new block id
 		block_id_t new_block_id = manager.GetFreeBlockId();
 		// write the block id of the new block to the start of the current block
-		*((block_id_t *)block->buffer) = new_block_id;
+		Store<block_id_t>(new_block_id, block->buffer);
 		// first flush the old block
 		Flush();
 		// now update the block id of the lbock
@@ -45,3 +45,5 @@ void MetaBlockWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	memcpy(block->buffer + offset, buffer, write_size);
 	offset += write_size;
 }
+
+} // namespace duckdb

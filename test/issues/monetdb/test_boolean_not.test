@@ -1,0 +1,63 @@
+# name: test/issues/monetdb/test_boolean_not.test
+# description: MonetDB Test: boolean_not.Bug-3505.sql
+# group: [monetdb]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE BOOLTBL1 (f1 bool);
+
+statement ok
+INSERT INTO BOOLTBL1 (f1) VALUES (cast('true' AS boolean));
+
+statement ok
+INSERT INTO BOOLTBL1 (f1) VALUES ('true');
+
+statement ok
+INSERT INTO BOOLTBL1 (f1) VALUES ('false');
+
+query T
+SELECT f1 FROM BOOLTBL1 WHERE f1 = NOT FALSE;
+----
+1
+1
+
+query T
+SELECT f1 FROM BOOLTBL1 WHERE f1 = NOT TRUE;
+----
+0
+
+query T
+SELECT f1 FROM BOOLTBL1 WHERE f1 = (NOT FALSE);
+----
+1
+1
+
+query T
+SELECT f1 FROM BOOLTBL1 WHERE NOT FALSE = f1;
+----
+1
+1
+
+query T
+SELECT f1 FROM BOOLTBL1 WHERE NOT f1 = FALSE;
+----
+1
+1
+
+query T
+SELECT f1 FROM BOOLTBL1 WHERE f1 = (NOT TRUE);
+----
+0
+
+query T
+SELECT f1 FROM BOOLTBL1 WHERE NOT TRUE = f1;
+----
+0
+
+query T
+SELECT f1 FROM BOOLTBL1 WHERE NOT f1 = TRUE;
+----
+0
+

@@ -1,0 +1,74 @@
+# name: test/sql/update/test_update_mix.test
+# description: Test mix of updates inserts and deletes
+# group: [update]
+
+statement ok con1
+CREATE TABLE test (a INTEGER);
+
+statement ok con1
+INSERT INTO test VALUES (1), (2), (3);
+
+query R con1
+SELECT SUM(a) FROM test
+----
+6.000000
+
+statement ok con1
+BEGIN TRANSACTION
+
+# append from con2
+statement ok con2
+INSERT INTO test VALUES (4), (5), (6);
+
+query R con1
+SELECT SUM(a) FROM test
+----
+6.000000
+
+query R con2
+SELECT SUM(a) FROM test
+----
+21.000000
+
+# delete from con2
+statement ok con2
+DELETE FROM test WHERE a < 4
+
+query R con1
+SELECT SUM(a) FROM test
+----
+6.000000
+
+query R con2
+SELECT SUM(a) FROM test
+----
+15.000000
+
+# update from con2
+statement ok con2
+UPDATE test SET a=a-3
+
+query R con1
+SELECT SUM(a) FROM test
+----
+6.000000
+
+query R con2
+SELECT SUM(a) FROM test
+----
+6.000000
+
+# now commit
+statement ok con1
+COMMIT
+
+query R con1
+SELECT SUM(a) FROM test
+----
+6.000000
+
+query R con2
+SELECT SUM(a) FROM test
+----
+6.000000
+

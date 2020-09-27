@@ -1,0 +1,264 @@
+# name: test/sql/setops/test_union_binding.test
+# description: Test binding parameters with union expressions
+# group: [setops]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(a INTEGER);
+
+statement ok
+CREATE TABLE test2(b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1), (2), (3), (NULL);
+
+statement ok
+INSERT INTO test2 VALUES (2), (3), (4), (NULL);
+
+query I
+(SELECT a FROM test ORDER BY a+1) UNION SELECT b FROM test2 ORDER BY 1;
+----
+NULL
+1
+2
+3
+4
+
+# union returns only one column
+query I
+SELECT * FROM (SELECT * FROM test UNION SELECT * FROM test2) res ORDER BY 1;
+----
+NULL
+1
+2
+3
+4
+
+# we can only bind by the column names of the first query
+query I
+SELECT a FROM (SELECT * FROM test UNION SELECT * FROM test2) res ORDER BY 1;
+----
+NULL
+1
+2
+3
+4
+
+# hence this does not work: "b" is from the second query
+statement error
+SELECT b FROM (SELECT * FROM test UNION SELECT * FROM test2) res ORDER BY 1;
+
+# it works if we reverse the tables
+query I
+SELECT b FROM (SELECT * FROM test2 UNION SELECT * FROM test) res ORDER BY 1;
+----
+NULL
+1
+2
+3
+4
+
+# we can give explicit subquery aliases
+query I
+SELECT col1 FROM (SELECT * FROM test2 UNION SELECT * FROM test) res(col1) ORDER BY 1;
+----
+NULL
+1
+2
+3
+4
+
+# we can ORDER BY names from both sides
+query I
+SELECT a FROM test UNION SELECT b FROM test2 ORDER BY a;
+----
+NULL
+1
+2
+3
+4
+
+query I
+SELECT a FROM test UNION SELECT b FROM test2 ORDER BY b;
+----
+NULL
+1
+2
+3
+4
+
+# if names are ambiguous, throw an error
+statement error
+SELECT 1, a FROM test UNION SELECT b AS a, 1 FROM test2 ORDER BY a;
+
+# if expressions are ambiguous as well, throw an error
+statement error
+SELECT 1, a+1 FROM test UNION SELECT a+1, 1 FROM test ORDER BY a+1;
+
+# also if we have multiple setops
+query I
+SELECT a FROM test UNION SELECT b FROM test2 UNION SELECT b AS c FROM test2 ORDER BY c;
+----
+NULL
+1
+2
+3
+4
+
+# we can also order by the expression itself
+query I
+SELECT a FROM test UNION SELECT b FROM test2 UNION SELECT b + 1 FROM test2 ORDER BY b + 1;
+----
+NULL
+1
+2
+3
+4
+5
+
+# multiple columns order
+query II
+SELECT a, 10 - a AS b FROM test UNION SELECT b, b + 1 FROM test2 ORDER BY 2;
+----
+NULL	NULL
+2	3
+3	4
+4	5
+3	7
+2	8
+1	9
+
+# ambiguous naming reference should fail
+statement error
+SELECT a, 10 - a AS b FROM test UNION SELECT b, b + 1 FROM test2 ORDER BY b;
+
+# and by constant references
+query I
+SELECT a FROM test UNION SELECT b FROM test2 ORDER BY 1;
+----
+NULL
+1
+2
+3
+4
+
+# out of range constant reference
+statement error
+SELECT a FROM test UNION SELECT b FROM test2 ORDER BY 2;
+
+# what if our subqueries have an order by clause?
+query I
+(SELECT a FROM test ORDER BY a+1) UNION SELECT b FROM test2 ORDER BY 1;
+----
+NULL
+1
+2
+3
+4
+
+# unions with SELECT * also allows orders
+query I
+SELECT * FROM test UNION SELECT * FROM test2 ORDER BY a;
+----
+NULL
+1
+2
+3
+4
+
+query I
+SELECT * FROM test UNION SELECT * FROM test2 ORDER BY b;
+----
+NULL
+1
+2
+3
+4
+
+# test union with/without table specifiers
+query I
+SELECT a FROM test UNION SELECT * FROM test2 ORDER BY test.a;
+----
+NULL
+1
+2
+3
+4
+
+query I
+SELECT a FROM test UNION SELECT b FROM test2 ORDER BY test2.b;
+----
+NULL
+1
+2
+3
+4
+
+query I
+SELECT test.a FROM test UNION SELECT * FROM test2 ORDER BY a;
+----
+NULL
+1
+2
+3
+4
+
+query I
+SELECT test.a FROM test UNION SELECT test2.b FROM test2 ORDER BY b;
+----
+NULL
+1
+2
+3
+4
+
+# what about multiple set ops?
+query I
+SELECT a FROM test UNION SELECT * FROM test2 UNION SELECT * FROM test t1 ORDER BY test.a, test2.b, t1.a;
+----
+NULL
+1
+2
+3
+4
+
+query I
+SELECT a FROM test UNION SELECT * FROM test2 UNION SELECT * FROM test t1 ORDER BY a;
+----
+NULL
+1
+2
+3
+4
+
+# and subqueries
+query I
+SELECT a FROM (SELECT * FROM test) bla UNION SELECT * FROM test2 ORDER BY bla.a;
+----
+NULL
+1
+2
+3
+4
+
+# what if we have cross products or joins
+query II
+SELECT t1.a, t2.a FROM test t1, test t2 WHERE t1.a=t2.a UNION SELECT b, b - 1 FROM test2 ORDER BY t1.a, t2.a, test2.b;
+----
+NULL	NULL
+1	1
+2	1
+2	2
+3	2
+3	3
+4	3
+
+# test union with NULLs
+query TTI
+SELECT NULL as a, NULL as b, 1 as id UNION SELECT CAST('2015-10-11 00:00:00' AS TIMESTAMP) as a, CAST('2015-10-11 12:34:56' AS TIMESTAMP) as b, 2 as id ORDER BY 3
+----
+NULL	NULL	1
+2015-10-11 00:00:00	2015-10-11 12:34:56	2
+

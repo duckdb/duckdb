@@ -1,0 +1,43 @@
+# name: test/issues/monetdb/test_simple_round.test
+# description: Test simple round usage
+# group: [monetdb]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table test (col1 double);
+
+statement ok
+insert into test values (2.887);
+
+query R
+select round(col1, -1) from test;
+----
+0
+
+query R
+select round(col1, 0) from test;
+----
+3.000000
+
+query R
+select round(col1, 1) from test;
+----
+2.900000
+
+query R
+select round(col1, 2) from test;
+----
+2.890000
+
+query R
+select round(col1, 3) from test;
+----
+2.887000
+
+query R
+select round(col1, 4) from test;
+----
+2.887000
+

@@ -1,0 +1,25 @@
+# name: test/sql/copy/csv/test_long_line.test
+# description: Test copy statement with long lines
+# group: [csv]
+
+# generate a CSV file with a very long string
+# load CSV file into a table
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/test_long_line.csv';
+----
+2
+
+query I
+SELECT LENGTH(b) FROM test ORDER BY a;
+----
+10000
+20000
+
+query II
+SELECT SUM(a), SUM(c) FROM test;
+----
+30	50
+

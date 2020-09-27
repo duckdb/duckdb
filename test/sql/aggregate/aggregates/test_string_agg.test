@@ -1,0 +1,90 @@
+# name: test/sql/aggregate/aggregates/test_string_agg.test
+# description: Test STRING_AGG operator
+# group: [aggregates]
+
+# test incorrect usage of STRING_AGG function
+
+statement error
+SELECT STRING_AGG()
+
+statement error
+SELECT STRING_AGG(1, 2, 3)
+
+statement error
+SELECT STRING_AGG(STRING_AGG('a',','))
+
+# test string aggregation on scalar values
+query T
+SELECT STRING_AGG('a',',')
+----
+a
+
+# test string aggregation on scalar values
+query TTTT
+SELECT STRING_AGG('a',','), STRING_AGG(NULL,','), STRING_AGG('a',NULL), STRING_AGG(NULL,NULL)
+----
+a
+NULL
+NULL
+NULL
+
+# test string aggregation on a set of values
+statement ok
+CREATE TABLE strings(g INTEGER, x VARCHAR, y VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES (1,'a','/'), (1,'b','-'), (2,'i','/'), (2,NULL,'-'), (2,'j','+'), (3,'p','/'), (4,'x','/'), (4,'y','-'), (4,'z','+')
+
+query TT
+SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings
+----
+a,b,i,j,p,x,y,z
+a-b/i+j/p/x-y+z
+
+query ITT
+SELECT g, STRING_AGG(x,','), STRING_AGG(x,y) FROM strings GROUP BY g ORDER BY g
+----
+1
+a,b
+a-b
+2
+i,j
+i+j
+3
+p
+p
+4
+x,y,z
+x-y+z
+
+# test agg on empty set
+query TT
+SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings WHERE g > 100
+----
+NULL
+NULL
+
+# numerics are auto cast to strings
+query T
+SELECT STRING_AGG(1, 2)
+----
+1
+
+# group concat is an alias for string_agg
+query T
+SELECT GROUP_CONCAT('a', ',')
+----
+a
+
+query T
+SELECT GROUP_CONCAT('a')
+----
+a
+
+query TT
+SELECT g, GROUP_CONCAT(x) FROM strings GROUP BY g ORDER BY g
+----
+1	a,b
+2	i,j
+3	p
+4	x,y,z

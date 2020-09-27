@@ -1,0 +1,32 @@
+# name: test/sql/types/hugeint/test_hugeint_auto_cast.test
+# description: Test hugeint auto cast
+# group: [hugeint]
+
+statement ok
+PRAGMA enable_verification
+
+# test auto cast of all integer types to hugeint
+query IIII
+SELECT 10000000000000000000::HUGEINT + 100::TINYINT, 10000000000000000000::HUGEINT + 100::SMALLINT, 10000000000000000000::HUGEINT + 100::INTEGER, 10000000000000000000::HUGEINT + 100::BIGINT;
+----
+10000000000000000100
+10000000000000000100
+10000000000000000100
+10000000000000000100
+
+# test auto cast of HUGEINT -> DOUBLE
+query I
+SELECT 100::HUGEINT + 0.5
+----
+100.5
+
+query I
+SELECT COS(100::HUGEINT)
+----
+0.862318872287684
+
+# test auto cast of HUGEINT -> VARCHAR
+query I
+SELECT CONCAT('hello number ', 100::HUGEINT)
+----
+hello number 100

@@ -1,0 +1,47 @@
+# name: test/sql/transactions/test_null_version.test
+# description: Test NULL versions
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok con1
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok con1
+INSERT INTO integers VALUES (NULL, 3)
+
+query II con1
+SELECT * FROM integers
+----
+NULL	3
+
+# begin a transaction in con2
+statement ok con2
+BEGIN TRANSACTION
+
+# update the row in con1
+statement ok con1
+UPDATE integers SET i=1,j=1
+
+# con1 should see the value "1"
+query II con1
+SELECT * FROM integers
+----
+1	1
+
+# con2 should see the value "NULL"
+query II con2
+SELECT * FROM integers
+----
+NULL	3
+
+# after a rollback con2 should see the value "1" as well
+statement ok con2
+ROLLBACK
+
+query II con1
+SELECT * FROM integers
+----
+1	1
+

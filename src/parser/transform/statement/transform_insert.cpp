@@ -1,10 +1,10 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformValuesList(PGList *list) {
 	auto result = make_unique<ExpressionListRef>();
@@ -39,11 +39,12 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(PGNode *node) {
 			result->columns.push_back(string(target->name));
 		}
 	}
-	result->select_statement = TransformSelect(stmt->selectStmt);
+	result->select_statement = TransformSelect(stmt->selectStmt, false);
 
-	auto ref = TransformRangeVar(stmt->relation);
-	auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
-	result->table = table.table_name;
-	result->schema = table.schema_name;
+	auto qname = TransformQualifiedName(stmt->relation);
+	result->table = qname.name;
+	result->schema = qname.schema;
 	return result;
 }
+
+} // namespace duckdb

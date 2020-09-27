@@ -9,7 +9,7 @@ namespace duckdb {
 BoundStatement Binder::Bind(VacuumStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
-	result.types = {SQLType::BOOLEAN};
+	result.types = {LogicalType::BOOLEAN};
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::VACUUM, move(stmt.info));
 	return result;
 }

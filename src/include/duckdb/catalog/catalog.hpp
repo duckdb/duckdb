@@ -17,6 +17,8 @@ struct DropInfo;
 struct BoundCreateTableInfo;
 struct AlterTableInfo;
 struct CreateTableFunctionInfo;
+struct CreateCopyFunctionInfo;
+struct CreatePragmaFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
@@ -29,8 +31,11 @@ class AggregateFunctionCatalogEntry;
 class CollateCatalogEntry;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
+class ViewCatalogEntry;
 class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
+class CopyFunctionCatalogEntry;
+class PragmaFunctionCatalogEntry;
 class StorageManager;
 class CatalogSet;
 class DependencyManager;
@@ -60,6 +65,10 @@ public:
 	CatalogEntry *CreateTable(ClientContext &context, BoundCreateTableInfo *info);
 	//! Create a table function in the catalog
 	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
+	//! Create a copy function in the catalog
+	CatalogEntry *CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info);
+	//! Create a pragma function in the catalog
+	CatalogEntry *CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info);
 	//! Create a scalar or aggregate function in the catalog
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
 	//! Creates a table in the catalog.
@@ -95,10 +104,18 @@ private:
 template <>
 TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 template <>
+ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
+template <>
 SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 template <>
 TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                              bool if_exists);
+template <>
+CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                            bool if_exists);
+template <>
+PragmaFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                              bool if_exists);
 template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                                  bool if_exists);

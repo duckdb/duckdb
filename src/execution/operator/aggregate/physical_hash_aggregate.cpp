@@ -6,15 +6,15 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
+PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                              PhysicalOperatorType type)
     : PhysicalHashAggregate(types, move(expressions), {}, type) {
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
+PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, PhysicalOperatorType type)
     : PhysicalSink(type, types), groups(move(groups_p)) {
 	// get a list of all aggregates to be computed
@@ -43,7 +43,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
 			}
 		} else {
 			// COUNT(*)
-			payload_types.push_back(TypeId::INT64);
+			payload_types.push_back(LogicalType::BIGINT);
 		}
 		if (!aggr.function.combine) {
 			all_combinable = false;
@@ -57,7 +57,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalOperatorState {
 public:
-	HashAggregateGlobalState(vector<TypeId> &group_types, vector<TypeId> &payload_types,
+	HashAggregateGlobalState(vector<LogicalType> &group_types, vector<LogicalType> &payload_types,
 	                         vector<BoundAggregateExpression *> &bindings)
 	    : is_empty(true) {
 		ht = make_unique<SuperLargeHashTable>(1024, group_types, payload_types, bindings);
@@ -74,7 +74,7 @@ public:
 class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(vector<unique_ptr<Expression>> &groups, vector<BoundAggregateExpression *> &aggregates,
-	                        vector<TypeId> &group_types, vector<TypeId> &payload_types)
+	                        vector<LogicalType> &group_types, vector<LogicalType> &payload_types)
 	    : group_executor(groups) {
 		for (auto &aggr : aggregates) {
 			if (aggr->children.size()) {
@@ -147,8 +147,9 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
-	PhysicalHashAggregateState(vector<TypeId> &group_types, vector<TypeId> &aggregate_types, PhysicalOperator *child)
-	    : PhysicalOperatorState(child), ht_scan_position(0) {
+	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types,
+	                           vector<LogicalType> &aggregate_types, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), ht_scan_position(0) {
 		group_chunk.Initialize(group_types);
 		if (aggregate_types.size() > 0) {
 			aggregate_chunk.Initialize(aggregate_types);
@@ -211,6 +212,8 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_types,
+	return make_unique<PhysicalHashAggregateState>(*this, group_types, aggregate_types,
 	                                               children.size() == 0 ? nullptr : children[0].get());
 }
+
+} // namespace duckdb

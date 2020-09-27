@@ -10,12 +10,14 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/vector.hpp"
 
-#include <stdarg.h>
 #include <stdexcept>
 
 namespace duckdb {
-enum class TypeId : uint8_t;
+enum class PhysicalType : uint8_t;
+struct LogicalType;
+struct hugeint_t;
 
 inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
                                      const char *fname, int linenr) {
@@ -69,8 +71,42 @@ enum class ExceptionType {
 	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 	INTERNAL =
 	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
-	INVALID_INPUT = 32    // Input or arguments error
+	INVALID_INPUT = 32 // Input or arguments error
 };
+
+enum class ExceptionFormatValueType : uint8_t {
+	FORMAT_VALUE_TYPE_DOUBLE,
+	FORMAT_VALUE_TYPE_INTEGER,
+	FORMAT_VALUE_TYPE_STRING
+};
+
+struct ExceptionFormatValue {
+	ExceptionFormatValue(double dbl_val) : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), dbl_val(dbl_val) {
+	}
+	ExceptionFormatValue(int64_t int_val)
+	    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {
+	}
+	ExceptionFormatValue(string str_val) : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(str_val) {
+	}
+
+	ExceptionFormatValueType type;
+
+	double dbl_val;
+	int64_t int_val;
+	string str_val;
+
+	template <class T> static ExceptionFormatValue CreateFormatValue(T value) {
+		return int64_t(value);
+	}
+};
+
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
 
 class Exception : public std::exception {
 public:
@@ -84,8 +120,18 @@ public:
 
 	string ExceptionTypeToString(ExceptionType type);
 
-protected:
-	void Format(va_list ap);
+	template <typename... Args> static string ConstructMessage(string msg, Args... params) {
+		vector<ExceptionFormatValue> values;
+		return ConstructMessageRecursive(msg, values, params...);
+	}
+
+	static string ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values);
+
+	template <class T, typename... Args>
+	static string ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
+		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
+		return ConstructMessageRecursive(msg, values, params...);
+	}
 
 private:
 	string exception_message_;
@@ -104,62 +150,110 @@ public:
 
 class CatalogException : public StandardException {
 public:
-	CatalogException(string msg, ...);
+	CatalogException(string msg);
+
+	template <typename... Args>
+	CatalogException(string msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class ParserException : public StandardException {
 public:
-	ParserException(string msg, ...);
+	ParserException(string msg);
+
+	template <typename... Args>
+	ParserException(string msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class BinderException : public StandardException {
 public:
-	BinderException(string msg, ...);
+	BinderException(string msg);
+
+	template <typename... Args>
+	BinderException(string msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class ConversionException : public Exception {
 public:
-	ConversionException(string msg, ...);
+	ConversionException(string msg);
+
+	template <typename... Args>
+	ConversionException(string msg, Args... params) : ConversionException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class TransactionException : public Exception {
 public:
-	TransactionException(string msg, ...);
+	TransactionException(string msg);
+
+	template <typename... Args>
+	TransactionException(string msg, Args... params) : TransactionException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class NotImplementedException : public Exception {
 public:
-	NotImplementedException(string msg, ...);
+	NotImplementedException(string msg);
+
+	template <typename... Args>
+	NotImplementedException(string msg, Args... params) : NotImplementedException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class OutOfRangeException : public Exception {
 public:
-	OutOfRangeException(string msg, ...);
+	OutOfRangeException(string msg);
+
+	template <typename... Args>
+	OutOfRangeException(string msg, Args... params) : OutOfRangeException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class SyntaxException : public Exception {
 public:
-	SyntaxException(string msg, ...);
+	SyntaxException(string msg);
+
+	template <typename... Args>
+	SyntaxException(string msg, Args... params) : SyntaxException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class ConstraintException : public Exception {
 public:
-	ConstraintException(string msg, ...);
+	ConstraintException(string msg);
+
+	template <typename... Args>
+	ConstraintException(string msg, Args... params) : ConstraintException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class IOException : public Exception {
 public:
-	IOException(string msg, ...);
+	IOException(string msg);
+
+	template <typename... Args>
+	IOException(string msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class SerializationException : public Exception {
 public:
-	SerializationException(string msg, ...);
+	SerializationException(string msg);
+
+	template <typename... Args>
+	SerializationException(string msg, Args... params) : SerializationException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class SequenceException : public Exception {
 public:
-	SequenceException(string msg, ...);
+	SequenceException(string msg);
+
+	template <typename... Args>
+	SequenceException(string msg, Args... params) : SequenceException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class InterruptException : public Exception {
@@ -169,39 +263,55 @@ public:
 
 class FatalException : public Exception {
 public:
-	FatalException(string msg, ...);
+	FatalException(string msg);
+
+	template <typename... Args>
+	FatalException(string msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class InternalException : public Exception {
 public:
-	InternalException(string msg, ...);
+	InternalException(string msg);
+
+	template <typename... Args>
+	InternalException(string msg, Args... params) : InternalException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class InvalidInputException : public Exception {
 public:
-	InvalidInputException(string msg, ...);
+	InvalidInputException(string msg);
+
+	template <typename... Args>
+	InvalidInputException(string msg, Args... params) : InvalidInputException(ConstructMessage(msg, params...)) {
+	}
 };
 
 class CastException : public Exception {
 public:
-	CastException(const TypeId origType, const TypeId newType);
+	CastException(const PhysicalType origType, const PhysicalType newType);
+	CastException(const LogicalType origType, const LogicalType newType);
 };
 
 class InvalidTypeException : public Exception {
 public:
-	InvalidTypeException(TypeId type, string msg);
+	InvalidTypeException(PhysicalType type, string msg);
+	InvalidTypeException(LogicalType type, string msg);
 };
 
 class TypeMismatchException : public Exception {
 public:
-	TypeMismatchException(const TypeId type_1, const TypeId type_2, string msg);
+	TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg);
+	TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg);
 };
 
 class ValueOutOfRangeException : public Exception {
 public:
-	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const TypeId varType, const idx_t length);
+	ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType);
+	ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
+	ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
+	ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
 };
 
 } // namespace duckdb

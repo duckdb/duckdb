@@ -1,9 +1,11 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 bool JoinRef::Equals(const TableRef *other_) const {
 	if (!TableRef::Equals(other_)) {
@@ -42,7 +44,7 @@ void JoinRef::Serialize(Serializer &serializer) {
 	right->Serialize(serializer);
 	serializer.WriteOptional(condition);
 	serializer.Write<JoinType>(type);
-	assert(using_columns.size() <= numeric_limits<uint32_t>::max());
+	assert(using_columns.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)using_columns.size());
 	for (auto &using_column : using_columns) {
 		serializer.WriteString(using_column);
@@ -61,4 +63,6 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 		result->using_columns.push_back(source.Read<string>());
 	}
 	return move(result);
+}
+
 }

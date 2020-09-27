@@ -9,15 +9,14 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
-
-#include <limits>
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
 struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo()
-	    : CreateInfo(CatalogType::SEQUENCE), name(string()), usage_count(0), increment(1), min_value(1),
-	      max_value(std::numeric_limits<int64_t>::max()), start_value(1), cycle(false) {
+	    : CreateInfo(CatalogType::SEQUENCE_ENTRY), name(string()), usage_count(0), increment(1), min_value(1),
+	      max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false) {
 	}
 
 	//! Sequence name to create

@@ -1,0 +1,194 @@
+# name: test/sql/function/timestamp/test_strptime.test
+# description: Test strptime function
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT strptime('21 June, 2018', '%d %B, %Y')
+----
+2018-06-21 00:00:00
+
+query I
+SELECT strptime('21/10/2018', '%d/%m/%Y')
+----
+2018-10-21 00:00:00
+
+query I
+SELECT strptime('2018-20-10', '%Y-%d-%m')
+----
+2018-10-20 00:00:00
+
+query I
+SELECT strptime('Mon 30, June 2003, 12:03:10 AM', '%a %d, %B %Y, %I:%M:%S %p')
+----
+2003-06-30 00:03:10
+
+query I
+SELECT strptime('Mon 30, June 2003, 12:03:10 PM', '%a %d, %B %Y, %I:%M:%S %p')
+----
+2003-06-30 12:03:10
+
+query I
+SELECT strptime('Mon 30, December 2003, 7:3:5 PM', '%a %d, %B %Y, %I:%M:%S %p')
+----
+2003-12-30 19:03:05
+
+query I
+SELECT strptime('Tuesday 30, December 2003, 7:3:5 PM', '%A %d, %B %Y, %I:%M:%S %p')
+----
+2003-12-30 19:03:05
+
+query I
+SELECT strptime('Mon 30, December 30, 7:3:5 PM', '%a %d, %B %y, %I:%M:%S %p')
+----
+2030-12-30 19:03:05
+
+# for strptime there is no difference between %- and %
+query I
+SELECT strptime('Mon 30, June 2003, 12:03:10 AM', '%a %-d, %B %Y, %-I:%-M:%-S %p')
+----
+2003-06-30 00:03:10
+
+# lowercase also works
+query I
+SELECT strptime('mon', '%a')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT strptime('tuesday', '%A')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT strptime('jun', '%b')
+----
+1900-06-01 00:00:00
+
+# empty specifier and string
+query I
+SELECT strptime('', '')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT strptime(NULL, '')
+----
+NULL
+
+query I
+SELECT strptime('', NULL)
+----
+NULL
+
+# different errors
+# month out of range
+statement error
+SELECT strptime('2018-20-10', '%Y-%m-%d')
+
+# day out of range
+statement error
+SELECT strptime('2018-10-100', '%Y-%m-%d')
+
+# year without century out of range
+statement error
+SELECT strptime('969-10-10', '%y-%m-%d')
+
+# literal part does not match
+statement error
+SELECT strptime('2000/10/10', '%Y-%m-%d')
+
+# incorrect date
+statement error
+SELECT strptime('2001-02-30', '%Y-%m-%d')
+
+# incorrect date
+statement error
+SELECT strptime('2000-10-hello', '%Y-%m-%d')
+
+# incorrect hour
+statement error
+SELECT strptime('2000-10-01 24:00:00', '%Y-%m-%d %H:%M:%S')
+
+# incorrect hour with 12 hour clock
+statement error
+SELECT strptime('2000-10-01 00:00:00 AM', '%Y-%m-%d %I:%M:%S %p')
+
+statement error
+SELECT strptime('2000-10-01 13:00:00 AM', '%Y-%m-%d %I:%M:%S %p')
+
+# incorrect minute
+statement error
+SELECT strptime('2000-10-01 23:60:00', '%Y-%m-%d %H:%M:%S')
+
+# incorrect seconds
+statement error
+SELECT strptime('2000-10-01 23:59:60', '%Y-%m-%d %H:%M:%S')
+
+# incorrect microseconds
+statement error
+SELECT strptime('2000-10-01 23:59:59.10000000', '%Y-%m-%d %H:%M:%S.%f')
+
+# huge number
+statement error
+SELECT strptime('2000-10-01 23:59:59.1000000000000000000000000000', '%Y-%m-%d %H:%M:%S.%f')
+
+# empty string
+statement error
+SELECT strptime('', '%Y-%m-%d %H:%M:%S.%f')
+
+# empty string with am/pm
+statement error
+SELECT strptime('', '%p')
+
+statement error
+SELECT strptime('a', '%p')
+
+# incorrect am/pm
+statement error
+SELECT strptime('mp', '%p')
+
+statement error
+SELECT strptime('pp', '%p')
+
+# incorrect abbreviated weekday name
+statement error
+SELECT strptime('moa', '%a')
+
+# incorrect weekday name
+statement error
+SELECT strptime('moaday', '%A')
+
+statement error
+SELECT strptime('mondayy', '%A')
+
+# incorrect abbreviated month name
+statement error
+SELECT strptime('juk', '%b')
+
+# incorrect weekday name
+statement error
+SELECT strptime('juke', '%B')
+
+statement error
+SELECT strptime('junee', '%B')
+
+# day of year not supported
+statement error
+SELECT strptime('30', '%j')
+
+statement error
+SELECT strptime('30', '%-j')
+
+# week numbers not supported
+statement error
+SELECT strptime('30', '%U')
+
+statement error
+SELECT strptime('30', '%W')
+
+# AM/PM out of range
+statement error
+SELECT strptime('Mon 30, December 30, 20:3:5 PM', '%a %d, %B %y, %H:%M:%S %p')

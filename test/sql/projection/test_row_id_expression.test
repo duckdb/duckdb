@@ -1,0 +1,179 @@
+# name: test/sql/projection/test_row_id_expression.test
+# description: Test Row IDs used in different types of operations
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+# test row ids on different operations
+# this is interesting because rowids are emitted as compressed vectors
+# hence this is really a test of correct handling of compressed vectors in the execution engine
+statement ok
+create table a(i integer);
+
+statement ok
+insert into a values (42);
+
+# arithmetic
+query IIII
+SELECT rowid + 1, rowid - 1, rowid + rowid, i + rowid FROM a
+----
+1	-1	0	42
+
+# unary ops
+query III
+SELECT -rowid, +rowid, abs(rowid) FROM a
+----
+0	0	0
+
+# ternary ops
+query TTT
+SELECT rowid BETWEEN -1 AND 1, 0 BETWEEN rowid AND 1, 1 BETWEEN -3 AND rowid FROM a
+----
+1	1	0
+
+# comparisons
+query TTTT
+SELECT rowid < i, rowid = NULL, rowid = i, rowid <> 0 FROM a
+----
+1	NULL	0	0
+
+# simple (ungrouped) aggregates
+query RIIII
+SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), FIRST(rowid) FROM a
+----
+0.000000	0	0	1	0
+
+query I
+SELECT COUNT(*) FROM a
+----
+1
+
+# grouped aggregates
+query RIIII
+SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), FIRST(rowid) FROM a GROUP BY i
+----
+0.000000	0	0	1	0
+
+# group by rowid
+query R
+SELECT SUM(i) FROM a GROUP BY rowid
+----
+42.000000
+
+# joins
+# equality
+query II
+SELECT * FROM a, a a2 WHERE a.rowid=a2.rowid
+----
+42	42
+
+# inequality
+query II
+SELECT * FROM a, a a2 WHERE a.rowid<>a2.rowid
+----
+
+# range
+query II
+SELECT * FROM a, a a2 WHERE a.rowid>=a2.rowid
+----
+42	42
+
+# order by
+query I
+SELECT * FROM a ORDER BY rowid
+----
+42
+
+# insert into table
+statement ok
+INSERT INTO a SELECT rowid FROM a
+
+query I
+SELECT * FROM a ORDER BY 1
+----
+0
+42
+
+# update value
+statement ok
+UPDATE a SET i=rowid
+
+query I
+SELECT * FROM a ORDER BY 1
+----
+0
+1
+
+# use rowid in filter
+query I
+SELECT * FROM a WHERE rowid=0
+----
+0
+
+query I
+SELECT * FROM a WHERE rowid BETWEEN -100 AND 100 ORDER BY 1
+----
+0
+1
+
+query I
+SELECT * FROM a WHERE rowid=0 OR rowid=1
+----
+0
+1
+
+# window expressions
+query I
+SELECT row_number() OVER (PARTITION BY rowid) FROM a ORDER BY rowid
+----
+1
+1
+
+query I
+SELECT row_number() OVER (ORDER BY rowid) FROM a ORDER BY rowid
+----
+1
+2
+
+query I
+SELECT row_number() OVER (ORDER BY rowid DESC) FROM a ORDER BY rowid
+----
+2
+1
+
+# uncorrelated subqueries
+query I
+SELECT (SELECT rowid FROM a LIMIT 1)
+----
+0
+
+query T
+SELECT 0 IN (SELECT rowid FROM a)
+----
+1
+
+query T
+SELECT EXISTS(SELECT rowid FROM a)
+----
+1
+
+# correlated subqueries
+query I
+SELECT (SELECT a2.rowid FROM a a2 WHERE a.rowid=a2.rowid) FROM a
+----
+0
+1
+
+query T
+SELECT a.rowid IN (SELECT a2.rowid FROM a a2 WHERE a.rowid>=a2.rowid) FROM a
+----
+1
+1
+
+query T
+SELECT EXISTS(SELECT a2.rowid FROM a a2 WHERE a.rowid>=a2.rowid) FROM a
+----
+1
+1
+

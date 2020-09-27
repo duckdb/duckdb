@@ -6,12 +6,14 @@
 #include "duckdb.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 
 // you can set this to enable compression. You will need to link zlib as well.
 // #define CPPHTTPLIB_ZLIB_SUPPORT 1
+#define CPPHTTPLIB_KEEPALIVE_TIMEOUT_USECOND 10000
+#define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 0
+#define CPPHTTPLIB_THREAD_POOL_COUNT 16
 
 #include "httplib.hpp"
 #include "json.hpp"
@@ -28,11 +30,12 @@ void print_help() {
 	fprintf(stderr, "          --port=[no]           listening port\n");
 	fprintf(stderr, "          --database=[file]     use given database file\n");
 	fprintf(stderr, "          --read_only           open database in read-only mode\n");
+	fprintf(stderr, "          --disable_copy        disallow file import/export, e.g. in COPY\n");
 	fprintf(stderr, "          --query_timeout=[sec] query timeout in seconds\n");
 	fprintf(stderr, "          --fetch_timeout=[sec] result set timeout in seconds\n");
+	fprintf(stderr, "          --static=[folder]     static resource folder to serve\n");
 	fprintf(stderr, "          --log=[file]          log queries to file\n\n");
-	fprintf(stderr, "Version: %s\n", DUCKDB_SOURCE_ID);
-
+	fprintf(stderr, "Version: %s\n", DuckDB::SourceID());
 }
 
 // https://stackoverflow.com/a/12468109/2652376
@@ -58,6 +61,7 @@ struct RestClientState {
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
 template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
+	v.Normalify(count);
 	auto data_ptr = FlatVector::GetData<T>(v);
 	auto &nullmask = FlatVector::Nullmask(v);
 	for (idx_t i = 0; i < count; i++) {
@@ -70,68 +74,72 @@ template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t c
 	}
 }
 
+static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
+	Vector cast_vector(LogicalType::VARCHAR);
+	Vector *result_vector;
+	if (v.type.id() != LogicalTypeId::VARCHAR) {
+		VectorOperations::Cast(v, cast_vector, count);
+		result_vector = &cast_vector;
+	} else {
+		result_vector = &v;
+	}
+	result_vector->Normalify(count);
+	auto data_ptr = FlatVector::GetData<string_t>(*result_vector);
+	auto &nullmask = FlatVector::Nullmask(*result_vector);
+	for (idx_t i = 0; i < count; i++) {
+		if (!nullmask[i]) {
+			j["data"][col_idx] += data_ptr[i].GetData();
+
+		} else {
+			j["data"][col_idx] += nullptr;
+		}
+	}
+}
+
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	assert(res);
-	Vector v2(TypeId::VARCHAR);
 	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
-		Vector *v = &chunk->data[col_idx];
-		switch (res->sql_types[col_idx].id) {
-		case SQLTypeId::DATE:
-		case SQLTypeId::TIME:
-		case SQLTypeId::TIMESTAMP: {
-			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR, chunk->size());
-			v = &v2;
+		Vector &v = chunk->data[col_idx];
+		switch (v.type.id()) {
+		case LogicalTypeId::BOOLEAN:
+			assign_json_loop<bool, int64_t>(v, col_idx, chunk->size(), j);
 			break;
-		}
+		case LogicalTypeId::TINYINT:
+			assign_json_loop<int8_t, int64_t>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::SMALLINT:
+			assign_json_loop<int16_t, int64_t>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::INTEGER:
+			assign_json_loop<int32_t, int64_t>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::BIGINT:
+			assign_json_loop<int64_t, int64_t>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::FLOAT:
+			assign_json_loop<float, double>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::DOUBLE:
+			assign_json_loop<double, double>(v, col_idx, chunk->size(), j);
+			break;
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::INTERVAL:
+		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::BLOB:
+		case LogicalTypeId::VARCHAR:
 		default:
+			assign_json_string_loop(v, col_idx, chunk->size(), j);
 			break;
-		}
-		v->Normalify(chunk->size());
-		assert(v);
-		switch (v->type) {
-		case TypeId::BOOL:
-			assign_json_loop<bool, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::INT8:
-			assign_json_loop<int8_t, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::INT16:
-			assign_json_loop<int16_t, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::INT32:
-			assign_json_loop<int32_t, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::INT64:
-			assign_json_loop<int64_t, int64_t>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::FLOAT:
-			assign_json_loop<float, double>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::DOUBLE:
-			assign_json_loop<double, double>(*v, col_idx, chunk->size(), j);
-			break;
-		case TypeId::VARCHAR: {
-			auto data_ptr = FlatVector::GetData<string_t>(*v);
-			auto &nullmask = FlatVector::Nullmask(*v);
-			for (idx_t i = 0; i < chunk->size(); i++) {
-				if (!nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i].GetData();
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			}
-			break;
-		}
-		default:
-			throw std::runtime_error("Unsupported Type");
 		}
 	}
 }
 
 void serialize_json(const Request &req, Response &resp, json &j) {
 	auto return_type = ReturnContentType::JSON;
-	j["duckdb_version"] = DUCKDB_SOURCE_ID;
+	j["duckdb_version"] = DuckDB::SourceID();
 
 	if (req.has_header("Accept")) {
 		auto accept = req.get_header_value("Accept");
@@ -233,6 +241,7 @@ int main(int argc, char **argv) {
 	string logfile_name;
 
 	string listen = "localhost";
+	string static_files;
 	int port = 1294;
 	std::ofstream logfile;
 
@@ -247,6 +256,8 @@ int main(int argc, char **argv) {
 			exit(0);
 		} else if (arg == "--read_only") {
 			config.access_mode = AccessMode::READ_ONLY;
+		} else if (arg == "--disable_copy") {
+			config.enable_copy = false;
 		} else if (StringUtil::StartsWith(arg, "--database=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -261,6 +272,13 @@ int main(int argc, char **argv) {
 				exit(1);
 			}
 			logfile_name = string(splits[1]);
+		} else if (StringUtil::StartsWith(arg, "--static=")) {
+			auto splits = StringUtil::Split(arg, '=');
+			if (splits.size() != 2) {
+				print_help();
+				exit(1);
+			}
+			static_files = string(splits[1]);
 		} else if (StringUtil::StartsWith(arg, "--listen=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -308,6 +326,8 @@ int main(int argc, char **argv) {
 		logfile.open(logfile_name, std::ios_base::app);
 	}
 
+	config.maximum_memory = 10737418240;
+
 	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile.c_str(), &config);
 
 	svr.Get("/query", [&](const Request &req, Response &resp) {
@@ -346,11 +366,11 @@ int main(int argc, char **argv) {
 			     {"sql_types", json::array()},
 			     {"data", json::array()}};
 
-			for (auto &sql_type : state.res->sql_types) {
-				j["sql_types"] += SQLTypeToString(sql_type);
+			for (auto &sql_type : state.res->types) {
+				j["sql_types"] += sql_type.ToString();
 			}
 			for (auto &type : state.res->types) {
-				j["types"] += TypeIdToString(type);
+				j["types"] += TypeIdToString(type.InternalType());
 			}
 
 			// make it easier to get col data by name
@@ -427,6 +447,17 @@ int main(int argc, char **argv) {
 
 		serialize_json(req, resp, j);
 	});
+
+	svr.Get("/", [&](const Request &req, Response &resp) {
+		resp.status = 302;
+
+		resp.set_header("Location", "/select.html");
+		resp.set_content("<a href='/select.html'>select.html</a>", "text/html");
+	});
+
+	if (!static_files.empty()) {
+		svr.set_base_dir(static_files.c_str());
+	}
 
 	std::cout << "🦆 serving " + dbfile + " on http://" + listen + ":" + std::to_string(port) + "\n";
 

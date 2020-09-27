@@ -84,4 +84,5 @@ template <> interval_t DivideOperator::Operation(interval_t left, int64_t right)
 template <> float ModuloOperator::Operation(float left, float right);
 template <> double ModuloOperator::Operation(double left, double right);
 
+
 } // namespace duckdb

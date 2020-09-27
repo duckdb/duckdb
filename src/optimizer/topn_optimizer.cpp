@@ -2,8 +2,9 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/common/limits.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
@@ -12,7 +13,7 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 		auto &order_by = (LogicalOrder &)*(op->children[0]);
 
 		// This optimization doesn't apply when OFFSET is present without LIMIT
-		if (limit.limit != std::numeric_limits<int64_t>::max()) {
+		if (limit.limit != NumericLimits<int64_t>::Maximum()) {
 			auto topn = make_unique<LogicalTopN>(move(order_by.orders), limit.limit, limit.offset);
 			topn->AddChild(move(order_by.children[0]));
 			op = move(topn);
@@ -24,3 +25,5 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	}
 	return op;
 }
+
+} // namespace duckdb

@@ -1,0 +1,30 @@
+# name: test/sql/join/inner/test_lt_join.test
+# description: Test less than join
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a AS SELECT i FROM range(1, 2001, 1) t1(i)
+
+query I
+select count(*) from a, (SELECT 2000 AS j) b where i < j
+----
+1999
+
+query I
+select count(*) from a, (SELECT 2000 AS j) b where i <= j
+----
+2000
+
+query I
+select count(*) from a, (SELECT 1 AS j) b where i > j
+----
+1999
+
+query I
+select count(*) from a, (SELECT 1 AS j) b where i >= j
+----
+2000
+

@@ -51,4 +51,4 @@ protected:
 	void CopyProperties(QueryNode &other);
 };
 
-}; // namespace duckdb
+} // namespace duckdb

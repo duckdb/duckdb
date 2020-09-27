@@ -34,7 +34,8 @@ enum class AlterTableType : uint8_t {
 	ADD_COLUMN = 3,
 	REMOVE_COLUMN = 4,
 	ALTER_COLUMN_TYPE = 5,
-	SET_DEFAULT = 6
+	SET_DEFAULT = 6,
+	RENAME_VIEW = 7
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -79,18 +80,19 @@ public:
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
 struct RenameTableInfo : public AlterTableInfo {
-	RenameTableInfo(string schema, string table, string new_name)
-	    : AlterTableInfo(AlterTableType::RENAME_TABLE, schema, table), new_table_name(new_name) {
+	RenameTableInfo(string schema, string table, string new_name, bool is_view)
+	    : AlterTableInfo(is_view ? AlterTableType::RENAME_VIEW : AlterTableType::RENAME_TABLE, schema, table),
+	      new_table_name(new_name) {
 	}
 	~RenameTableInfo() override {
 	}
 
-	//! Table new name
+	//! Relation new name
 	string new_table_name;
 
 public:
 	void Serialize(Serializer &serializer) override;
-	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table, bool is_view);
 };
 
 //===--------------------------------------------------------------------===//
@@ -136,7 +138,7 @@ public:
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
 struct ChangeColumnTypeInfo : public AlterTableInfo {
-	ChangeColumnTypeInfo(string schema, string table, string column_name, SQLType target_type,
+	ChangeColumnTypeInfo(string schema, string table, string column_name, LogicalType target_type,
 	                     unique_ptr<ParsedExpression> expression)
 	    : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE, schema, table), column_name(move(column_name)),
 	      target_type(move(target_type)), expression(move(expression)) {
@@ -147,7 +149,7 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 	//! The column name to alter
 	string column_name;
 	//! The target type of the column
-	SQLType target_type;
+	LogicalType target_type;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
 

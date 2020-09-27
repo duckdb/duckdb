@@ -24,33 +24,36 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	VectorData vdata;
 	source.Orrify(count, vdata);
 
-	switch (source.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (source.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		CopyToStorageLoop<int8_t>(vdata, count, target);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		CopyToStorageLoop<int16_t>(vdata, count, target);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		CopyToStorageLoop<int32_t>(vdata, count, target);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		CopyToStorageLoop<int64_t>(vdata, count, target);
 		break;
-	case TypeId::HASH:
+	case PhysicalType::INT128:
+		CopyToStorageLoop<hugeint_t>(vdata, count, target);
+		break;
+	case PhysicalType::HASH:
 		CopyToStorageLoop<hash_t>(vdata, count, target);
 		break;
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		CopyToStorageLoop<uintptr_t>(vdata, count, target);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		CopyToStorageLoop<float>(vdata, count, target);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		CopyToStorageLoop<double>(vdata, count, target);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		CopyToStorageLoop<interval_t>(vdata, count, target);
 		break;
 	default:
@@ -73,33 +76,36 @@ template <class T> static void ReadFromStorageLoop(data_ptr_t source, idx_t coun
 
 void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &result) {
 	result.vector_type = VectorType::FLAT_VECTOR;
-	switch (result.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (result.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		ReadFromStorageLoop<int8_t>(source, count, result);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		ReadFromStorageLoop<int16_t>(source, count, result);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		ReadFromStorageLoop<int32_t>(source, count, result);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		ReadFromStorageLoop<int64_t>(source, count, result);
 		break;
-	case TypeId::HASH:
+	case PhysicalType::INT128:
+		ReadFromStorageLoop<hugeint_t>(source, count, result);
+		break;
+	case PhysicalType::HASH:
 		ReadFromStorageLoop<hash_t>(source, count, result);
 		break;
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		ReadFromStorageLoop<uintptr_t>(source, count, result);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		ReadFromStorageLoop<float>(source, count, result);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		ReadFromStorageLoop<double>(source, count, result);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		ReadFromStorageLoop<interval_t>(source, count, result);
 		break;
 	default:

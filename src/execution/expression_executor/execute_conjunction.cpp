@@ -6,16 +6,15 @@
 #include <chrono>
 #include <random>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 using namespace chrono;
 
 struct ConjunctionState : public ExpressionState {
-	ConjunctionState(Expression &expr, ExpressionExecutorState &root)
-	    : ExpressionState(expr, root) {
-        adaptive_filter = make_unique<AdaptiveFilter>(expr);
-    }
-     unique_ptr<AdaptiveFilter> adaptive_filter;
+	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+		adaptive_filter = make_unique<AdaptiveFilter>(expr);
+	}
+	unique_ptr<AdaptiveFilter> adaptive_filter;
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunctionExpression &expr,
@@ -24,6 +23,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 	for (auto &child : expr.children) {
 		result->AddChild(child.get());
 	}
+	result->Finalize();
 	return move(result);
 }
 
@@ -31,13 +31,14 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
                                  idx_t count, Vector &result) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		Vector current_result(TypeId::BOOL);
+		Vector current_result;
+		current_result.Reference(state->intermediate_chunk.data[i]);
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, current_result);
 		if (i == 0) {
 			// move the result
 			result.Reference(current_result);
 		} else {
-			Vector intermediate(TypeId::BOOL);
+			Vector intermediate(LogicalType::BOOLEAN);
 			// AND/OR together
 			switch (expr.type) {
 			case ExpressionType::CONJUNCTION_AND:
@@ -75,9 +76,9 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 			true_sel = temp_true.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount =
-			    Select(*expr.children[state->adaptive_filter->permutation[i]], state->child_states[state->adaptive_filter->permutation[i]].get(),
-			           current_sel, current_count, true_sel, temp_false.get());
+			idx_t tcount = Select(*expr.children[state->adaptive_filter->permutation[i]],
+			                      state->child_states[state->adaptive_filter->permutation[i]].get(), current_sel,
+			                      current_count, true_sel, temp_false.get());
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel
@@ -99,8 +100,7 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 
 		// adapt runtime statistics
 		auto end_time = high_resolution_clock::now();
-		state->adaptive_filter->AdaptRuntimeStatistics(
-		                       duration_cast<duration<double>>(end_time - start_time).count());
+		state->adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
 		return current_count;
 	} else {
 		// get runtime statistics
@@ -119,9 +119,9 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 			false_sel = temp_false.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount =
-			    Select(*expr.children[state->adaptive_filter->permutation[i]], state->child_states[state->adaptive_filter->permutation[i]].get(),
-			           current_sel, current_count, temp_true.get(), false_sel);
+			idx_t tcount = Select(*expr.children[state->adaptive_filter->permutation[i]],
+			                      state->child_states[state->adaptive_filter->permutation[i]].get(), current_sel,
+			                      current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
 				if (true_sel) {
 					// tuples passed, move them into the actual result vector
@@ -137,8 +137,9 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 
 		// adapt runtime statistics
 		auto end_time = high_resolution_clock::now();
-		state->adaptive_filter->AdaptRuntimeStatistics(
-		                      duration_cast<duration<double>>(end_time - start_time).count());
+		state->adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
 		return result_count;
 	}
 }
+
+} // namespace duckdb

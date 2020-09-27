@@ -1,0 +1,54 @@
+# name: test/sql/types/date/test_incorrect_dates.test
+# description: Test out of range/incorrect date formats
+# group: [date]
+
+statement ok
+CREATE TABLE dates(i DATE)
+
+statement error
+INSERT INTO dates VALUES ('blabla')
+
+# month out of range
+statement error
+INSERT INTO dates VALUES ('1993-20-14')
+
+# day out of range
+statement error
+INSERT INTO dates VALUES ('1993-08-99')
+
+# day out of range because not a leapyear
+statement error
+INSERT INTO dates VALUES ('1993-02-29')
+
+# day out of range because not a leapyear
+statement error
+INSERT INTO dates VALUES ('1900-02-29')
+
+# day in range because of leapyear
+statement ok
+INSERT INTO dates VALUES ('1992-02-29')
+
+# day in range because of leapyear
+statement ok
+INSERT INTO dates VALUES ('2000-02-29')
+
+# test incorrect date formats
+# dd-mm-YYYY
+statement error
+INSERT INTO dates VALUES ('02-02-1992')
+
+# different separators are not supported
+statement error
+INSERT INTO dates VALUES ('1900a01a01')
+
+# this should work though
+statement ok
+INSERT INTO dates VALUES ('1900-1-1')
+
+# out of range dates
+statement error
+INSERT INTO dates VALUES ('-100000000-01-01')
+
+statement error
+INSERT INTO dates VALUES ('1000000000-01-01')
+

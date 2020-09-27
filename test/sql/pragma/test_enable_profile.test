@@ -1,0 +1,26 @@
+# name: test/sql/pragma/test_enable_profile.test
+# description: Test PRAGMA enable_profiling parsing
+# group: [pragma]
+
+# enable profiling cannot be called
+statement error
+PRAGMA enable_profiling()
+
+statement error
+PRAGMA enable_profiling='unsupported'
+
+statement error
+PRAGMA profiling_output
+
+# select the location of where to save the profiling output (instead of printing to stdout)
+statement ok
+PRAGMA profiling_output='test.json'
+
+# but we can clear it again
+statement ok
+PRAGMA profiling_output=''
+
+# enable and disable profiling
+statement ok
+PRAGMA disable_profiling
+

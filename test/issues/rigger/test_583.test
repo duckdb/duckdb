@@ -1,0 +1,26 @@
+# name: test/issues/rigger/test_583.test
+# description: Issue 583
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Comparing a string with a boolean yields an incorrect result after UPDATE
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+statement ok
+UPDATE t0 SET c0=0;
+
+statement ok
+UPDATE t0 SET c0=true;
+
+# -- expected: {true}, actual: {}
+query T
+SELECT * FROM t0 WHERE t0.c0 = true;
+----
+true
+

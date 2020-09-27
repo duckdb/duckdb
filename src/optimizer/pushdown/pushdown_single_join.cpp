@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using Filter = FilterPushdown::Filter;
@@ -26,3 +26,5 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<Logica
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
 	return FinishPushdown(move(op));
 }
+
+} // namespace duckdb

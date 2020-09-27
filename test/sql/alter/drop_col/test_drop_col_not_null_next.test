@@ -1,0 +1,39 @@
+# name: test/sql/alter/drop_col/test_drop_col_not_null_next.test
+# description: Test ALTER TABLE DROP COLUMN: DROP COLUMN with NOT NULL constraint on subsequent column
+# group: [drop_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER, k INTEGER NOT NULL)
+
+statement ok
+INSERT INTO test VALUES (1, 1, 11), (2, 2, 12)
+
+query III
+SELECT * FROM test
+----
+1
+1
+11
+2
+2
+12
+
+statement ok
+ALTER TABLE test DROP COLUMN j
+
+statement error
+INSERT INTO test VALUES (3, NULL)
+
+statement ok
+INSERT INTO test VALUES (3, 13)
+
+query II
+SELECT * FROM test
+----
+1
+11
+2
+12
+3
+13
+

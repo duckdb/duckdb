@@ -12,7 +12,8 @@ namespace duckdb {
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;
@@ -53,7 +54,7 @@ void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSt
 
 	// compute the sorting columns from the input data
 	ExpressionExecutor executor;
-	vector<TypeId> sort_types;
+	vector<LogicalType> sort_types;
 	vector<OrderType> order_types;
 	vector<OrderByNullType> null_order_types;
 	for (idx_t i = 0; i < orders.size(); i++) {
@@ -98,7 +99,7 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
-	return make_unique<PhysicalOrderOperatorState>(children[0].get());
+	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
 }
 
 } // namespace duckdb

@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -25,7 +25,6 @@ public:
 	TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableFunctionInfo *info);
 
 	//! The table function
-	TableFunction function;
-	bool supports_projection;
+	vector<TableFunction> functions;
 };
 } // namespace duckdb

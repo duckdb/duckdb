@@ -1,0 +1,77 @@
+# name: test/sql/storage/catalog/test_rename_table.test
+# description: Test storage of alter table rename table
+# group: [catalog]
+
+#  FIXME: right now rename is implemented as drop + create
+#  on database restart that means all data is removed from the table
+mode skip
+
+# load the DB from disk
+load __TEST_DIR__/test_rename_table.db
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+BEGIN TRANSACTION
+
+query I
+SELECT a FROM test ORDER BY a
+----
+11
+12
+13
+
+statement ok
+ALTER TABLE test RENAME TO new_name
+
+query I
+SELECT a FROM new_name ORDER BY 1
+----
+11
+12
+13
+
+statement ok
+ROLLBACK
+
+# restart the database
+restart
+
+statement ok
+BEGIN TRANSACTION
+
+# verify that the table is still there in the original form
+query I
+SELECT a FROM test ORDER BY a
+----
+11
+12
+13
+
+# now repeat the process, but this time commit
+statement ok
+ALTER TABLE test RENAME TO new_name
+
+query I
+SELECT a FROM new_name ORDER BY 1
+----
+11
+12
+13
+
+statement ok
+COMMIT
+
+restart
+
+# after a restart, the renamed table is still here
+query I
+SELECT a FROM new_name ORDER BY 1
+----
+11
+12
+13

@@ -18,10 +18,10 @@ struct IcuBindData : public FunctionData {
 	string language;
 	string country;
 
-	IcuBindData(string language_p, string country_p) :
-		language(move(language_p)), country(move(country_p)) {
+	IcuBindData(string language_p, string country_p) : language(move(language_p)), country(move(country_p)) {
 		UErrorCode status = U_ZERO_ERROR;
-		this->collator = std::unique_ptr<icu::Collator>(icu::Collator::createInstance(icu::Locale(language.c_str(), country.c_str()), status));
+		this->collator = std::unique_ptr<icu::Collator>(
+		    icu::Collator::createInstance(icu::Locale(language.c_str(), country.c_str()), status));
 		if (U_FAILURE(status)) {
 			throw Exception("Failed to create ICU collator!");
 		}
@@ -41,20 +41,25 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 	int32_t buffer_size = 0;
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		// create a sort key from the string
-		int32_t string_size = collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())), (uint8_t*) buffer.get(), buffer_size);
+		int32_t string_size =
+		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
+		                        (uint8_t *)buffer.get(), buffer_size);
 		if (string_size > buffer_size) {
 			// have to resize the buffer
 			buffer_size = string_size + 1;
 			buffer = unique_ptr<char[]>(new char[buffer_size]);
 
-			string_size = collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())), (uint8_t*) buffer.get(), buffer_size);
+			string_size =
+			    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
+			                        (uint8_t *)buffer.get(), buffer_size);
 		}
-		return StringVector::AddBlob(result, string_t(buffer.get(), buffer_size));
+		return StringVector::AddStringOrBlob(result, string_t(buffer.get(), buffer_size));
 	});
 }
 
-static unique_ptr<FunctionData> icu_collate_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	auto splits = StringUtil::Split(expr.function.name, "_");
+static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
+	auto splits = StringUtil::Split(bound_function.name, "_");
 	if (splits.size() == 1) {
 		return make_unique<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
@@ -65,7 +70,8 @@ static unique_ptr<FunctionData> icu_collate_bind(BoundFunctionExpression &expr, 
 }
 
 static ScalarFunction get_icu_function(string collation) {
-	return ScalarFunction(collation, {SQLType::VARCHAR}, SQLType::BIGINT, icu_collate_function, false, icu_collate_bind);
+	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::BLOB, icu_collate_function, false,
+	                      icu_collate_bind);
 }
 
 void ICUExtension::Load(DuckDB &db) {
@@ -76,7 +82,7 @@ void ICUExtension::Load(DuckDB &db) {
 	// iterate over all the collations
 	int32_t count;
 	auto locales = icu::Collator::getAvailableLocales(count);
-	for(int32_t i = 0; i < count; i++) {
+	for (int32_t i = 0; i < count; i++) {
 		string collation;
 		if (string(locales[i].getCountry()).empty()) {
 			// language only
@@ -88,11 +94,11 @@ void ICUExtension::Load(DuckDB &db) {
 		collation = StringUtil::Lower(collation);
 
 		CreateCollationInfo info(collation, get_icu_function(collation), false, true);
-		info.on_conflict = OnCreateConflict::IGNORE;
+		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		db.catalog->CreateCollation(*con.context, &info);
 	}
 
 	con.Commit();
 }
 
-}
+} // namespace duckdb

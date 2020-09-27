@@ -3,7 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ConnectionManager::~ConnectionManager() {
@@ -24,3 +24,5 @@ void ConnectionManager::RemoveConnection(Connection *conn) {
 	std::lock_guard<std::mutex> lock(connections_lock);
 	connections.erase(conn);
 }
+
+} // namespace duckdb

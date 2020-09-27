@@ -1,0 +1,49 @@
+# name: test/sql/catalog/test_schema_conflict.test
+# description: Catalog conflicts with schemas
+# group: [catalog]
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con2
+BEGIN TRANSACTION;
+
+# create the same schema in both connections
+statement ok con1
+CREATE SCHEMA test;
+
+# this should cause a conflict
+statement error con2
+CREATE SCHEMA test;
+
+statement ok con1
+COMMIT
+
+statement ok con2
+ROLLBACK
+
+# now try the same with DROP SCHEMA
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con2
+BEGIN TRANSACTION;
+
+statement ok con1
+DROP SCHEMA test;
+
+# this should cause a conflict
+statement error con2
+DROP SCHEMA test;
+
+# rollback the drop
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+# now the schema should still exist, so we can drop it again
+statement ok con1
+DROP SCHEMA test;
+

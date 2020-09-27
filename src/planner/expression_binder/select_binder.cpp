@@ -8,7 +8,7 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
@@ -60,8 +60,8 @@ idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 
 BindResult SelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
 	auto &group = node.groups[group_index];
-
 	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-	                                                        ColumnBinding(node.group_index, group_index), depth),
-	                  info.group_types[group_index]);
+	                                                        ColumnBinding(node.group_index, group_index), depth));
 }
+
+} // namespace duckdb

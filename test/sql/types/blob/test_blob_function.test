@@ -1,0 +1,94 @@
+# name: test/sql/types/blob/test_blob_function.test
+# description: BLOB with Functions
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE blobs (b BYTEA);
+
+statement ok
+INSERT INTO blobs VALUES ('a'::BYTEA)
+
+# conventional concat
+query T
+SELECT b || 'ZZ'::BYTEA FROM blobs
+----
+\x615A5A
+
+query T
+SELECT 'abc '::BYTEA || 'klm *©T'::BYTEA
+----
+\x616263206B6C6D202AA954
+
+query T
+SELECT 'abc '::BYTEA || 'klm *©T'::BYTEA
+----
+\x616263206B6C6D202AA954
+
+query T
+SELECT 'abc '::BYTEA || 'klm *©T'::BYTEA
+----
+\x616263206B6C6D202AA954
+
+statement ok
+INSERT INTO blobs VALUES ('abc klm *©T'::BYTEA)
+
+query I
+SELECT COUNT(*) FROM blobs
+----
+2
+
+# octet_length
+query I
+SELECT OCTET_LENGTH(b) FROM blobs
+----
+1
+11
+
+# HEX strings
+statement ok
+DELETE FROM blobs
+
+statement ok
+INSERT INTO blobs VALUES ('\xFF'::BYTEA)
+
+query T
+SELECT b || 'ZZ'::BYTEA FROM blobs
+----
+\xFF5A5A
+
+query T
+SELECT b || '\x5A5A'::BYTEA FROM blobs
+----
+\xFF5A5A
+
+# BLOB || VARCHAR is not allowed, should fail
+statement error
+SELECT b || '5A5A'::VARCHAR FROM blobs
+
+# Octet Length tests
+statement ok
+DELETE FROM blobs
+
+statement ok
+INSERT INTO blobs VALUES ('\xFF'::BYTEA)
+
+statement ok
+INSERT INTO blobs VALUES ('FF'::BYTEA)
+
+statement ok
+INSERT INTO blobs VALUES ('\x55AAFF55AAFF55AAFF01'::BYTEA)
+
+statement ok
+INSERT INTO blobs VALUES ('55AAFF55AAFF55AAFF01'::BYTEA)
+
+query I
+SELECT OCTET_LENGTH(b) FROM blobs
+----
+1
+2
+10
+20
+

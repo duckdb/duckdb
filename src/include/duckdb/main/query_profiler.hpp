@@ -14,6 +14,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 #include <stack>
 #include <unordered_map>
@@ -118,6 +119,8 @@ private:
 	//! Whether or not the query profiler is running
 	bool running;
 
+	bool query_requires_profiling;
+
 	//! The root of the query tree
 	unique_ptr<TreeNode> root;
 	//! The query string
@@ -139,5 +142,9 @@ private:
 
 private:
 	vector<PhaseTimingItem> GetOrderedPhaseTimings() const;
+
+	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
+	//! no profiling information is output.
+	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
 };
 } // namespace duckdb

@@ -1,0 +1,111 @@
+# name: test/sql/update/test_big_table_update.test_slow
+# description: Update big table of even and odd values
+# group: [update]
+
+# create a table with the values [0, ..., 3K]
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+CREATE TABLE test AS SELECT i AS a, 'hello' AS b FROM range (0, 3000, 1) t1(i);
+
+# insert a bunch more values
+# 3000 -> 6000
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 6000 -> 12000
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 12000 -> 24000
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 24000 -> 48000
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 48000 -> 96000
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 96000 -> 192000
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 192000 -> 384000
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+statement ok con1
+COMMIT
+
+query RR con1
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+575808000.000000	1920000.000000
+
+query RR con2
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+575808000.000000	1920000.000000
+
+# increment all even values by two
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE test SET a=a+2, b='hellohello' WHERE a%2=0
+
+query RR con1
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+576192000.000000	2880000.000000
+
+query RR con2
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+575808000.000000	1920000.000000
+
+# now increment all odd values by two
+statement ok con1
+UPDATE test SET a=a+2, b='hellohello' WHERE a%2=1
+
+query RR con1
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+576576000.000000	3840000.000000
+
+query RR con2
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+575808000.000000	1920000.000000
+
+# increment all tuples by two now
+statement ok con1
+UPDATE test SET a=a+2, b='hellohellohellohello'
+
+query RR con1
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+577344000.000000	7680000.000000
+
+query RR con2
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+575808000.000000	1920000.000000
+
+statement ok con1
+COMMIT
+
+query RR con1
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+577344000.000000	7680000.000000
+
+query RR con2
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+577344000.000000	7680000.000000
+

@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LogicalJoin::LogicalJoin(JoinType join_type, LogicalOperatorType logical_type)
@@ -35,7 +35,7 @@ void LogicalJoin::ResolveTypes() {
 	}
 	if (join_type == JoinType::MARK) {
 		// for MARK join we project the left hand side, plus a BOOLEAN column indicating the MARK
-		types.push_back(TypeId::BOOL);
+		types.push_back(LogicalType::BOOLEAN);
 		return;
 	}
 	// for any other join we project both sides
@@ -58,3 +58,5 @@ void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { GetExpressionBindings(child, bindings); });
 }
+
+} // namespace duckdb

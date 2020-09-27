@@ -18,13 +18,12 @@ class PhysicalHashAggregate;
 //! PhysicalChunkCollectionScan in the RHS.
 class PhysicalDelimJoin : public PhysicalSink {
 public:
-	PhysicalDelimJoin(vector<TypeId> types, unique_ptr<PhysicalOperator> original_join,
+	PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
 	                  vector<PhysicalOperator *> delim_scans);
 
 	unique_ptr<PhysicalOperator> join;
 	unique_ptr<PhysicalHashAggregate> distinct;
-	ChunkCollection lhs_data;
-	ChunkCollection delim_data;
+	vector<PhysicalOperator *> delim_scans;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

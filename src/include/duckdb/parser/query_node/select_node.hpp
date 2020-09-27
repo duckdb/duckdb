@@ -53,4 +53,4 @@ public:
 	//! Deserializes a blob back into a SelectNode
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 };
-}; // namespace duckdb
+} // namespace duckdb

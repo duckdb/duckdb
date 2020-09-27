@@ -11,6 +11,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 
+struct ArrowArray;
+
 namespace duckdb {
 
 //!  A Data Chunk represents a set of vectors.
@@ -61,12 +63,12 @@ public:
 	void Reference(DataChunk &chunk);
 
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
-	//! This will create one vector of the specified type for each TypeId in the
+	//! This will create one vector of the specified type for each LogicalType in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
-	void Initialize(vector<TypeId> &types);
+	void Initialize(vector<LogicalType> &types);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
-	void InitializeEmpty(vector<TypeId> &types);
+	void InitializeEmpty(vector<LogicalType> &types);
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk.
@@ -99,7 +101,7 @@ public:
 	void Hash(Vector &result);
 
 	//! Returns a list of types of the vectors of this data chunk
-	vector<TypeId> GetTypes();
+	vector<LogicalType> GetTypes();
 
 	//! Converts this DataChunk to a printable string representation
 	string ToString() const;
@@ -110,6 +112,9 @@ public:
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
+
+	//! export data chunk as a arrow struct array that can be imported as arrow record batch
+	void ToArrowArray(ArrowArray *out_array);
 
 private:
 	idx_t count;

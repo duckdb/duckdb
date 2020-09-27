@@ -1,0 +1,109 @@
+# name: test/sql/pragma/test_memory_limit.test
+# description: Test PRAGMA memory_limit
+# group: [pragma]
+
+# set memory_limit
+statement ok
+PRAGMA memory_limit='1GB'
+
+statement ok
+PRAGMA memory_limit=-1
+
+# different units can be used
+# G and GB = gigabyte
+statement ok
+PRAGMA memory_limit='1G'
+
+statement ok
+PRAGMA memory_limit='1GB'
+
+statement ok
+PRAGMA memory_limit='1gb'
+
+statement ok
+PRAGMA memory_limit = '1GB'
+
+statement ok
+PRAGMA memory_limit='1.0gb'
+
+statement ok
+PRAGMA memory_limit='1.0 gb'
+
+statement ok
+PRAGMA memory_limit='1.0 gigabytes'
+
+# M and MB = megabyte
+statement ok
+PRAGMA memory_limit='100M'
+
+statement ok
+PRAGMA memory_limit='100MB'
+
+statement ok
+PRAGMA memory_limit='100mb'
+
+statement ok
+PRAGMA memory_limit='100 megabytes'
+
+# K and KB = kilobyte
+statement ok
+PRAGMA memory_limit='10000K'
+
+statement ok
+PRAGMA memory_limit='10000KB'
+
+statement ok
+PRAGMA memory_limit='10000kb'
+
+statement ok
+PRAGMA memory_limit='10000 kilobytes'
+
+# B = byte
+statement ok
+PRAGMA memory_limit='100000B'
+
+statement ok
+PRAGMA memory_limit='100000b'
+
+statement ok
+PRAGMA memory_limit='100000 bytes'
+
+# T and TB = terabyte
+statement ok
+PRAGMA memory_limit='0.01T'
+
+statement ok
+PRAGMA memory_limit='0.01TB'
+
+statement ok
+PRAGMA memory_limit='0.01tb'
+
+statement ok
+PRAGMA memory_limit='0.01 terabytes'
+
+# no unit or unknown units fail
+statement error
+PRAGMA memory_limit=100
+
+statement error
+PRAGMA memory_limit='0.01BG'
+
+statement error
+PRAGMA memory_limit='0.01BLA'
+
+statement error
+PRAGMA memory_limit='0.01PP'
+
+statement error
+PRAGMA memory_limit='0.01TEST'
+
+# we can't invoke it like this either
+statement error
+PRAGMA memory_limit
+
+statement error
+PRAGMA memory_limit()
+
+statement error
+PRAGMA memory_limit(1, 2)
+

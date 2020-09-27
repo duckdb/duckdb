@@ -1,0 +1,19 @@
+# name: test/issues/rigger/test_547.test
+# description: Issue 547
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Query with SIMILAR TO results in 'Assertion `strlen(dataptr) == length' failed'
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0 VALUES (0);
+
+query I
+SELECT * FROM t0 WHERE t0.c0 SIMILAR TO '.';
+----
+0
+

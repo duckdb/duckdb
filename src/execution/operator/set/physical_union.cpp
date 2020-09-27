@@ -6,14 +6,15 @@ namespace duckdb {
 
 class PhysicalUnionOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalUnionOperatorState() : PhysicalOperatorState(nullptr), top_done(false) {
+	PhysicalUnionOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), top_done(false) {
 	}
 	unique_ptr<PhysicalOperatorState> top_state;
 	unique_ptr<PhysicalOperatorState> bottom_state;
 	bool top_done = false;
 };
 
-PhysicalUnion::PhysicalUnion(vector<TypeId> types, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom)
+PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
+                             unique_ptr<PhysicalOperator> bottom)
     : PhysicalOperator(PhysicalOperatorType::UNION, move(types)) {
 	children.push_back(move(top));
 	children.push_back(move(bottom));
@@ -37,7 +38,7 @@ void PhysicalUnion::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState() {
-	auto state = make_unique<PhysicalUnionOperatorState>();
+	auto state = make_unique<PhysicalUnionOperatorState>(*this);
 	state->top_state = children[0]->GetOperatorState();
 	state->bottom_state = children[1]->GetOperatorState();
 	return (move(state));

@@ -12,8 +12,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
 
-#include <limits>
-
 namespace duckdb {
 
 //! The Serialize class is a base class that can be used to serializing objects into a binary buffer
@@ -28,8 +26,12 @@ public:
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
+	//! Write data from a string buffer directly (wihtout length prefix)
+	void WriteBufferData(const string &str) {
+		WriteData((const_data_ptr_t)str.c_str(), str.size());
+	}
+	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		assert(val.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)val.size());
 		if (val.size() > 0) {
 			WriteData((const_data_ptr_t)val.c_str(), val.size());
@@ -37,10 +39,16 @@ public:
 	}
 
 	template <class T> void WriteList(vector<unique_ptr<T>> &list) {
-		assert(list.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)list.size());
 		for (auto &child : list) {
 			child->Serialize(*this);
+		}
+	}
+
+	void WriteStringVector(const vector<string> &list) {
+		Write<uint32_t>((uint32_t)list.size());
+		for (auto &child : list) {
+			WriteString(child);
 		}
 	}
 
@@ -67,7 +75,6 @@ public:
 		ReadData((data_ptr_t)&value, sizeof(T));
 		return value;
 	}
-
 	template <class T> void ReadList(vector<unique_ptr<T>> &list) {
 		auto select_count = Read<uint32_t>();
 		for (uint32_t i = 0; i < select_count; i++) {
@@ -83,6 +90,8 @@ public:
 		}
 		return nullptr;
 	}
+
+	void ReadStringVector(vector<string> &list);
 };
 
 template <> string Deserializer::Read();

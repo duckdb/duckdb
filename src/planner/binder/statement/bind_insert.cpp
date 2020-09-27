@@ -26,7 +26,7 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
 	assert(table);
@@ -47,7 +47,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			column_name_map[stmt.columns[i]] = i;
 			auto entry = table->name_map.find(stmt.columns[i]);
 			if (entry == table->name_map.end()) {
-				throw BinderException("Column %s not found in table %s", stmt.columns[i].c_str(), table->name.c_str());
+				throw BinderException("Column %s not found in table %s", stmt.columns[i], table->name);
 			}
 			if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
@@ -109,8 +109,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 						if (column.default_value) {
 							expr_list.values[list_idx][col_idx] = column.default_value->Copy();
 						} else {
-							expr_list.values[list_idx][col_idx] =
-							    make_unique<ConstantExpression>(column.type, Value(GetInternalType(column.type)));
+							expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.type));
 						}
 					}
 				}

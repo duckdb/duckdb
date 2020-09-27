@@ -1,11 +1,11 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left,
                                                      unique_ptr<Expression> right)
-    : Expression(type, ExpressionClass::BOUND_COMPARISON, TypeId::BOOL), left(move(left)), right(move(right)) {
+    : Expression(type, ExpressionClass::BOUND_COMPARISON, LogicalType::BOOLEAN), left(move(left)), right(move(right)) {
 }
 
 string BoundComparisonExpression::ToString() const {
@@ -13,7 +13,7 @@ string BoundComparisonExpression::ToString() const {
 }
 
 bool BoundComparisonExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundComparisonExpression *)other_;
@@ -31,3 +31,5 @@ unique_ptr<Expression> BoundComparisonExpression::Copy() {
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

@@ -2,8 +2,9 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateSchema(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateSchemaStmt *>(node);
@@ -13,7 +14,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSchema(PGNode *node) {
 
 	assert(stmt->schemaname);
 	info->schema = stmt->schemaname;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE : OnCreateConflict::ERROR;
+	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
 	if (stmt->schemaElts) {
 		// schema elements
@@ -30,3 +31,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSchema(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

@@ -52,7 +52,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 			if (new_types[i] != types[i]) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
-			if (types[i] == TypeId::LIST) {
+			if (types[i].InternalType() == PhysicalType::LIST) {
 				for (auto &chunk :
 				     chunks) { // need to check all the chunks because they can have only-null list entries
 					auto &chunk_vec = chunk->data[i];
@@ -60,8 +60,10 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
 						auto &chunk_types = ListVector::GetEntry(chunk_vec).types;
 						auto &new_types = ListVector::GetEntry(new_vec).types;
+						assert(new_types.size() <= 1);
+						assert(chunk_types.size() <= 1);
 						if (chunk_types.size() > 0 && new_types.size() > 0 && chunk_types != new_types) {
-							throw TypeMismatchException(chunk_types[0], new_types[i],
+							throw TypeMismatchException(chunk_types[0], new_types[0],
 							                            "Type mismatch when combining lists");
 						}
 					}
@@ -72,9 +74,12 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 
 		// first append data to the current chunk
 		DataChunk &last_chunk = *chunks.back();
-		idx_t added_data = std::min(remaining_data, (idx_t)(STANDARD_VECTOR_SIZE - last_chunk.size()));
+		idx_t added_data = MinValue<idx_t>(remaining_data, STANDARD_VECTOR_SIZE - last_chunk.size());
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
+			new_chunk.Normalify();
+			// have to be careful here: setting the cardinality without calling normalify can cause incorrect partial
+			// decompression
 			idx_t old_count = new_chunk.size();
 			new_chunk.SetCardinality(added_data);
 
@@ -128,23 +133,25 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 		return null_order == OrderByNullType::NULLS_FIRST ? -1 : 1;
 	}
 
-	switch (left_vec.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (left_vec.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return templated_compare_value<int8_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return templated_compare_value<int16_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return templated_compare_value<int32_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return templated_compare_value<int64_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::FLOAT:
+	case PhysicalType::INT128:
+		return templated_compare_value<hugeint_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case PhysicalType::FLOAT:
 		return templated_compare_value<float>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return templated_compare_value<string_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return templated_compare_value<interval_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	default:
 		throw NotImplementedException("Type for comparison");
@@ -204,7 +211,8 @@ static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &d
 }
 
 struct QuicksortInfo {
-	QuicksortInfo(int64_t left_, int64_t right_) : left(left_), right(right_) {}
+	QuicksortInfo(int64_t left_, int64_t right_) : left(left_), right(right_) {
+	}
 
 	int64_t left;
 	int64_t right;
@@ -247,17 +255,17 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc
 	std::swap(result[middle], result[left]);
 	bool all_equal = true;
 	while (i <= j) {
-		if (result )
-		while (i <= j) {
-			int cmp = compare_tuple(sort_by, desc, null_order, result[i], pivot);
-			if (cmp < 0) {
-				all_equal = false;
-			} else if (cmp > 0) {
-				all_equal = false;
-				break;
+		if (result)
+			while (i <= j) {
+				int cmp = compare_tuple(sort_by, desc, null_order, result[i], pivot);
+				if (cmp < 0) {
+					all_equal = false;
+				} else if (cmp > 0) {
+					all_equal = false;
+					break;
+				}
+				i++;
 			}
-			i++;
-		}
 
 		while (i <= j && compare_tuple(sort_by, desc, null_order, result[j], pivot) > 0) {
 			j--;
@@ -290,7 +298,7 @@ void ChunkCollection::Sort(vector<OrderType> &desc, vector<OrderByNullType> &nul
 	QuicksortStack stack;
 	stack.Enqueue(0, part);
 	stack.Enqueue(part + 1, count - 1);
-	while(!stack.IsEmpty()) {
+	while (!stack.IsEmpty()) {
 		auto element = stack.Pop();
 		_quicksort_inplace(this, desc, null_order, result, element, stack);
 	}
@@ -360,35 +368,38 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 
 	target.SetCardinality(remaining_data);
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		switch (types[col_idx]) {
-		case TypeId::BOOL:
-		case TypeId::INT8:
+		switch (types[col_idx].InternalType()) {
+		case PhysicalType::BOOL:
+		case PhysicalType::INT8:
 			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::INT128:
+			templated_set_values<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case PhysicalType::FLOAT:
 			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INTERVAL:
+		case PhysicalType::INTERVAL:
 			templated_set_values<interval_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 
-		case TypeId::LIST:
-		case TypeId::STRUCT: {
+		case PhysicalType::LIST:
+		case PhysicalType::STRUCT: {
 			for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
 				idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
 				idx_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
@@ -522,32 +533,35 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 
 	target.SetCardinality(remaining_data);
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		switch (types[col_idx]) {
-		case TypeId::BOOL:
-		case TypeId::INT8:
+		switch (types[col_idx].InternalType()) {
+		case PhysicalType::BOOL:
+		case PhysicalType::INT8:
 			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::INT128:
+			templated_set_values<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case PhysicalType::FLOAT:
 			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 			// TODO this is ugly and sloooow!
-		case TypeId::STRUCT:
-		case TypeId::LIST: {
+		case PhysicalType::STRUCT:
+		case PhysicalType::LIST: {
 			for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
 				idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
 				idx_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
@@ -571,4 +585,4 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 	return start_offset + remaining_data;
 }
 
-}
+} // namespace duckdb

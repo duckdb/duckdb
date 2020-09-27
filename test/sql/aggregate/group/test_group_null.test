@@ -1,0 +1,17 @@
+# name: test/sql/aggregate/group/test_group_null.test
+# description: GROUP BY NULL value
+# group: [group]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (3, 4), (NULL, 4), (2, 4);
+
+query IR
+SELECT i, SUM(j) FROM integers GROUP BY i ORDER BY i
+----
+NULL	4.000000
+2	4.000000
+3	4.000000
+

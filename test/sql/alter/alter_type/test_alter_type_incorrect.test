@@ -1,0 +1,25 @@
+# name: test/sql/alter/alter_type/test_alter_type_incorrect.test
+# description: Incorrect ALTER TYPE usage
+# group: [alter_type]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# cannot alter columns that don't exist
+statement error
+ALTER TABLE test ALTER blabla SET TYPE VARCHAR
+
+# expression error
+statement error
+ALTER TABLE test ALTER i SET TYPE VARCHAR USING blabla
+
+# cannot use aggregates/window functions
+statement error
+ALTER TABLE test ALTER i SET TYPE VARCHAR USING SUM(i)
+
+statement error
+ALTER TABLE test ALTER i SET TYPE VARCHAR USING row_id() OVER ()
+

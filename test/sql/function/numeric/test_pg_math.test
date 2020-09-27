@@ -1,0 +1,99 @@
+# name: test/sql/function/numeric/test_pg_math.test
+# description: Function test cases from PG docs
+# group: [numeric]
+
+# see https://www.postgresql.org/docs/10/functions-math.html
+
+statement ok
+PRAGMA enable_verification
+
+query R
+select abs(-17.4)
+----
+17.400000
+
+query R
+select cbrt(27.0)
+----
+3.000000
+
+query R
+select ceil(-42.8)
+----
+-42.000000
+
+query R
+select ceiling(-95.3)
+----
+-95.000000
+
+query R
+select exp(1.0)
+----
+2.718282
+
+query R
+select floor(-42.8)
+----
+-43.000000
+
+query R
+select ln(2.0)
+----
+0.693147
+
+query R
+select log(100.0)
+----
+2.000000
+
+query R
+select log10(100.0)
+----
+2.000000
+
+query R
+select log2(4.0)
+----
+2.000000
+
+query R
+select pi()
+----
+3.141593
+
+query R
+select sqrt(2.0)
+----
+1.414214
+
+query R
+select radians(45.0)
+----
+0.785398
+
+query R
+select degrees(0.5)
+----
+28.647890
+
+query I
+select sign(4.1)
+----
+1
+
+query I
+select sign(-4.1)
+----
+-1
+
+query I
+select sign(0)
+----
+0
+
+query I
+select sign(3)
+----
+1
+

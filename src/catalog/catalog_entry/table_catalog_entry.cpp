@@ -23,6 +23,7 @@
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 using namespace std;
 
@@ -30,7 +31,7 @@ namespace duckdb {
 
 void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &name_map) {
 	unordered_map<string, column_t> extra_lowercase_names;
-	for(auto &entry : name_map) {
+	for (auto &entry : name_map) {
 		auto lcase = StringUtil::Lower(entry.first);
 		// check the lowercase name map if there already exists a lowercase version
 		if (extra_lowercase_names.find(lcase) == extra_lowercase_names.end()) {
@@ -42,7 +43,7 @@ void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &nam
 		}
 	}
 	// for any new lowercase names, add them to the original name map
-	for(auto &entry : extra_lowercase_names) {
+	for (auto &entry : extra_lowercase_names) {
 		if (entry.second != INVALID_INDEX) {
 			name_map[entry.first] = entry.second;
 		}
@@ -51,7 +52,7 @@ void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &nam
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : StandardEntry(CatalogType::TABLE, schema, catalog, info->Base().table), storage(inherited_storage),
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(inherited_storage),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
 	this->temporary = info->Base().temporary;
@@ -77,12 +78,11 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				vector<unique_ptr<Expression>> bound_expressions;
 				idx_t key_nr = 0;
 				for (auto &key : unique.keys) {
-					TypeId column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
 
 					unbound_expressions.push_back(
-					    make_unique<BoundColumnRefExpression>(column_type, ColumnBinding(0, column_ids.size())));
-					bound_expressions.push_back(make_unique<BoundReferenceExpression>(column_type, key_nr++));
+					    make_unique<BoundColumnRefExpression>(columns[key].type, ColumnBinding(0, column_ids.size())));
+					bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
 					column_ids.push_back(key);
 				}
 				// create an adaptive radix tree around the expressions
@@ -160,7 +160,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		}
 	}
 	if (!found) {
-		throw CatalogException("Table does not have a column with name \"%s\"", info.name.c_str());
+		throw CatalogException("Table does not have a column with name \"%s\"", info.name);
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
 		auto copy = constraints[c_idx]->Copy();
@@ -225,7 +225,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	}
 	if (removed_index == INVALID_INDEX) {
 		if (!info.if_exists) {
-			throw CatalogException("Table does not have a column with name \"%s\"", info.removed_column.c_str());
+			throw CatalogException("Table does not have a column with name \"%s\"", info.removed_column);
 		}
 		return nullptr;
 	}
@@ -260,7 +260,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 					// CHECK constraint that concerns mult
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a CHECK constraint that depends on it",
-					    info.removed_column.c_str());
+					    info.removed_column);
 				} else {
 					// CHECK constraint that ONLY concerns this column, strip the constraint
 				}
@@ -272,12 +272,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 		case ConstraintType::UNIQUE: {
 			auto copy = constraint->Copy();
-			auto &unique = (UniqueConstraint &) *copy;
+			auto &unique = (UniqueConstraint &)*copy;
 			if (unique.index != INVALID_INDEX) {
 				if (unique.index == removed_index) {
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
-					    info.removed_column.c_str());
+					    info.removed_column);
 				} else if (unique.index > removed_index) {
 					unique.index--;
 				}
@@ -310,8 +310,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 	if (!found) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(),
-		                      info.column_name.c_str());
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -337,8 +336,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->columns.push_back(move(copy));
 	}
 	if (change_idx == INVALID_INDEX) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(),
-		                      info.column_name.c_str());
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -387,26 +385,26 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	auto entry = name_map.find(name);
 	if (entry == name_map.end() || entry->second == COLUMN_IDENTIFIER_ROW_ID) {
-		throw CatalogException("Column with name %s does not exist!", name.c_str());
+		throw CatalogException("Column with name %s does not exist!", name);
 	}
 	return columns[entry->second];
 }
 
-vector<TypeId> TableCatalogEntry::GetTypes() {
-	vector<TypeId> types;
+vector<LogicalType> TableCatalogEntry::GetTypes() {
+	vector<LogicalType> types;
 	for (auto &it : columns) {
-		types.push_back(GetInternalType(it.type));
+		types.push_back(it.type);
 	}
 	return types;
 }
 
-vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
-	vector<TypeId> result;
+vector<LogicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
+	vector<LogicalType> result;
 	for (auto &index : column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(TypeId::INT64);
+			result.push_back(LOGICAL_ROW_TYPE);
 		} else {
-			result.push_back(GetInternalType(columns[index].type));
+			result.push_back(columns[index].type);
 		}
 	}
 	return result;
@@ -415,16 +413,63 @@ vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
 void TableCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
-	assert(columns.size() <= std::numeric_limits<uint32_t>::max());
+	assert(columns.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)columns.size());
 	for (auto &column : columns) {
 		column.Serialize(serializer);
 	}
-	assert(constraints.size() <= std::numeric_limits<uint32_t>::max());
+	assert(constraints.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)constraints.size());
 	for (auto &constraint : constraints) {
 		constraint->Serialize(serializer);
 	}
+}
+
+string TableCatalogEntry::ToSQL() {
+	stringstream ss;
+	ss << "CREATE TABLE " << name << "(";
+
+	// find all columns that have NOT NULL specified, but are NOT primary key columns
+	unordered_set<idx_t> not_null_columns;
+	unordered_set<string> pk_columns;
+	for (auto &constraint : constraints) {
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			auto &not_null = (NotNullConstraint &)*constraint;
+			not_null_columns.insert(not_null.index);
+		} else if (constraint->type == ConstraintType::UNIQUE) {
+			auto &pk = (UniqueConstraint &)*constraint;
+			if (pk.is_primary_key) {
+				for (auto &col : pk.columns) {
+					pk_columns.insert(col);
+				}
+			}
+		}
+	}
+
+	for (idx_t i = 0; i < columns.size(); i++) {
+		if (i > 0) {
+			ss << ", ";
+		}
+		auto &column = columns[i];
+		ss << column.name << " " << column.type.ToString();
+		if (not_null_columns.find(column.oid) != not_null_columns.end() &&
+		    pk_columns.find(column.name) == pk_columns.end()) {
+			// NOT NULL but not a priamry key column
+			ss << " NOT NULL";
+		}
+	}
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto &constraint = constraints[i];
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			// handled above
+			continue;
+		}
+		ss << ", ";
+		ss << constraint->ToString();
+	}
+
+	ss << ");";
+	return ss.str();
 }
 
 unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source) {
@@ -467,4 +512,4 @@ void TableCatalogEntry::SetAsRoot() {
 	storage->SetAsRoot();
 }
 
-}
+} // namespace duckdb

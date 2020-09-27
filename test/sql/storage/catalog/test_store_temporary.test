@@ -1,0 +1,86 @@
+# name: test/sql/storage/catalog/test_store_temporary.test
+# description: Temporary tables are not written to disk
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/test_store_temporary.db
+
+# create a temporary table and do some ops on there
+statement ok
+CREATE TABLE persistent (i INTEGER)
+
+statement ok
+CREATE TEMPORARY TABLE temp.a (i INTEGER)
+
+# insert values, delete them, etc
+statement ok
+INSERT INTO a VALUES (42)
+
+statement ok
+DELETE FROM a
+
+statement ok
+DELETE FROM temp.a
+
+# check schema
+statement error
+DELETE FROM asdf.a
+
+# temporary sequences
+statement ok
+CREATE TEMPORARY SEQUENCE seq
+
+statement ok
+CREATE TEMPORARY SEQUENCE seq2
+
+statement ok
+DROP SEQUENCE seq2
+
+# temporary views
+statement ok
+CREATE TEMPORARY VIEW v1 AS SELECT 42
+
+statement ok
+CREATE TEMPORARY VIEW v2 AS SELECT 42
+
+statement ok
+DROP VIEW v2
+
+statement ok
+INSERT INTO temp.a VALUES (43)
+
+statement ok
+UPDATE temp.a SET i = 44
+
+statement ok
+UPDATE a SET i = 45
+
+# alter table on a temporary structure
+statement ok
+ALTER TABLE a RENAME COLUMN i TO k
+
+statement ok
+SELECT * FROM persistent
+
+statement ok
+SELECT * FROM a
+
+# now restart
+restart
+
+# persistent table is still there
+statement ok
+SELECT * FROM persistent
+
+# temporary table is gone
+statement error
+SELECT * FROM a
+
+statement ok
+CREATE TEMPORARY TABLE a (i INTEGER)
+
+statement ok
+CREATE TEMPORARY SEQUENCE seq
+
+statement ok
+CREATE TEMPORARY VIEW v1 AS SELECT 42

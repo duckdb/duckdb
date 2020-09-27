@@ -8,7 +8,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CleanupState::CleanupState() : current_table(nullptr), count(0) {
@@ -21,7 +21,7 @@ CleanupState::~CleanupState() {
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
-		CatalogEntry *catalog_entry = *((CatalogEntry **)data);
+		auto catalog_entry = Load<CatalogEntry *>(data);
 		// destroy the backed up entry: it is no longer required
 		assert(catalog_entry->parent);
 		if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
@@ -80,10 +80,12 @@ void CleanupState::Flush() {
 	}
 
 	// set up the row identifiers vector
-	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_numbers);
+	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_numbers);
 
 	// delete the tuples from all the indexes
 	current_table->RemoveFromIndexes(row_identifiers, count);
 
 	count = 0;
 }
+
+} // namespace duckdb

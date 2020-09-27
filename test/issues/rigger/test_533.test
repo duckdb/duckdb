@@ -1,0 +1,17 @@
+# name: test/issues/rigger/test_533.test
+# description: Issue 533
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Overflow when casting from REAL to INT results in 'Invalid TypeId -1'
+statement ok
+CREATE TABLE t0(c0 REAL);
+
+statement ok
+INSERT INTO t0(c0) VALUES (10000000000);
+
+statement error
+SELECT t0.c0 ::INT FROM t0;
+

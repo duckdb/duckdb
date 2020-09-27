@@ -1,0 +1,27 @@
+# name: test/sql/constraints/primarykey/test_pk_many_columns.test
+# description: PRIMARY KEY constraint on more than two columns
+# group: [primarykey]
+
+statement ok
+CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b,c,d,e))
+
+# insert two conflicting pairs at the same time
+statement error
+INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)
+
+# insert unique values
+statement ok
+INSERT INTO numbers VALUES (1,1,1,1,1),(1,2,1,1,1),(1,1,2,1,1),(2,2,2,2,2)
+
+# insert a duplicate value as part of a chain of values
+statement error
+INSERT INTO numbers VALUES (1,1,1,1,1),(1,1,1,1,4);
+
+# now insert just the second value
+statement ok
+INSERT INTO numbers VALUES (1,1,1,1,4);
+
+# this should fail since will cause a duplicate
+statement error
+UPDATE numbers SET c=1 WHERE c=2
+

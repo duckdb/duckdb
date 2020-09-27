@@ -1,0 +1,34 @@
+# name: test/sql/function/numeric/test_mod.test
+# description: Mod test
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE modme(a DOUBLE, b INTEGER)
+
+statement ok
+INSERT INTO modme VALUES (42.123456, 3)
+
+query R
+select mod(a, 40) from modme
+----
+2.123456
+
+# mod 0 results in NULL: SQLite behavior
+query I
+select mod(42, 0)
+----
+NULL
+
+query R
+select mod(a, 2) from modme
+----
+0.123456
+
+query R
+select mod(b, 2.1) from modme
+----
+0.900000
+

@@ -1,7 +1,7 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 PreparedStatementData::PreparedStatementData(StatementType type)
@@ -22,21 +22,22 @@ void PreparedStatementData::Bind(vector<Value> values) {
 		if (it == value_map.end()) {
 			throw BinderException("Could not find parameter with index %llu", i + 1);
 		}
-		if (values[i].type != GetInternalType(it->second.target_type)) {
+		if (values[i].type() != it->second->type()) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
-			    TypeIdToString(values[i].type).c_str(),
-			    TypeIdToString(GetInternalType(it->second.target_type)).c_str());
+			    values[i].type().ToString().c_str(), it->second->type().ToString().c_str());
 		}
 		auto &target = it->second;
-		*target.value = values[i];
+		*target = values[i];
 	}
 }
 
-SQLType PreparedStatementData::GetType(idx_t param_idx) {
+LogicalType PreparedStatementData::GetType(idx_t param_idx) {
 	auto it = value_map.find(param_idx);
 	if (it == value_map.end()) {
 		throw BinderException("Could not find parameter with index %llu", param_idx);
 	}
-	return it->second.target_type;
+	return it->second->type();
 }
+
+} // namespace duckdb

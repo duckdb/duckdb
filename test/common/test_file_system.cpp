@@ -38,7 +38,7 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs.DirectoryExists(fname_in_dir));
 
 	size_t n_files = 0;
-	REQUIRE(fs.ListFiles(dname, [&n_files](const string &path) { n_files++; }));
+	REQUIRE(fs.ListFiles(dname, [&n_files](const string &path, bool) { n_files++; }));
 
 	REQUIRE(n_files == 1);
 
@@ -75,7 +75,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// standard reading/writing test
 
 	// open file for writing
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE, FileLockType::NO_LOCK));
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE, FileLockType::NO_LOCK));
 	// write 10 integers
 	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// close the file
@@ -85,7 +85,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 		test_data[i] = 0;
 	}
 	// now open the file for reading
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::READ, FileLockType::NO_LOCK));
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK));
 	// read the 10 integers back
 	REQUIRE_NOTHROW(handle->Read((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// check the values of the integers
@@ -110,7 +110,7 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 	}
 
 	// open file for writing
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::WRITE | FileFlags::CREATE | FileFlags::DIRECT_IO,
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_DIRECT_IO,
 	                                     FileLockType::WRITE_LOCK));
 	// write the buffer
 	REQUIRE_NOTHROW(buf->Write(*handle, 0));

@@ -1,0 +1,15 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [sf1]
+
+require tpch
+
+cache tpch_sf1
+
+load
+CALL dbgen(sf=1);
+
+run
+PRAGMA tpch(${QUERY_NUMBER})
+
+result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv

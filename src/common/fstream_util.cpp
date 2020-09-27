@@ -1,7 +1,7 @@
 #include "duckdb/common/fstream_util.hpp"
 
 using namespace std;
-using namespace duckdb;
+namespace duckdb {
 
 void FstreamUtil::OpenFile(const string &file_path, fstream &new_file, ios_base::openmode mode) {
 	new_file.open(file_path, mode);
@@ -31,3 +31,5 @@ data_ptr FstreamUtil::ReadBinary(fstream &file) {
 
 	return result;
 }
+
+} // namespace duckdb

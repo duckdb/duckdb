@@ -1,15 +1,15 @@
 #include "duckdb/main/materialized_query_result.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type) {
 }
 
-MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, vector<SQLType> sql_types,
-                                                 vector<TypeId> types, vector<string> names)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, sql_types, types, names) {
+MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, vector<LogicalType> types,
+                                                 vector<string> names)
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), names) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(string error)
@@ -30,7 +30,7 @@ string MaterializedQueryResult::ToString() {
 		for (idx_t j = 0; j < collection.count; j++) {
 			for (idx_t i = 0; i < collection.column_count(); i++) {
 				auto val = collection.GetValue(i, j);
-				result += val.is_null ? "NULL" : val.ToString(sql_types[i]);
+				result += val.is_null ? "NULL" : val.ToString();
 				result += "\t";
 			}
 			result += "\n";
@@ -53,3 +53,5 @@ unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
 	collection.chunks.erase(collection.chunks.begin() + 0);
 	return chunk;
 }
+
+} // namespace duckdb

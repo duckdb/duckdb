@@ -3,12 +3,13 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, AggregateFunction function, bool distinct)
-    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, return_type), function(function),
-      distinct(distinct) {
+BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,
+                                                   unique_ptr<FunctionData> bind_info, bool distinct)
+    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.return_type),
+      function(move(function)), children(move(children)), bind_info(move(bind_info)), distinct(distinct) {
 }
 
 string BoundAggregateExpression::ToString() const {
@@ -17,7 +18,7 @@ string BoundAggregateExpression::ToString() const {
 		result += "DISTINCT ";
 	}
 	StringUtil::Join(children, children.size(), ", ",
-	                 [](const unique_ptr<Expression> &child) { return child->GetName(); });
+	                 [](const unique_ptr<Expression> &child) { return child->ToString(); });
 	result += ")";
 	return result;
 }
@@ -29,7 +30,7 @@ hash_t BoundAggregateExpression::Hash() const {
 }
 
 bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundAggregateExpression *)other_;
@@ -51,10 +52,14 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
-	auto copy = make_unique<BoundAggregateExpression>(return_type, function, distinct);
+	vector<unique_ptr<Expression>> new_children;
 	for (auto &child : children) {
-		copy->children.push_back(child->Copy());
+		new_children.push_back(child->Copy());
 	}
+	auto new_bind_info = bind_info->Copy();
+	auto copy = make_unique<BoundAggregateExpression>(function, move(new_children), move(new_bind_info), distinct);
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

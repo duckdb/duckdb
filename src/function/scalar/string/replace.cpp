@@ -7,7 +7,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <unordered_map>
-#include <algorithm> // std::max
 
 using namespace std;
 
@@ -67,8 +66,6 @@ static string_t replace_scalar_function(const string_t &haystack, const string_t
 }
 
 static void replace_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::VARCHAR &&
-	       args.data[2].type == TypeId::VARCHAR);
 	auto &haystack_vector = args.data[0];
 	auto &needle_vector = args.data[1];
 	auto &thread_vector = args.data[2];
@@ -83,11 +80,11 @@ static void replace_function(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 void ReplaceFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("replace",         // name of the function
-	                               {SQLType::VARCHAR, // argument list
-	                                SQLType::VARCHAR, SQLType::VARCHAR},
-	                               SQLType::VARCHAR,   // return type
-	                               replace_function)); // pointer to function implementation
+	set.AddFunction(ScalarFunction("replace",             // name of the function
+	                               {LogicalType::VARCHAR, // argument list
+	                                LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                               LogicalType::VARCHAR, // return type
+	                               replace_function));   // pointer to function implementation
 }
 
 } // namespace duckdb

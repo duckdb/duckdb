@@ -1,7 +1,7 @@
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SegmentBase *SegmentTree::GetRootSegment() {
@@ -49,3 +49,5 @@ void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
 		root_node = move(segment);
 	}
 }
+
+} // namespace duckdb

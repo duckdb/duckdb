@@ -5,10 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
-using namespace std;
-
 namespace duckdb {
+using namespace std;
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
@@ -27,7 +25,6 @@ protected:
 private:
 	unordered_set<CatalogEntry *> &dependencies;
 };
-} // namespace duckdb
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	// first resolve column references
@@ -74,12 +71,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalOrder &)op);
 	case LogicalOperatorType::TOP_N:
 		return CreatePlan((LogicalTopN &)op);
-	case LogicalOperatorType::COPY_FROM_FILE:
-		return CreatePlan((LogicalCopyFromFile &)op);
 	case LogicalOperatorType::COPY_TO_FILE:
 		return CreatePlan((LogicalCopyToFile &)op);
-	case LogicalOperatorType::TABLE_FUNCTION:
-		return CreatePlan((LogicalTableFunction &)op);
+	case LogicalOperatorType::DUMMY_SCAN:
+		return CreatePlan((LogicalDummyScan &)op);
 	case LogicalOperatorType::ANY_JOIN:
 		return CreatePlan((LogicalAnyJoin &)op);
 	case LogicalOperatorType::DELIM_JOIN:
@@ -116,23 +111,26 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalPrepare &)op);
 	case LogicalOperatorType::EXECUTE:
 		return CreatePlan((LogicalExecute &)op);
-	case LogicalOperatorType::INDEX_SCAN:
-		return CreatePlan((LogicalIndexScan &)op);
 	case LogicalOperatorType::CREATE_VIEW:
 	case LogicalOperatorType::CREATE_SEQUENCE:
 	case LogicalOperatorType::CREATE_SCHEMA:
 		return CreatePlan((LogicalCreate &)op);
+	case LogicalOperatorType::PRAGMA:
+		return CreatePlan((LogicalPragma &)op);
 	case LogicalOperatorType::TRANSACTION:
 	case LogicalOperatorType::ALTER:
 	case LogicalOperatorType::DROP:
-	case LogicalOperatorType::PRAGMA:
 	case LogicalOperatorType::VACUUM:
 		return CreatePlan((LogicalSimple &)op);
 	case LogicalOperatorType::RECURSIVE_CTE:
 		return CreatePlan((LogicalRecursiveCTE &)op);
 	case LogicalOperatorType::CTE_REF:
 		return CreatePlan((LogicalCTERef &)op);
+	case LogicalOperatorType::EXPORT:
+		return CreatePlan((LogicalExport &)op);
 	default:
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}
 }
+
+} // namespace duckdb

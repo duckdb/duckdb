@@ -1,0 +1,25 @@
+# name: test/sql/storage/catalog/test_not_null_constraints.test
+# description: Test serialization of NOT NULL constraint
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/not_null_storage_test.db
+
+# create a table with a check constraint
+statement ok
+CREATE TABLE test(a INTEGER NOT NULL);
+
+loop i 0 2
+
+# reload the database
+restart
+
+# constraint failure
+statement error
+INSERT INTO test VALUES (NULL)
+
+# constraint ok
+statement ok
+INSERT INTO test VALUES (1)
+
+endloop

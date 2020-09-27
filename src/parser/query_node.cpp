@@ -4,7 +4,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool QueryNode::Equals(const QueryNode *other) const {
@@ -66,3 +66,5 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	result->modifiers = move(modifiers);
 	return result;
 }
+
+} // namespace duckdb

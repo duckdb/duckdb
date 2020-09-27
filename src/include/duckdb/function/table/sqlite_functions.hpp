@@ -24,4 +24,12 @@ struct SQLiteMaster {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct PragmaVersion {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct PragmaDatabaseList {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

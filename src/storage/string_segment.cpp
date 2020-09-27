@@ -6,11 +6,12 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
+
 StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t block)
-    : UncompressedSegment(manager, TypeId::VARCHAR, row_start) {
+    : UncompressedSegment(manager, PhysicalType::VARCHAR, row_start) {
 	this->max_vector_count = 0;
 	this->dictionary_offset = 0;
 	// the vector_size is given in the size of the dictionary offsets
@@ -73,7 +74,7 @@ void StringSegment::read_string(string_t *result_data, buffer_handle_set_t &hand
                                 size_t vector_index) {
 	if (string_updates && string_updates[vector_index]) {
 		auto &info = *string_updates[vector_index];
-		while (info.ids[update_idx] < src_idx) {
+		while (update_idx < STANDARD_VECTOR_SIZE && info.ids[update_idx] < src_idx) {
 			//! We need to catch the update_idx up to the src_idx
 			update_idx++;
 		}
@@ -136,29 +137,29 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-	    bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-        auto less = isFirstGreater?tableFilter[1]:tableFilter[0];
-        auto greater = isFirstGreater?tableFilter[0]:tableFilter[1];
+		bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		                      tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		auto less = isFirstGreater ? tableFilter[1] : tableFilter[0];
+		auto greater = isFirstGreater ? tableFilter[0] : tableFilter[1];
 		if (greater.comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThan, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThan, LessThan>(state.handles, result, baseptr, base_data, sel,
+				                                             greater.constant.str_value, less.constant.str_value,
+				                                             approved_tuple_count, base_nullmask, vector_index);
 			} else {
-				Select_String_Between<GreaterThan, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThan, LessThanEquals>(state.handles, result, baseptr, base_data, sel,
+				                                                   greater.constant.str_value, less.constant.str_value,
+				                                                   approved_tuple_count, base_nullmask, vector_index);
 			}
 		} else {
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThanEquals, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThanEquals, LessThan>(state.handles, result, baseptr, base_data, sel,
+				                                                   greater.constant.str_value, less.constant.str_value,
+				                                                   approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThanEquals, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value, less.constant.str_value,
+				    approved_tuple_count, base_nullmask, vector_index);
 			}
 		}
 	}
@@ -303,7 +304,7 @@ string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t
 	// look up result in dictionary
 	auto dict_end = baseptr + Storage::BLOCK_SIZE;
 	auto dict_pos = dict_end - dict_offset;
-	auto string_length = *((uint16_t *)dict_pos);
+	auto string_length = Load<uint16_t>(dict_pos);
 	string_location_t result;
 	if (string_length == BIG_STRING_MARKER) {
 		ReadStringMarker(dict_pos, result.block_id, result.offset);
@@ -332,7 +333,7 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 		// normal string: read string from this block
 		auto dict_end = baseptr + Storage::BLOCK_SIZE;
 		auto dict_pos = dict_end - location.offset;
-		auto string_length = *((uint16_t *)dict_pos);
+		auto string_length = Load<uint16_t>(dict_pos);
 
 		auto str_ptr = (char *)(dict_pos + sizeof(uint16_t));
 		return string_t(str_ptr, string_length);
@@ -413,7 +414,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 // Append
 //===--------------------------------------------------------------------===//
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	assert(data.type == TypeId::VARCHAR);
+	assert(data.type.InternalType() == PhysicalType::VARCHAR);
 	auto handle = manager.Pin(block_id);
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
@@ -431,7 +432,7 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 			}
 		}
 		idx_t current_tuple_count = tuple_count - vector_index * STANDARD_VECTOR_SIZE;
-		idx_t append_count = std::min(STANDARD_VECTOR_SIZE - current_tuple_count, count);
+		idx_t append_count = MinValue(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
 		AppendData(stats, handle->node->buffer + vector_size * vector_index, handle->node->buffer + Storage::BLOCK_SIZE,
@@ -444,7 +445,7 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 	return tuple_count - initial_count;
 }
 
-static void update_min_max(string value, char *__restrict min, char *__restrict max) {
+static void update_min_max_string_segment(string value, char *__restrict min, char *__restrict max) {
 	//! we can only fit 8 bytes, so we might need to trim our string
 	size_t value_size = value.size() > 7 ? 7 : value.size();
 	//! This marks the min/max was not initialized
@@ -514,7 +515,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				block_id_t block;
 				int32_t offset;
 				//! Update min/max of column segment
-				update_min_max(sdata[source_idx].GetData(), min, max);
+				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
 				// write the string into the current string block
 				WriteString(sdata[source_idx], block, offset);
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
@@ -526,14 +527,13 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				stats.has_overflow_strings = true;
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
-				assert(string_length < std::numeric_limits<uint16_t>::max());
+				assert(string_length < NumericLimits<uint16_t>::Maximum());
 				dictionary_offset += total_length;
 				auto dict_pos = end - dictionary_offset;
 				//! Update min/max of column segment
-				update_min_max(sdata[source_idx].GetData(), min, max);
+				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
 				// first write the length as u16
-				uint16_t string_length_u16 = string_length;
-				memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
+				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
 			}
@@ -563,7 +563,7 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 	if (!head || head->offset + total_length >= head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
-		idx_t alloc_size = std::max((idx_t)total_length, (idx_t)Storage::BLOCK_ALLOC_SIZE);
+		idx_t alloc_size = MaxValue<idx_t>(total_length, Storage::BLOCK_ALLOC_SIZE);
 		auto new_block = make_unique<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
@@ -582,9 +582,9 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 
 	// copy the string and the length there
 	auto ptr = handle->node->buffer + head->offset;
-	memcpy(ptr, &string.length, sizeof(uint32_t));
+	Store<uint32_t>(string.GetSize(), ptr);
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.GetData(), string.length + 1);
+	memcpy(ptr, string.GetData(), string.GetSize() + 1);
 	head->offset += total_length;
 }
 
@@ -597,20 +597,20 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 		// read the overflow string from disk
 		// pin the initial handle and read the length
 		auto handle = manager.Pin(block);
-		uint32_t length = *((uint32_t *)(handle->node->buffer + offset));
+		uint32_t length = Load<uint32_t>(handle->node->buffer + offset);
 		uint32_t remaining = length + 1;
 		offset += sizeof(uint32_t);
 
 		// allocate a buffer to store the string
-		auto alloc_size = std::max((idx_t)Storage::BLOCK_ALLOC_SIZE, (idx_t)length + 1 + sizeof(uint32_t));
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + 1 + sizeof(uint32_t));
 		auto target_handle = manager.Allocate(alloc_size, true);
 		auto target_ptr = target_handle->node->buffer;
 		// write the length in this block as well
-		*((uint32_t *)target_ptr) = length;
+		Store<uint32_t>(length, target_ptr);
 		target_ptr += sizeof(uint32_t);
 		// now append the string to the single buffer
 		while (remaining > 0) {
-			idx_t to_write = std::min((idx_t)remaining, (idx_t)(Storage::BLOCK_SIZE - sizeof(block_id_t) - offset));
+			idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
 			memcpy(target_ptr, handle->node->buffer + offset, to_write);
 
 			remaining -= to_write;
@@ -618,7 +618,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 			target_ptr += to_write;
 			if (remaining > 0) {
 				// read the next block
-				block_id_t next_block = *((block_id_t *)(handle->node->buffer + offset));
+				block_id_t next_block = Load<block_id_t>(handle->node->buffer + offset);
 				handle = manager.Pin(next_block);
 				offset = 0;
 			}
@@ -646,7 +646,7 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 
 string_t StringSegment::ReadString(data_ptr_t target, int32_t offset) {
 	auto ptr = target + offset;
-	auto str_length = *((uint32_t *)ptr);
+	auto str_length = Load<uint32_t>(ptr);
 	auto str_ptr = (char *)(ptr + sizeof(uint32_t));
 	return string_t(str_ptr, str_length);
 }
@@ -682,7 +682,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			update_min_max(strings[i].GetData(), min, max);
+			update_min_max_string_segment(strings[i].GetData(), min, max);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
@@ -705,7 +705,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			update_min_max(strings[i].GetData(), min, max);
+			update_min_max_string_segment(strings[i].GetData(), min, max);
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
@@ -875,3 +875,5 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	}
 	CleanupUpdate(info);
 }
+
+} // namespace duckdb

@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
-#include <stdarg.h> // for va_list
 
 namespace duckdb {
 /**
@@ -21,11 +21,15 @@ namespace duckdb {
  */
 class StringUtil {
 public:
+	static bool CharacterIsSpace(char c) {
+		return c == ' ' || c == '\t' || c == '\n' || c == '\v'  || c ==  '\f'  || c == '\r';
+	}
+
 	//! Returns true if the needle string exists in the haystack
 	static bool Contains(const string &haystack, const string &needle);
 
 	//! Returns true if the target string starts with the given prefix
-	static bool StartsWith(const string &str, const string &prefix);
+	static bool StartsWith(string str, string prefix);
 
 	//! Returns true if the target string <b>ends</b> with the given suffix.
 	static bool EndsWith(const string &str, const string &suffix);
@@ -73,8 +77,9 @@ public:
 	static string Lower(const string &str);
 
 	//! Format a string using printf semantics
-	static string Format(const string fmt_str, ...);
-	static string VFormat(const string fmt_str, va_list ap);
+	template <typename... Args> static string Format(const string fmt_str, Args... params) {
+		return Exception::ConstructMessage(fmt_str, params...);
+	}
 
 	//! Split the input string into a vector of strings based on the split string
 	static vector<string> Split(const string &input, const string &split);

@@ -35,16 +35,17 @@
  * Also, pg_fsec_t is only meant for *fractional* seconds; beware of overflow
  * if the value you need to store could be many seconds.
  */
+namespace duckdb_libpgquery {
 
 typedef int64_t PGTimestamp;
 typedef int64_t PGTimestampTz;
 typedef int64_t PGTimeOffset;
-typedef int32_t pg_fsec_t;			/* fractional seconds (in microseconds) */
+typedef int32_t pg_fsec_t; /* fractional seconds (in microseconds) */
 
-typedef struct
-{
-	PGTimeOffset	time;			/* all time units other than days, months and
+typedef struct {
+	PGTimeOffset time; /* all time units other than days, months and
 								 * years */
-	int32_t		day;			/* days, after time for alignment */
-	int32_t		month;			/* months and years, after time for alignment */
+	int32_t day;       /* days, after time for alignment */
+	int32_t month;     /* months and years, after time for alignment */
 } PGInterval;
+}

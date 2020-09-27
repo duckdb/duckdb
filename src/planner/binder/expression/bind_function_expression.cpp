@@ -3,10 +3,11 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth) {
@@ -19,9 +20,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindUnnest(function, depth);
 	}
 
-	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, function.schema,
+	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema,
 	                                                  function.function_name);
-	if (func->type == CatalogType::SCALAR_FUNCTION) {
+	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	} else {
@@ -41,17 +42,30 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	// all children bound successfully
 	// extract the children and types
-	vector<SQLType> arguments;
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = (BoundExpression &)*function.children[i];
-		arguments.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
-
-	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
-	auto sql_return_type = result->sql_return_type;
-	return BindResult(move(result), sql_return_type);
+	// special binder-only functions
+	// FIXME: these shouldn't be special
+	if (function.function_name == "alias") {
+		if (children.size() != 1) {
+			throw BinderException("alias function expects a single argument");
+		}
+		// alias function: returns the alias of the current expression, or the name of the child
+		string alias = !function.alias.empty() ? function.alias : children[0]->GetName();
+		return BindResult(make_unique<BoundConstantExpression>(Value(alias)));
+	} else if (function.function_name == "typeof") {
+		if (children.size() != 1) {
+			throw BinderException("typeof function expects a single argument");
+		}
+		// typeof function: returns the type of the child expression
+		string type = children[0]->return_type.ToString();
+		return BindResult(make_unique<BoundConstantExpression>(Value(type)));
+	}
+	auto result = ScalarFunction::BindScalarFunction(context, *func, move(children), function.is_operator);
+	return BindResult(move(result));
 }
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,
@@ -70,3 +84,5 @@ string ExpressionBinder::UnsupportedAggregateMessage() {
 string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
 }
+
+} // namespace duckdb

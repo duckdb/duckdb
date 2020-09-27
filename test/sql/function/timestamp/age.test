@@ -1,0 +1,154 @@
+# name: test/sql/function/timestamp/age.test
+# description: Test age function
+# group: [timestamp]
+
+# age without second timestamp compares to NOW()
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE t1 AS SELECT AGE(TIMESTAMP '1957-06-13') t
+
+statement ok
+INSERT INTO t1 SELECT AGE(TIMESTAMP '1957-06-13');
+
+query I
+SELECT COUNT(DISTINCT t) FROM t1
+----
+1
+
+statement ok
+ROLLBACK
+
+query T
+SELECT AGE(TIMESTAMP '2001-04-10', TIMESTAMP '1957-06-13');
+----
+43 years 9 months 27 days
+
+query T
+SELECT age(TIMESTAMP '2014-04-25', TIMESTAMP '2014-04-17');
+----
+8 days
+
+query T
+SELECT age(TIMESTAMP '2014-04-25', TIMESTAMP '2014-01-01');
+----
+3 months 24 days
+
+query T
+SELECT age(TIMESTAMP '2019-06-11', TIMESTAMP '2019-06-11');
+----
+00:00:00
+
+query T
+SELECT age(TIMESTAMP '2019-06-11', TIMESTAMP '2019-06-11')::VARCHAR;
+----
+00:00:00
+
+query T
+ SELECT age(timestamp '2019-06-11 12:00:00', timestamp '2019-07-11 11:00:00');
+----
+-29 days -23:00:00
+
+statement ok
+CREATE TABLE timestamp(t1 TIMESTAMP, t2 TIMESTAMP)
+
+statement ok
+INSERT INTO timestamp VALUES('2001-04-10', '1957-06-13')
+
+statement ok
+INSERT INTO timestamp VALUES('2014-04-25', '2014-04-17')
+
+statement ok
+INSERT INTO timestamp VALUES('2014-04-25','2014-01-01')
+
+statement ok
+INSERT INTO timestamp VALUES('2019-06-11', '2019-06-11')
+
+statement ok
+INSERT INTO timestamp VALUES(NULL, '2019-06-11')
+
+statement ok
+INSERT INTO timestamp VALUES('2019-06-11', NULL)
+
+statement ok
+INSERT INTO timestamp VALUES(NULL, NULL)
+
+query T
+SELECT AGE(t1, TIMESTAMP '1957-06-13') FROM timestamp;
+----
+43 years 9 months 27 days
+56 years 10 months 12 days
+56 years 10 months 12 days
+61 years 11 months 28 days
+NULL
+61 years 11 months 28 days
+NULL
+
+query T
+SELECT AGE(TIMESTAMP '2001-04-10', t2) FROM timestamp;
+----
+43 years 9 months 27 days
+-13 years -7 days
+-12 years -8 months -21 days
+-18 years -2 months -1 days
+-18 years -2 months -1 days
+NULL
+NULL
+
+query T
+SELECT AGE(t1, t2) FROM timestamp;
+----
+43 years 9 months 27 days
+8 days
+3 months 24 days
+00:00:00
+NULL
+NULL
+NULL
+
+query T
+SELECT t1 - t2 FROM timestamp;
+----
+43 years 9 months 27 days
+8 days
+3 months 24 days
+00:00:00
+NULL
+NULL
+NULL
+
+query T
+SELECT AGE(t1, t2) FROM timestamp WHERE t1 > '2001-12-12';
+----
+8 days
+3 months 24 days
+00:00:00
+NULL
+
+query T
+SELECT AGE(NULL, NULL);
+----
+NULL
+
+query T
+SELECT AGE(TIMESTAMP '1957-06-13', NULL);
+----
+NULL
+
+query T
+SELECT AGE(NULL, TIMESTAMP '1957-06-13');
+----
+NULL
+
+# date can also be used with AGE
+# hopefully the clock is not off by more than a century
+query T
+SELECT INTERVAL '1' DAY < AGE(DATE '1900-06-13');
+----
+1
+
+query T
+SELECT AGE(DATE '1900-01-01', DATE '1950-01-01');
+----
+50 years

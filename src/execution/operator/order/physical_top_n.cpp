@@ -45,7 +45,7 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 	// now perform the actual ordering of the data
 	// compute the sorting columns from the input data
 	ExpressionExecutor executor;
-	vector<TypeId> sort_types;
+	vector<LogicalType> sort_types;
 	vector<OrderType> order_types;
 	vector<OrderByNullType> null_order_types;
 	for (idx_t i = 0; i < orders.size(); i++) {
@@ -120,7 +120,8 @@ void PhysicalTopN::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSta
 //===--------------------------------------------------------------------===//
 class PhysicalTopNOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTopNOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	PhysicalTopNOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;
@@ -140,7 +141,7 @@ void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
-	return make_unique<PhysicalTopNOperatorState>(children[0].get());
+	return make_unique<PhysicalTopNOperatorState>(*this, children[0].get());
 }
 
 } // namespace duckdb

@@ -4,11 +4,11 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-ConstantExpression::ConstantExpression(SQLType sql_type, Value val)
-    : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(val), sql_type(sql_type) {
+ConstantExpression::ConstantExpression(Value val)
+    : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(val) {
 }
 
 string ConstantExpression::ToString() const {
@@ -24,7 +24,7 @@ hash_t ConstantExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
-	auto copy = make_unique<ConstantExpression>(sql_type, value);
+	auto copy = make_unique<ConstantExpression>(value);
 	copy->CopyProperties(*this);
 	return move(copy);
 }
@@ -32,11 +32,11 @@ unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 void ConstantExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
 	value.Serialize(serializer);
-	sql_type.Serialize(serializer);
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	Value value = Value::Deserialize(source);
-	auto sql_type = SQLType::Deserialize(source);
-	return make_unique<ConstantExpression>(sql_type, value);
+	return make_unique<ConstantExpression>(value);
 }
+
+} // namespace duckdb

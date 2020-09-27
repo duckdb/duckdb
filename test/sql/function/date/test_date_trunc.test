@@ -1,0 +1,143 @@
+# name: test/sql/function/date/test_date_trunc.test
+# description: Test date truncate functionality
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(d DATE, s VARCHAR);
+
+statement ok
+CREATE TABLE timestamps(d TIMESTAMP, s VARCHAR);
+
+statement ok
+INSERT INTO dates VALUES ('1992-12-02', 'year'), ('1993-03-03', 'month'), ('1994-05-05', 'day');
+
+statement ok
+INSERT INTO timestamps VALUES ('1992-02-02 02:02:03', 'millennium'), ('1992-02-02 02:02:03', 'century'), ('1992-02-02 02:02:03', 'decade'), ('1992-02-02 02:02:03', 'year'), ('1992-02-02 02:02:03', 'quarter'), ('1992-02-02 02:02:03', 'month'), ('1992-02-02 02:02:03', 'week'), ('1992-02-02 02:02:03', 'day'), ('1992-02-02 02:02:03', 'hour'), ('1992-02-02 02:02:03', 'minute'), ('1992-02-02 02:02:03', 'second'), ('1992-02-02 02:02:03', 'milliseconds'), ('1992-02-02 02:02:03', 'microseconds');
+
+# test date_trunc with different combinations of constant/non-constant columns on both dates and timestamps
+query T
+SELECT date_trunc(NULL::VARCHAR, NULL::TIMESTAMP) FROM dates;
+----
+NULL
+NULL
+NULL
+
+query T
+SELECT date_trunc(s, NULL::TIMESTAMP) FROM dates;
+----
+NULL
+NULL
+NULL
+
+query T
+SELECT date_trunc(NULL, d) FROM dates;
+----
+NULL
+NULL
+NULL
+
+query T
+SELECT date_trunc(NULL::VARCHAR, NULL::TIMESTAMP) FROM timestamps LIMIT 3;
+----
+NULL
+NULL
+NULL
+
+query T
+SELECT date_trunc(s, NULL::TIMESTAMP) FROM timestamps LIMIT 3;
+----
+NULL
+NULL
+NULL
+
+query T
+SELECT date_trunc(NULL, d) FROM timestamps LIMIT 3;
+----
+NULL
+NULL
+NULL
+
+# dates should be cast to timestamp
+query T
+SELECT date_trunc('month', DATE '1992-02-02') FROM dates LIMIT 1;
+----
+1992-02-01 00:00:00
+
+query T
+SELECT date_trunc(s, d) FROM dates;
+----
+1992-01-01 00:00:00
+1993-03-01 00:00:00
+1994-05-05 00:00:00
+
+# Timestamps should return timestamp type
+query T
+SELECT date_trunc('minute', TIMESTAMP '1992-02-02 04:03:02') FROM timestamps LIMIT 1;
+----
+1992-02-02 04:03:00
+
+# Test all truncate operators on timestamps
+query T
+SELECT date_trunc(s, d) FROM timestamps;
+----
+1000-01-01 00:00:00
+1900-01-01 00:00:00
+1990-01-01 00:00:00
+1992-01-01 00:00:00
+1992-01-01 00:00:00
+1992-02-01 00:00:00
+1992-01-27 00:00:00
+1992-02-02 00:00:00
+1992-02-02 02:00:00
+1992-02-02 02:02:00
+1992-02-02 02:02:03
+1992-02-02 02:02:03
+1992-02-02 02:02:03
+
+# Redo previous test but with casting to date first
+query T
+SELECT date_trunc(s, CAST(d as DATE)) FROM timestamps;
+----
+1000-01-01 00:00:00
+1900-01-01 00:00:00
+1990-01-01 00:00:00
+1992-01-01 00:00:00
+1992-01-01 00:00:00
+1992-02-01 00:00:00
+1992-01-27 00:00:00
+1992-02-02 00:00:00
+1992-02-02 00:00:00
+1992-02-02 00:00:00
+1992-02-02 00:00:00
+1992-02-02 00:00:00
+1992-02-02 00:00:00
+
+# Test week operator special cases
+query T
+SELECT date_trunc('week', TIMESTAMP '2020-01-01 04:03:02') FROM timestamps LIMIT 1;
+----
+2019-12-30 00:00:00
+
+query T
+SELECT date_trunc('week', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+2018-12-31 00:00:00
+
+# Test quarter operator more thoroughly
+query T
+SELECT date_trunc('quarter', TIMESTAMP '2020-12-02 04:03:02') FROM timestamps LIMIT 1;
+----
+2020-10-01 00:00:00
+
+query T
+SELECT date_trunc('quarter', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+2019-01-01 00:00:00
+
+# Unknown specifier should fail
+statement error
+SELECT date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+

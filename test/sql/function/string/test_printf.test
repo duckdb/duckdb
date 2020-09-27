@@ -1,0 +1,185 @@
+# name: test/sql/function/string/test_printf.test
+# description: Test printf
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# printf without format specifiers
+query TT
+SELECT printf('hello'), printf(NULL)
+----
+hello	NULL
+
+# format strings
+query TT
+SELECT printf('%s', 'hello'), printf('%s: %s', 'hello', 'world')
+----
+hello	hello: world
+
+# format strings with NULL values
+query TT
+SELECT printf('%s', NULL), printf(NULL, 'hello', 'world')
+----
+NULL	NULL
+
+# booleans
+query T
+SELECT printf('%d', TRUE)
+----
+1
+
+# integers
+query TT
+SELECT printf('%d', 33), printf('%d + %d = %d', 3, 5, 3 + 5)
+----
+33	3 + 5 = 8
+
+# integers with special formatting specifiers
+query TTT
+SELECT printf('%04d', 33), printf('%s %02d:%02d:%02d %s', 'time', 12, 3, 16, 'AM'), printf('%10d', 1992)
+----
+0033	time 12:03:16 AM	      1992
+
+# different integer types
+query T
+SELECT printf('%hhd %hd %d %lld', 33::TINYINT, 12::SMALLINT, 40::INTEGER, 80::BIGINT)
+----
+33 12 40 80
+
+# ...but really any of these can be used
+query T
+SELECT printf('%d %lld %hhd %hd', 33::TINYINT, 12::SMALLINT, 40::INTEGER, 80::BIGINT)
+----
+33 12 40 80
+
+# exotic types
+# dates, times and timestamps are strings
+query T
+SELECT printf('%s %s = %s', DATE '1992-01-01', TIME '12:01:00', TIMESTAMP '1992-01-01 12:01:00')
+----
+1992-01-01 12:01:00 = 1992-01-01 12:01:00
+
+# blob
+query T
+SELECT printf('%s', BLOB '\x01a0')
+----
+\x01A0
+
+# hugeint
+query T
+SELECT printf('%s', 120381902481294715712::HUGEINT)
+----
+120381902481294715712
+
+# decimal
+query T
+SELECT printf('%.3f', '1.234'::DECIMAL)
+----
+1.234
+
+# octal hex etc
+query T
+SELECT printf('%d %x %o %#x %#o', 100, 100, 100, 100, 100)
+----
+100 64 144 0x64 0144
+
+# ascii characters
+query T
+SELECT printf('%c', 65)
+----
+A
+
+# width trick
+query T
+SELECT printf('%*d', 5, 10)
+----
+   10
+
+# floating point numbers
+query TT
+SELECT printf('%.2f', 10.0::FLOAT), printf('%.4f', 0.5)
+----
+10.00	0.5000
+
+# weird float stuff
+query T
+SELECT printf('floats: %4.2f %+.0e %E', 3.1416, 3.1416, 3.1416)
+----
+floats: 3.14 +3e+00 3.141600E+00
+
+# incorrect number of parameters
+# too few parameters
+statement error
+SELECT printf('%s')
+
+statement error
+SELECT printf('%s %s', 'hello')
+
+# excess parameters are ignored
+query T
+SELECT printf('%s', 'hello', 'world')
+----
+hello
+
+# incorrect types
+statement error
+SELECT printf('%s', 42)
+
+statement error
+SELECT printf('%d', 'hello')
+
+# Test printf with vectors
+statement ok
+CREATE TABLE strings(idx INTEGER, fmt STRING, pint INTEGER, pstring STRING)
+
+statement ok
+INSERT INTO strings VALUES (1, '%d: %s', 10, 'hello')
+
+statement ok
+INSERT INTO strings VALUES (2, 'blabla %d blabla %s', 20, 'blabla')
+
+statement ok
+INSERT INTO strings VALUES (3, NULL, 30, 'abcde')
+
+# printf without format specifiers: too few parameters
+statement error
+SELECT printf(fmt) FROM strings ORDER BY idx
+
+query T
+SELECT printf(CASE WHEN pint < 15 THEN NULL ELSE pint END) FROM strings ORDER BY idx
+----
+NULL
+20
+30
+
+# standard vectorized printf
+query T
+SELECT printf(fmt, pint, pstring) FROM strings ORDER BY idx
+----
+10: hello
+blabla 20 blabla blabla
+NULL
+
+# printf with constants in format arguments
+query T
+SELECT printf(fmt, 10, pstring) FROM strings ORDER BY idx
+----
+10: hello
+blabla 10 blabla blabla
+NULL
+
+# printf with constant format string
+query T
+SELECT printf('%s: %s', pstring, pstring) FROM strings ORDER BY idx
+----
+hello: hello
+blabla: blabla
+abcde: abcde
+
+# printf with selection vector
+query T
+SELECT printf('%s: %s', pstring, pstring) FROM strings WHERE idx <> 2 ORDER BY idx
+----
+hello: hello
+abcde: abcde

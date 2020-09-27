@@ -1,0 +1,17 @@
+# name: test/sql/copy/csv/test_nfc.test
+# description: Test CSV with UTF8 NFC Normalization
+# group: [csv]
+
+statement ok
+CREATE TABLE nfcstrings (s STRING);
+
+query I
+COPY nfcstrings FROM 'test/sql/copy/csv/data/test/nfc.csv';
+----
+2
+
+query I
+SELECT COUNT(*) FROM nfcstrings WHERE s COLLATE NFC = 'ü'
+----
+2
+

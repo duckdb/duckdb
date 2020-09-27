@@ -26,38 +26,32 @@
 #include "nodes/primnodes.hpp"
 #include "nodes/value.hpp"
 
-typedef enum PGOverridingKind
-{
+namespace duckdb_libpgquery {
+
+typedef enum PGOverridingKind {
 	PG_OVERRIDING_NOT_SET = 0,
 	PG_OVERRIDING_USER_VALUE,
 	OVERRIDING_SYSTEM_VALUE
 } PGOverridingKind;
 
 /* Possible sources of a PGQuery */
-typedef enum PGQuerySource
-{
-	PG_QSRC_ORIGINAL,				/* original parsetree (explicit query) */
-	PG_QSRC_PARSER,				/* added by parse analysis (now unused) */
-	PG_QSRC_INSTEAD_RULE,			/* added by unconditional INSTEAD rule */
-	PG_QSRC_QUAL_INSTEAD_RULE,		/* added by conditional INSTEAD rule */
-	QSRC_NON_INSTEAD_RULE		/* added by non-INSTEAD rule */
+typedef enum PGQuerySource {
+	PG_QSRC_ORIGINAL,          /* original parsetree (explicit query) */
+	PG_QSRC_PARSER,            /* added by parse analysis (now unused) */
+	PG_QSRC_INSTEAD_RULE,      /* added by unconditional INSTEAD rule */
+	PG_QSRC_QUAL_INSTEAD_RULE, /* added by conditional INSTEAD rule */
+	QSRC_NON_INSTEAD_RULE      /* added by non-INSTEAD rule */
 } PGQuerySource;
 
 /* PGSort ordering options for ORDER BY and CREATE INDEX */
-typedef enum PGSortByDir
-{
+typedef enum PGSortByDir {
 	PG_SORTBY_DEFAULT,
 	PG_SORTBY_ASC,
 	PG_SORTBY_DESC,
-	SORTBY_USING				/* not allowed in CREATE INDEX ... */
+	SORTBY_USING /* not allowed in CREATE INDEX ... */
 } PGSortByDir;
 
-typedef enum PGSortByNulls
-{
-	PG_SORTBY_NULLS_DEFAULT,
-	PG_SORTBY_NULLS_FIRST,
-	PG_SORTBY_NULLS_LAST
-} PGSortByNulls;
+typedef enum PGSortByNulls { PG_SORTBY_NULLS_DEFAULT, PG_SORTBY_NULLS_FIRST, PG_SORTBY_NULLS_LAST } PGSortByNulls;
 
 /*****************************************************************************
  *	PGQuery Tree
@@ -74,70 +68,69 @@ typedef enum PGSortByNulls
  *	  Planning converts a PGQuery tree into a PGPlan tree headed by a PGPlannedStmt
  *	  node --- the PGQuery structure is not used by the executor.
  */
-typedef struct PGQuery
-{
-	PGNodeTag		type;
+typedef struct PGQuery {
+	PGNodeTag type;
 
-	PGCmdType		commandType;	/* select|insert|update|delete|utility */
+	PGCmdType commandType; /* select|insert|update|delete|utility */
 
-	PGQuerySource querySource;	/* where did I come from? */
+	PGQuerySource querySource; /* where did I come from? */
 
-	uint32_t		queryId;		/* query identifier (can be set by plugins) */
+	uint32_t queryId; /* query identifier (can be set by plugins) */
 
-	bool		canSetTag;		/* do I set the command result tag? */
+	bool canSetTag; /* do I set the command result tag? */
 
-	PGNode	   *utilityStmt;	/* non-null if commandType == PG_CMD_UTILITY */
+	PGNode *utilityStmt; /* non-null if commandType == PG_CMD_UTILITY */
 
-	int			resultRelation; /* rtable index of target relation for
+	int resultRelation; /* rtable index of target relation for
 								 * INSERT/UPDATE/DELETE; 0 for SELECT */
 
-	bool		hasAggs;		/* has aggregates in tlist or havingQual */
-	bool		hasWindowFuncs; /* has window functions in tlist */
-	bool		hasTargetSRFs;	/* has set-returning functions in tlist */
-	bool		hasSubLinks;	/* has subquery PGSubLink */
-	bool		hasDistinctOn;	/* distinctClause is from DISTINCT ON */
-	bool		hasRecursive;	/* WITH RECURSIVE was specified */
-	bool		hasModifyingCTE;	/* has INSERT/UPDATE/DELETE in WITH */
-	bool		hasForUpdate;	/* FOR [KEY] UPDATE/SHARE was specified */
-	bool		hasRowSecurity; /* rewriter has applied some RLS policy */
+	bool hasAggs;         /* has aggregates in tlist or havingQual */
+	bool hasWindowFuncs;  /* has window functions in tlist */
+	bool hasTargetSRFs;   /* has set-returning functions in tlist */
+	bool hasSubLinks;     /* has subquery PGSubLink */
+	bool hasDistinctOn;   /* distinctClause is from DISTINCT ON */
+	bool hasRecursive;    /* WITH RECURSIVE was specified */
+	bool hasModifyingCTE; /* has INSERT/UPDATE/DELETE in WITH */
+	bool hasForUpdate;    /* FOR [KEY] UPDATE/SHARE was specified */
+	bool hasRowSecurity;  /* rewriter has applied some RLS policy */
 
-	PGList	   *cteList;		/* WITH list (of CommonTableExpr's) */
+	PGList *cteList; /* WITH list (of CommonTableExpr's) */
 
-	PGList	   *rtable;			/* list of range table entries */
-	PGFromExpr   *jointree;		/* table join tree (FROM and WHERE clauses) */
+	PGList *rtable;       /* list of range table entries */
+	PGFromExpr *jointree; /* table join tree (FROM and WHERE clauses) */
 
-	PGList	   *targetList;		/* target list (of PGTargetEntry) */
+	PGList *targetList; /* target list (of PGTargetEntry) */
 
-	PGOverridingKind override;	/* OVERRIDING clause */
+	PGOverridingKind override; /* OVERRIDING clause */
 
 	PGOnConflictExpr *onConflict; /* ON CONFLICT DO [NOTHING | UPDATE] */
 
-	PGList	   *returningList;	/* return-values list (of PGTargetEntry) */
+	PGList *returningList; /* return-values list (of PGTargetEntry) */
 
-	PGList	   *groupClause;	/* a list of SortGroupClause's */
+	PGList *groupClause; /* a list of SortGroupClause's */
 
-	PGList	   *groupingSets;	/* a list of GroupingSet's if present */
+	PGList *groupingSets; /* a list of GroupingSet's if present */
 
-	PGNode	   *havingQual;		/* qualifications applied to groups */
+	PGNode *havingQual; /* qualifications applied to groups */
 
-	PGList	   *windowClause;	/* a list of WindowClause's */
+	PGList *windowClause; /* a list of WindowClause's */
 
-	PGList	   *distinctClause; /* a list of SortGroupClause's */
+	PGList *distinctClause; /* a list of SortGroupClause's */
 
-	PGList	   *sortClause;		/* a list of SortGroupClause's */
+	PGList *sortClause; /* a list of SortGroupClause's */
 
-	PGNode	   *limitOffset;	/* # of result tuples to skip (int8_t expr) */
-	PGNode	   *limitCount;		/* # of result tuples to return (int8_t expr) */
+	PGNode *limitOffset; /* # of result tuples to skip (int8_t expr) */
+	PGNode *limitCount;  /* # of result tuples to return (int8_t expr) */
 
-	PGList	   *rowMarks;		/* a list of RowMarkClause's */
+	PGList *rowMarks; /* a list of RowMarkClause's */
 
-	PGNode	   *setOperations;	/* set-operation tree if this is top level of
+	PGNode *setOperations; /* set-operation tree if this is top level of
 								 * a UNION/INTERSECT/EXCEPT query */
 
-	PGList	   *constraintDeps; /* a list of pg_constraint OIDs that the query
+	PGList *constraintDeps; /* a list of pg_constraint OIDs that the query
 								 * depends on to be semantically valid */
 
-	PGList	   *withCheckOptions;	/* a list of WithCheckOption's, which are
+	PGList *withCheckOptions; /* a list of WithCheckOption's, which are
 									 * only added during rewrite and therefore
 									 * are not written out as part of Query. */
 
@@ -147,10 +140,9 @@ typedef struct PGQuery
 	 * Queries, not in sub-queries.  When not set, they might both be zero, or
 	 * both be -1 meaning "unknown".
 	 */
-	int			stmt_location;	/* start location, or -1 if unknown */
-	int			stmt_len;		/* length in bytes; 0 means "rest of string" */
+	int stmt_location; /* start location, or -1 if unknown */
+	int stmt_len;      /* length in bytes; 0 means "rest of string" */
 } PGQuery;
-
 
 /****************************************************************************
  *	Supporting data structures for Parse Trees
@@ -173,17 +165,16 @@ typedef struct PGQuery
  * the type of that field.  Otherwise (the normal case), names is a type
  * name possibly qualified with schema and database name.
  */
-typedef struct PGTypeName
-{
-	PGNodeTag		type;
-	PGList	   *names;			/* qualified name (list of PGValue strings) */
-	PGOid			typeOid;		/* type identified by OID */
-	bool		setof;			/* is a set? */
-	bool		pct_type;		/* %TYPE specified? */
-	PGList	   *typmods;		/* type modifier expression(s) */
-	int32_t		typemod;		/* prespecified type modifier */
-	PGList	   *arrayBounds;	/* array bounds */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGTypeName {
+	PGNodeTag type;
+	PGList *names;       /* qualified name (list of PGValue strings) */
+	PGOid typeOid;       /* type identified by OID */
+	bool setof;          /* is a set? */
+	bool pct_type;       /* %TYPE specified? */
+	PGList *typmods;     /* type modifier expression(s) */
+	int32_t typemod;     /* prespecified type modifier */
+	PGList *arrayBounds; /* array bounds */
+	int location;        /* token location, or -1 if unknown */
 } PGTypeName;
 
 /*
@@ -199,86 +190,80 @@ typedef struct PGTypeName
  * for simplicity in the normal case, initial field selection from a table
  * name is represented within PGColumnRef and not by adding AIndirection.
  */
-typedef struct PGColumnRef
-{
-	PGNodeTag		type;
-	PGList	   *fields;			/* field names (PGValue strings) or PGAStar */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGColumnRef {
+	PGNodeTag type;
+	PGList *fields; /* field names (PGValue strings) or PGAStar */
+	int location;   /* token location, or -1 if unknown */
 } PGColumnRef;
 
 /*
  * PGParamRef - specifies a $n parameter reference
  */
-typedef struct PGParamRef
-{
-	PGNodeTag		type;
-	int			number;			/* the number of the parameter */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGParamRef {
+	PGNodeTag type;
+	int number;   /* the number of the parameter */
+	int location; /* token location, or -1 if unknown */
 } PGParamRef;
 
 /*
  * PGAExpr - infix, prefix, and postfix expressions
  */
-typedef enum PGAExpr_Kind
-{
-	PG_AEXPR_OP,					/* normal operator */
-	PG_AEXPR_OP_ANY,				/* scalar op ANY (array) */
-	PG_AEXPR_OP_ALL,				/* scalar op ALL (array) */
-	PG_AEXPR_DISTINCT,				/* IS DISTINCT FROM - name must be "=" */
-	PG_AEXPR_NOT_DISTINCT,			/* IS NOT DISTINCT FROM - name must be "=" */
-	PG_AEXPR_NULLIF,				/* NULLIF - name must be "=" */
-	PG_AEXPR_OF,					/* IS [NOT] OF - name must be "=" or "<>" */
-	PG_AEXPR_IN,					/* [NOT] IN - name must be "=" or "<>" */
-	PG_AEXPR_LIKE,					/* [NOT] LIKE - name must be "~~" or "!~~" */
-	PG_AEXPR_ILIKE,				/* [NOT] ILIKE - name must be "~~*" or "!~~*" */
-	PG_AEXPR_SIMILAR,				/* [NOT] SIMILAR - name must be "~" or "!~" */
-	PG_AEXPR_BETWEEN,				/* name must be "BETWEEN" */
-	PG_AEXPR_NOT_BETWEEN,			/* name must be "NOT BETWEEN" */
-	PG_AEXPR_BETWEEN_SYM,			/* name must be "BETWEEN SYMMETRIC" */
-	PG_AEXPR_NOT_BETWEEN_SYM,		/* name must be "NOT BETWEEN SYMMETRIC" */
-	AEXPR_PAREN					/* nameless dummy node for parentheses */
+typedef enum PGAExpr_Kind {
+	PG_AEXPR_OP,              /* normal operator */
+	PG_AEXPR_OP_ANY,          /* scalar op ANY (array) */
+	PG_AEXPR_OP_ALL,          /* scalar op ALL (array) */
+	PG_AEXPR_DISTINCT,        /* IS DISTINCT FROM - name must be "=" */
+	PG_AEXPR_NOT_DISTINCT,    /* IS NOT DISTINCT FROM - name must be "=" */
+	PG_AEXPR_NULLIF,          /* NULLIF - name must be "=" */
+	PG_AEXPR_OF,              /* IS [NOT] OF - name must be "=" or "<>" */
+	PG_AEXPR_IN,              /* [NOT] IN - name must be "=" or "<>" */
+	PG_AEXPR_LIKE,            /* [NOT] LIKE - name must be "~~" or "!~~" */
+	PG_AEXPR_ILIKE,           /* [NOT] ILIKE - name must be "~~*" or "!~~*" */
+	PG_AEXPR_GLOB,            /* [NOT] GLOB - name must be "~~~" or "!~~~" */
+	PG_AEXPR_SIMILAR,         /* [NOT] SIMILAR - name must be "~" or "!~" */
+	PG_AEXPR_BETWEEN,         /* name must be "BETWEEN" */
+	PG_AEXPR_NOT_BETWEEN,     /* name must be "NOT BETWEEN" */
+	PG_AEXPR_BETWEEN_SYM,     /* name must be "BETWEEN SYMMETRIC" */
+	PG_AEXPR_NOT_BETWEEN_SYM, /* name must be "NOT BETWEEN SYMMETRIC" */
+	AEXPR_PAREN               /* nameless dummy node for parentheses */
 } PGAExpr_Kind;
 
-typedef struct PGAExpr
-{
-	PGNodeTag		type;
-	PGAExpr_Kind kind;			/* see above */
-	PGList	   *name;			/* possibly-qualified name of operator */
-	PGNode	   *lexpr;			/* left argument, or NULL if none */
-	PGNode	   *rexpr;			/* right argument, or NULL if none */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGAExpr {
+	PGNodeTag type;
+	PGAExpr_Kind kind; /* see above */
+	PGList *name;      /* possibly-qualified name of operator */
+	PGNode *lexpr;     /* left argument, or NULL if none */
+	PGNode *rexpr;     /* right argument, or NULL if none */
+	int location;      /* token location, or -1 if unknown */
 } PGAExpr;
 
 /*
  * PGAConst - a literal constant
  */
-typedef struct PGAConst
-{
-	PGNodeTag		type;
-	PGValue		val;			/* value (includes type info, see value.h) */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGAConst {
+	PGNodeTag type;
+	PGValue val;  /* value (includes type info, see value.h) */
+	int location; /* token location, or -1 if unknown */
 } PGAConst;
 
 /*
  * PGTypeCast - a CAST expression
  */
-typedef struct PGTypeCast
-{
-	PGNodeTag		type;
-	PGNode	   *arg;			/* the expression being casted */
-	PGTypeName   *typeName;		/* the target type */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGTypeCast {
+	PGNodeTag type;
+	PGNode *arg;          /* the expression being casted */
+	PGTypeName *typeName; /* the target type */
+	int location;         /* token location, or -1 if unknown */
 } PGTypeCast;
 
 /*
  * PGCollateClause - a COLLATE expression
  */
-typedef struct PGCollateClause
-{
-	PGNodeTag		type;
-	PGNode	   *arg;			/* input expression */
-	PGList	   *collname;		/* possibly-qualified collation name */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGCollateClause {
+	PGNodeTag type;
+	PGNode *arg;      /* input expression */
+	PGList *collname; /* possibly-qualified collation name */
+	int location;     /* token location, or -1 if unknown */
 } PGCollateClause;
 
 /*
@@ -295,19 +280,18 @@ typedef struct PGCollateClause
  * Normally, you'd initialize this via makeFuncCall() and then only change the
  * parts of the struct its defaults don't match afterwards, as needed.
  */
-typedef struct PGFuncCall
-{
-	PGNodeTag		type;
-	PGList	   *funcname;		/* qualified name of function */
-	PGList	   *args;			/* the arguments (list of exprs) */
-	PGList	   *agg_order;		/* ORDER BY (list of PGSortBy) */
-	PGNode	   *agg_filter;		/* FILTER clause, if any */
-	bool		agg_within_group;	/* ORDER BY appeared in WITHIN GROUP */
-	bool		agg_star;		/* argument was really '*' */
-	bool		agg_distinct;	/* arguments were labeled DISTINCT */
-	bool		func_variadic;	/* last argument was labeled VARIADIC */
-	struct PGWindowDef *over;		/* OVER clause, if any */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGFuncCall {
+	PGNodeTag type;
+	PGList *funcname;         /* qualified name of function */
+	PGList *args;             /* the arguments (list of exprs) */
+	PGList *agg_order;        /* ORDER BY (list of PGSortBy) */
+	PGNode *agg_filter;       /* FILTER clause, if any */
+	bool agg_within_group;    /* ORDER BY appeared in WITHIN GROUP */
+	bool agg_star;            /* argument was really '*' */
+	bool agg_distinct;        /* arguments were labeled DISTINCT */
+	bool func_variadic;       /* last argument was labeled VARIADIC */
+	struct PGWindowDef *over; /* OVER clause, if any */
+	int location;             /* token location, or -1 if unknown */
 } PGFuncCall;
 
 /*
@@ -316,9 +300,8 @@ typedef struct PGFuncCall
  * This can appear within ColumnRef.fields, AIndirection.indirection, and
  * ResTarget.indirection lists.
  */
-typedef struct PGAStar
-{
-	PGNodeTag		type;
+typedef struct PGAStar {
+	PGNodeTag type;
 } PGAStar;
 
 /*
@@ -327,12 +310,11 @@ typedef struct PGAStar
  * In slice case, either or both of lidx and uidx can be NULL (omitted).
  * In non-slice case, uidx holds the single subscript and lidx is always NULL.
  */
-typedef struct PGAIndices
-{
-	PGNodeTag		type;
-	bool		is_slice;		/* true if slice (i.e., colon present) */
-	PGNode	   *lidx;			/* slice lower bound, if any */
-	PGNode	   *uidx;			/* subscript, or slice upper bound if any */
+typedef struct PGAIndices {
+	PGNodeTag type;
+	bool is_slice; /* true if slice (i.e., colon present) */
+	PGNode *lidx;  /* slice lower bound, if any */
+	PGNode *uidx;  /* subscript, or slice upper bound if any */
 } PGAIndices;
 
 /*
@@ -350,21 +332,19 @@ typedef struct PGAIndices
  * Currently, PGAStar must appear only as the last list element --- the grammar
  * is responsible for enforcing this!
  */
-typedef struct PGAIndirection
-{
-	PGNodeTag		type;
-	PGNode	   *arg;			/* the thing being selected from */
-	PGList	   *indirection;	/* subscripts and/or field names and/or * */
+typedef struct PGAIndirection {
+	PGNodeTag type;
+	PGNode *arg;         /* the thing being selected from */
+	PGList *indirection; /* subscripts and/or field names and/or * */
 } PGAIndirection;
 
 /*
  * PGAArrayExpr - an ARRAY[] construct
  */
-typedef struct PGAArrayExpr
-{
-	PGNodeTag		type;
-	PGList	   *elements;		/* array element expressions */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGAArrayExpr {
+	PGNodeTag type;
+	PGList *elements; /* array element expressions */
+	int location;     /* token location, or -1 if unknown */
 } PGAArrayExpr;
 
 /*
@@ -385,13 +365,12 @@ typedef struct PGAArrayExpr
  *
  * See PGAIndirection for more info about what can appear in 'indirection'.
  */
-typedef struct PGResTarget
-{
-	PGNodeTag		type;
-	char	   *name;			/* column name or NULL */
-	PGList	   *indirection;	/* subscripts, field names, and '*', or NIL */
-	PGNode	   *val;			/* the value expression to compute or assign */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGResTarget {
+	PGNodeTag type;
+	char *name;          /* column name or NULL */
+	PGList *indirection; /* subscripts, field names, and '*', or NIL */
+	PGNode *val;         /* the value expression to compute or assign */
+	int location;        /* token location, or -1 if unknown */
 } PGResTarget;
 
 /*
@@ -403,25 +382,23 @@ typedef struct PGResTarget
  * row-valued-expression (which parse analysis will process only once, when
  * handling the PGMultiAssignRef with colno=1).
  */
-typedef struct PGMultiAssignRef
-{
-	PGNodeTag		type;
-	PGNode	   *source;			/* the row-valued expression */
-	int			colno;			/* column number for this target (1..n) */
-	int			ncolumns;		/* number of targets in the construct */
+typedef struct PGMultiAssignRef {
+	PGNodeTag type;
+	PGNode *source; /* the row-valued expression */
+	int colno;      /* column number for this target (1..n) */
+	int ncolumns;   /* number of targets in the construct */
 } PGMultiAssignRef;
 
 /*
  * PGSortBy - for ORDER BY clause
  */
-typedef struct PGSortBy
-{
-	PGNodeTag		type;
-	PGNode	   *node;			/* expression to sort on */
-	PGSortByDir	sortby_dir;		/* ASC/DESC/USING/default */
-	PGSortByNulls sortby_nulls;	/* NULLS FIRST/LAST */
-	PGList	   *useOp;			/* name of op to use, if SORTBY_USING */
-	int			location;		/* operator location, or -1 if none/unknown */
+typedef struct PGSortBy {
+	PGNodeTag type;
+	PGNode *node;               /* expression to sort on */
+	PGSortByDir sortby_dir;     /* ASC/DESC/USING/default */
+	PGSortByNulls sortby_nulls; /* NULLS FIRST/LAST */
+	PGList *useOp;              /* name of op to use, if SORTBY_USING */
+	int location;               /* operator location, or -1 if none/unknown */
 } PGSortBy;
 
 /*
@@ -432,17 +409,16 @@ typedef struct PGSortBy
  * for the "OVER (window)" syntax, which is subtly different --- the latter
  * implies overriding the window frame clause.
  */
-typedef struct PGWindowDef
-{
-	PGNodeTag		type;
-	char	   *name;			/* window's own name */
-	char	   *refname;		/* referenced window name, if any */
-	PGList	   *partitionClause;	/* PARTITION BY expression list */
-	PGList	   *orderClause;	/* ORDER BY (list of PGSortBy) */
-	int			frameOptions;	/* frame_clause options, see below */
-	PGNode	   *startOffset;	/* expression for starting bound, if any */
-	PGNode	   *endOffset;		/* expression for ending bound, if any */
-	int			location;		/* parse location, or -1 if none/unknown */
+typedef struct PGWindowDef {
+	PGNodeTag type;
+	char *name;              /* window's own name */
+	char *refname;           /* referenced window name, if any */
+	PGList *partitionClause; /* PARTITION BY expression list */
+	PGList *orderClause;     /* ORDER BY (list of PGSortBy) */
+	int frameOptions;        /* frame_clause options, see below */
+	PGNode *startOffset;     /* expression for starting bound, if any */
+	PGNode *endOffset;       /* expression for ending bound, if any */
+	int location;            /* parse location, or -1 if none/unknown */
 } PGWindowDef;
 
 /*
@@ -453,39 +429,34 @@ typedef struct PGWindowDef
  * the convenience of gram.y, even though some of them are useless/invalid.
  * We will need more bits (and fields) to cover the full SQL:2008 option set.
  */
-#define FRAMEOPTION_NONDEFAULT					0x00001 /* any specified? */
-#define FRAMEOPTION_RANGE						0x00002 /* RANGE behavior */
-#define FRAMEOPTION_ROWS						0x00004 /* ROWS behavior */
-#define FRAMEOPTION_BETWEEN						0x00008 /* BETWEEN given? */
-#define FRAMEOPTION_START_UNBOUNDED_PRECEDING	0x00010 /* start is U. P. */
-#define FRAMEOPTION_END_UNBOUNDED_PRECEDING		0x00020 /* (disallowed) */
-#define FRAMEOPTION_START_UNBOUNDED_FOLLOWING	0x00040 /* (disallowed) */
-#define FRAMEOPTION_END_UNBOUNDED_FOLLOWING		0x00080 /* end is U. F. */
-#define FRAMEOPTION_START_CURRENT_ROW			0x00100 /* start is C. R. */
-#define FRAMEOPTION_END_CURRENT_ROW				0x00200 /* end is C. R. */
-#define FRAMEOPTION_START_VALUE_PRECEDING		0x00400 /* start is V. P. */
-#define FRAMEOPTION_END_VALUE_PRECEDING			0x00800 /* end is V. P. */
-#define FRAMEOPTION_START_VALUE_FOLLOWING		0x01000 /* start is V. F. */
-#define FRAMEOPTION_END_VALUE_FOLLOWING			0x02000 /* end is V. F. */
+#define FRAMEOPTION_NONDEFAULT 0x00001 /* any specified? */
+#define FRAMEOPTION_RANGE 0x00002 /* RANGE behavior */
+#define FRAMEOPTION_ROWS 0x00004 /* ROWS behavior */
+#define FRAMEOPTION_BETWEEN 0x00008 /* BETWEEN given? */
+#define FRAMEOPTION_START_UNBOUNDED_PRECEDING 0x00010 /* start is U. P. */
+#define FRAMEOPTION_END_UNBOUNDED_PRECEDING 0x00020 /* (disallowed) */
+#define FRAMEOPTION_START_UNBOUNDED_FOLLOWING 0x00040 /* (disallowed) */
+#define FRAMEOPTION_END_UNBOUNDED_FOLLOWING 0x00080 /* end is U. F. */
+#define FRAMEOPTION_START_CURRENT_ROW 0x00100 /* start is C. R. */
+#define FRAMEOPTION_END_CURRENT_ROW 0x00200 /* end is C. R. */
+#define FRAMEOPTION_START_VALUE_PRECEDING 0x00400 /* start is V. P. */
+#define FRAMEOPTION_END_VALUE_PRECEDING 0x00800 /* end is V. P. */
+#define FRAMEOPTION_START_VALUE_FOLLOWING 0x01000 /* start is V. F. */
+#define FRAMEOPTION_END_VALUE_FOLLOWING 0x02000 /* end is V. F. */
 
-#define FRAMEOPTION_START_VALUE \
-	(FRAMEOPTION_START_VALUE_PRECEDING | FRAMEOPTION_START_VALUE_FOLLOWING)
-#define FRAMEOPTION_END_VALUE \
-	(FRAMEOPTION_END_VALUE_PRECEDING | FRAMEOPTION_END_VALUE_FOLLOWING)
+#define FRAMEOPTION_START_VALUE (FRAMEOPTION_START_VALUE_PRECEDING | FRAMEOPTION_START_VALUE_FOLLOWING)
+#define FRAMEOPTION_END_VALUE (FRAMEOPTION_END_VALUE_PRECEDING | FRAMEOPTION_END_VALUE_FOLLOWING)
 
-#define FRAMEOPTION_DEFAULTS \
-	(FRAMEOPTION_RANGE | FRAMEOPTION_START_UNBOUNDED_PRECEDING | \
-	 FRAMEOPTION_END_CURRENT_ROW)
+#define FRAMEOPTION_DEFAULTS (FRAMEOPTION_RANGE | FRAMEOPTION_START_UNBOUNDED_PRECEDING | FRAMEOPTION_END_CURRENT_ROW)
 
 /*
  * PGRangeSubselect - subquery appearing in a FROM clause
  */
-typedef struct PGRangeSubselect
-{
-	PGNodeTag		type;
-	bool		lateral;		/* does it have LATERAL prefix? */
-	PGNode	   *subquery;		/* the untransformed sub-select clause */
-	PGAlias	   *alias;			/* table alias & optional column aliases */
+typedef struct PGRangeSubselect {
+	PGNodeTag type;
+	bool lateral;     /* does it have LATERAL prefix? */
+	PGNode *subquery; /* the untransformed sub-select clause */
+	PGAlias *alias;   /* table alias & optional column aliases */
 } PGRangeSubselect;
 
 /*
@@ -502,15 +473,14 @@ typedef struct PGRangeSubselect
  * at the top level.  (We disallow coldeflist appearing both here and
  * per-function, but that's checked in parse analysis, not by the grammar.)
  */
-typedef struct PGRangeFunction
-{
-	PGNodeTag		type;
-	bool		lateral;		/* does it have LATERAL prefix? */
-	bool		ordinality;		/* does it have WITH ORDINALITY suffix? */
-	bool		is_rowsfrom;	/* is result of ROWS FROM() syntax? */
-	PGList	   *functions;		/* per-function information, see above */
-	PGAlias	   *alias;			/* table alias & optional column aliases */
-	PGList	   *coldeflist;		/* list of PGColumnDef nodes to describe result
+typedef struct PGRangeFunction {
+	PGNodeTag type;
+	bool lateral;       /* does it have LATERAL prefix? */
+	bool ordinality;    /* does it have WITH ORDINALITY suffix? */
+	bool is_rowsfrom;   /* is result of ROWS FROM() syntax? */
+	PGList *functions;  /* per-function information, see above */
+	PGAlias *alias;     /* table alias & optional column aliases */
+	PGList *coldeflist; /* list of PGColumnDef nodes to describe result
 								 * of function returning RECORD */
 } PGRangeFunction;
 
@@ -524,14 +494,13 @@ typedef struct PGRangeFunction
  * is wrapped around the node representing the <relation>, rather than being
  * a subfield of it.
  */
-typedef struct PGRangeTableSample
-{
-	PGNodeTag		type;
-	PGNode	   *relation;		/* relation to be sampled */
-	PGList	   *method;			/* sampling method name (possibly qualified) */
-	PGList	   *args;			/* argument(s) for sampling method */
-	PGNode	   *repeatable;		/* REPEATABLE expression, or NULL if none */
-	int			location;		/* method name location, or -1 if unknown */
+typedef struct PGRangeTableSample {
+	PGNodeTag type;
+	PGNode *relation;   /* relation to be sampled */
+	PGList *method;     /* sampling method name (possibly qualified) */
+	PGList *args;       /* argument(s) for sampling method */
+	PGNode *repeatable; /* REPEATABLE expression, or NULL if none */
+	int location;       /* method name location, or -1 if unknown */
 } PGRangeTableSample;
 
 /*
@@ -552,41 +521,38 @@ typedef struct PGRangeTableSample
  * the item and set raw_default instead.  PG_CONSTR_DEFAULT items
  * should not appear in any subsequent processing.
  */
-typedef struct PGColumnDef
-{
-	PGNodeTag		type;
-	char	   *colname;		/* name of column */
-	PGTypeName   *typeName;		/* type of column */
-	int			inhcount;		/* number of times column is inherited */
-	bool		is_local;		/* column has local (non-inherited) def'n */
-	bool		is_not_null;	/* NOT NULL constraint specified? */
-	bool		is_from_type;	/* column definition came from table type */
-	bool		is_from_parent; /* column def came from partition parent */
-	char		storage;		/* attstorage setting, or 0 for default */
-	PGNode	   *raw_default;	/* default value (untransformed parse tree) */
-	PGNode	   *cooked_default; /* default value (transformed expr tree) */
-	char		identity;		/* attidentity setting */
-	PGRangeVar   *identitySequence; /* to store identity sequence name for ALTER
+typedef struct PGColumnDef {
+	PGNodeTag type;
+	char *colname;                /* name of column */
+	PGTypeName *typeName;         /* type of column */
+	int inhcount;                 /* number of times column is inherited */
+	bool is_local;                /* column has local (non-inherited) def'n */
+	bool is_not_null;             /* NOT NULL constraint specified? */
+	bool is_from_type;            /* column definition came from table type */
+	bool is_from_parent;          /* column def came from partition parent */
+	char storage;                 /* attstorage setting, or 0 for default */
+	PGNode *raw_default;          /* default value (untransformed parse tree) */
+	PGNode *cooked_default;       /* default value (transformed expr tree) */
+	char identity;                /* attidentity setting */
+	PGRangeVar *identitySequence; /* to store identity sequence name for ALTER
 								   * TABLE ... ADD COLUMN */
-	PGCollateClause *collClause;	/* untransformed COLLATE spec, if any */
-	PGOid			collOid;		/* collation OID (InvalidOid if not set) */
-	PGList	   *constraints;	/* other constraints on column */
-	PGList	   *fdwoptions;		/* per-column FDW options */
-	int			location;		/* parse location, or -1 if none/unknown */
+	PGCollateClause *collClause;  /* untransformed COLLATE spec, if any */
+	PGOid collOid;                /* collation OID (InvalidOid if not set) */
+	PGList *constraints;          /* other constraints on column */
+	PGList *fdwoptions;           /* per-column FDW options */
+	int location;                 /* parse location, or -1 if none/unknown */
 } PGColumnDef;
 
 /*
  * PGTableLikeClause - CREATE TABLE ( ... LIKE ... ) clause
  */
-typedef struct PGTableLikeClause
-{
-	PGNodeTag		type;
-	PGRangeVar   *relation;
-	uint32_t		options;		/* OR of PGTableLikeOption flags */
+typedef struct PGTableLikeClause {
+	PGNodeTag type;
+	PGRangeVar *relation;
+	uint32_t options; /* OR of PGTableLikeOption flags */
 } PGTableLikeClause;
 
-typedef enum PGTableLikeOption
-{
+typedef enum PGTableLikeOption {
 	PG_CREATE_TABLE_LIKE_DEFAULTS = 1 << 0,
 	PG_CREATE_TABLE_LIKE_CONSTRAINTS = 1 << 1,
 	PG_CREATE_TABLE_LIKE_IDENTITY = 1 << 2,
@@ -604,15 +570,14 @@ typedef enum PGTableLikeOption
  * index, and 'expr' is NULL.  For an index expression, 'name' is NULL and
  * 'expr' is the expression tree.
  */
-typedef struct PGIndexElem
-{
-	PGNodeTag		type;
-	char	   *name;			/* name of attribute to index, or NULL */
-	PGNode	   *expr;			/* expression to index, or NULL */
-	char	   *indexcolname;	/* name for index column; NULL = default */
-	PGList	   *collation;		/* name of collation; NIL = default */
-	PGList	   *opclass;		/* name of desired opclass; NIL = default */
-	PGSortByDir	ordering;		/* ASC/DESC/default */
+typedef struct PGIndexElem {
+	PGNodeTag type;
+	char *name;                   /* name of attribute to index, or NULL */
+	PGNode *expr;                 /* expression to index, or NULL */
+	char *indexcolname;           /* name for index column; NULL = default */
+	PGList *collation;            /* name of collation; NIL = default */
+	PGList *opclass;              /* name of desired opclass; NIL = default */
+	PGSortByDir ordering;         /* ASC/DESC/default */
 	PGSortByNulls nulls_ordering; /* FIRST/LAST/default */
 } PGIndexElem;
 
@@ -626,22 +591,20 @@ typedef struct PGIndexElem
  * where they are relevant; C code can just ignore those fields in other
  * statements.)
  */
-typedef enum PGDefElemAction
-{
-	PG_DEFELEM_UNSPEC,				/* no action given */
+typedef enum PGDefElemAction {
+	PG_DEFELEM_UNSPEC, /* no action given */
 	PG_DEFELEM_SET,
 	PG_DEFELEM_ADD,
 	DEFELEM_DROP
 } PGDefElemAction;
 
-typedef struct PGDefElem
-{
-	PGNodeTag		type;
-	char	   *defnamespace;	/* NULL if unqualified name */
-	char	   *defname;
-	PGNode	   *arg;			/* a (PGValue *) or a (PGTypeName *) */
-	PGDefElemAction defaction;	/* unspecified action, or SET/ADD/DROP */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGDefElem {
+	PGNodeTag type;
+	char *defnamespace; /* NULL if unqualified name */
+	char *defname;
+	PGNode *arg;               /* a (PGValue *) or a (PGTypeName *) */
+	PGDefElemAction defaction; /* unspecified action, or SET/ADD/DROP */
+	int location;              /* token location, or -1 if unknown */
 } PGDefElem;
 
 /*
@@ -653,12 +616,11 @@ typedef struct PGDefElem
  * a location field --- currently, parse analysis insists on unqualified
  * names in LockingClause.)
  */
-typedef struct PGLockingClause
-{
-	PGNodeTag		type;
-	PGList	   *lockedRels;		/* FOR [KEY] UPDATE/SHARE relations */
+typedef struct PGLockingClause {
+	PGNodeTag type;
+	PGList *lockedRels; /* FOR [KEY] UPDATE/SHARE relations */
 	PGLockClauseStrength strength;
-	PGLockWaitPolicy waitPolicy;	/* NOWAIT and SKIP LOCKED */
+	PGLockWaitPolicy waitPolicy; /* NOWAIT and SKIP LOCKED */
 } PGLockingClause;
 
 /****************************************************************************
@@ -720,23 +682,21 @@ typedef struct PGLockingClause
  *	  decompiled queries.
  *--------------------
  */
-typedef enum PGRTEKind
-{
-	PG_RTE_RELATION,				/* ordinary relation reference */
-	PG_RTE_SUBQUERY,				/* subquery in FROM */
-	PG_RTE_JOIN,					/* join */
-	PG_RTE_FUNCTION,				/* function in FROM */
-	PG_RTE_TABLEFUNC,				/* TableFunc(.., column list) */
-	PG_RTE_VALUES,					/* VALUES (<exprlist>), (<exprlist>), ... */
-	PG_RTE_CTE,					/* common table expr (WITH list element) */
-	RTE_NAMEDTUPLESTORE			/* tuplestore, e.g. for AFTER triggers */
+typedef enum PGRTEKind {
+	PG_RTE_RELATION,    /* ordinary relation reference */
+	PG_RTE_SUBQUERY,    /* subquery in FROM */
+	PG_RTE_JOIN,        /* join */
+	PG_RTE_FUNCTION,    /* function in FROM */
+	PG_RTE_TABLEFUNC,   /* TableFunc(.., column list) */
+	PG_RTE_VALUES,      /* VALUES (<exprlist>), (<exprlist>), ... */
+	PG_RTE_CTE,         /* common table expr (WITH list element) */
+	RTE_NAMEDTUPLESTORE /* tuplestore, e.g. for AFTER triggers */
 } PGRTEKind;
 
-typedef struct PGRangeTblEntry
-{
-	PGNodeTag		type;
+typedef struct PGRangeTblEntry {
+	PGNodeTag type;
 
-	PGRTEKind		rtekind;		/* see above */
+	PGRTEKind rtekind; /* see above */
 
 	/*
 	 * XXX the fields applicable to only some rte kinds should be merged into
@@ -752,14 +712,14 @@ typedef struct PGRangeTblEntry
 	 * relation.  This allows plans referencing AFTER trigger transition
 	 * tables to be invalidated if the underlying table is altered.
 	 */
-	PGOid			relid;			/* OID of the relation */
-	char		relkind;		/* relation kind (see pg_class.relkind) */
-	struct PGTableSampleClause *tablesample;	/* sampling info, or NULL */
+	PGOid relid;                             /* OID of the relation */
+	char relkind;                            /* relation kind (see pg_class.relkind) */
+	struct PGTableSampleClause *tablesample; /* sampling info, or NULL */
 
 	/*
 	 * Fields valid for a subquery RTE (else NULL):
 	 */
-	PGQuery	   *subquery;		/* the sub-query */
+	PGQuery *subquery; /* the sub-query */
 
 	/*
 	 * Fields valid for a join RTE (else NULL/zero):
@@ -778,8 +738,8 @@ typedef struct PGRangeTblEntry
 	 * Also, once planning begins, joinaliasvars items can be almost anything,
 	 * as a result of subquery-flattening substitutions.
 	 */
-	PGJoinType	jointype;		/* type of join */
-	PGList	   *joinaliasvars;	/* list of alias-var expansions */
+	PGJoinType jointype;   /* type of join */
+	PGList *joinaliasvars; /* list of alias-var expansions */
 
 	/*
 	 * Fields valid for a function RTE (else NIL/zero):
@@ -789,25 +749,25 @@ typedef struct PGRangeTblEntry
 	 * implicit, and must be accounted for "by hand" in places such as
 	 * expandRTE().
 	 */
-	PGList	   *functions;		/* list of PGRangeTblFunction nodes */
-	bool		funcordinality; /* is this called WITH ORDINALITY? */
+	PGList *functions;   /* list of PGRangeTblFunction nodes */
+	bool funcordinality; /* is this called WITH ORDINALITY? */
 
 	/*
 	 * Fields valid for a PGTableFunc RTE (else NULL):
 	 */
-	PGTableFunc  *tablefunc;
+	PGTableFunc *tablefunc;
 
 	/*
 	 * Fields valid for a values RTE (else NIL):
 	 */
-	PGList	   *values_lists;	/* list of expression lists */
+	PGList *values_lists; /* list of expression lists */
 
 	/*
 	 * Fields valid for a CTE RTE (else NULL/zero):
 	 */
-	char	   *ctename;		/* name of the WITH list item */
-	PGIndex		ctelevelsup;	/* number of query levels up */
-	bool		self_reference; /* is this a recursive self-reference? */
+	char *ctename;       /* name of the WITH list item */
+	PGIndex ctelevelsup; /* number of query levels up */
+	bool self_reference; /* is this a recursive self-reference? */
 
 	/*
 	 * Fields valid for table functions, values, CTE and ENR RTEs (else NIL):
@@ -825,24 +785,24 @@ typedef struct PGRangeTblEntry
 	 * all three lists (as well as an empty-string entry in eref).  Testing
 	 * for zero coltype is the standard way to detect a dropped column.
 	 */
-	PGList	   *coltypes;		/* OID list of column type OIDs */
-	PGList	   *coltypmods;		/* integer list of column typmods */
-	PGList	   *colcollations;	/* OID list of column collation OIDs */
+	PGList *coltypes;      /* OID list of column type OIDs */
+	PGList *coltypmods;    /* integer list of column typmods */
+	PGList *colcollations; /* OID list of column collation OIDs */
 
 	/*
 	 * Fields valid for ENR RTEs (else NULL/zero):
 	 */
-	char	   *enrname;		/* name of ephemeral named relation */
-	double		enrtuples;		/* estimated or actual from caller */
+	char *enrname;    /* name of ephemeral named relation */
+	double enrtuples; /* estimated or actual from caller */
 
 	/*
 	 * Fields valid in all RTEs:
 	 */
-	PGAlias	   *alias;			/* user-written alias clause, if any */
-	PGAlias	   *eref;			/* expanded reference names */
-	bool		lateral;		/* subquery, function, or values is LATERAL? */
-	bool		inh;			/* inheritance requested? */
-	bool		inFromCl;		/* present in FROM clause? */
+	PGAlias *alias; /* user-written alias clause, if any */
+	PGAlias *eref;  /* expanded reference names */
+	bool lateral;   /* subquery, function, or values is LATERAL? */
+	bool inh;       /* inheritance requested? */
+	bool inFromCl;  /* present in FROM clause? */
 } PGRangeTblEntry;
 
 /*
@@ -861,19 +821,18 @@ typedef struct PGRangeTblEntry
  * (including dropped columns!), so that we can successfully ignore any
  * columns added after the query was parsed.
  */
-typedef struct PGRangeTblFunction
-{
-	PGNodeTag		type;
+typedef struct PGRangeTblFunction {
+	PGNodeTag type;
 
-	PGNode	   *funcexpr;		/* expression tree for func call */
-	int			funccolcount;	/* number of columns it contributes to RTE */
+	PGNode *funcexpr; /* expression tree for func call */
+	int funccolcount; /* number of columns it contributes to RTE */
 	/* These fields record the contents of a column definition list, if any: */
-	PGList	   *funccolnames;	/* column names (list of String) */
-	PGList	   *funccoltypes;	/* OID list of column type OIDs */
-	PGList	   *funccoltypmods; /* integer list of column typmods */
-	PGList	   *funccolcollations;	/* OID list of column collation OIDs */
+	PGList *funccolnames;      /* column names (list of String) */
+	PGList *funccoltypes;      /* OID list of column type OIDs */
+	PGList *funccoltypmods;    /* integer list of column typmods */
+	PGList *funccolcollations; /* OID list of column collation OIDs */
 	/* This is set during planning for use by the executor: */
-	PGBitmapset  *funcparams;		/* PG_PARAM_EXEC PGParam IDs affecting this func */
+	PGBitmapset *funcparams; /* PG_PARAM_EXEC PGParam IDs affecting this func */
 } PGRangeTblFunction;
 
 /*
@@ -881,12 +840,11 @@ typedef struct PGRangeTblFunction
  *
  * Unlike PGRangeTableSample, this is a subnode of the relevant RangeTblEntry.
  */
-typedef struct PGTableSampleClause
-{
-	PGNodeTag		type;
-	PGOid			tsmhandler;		/* OID of the tablesample handler function */
-	PGList	   *args;			/* tablesample argument expression(s) */
-	PGExpr	   *repeatable;		/* REPEATABLE expression, or NULL if none */
+typedef struct PGTableSampleClause {
+	PGNodeTag type;
+	PGOid tsmhandler;   /* OID of the tablesample handler function */
+	PGList *args;       /* tablesample argument expression(s) */
+	PGExpr *repeatable; /* REPEATABLE expression, or NULL if none */
 } PGTableSampleClause;
 
 /*
@@ -947,14 +905,13 @@ typedef struct PGTableSampleClause
  * ORDER BY and set up for the PGUnique step.  This is semantically necessary
  * for DISTINCT ON, and presents no real drawback for DISTINCT.)
  */
-typedef struct PGSortGroupClause
-{
-	PGNodeTag		type;
-	PGIndex		tleSortGroupRef;	/* reference into targetlist */
-	PGOid			eqop;			/* the equality operator ('=' op) */
-	PGOid			sortop;			/* the ordering operator ('<' op), or 0 */
-	bool		nulls_first;	/* do NULLs come before normal values? */
-	bool		hashable;		/* can eqop be implemented by hashing? */
+typedef struct PGSortGroupClause {
+	PGNodeTag type;
+	PGIndex tleSortGroupRef; /* reference into targetlist */
+	PGOid eqop;              /* the equality operator ('=' op) */
+	PGOid sortop;            /* the ordering operator ('<' op), or 0 */
+	bool nulls_first;        /* do NULLs come before normal values? */
+	bool hashable;           /* can eqop be implemented by hashing? */
 } PGSortGroupClause;
 
 /*
@@ -1007,8 +964,7 @@ typedef struct PGSortGroupClause
  *
  * SETS( SIMPLE(1,2), CUBE( SIMPLE(3), SIMPLE(4,5) ) )
  */
-typedef enum
-{
+typedef enum {
 	GROUPING_SET_EMPTY,
 	GROUPING_SET_SIMPLE,
 	GROUPING_SET_ROLLUP,
@@ -1016,12 +972,11 @@ typedef enum
 	GROUPING_SET_SETS
 } GroupingSetKind;
 
-typedef struct PGGroupingSet
-{
-	PGNodeTag		type;
+typedef struct PGGroupingSet {
+	PGNodeTag type;
 	GroupingSetKind kind;
-	PGList	   *content;
-	int			location;
+	PGList *content;
+	int location;
 } PGGroupingSet;
 
 /*
@@ -1038,18 +993,17 @@ typedef struct PGGroupingSet
  * the orderClause might or might not be copied (see copiedOrder); the framing
  * options are never copied, per spec.
  */
-typedef struct PGWindowClause
-{
-	PGNodeTag		type;
-	char	   *name;			/* window name (NULL in an OVER clause) */
-	char	   *refname;		/* referenced window name, if any */
-	PGList	   *partitionClause;	/* PARTITION BY list */
-	PGList	   *orderClause;	/* ORDER BY list */
-	int			frameOptions;	/* frame_clause options, see PGWindowDef */
-	PGNode	   *startOffset;	/* expression for starting bound, if any */
-	PGNode	   *endOffset;		/* expression for ending bound, if any */
-	PGIndex		winref;			/* ID referenced by window functions */
-	bool		copiedOrder;	/* did we copy orderClause from refname? */
+typedef struct PGWindowClause {
+	PGNodeTag type;
+	char *name;              /* window name (NULL in an OVER clause) */
+	char *refname;           /* referenced window name, if any */
+	PGList *partitionClause; /* PARTITION BY list */
+	PGList *orderClause;     /* ORDER BY list */
+	int frameOptions;        /* frame_clause options, see PGWindowDef */
+	PGNode *startOffset;     /* expression for starting bound, if any */
+	PGNode *endOffset;       /* expression for ending bound, if any */
+	PGIndex winref;          /* ID referenced by window functions */
+	bool copiedOrder;        /* did we copy orderClause from refname? */
 } PGWindowClause;
 
 /*
@@ -1065,7 +1019,6 @@ typedef struct PGWindowClause
  * UPDATE/SHARE/KEY SHARE clauses in the current query level.
  */
 
-
 /*
  * PGWithClause -
  *	   representation of WITH clause
@@ -1073,12 +1026,11 @@ typedef struct PGWindowClause
  * Note: PGWithClause does not propagate into the PGQuery representation;
  * but PGCommonTableExpr does.
  */
-typedef struct PGWithClause
-{
-	PGNodeTag		type;
-	PGList	   *ctes;			/* list of CommonTableExprs */
-	bool		recursive;		/* true = WITH RECURSIVE */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGWithClause {
+	PGNodeTag type;
+	PGList *ctes;   /* list of CommonTableExprs */
+	bool recursive; /* true = WITH RECURSIVE */
+	int location;   /* token location, or -1 if unknown */
 } PGWithClause;
 
 /*
@@ -1087,13 +1039,12 @@ typedef struct PGWithClause
  *
  * Note: PGInferClause does not propagate into the PGQuery representation.
  */
-typedef struct PGInferClause
-{
-	PGNodeTag		type;
-	PGList	   *indexElems;		/* IndexElems to infer unique index */
-	PGNode	   *whereClause;	/* qualification (partial-index predicate) */
-	char	   *conname;		/* PGConstraint name, or NULL if unnamed */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGInferClause {
+	PGNodeTag type;
+	PGList *indexElems;  /* IndexElems to infer unique index */
+	PGNode *whereClause; /* qualification (partial-index predicate) */
+	char *conname;       /* PGConstraint name, or NULL if unnamed */
+	int location;        /* token location, or -1 if unknown */
 } PGInferClause;
 
 /*
@@ -1102,14 +1053,13 @@ typedef struct PGInferClause
  *
  * Note: PGOnConflictClause does not propagate into the PGQuery representation.
  */
-typedef struct PGOnConflictClause
-{
-	PGNodeTag		type;
-	PGOnConflictAction action;	/* DO NOTHING or UPDATE? */
-	PGInferClause *infer;			/* Optional index inference clause */
-	PGList	   *targetList;		/* the target list (of PGResTarget) */
-	PGNode	   *whereClause;	/* qualifications */
-	int			location;		/* token location, or -1 if unknown */
+typedef struct PGOnConflictClause {
+	PGNodeTag type;
+	PGOnConflictAction action; /* DO NOTHING or UPDATE? */
+	PGInferClause *infer;      /* Optional index inference clause */
+	PGList *targetList;        /* the target list (of PGResTarget) */
+	PGNode *whereClause;       /* qualifications */
+	int location;              /* token location, or -1 if unknown */
 } PGOnConflictClause;
 
 /*
@@ -1118,30 +1068,26 @@ typedef struct PGOnConflictClause
  *
  * We don't currently support the SEARCH or CYCLE clause.
  */
-typedef struct PGCommonTableExpr
-{
-	PGNodeTag		type;
-	char	   *ctename;		/* query name (never qualified) */
-	PGList	   *aliascolnames;	/* optional list of column names */
+typedef struct PGCommonTableExpr {
+	PGNodeTag type;
+	char *ctename;         /* query name (never qualified) */
+	PGList *aliascolnames; /* optional list of column names */
 	/* SelectStmt/InsertStmt/etc before parse analysis, PGQuery afterwards: */
-	PGNode	   *ctequery;		/* the CTE's subquery */
-	int			location;		/* token location, or -1 if unknown */
+	PGNode *ctequery; /* the CTE's subquery */
+	int location;     /* token location, or -1 if unknown */
 	/* These fields are set during parse analysis: */
-	bool		cterecursive;	/* is this CTE actually recursive? */
-	int			cterefcount;	/* number of RTEs referencing this CTE
+	bool cterecursive;        /* is this CTE actually recursive? */
+	int cterefcount;          /* number of RTEs referencing this CTE
 								 * (excluding internal self-references) */
-	PGList	   *ctecolnames;	/* list of output column names */
-	PGList	   *ctecoltypes;	/* OID list of output column type OIDs */
-	PGList	   *ctecoltypmods;	/* integer list of output column typmods */
-	PGList	   *ctecolcollations;	/* OID list of column collation OIDs */
+	PGList *ctecolnames;      /* list of output column names */
+	PGList *ctecoltypes;      /* OID list of output column type OIDs */
+	PGList *ctecoltypmods;    /* integer list of output column typmods */
+	PGList *ctecolcollations; /* OID list of column collation OIDs */
 } PGCommonTableExpr;
 
 /* Convenience macro to get the output tlist of a CTE's query */
 #define GetCTETargetList(cte) \
-	(AssertMacro(IsA((cte)->ctequery, PGQuery)), \
-	 ((PGQuery *) (cte)->ctequery)->commandType == PG_CMD_SELECT ? \
-	 ((PGQuery *) (cte)->ctequery)->targetList : \
-	 ((PGQuery *) (cte)->ctequery)->returningList)
+	(AssertMacro(IsA((cte)->ctequery, PGQuery)), ((PGQuery *)(cte)->ctequery)->commandType == PG_CMD_SELECT ? ((PGQuery *)(cte)->ctequery)->targetList : ((PGQuery *)(cte)->ctequery)->returningList)
 
 /*
  * TriggerTransition -
@@ -1151,7 +1097,6 @@ typedef struct PGCommonTableExpr
  * AFTER triggers, but other permutations are accepted by the parser so we can
  * give a meaningful message from C code.
  */
-
 
 /*****************************************************************************
  *		Raw Grammar Output Statements
@@ -1169,12 +1114,11 @@ typedef struct PGCommonTableExpr
  * stmt_location/stmt_len identify the portion of the source text string
  * containing this raw statement (useful for multi-statement strings).
  */
-typedef struct PGRawStmt
-{
-	PGNodeTag		type;
-	PGNode	   *stmt;			/* raw parse tree */
-	int			stmt_location;	/* start location, or -1 if unknown */
-	int			stmt_len;		/* length in bytes; 0 means "rest of string" */
+typedef struct PGRawStmt {
+	PGNodeTag type;
+	PGNode *stmt;      /* raw parse tree */
+	int stmt_location; /* start location, or -1 if unknown */
+	int stmt_len;      /* length in bytes; 0 means "rest of string" */
 } PGRawStmt;
 
 /*****************************************************************************
@@ -1189,45 +1133,42 @@ typedef struct PGRawStmt
  * is INSERT ... DEFAULT VALUES.
  * ----------------------
  */
-typedef struct PGInsertStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *relation;		/* relation to insert into */
-	PGList	   *cols;			/* optional: names of the target columns */
-	PGNode	   *selectStmt;		/* the source SELECT/VALUES, or NULL */
+typedef struct PGInsertStmt {
+	PGNodeTag type;
+	PGRangeVar *relation;                 /* relation to insert into */
+	PGList *cols;                         /* optional: names of the target columns */
+	PGNode *selectStmt;                   /* the source SELECT/VALUES, or NULL */
 	PGOnConflictClause *onConflictClause; /* ON CONFLICT clause */
-	PGList	   *returningList;	/* list of expressions to return */
-	PGWithClause *withClause;		/* WITH clause */
-	PGOverridingKind override;	/* OVERRIDING clause */
+	PGList *returningList;                /* list of expressions to return */
+	PGWithClause *withClause;             /* WITH clause */
+	PGOverridingKind override;            /* OVERRIDING clause */
 } PGInsertStmt;
 
 /* ----------------------
  *		Delete Statement
  * ----------------------
  */
-typedef struct PGDeleteStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *relation;		/* relation to delete from */
-	PGList	   *usingClause;	/* optional using clause for more tables */
-	PGNode	   *whereClause;	/* qualifications */
-	PGList	   *returningList;	/* list of expressions to return */
-	PGWithClause *withClause;		/* WITH clause */
+typedef struct PGDeleteStmt {
+	PGNodeTag type;
+	PGRangeVar *relation;     /* relation to delete from */
+	PGList *usingClause;      /* optional using clause for more tables */
+	PGNode *whereClause;      /* qualifications */
+	PGList *returningList;    /* list of expressions to return */
+	PGWithClause *withClause; /* WITH clause */
 } PGDeleteStmt;
 
 /* ----------------------
  *		Update Statement
  * ----------------------
  */
-typedef struct PGUpdateStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *relation;		/* relation to update */
-	PGList	   *targetList;		/* the target list (of PGResTarget) */
-	PGNode	   *whereClause;	/* qualifications */
-	PGList	   *fromClause;		/* optional from clause for more tables */
-	PGList	   *returningList;	/* list of expressions to return */
-	PGWithClause *withClause;		/* WITH clause */
+typedef struct PGUpdateStmt {
+	PGNodeTag type;
+	PGRangeVar *relation;     /* relation to update */
+	PGList *targetList;       /* the target list (of PGResTarget) */
+	PGNode *whereClause;      /* qualifications */
+	PGList *fromClause;       /* optional from clause for more tables */
+	PGList *returningList;    /* list of expressions to return */
+	PGWithClause *withClause; /* WITH clause */
 } PGUpdateStmt;
 
 /* ----------------------
@@ -1243,30 +1184,23 @@ typedef struct PGUpdateStmt
  * whether it is a simple or compound SELECT.
  * ----------------------
  */
-typedef enum PGSetOperation
-{
-	PG_SETOP_NONE = 0,
-	PG_SETOP_UNION,
-	PG_SETOP_INTERSECT,
-	PG_SETOP_EXCEPT
-} PGSetOperation;
+typedef enum PGSetOperation { PG_SETOP_NONE = 0, PG_SETOP_UNION, PG_SETOP_INTERSECT, PG_SETOP_EXCEPT } PGSetOperation;
 
-typedef struct PGSelectStmt
-{
-	PGNodeTag		type;
+typedef struct PGSelectStmt {
+	PGNodeTag type;
 
 	/*
 	 * These fields are used only in "leaf" SelectStmts.
 	 */
-	PGList	   *distinctClause; /* NULL, list of DISTINCT ON exprs, or
+	PGList *distinctClause;   /* NULL, list of DISTINCT ON exprs, or
 								 * lcons(NIL,NIL) for all (SELECT DISTINCT) */
-	PGIntoClause *intoClause;		/* target for SELECT INTO */
-	PGList	   *targetList;		/* the target list (of PGResTarget) */
-	PGList	   *fromClause;		/* the FROM clause */
-	PGNode	   *whereClause;	/* WHERE qualification */
-	PGList	   *groupClause;	/* GROUP BY clauses */
-	PGNode	   *havingClause;	/* HAVING conditional-expression */
-	PGList	   *windowClause;	/* WINDOW window_name AS (...), ... */
+	PGIntoClause *intoClause; /* target for SELECT INTO */
+	PGList *targetList;       /* the target list (of PGResTarget) */
+	PGList *fromClause;       /* the FROM clause */
+	PGNode *whereClause;      /* WHERE qualification */
+	PGList *groupClause;      /* GROUP BY clauses */
+	PGNode *havingClause;     /* HAVING conditional-expression */
+	PGList *windowClause;     /* WINDOW window_name AS (...), ... */
 
 	/*
 	 * In a "leaf" node representing a VALUES list, the above fields are all
@@ -1276,28 +1210,27 @@ typedef struct PGSelectStmt
 	 * node), regardless of the context of the VALUES list. It's up to parse
 	 * analysis to reject that where not valid.
 	 */
-	PGList	   *valuesLists;	/* untransformed list of expression lists */
+	PGList *valuesLists; /* untransformed list of expression lists */
 
 	/*
 	 * These fields are used in both "leaf" SelectStmts and upper-level
 	 * SelectStmts.
 	 */
-	PGList	   *sortClause;		/* sort clause (a list of SortBy's) */
-	PGNode	   *limitOffset;	/* # of result tuples to skip */
-	PGNode	   *limitCount;		/* # of result tuples to return */
-	PGList	   *lockingClause;	/* FOR UPDATE (list of LockingClause's) */
-	PGWithClause *withClause;		/* WITH clause */
+	PGList *sortClause;       /* sort clause (a list of SortBy's) */
+	PGNode *limitOffset;      /* # of result tuples to skip */
+	PGNode *limitCount;       /* # of result tuples to return */
+	PGList *lockingClause;    /* FOR UPDATE (list of LockingClause's) */
+	PGWithClause *withClause; /* WITH clause */
 
 	/*
 	 * These fields are used only in upper-level SelectStmts.
 	 */
-	PGSetOperation op;			/* type of set op */
-	bool		all;			/* ALL specified? */
-	struct PGSelectStmt *larg;	/* left child */
-	struct PGSelectStmt *rarg;	/* right child */
-	/* Eventually add fields for CORRESPONDING spec here */
+	PGSetOperation op;         /* type of set op */
+	bool all;                  /* ALL specified? */
+	struct PGSelectStmt *larg; /* left child */
+	struct PGSelectStmt *rarg; /* right child */
+	                           /* Eventually add fields for CORRESPONDING spec here */
 } PGSelectStmt;
-
 
 /* ----------------------
  *		Set Operation node for post-analysis query trees
@@ -1319,8 +1252,6 @@ typedef struct PGSelectStmt
  * ----------------------
  */
 
-
-
 /*****************************************************************************
  *		Other Statements (no optimizations required)
  *
@@ -1341,13 +1272,12 @@ typedef struct PGSelectStmt
  * object type.  Note that commands typically don't support all the types.
  */
 
-typedef enum PGObjectType
-{
+typedef enum PGObjectType {
 	PG_OBJECT_ACCESS_METHOD,
 	PG_OBJECT_AGGREGATE,
 	PG_OBJECT_AMOP,
 	PG_OBJECT_AMPROC,
-	PG_OBJECT_ATTRIBUTE,			/* type's attribute, when distinct from column */
+	PG_OBJECT_ATTRIBUTE, /* type's attribute, when distinct from column */
 	PG_OBJECT_CAST,
 	PG_OBJECT_COLUMN,
 	PG_OBJECT_COLLATION,
@@ -1401,116 +1331,110 @@ typedef enum PGObjectType
  * executed after the schema itself is created.
  * ----------------------
  */
-typedef struct PGCreateSchemaStmt
-{
-	PGNodeTag		type;
-	char	   *schemaname;		/* the name of the schema to create */
-	PGList	   *schemaElts;		/* schema components (list of parsenodes) */
-	bool		if_not_exists;	/* just do nothing if schema already exists? */
+typedef struct PGCreateSchemaStmt {
+	PGNodeTag type;
+	char *schemaname;   /* the name of the schema to create */
+	PGList *schemaElts; /* schema components (list of parsenodes) */
+	bool if_not_exists; /* just do nothing if schema already exists? */
 } PGCreateSchemaStmt;
 
-typedef enum PGDropBehavior
-{
-	PG_DROP_RESTRICT,				/* drop fails if any dependent objects */
-	PG_DROP_CASCADE				/* remove dependent objects too */
+typedef enum PGDropBehavior {
+	PG_DROP_RESTRICT, /* drop fails if any dependent objects */
+	PG_DROP_CASCADE   /* remove dependent objects too */
 } PGDropBehavior;
 
 /* ----------------------
  *	Alter Table
  * ----------------------
  */
-typedef struct PGAlterTableStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *relation;		/* table to work on */
-	PGList	   *cmds;			/* list of subcommands */
-	PGObjectType	relkind;		/* type of object */
-	bool		missing_ok;		/* skip error if table missing */
+typedef struct PGAlterTableStmt {
+	PGNodeTag type;
+	PGRangeVar *relation; /* table to work on */
+	PGList *cmds;         /* list of subcommands */
+	PGObjectType relkind; /* type of object */
+	bool missing_ok;      /* skip error if table missing */
 } PGAlterTableStmt;
 
-typedef enum PGAlterTableType
-{
-	PG_AT_AddColumn,				/* add column */
-	PG_AT_AddColumnRecurse,		/* internal to commands/tablecmds.c */
-	PG_AT_AddColumnToView,			/* implicitly via CREATE OR REPLACE VIEW */
-	PG_AT_ColumnDefault,			/* alter column default */
-	PG_AT_DropNotNull,				/* alter column drop not null */
-	PG_AT_SetNotNull,				/* alter column set not null */
-	PG_AT_SetStatistics,			/* alter column set statistics */
-	PG_AT_SetOptions,				/* alter column set ( options ) */
-	PG_AT_ResetOptions,			/* alter column reset ( options ) */
-	PG_AT_SetStorage,				/* alter column set storage */
-	PG_AT_DropColumn,				/* drop column */
-	PG_AT_DropColumnRecurse,		/* internal to commands/tablecmds.c */
-	PG_AT_AddIndex,				/* add index */
-	PG_AT_ReAddIndex,				/* internal to commands/tablecmds.c */
-	PG_AT_AddConstraint,			/* add constraint */
-	PG_AT_AddConstraintRecurse,	/* internal to commands/tablecmds.c */
-	PG_AT_ReAddConstraint,			/* internal to commands/tablecmds.c */
-	PG_AT_AlterConstraint,			/* alter constraint */
-	PG_AT_ValidateConstraint,		/* validate constraint */
-	PG_AT_ValidateConstraintRecurse,	/* internal to commands/tablecmds.c */
-	PG_AT_ProcessedConstraint,		/* pre-processed add constraint (local in
+typedef enum PGAlterTableType {
+	PG_AT_AddColumn,                 /* add column */
+	PG_AT_AddColumnRecurse,          /* internal to commands/tablecmds.c */
+	PG_AT_AddColumnToView,           /* implicitly via CREATE OR REPLACE VIEW */
+	PG_AT_ColumnDefault,             /* alter column default */
+	PG_AT_DropNotNull,               /* alter column drop not null */
+	PG_AT_SetNotNull,                /* alter column set not null */
+	PG_AT_SetStatistics,             /* alter column set statistics */
+	PG_AT_SetOptions,                /* alter column set ( options ) */
+	PG_AT_ResetOptions,              /* alter column reset ( options ) */
+	PG_AT_SetStorage,                /* alter column set storage */
+	PG_AT_DropColumn,                /* drop column */
+	PG_AT_DropColumnRecurse,         /* internal to commands/tablecmds.c */
+	PG_AT_AddIndex,                  /* add index */
+	PG_AT_ReAddIndex,                /* internal to commands/tablecmds.c */
+	PG_AT_AddConstraint,             /* add constraint */
+	PG_AT_AddConstraintRecurse,      /* internal to commands/tablecmds.c */
+	PG_AT_ReAddConstraint,           /* internal to commands/tablecmds.c */
+	PG_AT_AlterConstraint,           /* alter constraint */
+	PG_AT_ValidateConstraint,        /* validate constraint */
+	PG_AT_ValidateConstraintRecurse, /* internal to commands/tablecmds.c */
+	PG_AT_ProcessedConstraint,       /* pre-processed add constraint (local in
 								 * parser/parse_utilcmd.c) */
-	PG_AT_AddIndexConstraint,		/* add constraint using existing index */
-	PG_AT_DropConstraint,			/* drop constraint */
-	PG_AT_DropConstraintRecurse,	/* internal to commands/tablecmds.c */
-	PG_AT_ReAddComment,			/* internal to commands/tablecmds.c */
-	PG_AT_AlterColumnType,			/* alter column type */
-	PG_AT_AlterColumnGenericOptions,	/* alter column OPTIONS (...) */
-	PG_AT_ChangeOwner,				/* change owner */
-	PG_AT_ClusterOn,				/* CLUSTER ON */
-	PG_AT_DropCluster,				/* SET WITHOUT CLUSTER */
-	PG_AT_SetLogged,				/* SET LOGGED */
-	PG_AT_SetUnLogged,				/* SET UNLOGGED */
-	PG_AT_AddOids,					/* SET WITH OIDS */
-	PG_AT_AddOidsRecurse,			/* internal to commands/tablecmds.c */
-	PG_AT_DropOids,				/* SET WITHOUT OIDS */
-	PG_AT_SetTableSpace,			/* SET TABLESPACE */
-	PG_AT_SetRelOptions,			/* SET (...) -- AM specific parameters */
-	PG_AT_ResetRelOptions,			/* RESET (...) -- AM specific parameters */
-	PG_AT_ReplaceRelOptions,		/* replace reloption list in its entirety */
-	PG_AT_EnableTrig,				/* ENABLE TRIGGER name */
-	PG_AT_EnableAlwaysTrig,		/* ENABLE ALWAYS TRIGGER name */
-	PG_AT_EnableReplicaTrig,		/* ENABLE REPLICA TRIGGER name */
-	PG_AT_DisableTrig,				/* DISABLE TRIGGER name */
-	PG_AT_EnableTrigAll,			/* ENABLE TRIGGER ALL */
-	PG_AT_DisableTrigAll,			/* DISABLE TRIGGER ALL */
-	PG_AT_EnableTrigUser,			/* ENABLE TRIGGER USER */
-	PG_AT_DisableTrigUser,			/* DISABLE TRIGGER USER */
-	PG_AT_EnableRule,				/* ENABLE RULE name */
-	PG_AT_EnableAlwaysRule,		/* ENABLE ALWAYS RULE name */
-	PG_AT_EnableReplicaRule,		/* ENABLE REPLICA RULE name */
-	PG_AT_DisableRule,				/* DISABLE RULE name */
-	PG_AT_AddInherit,				/* INHERIT parent */
-	PG_AT_DropInherit,				/* NO INHERIT parent */
-	PG_AT_AddOf,					/* OF <type_name> */
-	PG_AT_DropOf,					/* NOT OF */
-	PG_AT_ReplicaIdentity,			/* REPLICA IDENTITY */
-	PG_AT_EnableRowSecurity,		/* ENABLE ROW SECURITY */
-	PG_AT_DisableRowSecurity,		/* DISABLE ROW SECURITY */
-	PG_AT_ForceRowSecurity,		/* FORCE ROW SECURITY */
-	PG_AT_NoForceRowSecurity,		/* NO FORCE ROW SECURITY */
-	PG_AT_GenericOptions,			/* OPTIONS (...) */
-	PG_AT_AttachPartition,			/* ATTACH PARTITION */
-	PG_AT_DetachPartition,			/* DETACH PARTITION */
-	PG_AT_AddIdentity,				/* ADD IDENTITY */
-	PG_AT_SetIdentity,				/* SET identity column options */
-	AT_DropIdentity				/* DROP IDENTITY */
+	PG_AT_AddIndexConstraint,        /* add constraint using existing index */
+	PG_AT_DropConstraint,            /* drop constraint */
+	PG_AT_DropConstraintRecurse,     /* internal to commands/tablecmds.c */
+	PG_AT_ReAddComment,              /* internal to commands/tablecmds.c */
+	PG_AT_AlterColumnType,           /* alter column type */
+	PG_AT_AlterColumnGenericOptions, /* alter column OPTIONS (...) */
+	PG_AT_ChangeOwner,               /* change owner */
+	PG_AT_ClusterOn,                 /* CLUSTER ON */
+	PG_AT_DropCluster,               /* SET WITHOUT CLUSTER */
+	PG_AT_SetLogged,                 /* SET LOGGED */
+	PG_AT_SetUnLogged,               /* SET UNLOGGED */
+	PG_AT_AddOids,                   /* SET WITH OIDS */
+	PG_AT_AddOidsRecurse,            /* internal to commands/tablecmds.c */
+	PG_AT_DropOids,                  /* SET WITHOUT OIDS */
+	PG_AT_SetTableSpace,             /* SET TABLESPACE */
+	PG_AT_SetRelOptions,             /* SET (...) -- AM specific parameters */
+	PG_AT_ResetRelOptions,           /* RESET (...) -- AM specific parameters */
+	PG_AT_ReplaceRelOptions,         /* replace reloption list in its entirety */
+	PG_AT_EnableTrig,                /* ENABLE TRIGGER name */
+	PG_AT_EnableAlwaysTrig,          /* ENABLE ALWAYS TRIGGER name */
+	PG_AT_EnableReplicaTrig,         /* ENABLE REPLICA TRIGGER name */
+	PG_AT_DisableTrig,               /* DISABLE TRIGGER name */
+	PG_AT_EnableTrigAll,             /* ENABLE TRIGGER ALL */
+	PG_AT_DisableTrigAll,            /* DISABLE TRIGGER ALL */
+	PG_AT_EnableTrigUser,            /* ENABLE TRIGGER USER */
+	PG_AT_DisableTrigUser,           /* DISABLE TRIGGER USER */
+	PG_AT_EnableRule,                /* ENABLE RULE name */
+	PG_AT_EnableAlwaysRule,          /* ENABLE ALWAYS RULE name */
+	PG_AT_EnableReplicaRule,         /* ENABLE REPLICA RULE name */
+	PG_AT_DisableRule,               /* DISABLE RULE name */
+	PG_AT_AddInherit,                /* INHERIT parent */
+	PG_AT_DropInherit,               /* NO INHERIT parent */
+	PG_AT_AddOf,                     /* OF <type_name> */
+	PG_AT_DropOf,                    /* NOT OF */
+	PG_AT_ReplicaIdentity,           /* REPLICA IDENTITY */
+	PG_AT_EnableRowSecurity,         /* ENABLE ROW SECURITY */
+	PG_AT_DisableRowSecurity,        /* DISABLE ROW SECURITY */
+	PG_AT_ForceRowSecurity,          /* FORCE ROW SECURITY */
+	PG_AT_NoForceRowSecurity,        /* NO FORCE ROW SECURITY */
+	PG_AT_GenericOptions,            /* OPTIONS (...) */
+	PG_AT_AttachPartition,           /* ATTACH PARTITION */
+	PG_AT_DetachPartition,           /* DETACH PARTITION */
+	PG_AT_AddIdentity,               /* ADD IDENTITY */
+	PG_AT_SetIdentity,               /* SET identity column options */
+	AT_DropIdentity                  /* DROP IDENTITY */
 } PGAlterTableType;
 
-
-
-typedef struct PGAlterTableCmd	/* one subcommand of an ALTER TABLE */
+typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
 {
-	PGNodeTag		type;
-	PGAlterTableType subtype;		/* Type of table alteration to apply */
-	char	   *name;			/* column, constraint, or trigger to act on,
+	PGNodeTag type;
+	PGAlterTableType subtype; /* Type of table alteration to apply */
+	char *name;               /* column, constraint, or trigger to act on,
 								 * or tablespace */
-	PGNode	   *def;			/* definition of new column, index,
+	PGNode *def;              /* definition of new column, index,
 								 * constraint, or parent table */
-	PGDropBehavior behavior;		/* RESTRICT or CASCADE for DROP cases */
-	bool		missing_ok;		/* skip error if missing? */
+	PGDropBehavior behavior;  /* RESTRICT or CASCADE for DROP cases */
+	bool missing_ok;          /* skip error if missing? */
 } PGAlterTableCmd;
 
 /*
@@ -1518,12 +1442,11 @@ typedef struct PGAlterTableCmd	/* one subcommand of an ALTER TABLE */
  * function.  So it is sufficient to identify an existing function, but it
  * is not enough info to define a function nor to call it.
  */
-typedef struct PGObjectWithArgs
-{
-	PGNodeTag		type;
-	PGList	   *objname;		/* qualified name of function/operator */
-	PGList	   *objargs;		/* list of Typename nodes */
-	bool		args_unspecified;	/* argument list was omitted, so name must
+typedef struct PGObjectWithArgs {
+	PGNodeTag type;
+	PGList *objname;       /* qualified name of function/operator */
+	PGList *objargs;       /* list of Typename nodes */
+	bool args_unspecified; /* argument list was omitted, so name must
 									 * be unique (note that objargs == NIL
 									 * means zero args) */
 } PGObjectWithArgs;
@@ -1536,18 +1459,17 @@ typedef struct PGObjectWithArgs
  * and "query" must be non-NULL.
  * ----------------------
  */
-typedef struct PGCopyStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *relation;		/* the relation to copy */
-	PGNode	   *query;			/* the query (SELECT or DML statement with
+typedef struct PGCopyStmt {
+	PGNodeTag type;
+	PGRangeVar *relation; /* the relation to copy */
+	PGNode *query;        /* the query (SELECT or DML statement with
 								 * RETURNING) to copy, as a raw parse tree */
-	PGList	   *attlist;		/* PGList of column names (as Strings), or NIL
+	PGList *attlist;      /* PGList of column names (as Strings), or NIL
 								 * for all columns */
-	bool		is_from;		/* TO or FROM */
-	bool		is_program;		/* is 'filename' a program to popen? */
-	char	   *filename;		/* filename, or NULL for STDIN/STDOUT */
-	PGList	   *options;		/* PGList of PGDefElem nodes */
+	bool is_from;         /* TO or FROM */
+	bool is_program;      /* is 'filename' a program to popen? */
+	char *filename;       /* filename, or NULL for STDIN/STDOUT */
+	PGList *options;      /* PGList of PGDefElem nodes */
 } PGCopyStmt;
 
 /* ----------------------
@@ -1557,33 +1479,30 @@ typedef struct PGCopyStmt
  * preserve the distinction in VariableSetKind for CreateCommandTag().
  * ----------------------
  */
-typedef enum
-{
-	VAR_SET_VALUE,				/* SET var = value */
-	VAR_SET_DEFAULT,			/* SET var TO DEFAULT */
-	VAR_SET_CURRENT,			/* SET var FROM CURRENT */
-	VAR_SET_MULTI,				/* special case for SET TRANSACTION ... */
-	VAR_RESET,					/* RESET var */
-	VAR_RESET_ALL				/* RESET ALL */
+typedef enum {
+	VAR_SET_VALUE,   /* SET var = value */
+	VAR_SET_DEFAULT, /* SET var TO DEFAULT */
+	VAR_SET_CURRENT, /* SET var FROM CURRENT */
+	VAR_SET_MULTI,   /* special case for SET TRANSACTION ... */
+	VAR_RESET,       /* RESET var */
+	VAR_RESET_ALL    /* RESET ALL */
 } VariableSetKind;
 
-typedef struct PGVariableSetStmt
-{
-	PGNodeTag		type;
+typedef struct PGVariableSetStmt {
+	PGNodeTag type;
 	VariableSetKind kind;
-	char	   *name;			/* variable to be set */
-	PGList	   *args;			/* PGList of PGAConst nodes */
-	bool		is_local;		/* SET LOCAL? */
+	char *name;    /* variable to be set */
+	PGList *args;  /* PGList of PGAConst nodes */
+	bool is_local; /* SET LOCAL? */
 } PGVariableSetStmt;
 
 /* ----------------------
  * Show Statement
  * ----------------------
  */
-typedef struct PGVariableShowStmt
-{
-	PGNodeTag		type;
-	char	   *name;
+typedef struct PGVariableShowStmt {
+	PGNodeTag type;
+	char *name;
 } PGVariableShowStmt;
 
 /* ----------------------
@@ -1597,19 +1516,18 @@ typedef struct PGVariableShowStmt
  * ----------------------
  */
 
-typedef struct PGCreateStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *relation;		/* relation to create */
-	PGList	   *tableElts;		/* column definitions (list of PGColumnDef) */
-	PGList	   *inhRelations;	/* relations to inherit from (list of
+typedef struct PGCreateStmt {
+	PGNodeTag type;
+	PGRangeVar *relation;      /* relation to create */
+	PGList *tableElts;         /* column definitions (list of PGColumnDef) */
+	PGList *inhRelations;      /* relations to inherit from (list of
 								 * inhRelation) */
-	PGTypeName   *ofTypename;		/* OF typename */
-	PGList	   *constraints;	/* constraints (list of PGConstraint nodes) */
-	PGList	   *options;		/* options from WITH clause */
-	PGOnCommitAction oncommit;	/* what do we do at COMMIT? */
-	char	   *tablespacename; /* table space to use, or NULL */
-	bool		if_not_exists;	/* just do nothing if it already exists? */
+	PGTypeName *ofTypename;    /* OF typename */
+	PGList *constraints;       /* constraints (list of PGConstraint nodes) */
+	PGList *options;           /* options from WITH clause */
+	PGOnCommitAction oncommit; /* what do we do at COMMIT? */
+	char *tablespacename;      /* table space to use, or NULL */
+	bool if_not_exists;        /* just do nothing if it already exists? */
 } PGCreateStmt;
 
 /* ----------
@@ -1643,81 +1561,78 @@ typedef struct PGCreateStmt
  * ----------
  */
 
-typedef enum PGConstrType			/* types of constraints */
-{
-	PG_CONSTR_NULL,				/* not standard SQL, but a lot of people
+typedef enum PGConstrType /* types of constraints */
+{ PG_CONSTR_NULL,         /* not standard SQL, but a lot of people
 								 * expect it */
-	PG_CONSTR_NOTNULL,
-	PG_CONSTR_DEFAULT,
-	PG_CONSTR_IDENTITY,
-	PG_CONSTR_CHECK,
-	PG_CONSTR_PRIMARY,
-	PG_CONSTR_UNIQUE,
-	PG_CONSTR_EXCLUSION,
-	PG_CONSTR_FOREIGN,
-	PG_CONSTR_ATTR_DEFERRABLE,		/* attributes for previous constraint node */
-	PG_CONSTR_ATTR_NOT_DEFERRABLE,
-	PG_CONSTR_ATTR_DEFERRED,
-	PG_CONSTR_ATTR_IMMEDIATE
-} PGConstrType;
+  PG_CONSTR_NOTNULL,
+  PG_CONSTR_DEFAULT,
+  PG_CONSTR_IDENTITY,
+  PG_CONSTR_CHECK,
+  PG_CONSTR_PRIMARY,
+  PG_CONSTR_UNIQUE,
+  PG_CONSTR_EXCLUSION,
+  PG_CONSTR_FOREIGN,
+  PG_CONSTR_ATTR_DEFERRABLE, /* attributes for previous constraint node */
+  PG_CONSTR_ATTR_NOT_DEFERRABLE,
+  PG_CONSTR_ATTR_DEFERRED,
+  PG_CONSTR_ATTR_IMMEDIATE } PGConstrType;
 
 /* Foreign key action codes */
-#define PG_FKCONSTR_ACTION_NOACTION	'a'
-#define PG_FKCONSTR_ACTION_RESTRICT	'r'
-#define PG_FKCONSTR_ACTION_CASCADE		'c'
-#define PG_FKCONSTR_ACTION_SETNULL		'n'
-#define PG_FKCONSTR_ACTION_SETDEFAULT	'd'
+#define PG_FKCONSTR_ACTION_NOACTION 'a'
+#define PG_FKCONSTR_ACTION_RESTRICT 'r'
+#define PG_FKCONSTR_ACTION_CASCADE 'c'
+#define PG_FKCONSTR_ACTION_SETNULL 'n'
+#define PG_FKCONSTR_ACTION_SETDEFAULT 'd'
 
 /* Foreign key matchtype codes */
-#define PG_FKCONSTR_MATCH_FULL			'f'
-#define PG_FKCONSTR_MATCH_PARTIAL		'p'
-#define PG_FKCONSTR_MATCH_SIMPLE		's'
+#define PG_FKCONSTR_MATCH_FULL 'f'
+#define PG_FKCONSTR_MATCH_PARTIAL 'p'
+#define PG_FKCONSTR_MATCH_SIMPLE 's'
 
-typedef struct PGConstraint
-{
-	PGNodeTag		type;
-	PGConstrType	contype;		/* see above */
+typedef struct PGConstraint {
+	PGNodeTag type;
+	PGConstrType contype; /* see above */
 
 	/* Fields used for most/all constraint types: */
-	char	   *conname;		/* PGConstraint name, or NULL if unnamed */
-	bool		deferrable;		/* DEFERRABLE? */
-	bool		initdeferred;	/* INITIALLY DEFERRED? */
-	int			location;		/* token location, or -1 if unknown */
+	char *conname;     /* PGConstraint name, or NULL if unnamed */
+	bool deferrable;   /* DEFERRABLE? */
+	bool initdeferred; /* INITIALLY DEFERRED? */
+	int location;      /* token location, or -1 if unknown */
 
 	/* Fields used for constraints with expressions (CHECK and DEFAULT): */
-	bool		is_no_inherit;	/* is constraint non-inheritable? */
-	PGNode	   *raw_expr;		/* expr, as untransformed parse tree */
-	char	   *cooked_expr;	/* expr, as nodeToString representation */
-	char		generated_when;
+	bool is_no_inherit; /* is constraint non-inheritable? */
+	PGNode *raw_expr;   /* expr, as untransformed parse tree */
+	char *cooked_expr;  /* expr, as nodeToString representation */
+	char generated_when;
 
 	/* Fields used for unique constraints (UNIQUE and PRIMARY KEY): */
-	PGList	   *keys;			/* String nodes naming referenced column(s) */
+	PGList *keys; /* String nodes naming referenced column(s) */
 
 	/* Fields used for EXCLUSION constraints: */
-	PGList	   *exclusions;		/* list of (PGIndexElem, operator name) pairs */
+	PGList *exclusions; /* list of (PGIndexElem, operator name) pairs */
 
 	/* Fields used for index constraints (UNIQUE, PRIMARY KEY, EXCLUSION): */
-	PGList	   *options;		/* options from WITH clause */
-	char	   *indexname;		/* existing index to use; otherwise NULL */
-	char	   *indexspace;		/* index tablespace; NULL for default */
+	PGList *options;  /* options from WITH clause */
+	char *indexname;  /* existing index to use; otherwise NULL */
+	char *indexspace; /* index tablespace; NULL for default */
 	/* These could be, but currently are not, used for UNIQUE/PKEY: */
-	char	   *access_method;	/* index access method; NULL for default */
-	PGNode	   *where_clause;	/* partial index predicate */
+	char *access_method;  /* index access method; NULL for default */
+	PGNode *where_clause; /* partial index predicate */
 
 	/* Fields used for FOREIGN KEY constraints: */
-	PGRangeVar   *pktable;		/* Primary key table */
-	PGList	   *fk_attrs;		/* Attributes of foreign key */
-	PGList	   *pk_attrs;		/* Corresponding attrs in PK table */
-	char		fk_matchtype;	/* FULL, PARTIAL, SIMPLE */
-	char		fk_upd_action;	/* ON UPDATE action */
-	char		fk_del_action;	/* ON DELETE action */
-	PGList	   *old_conpfeqop;	/* pg_constraint.conpfeqop of my former self */
-	PGOid			old_pktable_oid;	/* pg_constraint.confrelid of my former
+	PGRangeVar *pktable;   /* Primary key table */
+	PGList *fk_attrs;      /* Attributes of foreign key */
+	PGList *pk_attrs;      /* Corresponding attrs in PK table */
+	char fk_matchtype;     /* FULL, PARTIAL, SIMPLE */
+	char fk_upd_action;    /* ON UPDATE action */
+	char fk_del_action;    /* ON DELETE action */
+	PGList *old_conpfeqop; /* pg_constraint.conpfeqop of my former self */
+	PGOid old_pktable_oid; /* pg_constraint.confrelid of my former
 									 * self */
 
 	/* Fields used for constraints that allow a NOT VALID specification */
-	bool		skip_validation;	/* skip validation of existing rows? */
-	bool		initially_valid;	/* mark the new constraint as valid? */
+	bool skip_validation; /* skip validation of existing rows? */
+	bool initially_valid; /* mark the new constraint as valid? */
 } PGConstraint;
 
 /* ----------------------
@@ -1725,23 +1640,21 @@ typedef struct PGConstraint
  * ----------------------
  */
 
-typedef struct PGCreateSeqStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *sequence;		/* the sequence to create */
-	PGList	   *options;
-	PGOid			ownerId;		/* ID of owner, or InvalidOid for default */
-	bool		for_identity;
-	bool		if_not_exists;	/* just do nothing if it already exists? */
+typedef struct PGCreateSeqStmt {
+	PGNodeTag type;
+	PGRangeVar *sequence; /* the sequence to create */
+	PGList *options;
+	PGOid ownerId; /* ID of owner, or InvalidOid for default */
+	bool for_identity;
+	bool if_not_exists; /* just do nothing if it already exists? */
 } PGCreateSeqStmt;
 
-typedef struct PGAlterSeqStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *sequence;		/* the sequence to alter */
-	PGList	   *options;
-	bool		for_identity;
-	bool		missing_ok;		/* skip error if a role is missing? */
+typedef struct PGAlterSeqStmt {
+	PGNodeTag type;
+	PGRangeVar *sequence; /* the sequence to alter */
+	PGList *options;
+	bool for_identity;
+	bool missing_ok; /* skip error if a role is missing? */
 } PGAlterSeqStmt;
 
 /* ----------------------
@@ -1749,14 +1662,13 @@ typedef struct PGAlterSeqStmt
  * ----------------------
  */
 
-typedef struct PGDropStmt
-{
-	PGNodeTag		type;
-	PGList	   *objects;		/* list of names */
-	PGObjectType	removeType;		/* object type */
-	PGDropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if object is missing? */
-	bool		concurrent;		/* drop index concurrently? */
+typedef struct PGDropStmt {
+	PGNodeTag type;
+	PGList *objects;         /* list of names */
+	PGObjectType removeType; /* object type */
+	PGDropBehavior behavior; /* RESTRICT or CASCADE behavior */
+	bool missing_ok;         /* skip error if object is missing? */
+	bool concurrent;         /* drop index concurrently? */
 } PGDropStmt;
 
 /* ----------------------
@@ -1770,72 +1682,66 @@ typedef struct PGDropStmt
  * properties are empty.
  * ----------------------
  */
-typedef struct PGIndexStmt
-{
-	PGNodeTag		type;
-	char	   *idxname;		/* name of new index, or NULL for default */
-	PGRangeVar   *relation;		/* relation to build index on */
-	char	   *accessMethod;	/* name of access method (eg. btree) */
-	char	   *tableSpace;		/* tablespace, or NULL for default */
-	PGList	   *indexParams;	/* columns to index: a list of PGIndexElem */
-	PGList	   *options;		/* WITH clause options: a list of PGDefElem */
-	PGNode	   *whereClause;	/* qualification (partial-index predicate) */
-	PGList	   *excludeOpNames; /* exclusion operator names, or NIL if none */
-	char	   *idxcomment;		/* comment to apply to index, or NULL */
-	PGOid			indexOid;		/* OID of an existing index, if any */
-	PGOid			oldNode;		/* relfilenode of existing storage, if any */
-	bool		unique;			/* is index unique? */
-	bool		primary;		/* is index a primary key? */
-	bool		isconstraint;	/* is it for a pkey/unique constraint? */
-	bool		deferrable;		/* is the constraint DEFERRABLE? */
-	bool		initdeferred;	/* is the constraint INITIALLY DEFERRED? */
-	bool		transformed;	/* true when transformIndexStmt is finished */
-	bool		concurrent;		/* should this be a concurrent index build? */
-	bool		if_not_exists;	/* just do nothing if index already exists? */
+typedef struct PGIndexStmt {
+	PGNodeTag type;
+	char *idxname;          /* name of new index, or NULL for default */
+	PGRangeVar *relation;   /* relation to build index on */
+	char *accessMethod;     /* name of access method (eg. btree) */
+	char *tableSpace;       /* tablespace, or NULL for default */
+	PGList *indexParams;    /* columns to index: a list of PGIndexElem */
+	PGList *options;        /* WITH clause options: a list of PGDefElem */
+	PGNode *whereClause;    /* qualification (partial-index predicate) */
+	PGList *excludeOpNames; /* exclusion operator names, or NIL if none */
+	char *idxcomment;       /* comment to apply to index, or NULL */
+	PGOid indexOid;         /* OID of an existing index, if any */
+	PGOid oldNode;          /* relfilenode of existing storage, if any */
+	bool unique;            /* is index unique? */
+	bool primary;           /* is index a primary key? */
+	bool isconstraint;      /* is it for a pkey/unique constraint? */
+	bool deferrable;        /* is the constraint DEFERRABLE? */
+	bool initdeferred;      /* is the constraint INITIALLY DEFERRED? */
+	bool transformed;       /* true when transformIndexStmt is finished */
+	bool concurrent;        /* should this be a concurrent index build? */
+	bool if_not_exists;     /* just do nothing if index already exists? */
 } PGIndexStmt;
-
 
 /* ----------------------
  *		Alter Object Rename Statement
  * ----------------------
  */
-typedef struct PGRenameStmt
-{
-	PGNodeTag		type;
-	PGObjectType	renameType;		/* PG_OBJECT_TABLE, PG_OBJECT_COLUMN, etc */
-	PGObjectType	relationType;	/* if column name, associated relation type */
-	PGRangeVar   *relation;		/* in case it's a table */
-	PGNode	   *object;			/* in case it's some other object */
-	char	   *subname;		/* name of contained object (column, rule,
+typedef struct PGRenameStmt {
+	PGNodeTag type;
+	PGObjectType renameType;   /* PG_OBJECT_TABLE, PG_OBJECT_COLUMN, etc */
+	PGObjectType relationType; /* if column name, associated relation type */
+	PGRangeVar *relation;      /* in case it's a table */
+	PGNode *object;            /* in case it's some other object */
+	char *subname;             /* name of contained object (column, rule,
 								 * trigger, etc) */
-	char	   *newname;		/* the new name */
-	PGDropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if missing? */
+	char *newname;             /* the new name */
+	PGDropBehavior behavior;   /* RESTRICT or CASCADE behavior */
+	bool missing_ok;           /* skip error if missing? */
 } PGRenameStmt;
-
 
 /* ----------------------
  *		ALTER object SET SCHEMA Statement
  * ----------------------
  */
-typedef struct PGAlterObjectSchemaStmt
-{
-	PGNodeTag		type;
-	PGObjectType	objectType;		/* PG_OBJECT_TABLE, PG_OBJECT_TYPE, etc */
-	PGRangeVar   *relation;		/* in case it's a table */
-	PGNode	   *object;			/* in case it's some other object */
-	char	   *newschema;		/* the new schema */
-	bool		missing_ok;		/* skip error if missing? */
+typedef struct PGAlterObjectSchemaStmt {
+	PGNodeTag type;
+	PGObjectType objectType; /* PG_OBJECT_TABLE, PG_OBJECT_TYPE, etc */
+	PGRangeVar *relation;    /* in case it's a table */
+	PGNode *object;          /* in case it's some other object */
+	char *newschema;         /* the new schema */
+	bool missing_ok;         /* skip error if missing? */
 } PGAlterObjectSchemaStmt;
 
 /* ----------------------
  *		{Begin|Commit|Rollback} Transaction Statement
  * ----------------------
  */
-typedef enum PGTransactionStmtKind
-{
+typedef enum PGTransactionStmtKind {
 	PG_TRANS_STMT_BEGIN,
-	PG_TRANS_STMT_START,			/* semantically identical to BEGIN */
+	PG_TRANS_STMT_START, /* semantically identical to BEGIN */
 	PG_TRANS_STMT_COMMIT,
 	PG_TRANS_STMT_ROLLBACK,
 	PG_TRANS_STMT_SAVEPOINT,
@@ -1846,44 +1752,36 @@ typedef enum PGTransactionStmtKind
 	TRANS_STMT_ROLLBACK_PREPARED
 } PGTransactionStmtKind;
 
-typedef struct PGTransactionStmt
-{
-	PGNodeTag		type;
-	PGTransactionStmtKind kind;	/* see above */
-	PGList	   *options;		/* for BEGIN/START and savepoint commands */
-	char	   *gid;			/* for two-phase-commit related commands */
+typedef struct PGTransactionStmt {
+	PGNodeTag type;
+	PGTransactionStmtKind kind; /* see above */
+	PGList *options;            /* for BEGIN/START and savepoint commands */
+	char *gid;                  /* for two-phase-commit related commands */
 } PGTransactionStmt;
 
 /* ----------------------
  *		Create View Statement
  * ----------------------
  */
-typedef enum PGViewCheckOption
-{
-	PG_NO_CHECK_OPTION,
-	PG_LOCAL_CHECK_OPTION,
-	CASCADED_CHECK_OPTION
-} PGViewCheckOption;
+typedef enum PGViewCheckOption { PG_NO_CHECK_OPTION, PG_LOCAL_CHECK_OPTION, CASCADED_CHECK_OPTION } PGViewCheckOption;
 
-typedef struct PGViewStmt
-{
-	PGNodeTag		type;
-	PGRangeVar   *view;			/* the view to be created */
-	PGList	   *aliases;		/* target column names */
-	PGNode	   *query;			/* the SELECT query (as a raw parse tree) */
-	bool		replace;		/* replace an existing view? */
-	PGList	   *options;		/* options from WITH clause */
-	PGViewCheckOption withCheckOption;	/* WITH CHECK OPTION */
+typedef struct PGViewStmt {
+	PGNodeTag type;
+	PGRangeVar *view;                  /* the view to be created */
+	PGList *aliases;                   /* target column names */
+	PGNode *query;                     /* the SELECT query (as a raw parse tree) */
+	bool replace;                      /* replace an existing view? */
+	PGList *options;                   /* options from WITH clause */
+	PGViewCheckOption withCheckOption; /* WITH CHECK OPTION */
 } PGViewStmt;
 
 /* ----------------------
  *		Load Statement
  * ----------------------
  */
-typedef struct PGLoadStmt
-{
-	PGNodeTag		type;
-	char	   *filename;		/* file to load */
+typedef struct PGLoadStmt {
+	PGNodeTag type;
+	char *filename; /* file to load */
 } PGLoadStmt;
 
 /* ----------------------
@@ -1894,24 +1792,22 @@ typedef struct PGLoadStmt
  * and PG_VACOPT_ANALYZE must be set in options.
  * ----------------------
  */
-typedef enum PGVacuumOption
-{
-	PG_VACOPT_VACUUM = 1 << 0,		/* do VACUUM */
-	PG_VACOPT_ANALYZE = 1 << 1,	/* do ANALYZE */
-	PG_VACOPT_VERBOSE = 1 << 2,	/* print progress info */
-	PG_VACOPT_FREEZE = 1 << 3,		/* FREEZE option */
-	PG_VACOPT_FULL = 1 << 4,		/* FULL (non-concurrent) vacuum */
-	PG_VACOPT_NOWAIT = 1 << 5,		/* don't wait to get lock (autovacuum only) */
-	PG_VACOPT_SKIPTOAST = 1 << 6,	/* don't process the TOAST table, if any */
-	PG_VACOPT_DISABLE_PAGE_SKIPPING = 1 << 7	/* don't skip any pages */
+typedef enum PGVacuumOption {
+	PG_VACOPT_VACUUM = 1 << 0,               /* do VACUUM */
+	PG_VACOPT_ANALYZE = 1 << 1,              /* do ANALYZE */
+	PG_VACOPT_VERBOSE = 1 << 2,              /* print progress info */
+	PG_VACOPT_FREEZE = 1 << 3,               /* FREEZE option */
+	PG_VACOPT_FULL = 1 << 4,                 /* FULL (non-concurrent) vacuum */
+	PG_VACOPT_NOWAIT = 1 << 5,               /* don't wait to get lock (autovacuum only) */
+	PG_VACOPT_SKIPTOAST = 1 << 6,            /* don't process the TOAST table, if any */
+	PG_VACOPT_DISABLE_PAGE_SKIPPING = 1 << 7 /* don't skip any pages */
 } PGVacuumOption;
 
-typedef struct PGVacuumStmt
-{
-	PGNodeTag		type;
-	int			options;		/* OR of PGVacuumOption flags */
-	PGRangeVar   *relation;		/* single table to process, or NULL */
-	PGList	   *va_cols;		/* list of column names, or NIL for all */
+typedef struct PGVacuumStmt {
+	PGNodeTag type;
+	int options;          /* OR of PGVacuumOption flags */
+	PGRangeVar *relation; /* single table to process, or NULL */
+	PGList *va_cols;      /* list of column names, or NIL for all */
 } PGVacuumStmt;
 
 /* ----------------------
@@ -1922,11 +1818,10 @@ typedef struct PGVacuumStmt
  * of the query are always postponed until execution.
  * ----------------------
  */
-typedef struct PGExplainStmt
-{
-	PGNodeTag		type;
-	PGNode	   *query;			/* the query (see comments above) */
-	PGList	   *options;		/* list of PGDefElem nodes */
+typedef struct PGExplainStmt {
+	PGNodeTag type;
+	PGNode *query;   /* the query (see comments above) */
+	PGList *options; /* list of PGDefElem nodes */
 } PGExplainStmt;
 
 /* ----------------------
@@ -1942,62 +1837,54 @@ typedef struct PGExplainStmt
  * can be a SELECT or an EXECUTE, but not other DML statements.
  * ----------------------
  */
-typedef struct PGCreateTableAsStmt
-{
-	PGNodeTag		type;
-	PGNode	   *query;			/* the query (see comments above) */
-	PGIntoClause *into;			/* destination table */
-	PGObjectType	relkind;		/* PG_OBJECT_TABLE or PG_OBJECT_MATVIEW */
-	bool		is_select_into; /* it was written as SELECT INTO */
-	bool		if_not_exists;	/* just do nothing if it already exists? */
+typedef struct PGCreateTableAsStmt {
+	PGNodeTag type;
+	PGNode *query;        /* the query (see comments above) */
+	PGIntoClause *into;   /* destination table */
+	PGObjectType relkind; /* PG_OBJECT_TABLE or PG_OBJECT_MATVIEW */
+	bool is_select_into;  /* it was written as SELECT INTO */
+	bool if_not_exists;   /* just do nothing if it already exists? */
 } PGCreateTableAsStmt;
 
 /* ----------------------
  * Checkpoint Statement
  * ----------------------
  */
-typedef struct PGCheckPointStmt
-{
-	PGNodeTag		type;
+typedef struct PGCheckPointStmt {
+	PGNodeTag type;
 } PGCheckPointStmt;
 
 /* ----------------------
  *		PREPARE Statement
  * ----------------------
  */
-typedef struct PGPrepareStmt
-{
-	PGNodeTag		type;
-	char	   *name;			/* Name of plan, arbitrary */
-	PGList	   *argtypes;		/* Types of parameters (PGList of PGTypeName) */
-	PGNode	   *query;			/* The query itself (as a raw parsetree) */
+typedef struct PGPrepareStmt {
+	PGNodeTag type;
+	char *name;       /* Name of plan, arbitrary */
+	PGList *argtypes; /* Types of parameters (PGList of PGTypeName) */
+	PGNode *query;    /* The query itself (as a raw parsetree) */
 } PGPrepareStmt;
-
 
 /* ----------------------
  *		EXECUTE Statement
  * ----------------------
  */
 
-typedef struct PGExecuteStmt
-{
-	PGNodeTag		type;
-	char	   *name;			/* The name of the plan to execute */
-	PGList	   *params;			/* Values to assign to parameters */
+typedef struct PGExecuteStmt {
+	PGNodeTag type;
+	char *name;     /* The name of the plan to execute */
+	PGList *params; /* Values to assign to parameters */
 } PGExecuteStmt;
-
 
 /* ----------------------
  *		DEALLOCATE Statement
  * ----------------------
  */
-typedef struct PGDeallocateStmt
-{
-	PGNodeTag		type;
-	char	   *name;			/* The name of the plan to remove */
-	/* NULL means DEALLOCATE ALL */
+typedef struct PGDeallocateStmt {
+	PGNodeTag type;
+	char *name; /* The name of the plan to remove */
+	            /* NULL means DEALLOCATE ALL */
 } PGDeallocateStmt;
-
 
 /* ----------------------
  * PRAGMA statements
@@ -2007,17 +1894,39 @@ typedef struct PGDeallocateStmt
  * PRAGMA pragma_name('param'); (CALL)
  * ----------------------
  */
-typedef enum
-	{
-	PG_PRAGMA_TYPE_NOTHING,
-	PG_PRAGMA_TYPE_ASSIGNMENT,
-	PG_PRAGMA_TYPE_CALL
-} PGPragmaKind;
+typedef enum { PG_PRAGMA_TYPE_NOTHING, PG_PRAGMA_TYPE_ASSIGNMENT, PG_PRAGMA_TYPE_CALL } PGPragmaKind;
 
-typedef struct PGPragmaStmt
-{
-	PGNodeTag		type;
+typedef struct PGPragmaStmt {
+	PGNodeTag type;
 	PGPragmaKind kind;
-	char	   *name;			/* variable to be set */
-	PGList	   *args;			/* PGList of PGAConst nodes */
+	char *name;   /* variable to be set */
+	PGList *args; /* PGList of PGAConst nodes */
 } PGPragmaStmt;
+
+/* ----------------------
+ *		CALL Statement
+ * ----------------------
+ */
+
+typedef struct PGCallStmt {
+	PGNodeTag type;
+	PGNode *func;
+} PGCallStmt;
+
+/* ----------------------
+ *		EXPORT/IMPORT Statements
+ * ----------------------
+ */
+
+typedef struct PGExportStmt {
+	PGNodeTag type;
+	char *filename;       /* filename */
+	PGList *options;      /* PGList of PGDefElem nodes */
+} PGExportStmt;
+
+typedef struct PGImportStmt {
+	PGNodeTag type;
+	char *filename;       /* filename */
+} PGImportStmt;
+
+}

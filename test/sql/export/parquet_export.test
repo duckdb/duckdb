@@ -1,0 +1,39 @@
+# name: test/sql/export/parquet_export.test
+# description: Test EXPORT/IMPORT database with parquet
+# group: [export]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i INTEGER NOT NULL, j INTEGER)
+
+statement ok
+INSERT INTO integers SELECT i, i+1 FROM range(0, 1000) tbl(i)
+
+query II nosort sumresult
+SELECT SUM(i), SUM(j) FROM integers
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT PARQUET)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_test'
+
+# verify the data is still there
+query II nosort sumresult
+SELECT SUM(i), SUM(j) FROM integers
+
+# verify that the not null constraint is still there
+statement error
+INSERT INTO integers VALUES (NULL, NULL)
+
+

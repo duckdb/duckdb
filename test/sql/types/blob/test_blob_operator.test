@@ -1,0 +1,64 @@
+# name: test/sql/types/blob/test_blob_operator.test
+# description: Test BLOBs with various SQL operators
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE blobs (b BYTEA, g INTEGER);
+
+# strings: hello -> \x68656C6C6F, r -> \x72
+statement ok
+INSERT INTO blobs VALUES ('hello', 0), ('\xAAFFAA', 1), (NULL, 0), ('r', 1)
+
+# simple aggregates only
+query IITT
+SELECT COUNT(*), COUNT(b), MIN(b), MAX(b) FROM blobs
+----
+4	3	\x68656C6C6F	\xAAFFAA
+
+# ORDER BY
+query TI
+SELECT * FROM blobs ORDER BY b
+----
+NULL	0
+\x68656C6C6F	0
+\x72	1
+\xAAFFAA	1
+
+# GROUP BY
+statement ok
+INSERT INTO blobs VALUES ('hello', 3), ('\xAAFFAA', 9), (NULL, 0), ('r', 19)
+
+query R
+SELECT SUM(g) FROM blobs GROUP BY b ORDER BY b
+----
+0.000000
+3.000000
+20.000000
+10.000000
+
+# JOIN
+statement ok
+CREATE TABLE blobs2 (b BYTEA, g INTEGER);
+
+statement ok
+INSERT INTO blobs2 VALUES ('hello', 0), ('\xAAFFAA', 100), (NULL, 0), ('r', 200)
+
+# group by blobs.b, explicit JOIN
+query TR
+SELECT L.b, SUM(L.g) FROM blobs as L JOIN blobs2 AS R ON L.b=R.b GROUP BY L.b ORDER BY L.b
+----
+\x68656C6C6F	3.000000
+\x72	20.000000
+\xAAFFAA	10.000000
+
+# group by blobs2.b, implicit JOIN
+query TR
+SELECT R.b, SUM(R.g) FROM blobs as L, blobs2 AS R WHERE L.b=R.b GROUP BY R.b ORDER BY R.b
+----
+\x68656C6C6F	0.000000
+\x72	400.000000
+\xAAFFAA	200.000000
+

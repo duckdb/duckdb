@@ -1,0 +1,17 @@
+# name: test/issues/rigger/test_624.test
+# description: Issue 624
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# ALTER TABLE results in an assertion failure 'Assertion `expr.return_type == vector.type' failed'
+statement ok
+CREATE TABLE t0(c0 INT, c1 VARCHAR);
+
+statement ok
+INSERT INTO t0(c1) VALUES(NULL);
+
+statement ok
+ALTER TABLE t0 ALTER c1 TYPE TIMESTAMP;
+

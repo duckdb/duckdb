@@ -31,7 +31,7 @@ public:
 	//! The set of data chunks in the collection
 	vector<unique_ptr<DataChunk>> chunks;
 	//! The types of the ChunkCollection
-	vector<TypeId> types;
+	vector<LogicalType> types;
 
 	//! The amount of columns in the ChunkCollection
 	idx_t column_count() {

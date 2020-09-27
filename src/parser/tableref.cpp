@@ -4,7 +4,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void TableRef::Serialize(Serializer &serializer) {
@@ -50,3 +50,5 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 void TableRef::Print() {
 	Printer::Print(ToString());
 }
+
+} // namespace duckdb

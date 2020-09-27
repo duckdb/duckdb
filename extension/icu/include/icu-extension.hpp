@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/extension.hpp
+// icu-extension.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,6 +16,5 @@ class ICUExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
 };
-
 
 } // namespace duckdb

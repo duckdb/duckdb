@@ -1,0 +1,181 @@
+# name: test/sql/subquery/any_all/test_correlated_any_all.test
+# description: Test correlated ANY/ALL subqueries
+# group: [any_all]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# correlated ANY/ALL
+query T
+SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;
+----
+0
+1
+1
+1
+
+query T
+SELECT i>ALL(SELECT (i+i1.i-1)/2 FROM integers WHERE i IS NOT NULL) FROM integers i1 ORDER BY i;
+----
+NULL
+0
+0
+1
+
+query T
+SELECT i=ALL(SELECT i FROM integers WHERE i<>i1.i) FROM integers i1 ORDER BY i;
+----
+1
+0
+0
+0
+
+# correlated ANY/ALL
+query I
+SELECT i FROM integers i1 WHERE i=ANY(SELECT i FROM integers WHERE i=i1.i) ORDER BY i;
+----
+1
+2
+3
+
+query I
+SELECT i FROM integers i1 WHERE i<>ANY(SELECT i FROM integers WHERE i=i1.i) ORDER BY i;
+----
+
+query I
+SELECT i FROM integers i1 WHERE i=ANY(SELECT i FROM integers WHERE i<>i1.i) ORDER BY i;
+----
+
+query I
+SELECT i FROM integers i1 WHERE i>ANY(SELECT i FROM integers WHERE i<>i1.i) ORDER BY i;
+----
+2
+3
+
+query I
+SELECT i FROM integers i1 WHERE i>ALL(SELECT (i+i1.i-1)/2 FROM integers WHERE i IS NOT NULL) ORDER BY i;
+----
+3
+
+# if there is i=ANY() where the subquery returns an EMPTY result set and i=NULL, the result becomes FALSE instead
+# of NULL
+query T
+SELECT i=ALL(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;
+----
+1
+1
+1
+1
+
+query T
+SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;
+----
+0
+1
+1
+1
+
+query T
+SELECT i<>ALL(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;
+----
+1
+0
+0
+0
+
+query T
+SELECT i<>ANY(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;
+----
+0
+0
+0
+0
+
+query T
+SELECT i=ALL(SELECT i FROM integers WHERE i<>i1.i) FROM integers i1 ORDER BY i;
+----
+1
+0
+0
+0
+
+query T
+SELECT i=ANY(SELECT i FROM integers WHERE i<>i1.i) FROM integers i1 ORDER BY i;
+----
+0
+0
+0
+0
+
+query T
+SELECT i>ANY(SELECT i FROM integers WHERE i<>i1.i) FROM integers i1 ORDER BY i;
+----
+0
+0
+1
+1
+
+query T
+SELECT i>ALL(SELECT (i+i1.i-1)/2 FROM integers) FROM integers i1 ORDER BY i;
+----
+NULL
+0
+0
+NULL
+
+query T
+SELECT i>ALL(SELECT (i+i1.i-1)/2 FROM integers WHERE i IS NOT NULL) FROM integers i1 ORDER BY i;
+----
+NULL
+0
+0
+1
+
+query T
+SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i OR i IS NULL) FROM integers i1 ORDER BY i;
+----
+NULL
+1
+1
+1
+
+query T
+SELECT i=ALL(SELECT i FROM integers WHERE i=i1.i OR i IS NULL) FROM integers i1 ORDER BY i;
+----
+NULL
+NULL
+NULL
+NULL
+
+# correlated ANY/ALL with aggregations
+query T
+SELECT MIN(i)>ANY(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;
+----
+0
+
+query T
+SELECT SUM(i)>ANY(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;
+----
+1
+
+# correlated subquery with correlated any
+query T
+SELECT (SELECT SUM(i)+SUM(i1.i) FROM integers)>ANY(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;
+----
+1
+
+# zero results for all
+query T
+SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i AND i>10) FROM integers i1 ORDER BY i;
+----
+0
+0
+0
+0
+

@@ -7,7 +7,16 @@
 #include "datetime.h" // from Python
 
 #include "duckdb.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "parquet-extension.hpp"
+
+#include <random>
 
 namespace py = pybind11;
 
@@ -46,6 +55,18 @@ struct StringConvert {
 	}
 };
 
+struct IntegralConvert {
+	template <class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(DUCKDB_T val) {
+		return NUMPY_T(val);
+	}
+};
+
+template <> double IntegralConvert::convert_value(hugeint_t val) {
+	double result;
+	Hugeint::TryCast(val, result);
+	return result;
+}
+
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static py::array fetch_column(string numpy_type, ChunkCollection &collection, idx_t column) {
 	auto out = py::array(py::dtype(numpy_type), collection.count);
@@ -71,8 +92,50 @@ template <class T> static py::array fetch_column_regular(string numpy_type, Chun
 	return fetch_column<T, T, RegularConvert>(numpy_type, collection, column);
 }
 
-}; // namespace duckdb_py_convert
-// namespace duckdb_py_convert
+template <class DUCKDB_T>
+static void decimal_convert_internal(ChunkCollection &collection, idx_t column, double *out_ptr, double division) {
+	idx_t out_offset = 0;
+	for (auto &data_chunk : collection.chunks) {
+		auto &src = data_chunk->data[column];
+		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
+		auto &nullmask = FlatVector::Nullmask(src);
+		for (idx_t i = 0; i < data_chunk->size(); i++) {
+			if (nullmask[i]) {
+				continue;
+			}
+			out_ptr[i + out_offset] = IntegralConvert::convert_value<DUCKDB_T, double>(src_ptr[i]) / division;
+		}
+		out_offset += data_chunk->size();
+	}
+}
+
+static py::array fetch_column_decimal(string numpy_type, ChunkCollection &collection, idx_t column,
+                                      LogicalType &decimal_type) {
+	auto out = py::array(py::dtype(numpy_type), collection.count);
+	auto out_ptr = (double *)out.mutable_data();
+
+	auto dec_scale = decimal_type.scale();
+	double division = pow(10, dec_scale);
+	switch (decimal_type.InternalType()) {
+	case PhysicalType::INT16:
+		decimal_convert_internal<int16_t>(collection, column, out_ptr, division);
+		break;
+	case PhysicalType::INT32:
+		decimal_convert_internal<int32_t>(collection, column, out_ptr, division);
+		break;
+	case PhysicalType::INT64:
+		decimal_convert_internal<int64_t>(collection, column, out_ptr, division);
+		break;
+	case PhysicalType::INT128:
+		decimal_convert_internal<hugeint_t>(collection, column, out_ptr, division);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented internal type for DECIMAL");
+	}
+	return out;
+}
+
+} // namespace duckdb_py_convert
 
 namespace random_string {
 static std::random_device rd;
@@ -91,21 +154,29 @@ std::string generate() {
 } // namespace random_string
 
 struct PandasScanFunctionData : public TableFunctionData {
-	PandasScanFunctionData(py::handle df, idx_t row_count, vector<SQLType> sql_types)
-	    : df(df), row_count(row_count), sql_types(sql_types), position(0) {
+	PandasScanFunctionData(py::handle df, idx_t row_count, vector<LogicalType> sql_types)
+	    : df(df), row_count(row_count), sql_types(sql_types) {
 	}
 	py::handle df;
 	idx_t row_count;
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
+};
+
+struct PandasScanState : public FunctionOperatorData {
+	PandasScanState() : position(0) {
+	}
+
 	idx_t position;
 };
 
 struct PandasScanFunction : public TableFunction {
 	PandasScanFunction()
-	    : TableFunction("pandas_scan", {SQLType::VARCHAR}, pandas_scan_bind, pandas_scan_function, nullptr){};
+	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_function, pandas_scan_bind, pandas_scan_init,
+	                    nullptr, nullptr, pandas_scan_cardinality){};
 
-	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> inputs,
-	                                                 vector<SQLType> &return_types, vector<string> &names) {
+	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> &inputs,
+	                                                 unordered_map<string, Value> &named_parameters,
+	                                                 vector<LogicalType> &return_types, vector<string> &names) {
 		// Hey, it works (TM)
 		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
@@ -127,26 +198,26 @@ struct PandasScanFunction : public TableFunction {
 		for (idx_t col_idx = 0; col_idx < py::len(df_names); col_idx++) {
 			auto col_type = string(py::str(df_types[col_idx]));
 			names.push_back(string(py::str(df_names[col_idx])));
-			SQLType duckdb_col_type;
+			LogicalType duckdb_col_type;
 			if (col_type == "bool") {
-				duckdb_col_type = SQLType::BOOLEAN;
+				duckdb_col_type = LogicalType::BOOLEAN;
 			} else if (col_type == "int8") {
-				duckdb_col_type = SQLType::TINYINT;
+				duckdb_col_type = LogicalType::TINYINT;
 			} else if (col_type == "int16") {
-				duckdb_col_type = SQLType::SMALLINT;
+				duckdb_col_type = LogicalType::SMALLINT;
 			} else if (col_type == "int32") {
-				duckdb_col_type = SQLType::INTEGER;
+				duckdb_col_type = LogicalType::INTEGER;
 			} else if (col_type == "int64") {
-				duckdb_col_type = SQLType::BIGINT;
+				duckdb_col_type = LogicalType::BIGINT;
 			} else if (col_type == "float32") {
-				duckdb_col_type = SQLType::FLOAT;
+				duckdb_col_type = LogicalType::FLOAT;
 			} else if (col_type == "float64") {
-				duckdb_col_type = SQLType::DOUBLE;
+				duckdb_col_type = LogicalType::DOUBLE;
 			} else if (col_type == "datetime64[ns]") {
-				duckdb_col_type = SQLType::TIMESTAMP;
+				duckdb_col_type = LogicalType::TIMESTAMP;
 			} else if (col_type == "object") {
 				// this better be strings
-				duckdb_col_type = SQLType::VARCHAR;
+				duckdb_col_type = LogicalType::VARCHAR;
 			} else {
 				throw runtime_error("unsupported python type " + col_type);
 			}
@@ -156,19 +227,41 @@ struct PandasScanFunction : public TableFunction {
 		return make_unique<PandasScanFunctionData>(df, row_count, return_types);
 	}
 
-	template <class T> static void scan_pandas_column(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
-		auto src_ptr = (T *)numpy_col.data();
-		FlatVector::SetData(out, (data_ptr_t) (src_ptr + offset));
+	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
+	                                                         vector<column_t> &column_ids,
+	                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+		return make_unique<PandasScanState>();
 	}
 
-	static void pandas_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
-	                                 FunctionData *dataptr) {
-		auto &data = *((PandasScanFunctionData *)dataptr);
+	template <class T> static void scan_pandas_column(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
+		auto src_ptr = (T *)numpy_col.data();
+		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+	}
 
-		if (data.position >= data.row_count) {
+	template <class T> static bool ValueIsNull(T value) {
+		throw runtime_error("unsupported type for ValueIsNull");
+	}
+
+	template <class T> static void scan_pandas_fp_column(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
+		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+		auto tgt_ptr = (T *)FlatVector::GetData(out);
+		auto &nullmask = FlatVector::Nullmask(out);
+		for (idx_t i = 0; i < count; i++) {
+			if (ValueIsNull(tgt_ptr[i])) {
+				nullmask[i] = true;
+			}
+		}
+	}
+
+	static void pandas_scan_function(ClientContext &context, const FunctionData *bind_data,
+	                                 FunctionOperatorData *operator_state, DataChunk &output) {
+		auto &data = (PandasScanFunctionData &)*bind_data;
+		auto &state = (PandasScanState &)*operator_state;
+
+		if (state.position >= data.row_count) {
 			return;
 		}
-		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - data.position);
+		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - state.position);
 
 		auto df_names = py::list(data.df.attr("columns"));
 		auto get_fun = data.df.attr("__getitem__");
@@ -177,34 +270,43 @@ struct PandasScanFunction : public TableFunction {
 		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
 			auto numpy_col = py::array(get_fun(df_names[col_idx]).attr("to_numpy")());
 
-			switch (data.sql_types[col_idx].id) {
-			case SQLTypeId::BOOLEAN:
-				scan_pandas_column<bool>(numpy_col, this_count, data.position, output.data[col_idx]);
+			switch (data.sql_types[col_idx].id()) {
+			case LogicalTypeId::BOOLEAN:
+				scan_pandas_column<bool>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::TINYINT:
-				scan_pandas_column<int8_t>(numpy_col, this_count, data.position, output.data[col_idx]);
+			case LogicalTypeId::TINYINT:
+				scan_pandas_column<int8_t>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::SMALLINT:
-				scan_pandas_column<int16_t>(numpy_col, this_count, data.position, output.data[col_idx]);
+			case LogicalTypeId::SMALLINT:
+				scan_pandas_column<int16_t>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::INTEGER:
-				scan_pandas_column<int32_t>(numpy_col, this_count, data.position, output.data[col_idx]);
+			case LogicalTypeId::INTEGER:
+				scan_pandas_column<int32_t>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::BIGINT:
-				scan_pandas_column<int64_t>(numpy_col, this_count, data.position, output.data[col_idx]);
+			case LogicalTypeId::BIGINT:
+				scan_pandas_column<int64_t>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::FLOAT:
-				scan_pandas_column<float>(numpy_col, this_count, data.position, output.data[col_idx]);
+			case LogicalTypeId::FLOAT:
+				scan_pandas_fp_column<float>((float *)numpy_col.data(), this_count, state.position,
+				                             output.data[col_idx]);
 				break;
-			case SQLTypeId::DOUBLE:
-				scan_pandas_column<double>(numpy_col, this_count, data.position, output.data[col_idx]);
+			case LogicalTypeId::DOUBLE:
+				scan_pandas_fp_column<double>((double *)numpy_col.data(), this_count, state.position,
+				                              output.data[col_idx]);
 				break;
-			case SQLTypeId::TIMESTAMP: {
+			case LogicalTypeId::TIMESTAMP: {
 				auto src_ptr = (int64_t *)numpy_col.data();
 				auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
+				auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
-					auto ms = src_ptr[row] / 1000000; // nanoseconds
+					auto source_idx = state.position + row;
+					if (src_ptr[source_idx] <= NumericLimits<int64_t>::Minimum()) {
+						// pandas Not a Time (NaT)
+						nullmask[row] = true;
+						continue;
+					}
+					auto ms = src_ptr[source_idx] / 1000000; // nanoseconds
 					auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
 					date_t date = Date::EpochToDate(ms / 1000);
 					dtime_t time = (dtime_t)(ms % ms_per_day);
@@ -212,12 +314,13 @@ struct PandasScanFunction : public TableFunction {
 				}
 				break;
 			} break;
-			case SQLTypeId::VARCHAR: {
+			case LogicalTypeId::VARCHAR: {
 				auto src_ptr = (PyObject **)numpy_col.data();
 				auto tgt_ptr = (string_t *)FlatVector::GetData(output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
-					auto val = src_ptr[row + data.position];
+					auto source_idx = state.position + row;
+					auto val = src_ptr[source_idx];
 
 #if PY_MAJOR_VERSION >= 3
 					if (!PyUnicode_Check(val)) {
@@ -227,25 +330,41 @@ struct PandasScanFunction : public TableFunction {
 					if (PyUnicode_READY(val) != 0) {
 						throw runtime_error("failure in PyUnicode_READY");
 					}
-					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object*) &val)->cast<string>());
+					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object *)&val)->cast<string>());
 #else
-					if (!py::isinstance<py::str>(*((py::object*) &val))) {
+					if (!py::isinstance<py::str>(*((py::object *)&val))) {
 						FlatVector::SetNull(output.data[col_idx], row, true);
 						continue;
 					}
 
-					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object*) &val)->cast<string>());
+					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object *)&val)->cast<string>());
 #endif
 				}
 				break;
 			}
 			default:
-				throw runtime_error("Unsupported type " + SQLTypeToString(data.sql_types[col_idx]));
+				throw runtime_error("Unsupported type " + data.sql_types[col_idx].ToString());
 			}
 		}
-		data.position += this_count;
+		state.position += this_count;
+	}
+
+	static idx_t pandas_scan_cardinality(const FunctionData *bind_data) {
+		auto &data = (PandasScanFunctionData &)*bind_data;
+		return data.row_count;
 	}
 };
+
+template <> bool PandasScanFunction::ValueIsNull(float value);
+template <> bool PandasScanFunction::ValueIsNull(double value);
+
+template <> bool PandasScanFunction::ValueIsNull(float value) {
+	return !Value::FloatIsValid(value);
+}
+
+template <> bool PandasScanFunction::ValueIsNull(double value) {
+	return !Value::DoubleIsValid(value);
+}
 
 struct DuckDBPyResult {
 
@@ -274,36 +393,43 @@ struct DuckDBPyResult {
 				continue;
 			}
 			auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-			switch (result->sql_types[col_idx].id) {
-			case SQLTypeId::BOOLEAN:
+			switch (result->types[col_idx].id()) {
+			case LogicalTypeId::BOOLEAN:
 				res[col_idx] = val.GetValue<bool>();
 				break;
-			case SQLTypeId::TINYINT:
+			case LogicalTypeId::TINYINT:
 				res[col_idx] = val.GetValue<int8_t>();
 				break;
-			case SQLTypeId::SMALLINT:
+			case LogicalTypeId::SMALLINT:
 				res[col_idx] = val.GetValue<int16_t>();
 				break;
-			case SQLTypeId::INTEGER:
+			case LogicalTypeId::INTEGER:
 				res[col_idx] = val.GetValue<int32_t>();
 				break;
-			case SQLTypeId::BIGINT:
+			case LogicalTypeId::BIGINT:
 				res[col_idx] = val.GetValue<int64_t>();
 				break;
-			case SQLTypeId::FLOAT:
+			case LogicalTypeId::HUGEINT: {
+				auto hugeint_str = val.GetValue<string>();
+				res[col_idx] = PyLong_FromString((char *)hugeint_str.c_str(), nullptr, 10);
+				break;
+			}
+			case LogicalTypeId::FLOAT:
 				res[col_idx] = val.GetValue<float>();
 				break;
-			case SQLTypeId::DOUBLE:
+			case LogicalTypeId::DOUBLE:
 				res[col_idx] = val.GetValue<double>();
 				break;
-			case SQLTypeId::VARCHAR:
+			case LogicalTypeId::DECIMAL:
+				res[col_idx] = val.CastAs(LogicalType::DOUBLE).GetValue<double>();
+				break;
+			case LogicalTypeId::VARCHAR:
 				res[col_idx] = val.GetValue<string>();
 				break;
 
-			case SQLTypeId::TIMESTAMP: {
-				if (result->types[col_idx] != TypeId::INT64) {
-					throw runtime_error("expected int64 for timestamp");
-				}
+			case LogicalTypeId::TIMESTAMP: {
+				assert(result->types[col_idx].InternalType() == PhysicalType::INT64);
+
 				auto timestamp = val.GetValue<int64_t>();
 				auto date = Timestamp::GetDate(timestamp);
 				res[col_idx] = PyDateTime_FromDateAndTime(
@@ -313,20 +439,18 @@ struct DuckDBPyResult {
 
 				break;
 			}
-			case SQLTypeId::TIME: {
-				if (result->types[col_idx] != TypeId::INT32) {
-					throw runtime_error("expected int32 for time");
-				}
+			case LogicalTypeId::TIME: {
+				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+
 				int32_t hour, min, sec, msec;
 				auto time = val.GetValue<int32_t>();
 				duckdb::Time::Convert(time, hour, min, sec, msec);
 				res[col_idx] = PyTime_FromTime(hour, min, sec, msec * 1000);
 				break;
 			}
-			case SQLTypeId::DATE: {
-				if (result->types[col_idx] != TypeId::INT32) {
-					throw runtime_error("expected int32 for date");
-				}
+			case LogicalTypeId::DATE: {
+				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+
 				auto date = val.GetValue<int32_t>();
 				res[col_idx] = PyDate_FromDate(duckdb::Date::ExtractYear(date), duckdb::Date::ExtractMonth(date),
 				                               duckdb::Date::ExtractDay(date));
@@ -334,7 +458,7 @@ struct DuckDBPyResult {
 			}
 
 			default:
-				throw runtime_error("unsupported type: " + SQLTypeToString(result->sql_types[col_idx]));
+				throw runtime_error("unsupported type: " + result->types[col_idx].ToString());
 			}
 		}
 		chunk_offset++;
@@ -372,51 +496,59 @@ struct DuckDBPyResult {
 		for (idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
 			// convert the actual payload
 			py::array col_res;
-			switch (mres->sql_types[col_idx].id) {
-			case SQLTypeId::BOOLEAN:
+			switch (mres->types[col_idx].id()) {
+			case LogicalTypeId::BOOLEAN:
 				col_res = duckdb_py_convert::fetch_column_regular<bool>("bool", mres->collection, col_idx);
 				break;
-			case SQLTypeId::TINYINT:
+			case LogicalTypeId::TINYINT:
 				col_res = duckdb_py_convert::fetch_column_regular<int8_t>("int8", mres->collection, col_idx);
 				break;
-			case SQLTypeId::SMALLINT:
+			case LogicalTypeId::SMALLINT:
 				col_res = duckdb_py_convert::fetch_column_regular<int16_t>("int16", mres->collection, col_idx);
 				break;
-			case SQLTypeId::INTEGER:
+			case LogicalTypeId::INTEGER:
 				col_res = duckdb_py_convert::fetch_column_regular<int32_t>("int32", mres->collection, col_idx);
 				break;
-			case SQLTypeId::BIGINT:
+			case LogicalTypeId::BIGINT:
 				col_res = duckdb_py_convert::fetch_column_regular<int64_t>("int64", mres->collection, col_idx);
 				break;
-			case SQLTypeId::FLOAT:
+			case LogicalTypeId::HUGEINT:
+				col_res = duckdb_py_convert::fetch_column<hugeint_t, double, duckdb_py_convert::IntegralConvert>(
+				    "float64", mres->collection, col_idx);
+				break;
+			case LogicalTypeId::FLOAT:
 				col_res = duckdb_py_convert::fetch_column_regular<float>("float32", mres->collection, col_idx);
 				break;
-			case SQLTypeId::DOUBLE:
+			case LogicalTypeId::DOUBLE:
 				col_res = duckdb_py_convert::fetch_column_regular<double>("float64", mres->collection, col_idx);
 				break;
-			case SQLTypeId::TIMESTAMP:
+			case LogicalTypeId::DECIMAL:
+				col_res =
+				    duckdb_py_convert::fetch_column_decimal("float64", mres->collection, col_idx, mres->types[col_idx]);
+				break;
+			case LogicalTypeId::TIMESTAMP:
 				col_res = duckdb_py_convert::fetch_column<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
 				    "datetime64[ms]", mres->collection, col_idx);
 				break;
-			case SQLTypeId::DATE:
+			case LogicalTypeId::DATE:
 				col_res = duckdb_py_convert::fetch_column<date_t, int64_t, duckdb_py_convert::DateConvert>(
 				    "datetime64[s]", mres->collection, col_idx);
 				break;
-			case SQLTypeId::TIME:
+			case LogicalTypeId::TIME:
 				col_res = duckdb_py_convert::fetch_column<time_t, py::str, duckdb_py_convert::TimeConvert>(
 				    "object", mres->collection, col_idx);
 				break;
-			case SQLTypeId::VARCHAR:
+			case LogicalTypeId::VARCHAR:
 				col_res = duckdb_py_convert::fetch_column<string_t, py::str, duckdb_py_convert::StringConvert>(
 				    "object", mres->collection, col_idx);
 				break;
 			default:
-				throw runtime_error("unsupported type " + SQLTypeToString(mres->sql_types[col_idx]));
+				throw runtime_error("unsupported type " + mres->types[col_idx].ToString());
 			}
 
 			// convert the nullmask
 			auto nullmask = py::array(py::dtype("bool"), mres->collection.count);
-			auto nullmask_ptr = (bool*) nullmask.mutable_data();
+			auto nullmask_ptr = (bool *)nullmask.mutable_data();
 			idx_t out_offset = 0;
 			for (auto &data_chunk : mres->collection.chunks) {
 				auto &src_nm = FlatVector::Nullmask(data_chunk->data[col_idx]);
@@ -435,6 +567,35 @@ struct DuckDBPyResult {
 
 	py::object fetchdf() {
 		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy());
+	}
+
+	py::object fetch_arrow_table() {
+		if (!result) {
+			throw runtime_error("result closed");
+		}
+
+		auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+
+		auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
+		auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
+		auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
+		ArrowSchema schema;
+		result->ToArrowSchema(&schema);
+		auto schema_obj = schema_import_func((uint64_t)&schema);
+
+		py::list batches;
+		while (true) {
+			auto data_chunk = result->Fetch();
+			if (data_chunk->size() == 0) {
+				break;
+			}
+			ArrowArray data;
+			data_chunk->ToArrowArray(&data);
+			ArrowSchema schema;
+			result->ToArrowSchema(&schema);
+			batches.append(batch_import_func((uint64_t)&data, (uint64_t)&schema));
+		}
+		return from_batches_func(batches, schema_obj);
 	}
 
 	py::list description() {
@@ -550,7 +711,7 @@ struct DuckDBPyConnection {
 		if (!connection) {
 			throw runtime_error("connection closed");
 		}
-		vector<vector<Value>> values {DuckDBPyConnection::transform_python_param_list(params)};
+		vector<vector<Value>> values{DuckDBPyConnection::transform_python_param_list(params)};
 		return make_unique<DuckDBPyRelation>(connection->Values(values));
 	}
 
@@ -590,7 +751,6 @@ struct DuckDBPyConnection {
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 	}
 
-
 	unique_ptr<DuckDBPyRelation> from_parquet(string filename) {
 		if (!connection) {
 			throw runtime_error("connection closed");
@@ -600,6 +760,82 @@ struct DuckDBPyConnection {
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 	}
 
+	struct PythonTableArrowArrayStream {
+		PythonTableArrowArrayStream(py::object arrow_table) : arrow_table(arrow_table) {
+			stream.get_schema = PythonTableArrowArrayStream::my_stream_getschema;
+			stream.get_next = PythonTableArrowArrayStream::my_stream_getnext;
+			stream.release = PythonTableArrowArrayStream::my_stream_release;
+			stream.get_last_error = PythonTableArrowArrayStream::my_stream_getlasterror;
+			stream.private_data = this;
+
+			batches = arrow_table.attr("to_batches")();
+		}
+
+		static int my_stream_getschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			if (!stream->release) {
+				my_stream->last_error = "stream was released";
+				return -1;
+			}
+			my_stream->arrow_table.attr("schema").attr("_export_to_c")((uint64_t)out);
+			return 0;
+		}
+
+		static int my_stream_getnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			if (!stream->release) {
+				my_stream->last_error = "stream was released";
+				return -1;
+			}
+			if (my_stream->batch_idx >= py::len(my_stream->batches)) {
+				out->release = nullptr;
+				return 0;
+			}
+			my_stream->batches[my_stream->batch_idx++].attr("_export_to_c")((uint64_t)out);
+			return 0;
+		}
+
+		static void my_stream_release(struct ArrowArrayStream *stream) {
+			if (!stream->release) {
+				return;
+			}
+			stream->release = nullptr;
+			delete (PythonTableArrowArrayStream *)stream->private_data;
+		}
+
+		static const char *my_stream_getlasterror(struct ArrowArrayStream *stream) {
+			if (!stream->release) {
+				return "stream was released";
+			}
+			assert(stream->private_data);
+			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
+			return my_stream->last_error.c_str();
+		}
+
+		ArrowArrayStream stream;
+		string last_error;
+		py::object arrow_table;
+		py::list batches;
+		idx_t batch_idx = 0;
+	};
+
+	unique_ptr<DuckDBPyRelation> from_arrow_table(py::object table) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		};
+
+		// the following is a careful dance around having to depend on pyarrow
+		if (table.is_none() || string(py::str(table.get_type().attr("__name__"))) != "Table") {
+			throw runtime_error("Only arrow tables supported");
+		}
+
+		auto my_arrow_table = new PythonTableArrowArrayStream(table);
+		string name = "arrow_table_" + ptr_to_string((void *)my_arrow_table);
+		return make_unique<DuckDBPyRelation>(
+		    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)my_arrow_table)})->Alias(name));
+	}
 
 	DuckDBPyConnection *unregister_df(string name) {
 		registered_dfs[name] = py::none();
@@ -674,6 +910,12 @@ struct DuckDBPyConnection {
 		}
 		return result->fetchdf();
 	}
+	py::object fetcharrow() {
+		if (!result) {
+			throw runtime_error("no open result set");
+		}
+		return result->fetch_arrow_table();
+	}
 
 	static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 		auto res = make_unique<DuckDBPyConnection>();
@@ -708,8 +950,9 @@ struct DuckDBPyConnection {
 		vector<Value> args;
 
 		auto datetime_mod = py::module::import("datetime");
-		auto datetime_date = datetime_mod.attr("datetime");
-		auto datetime_datetime = datetime_mod.attr("date");
+		auto datetime_date = datetime_mod.attr("date");
+		auto datetime_datetime = datetime_mod.attr("datetime");
+		auto datetime_time = datetime_mod.attr("time");
 
 		for (auto &ele : params) {
 			if (ele.is_none()) {
@@ -722,12 +965,26 @@ struct DuckDBPyConnection {
 				args.push_back(Value::DOUBLE(ele.cast<double>()));
 			} else if (py::isinstance<py::str>(ele)) {
 				args.push_back(Value(ele.cast<string>()));
-			} else if (ele.get_type().is(datetime_date)) {
-				throw runtime_error("date parameters not supported yet :/");
-				// args.push_back(Value::DATE(1984, 4, 24));
-			} else if (ele.get_type().is(datetime_datetime)) {
-				throw runtime_error("datetime parameters not supported yet :/");
-				// args.push_back(Value::TIMESTAMP(1984, 4, 24, 14, 42, 0, 0));
+			} else if (py::isinstance(ele, datetime_datetime)) {
+				auto year = PyDateTime_GET_YEAR(ele.ptr());
+				auto month = PyDateTime_GET_MONTH(ele.ptr());
+				auto day = PyDateTime_GET_DAY(ele.ptr());
+				auto hour = PyDateTime_DATE_GET_HOUR(ele.ptr());
+				auto minute = PyDateTime_DATE_GET_MINUTE(ele.ptr());
+				auto second = PyDateTime_DATE_GET_SECOND(ele.ptr());
+				auto millis = PyDateTime_DATE_GET_MICROSECOND(ele.ptr()) / 1000;
+				args.push_back(Value::TIMESTAMP(year, month, day, hour, minute, second, millis));
+			} else if (py::isinstance(ele, datetime_time)) {
+				auto hour = PyDateTime_TIME_GET_HOUR(ele.ptr());
+				auto minute = PyDateTime_TIME_GET_MINUTE(ele.ptr());
+				auto second = PyDateTime_TIME_GET_SECOND(ele.ptr());
+				auto millis = PyDateTime_TIME_GET_MICROSECOND(ele.ptr()) / 1000;
+				args.push_back(Value::TIME(hour, minute, second, millis));
+			} else if (py::isinstance(ele, datetime_date)) {
+				auto year = PyDateTime_GET_YEAR(ele.ptr());
+				auto month = PyDateTime_GET_MONTH(ele.ptr());
+				auto day = PyDateTime_GET_DAY(ele.ptr());
+				args.push_back(Value::DATE(year, month, day));
 			} else {
 				throw runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
 			}
@@ -754,12 +1011,20 @@ struct DuckDBPyRelation {
 		return default_connection()->from_df(df);
 	}
 
+	static unique_ptr<DuckDBPyRelation> values(py::object values = py::list()) {
+		return default_connection()->values(values);
+	}
+
 	static unique_ptr<DuckDBPyRelation> from_csv_auto(string filename) {
 		return default_connection()->from_csv_auto(filename);
 	}
 
 	static unique_ptr<DuckDBPyRelation> from_parquet(string filename) {
 		return default_connection()->from_parquet(filename);
+	}
+
+	static unique_ptr<DuckDBPyRelation> from_arrow_table(py::object table) {
+		return default_connection()->from_arrow_table(table);
 	}
 
 	unique_ptr<DuckDBPyRelation> project(string expr) {
@@ -830,6 +1095,15 @@ struct DuckDBPyRelation {
 		return res->fetchdf();
 	}
 
+	py::object to_arrow_table() {
+		auto res = make_unique<DuckDBPyResult>();
+		res->result = rel->Execute();
+		if (!res->result->success) {
+			throw runtime_error(res->result->error);
+		}
+		return res->fetch_arrow_table();
+	}
+
 	unique_ptr<DuckDBPyRelation> union_(DuckDBPyRelation *other) {
 		return make_unique<DuckDBPyRelation>(rel->Union(other->rel));
 	}
@@ -891,7 +1165,7 @@ struct DuckDBPyRelation {
 	}
 
 	void insert(py::object params = py::list()) {
-		vector<vector<Value>> values {DuckDBPyConnection::transform_python_param_list(params)};
+		vector<vector<Value>> values{DuckDBPyConnection::transform_python_param_list(params)};
 		rel->Insert(values);
 	}
 
@@ -900,7 +1174,8 @@ struct DuckDBPyRelation {
 	}
 
 	string print() {
-		return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +  rel->Limit(10)->Execute()->ToString() + "\n";
+		return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
+		       rel->Limit(10)->Execute()->ToString() + "\n";
 	}
 
 	py::object getattr(py::str key) {
@@ -918,7 +1193,7 @@ struct DuckDBPyRelation {
 		} else if (key_s == "types" || key_s == "dtypes") {
 			py::list res;
 			for (auto &col : rel->Columns()) {
-				res.append(SQLTypeToString(col.type));
+				res.append(col.type.ToString());
 			}
 			return move(res);
 		}
@@ -929,40 +1204,59 @@ struct DuckDBPyRelation {
 };
 
 PYBIND11_MODULE(duckdb, m) {
-	m.def("connect", &DuckDBPyConnection::connect, "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a read_only flag if no changes are desired",
+	m.def("connect", &DuckDBPyConnection::connect,
+	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
+	      "read_only flag if no changes are desired",
 	      py::arg("database") = ":memory:", py::arg("read_only") = false);
 
 	auto conn_class =
 	    py::class_<DuckDBPyConnection>(m, "DuckDBPyConnection")
 	        .def("cursor", &DuckDBPyConnection::cursor, "Create a duplicate of the current connection")
 	        .def("duplicate", &DuckDBPyConnection::cursor, "Create a duplicate of the current connection")
-	        .def("execute", &DuckDBPyConnection::execute, "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
-	             py::arg("parameters") = py::list(), py::arg("multiple_parameter_sets") = false)
-	        .def("executemany", &DuckDBPyConnection::executemany, "Execute the given prepared statement multiple times using the list of parameter sets in parameters", py::arg("query"),
-	             py::arg("parameters") = py::list())
+	        .def("execute", &DuckDBPyConnection::execute,
+	             "Execute the given SQL query, optionally using prepared statements with parameters set",
+	             py::arg("query"), py::arg("parameters") = py::list(), py::arg("multiple_parameter_sets") = false)
+	        .def("executemany", &DuckDBPyConnection::executemany,
+	             "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
+	             py::arg("query"), py::arg("parameters") = py::list())
 	        .def("close", &DuckDBPyConnection::close, "Close the connection")
 	        .def("fetchone", &DuckDBPyConnection::fetchone, "Fetch a single row from a result following execute")
 	        .def("fetchall", &DuckDBPyConnection::fetchall, "Fetch all rows from a result following execute")
-	        .def("fetchnumpy", &DuckDBPyConnection::fetchnumpy, "Fetch a result as list of NumPy arrays following execute")
+	        .def("fetchnumpy", &DuckDBPyConnection::fetchnumpy,
+	             "Fetch a result as list of NumPy arrays following execute")
 	        .def("fetchdf", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("df", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("fetch_arrow_table", &DuckDBPyConnection::fetcharrow,
+	             "Fetch a result as Arrow table following execute()")
+	        .def("arrow", &DuckDBPyConnection::fetcharrow, "Fetch a result as Arrow table following execute()")
 	        .def("begin", &DuckDBPyConnection::begin, "Start a new transaction")
 	        .def("commit", &DuckDBPyConnection::commit, "Commit changes performed within a transaction")
 	        .def("rollback", &DuckDBPyConnection::rollback, "Roll back changes performed within a transaction")
-	        .def("append", &DuckDBPyConnection::append, "Append the passed Data.Frame to the named table", py::arg("table_name"), py::arg("df"))
-			.def("register", &DuckDBPyConnection::register_df, "Register the passed Data.Frame value for querying with a view", py::arg("view_name"), py::arg("df"))
-	        .def("unregister", &DuckDBPyConnection::unregister_df, "Unregister the view name",  py::arg("view_name"))
-			.def("table", &DuckDBPyConnection::table, "Create a relation object for the name'd table", py::arg("table_name"))
-	        .def("view", &DuckDBPyConnection::view, "Create a relation object for the name'd view", py::arg("view_name"))
-	        .def("values", &DuckDBPyConnection::values, "Create a relation object from the passed values", py::arg("values"))
-	        .def("table_function", &DuckDBPyConnection::table_function, "Create a relation object from the name'd table function with given parameters",
-	             py::arg("name"), py::arg("parameters") = py::list())
-	        .def("from_df", &DuckDBPyConnection::from_df, "Create a relation object from the Data.Frame in df", py::arg("df"))
-	        .def("df", &DuckDBPyConnection::from_df, "Create a relation object from the Data.Frame in df (alias of from_df)", py::arg("df"))
-			.def("from_csv_auto", &DuckDBPyConnection::from_csv_auto, "Create a relation object from the CSV file in file_name",
-	             py::arg("file_name"))
-	       	.def("from_parquet", &DuckDBPyConnection::from_parquet, "Create a relation object from the Parquet file in file_name",
-	             py::arg("file_name"))
-		    .def("__getattr__", &DuckDBPyConnection::getattr, "Get result set attributes, mainly column names");
+	        .def("append", &DuckDBPyConnection::append, "Append the passed Data.Frame to the named table",
+	             py::arg("table_name"), py::arg("df"))
+	        .def("register", &DuckDBPyConnection::register_df,
+	             "Register the passed Data.Frame value for querying with a view", py::arg("view_name"), py::arg("df"))
+	        .def("unregister", &DuckDBPyConnection::unregister_df, "Unregister the view name", py::arg("view_name"))
+	        .def("table", &DuckDBPyConnection::table, "Create a relation object for the name'd table",
+	             py::arg("table_name"))
+	        .def("view", &DuckDBPyConnection::view, "Create a relation object for the name'd view",
+	             py::arg("view_name"))
+	        .def("values", &DuckDBPyConnection::values, "Create a relation object from the passed values",
+	             py::arg("values"))
+	        .def("table_function", &DuckDBPyConnection::table_function,
+	             "Create a relation object from the name'd table function with given parameters", py::arg("name"),
+	             py::arg("parameters") = py::list())
+	        .def("from_df", &DuckDBPyConnection::from_df, "Create a relation object from the Data.Frame in df",
+	             py::arg("df"))
+	        .def("from_arrow_table", &DuckDBPyConnection::from_arrow_table,
+	             "Create a relation object from an Arrow table", py::arg("table"))
+	        .def("df", &DuckDBPyConnection::from_df,
+	             "Create a relation object from the Data.Frame in df (alias of from_df)", py::arg("df"))
+	        .def("from_csv_auto", &DuckDBPyConnection::from_csv_auto,
+	             "Create a relation object from the CSV file in file_name", py::arg("file_name"))
+	        .def("from_parquet", &DuckDBPyConnection::from_parquet,
+	             "Create a relation object from the Parquet file in file_name", py::arg("file_name"))
+	        .def("__getattr__", &DuckDBPyConnection::getattr, "Get result set attributes, mainly column names");
 
 	py::class_<DuckDBPyResult>(m, "DuckDBPyResult")
 	    .def("close", &DuckDBPyResult::close)
@@ -971,57 +1265,92 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchnumpy", &DuckDBPyResult::fetchnumpy)
 	    .def("fetchdf", &DuckDBPyResult::fetchdf)
 	    .def("fetch_df", &DuckDBPyResult::fetchdf)
+	    .def("fetch_arrow_table", &DuckDBPyResult::fetch_arrow_table)
+	    .def("arrow", &DuckDBPyResult::fetch_arrow_table)
 	    .def("df", &DuckDBPyResult::fetchdf);
 
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
-	    .def("filter", &DuckDBPyRelation::filter, "Filter the relation object by the filter in filter_expr", py::arg("filter_expr"))
-	    .def("project", &DuckDBPyRelation::project, "Project the relation object by the projection in project_expr", py::arg("project_expr"))
+	    .def("filter", &DuckDBPyRelation::filter, "Filter the relation object by the filter in filter_expr",
+	         py::arg("filter_expr"))
+	    .def("project", &DuckDBPyRelation::project, "Project the relation object by the projection in project_expr",
+	         py::arg("project_expr"))
 	    .def("set_alias", &DuckDBPyRelation::alias, "Rename the relation object to new alias", py::arg("alias"))
 	    .def("order", &DuckDBPyRelation::order, "Reorder the relation object by order_expr", py::arg("order_expr"))
-	    .def("aggregate", &DuckDBPyRelation::aggregate, "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
+	    .def("aggregate", &DuckDBPyRelation::aggregate,
+	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")
-	    .def("union", &DuckDBPyRelation::union_, "Create the set union of this relation object with another relation object in other_rel")
-	    .def("except_", &DuckDBPyRelation::except, "Create the set except of this relation object with another relation object in other_rel", py::arg("other_rel"))
-	    .def("intersect", &DuckDBPyRelation::intersect, "Create the set intersection of this relation object with another relation object in other_rel", py::arg("other_rel"))
-	    .def("join", &DuckDBPyRelation::join, "Join the relation object with another relation object in other_rel using the join condition expression in join_condition", py::arg("other_rel"),
-	         py::arg("join_condition"))
+	    .def("union", &DuckDBPyRelation::union_,
+	         "Create the set union of this relation object with another relation object in other_rel")
+	    .def("except_", &DuckDBPyRelation::except,
+	         "Create the set except of this relation object with another relation object in other_rel",
+	         py::arg("other_rel"))
+	    .def("intersect", &DuckDBPyRelation::intersect,
+	         "Create the set intersection of this relation object with another relation object in other_rel",
+	         py::arg("other_rel"))
+	    .def("join", &DuckDBPyRelation::join,
+	         "Join the relation object with another relation object in other_rel using the join condition expression "
+	         "in join_condition",
+	         py::arg("other_rel"), py::arg("join_condition"))
 	    .def("distinct", &DuckDBPyRelation::distinct, "Retrieve distinct rows from this relation object")
-	    .def("limit", &DuckDBPyRelation::limit, "Only retrieve the first n rows from this relation object", py::arg("n"))
-	    .def("query", &DuckDBPyRelation::query, "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation object", py::arg("virtual_table_name"),
-	         py::arg("sql_query"))
+	    .def("limit", &DuckDBPyRelation::limit, "Only retrieve the first n rows from this relation object",
+	         py::arg("n"))
+	    .def("query", &DuckDBPyRelation::query,
+	         "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation "
+	         "object",
+	         py::arg("virtual_table_name"), py::arg("sql_query"))
 	    .def("execute", &DuckDBPyRelation::execute, "Transform the relation into a result set")
-	    .def("write_csv", &DuckDBPyRelation::write_csv, "Write the relation object to a CSV file in file_name", py::arg("file_name"))
-	    .def("insert_into", &DuckDBPyRelation::insert_into, "Inserts the relation object into an existing table named table_name", py::arg("table_name"))
+	    .def("write_csv", &DuckDBPyRelation::write_csv, "Write the relation object to a CSV file in file_name",
+	         py::arg("file_name"))
+	    .def("insert_into", &DuckDBPyRelation::insert_into,
+	         "Inserts the relation object into an existing table named table_name", py::arg("table_name"))
 	    .def("insert", &DuckDBPyRelation::insert, "Inserts the given values into the relation", py::arg("values"))
-	    .def("create", &DuckDBPyRelation::create, "Creates a new table named table_name with the contents of the relation object", py::arg("table_name"))
-	    .def("create_view", &DuckDBPyRelation::create_view, "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
+	    .def("create", &DuckDBPyRelation::create,
+	         "Creates a new table named table_name with the contents of the relation object", py::arg("table_name"))
+	    .def("create_view", &DuckDBPyRelation::create_view,
+	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
+	    .def("to_arrow_table", &DuckDBPyRelation::to_arrow_table, "Transforms the relation object into a Arrow table")
+	    .def("arrow", &DuckDBPyRelation::to_arrow_table, "Transforms the relation object into a Arrow table")
 	    .def("to_df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
 	    .def("df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
 	    .def("__str__", &DuckDBPyRelation::print)
 	    .def("__repr__", &DuckDBPyRelation::print)
 	    .def("__getattr__", &DuckDBPyRelation::getattr);
 
-	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "Creates a relation object from the CSV file in file_name", py::arg("file_name"));
-	m.def("from_parquet", &DuckDBPyRelation::from_parquet, "Creates a relation object from the Parquet file in file_name", py::arg("file_name"));
+	m.def("values", &DuckDBPyRelation::values, "Create a relation object from the passed values", py::arg("values"));
+	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "Creates a relation object from the CSV file in file_name",
+	      py::arg("file_name"));
+	m.def("from_parquet", &DuckDBPyRelation::from_parquet,
+	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"));
 	m.def("df", &DuckDBPyRelation::from_df, "Create a relation object from the Data.Frame df", py::arg("df"));
 	m.def("from_df", &DuckDBPyRelation::from_df, "Create a relation object from the Data.Frame df", py::arg("df"));
-	m.def("filter", &DuckDBPyRelation::filter_df, "Filter the Data.Frame df by the filter in filter_expr", py::arg("df"), py::arg("filter_expr"));
-	m.def("project", &DuckDBPyRelation::project_df, "Project the Data.Frame df by the projection in project_expr", py::arg("df"),
-	      py::arg("project_expr"));
-	m.def("alias", &DuckDBPyRelation::alias_df, "Create a relation from Data.Frame df with the passed alias", py::arg("df"), py::arg("alias"));
-	m.def("order", &DuckDBPyRelation::order_df, "Reorder the Data.Frame df by order_expr", py::arg("df"), py::arg("order_expr"));
-	m.def("aggregate", &DuckDBPyRelation::aggregate_df, "Compute the aggregate aggr_expr by the optional groups group_expr on Data.frame df", py::arg("df"),
+	m.def("from_arrow_table", &DuckDBPyRelation::from_arrow_table, "Create a relation object from an Arrow table",
+	      py::arg("table"));
+	m.def("arrow", &DuckDBPyRelation::from_arrow_table, "Create a relation object from an Arrow table",
+	      py::arg("table"));
+	m.def("filter", &DuckDBPyRelation::filter_df, "Filter the Data.Frame df by the filter in filter_expr",
+	      py::arg("df"), py::arg("filter_expr"));
+	m.def("project", &DuckDBPyRelation::project_df, "Project the Data.Frame df by the projection in project_expr",
+	      py::arg("df"), py::arg("project_expr"));
+	m.def("alias", &DuckDBPyRelation::alias_df, "Create a relation from Data.Frame df with the passed alias",
+	      py::arg("df"), py::arg("alias"));
+	m.def("order", &DuckDBPyRelation::order_df, "Reorder the Data.Frame df by order_expr", py::arg("df"),
+	      py::arg("order_expr"));
+	m.def("aggregate", &DuckDBPyRelation::aggregate_df,
+	      "Compute the aggregate aggr_expr by the optional groups group_expr on Data.frame df", py::arg("df"),
 	      py::arg("aggr_expr"), py::arg("group_expr") = "");
 	m.def("distinct", &DuckDBPyRelation::distinct_df, "Compute the distinct rows from Data.Frame df ", py::arg("df"));
-	m.def("limit", &DuckDBPyRelation::limit_df, "Retrieve the first n rows from the Data.Frame df", py::arg("df"), py::arg("n"));
-	m.def("query", &DuckDBPyRelation::query_df, "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of Data.Frame df", py::arg("df"),
-	      py::arg("virtual_table_name"), py::arg("sql_query"));
-	m.def("write_csv", &DuckDBPyRelation::write_csv_df, "Write the Data.Frame df to a CSV file in file_name", py::arg("df"),
-	      py::arg("file_name"));
+	m.def("limit", &DuckDBPyRelation::limit_df, "Retrieve the first n rows from the Data.Frame df", py::arg("df"),
+	      py::arg("n"));
+	m.def("query", &DuckDBPyRelation::query_df,
+	      "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of "
+	      "Data.Frame df",
+	      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"));
+	m.def("write_csv", &DuckDBPyRelation::write_csv_df, "Write the Data.Frame df to a CSV file in file_name",
+	      py::arg("df"), py::arg("file_name"));
 
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
-	auto clean_default_connection = []() { default_connection_ = nullptr; };
+	auto clean_default_connection = []() { default_connection_.reset(); };
 	m.add_object("_clean_default_connection", py::capsule(clean_default_connection));
 	PyDateTime_IMPORT;
 }

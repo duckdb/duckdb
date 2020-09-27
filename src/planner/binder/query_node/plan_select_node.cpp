@@ -4,7 +4,7 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root) {
@@ -104,3 +104,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	}
 	return root;
 }
+
+} // namespace duckdb

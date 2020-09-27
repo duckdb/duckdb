@@ -32,16 +32,6 @@ class Transaction;
 
 typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
 
-//! TableFilter represents a filter pushed down into the table scan.
-class TableFilter {
-public:
-	TableFilter(Value constant, ExpressionType comparison_type, idx_t column_index)
-	    : constant(constant), comparison_type(comparison_type), column_index(column_index){};
-	Value constant;
-	ExpressionType comparison_type;
-	idx_t column_index;
-};
-
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
 	}
@@ -61,22 +51,28 @@ struct DataTableInfo {
 	}
 };
 
+struct ParallelTableScanState {
+	idx_t persistent_row_idx;
+	idx_t transient_row_idx;
+	bool transaction_local_data;
+};
+
 //! DataTable represents a physical table on disk
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types, persistent_data_t data);
+	DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types, persistent_data_t data);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
-	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type,
+	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
 	          vector<column_t> bound_columns, Expression &cast_expr);
 
 	shared_ptr<DataTableInfo> info;
 	//! Types managed by data table
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	//! A reference to the base storage manager
 	StorageManager &storage;
 
@@ -86,9 +82,11 @@ public:
 	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
 	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
 
-	void InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids,
-	                            unordered_map<idx_t, vector<TableFilter>> *table_filters,
-	                            std::function<void(TableScanState)> callback);
+	//! Returns the maximum amount of threads that should be assigned to scan this data table
+	idx_t MaxThreads(ClientContext &context);
+	void InitializeParallelScan(ParallelTableScanState &state);
+	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+	                      const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -97,19 +95,9 @@ public:
 	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
 	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
 
-	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
-	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value,
-	                         ExpressionType expr_type, vector<column_t> column_ids);
-	//! Initialize an index scan with two predicates and two comparison types (> >= < <=)
-	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value low_value,
-	                         ExpressionType low_type, Value high_value, ExpressionType high_type,
-	                         vector<column_t> column_ids);
-	//! Scans up to STANDARD_VECTOR_SIZE elements from the table from the given index structure
-	void IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state);
-
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
-	           idx_t fetch_count, TableIndexScanState &state);
+	           idx_t fetch_count, ColumnFetchState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
@@ -149,9 +137,6 @@ private:
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
-
-	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
-	                         vector<column_t> column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
 	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);

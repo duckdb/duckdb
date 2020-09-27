@@ -1,6 +1,6 @@
 #include "duckdb/planner/expression_binder/update_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 UpdateBinder::UpdateBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
@@ -18,3 +18,5 @@ BindResult UpdateBinder::BindExpression(ParsedExpression &expr, idx_t depth, boo
 string UpdateBinder::UnsupportedAggregateMessage() {
 	return "aggregate functions are not allowed in UPDATE";
 }
+
+} // namespace duckdb

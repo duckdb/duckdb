@@ -1,0 +1,49 @@
+# name: test/sql/subquery/any_all/test_scalar_any_all.test
+# description: Test scalar ANY/ALL queries
+# group: [any_all]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar ANY
+query T
+SELECT 1 = ANY(SELECT 1)
+----
+1
+
+query T
+SELECT 1 = ANY(SELECT NULL)
+----
+NULL
+
+query T
+SELECT 1 = ANY(SELECT 2)
+----
+0
+
+query T
+SELECT NULL = ANY(SELECT 2)
+----
+NULL
+
+# scalar ALL
+query T
+SELECT 1 = ALL(SELECT 1)
+----
+1
+
+query T
+SELECT 1 = ALL(SELECT NULL)
+----
+NULL
+
+query T
+SELECT 1 = ALL(SELECT 2)
+----
+0
+
+query T
+SELECT NULL = ALL(SELECT 2)
+----
+NULL
+

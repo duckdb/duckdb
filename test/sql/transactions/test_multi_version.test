@@ -1,0 +1,98 @@
+# name: test/sql/transactions/test_multi_version.test
+# description: Test multiple versions of the same data
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+# initialize the database
+statement ok con1
+CREATE TABLE integers(i INTEGER);
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3);
+
+# we can query the database using both connections
+query R con1
+SELECT SUM(i) FROM integers
+----
+6.000000
+
+query R con2
+SELECT SUM(i) FROM integers
+----
+6.000000
+
+# now update the database in connection 1
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE integers SET i=5 WHERE i=1;
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+10.000000
+
+# con 2 still has the same result
+query R con2
+SELECT SUM(i) FROM integers
+----
+6.000000
+
+# we can update the same data point again in con 1
+statement ok con1
+UPDATE integers SET i=10 WHERE i=5;
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+15.000000
+
+# con 2 still has the same result
+query R con2
+SELECT SUM(i) FROM integers
+----
+6.000000
+
+# now delete it
+statement ok con1
+DELETE FROM integers WHERE i>5;
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+5.000000
+
+# con 2 still has the same result
+query R con2
+SELECT SUM(i) FROM integers
+----
+6.000000
+
+# insert some new data again
+statement ok con1
+INSERT INTO integers VALUES (1), (2)
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+8.000000
+
+# con 2 still has the same result
+query R con2
+SELECT SUM(i) FROM integers
+----
+6.000000
+
+# now commit
+statement ok con1
+COMMIT
+
+# con 2 now has the updated results
+query R con2
+SELECT SUM(i) FROM integers
+----
+8.000000
+

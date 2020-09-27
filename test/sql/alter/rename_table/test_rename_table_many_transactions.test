@@ -1,0 +1,98 @@
+# name: test/sql/alter/rename_table/test_rename_table_many_transactions.test
+# description: Test RENAME TABLE four table rename and four parallel transactions
+# group: [rename_table]
+
+statement ok con1
+CREATE TABLE tbl1(i INTEGER)
+
+statement ok con1
+INSERT INTO tbl1 VALUES (999), (100)
+
+# rename chain
+# con2 starts a transaction now
+statement ok con2
+BEGIN TRANSACTION
+
+# rename in con1, con2 should still see "tbl1"
+statement ok con1
+ALTER TABLE tbl1 RENAME TO tbl2
+
+# con3 starts a transaction now
+statement ok con3
+BEGIN TRANSACTION
+
+# rename in con1, con3 should still see "tbl2"
+statement ok con1
+ALTER TABLE tbl2 RENAME TO tbl3
+
+# con4 starts a transaction now
+statement ok con4
+BEGIN TRANSACTION
+
+# rename in con1, con4 should still see "tbl3"
+statement ok con1
+ALTER TABLE tbl3 RENAME TO tbl4
+
+# con2 sees ONLY tbl1
+query I con2
+SELECT * FROM tbl1
+----
+999
+100
+
+statement error con2
+SELECT * FROM tbl2
+
+statement error con2
+SELECT * FROM tbl3
+
+statement error con2
+SELECT * FROM tbl4
+
+# con3 sees ONLY tbl2
+statement error con3
+SELECT * FROM tbl1
+
+query I con3
+SELECT * FROM tbl2
+----
+999
+100
+
+statement error con3
+SELECT * FROM tbl3
+
+statement error con3
+SELECT * FROM tbl4
+
+# con4 sees ONLY tbl3
+statement error con4
+SELECT * FROM tbl1
+
+statement error con4
+SELECT * FROM tbl2
+
+query I con4
+SELECT * FROM tbl3
+----
+999
+100
+
+statement error con4
+SELECT * FROM tbl4
+
+# con1 sees ONLY tbl4
+statement error con1
+SELECT * FROM tbl1
+
+statement error con1
+SELECT * FROM tbl2
+
+statement error con1
+SELECT * FROM tbl3
+
+query I con1
+SELECT * FROM tbl4
+----
+999
+100

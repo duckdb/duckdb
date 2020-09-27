@@ -1,0 +1,20 @@
+# name: test/issues/rigger/test_588.test
+# description: Issue 588
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Query with complex ORDER BY causes an incorrect rowid value
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0 VALUES (1), (0), (1);
+
+query I
+SELECT t0.rowid FROM t0 WHERE t0.rowid ORDER BY CASE ((t0.c0) ::BOOL) WHEN 1 THEN t0.rowid END;
+----
+1
+2
+

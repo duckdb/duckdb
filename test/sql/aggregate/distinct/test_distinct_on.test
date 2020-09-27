@@ -1,0 +1,132 @@
+# name: test/sql/aggregate/distinct/test_distinct_on.test
+# description: Test DISTINCT ON
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (2, 3, 5), (4, 5, 6), (2, 7, 6)
+
+query II
+SELECT DISTINCT ON (i) i, j FROM integers WHERE i <> 2
+----
+4	5
+
+query II
+SELECT DISTINCT ON (j) i, j FROM integers WHERE i <> 2
+----
+4	5
+
+query II
+SELECT DISTINCT ON (j, i) i, j FROM integers WHERE i <> 2
+----
+4	5
+
+query II
+SELECT DISTINCT ON (j + 1, i * 3) i, j FROM integers WHERE i <> 2
+----
+4	5
+
+query II
+SELECT DISTINCT ON (1) i, j FROM integers ORDER BY i
+----
+2	3
+4	5
+
+query II
+SELECT DISTINCT ON (1) i, j FROM integers ORDER BY i LIMIT 1
+----
+2	3
+
+query II
+SELECT DISTINCT ON (1) i, j FROM integers ORDER BY i LIMIT 1 OFFSET 1
+----
+4	5
+
+query II
+SELECT DISTINCT ON (2) i, j FROM integers ORDER BY 2
+----
+2	3
+4	5
+2	7
+
+query II
+SELECT DISTINCT ON (2) j, k FROM integers ORDER BY 2
+----
+3	5
+5	6
+
+query III
+SELECT DISTINCT ON (3) i, j, k FROM integers ORDER BY 2
+----
+2	3	5
+4	5	6
+
+query III
+SELECT DISTINCT ON (3) i, j, k FROM integers ORDER BY 3
+----
+2	3	5
+4	5	6
+
+query II
+SELECT DISTINCT ON (2) j, (SELECT i FROM integers) FROM integers ORDER BY 2
+----
+3	2
+
+query II
+SELECT DISTINCT ON (2) j, (SELECT DISTINCT ON (i) i FROM integers ORDER BY 1) FROM integers ORDER BY 2
+----
+3	2
+
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY j
+----
+2	3
+4	5
+
+query II
+SELECT * FROM (SELECT DISTINCT ON (i) i, j FROM integers) tbl1 WHERE i <> 2
+----
+4	5
+
+# order by a column that does not exist in the SELECT clause
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY k
+----
+2	3
+4	5
+
+# equivalent to this, but without projecting the k
+query III
+SELECT DISTINCT ON (i) i, j, k FROM integers ORDER BY k
+----
+2	3	5
+4	5	6
+
+# binding of DISTINCT ON with different column names
+query II
+SELECT DISTINCT ON (integers.i) i, j FROM integers ORDER BY 1, 2
+----
+2	3
+4	5
+
+query II
+SELECT DISTINCT ON (i) integers.i, integers.j FROM integers ORDER BY 1, 2
+----
+2	3
+4	5
+
+query II
+SELECT DISTINCT ON (integers.i) integers.i, integers.j FROM integers ORDER BY i, j
+----
+2	3
+4	5
+
+# out of bounds
+statement error
+SELECT DISTINCT ON (2) i FROM integers
+

@@ -1,0 +1,22 @@
+# name: test/sql/alter/rename_view/test_rename_view_table.test
+# description: Test RENAME VIEW with a table as entry
+# group: [rename_view]
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok
+INSERT INTO tbl VALUES (999), (100)
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM tbl
+
+statement error
+ALTER VIEW tbl RENAME TO tbl2
+
+query I
+SELECT * FROM v1
+----
+999
+100
+

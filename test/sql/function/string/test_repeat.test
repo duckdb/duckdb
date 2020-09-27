@@ -1,0 +1,61 @@
+# name: test/sql/function/string/test_repeat.test
+# description: REPEAT test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test repeat on NULLs
+query TTT
+select REPEAT(NULL, NULL), REPEAT(NULL, 3), REPEAT('MySQL', NULL)
+----
+NULL	NULL	NULL
+
+# test repeat on scalars
+query TTTT
+select REPEAT('', 3), REPEAT('MySQL', 3), REPEAT('MotörHead', 2), REPEAT('Hello', -1)
+----
+(empty)	MySQLMySQLMySQL	MotörHeadMotörHead	(empty)
+
+# test repeat on tables
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('Hello', 'World'), ('HuLlD', NULL), ('MotörHead','RÄcks'), ('', NULL)
+
+query T
+select REPEAT(a, 3) FROM strings
+----
+HelloHelloHello
+HuLlDHuLlDHuLlD
+MotörHeadMotörHeadMotörHead
+(empty)
+
+query T
+select REPEAT(b, 2) FROM strings
+----
+WorldWorld
+NULL
+RÄcksRÄcks
+NULL
+
+query T
+select REPEAT(a, 4) FROM strings WHERE b IS NOT NULL
+----
+HelloHelloHelloHello
+MotörHeadMotörHeadMotörHeadMotörHead
+
+# test incorrect usage of reverse
+statement error
+select REPEAT()
+
+statement error
+select REPEAT(1)
+
+statement error
+select REPEAT('hello', 'world')
+
+statement error
+select REPEAT('hello', 'world', 3)
+

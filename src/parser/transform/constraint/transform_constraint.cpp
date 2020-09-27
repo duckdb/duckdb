@@ -3,8 +3,9 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell) {
 	auto constraint = reinterpret_cast<PGConstraint *>(cell->data.ptr_value);
@@ -18,6 +19,16 @@ unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell) {
 		}
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	}
+	case PG_CONSTR_CHECK: {
+		auto expression = TransformExpression(constraint->raw_expr);
+		if (expression->HasSubquery()) {
+			throw ParserException("subqueries prohibited in CHECK constraints");
+		}
+		if (expression->IsAggregate()) {
+			throw ParserException("aggregates prohibited in CHECK constraints");
+		}
+		return make_unique<CheckConstraint>(TransformExpression(constraint->raw_expr));
+	}
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
 	}
@@ -29,16 +40,8 @@ unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell, Column
 	switch (constraint->contype) {
 	case PG_CONSTR_NOTNULL:
 		return make_unique<NotNullConstraint>(index);
-	case PG_CONSTR_CHECK: {
-		auto expression = TransformExpression(constraint->raw_expr);
-		if (expression->HasSubquery()) {
-			throw ParserException("subqueries prohibited in CHECK constraints");
-		}
-		if (expression->IsAggregate()) {
-			throw ParserException("aggregates prohibited in CHECK constraints");
-		}
-		return make_unique<CheckConstraint>(TransformExpression(constraint->raw_expr));
-	}
+	case PG_CONSTR_CHECK:
+		return TransformConstraint(cell);
 	case PG_CONSTR_PRIMARY:
 		return make_unique<UniqueConstraint>(index, true);
 	case PG_CONSTR_UNIQUE:
@@ -53,3 +56,5 @@ unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell, Column
 		throw NotImplementedException("Constraint not implemented!");
 	}
 }
+
+} // namespace duckdb

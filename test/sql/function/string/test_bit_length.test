@@ -1,0 +1,52 @@
+# name: test/sql/function/string/test_bit_length.test
+# description: BIT_LENGTH test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test on scalars
+query IIIIII
+select BIT_LENGTH(NULL), BIT_LENGTH(''), BIT_LENGTH('$'), BIT_LENGTH('¢'), BIT_LENGTH('€'), BIT_LENGTH('𐍈')
+----
+NULL	0	8	16	24	32
+
+# test on tables
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('', 'Zero'), ('$', NULL), ('¢','Two'), ('€', NULL), ('𐍈','Four')
+
+query I
+select BIT_LENGTH(a) FROM strings
+----
+0
+8
+16
+24
+32
+
+query I
+select BIT_LENGTH(b) FROM strings
+----
+32
+NULL
+24
+NULL
+32
+
+query I
+select BIT_LENGTH(a) FROM strings WHERE b IS NOT NULL
+----
+0
+16
+32
+
+# test incorrect usage
+statement error
+select BIT_LENGTH()
+
+statement error
+select BIT_LENGTH(1, 2)
+

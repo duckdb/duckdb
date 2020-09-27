@@ -1,7 +1,6 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -16,9 +15,9 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
 class ReplayState {
 public:
 	ReplayState(DuckDB &db, ClientContext &context, Deserializer &source)
@@ -168,7 +167,7 @@ void ReplayState::ReplayCreateTable() {
 void ReplayState::ReplayDropTable() {
 	DropInfo info;
 
-	info.type = CatalogType::TABLE;
+	info.type = CatalogType::TABLE_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
@@ -195,7 +194,7 @@ void ReplayState::ReplayCreateView() {
 
 void ReplayState::ReplayDropView() {
 	DropInfo info;
-	info.type = CatalogType::VIEW;
+	info.type = CatalogType::VIEW_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	db.catalog->DropEntry(context, &info);
@@ -214,7 +213,7 @@ void ReplayState::ReplayCreateSchema() {
 void ReplayState::ReplayDropSchema() {
 	DropInfo info;
 
-	info.type = CatalogType::SCHEMA;
+	info.type = CatalogType::SCHEMA_ENTRY;
 	info.name = source.Read<string>();
 
 	db.catalog->DropEntry(context, &info);
@@ -231,7 +230,7 @@ void ReplayState::ReplayCreateSequence() {
 
 void ReplayState::ReplayDropSequence() {
 	DropInfo info;
-	info.type = CatalogType::SEQUENCE;
+	info.type = CatalogType::SEQUENCE_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
@@ -279,9 +278,9 @@ void ReplayState::ReplayDelete() {
 	DataChunk chunk;
 	chunk.Deserialize(source);
 
-	assert(chunk.column_count() == 1 && chunk.data[0].type == ROW_TYPE);
+	assert(chunk.column_count() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
 	row_t row_ids[1];
-	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_ids);
+	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_ids);
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table
@@ -313,3 +312,5 @@ void ReplayState::ReplayUpdate() {
 	// now perform the update
 	current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
 }
+
+} // namespace duckdb

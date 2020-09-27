@@ -1,0 +1,116 @@
+# name: test/sql/copy/csv/auto/test_header_detection.test
+# description: Test csv header detection
+# group: [auto]
+
+require vector_size 512
+
+# CSV file with two lines, none header
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/no_header.csv');
+
+query RTT
+SELECT column0, column1, column2 FROM test ORDER BY column0;
+----
+123.000000	TEST1	2000-12-12
+345.000000	TEST1	2000-12-13
+
+statement ok
+DROP TABLE test;
+
+# CSV file with two lines, one header
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/single_header.csv');
+
+query RTT
+SELECT number, text, date FROM test ORDER BY number;
+----
+345.000000	TEST2	2000-12-13
+
+statement ok
+DROP TABLE test;
+
+# CSV file with three lines, one header, one skip row
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/skip_row.csv');
+
+query RTT
+SELECT number, text, date FROM test ORDER BY number;
+----
+345.000000	TEST3	2000-12-13
+
+statement ok
+DROP TABLE test;
+
+# CSV file with three lines, one header, two skip rows
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/multiple_skip_row.csv');
+
+query RTT
+SELECT number, text, date FROM test ORDER BY number;
+----
+345.000000	TEST4	2000-12-13
+
+statement ok
+DROP TABLE test;
+
+# CSV file with two lines both only strings
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_multi_line.csv');
+
+query TTT
+SELECT * FROM test ORDER BY column0;
+----
+Alice	StreetA	TEST5
+Bob	StreetB	TEST5
+
+statement ok
+DROP TABLE test;
+
+# CSV file with one line, two columns, only strings
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_single_line.csv');
+
+query TT
+SELECT column0, column1 FROM test ORDER BY column0;
+----
+Alice	StreetA
+
+statement ok
+DROP TABLE test;
+
+# CSV file with one line, two columns - one numeric, one string
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/mixed_single_line.csv');
+
+query IT
+SELECT column0, column1 FROM test ORDER BY column0;
+----
+1	StreetA
+
+statement ok
+DROP TABLE test;
+
+# CSV file with one line, one string column
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/single_value.csv');
+
+query T
+SELECT * FROM test;
+----
+Test
+
+statement ok
+DROP TABLE test;
+
+# CSV file with one line, one numeric column
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/single_numeric.csv');
+
+query I
+SELECT * FROM test;
+----
+1
+
+statement ok
+DROP TABLE test;
+

@@ -1,0 +1,14 @@
+# name: test/sql/alter/alter_type/test_alter_type_check.test
+# description: ALTER TYPE with CHECK constraint
+# group: [alter_type]
+
+statement ok
+CREATE TABLE test(i INTEGER CHECK(i < 10), j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# we disallow ALTER TYPE on a column with a CHECK constraint
+statement error
+ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+

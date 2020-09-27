@@ -1,0 +1,54 @@
+# name: test/sql/subquery/table/test_table_subquery.test
+# description: Table subquery
+# group: [table]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (3, 4), (4, 5), (5, 6);
+
+query II
+SELECT * FROM (SELECT i, j AS d FROM test ORDER BY i) AS b;
+----
+3	4
+4	5
+5	6
+
+# check column names for simple projections and aliases
+query I
+SELECT b.d FROM (SELECT i * 2 + j AS d FROM test) AS b;
+----
+10
+13
+16
+
+# join with subqueries
+query IIII
+SELECT a.i,a.j,b.r,b.j FROM (SELECT i, j FROM test) AS a INNER JOIN (SELECT i+1 AS r,j FROM test) AS b ON a.i=b.r ORDER BY 1;
+----
+4	5	4	4
+5	6	5	5
+
+# check that * is in the correct order
+query IIIIII
+SELECT * FROM (SELECT i, j FROM test) AS a, (SELECT i+1 AS r,j FROM test) AS b, test WHERE a.i=b.r AND test.j=a.i ORDER BY 1;
+----
+4	5	4	4	3	4
+5	6	5	5	4	5
+
+# subquery group cols are visible
+query R
+select sum(x) from (select i as x from test group by i) sq;
+----
+12.000000
+
+# subquery group aliases are visible
+query R
+select sum(x) from (select i+1 as x from test group by x) sq;
+----
+15.000000
+

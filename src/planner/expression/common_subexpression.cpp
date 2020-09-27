@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CommonSubExpression::CommonSubExpression(unique_ptr<Expression> child, string alias)
@@ -35,3 +35,5 @@ bool CommonSubExpression::Equals(const BaseExpression *other_) const {
 unique_ptr<Expression> CommonSubExpression::Copy() {
 	throw SerializationException("CSEs cannot be copied");
 }
+
+} // namespace duckdb

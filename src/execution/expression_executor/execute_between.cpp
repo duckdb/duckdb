@@ -4,7 +4,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct BothInclusiveBetweenOperator {
@@ -34,26 +34,29 @@ struct ExclusiveBetweenOperator {
 template <class OP>
 static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel,
                                       idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	switch (input.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (input.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return TernaryExecutor::Select<int8_t, int8_t, int8_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                           false_sel);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return TernaryExecutor::Select<int16_t, int16_t, int16_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                              false_sel);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return TernaryExecutor::Select<int32_t, int32_t, int32_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                              false_sel);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return TernaryExecutor::Select<int64_t, int64_t, int64_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                              false_sel);
-	case TypeId::FLOAT:
+	case PhysicalType::INT128:
+		return TernaryExecutor::Select<hugeint_t, hugeint_t, hugeint_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                                    false_sel);
+	case PhysicalType::FLOAT:
 		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, sel, count, true_sel, false_sel);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return TernaryExecutor::Select<double, double, double, OP>(input, lower, upper, sel, count, true_sel,
 		                                                           false_sel);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return TernaryExecutor::Select<string_t, string_t, string_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                                 false_sel);
 	default:
@@ -67,19 +70,24 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundBetweenExpr
 	result->AddChild(expr.input.get());
 	result->AddChild(expr.lower.get());
 	result->AddChild(expr.upper.get());
+	result->Finalize();
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	// resolve the children
-	Vector input(expr.input->return_type), lower(expr.lower->return_type), upper(expr.upper->return_type);
+	Vector input, lower, upper;
+	input.Reference(state->intermediate_chunk.data[0]);
+	lower.Reference(state->intermediate_chunk.data[1]);
+	upper.Reference(state->intermediate_chunk.data[2]);
+
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
 	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);
 	Execute(*expr.upper, state->child_states[2].get(), sel, count, upper);
 
-	Vector intermediate1(TypeId::BOOL);
-	Vector intermediate2(TypeId::BOOL);
+	Vector intermediate1(LogicalType::BOOLEAN);
+	Vector intermediate2(LogicalType::BOOLEAN);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
 		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
@@ -100,7 +108,11 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
-	Vector input(expr.input->return_type), lower(expr.lower->return_type), upper(expr.upper->return_type);
+	Vector input, lower, upper;
+	input.Reference(state->intermediate_chunk.data[0]);
+	lower.Reference(state->intermediate_chunk.data[1]);
+	upper.Reference(state->intermediate_chunk.data[2]);
+
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
 	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);
 	Execute(*expr.upper, state->child_states[2].get(), sel, count, upper);
@@ -118,3 +130,5 @@ idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *
 		return between_loop_type_switch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
 	}
 }
+
+} // namespace duckdb

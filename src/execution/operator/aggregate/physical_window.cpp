@@ -16,7 +16,8 @@ namespace duckdb {
 //! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalWindowOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), position(0) {
 	}
 
 	idx_t position;
@@ -25,9 +26,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
+PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types)), select_list(move(select_list)) {
 }
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {
@@ -68,7 +69,7 @@ static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCo
 		return;
 	}
 
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	ExpressionExecutor executor;
 	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
@@ -97,7 +98,7 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 
 static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     ChunkCollection &sort_collection) {
-	vector<TypeId> sort_types;
+	vector<LogicalType> sort_types;
 	vector<OrderType> orders;
 	vector<OrderByNullType> null_order_types;
 	ExpressionExecutor executor;
@@ -352,7 +353,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			rank_equal++;
 		}
 
-		auto res = Value();
+		Value res;
 
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
@@ -396,19 +397,30 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
-			int64_t n_size = (n_total / n_param);
-			if (n_size > 0) {
-				int64_t n_large = n_total - n_param * n_size;
-				int64_t i_small = n_large * (n_size + 1);
-
-				assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
-
-				if (row_idx < (idx_t)i_small) {
-					res = Value::Numeric(wexpr->return_type, 1 + row_idx / (n_size + 1));
-				} else {
-					res = Value::Numeric(wexpr->return_type, 1 + n_large + (row_idx - i_small) / n_size);
-				}
+			if (n_param > n_total) {
+				// more groups allowed than we have values
+				// map every entry to a unique group
+				n_param = n_total;
 			}
+			int64_t n_size = (n_total / n_param);
+			// find the row idx within the group
+			assert(row_idx >= bounds.partition_start);
+			int64_t adjusted_row_idx = row_idx - bounds.partition_start;
+			// now compute the ntile
+			int64_t n_large = n_total - n_param * n_size;
+			int64_t i_small = n_large * (n_size + 1);
+			int64_t result_ntile;
+
+			assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
+
+			if (adjusted_row_idx < i_small) {
+				result_ntile = 1 + adjusted_row_idx / (n_size + 1);
+			} else {
+				result_ntile = 1 + n_large + (adjusted_row_idx - i_small) / n_size;
+			}
+			// result has to be between [1, NTILE]
+			assert(result_ntile >= 1 && result_ntile <= n_param);
+			res = Value::Numeric(wexpr->return_type, result_ntile);
 			break;
 		}
 		case ExpressionType::WINDOW_LEAD:
@@ -423,7 +435,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
-				auto lead_idx = row_idx + 1;
+				auto lead_idx = row_idx + offset;
 				if (lead_idx < bounds.partition_end) {
 					res = payload_collection.GetValue(0, lead_idx);
 				} else {
@@ -449,7 +461,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 		default:
-			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type).c_str());
+			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
 
 		output.SetValue(output_idx, row_idx, res);
@@ -472,7 +484,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			return;
 		}
 
-		vector<TypeId> window_types;
+		vector<LogicalType> window_types;
 		for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			window_types.push_back(select_list[expr_idx]->return_type);
 		}
@@ -522,7 +534,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
-	return make_unique<PhysicalWindowOperatorState>(children[0].get());
+	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
 }
 
 } // namespace duckdb

@@ -12,8 +12,9 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/main/client_context.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
@@ -34,7 +35,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	}
 	// fetch the schema in which we want to create the object
 	auto schema_obj = Catalog::GetCatalog(context).GetSchema(context, info.schema);
-	assert(schema_obj->type == CatalogType::SCHEMA);
+	assert(schema_obj->type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj->name;
 	return schema_obj;
 }
@@ -42,15 +43,19 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
-	case CatalogType::SCHEMA:
+	case CatalogType::SCHEMA_ENTRY:
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SCHEMA, move(stmt.info));
 		break;
-	case CatalogType::VIEW: {
+	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
+		// extract the SQL from the query, if any
+		if (stmt.stmt_location + stmt.stmt_length <= context.query.size()) {
+			base.sql = context.query.substr(stmt.stmt_location, stmt.stmt_length);
+		}
 		// bind the schema
 		auto schema = BindSchema(*stmt.info);
 
@@ -69,12 +74,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_VIEW, move(stmt.info), schema);
 		break;
 	}
-	case CatalogType::SEQUENCE: {
+	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SEQUENCE, move(stmt.info), schema);
 		break;
 	}
-	case CatalogType::INDEX: {
+	case CatalogType::INDEX_ENTRY: {
 		auto &base = (CreateIndexInfo &)*stmt.info;
 
 		// visit the table reference
@@ -82,6 +87,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw BinderException("Can only delete from base table!");
 		}
+		auto &table_binding = (BoundBaseTableRef &)*bound_table;
+		auto table = table_binding.table;
 		// bind the index expressions
 		vector<unique_ptr<Expression>> expressions;
 		IndexBinder binder(*this, context);
@@ -102,11 +109,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// this gives us a logical table scan
 		// we take the required columns from here
 		// create the logical operator
-		result.plan = make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(expressions),
+		result.plan = make_unique<LogicalCreateIndex>(*table, get.column_ids, move(expressions),
 		                                              unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
 		break;
 	}
-	case CatalogType::TABLE: {
+	case CatalogType::TABLE_ENTRY: {
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);
 
@@ -123,3 +130,5 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	return result;
 }
+
+} // namespace duckdb

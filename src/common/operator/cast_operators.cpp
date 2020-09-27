@@ -3,10 +3,14 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/numeric_helper.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "fmt/format.h"
 
 #include <cctype>
@@ -18,7 +22,7 @@ using namespace std;
 namespace duckdb {
 
 template <class SRC, class DST> static bool try_cast_with_overflow_check(SRC value, DST &result) {
-	if (value < MinimumValue<DST>() || value > MaximumValue<DST>()) {
+	if (value < NumericLimits<DST>::Minimum() || value > NumericLimits<DST>::Maximum()) {
 		return false;
 	}
 	result = (DST)value;
@@ -28,7 +32,7 @@ template <class SRC, class DST> static bool try_cast_with_overflow_check(SRC val
 template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 	DST result;
 	if (!try_cast_with_overflow_check<SRC, DST>(value, result)) {
-		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(), GetTypeId<DST>());
+		throw ValueOutOfRangeException((double)value, GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 	return result;
 }
@@ -138,6 +142,9 @@ template <> int64_t Cast::Operation(double input) {
 // Double -> float casts
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(double input, float &result, bool strict) {
+	if (input < (double)NumericLimits<float>::Minimum() || input > (double)NumericLimits<float>::Maximum()) {
+		return false;
+	}
 	auto res = (float)input;
 	if (std::isnan(res) || std::isinf(res)) {
 		return false;
@@ -161,50 +168,96 @@ template <> float Cast::Operation(double input) {
 template <class T> static T try_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result)) {
-		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()).c_str());
+		throw ConversionException("Could not convert string '%s' to %s", input.GetData(),
+		                          TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
 }
-
-
 
 template <class T> static T try_strict_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result, true)) {
-		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()).c_str());
+		throw ConversionException("Could not convert string '%s' to %s", input.GetData(),
+		                          TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
 }
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
+struct IntegerCastOperation {
+	template <class T, bool NEGATIVE> static bool HandleDigit(T &result, uint8_t digit) {
+		if (NEGATIVE) {
+			if (result < (NumericLimits<T>::Minimum() + digit) / 10) {
+				return false;
+			}
+			result = result * 10 - digit;
+		} else {
+			if (result > (NumericLimits<T>::Maximum() - digit) / 10) {
+				return false;
+			}
+			result = result * 10 + digit;
+		}
+		return true;
+	}
+
+	template <class T> static bool HandleExponent(T &result, int64_t exponent) {
+		double dbl_res = result * pow(10, exponent);
+		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
+			return false;
+		}
+		result = (T)dbl_res;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE> static bool HandleDecimal(T &result, uint8_t digit) {
+		return true;
+	}
+
+	template <class T> static bool Finalize(T &result) {
+		return true;
+	}
+};
+
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
-	idx_t pos = NEGATIVE || *buf == '+' ? 1 : 0;
-	while(pos < len) {
+	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t pos = start_pos;
+	while (pos < len) {
 		if (!std::isdigit((unsigned char)buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
 				if (strict) {
 					return false;
 				}
+				bool number_before_period = pos > start_pos;
 				// decimal point: we accept decimal values for integers as well
 				// we just truncate them
 				// make sure everything after the period is a number
 				pos++;
-				while(pos < len) {
-					if (!std::isdigit((unsigned char)buf[pos++])) {
+				idx_t start_digit = pos;
+				while (pos < len) {
+					if (!std::isdigit((unsigned char)buf[pos])) {
 						return false;
 					}
+					if (!OP::template HandleDecimal<T, NEGATIVE>(result, buf[pos] - '0')) {
+						return false;
+					}
+					pos++;
 				}
-				return true;
+				if (!OP::template Finalize<T>(result)) {
+					return false;
+				}
+				// make sure there is either (1) one number after the period, or (2) one number before the period
+				// i.e. we accept "1." and ".1" as valid numbers, but not "."
+				return number_before_period || pos > start_digit;
 			}
-			if (std::isspace((unsigned char)buf[pos])) {
+			if (StringUtil::CharacterIsSpace(buf[pos])) {
 				// skip any trailing spaces
-				while(++pos < len) {
-					if (!std::isspace((unsigned char)buf[pos])) {
+				while (++pos < len) {
+					if (!StringUtil::CharacterIsSpace(buf[pos])) {
 						return false;
 					}
 				}
-				return true;
+				break;
 			}
 			if (ALLOW_EXPONENT) {
 				if (buf[pos] == 'e' || buf[pos] == 'E') {
@@ -220,35 +273,26 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 							return false;
 						}
 					}
-					double dbl_res = result * pow(10, exponent);
-					if (dbl_res < MinimumValue<T>() || dbl_res > MaximumValue<T>()) {
-						return false;
-					}
-					result = (T)dbl_res;
-					return true;
+					return OP::template HandleExponent<T>(result, exponent);
 				}
 			}
 			return false;
 		}
-		T digit = buf[pos++] - '0';
-		if (NEGATIVE) {
-			if (result < (MinimumValue<T>() + digit) / 10) {
-				return false;
-			}
-			result = result * 10 - digit;
-		} else {
-			if (result > (MaximumValue<T>() - digit) / 10) {
-				return false;
-			}
-			result = result * 10 + digit;
+		uint8_t digit = buf[pos++] - '0';
+		if (!OP::template HandleDigit<T, NEGATIVE>(result, digit)) {
+			return false;
 		}
 	}
-	return pos > (NEGATIVE ? 1 : 0);
+	if (!OP::template Finalize<T>(result)) {
+		return false;
+	}
+	return pos > start_pos;
 }
 
-template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
+template <class T, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation, bool ZERO_INITIALIZE = true>
+static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
-	while(len > 0 && std::isspace(*buf)) {
+	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
 		buf++;
 		len--;
 	}
@@ -257,37 +301,58 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 	}
 	int negative = *buf == '-';
 
-	result = 0;
+	if (ZERO_INITIALIZE) {
+		memset(&result, 0, sizeof(T));
+	}
 	if (!negative) {
-		return IntegerCastLoop<T, false, ALLOW_EXPONENT>(buf, len, result, strict);
+		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	} else {
-		return IntegerCastLoop<T, true, ALLOW_EXPONENT>(buf, len, result, strict);
+		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	}
 }
 
 template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	auto input_data = input.GetData();
-	// TODO: add support for '0' and '1' as boolean
-	if (strict) {
-		if (strcmp(input_data, "true") == 0 || strcmp(input_data, "True") == 0 || strcmp(input_data, "TRUE") == 0) {
-			result = true;
-		} else if (strcmp(input_data, "false") == 0 || strcmp(input_data, "False") == 0 ||
-		           strcmp(input_data, "FALSE") == 0) {
-			result = false;
-		} else {
-			return false;
-		}
-	} else {
-		if (input_data[0] == 't' || input_data[0] == 'T') {
-			result = true;
-		} else if (input_data[0] == 'f' || input_data[0] == 'F') {
-			result = false;
-		} else {
-			return false;
-		}
-	}
+	auto input_size = input.GetSize();
 
-	return true;
+	switch (input_size) {
+	case 1: {
+		char c = std::tolower(*input_data);
+		if (c == 't' || (!strict && c == '1')) {
+			result = true;
+			return true;
+		} else if (c == 'f' || (!strict && c == '0')) {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	case 4: {
+		char t = std::tolower(input_data[0]);
+		char r = std::tolower(input_data[1]);
+		char u = std::tolower(input_data[2]);
+		char e = std::tolower(input_data[3]);
+		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
+			result = true;
+			return true;
+		}
+		return false;
+	}
+	case 5: {
+		char f = std::tolower(input_data[0]);
+		char a = std::tolower(input_data[1]);
+		char l = std::tolower(input_data[2]);
+		char s = std::tolower(input_data[3]);
+		char e = std::tolower(input_data[4]);
+		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
 }
 template <> bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
 	return TryIntegerCast<int8_t>(input.GetData(), input.GetSize(), result, strict);
@@ -313,7 +378,8 @@ template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx
 }
 
 template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, idx_t len, T &result, bool strict) {
-	idx_t pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t pos = start_pos;
 	idx_t decimal = 0;
 	idx_t decimal_factor = 0;
 	while (pos < len) {
@@ -328,10 +394,10 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 				decimal_factor = 1;
 				pos++;
 				continue;
-			} else if (std::isspace((unsigned char)buf[pos])) {
+			} else if (StringUtil::CharacterIsSpace(buf[pos])) {
 				// skip any trailing spaces
 				while (++pos < len) {
-					if (!std::isspace((unsigned char)buf[pos])) {
+					if (!StringUtil::CharacterIsSpace(buf[pos])) {
 						return false;
 					}
 				}
@@ -346,7 +412,11 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
+				if (result > NumericLimits<T>::Maximum() / pow(10, exponent)) {
+					return false;
+				}
 				result = result * pow(10, exponent);
+
 				return true;
 			} else {
 				return false;
@@ -365,7 +435,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 		}
 	}
 	ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
-	return pos > (NEGATIVE ? 1 : 0);
+	return pos > start_pos;
 }
 
 template <class T> bool CheckDoubleValidity(T value);
@@ -380,7 +450,7 @@ template <> bool CheckDoubleValidity(double value) {
 
 template <class T> static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
-	while(len > 0 && std::isspace(*buf)) {
+	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
 		buf++;
 		len--;
 	}
@@ -460,7 +530,7 @@ template <> double StrictCast::Operation(string_t input) {
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
 template <class T> string CastToStandardString(T input) {
-	Vector v(TypeId::VARCHAR);
+	Vector v(LogicalType::VARCHAR);
 	return StringCast::Operation(input, v).GetString();
 }
 
@@ -478,6 +548,9 @@ template <> string Cast::Operation(int32_t input) {
 }
 template <> string Cast::Operation(int64_t input) {
 	return CastToStandardString(input);
+}
+template <> string Cast::Operation(hugeint_t input) {
+	return Hugeint::ToString(input);
 }
 template <> string Cast::Operation(float input) {
 	return CastToStandardString(input);
@@ -497,129 +570,19 @@ template <> string_t StringCast::Operation(bool input, Vector &vector) {
 	}
 }
 
-struct StringToIntegerCast {
-	template <class T> static int UnsignedLength(T value);
-
-	// Formats value in reverse and returns a pointer to the beginning.
-	template <class T> static char *FormatUnsigned(T value, char *ptr) {
-		while (value >= 100) {
-			// Integer division is slow so do it for a group of two digits instead
-			// of for every digit. The idea comes from the talk by Alexandrescu
-			// "Three Optimization Tips for C++". See speed-test for a comparison.
-			auto index = static_cast<unsigned>((value % 100) * 2);
-			value /= 100;
-			*--ptr = duckdb_fmt::internal::data::digits[index + 1];
-			*--ptr = duckdb_fmt::internal::data::digits[index];
-		}
-		if (value < 10) {
-			*--ptr = static_cast<char>('0' + value);
-			return ptr;
-		}
-		auto index = static_cast<unsigned>(value * 2);
-		*--ptr = duckdb_fmt::internal::data::digits[index + 1];
-		*--ptr = duckdb_fmt::internal::data::digits[index];
-		return ptr;
-	}
-
-	template <class SIGNED, class UNSIGNED> static string_t FormatSigned(SIGNED value, Vector &vector) {
-		int sign = -(value < 0);
-		UNSIGNED unsigned_value = (value ^ sign) - sign;
-		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
-		string_t result = StringVector::EmptyString(vector, length);
-		auto dataptr = result.GetData();
-		auto endptr = dataptr + length;
-		endptr = FormatUnsigned(unsigned_value, endptr);
-		if (sign) {
-			*--endptr = '-';
-		}
-		result.Finalize();
-		return result;
-	}
-};
-
-template <> int StringToIntegerCast::UnsignedLength(uint8_t value) {
-	int length = 1;
-	length += value >= 10;
-	length += value >= 100;
-	return length;
-}
-
-template <> int StringToIntegerCast::UnsignedLength(uint16_t value) {
-	int length = 1;
-	length += value >= 10;
-	length += value >= 100;
-	length += value >= 1000;
-	length += value >= 10000;
-	return length;
-}
-
-template <> int StringToIntegerCast::UnsignedLength(uint32_t value) {
-	if (value >= 10000) {
-		int length = 5;
-		length += value >= 100000;
-		length += value >= 1000000;
-		length += value >= 10000000;
-		length += value >= 100000000;
-		length += value >= 1000000000;
-		return length;
-	} else {
-		int length = 1;
-		length += value >= 10;
-		length += value >= 100;
-		length += value >= 1000;
-		return length;
-	}
-}
-
-template <> int StringToIntegerCast::UnsignedLength(uint64_t value) {
-	if (value >= 10000000000ULL) {
-		if (value >= 1000000000000000ULL) {
-			int length = 16;
-			length += value >= 10000000000000000ULL;
-			length += value >= 100000000000000000ULL;
-			length += value >= 1000000000000000000ULL;
-			length += value >= 10000000000000000000ULL;
-			return length;
-		} else {
-			int length = 11;
-			length += value >= 100000000000ULL;
-			length += value >= 1000000000000ULL;
-			length += value >= 10000000000000ULL;
-			length += value >= 100000000000000ULL;
-			return length;
-		}
-	} else {
-		if (value >= 100000ULL) {
-			int length = 6;
-			length += value >= 1000000ULL;
-			length += value >= 10000000ULL;
-			length += value >= 100000000ULL;
-			length += value >= 1000000000ULL;
-			return length;
-		} else {
-			int length = 1;
-			length += value >= 10ULL;
-			length += value >= 100ULL;
-			length += value >= 1000ULL;
-			length += value >= 10000ULL;
-			return length;
-		}
-	}
-}
-
 template <> string_t StringCast::Operation(int8_t input, Vector &vector) {
-	return StringToIntegerCast::FormatSigned<int8_t, uint8_t>(input, vector);
+	return NumericHelper::FormatSigned<int8_t, uint8_t>(input, vector);
 }
 
 template <> string_t StringCast::Operation(int16_t input, Vector &vector) {
-	return StringToIntegerCast::FormatSigned<int16_t, uint16_t>(input, vector);
+	return NumericHelper::FormatSigned<int16_t, uint16_t>(input, vector);
 }
 template <> string_t StringCast::Operation(int32_t input, Vector &vector) {
-	return StringToIntegerCast::FormatSigned<int32_t, uint32_t>(input, vector);
+	return NumericHelper::FormatSigned<int32_t, uint32_t>(input, vector);
 }
 
 template <> string_t StringCast::Operation(int64_t input, Vector &vector) {
-	return StringToIntegerCast::FormatSigned<int64_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<int64_t, uint64_t>(input, vector);
 }
 
 template <> string_t StringCast::Operation(float input, Vector &vector) {
@@ -637,6 +600,9 @@ template <> string_t StringCast::Operation(interval_t input, Vector &vector) {
 	return StringVector::AddString(vector, s);
 }
 
+template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
+	return HugeintToStringCast::FormatSigned(move(input), vector);
+}
 
 //===--------------------------------------------------------------------===//
 // Cast From Date
@@ -667,7 +633,7 @@ struct DateToStringCast {
 	static void Format(char *data, int32_t date[], idx_t year_length, bool add_bc) {
 		// now we write the string, first write the year
 		auto endptr = data + year_length;
-		endptr = StringToIntegerCast::FormatUnsigned(date[0], endptr);
+		endptr = NumericHelper::FormatUnsigned(date[0], endptr);
 		// add optional leading zeros
 		while (endptr > data) {
 			*--endptr = '0';
@@ -755,7 +721,7 @@ struct TimeToStringCast {
 		// now optionally write ms at the end
 		if (time[3] > 0) {
 			auto start = ptr;
-			ptr = StringToIntegerCast::FormatUnsigned(time[3], data + length);
+			ptr = NumericHelper::FormatUnsigned(time[3], data + length);
 			while (ptr > start) {
 				*--ptr = '0';
 			}
@@ -836,7 +802,7 @@ template <> dtime_t CastTimestampToTime::Operation(timestamp_t input) {
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <> timestamp_t CastToTimestamp::Operation(string_t input) {
-	return Timestamp::FromString(input.GetData());
+	return Timestamp::FromCString(input.GetData(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//
@@ -851,16 +817,17 @@ template <> string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 }
 
 void CastFromBlob::ToHexString(string_t input, string_t &output) {
-	const char hexa_table[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
+	const char hexa_table[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 	idx_t input_size = input.GetSize();
 	assert(output.GetSize() == (input_size * 2 + 2));
 	auto input_data = input.GetData();
-	auto hexa_data  = output.GetData();
+	auto hexa_data = output.GetData();
 	// hex identifier
-	hexa_data[0] = '\\'; hexa_data[1] = 'x';
+	hexa_data[0] = '\\';
+	hexa_data[1] = 'x';
 	hexa_data += 2;
-	for(idx_t idx = 0; idx < input_size; ++idx) {
-		hexa_data[idx * 2]     = hexa_table[(input_data[idx] >> 4) & 0x0F];
+	for (idx_t idx = 0; idx < input_size; ++idx) {
+		hexa_data[idx * 2] = hexa_table[(input_data[idx] >> 4) & 0x0F];
 		hexa_data[idx * 2 + 1] = hexa_table[input_data[idx] & 0x0F];
 	}
 	output.Finalize();
@@ -869,7 +836,7 @@ void CastFromBlob::ToHexString(string_t input, string_t &output) {
 void CastFromBlob::FromHexToBytes(string_t input, string_t &output) {
 	idx_t in_size = input.GetSize();
 	// amount of hex chars must be even
-	if((in_size % 2) != 0) {
+	if ((in_size % 2) != 0) {
 		throw OutOfRangeException("Hex string must have an even number of bytes.");
 	}
 
@@ -879,23 +846,21 @@ void CastFromBlob::FromHexToBytes(string_t input, string_t &output) {
 	in_size -= 2;
 
 	auto out_data = output.GetData();
-	idx_t out_size = output.GetSize();
-	assert(out_size == (in_size / 2));
-	idx_t out_idx=0;
+	assert(output.GetSize() == (in_size / 2));
+	idx_t out_idx = 0;
 
 	idx_t num_hex_per_byte = 2;
 	uint8_t hex[2];
 
-	for(idx_t in_idx = 0; in_idx < in_size; in_idx+=2, ++out_idx) {
-		for(idx_t hex_idx = 0; hex_idx < num_hex_per_byte; ++hex_idx) {
+	for (idx_t in_idx = 0; in_idx < in_size; in_idx += 2, ++out_idx) {
+		for (idx_t hex_idx = 0; hex_idx < num_hex_per_byte; ++hex_idx) {
 			uint8_t int_ch = in_data[in_idx + hex_idx];
-			if(int_ch >= (uint8_t)'0' && int_ch <= (uint8_t)'9') {
+			if (int_ch >= (uint8_t)'0' && int_ch <= (uint8_t)'9') {
 				// numeric ascii chars: '0' to '9'
 				hex[hex_idx] = int_ch & 0X0F;
-			}
-			else if((int_ch >= (uint8_t)'A' && int_ch <= (uint8_t)'F') ||
-					(int_ch >= (uint8_t)'a' && int_ch <= (uint8_t)'f')) {
-					// hex chars: ['A':'F'] or ['a':'f']
+			} else if ((int_ch >= (uint8_t)'A' && int_ch <= (uint8_t)'F') ||
+			           (int_ch >= (uint8_t)'a' && int_ch <= (uint8_t)'f')) {
+				// hex chars: ['A':'F'] or ['a':'f']
 				// transforming char into an integer in the range of 10 to 15
 				hex[hex_idx] = ((int_ch & 0X0F) - 1) + 10;
 			} else {
@@ -917,13 +882,13 @@ template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
 	auto input_data = input.GetData();
 	string_t result;
 	// Check by a hex string
-	if(input_size >= 2 && input_data[0] == '\\' && input_data[1] == 'x') {
+	if (input_size >= 2 && input_data[0] == '\\' && input_data[1] == 'x') {
 		auto output = StringVector::EmptyString(vector, (input_size - 2) / 2);
 		CastFromBlob::FromHexToBytes(input, output);
 		result = output;
 	} else {
 		// raw string
-		result = StringVector::AddBlob(vector, input);
+		result = StringVector::AddStringOrBlob(vector, input);
 	}
 	return result;
 }
@@ -941,6 +906,688 @@ template <> interval_t StrictCast::Operation(string_t input) {
 
 template <> interval_t Cast::Operation(string_t input) {
 	return try_cast_string<interval_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From Hugeint
+//===--------------------------------------------------------------------===//
+// parsing hugeint from string is done a bit differently for performance reasons
+// for other integer types we keep track of a single value
+// and multiply that value by 10 for every digit we read
+// however, for hugeints, multiplication is very expensive (>20X as expensive as for int64)
+// for that reason, we parse numbers first into an int64 value
+// when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
+// this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
+struct HugeIntCastData {
+	hugeint_t hugeint;
+	int64_t intermediate;
+	uint8_t digits;
+
+	bool Flush() {
+		if (digits == 0 && intermediate == 0) {
+			return true;
+		}
+		if (hugeint.lower != 0 || hugeint.upper != 0) {
+			if (digits > 38) {
+				return false;
+			}
+			if (!Hugeint::TryMultiply(hugeint, Hugeint::PowersOfTen[digits], hugeint)) {
+				return false;
+			}
+		}
+		if (!Hugeint::AddInPlace(hugeint, hugeint_t(intermediate))) {
+			return false;
+		}
+		digits = 0;
+		intermediate = 0;
+		return true;
+	}
+};
+
+struct HugeIntegerCastOperation {
+	template <class T, bool NEGATIVE> static bool HandleDigit(T &result, uint8_t digit) {
+		if (NEGATIVE) {
+			if (result.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10) {
+				// intermediate is full: need to flush it
+				if (!result.Flush()) {
+					return false;
+				}
+			}
+			result.intermediate = result.intermediate * 10 - digit;
+		} else {
+			if (result.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+				if (!result.Flush()) {
+					return false;
+				}
+			}
+			result.intermediate = result.intermediate * 10 + digit;
+		}
+		result.digits++;
+		return true;
+	}
+
+	template <class T> static bool HandleExponent(T &result, int64_t exponent) {
+		result.Flush();
+		if (exponent < -38 || exponent > 38) {
+			// out of range for exact exponent: use double and convert
+			double dbl_res = Hugeint::Cast<double>(result.hugeint) * pow(10, exponent);
+			if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) ||
+			    dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
+				return false;
+			}
+			result.hugeint = Hugeint::Convert(dbl_res);
+			return true;
+		}
+		if (exponent < 0) {
+			// negative exponent: divide by power of 10
+			result.hugeint = Hugeint::Divide(result.hugeint, Hugeint::PowersOfTen[-exponent]);
+			return true;
+		} else {
+			// positive exponent: multiply by power of 10
+			return Hugeint::TryMultiply(result.hugeint, Hugeint::PowersOfTen[exponent], result.hugeint);
+		}
+	}
+
+	template <class T, bool NEGATIVE> static bool HandleDecimal(T &result, uint8_t digit) {
+		return true;
+	}
+
+	template <class T> static bool Finalize(T &result) {
+		return result.Flush();
+	}
+};
+
+template <> bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
+	HugeIntCastData data;
+	if (!TryIntegerCast<HugeIntCastData, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), data,
+	                                                                     strict)) {
+		return false;
+	}
+	result = data.hugeint;
+	return true;
+}
+
+template <> hugeint_t Cast::Operation(string_t input) {
+	return try_cast_string<hugeint_t>(input);
+}
+
+template <> hugeint_t StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<hugeint_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Numeric -> Hugeint
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(bool input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<bool, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(int8_t input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<int8_t, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(int16_t input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<int16_t, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(int32_t input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<int32_t, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(int64_t input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<int64_t, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(float input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<float, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(double input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<double, hugeint_t>(input);
+	return true;
+}
+
+template <> hugeint_t Cast::Operation(bool input) {
+	hugeint_t result;
+	result.upper = 0;
+	result.lower = input ? 1 : 0;
+	return result;
+}
+template <> hugeint_t Cast::Operation(int8_t input) {
+	return Hugeint::Convert<int8_t>(input);
+}
+template <> hugeint_t Cast::Operation(int16_t input) {
+	return Hugeint::Convert<int16_t>(input);
+}
+template <> hugeint_t Cast::Operation(int32_t input) {
+	return Hugeint::Convert<int32_t>(input);
+}
+template <> hugeint_t Cast::Operation(int64_t input) {
+	return Hugeint::Convert<int64_t>(input);
+}
+template <> hugeint_t Cast::Operation(float input) {
+	return Hugeint::Convert<float>(input);
+}
+template <> hugeint_t Cast::Operation(double input) {
+	return Hugeint::Convert<double>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Hugeint -> Numeric
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(hugeint_t input, bool &result, bool strict) {
+	// any positive number converts to true
+	result = input.upper > 0 || (input.upper == 0 && input.lower > 0);
+	return true;
+}
+
+template <> bool TryCast::Operation(hugeint_t input, int8_t &result, bool strict) {
+	return Hugeint::TryCast<int8_t>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, int16_t &result, bool strict) {
+	return Hugeint::TryCast<int16_t>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, int32_t &result, bool strict) {
+	return Hugeint::TryCast<int32_t>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, int64_t &result, bool strict) {
+	return Hugeint::TryCast<int64_t>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, float &result, bool strict) {
+	return Hugeint::TryCast<float>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, double &result, bool strict) {
+	return Hugeint::TryCast<double>(input, result);
+}
+
+template <> bool Cast::Operation(hugeint_t input) {
+	bool result;
+	TryCast::Operation(input, result);
+	return result;
+}
+
+template <class T> static T hugeint_cast_to_numeric(hugeint_t input) {
+	T result;
+	if (!TryCast::Operation<hugeint_t, T>(input, result)) {
+		throw ValueOutOfRangeException(input, PhysicalType::INT128, GetTypeId<T>());
+	}
+	return result;
+}
+
+template <> int8_t Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<int8_t>(input);
+}
+
+template <> int16_t Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<int16_t>(input);
+}
+
+template <> int32_t Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<int32_t>(input);
+}
+
+template <> int64_t Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<int64_t>(input);
+}
+
+template <> float Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<float>(input);
+}
+
+template <> double Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<double>(input);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict) {
+	result = input;
+	return true;
+}
+
+template <> hugeint_t Cast::Operation(hugeint_t input) {
+	return input;
+}
+
+//===--------------------------------------------------------------------===//
+// Decimal String Cast
+//===--------------------------------------------------------------------===//
+template <class T> struct DecimalCastData {
+	T result;
+	uint8_t width;
+	uint8_t scale;
+	uint8_t digit_count;
+	uint8_t decimal_count;
+};
+
+struct DecimalCastOperation {
+	template <class T, bool NEGATIVE> static bool HandleDigit(T &state, uint8_t digit) {
+		if (state.result == 0 && digit == 0) {
+			// leading zero's don't count towards the digit count
+			return true;
+		}
+		if (state.digit_count == state.width - state.scale) {
+			// width of decimal type is exceeded!
+			return false;
+		}
+		state.digit_count++;
+		if (NEGATIVE) {
+			state.result = state.result * 10 - digit;
+		} else {
+			state.result = state.result * 10 + digit;
+		}
+		return true;
+	}
+
+	template <class T> static bool HandleExponent(T &state, int64_t exponent) {
+		return false;
+	}
+
+	template <class T, bool NEGATIVE> static bool HandleDecimal(T &state, uint8_t digit) {
+		if (state.decimal_count == state.scale) {
+			// we exceeded the amount of supported decimals
+			// however, we don't throw an error here
+			// we just truncate the decimal
+			return true;
+		}
+		state.decimal_count++;
+		if (NEGATIVE) {
+			state.result = state.result * 10 - digit;
+		} else {
+			state.result = state.result * 10 + digit;
+		}
+		return true;
+	}
+
+	template <class T> static bool Finalize(T &state) {
+		// if we have not gotten exactly "scale" decimals, we need to multiply the result
+		// e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
+		// but we have only gotten the value "10" so far, so we multiply by 1000
+		for (uint8_t i = state.decimal_count; i < state.scale; i++) {
+			state.result *= 10;
+		}
+		return true;
+	}
+};
+
+template <class T> T decimal_string_cast(string_t input, uint8_t width, uint8_t scale) {
+	DecimalCastData<T> state;
+	state.result = 0;
+	state.width = width;
+	state.scale = scale;
+	state.digit_count = 0;
+	state.decimal_count = 0;
+	if (!TryIntegerCast<DecimalCastData<T>, false, DecimalCastOperation, false>(input.GetData(), input.GetSize(), state,
+	                                                                            false)) {
+		throw ConversionException("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetData(), (int)width,
+		                          (int)scale);
+	}
+	return state.result;
+}
+
+template <> int16_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale) {
+	return decimal_string_cast<int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale) {
+	return decimal_string_cast<int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale) {
+	return decimal_string_cast<int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale) {
+	return decimal_string_cast<hugeint_t>(input, width, scale);
+}
+
+template <> string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, Vector &result) {
+	return DecimalToString::Format<int16_t, uint16_t>(input, scale, result);
+}
+
+template <> string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, Vector &result) {
+	return DecimalToString::Format<int32_t, uint32_t>(input, scale, result);
+}
+
+template <> string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result) {
+	return DecimalToString::Format<int64_t, uint64_t>(input, scale, result);
+}
+
+template <> string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result) {
+	return HugeintToStringCast::FormatDecimal(input, scale, result);
+}
+
+template <> int16_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
+	return input ? NumericHelper::PowersOfTen[scale] : 0;
+}
+
+template <> int32_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
+	return input ? NumericHelper::PowersOfTen[scale] : 0;
+}
+
+template <> int64_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
+	return input ? NumericHelper::PowersOfTen[scale] : 0;
+}
+
+template <> hugeint_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale) {
+	return input ? Hugeint::PowersOfTen[scale] : 0;
+}
+
+template <> bool CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<int16_t, bool>(input);
+}
+
+template <> bool CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<int32_t, bool>(input);
+}
+
+template <> bool CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<int64_t, bool>(input);
+}
+
+template <> bool CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return Cast::Operation<hugeint_t, bool>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Numeric -> Decimal Cast
+//===--------------------------------------------------------------------===//
+template <class SRC, class DST> DST StandardNumericToDecimalCast(SRC input, uint8_t width, uint8_t scale) {
+	// check for overflow
+	DST max_width = NumericHelper::PowersOfTen[width - scale];
+	if (int64_t(input) >= max_width || int64_t(input) <= -max_width) {
+		throw OutOfRangeException("Could not cast value %d to DECIMAL(%d,%d)", input, width, scale);
+	}
+	return DST(input) * NumericHelper::PowersOfTen[scale];
+}
+
+template <class SRC> hugeint_t NumericToHugeDecimalCast(SRC input, uint8_t width, uint8_t scale) {
+	// check for overflow
+	hugeint_t max_width = Hugeint::PowersOfTen[width - scale];
+	hugeint_t hinput = hugeint_t(input);
+	if (hinput >= max_width || hinput <= -max_width) {
+		throw OutOfRangeException("Could not cast value %s to DECIMAL(%d,%d)", hinput.ToString(), width, scale);
+	}
+	return hinput * Hugeint::PowersOfTen[scale];
+}
+
+// TINYINT -> DECIMAL
+template <> int16_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int8_t, int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int8_t, int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int8_t, int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale) {
+	return NumericToHugeDecimalCast<int8_t>(input, width, scale);
+}
+
+// SMALLINT -> DECIMAL
+template <> int16_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int16_t, int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int16_t, int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int16_t, int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return NumericToHugeDecimalCast<int16_t>(input, width, scale);
+}
+
+// INTEGER -> DECIMAL
+template <> int16_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int32_t, int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int32_t, int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int32_t, int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return NumericToHugeDecimalCast<int32_t>(input, width, scale);
+}
+
+// BIGINT -> DECIMAL
+template <> int16_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int64_t, int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int64_t, int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<int64_t, int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return NumericToHugeDecimalCast<int64_t>(input, width, scale);
+}
+
+template <class DST> DST HugeintToDecimalCast(hugeint_t input, uint8_t width, uint8_t scale) {
+	// check for overflow
+	hugeint_t max_width = Hugeint::PowersOfTen[width - scale];
+	if (input >= max_width || input <= -max_width) {
+		throw OutOfRangeException("Could not cast value %s to DECIMAL(%d,%d)", input.ToString(), width, scale);
+	}
+	return Hugeint::Cast<DST>(input * Hugeint::PowersOfTen[scale]);
+}
+
+// HUGEINT -> DECIMAL
+template <> int16_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return HugeintToDecimalCast<int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return HugeintToDecimalCast<int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return HugeintToDecimalCast<int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return HugeintToDecimalCast<hugeint_t>(input, width, scale);
+}
+
+template <class SRC, class DST> DST DoubleToDecimalCast(SRC input, uint8_t width, uint8_t scale) {
+	double value = input * NumericHelper::DoublePowersOfTen[scale];
+	if (value <= -NumericHelper::DoublePowersOfTen[width] || value >= NumericHelper::DoublePowersOfTen[width]) {
+		throw OutOfRangeException("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
+	}
+	return Cast::Operation<SRC, DST>(value);
+}
+
+// FLOAT -> DECIMAL
+template <> int16_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale) {
+	return DoubleToDecimalCast<float, int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale) {
+	return DoubleToDecimalCast<float, int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale) {
+	return DoubleToDecimalCast<float, int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale) {
+	return DoubleToDecimalCast<float, hugeint_t>(input, width, scale);
+}
+
+// DOUBLE -> DECIMAL
+template <> int16_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale) {
+	return DoubleToDecimalCast<double, int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale) {
+	return DoubleToDecimalCast<double, int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale) {
+	return DoubleToDecimalCast<double, int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale) {
+	return DoubleToDecimalCast<double, hugeint_t>(input, width, scale);
+}
+
+//===--------------------------------------------------------------------===//
+// Decimal -> Numeric Cast
+//===--------------------------------------------------------------------===//
+template <class SRC, class DST> DST CastDecimalToNumeric(SRC input, uint8_t scale) {
+	return Cast::Operation<SRC, DST>(input / NumericHelper::PowersOfTen[scale]);
+}
+
+template <class DST> DST CastHugeDecimalToNumeric(hugeint_t input, uint8_t scale) {
+	return Cast::Operation<hugeint_t, DST>(input / Hugeint::PowersOfTen[scale]);
+}
+
+// DECIMAL -> TINYINT
+template <> int8_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, int8_t>(input, scale);
+}
+
+template <> int8_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, int8_t>(input, scale);
+}
+
+template <> int8_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, int8_t>(input, scale);
+}
+
+template <> int8_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<int8_t>(input, scale);
+}
+
+// DECIMAL -> SMALLINT
+template <> int16_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, int16_t>(input, scale);
+}
+
+template <> int16_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, int16_t>(input, scale);
+}
+
+template <> int16_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, int16_t>(input, scale);
+}
+
+template <> int16_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<int16_t>(input, scale);
+}
+
+// DECIMAL -> INTEGER
+template <> int32_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, int32_t>(input, scale);
+}
+
+template <> int32_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, int32_t>(input, scale);
+}
+
+template <> int32_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, int32_t>(input, scale);
+}
+
+template <> int32_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<int32_t>(input, scale);
+}
+
+// DECIMAL -> BIGINT
+template <> int64_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, int64_t>(input, scale);
+}
+
+template <> int64_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, int64_t>(input, scale);
+}
+
+template <> int64_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, int64_t>(input, scale);
+}
+
+template <> int64_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<int64_t>(input, scale);
+}
+
+// DECIMAL -> HUGEINT
+template <> hugeint_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, hugeint_t>(input, scale);
+}
+
+template <> hugeint_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, hugeint_t>(input, scale);
+}
+
+template <> hugeint_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, hugeint_t>(input, scale);
+}
+
+template <> hugeint_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<hugeint_t>(input, scale);
+}
+
+template <class SRC, class DST> DST CastDecimalToFloatingPoint(SRC input, uint8_t scale) {
+	return Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DoublePowersOfTen[scale]);
+}
+
+// DECIMAL -> FLOAT
+template <> float CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToFloatingPoint<int16_t, float>(input, scale);
+}
+
+template <> float CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToFloatingPoint<int32_t, float>(input, scale);
+}
+
+template <> float CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToFloatingPoint<int64_t, float>(input, scale);
+}
+
+template <> float CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToFloatingPoint<hugeint_t, float>(input, scale);
+}
+
+// DECIMAL -> DOUBLE
+template <> double CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToFloatingPoint<int16_t, double>(input, scale);
+}
+
+template <> double CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToFloatingPoint<int32_t, double>(input, scale);
+}
+
+template <> double CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToFloatingPoint<int64_t, double>(input, scale);
+}
+
+template <> double CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToFloatingPoint<hugeint_t, double>(input, scale);
 }
 
 } // namespace duckdb

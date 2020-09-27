@@ -1,0 +1,44 @@
+# name: test/sql/order/test_order_pragma.test
+# description: Test ORDER BY PRAGMA
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
+
+# default is ORDER BY ASC
+query I
+SELECT a FROM test ORDER BY a
+----
+11
+12
+13
+
+# we can change the default with a pragma
+statement ok
+PRAGMA default_order='DESCENDING'
+
+query I
+SELECT a FROM test ORDER BY a
+----
+13
+12
+11
+
+statement ok
+PRAGMA default_order='ASC'
+
+statement error
+PRAGMA default_order())
+
+statement error
+PRAGMA default_order=UNKNOWN)
+
+statement error
+PRAGMA default_order=3)
+

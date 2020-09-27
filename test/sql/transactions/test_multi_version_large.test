@@ -1,0 +1,261 @@
+# name: test/sql/transactions/test_multi_version_large.test
+# description: Test multiple versions of the same data with a data set that exceeds a single block
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+# set up the database
+statement ok con1
+CREATE TABLE integers(i INTEGER);
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3), (4);
+
+# 4 -> 8
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 8 -> 16
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 16 -> 32
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 32 -> 64
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 64 -> 128
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 128 -> 256
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 256 -> 512
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 512 -> 1024
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 1024 -> 2048
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 2048 -> 4096
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 4096 -> 8192
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 8192 -> 16384
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 16384 -> 32768
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 32768 -> 65536
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# 65536 -> 131072
+statement ok con1
+INSERT INTO integers SELECT * FROM integers
+
+# verify the count and sum
+query I con1
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+327680.000000
+
+# now delete some tuples
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+DELETE FROM integers WHERE i=1
+
+# check the updated count and sum
+query I con1
+SELECT COUNT(*) FROM integers
+----
+98304
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+294912.000000
+
+# con2 still has the same count and sum
+query I con2
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con2
+SELECT SUM(i) FROM integers
+----
+327680.000000
+
+# rollback
+statement ok con1
+ROLLBACK;
+
+# now the count and sum are back to normal
+query I con1
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+327680.000000
+
+# now delete some tuples
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+DELETE FROM integers WHERE i=2
+
+# check the updated count and sum
+query I con1
+SELECT COUNT(*) FROM integers
+----
+98304
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+262144.000000
+
+# con2 still has the same count and sum
+query I con2
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con2
+SELECT SUM(i) FROM integers
+----
+327680.000000
+
+# rollback
+statement ok con1
+ROLLBACK;
+
+# now the count and sum are back to normal
+query I con1
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+327680.000000
+
+# now delete some tuples
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+DELETE FROM integers WHERE i=3
+
+# check the updated count and sum
+query I con1
+SELECT COUNT(*) FROM integers
+----
+98304
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+229376.000000
+
+# con2 still has the same count and sum
+query I con2
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con2
+SELECT SUM(i) FROM integers
+----
+327680.000000
+
+# rollback
+statement ok con1
+ROLLBACK;
+
+# now the count and sum are back to normal
+query I con1
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+327680.000000
+
+# now delete some tuples
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+DELETE FROM integers WHERE i=4
+
+# check the updated count and sum
+query I con1
+SELECT COUNT(*) FROM integers
+----
+98304
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+196608.000000
+
+# con2 still has the same count and sum
+query I con2
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con2
+SELECT SUM(i) FROM integers
+----
+327680.000000
+
+# rollback
+statement ok con1
+ROLLBACK;
+
+# now the count and sum are back to normal
+query I con1
+SELECT COUNT(*) FROM integers
+----
+131072
+
+query R con1
+SELECT SUM(i) FROM integers
+----
+327680.000000
+

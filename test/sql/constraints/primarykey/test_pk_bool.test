@@ -1,0 +1,24 @@
+# name: test/sql/constraints/primarykey/test_pk_bool.test
+# description: Multi-column boolean PRIMARY KEY constraint
+# group: [primarykey]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j BOOLEAN, PRIMARY KEY(i, j))
+
+statement ok
+INSERT INTO integers VALUES (1, false), (1, true), (2, false)
+
+# duplicate value!
+statement error
+INSERT INTO integers VALUES (1, false)
+
+statement ok
+INSERT INTO integers VALUES (2, true)
+
+query IT
+SELECT * FROM integers ORDER BY 1, 2
+----
+1	0
+1	1
+2	0
+2	1

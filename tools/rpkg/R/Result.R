@@ -1,8 +1,19 @@
 #' DuckDB Result Set
 #'
 #' Methods for accessing result sets for queries on DuckDB connections.
-#' @name duckdb_result
-NULL
+#' Implements \linkS4class{DBIResult}.
+#'
+#' @aliases duckdb_result
+#' @keywords internal
+#' @export
+setClass("duckdb_result",
+  contains = "DBIResult",
+  slots = list(
+    connection = "duckdb_connection",
+    stmt_lst = "list",
+    env = "environment"
+  )
+)
 
 duckdb_result <- function(connection, stmt_lst) {
   env <- new.env(parent = emptyenv())
@@ -30,29 +41,18 @@ duckdb_execute <- function(res) {
 }
 
 
-#' @rdname duckdb_result
-#' @export
-setClass(
-  "duckdb_result",
-  contains = "DBIResult",
-  slots = list(
-    connection = "duckdb_connection",
-    stmt_lst = "list",
-    env = "environment"
-  )
-)
-
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams methods::show
 #' @export
 setMethod(
   "show", "duckdb_result",
   function(object) {
-    cat(sprintf("<duckdb_result %s connection=%s statement='%s'>\n", extptr_str(object@stmt_lst$ref), extptr_str(object@connection@conn_ref), object@stmt_lst$str))
+    message(sprintf("<duckdb_result %s connection=%s statement='%s'>", extptr_str(object@stmt_lst$ref), extptr_str(object@connection@conn_ref), object@stmt_lst$str))
+    invisible(NULL)
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbClearResult
 #' @export
 setMethod(
@@ -77,7 +77,7 @@ fix_rownames <- function(df) {
 }
 
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbFetch
 #' @importFrom utils head
 #' @export
@@ -132,7 +132,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbHasCompleted
 #' @export
 setMethod(
@@ -148,7 +148,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -159,7 +159,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbIsValid
 #' @export
 setMethod(
@@ -169,7 +169,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbGetStatement
 #' @export
 setMethod(
@@ -182,7 +182,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbColumnInfo
 #' @export
 setMethod(
@@ -193,7 +193,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbGetRowCount
 #' @export
 setMethod(
@@ -206,7 +206,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbGetRowsAffected
 #' @export
 setMethod(
@@ -219,7 +219,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_result
+#' @rdname duckdb_result-class
 #' @inheritParams DBI::dbBind
 #' @export
 setMethod(

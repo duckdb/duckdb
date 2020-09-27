@@ -1,0 +1,71 @@
+# name: test/sql/constraints/primarykey/test_pk_updel_multi_column.test
+# description: PRIMARY KEY and update/delete on multiple columns
+# group: [primarykey]
+
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));
+
+statement ok
+INSERT INTO test VALUES (11, 'hello'), (12, 'world'), (13, 'blablabla')
+
+statement ok
+UPDATE test SET b='pandas';
+
+query IT
+SELECT * FROM test ORDER BY a;
+----
+11	pandas
+12	pandas
+13	pandas
+
+statement error
+UPDATE test SET a=a+1;
+
+query IT
+SELECT * FROM test ORDER BY a;
+----
+11	pandas
+12	pandas
+13	pandas
+
+statement error
+UPDATE test SET a=13 WHERE a=12;
+
+statement error
+UPDATE test SET a=4;
+
+query IT
+SELECT * FROM test ORDER BY a;
+----
+11	pandas
+12	pandas
+13	pandas
+
+statement ok
+DELETE FROM test WHERE a=12
+
+statement ok
+INSERT INTO test VALUES (12, 'pandas');
+
+statement error
+INSERT INTO test VALUES (12, 'pandas');
+
+statement ok
+DELETE FROM test WHERE a=12
+
+statement ok
+INSERT INTO test VALUES (4, 'pandas');
+
+statement ok
+UPDATE test SET a=4 WHERE a=12;
+
+query IT
+SELECT * FROM test ORDER BY a;
+----
+4	pandas
+11	pandas
+13	pandas
+
+statement error
+UPDATE test SET b=NULL WHERE a=13;
+

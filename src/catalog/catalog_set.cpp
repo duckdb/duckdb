@@ -8,7 +8,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CatalogSet::CatalogSet(Catalog &catalog) : catalog(catalog) {
@@ -40,7 +40,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 		if (HasConflict(transaction, current)) {
 			// current version has been written to by a currently active
 			// transaction
-			throw TransactionException("Catalog write-write conflict on create with \"%s\"", current.name.c_str());
+			throw TransactionException("Catalog write-write conflict on create with \"%s\"", current.name);
 		}
 		// there is a current version that has been committed
 		// if it has not been deleted there is a conflict
@@ -81,7 +81,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	if (HasConflict(transaction, current)) {
 		// current version has been written to by a currently active
 		// transaction
-		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", current.name.c_str());
+		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", current.name);
 	}
 
 	// lock this catalog set to disallow reading
@@ -126,7 +126,7 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool ca
 	}
 	if (HasConflict(transaction, *entry->second)) {
 		// current version has been written to by a currently active transaction
-		throw TransactionException("Catalog write-write conflict on drop with \"%s\"", name.c_str());
+		throw TransactionException("Catalog write-write conflict on drop with \"%s\"", name);
 	}
 	// there is a current version that has been committed by this transaction
 	if (entry->second->deleted) {
@@ -238,3 +238,5 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		entry->parent = nullptr;
 	}
 }
+
+} // namespace duckdb

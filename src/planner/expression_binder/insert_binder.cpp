@@ -2,7 +2,7 @@
 
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 InsertBinder::InsertBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
@@ -22,3 +22,5 @@ BindResult InsertBinder::BindExpression(ParsedExpression &expr, idx_t depth, boo
 string InsertBinder::UnsupportedAggregateMessage() {
 	return "INSERT statement cannot contain aggregates!";
 }
+
+} // namespace duckdb

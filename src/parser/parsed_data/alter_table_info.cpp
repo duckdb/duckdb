@@ -1,7 +1,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void AlterInfo::Serialize(Serializer &serializer) {
@@ -34,7 +34,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &source) {
 	case AlterTableType::RENAME_COLUMN:
 		return RenameColumnInfo::Deserialize(source, schema, table);
 	case AlterTableType::RENAME_TABLE:
-		return RenameTableInfo::Deserialize(source, schema, table);
+		return RenameTableInfo::Deserialize(source, schema, table, false);
+	case AlterTableType::RENAME_VIEW:
+		return RenameTableInfo::Deserialize(source, schema, table, true);
 	case AlterTableType::ADD_COLUMN:
 		return AddColumnInfo::Deserialize(source, schema, table);
 	case AlterTableType::REMOVE_COLUMN:
@@ -71,9 +73,9 @@ void RenameTableInfo::Serialize(Serializer &serializer) {
 	serializer.WriteString(new_table_name);
 }
 
-unique_ptr<AlterInfo> RenameTableInfo::Deserialize(Deserializer &source, string schema, string table) {
+unique_ptr<AlterInfo> RenameTableInfo::Deserialize(Deserializer &source, string schema, string table, bool is_view) {
 	auto new_name = source.Read<string>();
-	return make_unique<RenameTableInfo>(schema, table, new_name);
+	return make_unique<RenameTableInfo>(schema, table, new_name, is_view);
 }
 
 //===--------------------------------------------------------------------===//
@@ -116,7 +118,7 @@ void ChangeColumnTypeInfo::Serialize(Serializer &serializer) {
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &source, string schema, string table) {
 	auto column_name = source.Read<string>();
-	auto target_type = SQLType::Deserialize(source);
+	auto target_type = LogicalType::Deserialize(source);
 	auto expression = source.ReadOptional<ParsedExpression>();
 	return make_unique<ChangeColumnTypeInfo>(schema, table, move(column_name), move(target_type), move(expression));
 }
@@ -135,3 +137,4 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(Deserializer &source, string s
 	auto new_default = source.ReadOptional<ParsedExpression>();
 	return make_unique<SetDefaultInfo>(schema, table, move(column_name), move(new_default));
 }
+} // namespace duckdb

@@ -2,17 +2,17 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-CastExpression::CastExpression(SQLType target, unique_ptr<ParsedExpression> child)
+CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> child)
     : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(target) {
 	assert(child);
 	this->child = move(child);
 }
 
 string CastExpression::ToString() const {
-	return "CAST[" + SQLTypeToString(cast_type) + "](" + child->ToString() + ")";
+	return "CAST[" + cast_type.ToString() + "](" + child->ToString() + ")";
 }
 
 bool CastExpression::Equals(const CastExpression *a, const CastExpression *b) {
@@ -39,6 +39,8 @@ void CastExpression::Serialize(Serializer &serializer) {
 
 unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto child = ParsedExpression::Deserialize(source);
-	auto cast_type = SQLType::Deserialize(source);
+	auto cast_type = LogicalType::Deserialize(source);
 	return make_unique_base<ParsedExpression, CastExpression>(cast_type, move(child));
 }
+
+} // namespace duckdb

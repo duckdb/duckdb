@@ -9,7 +9,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression.hpp"
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
@@ -25,6 +25,7 @@ Expression *FilterCombiner::GetNode(Expression *expr) {
 	// expression does not exist yet: create a copy and store it
 	auto copy = expr->Copy();
 	auto pointer_copy = copy.get();
+	assert(stored_expressions.find(pointer_copy) == stored_expressions.end());
 	stored_expressions.insert(make_pair(pointer_copy, move(copy)));
 	return pointer_copy;
 }
@@ -154,22 +155,19 @@ bool FilterCombiner::HasFilters() {
 	return has_filters;
 }
 
-vector<TableFilter>
-FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expression> filter)> callback,
-                                         vector<idx_t> &column_ids) {
+vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
 	vector<TableFilter> tableFilters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
 		if (constant_value.second.size() > 0) {
-			//			for (idx_t i = 0; i < constant_value.second.size(); ++i) {
 			auto filter_exp = equivalence_map.end();
 			if ((constant_value.second[0].comparison_type == ExpressionType::COMPARE_EQUAL ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
-			    (TypeIsNumeric(constant_value.second[0].constant.type) ||
-			     constant_value.second[0].constant.type == TypeId::VARCHAR)) {
+			    (TypeIsNumeric(constant_value.second[0].constant.type().InternalType()) ||
+			     constant_value.second[0].constant.type().InternalType() == PhysicalType::VARCHAR)) {
 				//! Here we check if these filters are column references
 				filter_exp = equivalence_map.find(constant_value.first);
 				if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF) {
@@ -182,45 +180,11 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 					auto &constant_list = constant_values.find(equivalence_set)->second;
 					// for each entry generate an equality expression comparing to each other
 					for (idx_t i = 0; i < entries.size(); i++) {
-						for (idx_t k = i + 1; k < entries.size(); k++) {
-							auto comparison = make_unique<BoundComparisonExpression>(
-							    ExpressionType::COMPARE_EQUAL, entries[i]->Copy(), entries[k]->Copy());
-							callback(move(comparison));
-						}
 						// for each entry also create a comparison with each constant
-						int lower_index = -1, upper_index = -1;
 						for (idx_t k = 0; k < constant_list.size(); k++) {
 							tableFilters.push_back(TableFilter(constant_value.second[k].constant,
 							                                   constant_value.second[k].comparison_type,
 							                                   filter_col_exp->binding.column_index));
-							auto &info = constant_list[k];
-							if (info.comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-							    info.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-								lower_index = k;
-
-							} else if (info.comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-							           info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
-								upper_index = k;
-							} else {
-								auto constant = make_unique<BoundConstantExpression>(info.constant);
-								auto comparison = make_unique<BoundComparisonExpression>(
-								    info.comparison_type, entries[i]->Copy(), move(constant));
-								callback(move(comparison));
-							}
-						}
-						if (lower_index >= 0) {
-							// only lower index found, create simple comparison expression
-							auto constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
-							auto comparison = make_unique<BoundComparisonExpression>(
-							    constant_list[lower_index].comparison_type, entries[i]->Copy(), move(constant));
-							callback(move(comparison));
-						}
-						if (upper_index >= 0) {
-							// only upper index found, create simple comparison expression
-							auto constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
-							auto comparison = make_unique<BoundComparisonExpression>(
-							    constant_list[upper_index].comparison_type, entries[i]->Copy(), move(constant));
-							callback(move(comparison));
 						}
 					}
 					equivalence_map.erase(filter_exp);
@@ -297,7 +261,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	}
 	if (expr->IsFoldable()) {
 		// scalar condition, evaluate it
-		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(TypeId::BOOL);
+		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BOOLEAN);
 		// check if the filter passes
 		if (result.is_null || !result.value_.boolean) {
 			// the filter does not pass the scalar test, create an empty result
@@ -571,3 +535,5 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 		return InvertValueComparisonResult(CompareValueInformation(right, left));
 	}
 }
+
+} // namespace duckdb

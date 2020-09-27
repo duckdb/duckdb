@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 
 #include <cstring>
@@ -67,13 +68,13 @@ struct StringComparisonOperators {
 			// prefix and length are equal
 			if (a.IsInlined()) {
 				// small string: compare entire inlined string
-				if (memcmp(a.prefix, b.prefix, a.length) == 0) {
+				if (memcmp(a.value.inlined.inlined, b.value.inlined.inlined, a.GetSize()) == 0) {
 					// entire string is equal
 					return INVERSE ? false : true;
 				}
 			} else {
 				// large string: check main data source
-				if (memcmp(a.value_.data, b.value_.data, a.length) == 0) {
+				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
 					// entire string is equal
 					return INVERSE ? false : true;
 				}
@@ -121,5 +122,26 @@ template <> inline bool LessThan::Operation(interval_t left, interval_t right) {
 }
 template <> inline bool LessThanEquals::Operation(interval_t left, interval_t right) {
 	return GreaterThanEquals::Operation(right, left);
+}
+//===--------------------------------------------------------------------===//
+// Specialized Hugeint Comparison Operators
+//===--------------------------------------------------------------------===//
+template <> inline bool Equals::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::Equals(left, right);
+}
+template <> inline bool NotEquals::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::NotEquals(left, right);
+}
+template <> inline bool GreaterThan::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::GreaterThan(left, right);
+}
+template <> inline bool GreaterThanEquals::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::GreaterThanEquals(left, right);
+}
+template <> inline bool LessThan::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::LessThan(left, right);
+}
+template <> inline bool LessThanEquals::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::LessThanEquals(left, right);
 }
 } // namespace duckdb

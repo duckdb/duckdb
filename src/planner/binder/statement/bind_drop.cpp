@@ -5,7 +5,7 @@
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundStatement Binder::Bind(DropStatement &stmt) {
@@ -17,14 +17,14 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		// it also does not require a valid transaction
 		this->requires_valid_transaction = false;
 		break;
-	case CatalogType::SCHEMA:
+	case CatalogType::SCHEMA_ENTRY:
 		// dropping a schema is never read-only because there are no temporary schemas
 		this->read_only = false;
 		break;
-	case CatalogType::VIEW:
-	case CatalogType::SEQUENCE:
-	case CatalogType::INDEX:
-	case CatalogType::TABLE: {
+	case CatalogType::VIEW_ENTRY:
+	case CatalogType::SEQUENCE_ENTRY:
+	case CatalogType::INDEX_ENTRY:
+	case CatalogType::TABLE_ENTRY: {
 		auto entry = (StandardEntry *)Catalog::GetCatalog(context).GetEntry(context, stmt.info->type, stmt.info->schema,
 		                                                                    stmt.info->name, true);
 		if (!entry) {
@@ -42,6 +42,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	}
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::DROP, move(stmt.info));
 	result.names = {"Success"};
-	result.types = {SQLType::BOOLEAN};
+	result.types = {LogicalType::BOOLEAN};
 	return result;
 }
+
+} // namespace duckdb

@@ -12,7 +12,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //! Create a JoinCondition from a comparison
@@ -51,36 +51,67 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 	// first check if we can create
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		auto &expr = expressions[i];
-		if (!expr->HasSubquery()) {
-			auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
-			if (total_side != JoinSide::BOTH) {
-				// join condition does not reference both sides, add it as filter under the join
-				if (type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
-					// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
-					if (right_child->type != LogicalOperatorType::FILTER) {
-						// not a filter yet, push a new empty filter
-						auto filter = make_unique<LogicalFilter>();
-						filter->AddChild(move(right_child));
-						right_child = move(filter);
-					}
-					// push the expression into the filter
-					auto &filter = (LogicalFilter &)*right_child;
-					filter.expressions.push_back(move(expr));
-					continue;
+		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
+		if (total_side != JoinSide::BOTH) {
+			// join condition does not reference both sides, add it as filter under the join
+			if (type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
+				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
+				if (right_child->type != LogicalOperatorType::FILTER) {
+					// not a filter yet, push a new empty filter
+					auto filter = make_unique<LogicalFilter>();
+					filter->AddChild(move(right_child));
+					right_child = move(filter);
 				}
-			} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
-					expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-				// comparison, check if we can create a comparison JoinCondition
-				if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
-					// successfully created the join condition
-					continue;
-				}
+				// push the expression into the filter
+				auto &filter = (LogicalFilter &)*right_child;
+				filter.expressions.push_back(move(expr));
+				continue;
+			}
+		} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
+		           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+			// comparison, check if we can create a comparison JoinCondition
+			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
+				// successfully created the join condition
+				continue;
 			}
 		}
 		arbitrary_expressions.push_back(move(expr));
 	}
-	if (conditions.size() > 0) {
-		// we successfully convertedexpressions into JoinConditions
+	bool need_to_consider_arbitrary_expressions = true;
+	if (type == JoinType::INNER) {
+		// for inner joins we can push arbitrary expressions as a filter
+		// here we prefer to create a comparison join if possible
+		// that way we can use the much faster hash join to process the main join
+		// rather than doing a nested loop join to handle arbitrary expressions
+
+		// for left and full outer joins we HAVE to process all join conditions
+		// because pushing a filter will lead to an incorrect result, as non-matching tuples cannot be filtered out
+		need_to_consider_arbitrary_expressions = false;
+	}
+	if ((need_to_consider_arbitrary_expressions && arbitrary_expressions.size() > 0) || conditions.size() == 0) {
+		if (arbitrary_expressions.size() == 0) {
+			// all conditions were pushed down, add TRUE predicate
+			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
+		}
+		for (auto &condition : conditions) {
+			arbitrary_expressions.push_back(JoinCondition::CreateExpression(move(condition)));
+		}
+		// if we get here we could not create any JoinConditions
+		// turn this into an arbitrary expression join
+		auto any_join = make_unique<LogicalAnyJoin>(type);
+		// create the condition
+		any_join->children.push_back(move(left_child));
+		any_join->children.push_back(move(right_child));
+		// AND all the arbitrary expressions together
+		// do the same with any remaining conditions
+		any_join->condition = move(arbitrary_expressions[0]);
+		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
+			any_join->condition = make_unique<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
+		}
+		return move(any_join);
+	} else {
+		// we successfully converted expressions into JoinConditions
 		// create a LogicalComparisonJoin
 		auto comp_join = make_unique<LogicalComparisonJoin>(type);
 		comp_join->conditions = move(conditions);
@@ -98,25 +129,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			return move(filter);
 		}
 		return move(comp_join);
-	} else {
-		if (arbitrary_expressions.size() == 0) {
-			// all conditions were pushed down, add TRUE predicate
-			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
-		}
-		// if we get here we could not create any JoinConditions
-		// turn this into an arbitrary expression join
-		auto any_join = make_unique<LogicalAnyJoin>(type);
-		// create the condition
-		any_join->children.push_back(move(left_child));
-		any_join->children.push_back(move(right_child));
-		// AND all the arbitrary expressions together
-		// do the same with any remaining conditions
-		any_join->condition = move(arbitrary_expressions[0]);
-		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
-			any_join->condition = make_unique<BoundConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
-		}
-		return move(any_join);
 	}
 }
 
@@ -166,6 +178,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	} else {
 		join = result.get();
 	}
+	for (auto &child : join->children) {
+		if (child->type == LogicalOperatorType::FILTER) {
+			auto &filter = (LogicalFilter &)*child;
+			for (auto &expr : filter.expressions) {
+				PlanSubqueries(&expr, &filter.children[0]);
+			}
+		}
+	}
 
 	// we visit the expressions depending on the type of join
 	if (join->type == LogicalOperatorType::COMPARISON_JOIN) {
@@ -186,3 +206,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	return result;
 }
+
+} // namespace duckdb

@@ -72,13 +72,16 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
 			auto &info = state->hash_table->correlated_mark_join_info;
 
-			vector<TypeId> payload_types = {TypeId::INT64, TypeId::INT64}; // COUNT types
+			vector<LogicalType> payload_types;
 			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
 			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
-				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);
+				vector<unique_ptr<Expression>> children;
+				auto aggr =
+				    AggregateFunction::BindAggregateFunction(context, aggregate_functions[i], move(children), false);
 				correlated_aggregates.push_back(&*aggr);
 				info.correlated_aggregates.push_back(move(aggr));
+				payload_types.push_back(aggregate_functions[i].return_type);
 			}
 			info.correlated_counts =
 			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, correlated_aggregates);
@@ -140,8 +143,9 @@ void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperato
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public PhysicalOperatorState {
 public:
-	PhysicalHashJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
-	    : PhysicalOperatorState(left) {
+	PhysicalHashJoinState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right,
+	                      vector<JoinCondition> &conditions)
+	    : PhysicalOperatorState(op, left) {
 	}
 
 	DataChunk cached_chunk;
@@ -151,7 +155,7 @@ public:
 };
 
 unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
-	auto state = make_unique<PhysicalHashJoinState>(children[0].get(), children[1].get(), conditions);
+	auto state = make_unique<PhysicalHashJoinState>(*this, children[0].get(), children[1].get(), conditions);
 	state->cached_chunk.Initialize(types);
 	state->join_keys.Initialize(condition_types);
 	for (auto &cond : conditions) {

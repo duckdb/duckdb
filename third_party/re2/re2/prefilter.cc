@@ -17,7 +17,7 @@
 #include "re2/unicode_casefold.h"
 #include "re2/walker-inl.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 typedef std::set<std::string>::iterator SSIter;
 typedef std::set<std::string>::const_iterator ConstSSIter;
@@ -689,4 +689,4 @@ Prefilter* Prefilter::FromRE2(const RE2* re2) {
 }
 
 
-}  // namespace re2
+}  // namespace duckdb_re2

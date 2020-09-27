@@ -87,7 +87,7 @@
 #include "parser/scansup.hpp"
 #include "mb/pg_wchar.hpp"
 
-
+#include <stdexcept>
 
 
 
@@ -118,6 +118,9 @@
 #ifndef FLEXINT_H
 #define FLEXINT_H
 
+namespace duckdb_libpgquery {
+
+
 /* C99 systems have <inttypes.h>. Non-C99 systems may or may not. */
 
 #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
@@ -130,6 +133,9 @@
 #endif
 
 #include <inttypes.h>
+
+
+
 typedef int8_t flex_int8_t;
 typedef uint8_t flex_uint8_t;
 typedef int16_t flex_int16_t;
@@ -10741,7 +10747,6 @@ YY_BUFFER_STATE core_yy_scan_buffer  (char * base, yy_size_t  size , yyscan_t yy
 #define YY_EXIT_FAILURE 2
 #endif
 
-#include <stdexcept>
 
 static void yy_fatal_error (yyconst char* msg , yyscan_t yyscanner)
 {
@@ -11464,3 +11469,4 @@ core_yyrealloc(void *ptr, yy_size_t bytes, core_yyscan_t yyscanner)
 
 
 
+}

@@ -1,0 +1,65 @@
+# name: test/sql/update/test_string_update.test
+# description: Test update of string columns
+# group: [update]
+
+# create a table
+statement ok con1
+CREATE TABLE test (a VARCHAR);
+
+statement ok con1
+INSERT INTO test VALUES ('hello'), ('world')
+
+statement ok con2
+BEGIN TRANSACTION;
+
+# scan the table
+query T con1
+SELECT * FROM test ORDER BY a
+----
+hello
+world
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+hello
+world
+
+# test a delete from the table
+statement ok con1
+DELETE FROM test WHERE a='hello';
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+world
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+hello
+world
+
+# now test an update of the table
+statement ok con1
+UPDATE test SET a='hello';
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+hello
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+hello
+world
+
+statement ok con2
+COMMIT;
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+hello
+

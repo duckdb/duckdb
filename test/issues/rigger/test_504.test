@@ -1,0 +1,19 @@
+# name: test/issues/rigger/test_504.test
+# description: Issue 504
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# INSERT results in an error 'Not implemented: Cannot create data from this type'
+statement ok
+CREATE TABLE t0(c0 BOOLEAN, c1 INT, PRIMARY KEY(c0, c1));
+
+statement ok
+INSERT INTO t0(c1, c0) VALUES (0, 0);
+
+query TI
+SELECT * FROM t0;
+----
+0	0
+

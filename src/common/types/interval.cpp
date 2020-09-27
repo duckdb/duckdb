@@ -5,6 +5,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/limits.hpp"
 
 using namespace std;
 
@@ -14,14 +15,13 @@ bool Interval::FromString(string str, interval_t &result) {
 	return Interval::FromCString(str.c_str(), str.size(), result);
 }
 
-template<class T>
-void interval_try_addition(T &target, int64_t input, int64_t multiplier) {
+template <class T> void interval_try_addition(T &target, int64_t input, int64_t multiplier) {
 	if (target >= 0) {
-		if (input > (std::numeric_limits<T>::max() / multiplier) - target) {
+		if (input > (NumericLimits<T>::Maximum() / multiplier) - target) {
 			throw OutOfRangeException("interval value is out of range");
 		}
 	} else {
-		if (input < ((std::numeric_limits<T>::min() / multiplier) - target)) {
+		if (input < ((NumericLimits<T>::Minimum() / multiplier) - target)) {
 			throw OutOfRangeException("interval value is out of range");
 		}
 	}
@@ -44,7 +44,7 @@ bool Interval::FromCString(const char *str, idx_t len, interval_t &result) {
 	result.msecs = 0;
 	result.months = 0;
 
-	switch(str[pos]) {
+	switch (str[pos]) {
 	case '@':
 		pos++;
 		goto standard_interval;
@@ -57,7 +57,7 @@ bool Interval::FromCString(const char *str, idx_t len, interval_t &result) {
 	}
 standard_interval:
 	// start parsing a standard interval (e.g. 2 years 3 months...)
-	for(; pos < len; pos++) {
+	for (; pos < len; pos++) {
 		char c = str[pos];
 		if (c == ' ' || c == '\t' || c == '\n') {
 			// skip spaces
@@ -82,11 +82,14 @@ standard_interval:
 	goto end_of_string;
 interval_parse_number:
 	start_pos = pos;
-	for(; pos < len; pos++) {
+	for (; pos < len; pos++) {
 		char c = str[pos];
 		if (c >= '0' && c <= '9') {
 			// the number continues
 			continue;
+		} else if (c == ':') {
+			// colon: we are parsing a time
+			goto interval_parse_time;
 		} else {
 			if (pos == start_pos) {
 				return false;
@@ -101,8 +104,15 @@ interval_parse_number:
 		}
 	}
 	goto end_of_string;
+interval_parse_time : {
+	// parse the remainder of the time as a Time type
+	dtime_t time = Time::FromCString(str + start_pos);
+	result.msecs += time;
+	found_any = true;
+	goto end_of_string;
+}
 interval_parse_identifier:
-	for(; pos < len; pos++) {
+	for (; pos < len; pos++) {
 		char c = str[pos];
 		if (c == ' ' || c == '\t' || c == '\n') {
 			// skip spaces at the start
@@ -113,7 +123,7 @@ interval_parse_identifier:
 	}
 	// now parse the identifier
 	start_pos = pos;
-	for(; pos < len; pos++) {
+	for (; pos < len; pos++) {
 		char c = str[pos];
 		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
 			// keep parsing the string
@@ -124,7 +134,7 @@ interval_parse_identifier:
 	}
 	specifier = GetDatePartSpecifier(string(str + start_pos, pos - start_pos));
 	// add the specifier to the interval
-	switch(specifier) {
+	switch (specifier) {
 	case DatePartSpecifier::MILLENNIUM:
 		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_MILLENIUM);
 		break;
@@ -187,7 +197,7 @@ interval_parse_ago:
 	}
 	pos++;
 	// parse any trailing whitespace
-	for(; pos < len; pos++) {
+	for (; pos < len; pos++) {
 		char c = str[pos];
 		if (c == ' ' || c == '\t' || c == '\n') {
 			continue;
@@ -276,7 +286,7 @@ string Interval::ToString(interval_t date) {
 
 // Used to check amount of days per month in common year and leap year
 constexpr int days_per_month[2][13] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0},
-									{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0}};
+                                       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0}};
 constexpr bool isleap(int16_t year) {
 	return (((year) % 4) == 0 && (((year) % 100) != 0 || ((year) % 400) == 0));
 }
@@ -411,4 +421,4 @@ bool Interval::GreaterThanEquals(interval_t left, interval_t right) {
 	return GreaterThan(left, right) || Equals(left, right);
 }
 
-}
+} // namespace duckdb

@@ -5,7 +5,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include <random>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct RandomBindData : public FunctionData {
@@ -32,11 +32,14 @@ static void random_function(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-unique_ptr<FunctionData> random_bind(BoundFunctionExpression &expr, ClientContext &context) {
+unique_ptr<FunctionData> random_bind(ClientContext &context, ScalarFunction &bound_function,
+                                     vector<unique_ptr<Expression>> &arguments) {
 	uniform_real_distribution<double> dist(0, 1);
 	return make_unique<RandomBindData>(context, move(dist));
 }
 
 void RandomFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("random", {}, SQLType::DOUBLE, random_function, true, random_bind));
+	set.AddFunction(ScalarFunction("random", {}, LogicalType::DOUBLE, random_function, true, random_bind));
 }
+
+} // namespace duckdb

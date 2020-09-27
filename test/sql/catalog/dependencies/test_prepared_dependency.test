@@ -1,0 +1,53 @@
+# name: test/sql/catalog/dependencies/test_prepared_dependency.test
+# description: Prepared statement dependencies
+# group: [dependencies]
+
+# prepared statements and dependencies
+# dependency on a bound table
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con2
+PREPARE v AS SELECT * FROM integers
+
+statement ok con2
+EXECUTE v
+
+# cannot drop table now
+statement error con1
+DROP TABLE integers
+
+# but CASCADE drop should work
+statement ok con1
+DROP TABLE integers CASCADE
+
+# after the cascade drop the prepared statement is invalidated
+statement error con2
+EXECUTE v
+
+# dependency on a sequence for prepare
+statement ok con1
+CREATE SEQUENCE seq
+
+statement ok con2
+PREPARE v AS SELECT nextval('seq')
+
+statement ok con2
+EXECUTE v
+
+# cannot drop sequence now
+statement error con1
+DROP SEQUENCE seq
+
+# check that the prepared statement still works
+statement ok con2
+EXECUTE v
+
+# cascade drop
+statement ok con1
+DROP SEQUENCE seq CASCADE
+
+# after the cascade drop the prepared statement is invalidated
+statement error con2
+EXECUTE v
+

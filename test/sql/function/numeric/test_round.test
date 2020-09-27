@@ -1,0 +1,58 @@
+# name: test/sql/function/numeric/test_round.test
+# description: Rounding test
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE roundme(a DOUBLE, b INTEGER)
+
+statement ok
+INSERT INTO roundme VALUES (42.123456, 3)
+
+query R
+select round(42.12345::DOUBLE, 0)
+----
+42.000000
+
+query R
+select round(42.12345::DOUBLE)
+----
+42.000000
+
+query R
+select round(42.12345::DOUBLE, 2)
+----
+42.120000
+
+query RR
+select round(42.12345::DOUBLE, 4), round(42.1235::DOUBLE, 1000)
+----
+42.123400	42.12345
+
+query I
+select round(42::DOUBLE, 0)
+----
+42
+
+query III
+select round(42::DOUBLE, -1), round(42::DOUBLE, -2), round(42::DOUBLE, -1000)
+----
+40	0	0
+
+query R
+select round(a, 1) from roundme
+----
+42.100000
+
+query I
+select round(b, 1) from roundme
+----
+3
+
+query R
+select round(a, b) from roundme
+----
+42.123000
+

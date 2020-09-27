@@ -10,16 +10,20 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
+
+#include <map>
 #include <sstream>
 
-#define SAMPLE_CHUNK_SIZE 100
-#if STANDARD_VECTOR_SIZE < SAMPLE_CHUNK_SIZE
-#undef SAMPLE_CHUNK_SIZE
-#define SAMPLE_CHUNK_SIZE STANDARD_VECTOR_SIZE
+#define DEFAULT_SAMPLE_CHUNK_SIZE 100
+#if STANDARD_VECTOR_SIZE < DEFAULT_SAMPLE_CHUNK_SIZE
+#undef DEFAULT_SAMPLE_CHUNK_SIZE
+#define DEFAULT_SAMPLE_CHUNK_SIZE STANDARD_VECTOR_SIZE
 #endif
 
 namespace duckdb {
 struct CopyInfo;
+struct StrpTimeFormat;
 
 //! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next
 //! position given that we encounter a byte with the given value.
@@ -36,12 +40,54 @@ struct TextSearchShiftArray {
 	TextSearchShiftArray(string search_term);
 
 	inline bool Match(uint8_t &position, uint8_t byte_value) {
+		if (position >= length) {
+			return false;
+		}
 		position = shifts[position * 255 + byte_value];
 		return position == length;
 	}
 
 	idx_t length;
 	unique_ptr<uint8_t[]> shifts;
+};
+
+struct BufferedCSVReaderOptions {
+	//! The file path of the CSV file to read
+	string file_path;
+	//! Whether or not to automatically detect dialect and datatypes
+	bool auto_detect = true;
+	//! Whether or not a delimiter was defined by the user
+	bool has_delimiter = false;
+	//! Delimiter to separate columns within each line
+	string delimiter = ",";
+	//! Whether or not a quote sign was defined by the user
+	bool has_quote = false;
+	//! Quote used for columns that contain reserved characters, e.g., delimiter
+	string quote = "\"";
+	//! Whether or not an escape character was defined by the user
+	bool has_escape = false;
+	//! Escape character to escape quote character
+	string escape;
+	//! Whether or not a header information was given by the user
+	bool has_header = false;
+	//! Whether or not the file has a header line
+	bool header = false;
+	//! How many leading rows to skip
+	idx_t skip_rows = 0;
+	//! Expected number of columns
+	idx_t num_cols = 0;
+	//! Specifies the string that represents a null value
+	string null_str;
+	//! True, if column with that index must skip null check
+	vector<bool> force_not_null;
+	//! Size of sample chunk used for dialect and type detection
+	idx_t sample_size = DEFAULT_SAMPLE_CHUNK_SIZE;
+	//! Number of sample chunks used for type detection
+	idx_t num_samples = 10;
+	//! The date format to use (if any is specified)
+	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	//! Whether or not a type format is specified
+	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 };
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
@@ -52,17 +98,29 @@ static DataChunk DUMMY_CHUNK;
 
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader {
+	//! Initial buffer read size; can be extended for long lines
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
+	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters
 	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
-	static constexpr uint8_t MAX_SAMPLE_CHUNKS = 10;
 	ParserMode mode;
 
-public:
-	BufferedCSVReader(ClientContext &context, CopyInfo &info, vector<SQLType> requested_types = vector<SQLType>());
-	BufferedCSVReader(CopyInfo &info, vector<SQLType> requested_types, unique_ptr<std::istream> source);
+	//! Candidates for delimiter auto detection
+	vector<string> delim_candidates = {",", "|", ";", "\t"};
+	//! Candidates for quote rule auto detection
+	vector<QuoteRule> quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+	//! Candidates for quote sign auto detection (per quote rule)
+	vector<vector<string>> quote_candidates_map = {{"\""}, {"\"", "'"}, {""}};
+	//! Candidates for escape character auto detection (per quote rule)
+	vector<vector<string>> escape_candidates_map = {{""}, {"\\"}, {""}};
 
-	CopyInfo &info;
-	vector<SQLType> sql_types;
+public:
+	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
+	                  vector<LogicalType> requested_types = vector<LogicalType>());
+	BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types,
+	                  unique_ptr<std::istream> source);
+
+	BufferedCSVReaderOptions options;
+	vector<LogicalType> sql_types;
 	vector<string> col_names;
 	unique_ptr<std::istream> source;
 	bool plain_file_source = false;
@@ -76,9 +134,13 @@ public:
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
 
+	idx_t SAMPLE_CHUNK_SIZE;
+	idx_t MAX_SAMPLE_CHUNKS;
+
 	vector<idx_t> sniffed_column_counts;
 	uint8_t sample_chunk_idx = 0;
 	bool jumping_samples = false;
+	bool end_of_file_reached = false;
 
 	idx_t bytes_in_chunk = 0;
 	double bytes_per_line_avg = 0;
@@ -95,7 +157,7 @@ public:
 
 private:
 	//! Initialize Parser
-	void Initialize(vector<SQLType> requested_types);
+	void Initialize(vector<LogicalType> requested_types);
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
@@ -103,11 +165,17 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
-	vector<SQLType> SniffCSV(vector<SQLType> requested_types);
+	vector<LogicalType> SniffCSV(vector<LogicalType> requested_types);
+	//! Change the date format for the type to the string
+	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
+	//! Try to cast a string value to the specified sql type
+	bool TryCastValue(Value value, LogicalType sql_type);
+	//! Try to cast a vector of values to the specified sql type
+	bool TryCastVector(Vector &parse_chunk_col, idx_t size, LogicalType sql_type);
 	//! Skips header rows and skip_rows in the input stream
-	void SkipHeader();
+	void SkipHeader(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
-	void JumpToBeginning();
+	void JumpToBeginning(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
 	bool JumpToNextSample();
 	//! Resets the buffer
@@ -116,6 +184,10 @@ private:
 	void ResetStream();
 	//! Resets the parse_chunk and related internal states, keep_types keeps the parse_chunk initialized
 	void ResetParseChunk();
+	//! Sets size of sample chunk and number of chunks for dialect and type detection
+	void ConfigureSampling();
+	//! Prepare candidate sets for auto detection based on user input
+	void PrepareCandidateSets();
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	void ParseSimpleCSV(DataChunk &insert_chunk);
@@ -131,7 +203,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<std::istream> OpenCSV(ClientContext &context, CopyInfo &info);
+	unique_ptr<std::istream> OpenCSV(ClientContext &context, BufferedCSVReaderOptions options);
 };
 
 } // namespace duckdb

@@ -11,5 +11,6 @@
 #include <mutex>
 
 namespace duckdb {
+using std::lock_guard;
 using std::mutex;
-}
+} // namespace duckdb

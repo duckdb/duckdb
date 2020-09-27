@@ -6,7 +6,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
@@ -23,7 +23,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			// for each using column, get the matching binding
 			auto left_bindings = bind_context.GetMatchingBindings(using_column);
 			if (left_bindings.size() == 0) {
-				throw BinderException("Column \"%s\" does not exist on left side of join!", using_column.c_str());
+				throw BinderException("Column \"%s\" does not exist on left side of join!", using_column);
 			}
 			// find the join binding
 			string left_binding;
@@ -59,7 +59,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 				}
 			}
 			if (right_binding.empty()) {
-				throw BinderException("Column \"%s\" does not exist on right side of join!", using_column.c_str());
+				throw BinderException("Column \"%s\" does not exist on right side of join!", using_column);
 			}
 			assert(!left_binding.empty());
 			auto left_expr = make_unique<ColumnRefExpression>(using_column, left_binding);
@@ -84,3 +84,5 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	}
 	return move(result);
 }
+
+} // namespace duckdb

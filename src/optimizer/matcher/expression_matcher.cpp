@@ -2,11 +2,11 @@
 
 #include "duckdb/planner/expression/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool ExpressionMatcher::Match(Expression *expr, vector<Expression *> &bindings) {
-	if (type && !type->Match(expr->return_type)) {
+	if (type && !type->Match(expr->return_type.InternalType())) {
 		return false;
 	}
 	if (expr_type && !expr_type->Match(expr->type)) {
@@ -105,3 +105,5 @@ bool FoldableConstantMatcher::Match(Expression *expr, vector<Expression *> &bind
 	bindings.push_back(expr);
 	return true;
 }
+
+} // namespace duckdb

@@ -1,6 +1,7 @@
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
+using namespace duckdb_libpgquery;
 
 std::string Transformer::NodetypeToString(PGNodeTag type) {
 	switch (type) {
@@ -578,6 +579,8 @@ std::string Transformer::NodetypeToString(PGNodeTag type) {
 		return "T_PrepareStmt";
 	case T_PGExecuteStmt:
 		return "T_ExecuteStmt";
+	case T_PGCallStmt:
+		return "T_CallStmt";
 	case T_PGDeallocateStmt:
 		return "T_DeallocateStmt";
 	case T_PGDeclareCursorStmt:
@@ -813,3 +816,5 @@ std::string Transformer::NodetypeToString(PGNodeTag type) {
 		return "";
 	}
 }
+
+} // namespace duckdb

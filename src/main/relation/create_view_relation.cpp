@@ -21,7 +21,7 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	auto info = make_unique<CreateViewInfo>();
 	info->query = child->GetQueryNode();
 	info->view_name = view_name;
-	info->on_conflict = replace ? OnCreateConflict::REPLACE : OnCreateConflict::ERROR;
+	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = move(info);
 	return binder.Bind((SQLStatement &)stmt);
 }

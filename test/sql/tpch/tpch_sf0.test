@@ -1,0 +1,28 @@
+# name: test/sql/tpch/tpch_sf0.test
+# description: Test TPC-H SF0
+# group: [tpch]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0);
+
+loop i 1 23
+
+statement ok
+PRAGMA tpch(${i})
+
+endloop
+
+# out of range
+statement error
+PRAGMA tpch(-1)
+
+statement error
+PRAGMA tpch(3290819023812038903)
+
+statement error
+PRAGMA tpch(32908301298)
+
+statement error
+PRAGMA tpch(1.1)

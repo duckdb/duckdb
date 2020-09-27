@@ -8,24 +8,25 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //===--------------------------------------------------------------------===//
 // AND/OR
 //===--------------------------------------------------------------------===//
 template <class OP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
-	assert(left.type == TypeId::BOOL && right.type == TypeId::BOOL && result.type == TypeId::BOOL);
+	assert(left.type.id() == LogicalTypeId::BOOLEAN && right.type.id() == LogicalTypeId::BOOLEAN &&
+	       result.type.id() == LogicalTypeId::BOOLEAN);
 
 	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 		// operation on two constants, result is constant vector
 		result.vector_type = VectorType::CONSTANT_VECTOR;
-		auto ldata = ConstantVector::GetData<bool>(left);
-		auto rdata = ConstantVector::GetData<bool>(right);
+		auto ldata = ConstantVector::GetData<uint8_t>(left);
+		auto rdata = ConstantVector::GetData<uint8_t>(right);
 		auto result_data = ConstantVector::GetData<bool>(result);
 
-		bool is_null =
-		    OP::Operation(*ldata, *rdata, ConstantVector::IsNull(left), ConstantVector::IsNull(right), *result_data);
+		bool is_null = OP::Operation(*ldata > 0, *rdata > 0, ConstantVector::IsNull(left),
+		                             ConstantVector::IsNull(right), *result_data);
 		ConstantVector::SetNull(result, is_null);
 	} else {
 		// perform generic loop
@@ -34,15 +35,15 @@ template <class OP> static void templated_boolean_nullmask(Vector &left, Vector 
 		right.Orrify(count, rdata);
 
 		result.vector_type = VectorType::FLAT_VECTOR;
-		auto left_data = (bool *)ldata.data;
-		auto right_data = (bool *)rdata.data;
+		auto left_data = (uint8_t *)ldata.data; // we use uint8 to avoid load of gunk bools
+		auto right_data = (uint8_t *)rdata.data;
 		auto result_data = FlatVector::GetData<bool>(result);
 		auto &result_mask = FlatVector::Nullmask(result);
 		if (ldata.nullmask->any() || rdata.nullmask->any()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto lidx = ldata.sel->get_index(i);
 				auto ridx = rdata.sel->get_index(i);
-				bool is_null = OP::Operation(left_data[lidx], right_data[ridx], (*ldata.nullmask)[lidx],
+				bool is_null = OP::Operation(left_data[lidx] > 0, right_data[ridx] > 0, (*ldata.nullmask)[lidx],
 				                             (*rdata.nullmask)[ridx], result_data[i]);
 				result_mask[i] = is_null;
 			}
@@ -167,6 +168,8 @@ struct NotOperator {
 };
 
 void VectorOperations::Not(Vector &input, Vector &result, idx_t count) {
-	assert(input.type == TypeId::BOOL && result.type == TypeId::BOOL);
+	assert(input.type == LogicalType::BOOLEAN && result.type == LogicalType::BOOLEAN);
 	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result, count);
 }
+
+} // namespace duckdb

@@ -4,8 +4,9 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 	auto result = make_unique<JoinRef>();
@@ -30,7 +31,9 @@ unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 		result->type = JoinType::SEMI;
 		break;
 	}
-	default: { throw NotImplementedException("Join type %d not supported yet...\n", root->jointype); }
+	default: {
+		throw NotImplementedException("Join type %d not supported yet...\n", root->jointype);
+	}
 	}
 
 	// Check the type of left arg and right arg before transform
@@ -58,3 +61,5 @@ unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 	result->condition = TransformExpression(root->quals);
 	return move(result);
 }
+
+} // namespace duckdb

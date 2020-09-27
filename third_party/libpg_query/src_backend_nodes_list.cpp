@@ -36,6 +36,8 @@
 #include "nodes/pg_list.hpp"
 
 
+namespace duckdb_libpgquery {
+
 /*
  * Routines to simplify writing assertions about the type of a list; a
  * NIL list is considered to be an empty list of any type.
@@ -535,3 +537,4 @@ list_copy_tail(const PGList *oldlist, int nskip)
 int			length(const PGList *list);
 
 
+}

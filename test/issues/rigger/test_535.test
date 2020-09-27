@@ -1,0 +1,26 @@
+# name: test/issues/rigger/test_535.test
+# description: Issue 535
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# GROUP BY clause results in non-deterministic result
+statement ok
+CREATE TABLE t0(c0 DOUBLE);
+
+statement ok
+INSERT INTO t0(c0) VALUES (-515965088);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1), (-5.15965088E8);
+
+statement ok
+CREATE INDEX i0 ON t0(c0);
+
+query R
+SELECT t0.c0 FROM t0 GROUP BY t0.c0, REVERSE(t0.c0) ORDER BY 1;
+----
+-515965088.000000
+1.000000
+

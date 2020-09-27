@@ -8,23 +8,24 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 
-struct CreateTableFunctionInfo : public CreateInfo {
-	CreateTableFunctionInfo(TableFunction function, bool supports_projection = false)
-	    : CreateInfo(CatalogType::TABLE_FUNCTION), function(function), supports_projection(supports_projection) {
+struct CreateTableFunctionInfo : public CreateFunctionInfo {
+	CreateTableFunctionInfo(TableFunctionSet set)
+	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(move(set.functions)) {
+		this->name = set.name;
+	}
+	CreateTableFunctionInfo(TableFunction function)
+	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY) {
 		this->name = function.name;
+		functions.push_back(move(function));
 	}
 
-	//! Function name
-	string name;
-	//! The table function
-	TableFunction function;
-
-	bool supports_projection;
+	//! The table functions
+	vector<TableFunction> functions;
 };
 
 } // namespace duckdb

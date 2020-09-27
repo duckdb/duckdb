@@ -1,0 +1,28 @@
+# name: test/sql/alter/drop_col/test_drop_col_pk.test
+# description: Test ALTER TABLE DROP COLUMN: DROP COLUMN from table with primary key constraint
+# group: [drop_col]
+
+statement ok
+CREATE TABLE test(i INTEGER PRIMARY KEY, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# cannot drop primary key column
+statement error
+ALTER TABLE test DROP COLUMN i
+
+# but we can drop column "j"
+statement ok
+ALTER TABLE test DROP COLUMN j
+
+statement ok
+INSERT INTO test VALUES (3)
+
+query I
+SELECT * FROM test
+----
+1
+2
+3
+

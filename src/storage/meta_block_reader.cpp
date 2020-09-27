@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 MetaBlockReader::MetaBlockReader(BufferManager &manager, block_id_t block_id)
@@ -31,6 +31,8 @@ void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	handle = manager.Pin(id);
 
-	next_block = *((block_id_t *)handle->node->buffer);
+	next_block = Load<block_id_t>(handle->node->buffer);
 	offset = sizeof(block_id_t);
 }
+
+} // namespace duckdb

@@ -1,0 +1,19 @@
+# name: test/sql/copy/csv/test_copy_many_empty_lines.test
+# description: Test copy statement with many empty lines
+# group: [csv]
+
+# CSV file with many empty lines
+# load CSV file into a table
+statement ok
+CREATE TABLE test (a INTEGER);
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/many_empty_lines.csv' (HEADER 0);
+----
+20000
+
+query I
+SELECT SUM(a) FROM test;
+----
+1
+

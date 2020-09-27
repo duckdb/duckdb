@@ -26,7 +26,7 @@
 
 #include "re2/re2.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 class PrefilterTree;
 
@@ -105,6 +105,6 @@ class FilteredRE2 {
   FilteredRE2& operator=(const FilteredRE2&) = delete;
 };
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_FILTERED_RE2_H_

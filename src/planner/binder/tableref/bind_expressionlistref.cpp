@@ -3,7 +3,7 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
@@ -12,7 +12,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	result->names = expr.expected_names;
 	// bind value list
 	InsertBinder binder(*this, context);
-	binder.target_type = SQLType(SQLTypeId::INVALID);
+	binder.target_type = LogicalType(LogicalTypeId::INVALID);
 	for (idx_t list_idx = 0; list_idx < expr.values.size(); list_idx++) {
 		auto &expression_list = expr.values[list_idx];
 		if (result->names.size() == 0) {
@@ -26,7 +26,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 		if (result->types.size() == 0) {
 			// for the first list, we set the expected types as the types of these expressions
 			for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-				SQLType result_type;
+				LogicalType result_type;
 				auto expr = binder.Bind(expression_list[val_idx], &result_type);
 				result->types.push_back(result_type);
 				list.push_back(move(expr));
@@ -44,3 +44,5 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	bind_context.AddGenericBinding(result->bind_index, expr.alias, result->names, result->types);
 	return move(result);
 }
+
+} // namespace duckdb

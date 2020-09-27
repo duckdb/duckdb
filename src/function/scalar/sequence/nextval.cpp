@@ -46,11 +46,11 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 		result = seq->counter;
 		seq->counter += seq->increment;
 		if (result < seq->min_value) {
-			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name.c_str(),
+			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name,
 			                        seq->min_value);
 		}
 		if (result > seq->max_value) {
-			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name.c_str(),
+			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name,
 			                        seq->max_value);
 		}
 	}
@@ -62,7 +62,6 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 static void nextval_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
-	assert(args.column_count() == 1 && args.data[0].type == TypeId::VARCHAR);
 	auto &input = args.data[0];
 
 	auto &transaction = Transaction::GetTransaction(info.context);
@@ -89,15 +88,16 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
-static unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientContext &context) {
+static unique_ptr<FunctionData> nextval_bind(ClientContext &context, ScalarFunction &bound_function,
+                                             vector<unique_ptr<Expression>> &arguments) {
 	SequenceCatalogEntry *sequence = nullptr;
-	if (expr.children[0]->IsFoldable()) {
+	if (arguments[0]->IsFoldable()) {
 		string schema, seq;
 		// parameter to nextval function is a foldable constant
 		// evaluate the constant and perform the catalog lookup already
-		Value seqname = ExpressionExecutor::EvaluateScalar(*expr.children[0]);
+		Value seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (!seqname.is_null) {
-			assert(seqname.type == TypeId::VARCHAR);
+			assert(seqname.type().id() == LogicalTypeId::VARCHAR);
 			Catalog::ParseRangeVar(seqname.str_value, schema, seq);
 			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, schema, seq);
 		}
@@ -113,8 +113,8 @@ static void nextval_dependency(BoundFunctionExpression &expr, unordered_set<Cata
 }
 
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("nextval", {SQLType::VARCHAR}, SQLType::BIGINT, nextval_function, true, nextval_bind,
-	                               nextval_dependency));
+	set.AddFunction(ScalarFunction("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT, nextval_function, true,
+	                               nextval_bind, nextval_dependency));
 }
 
 } // namespace duckdb

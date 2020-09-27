@@ -1,0 +1,94 @@
+# name: test/sql/types/decimal/decimal_decimal_overflow_cast.test
+# description: Test decimal-decimal overflow cast
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+# casting 1.0 from various width/scales to different width/scales
+# these should all work
+query IIII
+SELECT 1.0::DECIMAL(4,3)::DECIMAL(2,1), 1.0::DECIMAL(4,3)::DECIMAL(9,1), 1.0::DECIMAL(4,3)::DECIMAL(18,1), 1.0::DECIMAL(4,3)::DECIMAL(38,1)
+----
+1.0	1.0	1.0	1.0
+
+query IIII
+SELECT 1.0::DECIMAL(9,8)::DECIMAL(2,1), 1.0::DECIMAL(9,8)::DECIMAL(9,1), 1.0::DECIMAL(9,8)::DECIMAL(18,1), 1.0::DECIMAL(9,8)::DECIMAL(38,1)
+----
+1.0	1.0	1.0	1.0
+
+query IIII
+SELECT 1.0::DECIMAL(18,17)::DECIMAL(2,1), 1.0::DECIMAL(18,17)::DECIMAL(9,1), 1.0::DECIMAL(18,17)::DECIMAL(18,1), 1.0::DECIMAL(18,17)::DECIMAL(38,1)
+----
+1.0	1.0	1.0	1.0
+
+query IIII
+SELECT 1.0::DECIMAL(38,37)::DECIMAL(2,1), 1.0::DECIMAL(38,37)::DECIMAL(9,1), 1.0::DECIMAL(38,37)::DECIMAL(18,1), 1.0::DECIMAL(38,37)::DECIMAL(38,1)
+----
+1.0	1.0	1.0	1.0
+
+# overflow on casting UP on scale
+statement error
+SELECT 10.00::DECIMAL(4,2)::DECIMAL(4,3);
+
+statement error
+SELECT 10.00::DECIMAL(4,2)::DECIMAL(9,8);
+
+statement error
+SELECT 10.00::DECIMAL(4,2)::DECIMAL(18,17);
+
+statement error
+SELECT 10.00::DECIMAL(4,2)::DECIMAL(38,37);
+
+# overflow on casting DOWN on scale
+statement error
+SELECT 10.00::DECIMAL(4,2)::DECIMAL(2,1);
+
+statement error
+SELECT 10.00::DECIMAL(9,7)::DECIMAL(7,6);
+
+statement error
+SELECT 10.00::DECIMAL(18,16)::DECIMAL(16,15);
+
+statement error
+SELECT 10.00::DECIMAL(38,36)::DECIMAL(36,35);
+
+# casting up in a manner that will always fit
+query II
+SELECT 1.0::DECIMAL(3,1)::DECIMAL(18,2), 1.0::DECIMAL(3,1)::DECIMAL(38,2)
+----
+1.00	1.00
+
+# testing the same scale
+query IIII
+SELECT 1.0::DECIMAL(3,1)::DECIMAL(2,1), 1.0::DECIMAL(3,1)::DECIMAL(9,1), 1.0::DECIMAL(3,1)::DECIMAL(18,1), 1.0::DECIMAL(3,1)::DECIMAL(38,1)
+----
+1.0	1.0	1.0	1.0
+
+query IIII
+SELECT 1.0::DECIMAL(9,1)::DECIMAL(2,1), 1.0::DECIMAL(9,1)::DECIMAL(8,1), 1.0::DECIMAL(9,1)::DECIMAL(18,1), 1.0::DECIMAL(9,1)::DECIMAL(38,1)
+----
+1.0	1.0	1.0	1.0
+
+query IIII
+SELECT 1.0::DECIMAL(18,1)::DECIMAL(2,1), 1.0::DECIMAL(18,1)::DECIMAL(8,1), 1.0::DECIMAL(18,1)::DECIMAL(17,1), 1.0::DECIMAL(18,1)::DECIMAL(38,1)
+----
+1.0	1.0	1.0	1.0
+
+query IIII
+SELECT 1.0::DECIMAL(38,1)::DECIMAL(2,1), 1.0::DECIMAL(38,1)::DECIMAL(8,1), 1.0::DECIMAL(38,1)::DECIMAL(17,1), 1.0::DECIMAL(38,1)::DECIMAL(37,1)
+----
+1.0	1.0	1.0	1.0
+
+# overflow on same scale
+statement error
+SELECT 1.0::DECIMAL(3,1)::DECIMAL(1,1)
+
+statement error
+SELECT 1.0::DECIMAL(9,1)::DECIMAL(1,1)
+
+statement error
+SELECT 1.0::DECIMAL(18,1)::DECIMAL(1,1)
+
+statement error
+SELECT 1.0::DECIMAL(38,1)::DECIMAL(1,1)

@@ -1,0 +1,13 @@
+# name: test/sql/alter/add_col/test_add_col_incorrect.test
+# description: Test ALTER TABLE ADD COLUMN: Incorrect usage
+# group: [add_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement error
+ALTER TABLE test ADD COLUMN i INTEGER
+

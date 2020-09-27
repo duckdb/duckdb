@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ConjunctionSimplificationRule::ConjunctionSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -38,7 +38,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
 	assert(constant_expr->IsFoldable());
-	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(TypeId::BOOL);
+	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(LogicalType::BOOLEAN);
 	if (constant_value.is_null) {
 		// we can't simplify conjunctions with a constant NULL
 		return nullptr;
@@ -62,3 +62,5 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 		}
 	}
 }
+
+} // namespace duckdb

@@ -1,0 +1,69 @@
+# name: test/sql/function/numeric/test_unary.test
+# description: Test unary operators
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(i INTEGER)
+
+statement ok
+INSERT INTO test VALUES (2)
+
+query I
+SELECT ++-++-+i FROM test
+----
+2
+
+# test simple unary operators
+query I
+SELECT +i FROM test
+----
+2
+
+query I
+SELECT -i FROM test
+----
+-2
+
+# we can also stack unary functions
+query I
+SELECT +++++++i FROM test
+----
+2
+
+query I
+SELECT ++-++-+i FROM test
+----
+2
+
+query I
+SELECT -+-+-+-+-i FROM test
+----
+-2
+
+# cannot apply these to a string
+statement error
+SELECT +'hello'
+
+statement error
+SELECT -'hello'
+
+# cannot apply these to a date either
+statement ok
+CREATE TABLE dates(d DATE)
+
+statement ok
+INSERT INTO dates VALUES ('1992-02-02')
+
+statement error
+SELECT +d FROM dates
+
+statement error
+SELECT -d FROM dates
+
+# postfix operators not implemented
+statement error
+SELECT 2!
+

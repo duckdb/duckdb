@@ -1,0 +1,190 @@
+# name: test/sql/aggregate/aggregates/test_aggregate_types.test
+# description: Test aggregates with many different types
+# group: [aggregates]
+
+statement ok
+CREATE TABLE strings(s STRING, g INTEGER)
+
+statement ok
+INSERT INTO strings VALUES ('hello', 0), ('world', 1), (NULL, 0), ('r', 1)
+
+# simple aggregates only
+query IITT
+SELECT COUNT(*), COUNT(s), MIN(s), MAX(s) FROM strings
+----
+4
+3
+hello
+world
+
+query IITT
+SELECT COUNT(*), COUNT(s), MIN(s), MAX(s) FROM strings WHERE s IS NULL
+----
+1
+0
+NULL
+NULL
+
+# add string agg
+query TTTT
+SELECT STRING_AGG(s, ' '), STRING_AGG(s, ''), STRING_AGG('', ''), STRING_AGG('hello', ' ') FROM strings
+----
+hello world r
+helloworldr
+(empty)
+hello hello hello hello
+
+# more complex agg (groups)
+query IIITTT
+SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(s, ' ') FROM strings GROUP BY g ORDER BY g
+----
+0
+2
+1
+hello
+hello
+hello
+1
+2
+2
+r
+world
+world r
+
+# empty group
+query IIITTT
+SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(s, ' ') FROM strings WHERE s IS NULL OR s <> 'hello' GROUP BY g ORDER BY g
+----
+0
+1
+0
+NULL
+NULL
+NULL
+1
+2
+2
+r
+world
+world r
+
+# unsupported aggregates
+statement error
+SELECT SUM(s) FROM strings GROUP BY g ORDER BY g
+
+statement error
+SELECT AVG(s) FROM strings GROUP BY g ORDER BY g
+
+# booleans
+statement ok
+CREATE TABLE booleans(b BOOLEAN, g INTEGER)
+
+statement ok
+INSERT INTO booleans VALUES (false, 0), (true, 1), (NULL, 0), (false, 1)
+
+query IITT
+SELECT COUNT(*), COUNT(b), MIN(b), MAX(b) FROM booleans
+----
+4
+3
+0
+1
+
+query IITT
+SELECT COUNT(*), COUNT(b), MIN(b), MAX(b) FROM booleans WHERE b IS NULL
+----
+1
+0
+NULL
+NULL
+
+query IIITT
+SELECT g, COUNT(*), COUNT(b), MIN(b), MAX(b) FROM booleans GROUP BY g ORDER BY g
+----
+0
+2
+1
+0
+0
+1
+2
+2
+0
+1
+
+query IIITT
+SELECT g, COUNT(*), COUNT(b), MIN(b), MAX(b) FROM booleans WHERE b IS NULL OR b=true GROUP BY g ORDER BY g
+----
+0
+1
+0
+NULL
+NULL
+1
+1
+1
+1
+1
+
+statement error
+SELECT SUM(b) FROM booleans GROUP BY g ORDER BY g
+
+statement error
+SELECT AVG(b) FROM booleans GROUP BY g ORDER BY g
+
+statement ok
+CREATE TABLE integers(i INTEGER, g INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (12, 0), (22, 1), (NULL, 0), (14, 1)
+
+query IIIIR
+SELECT COUNT(*), COUNT(i), MIN(i), MAX(i), SUM(i) FROM integers
+----
+4
+3
+12
+22
+48.000000
+
+query IIIIR
+SELECT COUNT(*), COUNT(i), MIN(i), MAX(i), SUM(i) FROM INTEGERS WHERE i IS NULL
+----
+1
+0
+NULL
+NULL
+NULL
+
+query IIIIIR
+SELECT g, COUNT(*), COUNT(i), MIN(i), MAX(i), SUM(i) FROM integers GROUP BY g ORDER BY g
+----
+0
+2
+1
+12
+12
+12.000000
+1
+2
+2
+14
+22
+36.000000
+
+query IIIIIR
+SELECT g, COUNT(*), COUNT(i), MIN(i), MAX(i), SUM(i) FROM integers WHERE i IS NULL OR i > 15 GROUP BY g ORDER BY g
+----
+0
+1
+0
+NULL
+NULL
+NULL
+1
+1
+1
+22
+22
+22.000000
+

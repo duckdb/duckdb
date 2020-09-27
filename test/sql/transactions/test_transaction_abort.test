@@ -1,0 +1,53 @@
+# name: test/sql/transactions/test_transaction_abort.test
+# description: Test transaction aborts after failures
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+# set up a table
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO integers VALUES (1), (2)
+
+# start a transaction
+statement ok
+BEGIN TRANSACTION
+
+# parser errors do not invalidate the current transaction
+statement error
+SELEC 42
+
+query I
+SELECT 42
+----
+42
+
+# neither do binder errors
+statement error
+SELECT * FROM nonexistanttable
+
+query I
+SELECT 42
+----
+42
+
+# however primary key conflicts do invalidate it
+statement error
+UPDATE integers SET i=2
+
+statement error
+SELECT 42
+
+# now we need to rollback
+statement ok
+ROLLBACK
+
+query I
+SELECT * FROM integers ORDER BY 1
+----
+1
+2
+

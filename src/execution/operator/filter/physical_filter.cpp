@@ -8,14 +8,15 @@ namespace duckdb {
 
 class PhysicalFilterState : public PhysicalOperatorState {
 public:
-	PhysicalFilterState(PhysicalOperator *child, Expression &expr) : PhysicalOperatorState(child), executor(expr) {
+	PhysicalFilterState(PhysicalOperator &op, PhysicalOperator *child, Expression &expr)
+	    : PhysicalOperatorState(op, child), executor(expr) {
 	}
 
 	ExpressionExecutor executor;
 };
 
-PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expression>> select_list)
-    : PhysicalOperator(PhysicalOperatorType::FILTER, types) {
+PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list)
+    : PhysicalOperator(PhysicalOperatorType::FILTER, move(types)) {
 	assert(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions
@@ -53,7 +54,7 @@ void PhysicalFilter::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
-	return make_unique<PhysicalFilterState>(children[0].get(), *expression);
+	return make_unique<PhysicalFilterState>(*this, children[0].get(), *expression);
 }
 
 string PhysicalFilter::ExtraRenderInformation() const {

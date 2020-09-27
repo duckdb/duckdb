@@ -1,6 +1,6 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> check, unique_ptr<Expression> res_if_true,
@@ -15,7 +15,7 @@ string BoundCaseExpression::ToString() const {
 }
 
 bool BoundCaseExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundCaseExpression *)other_;
@@ -36,3 +36,5 @@ unique_ptr<Expression> BoundCaseExpression::Copy() {
 	new_case->CopyProperties(*this);
 	return move(new_case);
 }
+
+} // namespace duckdb

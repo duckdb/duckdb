@@ -15,10 +15,10 @@ namespace duckdb {
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {
 public:
-	Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type);
+	Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type);
 
 	//! The return type of the expression
-	TypeId return_type;
+	LogicalType return_type;
 
 public:
 	bool IsAggregate() const override;
@@ -29,6 +29,13 @@ public:
 	virtual bool IsFoldable() const;
 
 	hash_t Hash() const override;
+
+	virtual bool Equals(const BaseExpression *other) const override {
+		if (!BaseExpression::Equals(other)) {
+			return false;
+		}
+		return return_type == ((Expression *) other)->return_type;
+	}
 
 	static bool Equals(Expression *left, Expression *right) {
 		return BaseExpression::Equals((BaseExpression *)left, (BaseExpression *)right);

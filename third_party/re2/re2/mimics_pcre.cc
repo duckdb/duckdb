@@ -27,7 +27,7 @@
 #include "re2/regexp.h"
 #include "re2/walker-inl.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Returns whether re might match an empty string.
 static bool CanBeEmptyString(Regexp *re);
@@ -184,4 +184,4 @@ static bool CanBeEmptyString(Regexp* re) {
   return w.Walk(re, true);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

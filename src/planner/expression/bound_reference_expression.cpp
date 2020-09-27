@@ -3,15 +3,15 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-BoundReferenceExpression::BoundReferenceExpression(string alias, TypeId type, idx_t index)
-    : Expression(ExpressionType::BOUND_REF, ExpressionClass::BOUND_REF, type), index(index) {
+BoundReferenceExpression::BoundReferenceExpression(string alias, LogicalType type, idx_t index)
+    : Expression(ExpressionType::BOUND_REF, ExpressionClass::BOUND_REF, move(type)), index(index) {
 	this->alias = alias;
 }
-BoundReferenceExpression::BoundReferenceExpression(TypeId type, idx_t index)
-    : BoundReferenceExpression(string(), type, index) {
+BoundReferenceExpression::BoundReferenceExpression(LogicalType type, idx_t index)
+    : BoundReferenceExpression(string(), move(type), index) {
 }
 
 string BoundReferenceExpression::ToString() const {
@@ -19,7 +19,7 @@ string BoundReferenceExpression::ToString() const {
 }
 
 bool BoundReferenceExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundReferenceExpression *)other_;
@@ -33,3 +33,5 @@ hash_t BoundReferenceExpression::Hash() const {
 unique_ptr<Expression> BoundReferenceExpression::Copy() {
 	return make_unique<BoundReferenceExpression>(alias, return_type, index);
 }
+
+} // namespace duckdb

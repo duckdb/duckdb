@@ -1,0 +1,35 @@
+# name: test/sql/constraints/primarykey/test_pk_col_subset.test
+# description: PRIMARY KEY constraint that only covers a subset of the columns
+# group: [primarykey]
+
+statement ok
+CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b))
+
+# insert two conflicting pairs at the same time
+statement error
+INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)
+
+# insert unique values
+statement ok
+INSERT INTO numbers VALUES (1,1,1,1,1),(1,2,1,1,1),(2,1,2,1,1),(2,2,2,2,2)
+
+# insert a duplicate value as part of a chain of values
+statement error
+INSERT INTO numbers VALUES (1,1,1,1,1),(1,5,1,1,4);
+
+# now insert just the second value
+statement ok
+INSERT INTO numbers VALUES (1,5,1,1,4);
+
+# this should  work since is not part of primary key
+statement ok
+UPDATE numbers SET c=1 WHERE c=2
+
+# this should  fail since is will cause a duplicate
+statement error
+UPDATE numbers SET b=1 WHERE b=2
+
+# this should  work since it won't cause a duplicate
+statement ok
+UPDATE numbers SET b=3 WHERE b=2
+

@@ -2,8 +2,9 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 	auto stmt = reinterpret_cast<PGPragmaStmt *>(node);
@@ -29,16 +30,16 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 		if (info.parameters.size() > 0) {
 			throw ParserException("PRAGMA statement that is not a call or assignment cannot contain parameters");
 		}
-		info.pragma_type = PragmaType::NOTHING;
+		info.pragma_type = PragmaType::PRAGMA_STATEMENT;
 		break;
 	case PG_PRAGMA_TYPE_ASSIGNMENT:
 		if (info.parameters.size() != 1) {
 			throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 		}
-		info.pragma_type = PragmaType::ASSIGNMENT;
+		info.pragma_type = PragmaType::PRAGMA_ASSIGNMENT;
 		break;
 	case PG_PRAGMA_TYPE_CALL:
-		info.pragma_type = PragmaType::CALL;
+		info.pragma_type = PragmaType::PRAGMA_CALL;
 		break;
 	default:
 		throw ParserException("Unknown pragma type");
@@ -46,3 +47,5 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 
 	return result;
 }
+
+} // namespace duckdb

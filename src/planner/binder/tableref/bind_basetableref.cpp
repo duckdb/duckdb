@@ -6,8 +6,10 @@
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
@@ -17,17 +19,18 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	if (cte) {
 		// Check if there is a CTE binding in the BindContext
 		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
-		if (ctebinding == nullptr) {
+		if (!ctebinding) {
 			// Move CTE to subquery and bind recursively
-			SubqueryRef subquery(move(cte));
+			SubqueryRef subquery(cte->query->Copy());
 			subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
+			subquery.column_name_alias = cte->aliases;
 			return Bind(subquery);
 		} else {
 			// There is a CTE binding in the BindContext.
 			// This can only be the case if there is a recursive CTE present.
 			auto index = GenerateTableIndex();
 			auto result = make_unique<BoundCTERef>(index, ctebinding->index);
-			auto b = (GenericBinding *)ctebinding;
+			auto b = ctebinding;
 
 			bind_context.AddGenericBinding(index, ref.alias.empty() ? ref.table_name : ref.alias, b->names, b->types);
 			// Update references to CTE
@@ -42,19 +45,30 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// not a CTE
 	// extract a table or view from the catalog
 	auto table_or_view =
-	    Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE, ref.schema_name, ref.table_name);
+	    Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name);
 	switch (table_or_view->type) {
-	case CatalogType::TABLE: {
+	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto table = (TableCatalogEntry *)table_or_view;
 
-		auto logical_get = make_unique<LogicalGet>(table, table_index);
+		auto scan_function = TableScanFunction::GetFunction();
+		auto bind_data = make_unique<TableScanBindData>(table);
+		vector<LogicalType> table_types;
+		vector<string> table_names;
+		for (auto &col : table->columns) {
+			table_types.push_back(col.type);
+			table_names.push_back(col.name);
+		}
+
+		auto logical_get =
+		    make_unique<LogicalGet>(table_index, scan_function, move(bind_data), table_types, table_names);
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-		bind_context.AddBaseTable(table_index, alias, *table, *logical_get);
-		return make_unique_base<BoundTableRef, BoundBaseTableRef>(move(logical_get));
+		bind_context.AddBaseTable(table_index, alias, move(table_names), move(table_types), table->name_map,
+		                          *logical_get);
+		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}
-	case CatalogType::VIEW: {
+	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
 		SubqueryRef subquery(view_catalog_entry->query->Copy());
@@ -74,3 +88,4 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		throw NotImplementedException("Catalog entry type");
 	}
 }
+} // namespace duckdb

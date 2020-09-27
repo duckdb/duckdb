@@ -1,0 +1,127 @@
+# name: test/sql/update/test_string_update_many_strings.test
+# description: Test string updates with many strings
+# group: [update]
+
+# create a table
+statement ok con1
+CREATE TABLE test (a VARCHAR);
+
+statement ok con1
+INSERT INTO test VALUES ('a'), ('b'), ('c'), (NULL)
+
+# insert the same strings many times
+# 16 -> 64
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 64 -> 256
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 256 -> 1024
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 1024 -> 4096
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 4096 -> 16384
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 16384 -> 65536
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 65536 -> 262144
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# 262144 -> 1048576
+statement ok con1
+INSERT INTO test SELECT * FROM test
+
+# verify that the distinct values are correct
+query T con1
+SELECT DISTINCT a FROM test ORDER BY a
+----
+NULL
+a
+b
+c
+
+query T con2
+SELECT DISTINCT a FROM test ORDER BY a
+----
+NULL
+a
+b
+c
+
+# test update of string column in another transaction
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE test SET a='aa' WHERE a='a';
+
+# verify that the values were updated
+query T con1
+SELECT DISTINCT a FROM test ORDER BY a
+----
+NULL
+aa
+b
+c
+
+query T con2
+SELECT DISTINCT a FROM test ORDER BY a
+----
+NULL
+a
+b
+c
+
+# now roll it back
+statement ok con1
+ROLLBACK;
+
+# the values should be back to normal
+query T con1
+SELECT DISTINCT a FROM test ORDER BY a
+----
+NULL
+a
+b
+c
+
+query T con2
+SELECT DISTINCT a FROM test ORDER BY a
+----
+NULL
+a
+b
+c
+
+# this time do the same but commit it
+statement ok con1
+UPDATE test SET a='aa' WHERE a='a';
+
+# now both connections have the updated value
+query T con1
+SELECT DISTINCT a FROM test ORDER BY a
+----
+NULL
+aa
+b
+c
+
+query T con2
+SELECT DISTINCT a FROM test ORDER BY a
+----
+NULL
+aa
+b
+c
+

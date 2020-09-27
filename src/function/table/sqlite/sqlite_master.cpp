@@ -7,78 +7,58 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
-#include <sstream>
 
 using namespace std;
 
 namespace duckdb {
 
-struct SQLiteMasterData : public TableFunctionData {
-	SQLiteMasterData() : initialized(false), offset(0) {
+struct SQLiteMasterData : public FunctionOperatorData {
+	SQLiteMasterData() : offset(0) {
 	}
 
-	bool initialized;
 	vector<CatalogEntry *> entries;
 	idx_t offset;
 };
 
-string GenerateQuery(CatalogEntry *entry) {
-	// generate a query from a catalog entry
-	if (entry->type == CatalogType::TABLE) {
-		// FIXME: constraints
-		stringstream ss;
-		auto table = (TableCatalogEntry *)entry;
-		ss << "CREATE TABLE " << table->name << "(";
-
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			auto &column = table->columns[i];
-			ss << column.name << " " << SQLTypeToString(column.type);
-			if (i + 1 < table->columns.size()) {
-				ss << ", ";
-			}
-		}
-
-		ss << ");";
-		return ss.str();
-	} else {
-		return "[Unknown]";
-	}
-}
-
-static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> inputs,
-                                                   vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs,
+                                                   unordered_map<string, Value> &named_parameters,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("type");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("tbl_name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("rootpage");
-	return_types.push_back(SQLType::INTEGER);
+	return_types.push_back(LogicalType::INTEGER);
 
 	names.push_back("sql");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
-	// initialize the function data structure
-	return make_unique<SQLiteMasterData>();
+	return nullptr;
 }
 
-void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = *((SQLiteMasterData *)dataptr);
-	assert(input.size() == 0);
-	if (!data.initialized) {
-		// scan all the schemas
-		auto &transaction = Transaction::GetTransaction(context);
-		Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
-			auto schema = (SchemaCatalogEntry *)entry;
-			schema->tables.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
-		});
-		data.initialized = true;
-	}
+unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, const FunctionData *bind_data,
+                                                    vector<column_t> &column_ids,
+                                                    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	auto result = make_unique<SQLiteMasterData>();
 
+	// scan all the schemas for tables and views and collect them
+	auto &transaction = Transaction::GetTransaction(context);
+	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
+		auto schema = (SchemaCatalogEntry *)entry;
+		schema->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	});
+
+	return move(result);
+}
+
+void sqlite_master(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                   DataChunk &output) {
+	auto &data = (SQLiteMasterData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -93,39 +73,39 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 		auto &entry = data.entries[i];
 
 		// return values:
-		// "type", TypeId::VARCHAR
+		// "type", PhysicalType::VARCHAR
 		const char *type_str;
 		switch (entry->type) {
-		case CatalogType::TABLE:
+		case CatalogType::TABLE_ENTRY:
 			type_str = "table";
 			break;
-		case CatalogType::SCHEMA:
+		case CatalogType::SCHEMA_ENTRY:
 			type_str = "schema";
 			break;
-		case CatalogType::TABLE_FUNCTION:
+		case CatalogType::TABLE_FUNCTION_ENTRY:
 			type_str = "function";
 			break;
-		case CatalogType::VIEW:
+		case CatalogType::VIEW_ENTRY:
 			type_str = "view";
 			break;
 		default:
 			type_str = "unknown";
 		}
 		output.SetValue(0, index, Value(type_str));
-		// "name", TypeId::VARCHAR
+		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(entry->name));
-		// "tbl_name", TypeId::VARCHAR
+		// "tbl_name", PhysicalType::VARCHAR
 		output.SetValue(2, index, Value(entry->name));
-		// "rootpage", TypeId::INT32
+		// "rootpage", PhysicalType::INT32
 		output.SetValue(3, index, Value::INTEGER(0));
-		// "sql", TypeId::VARCHAR
-		output.SetValue(4, index, Value(GenerateQuery(entry)));
+		// "sql", PhysicalType::VARCHAR
+		output.SetValue(4, index, Value(entry->ToSQL()));
 	}
 	data.offset = next;
 }
 
 void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master, nullptr));
+	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master, sqlite_master_bind, sqlite_master_init));
 }
 
 } // namespace duckdb

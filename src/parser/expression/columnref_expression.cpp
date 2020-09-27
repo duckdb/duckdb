@@ -4,7 +4,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //! Specify both the column and table name
@@ -56,3 +56,5 @@ unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType typ
 	auto expression = make_unique<ColumnRefExpression>(column_name, table_name);
 	return move(expression);
 }
+
+} // namespace duckdb

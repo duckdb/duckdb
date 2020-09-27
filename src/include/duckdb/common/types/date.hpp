@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -16,12 +17,20 @@ namespace duckdb {
 //! type.
 class Date {
 public:
+	static string_t MonthNames[12];
+	static string_t MonthNamesAbbreviated[12];
+	static string_t DayNames[7];
+	static string_t DayNamesAbbreviated[7];
+
+public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromString(string str, bool strict = false);
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromCString(const char *str, bool strict = false);
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	static string ToString(date_t date);
+	//! Try to convert text in a buffer to a date; returns true if parsing was successful
+	static bool TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool strict = false);
 
 	//! Create a string "YYYY-MM-DD" from a specified (year, month, day)
 	//! combination
@@ -43,6 +52,12 @@ public:
 	static int64_t Epoch(date_t date);
 	//! Convert the epoch (seconds since 1970-01-01) to a date_t
 	static date_t EpochToDate(int64_t epoch);
+
+	//! Extract the number of days since epoch (days since 1970-01-01)
+	static int32_t EpochDays(date_t date);
+	//! Convert the epoch number of days to a date_t
+	static date_t EpochDaysToDate(int32_t epoch);
+
 	//! Extract year of a date entry
 	static int32_t ExtractYear(date_t date);
 	//! Extract month of a date entry
@@ -53,8 +68,17 @@ public:
 	static int32_t ExtractISODayOfTheWeek(date_t date);
 	//! Extract the day of the year
 	static int32_t ExtractDayOfTheYear(date_t date);
-	//! Extract the week number
-	static int32_t ExtractWeekNumber(date_t date);
+	//! Extract the ISO week number
+	//! ISO weeks start on Monday and the first week of a year
+	//! contains January 4 of that year.
+	//! In the ISO week-numbering system, it is possible for early-January dates
+	//! to be part of the 52nd or 53rd week of the previous year.
+	static int32_t ExtractISOWeekNumber(date_t date);
+	//! Extract the week number as Python handles it.
+	//! Either Monday or Sunday is the first day of the week,
+	//! and any date before the first Monday/Sunday returns week 0
+	//! This is a bit more consistent because week numbers in a year are always incrementing
+	static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
 	//! Returns the date of the monday of the current week.
 	static date_t GetMondayOfCurrentWeek(date_t date);
 };

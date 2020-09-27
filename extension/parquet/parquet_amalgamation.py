@@ -7,6 +7,9 @@ header_file = os.path.join(amal_dir, "parquet-extension.hpp")
 source_file = os.path.join(amal_dir, "parquet-extension.cpp")
 temp_source = 'parquet-extension.cpp.tmp'
 
+include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/include', 'third_party/parquet', 'third_party/snappy', 'third_party/thrift']]
+source_files = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/parquet-extension.cpp', 'third_party/parquet/parquet_constants.cpp',  'third_party/parquet/parquet_types.cpp',  'third_party/thrift/thrift/protocol/TProtocol.cpp',  'third_party/thrift/thrift/transport/TTransportException.cpp',  'third_party/thrift/thrift/transport/TBufferTransports.cpp',  'third_party/snappy/snappy.cc',  'third_party/snappy/snappy-sinksource.cc']]
+source_files += [os.path.sep.join(x.split('/')) for x in ['extension/parquet/parquet_reader.cpp', 'extension/parquet/parquet_timestamp.cpp', 'extension/parquet/parquet_writer.cpp']]
 
 def generate_amalgamation(source_file, header_file):
     def copy_if_different(src, dest):
@@ -17,7 +20,9 @@ def generate_amalgamation(source_file, header_file):
             with open(dest, 'r') as f:
                 dest_text = f.read()
             if source_text == dest_text:
+                print("Skipping copy of " + src + ", identical copy already exists at " + dest)
                 return
+        print("Copying " + src + " to " + dest)
         shutil.copyfile(src, dest)
 
 
@@ -37,10 +42,10 @@ def generate_amalgamation(source_file, header_file):
         os.chdir(wd)
         return [f.replace('\\', '/') for f in files]
 
-    headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/*.h") + myglob("third_party", "thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h") + myglob("third_party/miniz", "*.hpp")
+    headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/thrift/*.h") + myglob("third_party", "thrift/thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h") + myglob("third_party/miniz", "*.hpp")
 
     def rewrite(file_in, file_out):
-        print(file_in)
+        # print(file_in)
         a_file = open(file_in, "r")
         out = open(file_out, "a")
 
@@ -66,11 +71,11 @@ def generate_amalgamation(source_file, header_file):
         for f in files:
             rewrite("%s/%s" % (prefix, f), temp_source)
 
-    # the local and overall order of these rewrites matters. 
-    rewrite_prefix('third_party/thrift', ['transport/PlatformSocket.h','config.h','thrift-config.h','Thrift.h',
+    # the local and overall order of these rewrites matters.
+    rewrite_prefix('third_party/thrift/thrift', ['transport/PlatformSocket.h','config.h','thrift-config.h','Thrift.h',
         'TLogging.h','transport/TTransportException.h','transport/TTransport.h','protocol/TProtocolException.h',
         'protocol/TProtocol.h','protocol/TVirtualProtocol.h','protocol/TCompactProtocol.h','protocol/TCompactProtocol.tcc',
-        'transport/TVirtualTransport.h','transport/TBufferTransports.h','TBase.h','TToString.h', 'protocol/TProtocol.cpp', 
+        'transport/TVirtualTransport.h','transport/TBufferTransports.h','TBase.h','TToString.h', 'protocol/TProtocol.cpp',
         'transport/TTransportException.cpp', 'transport/TBufferTransports.cpp'])
 
     rewrite_prefix('third_party/parquet', ['windows_compatibility.h', 'parquet_types.h', 'parquet_constants.h',

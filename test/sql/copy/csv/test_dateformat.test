@@ -1,0 +1,48 @@
+# name: test/sql/copy/csv/test_dateformat.test
+# description: Test CSVs with a variable date format
+# group: [csv]
+
+statement ok
+CREATE TABLE dates (d DATE);
+
+# base date format does not work here
+statement error
+COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (AUTO_DETECT 0, HEADER 0)
+
+statement ok
+COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
+
+query I
+SELECT * FROM dates
+----
+2019-06-05
+
+# if we reverse the date format, we get a different result
+statement ok
+COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%m/%d/%Y')
+
+query I
+SELECT * FROM dates ORDER BY d
+----
+2019-05-06
+2019-06-05
+
+# timestamp format
+statement ok
+CREATE TABLE timestamps(t TIMESTAMP);
+
+# timestamp format
+statement ok
+COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
+
+query I
+SELECT * FROM timestamps
+----
+2003-06-30 12:03:10
+
+# incorrect date/timestamp format results in an error
+statement error
+COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%')
+
+statement error
+COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')

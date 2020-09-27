@@ -143,27 +143,28 @@ template class std::unique_ptr<Binder>;
 	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front() const;                                      \
 	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::front();
 
-INSTANTIATE_VECTOR(std::vector<ColumnDefinition>);
+INSTANTIATE_VECTOR(std::vector<ColumnDefinition>)
 template class std::vector<ExpressionType>;
-INSTANTIATE_VECTOR(std::vector<JoinCondition>);
-INSTANTIATE_VECTOR(std::vector<OrderByNode>);
+INSTANTIATE_VECTOR(std::vector<JoinCondition>)
+INSTANTIATE_VECTOR(std::vector<OrderByNode>)
 template class std::vector<uint64_t>;
 template class std::vector<string>;
 INSTANTIATE_VECTOR(std::vector<Expression *>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>);
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>);
-template class std::vector<TypeId>;
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>)
+template class std::vector<PhysicalType>;
 template class std::vector<Value>;
 template class std::vector<int>;
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>);
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>);
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>)
 template class std::vector<std::vector<Expression *>>;
-template class std::vector<SQLType>;
+template class std::vector<LogicalType>;
 
 template struct std::atomic<uint64_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;
@@ -175,7 +176,7 @@ template class std::stack<PhysicalOperator *>;
 	template MAP_DEFINITION::mapped_type &MAP_DEFINITION::operator[](const MAP_DEFINITION::key_type &k);
 
 using catalog_map = std::unordered_map<string, unique_ptr<CatalogEntry>>;
-INSTANTIATE_UNORDERED_MAP(catalog_map);
+INSTANTIATE_UNORDERED_MAP(catalog_map)
 
 template class std::unordered_map<string, uint64_t>;
 template class std::unordered_map<string, std::vector<string>>;
