@@ -1,4 +1,6 @@
-build
+build-*
 node_modules
-duckdb.cpp
-duckdb.hpp
+src/duckdb.cpp
+src/duckdb.hpp
+lib/binding
+package-lock.json

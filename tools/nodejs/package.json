@@ -1,12 +1,24 @@
 {
-  "name": "duckdb",
-  "main": "index.js",
-  "version": "0.2.0",
+  "name": "node_duckdb",
+  "main": "./lib/duckdb.js", 
+  "version": "0.2.2",
   "description": "DuckDB node.js API",
   "private": true,
   "gypfile": true,
   "dependencies": {
+    "bindings": "*",
+    "mocha": "^8.1.3",
     "node-addon-api": "*",
-    "bindings": "*"
+    "node-pre-gyp": "^0.15.0"
+  },
+  "binary": {
+    "module_name": "node_duckdb",
+    "module_path": "./lib/binding/napi-v{napi_build_version}-{platform}-{arch}",
+    "host": "https://example.com",
+    "remote_path": "./{name}/v{version}/{toolset}/",
+    "package_name": "napi-v{napi_build_version}-{platform}-{arch}.tar.gz",
+    "napi_versions": [
+      3
+    ]
   }
 }

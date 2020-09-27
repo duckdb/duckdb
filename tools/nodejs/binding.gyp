@@ -1,10 +1,12 @@
 {
     "targets": [
         {
-            "target_name": "duckdb",
+            "target_name": "node_duckdb",
             "sources": [
-                "duckdb_nodejs.cc",
-                "duckdb.cpp"
+                 "src/node_duckdb.cc",
+                "src/database.cc",
+                "src/statement.cc",
+                "src/duckdb.cpp" # comment this out to build against existing lib
             ],
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")"
@@ -26,7 +28,21 @@
                 "VCCLCompilerTool": {
                     "ExceptionHandling": 1
                 }
-            }
-        }
+            },
+            # "libraries": [
+            #   "/Users/hannes/source/duckdb/build/release/src/libduckdb.dylib"
+            #   ]
+        },
+        {
+      "target_name": "action_after_build",
+      "type": "none",
+      "dependencies": [ "<(module_name)" ],
+      "copies": [
+          {
+            "files": [ "<(PRODUCT_DIR)/<(module_name).node" ],
+            "destination": "<(module_path)"
+          }
+      ]
+    }
     ]
 }
