@@ -34,8 +34,15 @@ function readAllRows() {
         rows.forEach(function (row) {
             console.log(row.id + ": " + row.info);
         });
-        closeDb();
+        each();
     });
+}
+
+function each() {
+        console.log("each");
+        db.each("SELECT rowid AS id, info FROM lorem", function(err, row) {
+            console.log(row)
+        })
 }
 
 function closeDb() {

@@ -129,7 +129,6 @@ void Statement::Work_BeginPrepare(Database::Baton* baton) {
 
 void Statement::Work_Prepare(napi_env e, void* data) {
     STATEMENT_INIT(PrepareBaton);
-	// TODO lock the connection
 	stmt->_stmt_handle = baton->db->_conn_handle->Prepare(baton->sql);
     stmt->_res_handle.reset();
 	if (!stmt->_stmt_handle->success) {
@@ -421,14 +420,12 @@ void Statement::Work_Run(napi_env e, void* data) {
     STATEMENT_INIT(RunBaton);
 
     stmt->_res_handle.reset();
-
     stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters);
     if (!stmt->_res_handle->success) {
         stmt->status = -1;
         stmt->message = stmt->_res_handle->error;
         stmt->_res_handle.reset();
     }
-
 }
 
 void Statement::Work_AfterRun(napi_env e, napi_status status, void* data) {
@@ -480,39 +477,16 @@ void Statement::Work_All(napi_env e, void* data) {
     auto baton = ((RowsBaton*)data);
     auto stmt = baton->stmt;
 
-    assert(stmt->_stmt_handle);
 	stmt->_res_handle.reset();
 
-    stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, false);
-    if (!stmt->_res_handle->success) {
-        stmt->status = -1;
-        stmt->message = stmt->_res_handle->error;
-        stmt->_res_handle.reset();
-		return;
-    }
-
-
-	/* FIXME
-
-    // Make sure that we also reset when there are no parameters.
-    if (!baton->parameters.size()) {
-        sqlite3_reset(stmt->_handle);
-    }
-
     if (stmt->Bind(baton->parameters)) {
-        while ((stmt->status = sqlite3_step(stmt->_handle)) == SQLITE_ROW) {
-            Row* row = new Row();
-            GetRow(row, stmt->_handle);
-            baton->rows.push_back(row);
-        }
-
-        if (stmt->status != SQLITE_DONE) {
-            stmt->message = std::string(sqlite3_errmsg(stmt->db->_handle));
+        stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, false);
+        if (!stmt->_res_handle->success) {
+            stmt->status = -1;
+            stmt->message = stmt->_res_handle->error;
+            stmt->_res_handle.reset();
         }
     }
-
-    sqlite3_mutex_leave(mtx);
-    */
 }
 
 static Napi::Value convert_chunk(Napi::Env& env, vector<string> names, duckdb::DataChunk& chunk) {
@@ -656,40 +630,31 @@ void Statement::Work_Each(napi_env e, void* data) {
 
     Async* async = baton->async;
 
-    int retrieved = 0;
-	assert(0);
-	/* FIXME
+	stmt->_res_handle.reset();
+    stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, true);
 
-    // Make sure that we also reset when there are no parameters.
-    if (!baton->parameters.size()) {
-        sqlite3_reset(stmt->_handle);
+	if (!stmt->_res_handle->success) {
+        stmt->status = -1;
+        stmt->message = stmt->_res_handle->error;
+        stmt->_res_handle.reset();
+        async->completed = true;
+
+        return;
     }
 
-    if (stmt->Bind(baton->parameters)) {
-        while (true) {
-            sqlite3_mutex_enter(mtx);
-            stmt->status = sqlite3_step(stmt->_handle);
-            if (stmt->status == SQLITE_ROW) {
-                sqlite3_mutex_leave(mtx);
-                Row* row = new Row();
-                GetRow(row, stmt->_handle);
-                NODE_SQLITE3_MUTEX_LOCK(&async->mutex)
-                async->data.push_back(row);
-                retrieved++;
-                NODE_SQLITE3_MUTEX_UNLOCK(&async->mutex)
+	async->names = stmt->_res_handle->names;
 
-                uv_async_send(&async->watcher);
-            }
-            else {
-                if (stmt->status != SQLITE_DONE) {
-                    stmt->message = std::string(sqlite3_errmsg(stmt->db->_handle));
-                }
-                sqlite3_mutex_leave(mtx);
-                break;
-            }
+    while (true) {
+        auto chunk = stmt->_res_handle->Fetch();
+        if (chunk->size() == 0) {
+            break;
         }
+        {
+            std::lock_guard<std::mutex> lock(async->mutex);
+            async->data = move(chunk);
+        }
+		uv_async_send(&async->watcher);
     }
-     */
 
     async->completed = true;
     uv_async_send(&async->watcher);
@@ -710,29 +675,25 @@ void Statement::AsyncEach(uv_async_t* handle) {
 
     while (true) {
         // Get the contents out of the data cache for us to process in the JS callback.
-        Rows rows;
+        unique_ptr<duckdb::DataChunk> rows;
 		{
 			std::lock_guard<std::mutex> lock(async->mutex);
-			rows.swap(async->data);
+            rows.swap(async->data);
 		}
-
-        if (rows.empty()) {
+        if (!rows || rows->size() == 0) {
             break;
         }
+		auto converted_chunk = convert_chunk(env, async->names, *rows).ToObject();
 
         Napi::Function cb = async->item_cb.Value();
         if (!cb.IsUndefined() && cb.IsFunction()) {
             Napi::Value argv[2];
             argv[0] = env.Null();
 
-            Rows::const_iterator it = rows.begin();
-            Rows::const_iterator end = rows.end();
-            for (int i = 0; it < end; ++it, i++) {
-                std::unique_ptr<Row> row(*it);
-                argv[1] = RowToJS(env,row.get());
-                async->retrieved++;
+			for (duckdb::idx_t row_idx = 0; row_idx < rows->size(); row_idx++) {
+                argv[1] = converted_chunk.Get(row_idx);
                 TRY_CATCH_CALL(async->stmt->Value(), cb, 2, argv);
-            }
+			}
         }
     }
 
@@ -804,77 +765,6 @@ void Statement::Work_AfterReset(napi_env e, napi_status status, void* data) {
     STATEMENT_END();
 }
 
-Napi::Value Statement::RowToJS(Napi::Env env, Row* row) {
-    Napi::EscapableHandleScope scope(env);
-
-    Napi::Object result = Napi::Object::New(env);
-
-    Row::const_iterator it = row->begin();
-    Row::const_iterator end = row->end();
-    for (int i = 0; it < end; ++it, i++) {
-       //Values::Field* field = *it;
-
-        Napi::Value value;
-/* FIXME
-        switch (field->type) {
-            case SQLITE_INTEGER: {
-                value = Napi::Number::New(env, ((Values::Integer*)field)->value);
-            } break;
-            case SQLITE_FLOAT: {
-                value = Napi::Number::New(env, ((Values::Float*)field)->value);
-            } break;
-            case SQLITE_TEXT: {
-                value = Napi::String::New(env, ((Values::Text*)field)->value.c_str(), ((Values::Text*)field)->value.size());
-            } break;
-            case SQLITE_BLOB: {
-                value = Napi::Buffer<char>::Copy(env, ((Values::Blob*)field)->value, ((Values::Blob*)field)->length);
-            } break;
-            case SQLITE_NULL: {
-                value = env.Null();
-            } break;
-        }
-*/
-//        (result).Set(Napi::String::New(env, field->name.c_str()), value);
-
-		// FIXME wtf
-//        DELETE_FIELD(field);
-    }
-
-    return scope.Escape(result);
-}
-
-void Statement::GetRow(Row* row, duckdb::PreparedStatement* stmt) {
-	/* FIXME
-    int rows = sqlite3_column_count(stmt);
-
-    for (int i = 0; i < rows; i++) {
-        int type = sqlite3_column_type(stmt, i);
-        const char* name = sqlite3_column_name(stmt, i);
-        switch (type) {
-            case SQLITE_INTEGER: {
-                row->push_back(new Values::Integer(name, sqlite3_column_int64(stmt, i)));
-            }   break;
-            case SQLITE_FLOAT: {
-                row->push_back(new Values::Float(name, sqlite3_column_double(stmt, i)));
-            }   break;
-            case SQLITE_TEXT: {
-                const char* text = (const char*)sqlite3_column_text(stmt, i);
-                int length = sqlite3_column_bytes(stmt, i);
-                row->push_back(new Values::Text(name, length, text));
-            } break;
-            case SQLITE_BLOB: {
-                const void* blob = sqlite3_column_blob(stmt, i);
-                int length = sqlite3_column_bytes(stmt, i);
-                row->push_back(new Values::Blob(name, length, blob));
-            }   break;
-            case SQLITE_NULL: {
-                row->push_back(new Values::Null(name));
-            }   break;
-            default:
-                assert(false);
-        }
-    } */
-}
 
 Napi::Value Statement::Finalize_(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();

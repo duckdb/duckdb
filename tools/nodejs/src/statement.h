@@ -16,11 +16,7 @@ using namespace Napi;
 
 namespace node_duckdb {
 
-
-typedef std::vector<duckdb::Value> Row;
-typedef std::vector<Row*> Rows;
-typedef Row Parameters;
-
+typedef std::vector<duckdb::Value> Parameters;
 
 class Statement : public Napi::ObjectWrap<Statement> {
 public:
@@ -47,7 +43,7 @@ public:
     struct RowBaton : Baton {
         RowBaton(Statement* stmt_, Napi::Function cb_) :
             Baton(stmt_, cb_) {}
-        Row row;
+      //  Row row;
     };
 
     struct RunBaton : Baton {
@@ -60,7 +56,7 @@ public:
     struct RowsBaton : Baton {
         RowsBaton(Statement* stmt_, Napi::Function cb_) :
             Baton(stmt_, cb_) {}
-        Rows rows;
+        //Rows rows;
     };
 
     struct Async;
@@ -104,7 +100,9 @@ public:
     struct Async {
         uv_async_t watcher;
         Statement* stmt;
-        Rows data;
+        std::unique_ptr<duckdb::DataChunk> data;
+		vector<string> names;
+
         std::mutex mutex;
 		bool completed;
         int retrieved;
@@ -168,9 +166,6 @@ protected:
     template <class T> inline duckdb::Value BindParameter(const Napi::Value source, T pos);
     template <class T> T* Bind(const Napi::CallbackInfo& info, int start = 0, int end = -1);
     bool Bind(const Parameters &parameters);
-
-    static void GetRow(Row* row, duckdb::PreparedStatement* stmt);
-    static Napi::Value RowToJS(Napi::Env env, Row* row);
     void Schedule(Work_Callback callback, Baton* baton);
     void Process();
     void CleanQueue();

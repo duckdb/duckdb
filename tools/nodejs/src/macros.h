@@ -1,8 +1,6 @@
 #ifndef NODE_DUCKDB_SRC_MACROS_H
 #define NODE_DUCKDB_SRC_MACROS_H
 
-const char* sqlite_code_string(int code);
-const char* sqlite_authorizer_string(int type);
 #include <vector>
 
 // TODO: better way to work around StringConcat?
@@ -99,7 +97,7 @@ inline bool OtherIsInt(Napi::Number source) {
     Napi::Value name = Napi::Error::New(env,                                   \
         StringConcat(                                                          \
             StringConcat(                                                      \
-                Napi::String::New(env, sqlite_code_string(errno)),             \
+                Napi::String::New(env, "xx"),             \
                 Napi::String::New(env, ": ")                                   \
             ),                                                                 \
             (msg)                                                              \
@@ -108,7 +106,7 @@ inline bool OtherIsInt(Napi::Number source) {
     Napi::Object name ##_obj = name.As<Napi::Object>();                        \
     (name ##_obj).Set( Napi::String::New(env, "errno"), Napi::Number::New(env, errno)); \
     (name ##_obj).Set( Napi::String::New(env, "code"),                         \
-        Napi::String::New(env, sqlite_code_string(errno)));
+        Napi::String::New(env, "xx"));
 
 
 #define EMIT_EVENT(obj, argc, argv)                                            \
