@@ -18,6 +18,8 @@ Napi::Object RegisterModule(Napi::Env env, Napi::Object exports) {
     Statement::Init(env, exports);
 
     exports.DefineProperties({
+	    DEFINE_CONSTANT_INTEGER(exports, DUCKDB_NODEJS_ERROR, ERROR)
+
 /*
         DEFINE_CONSTANT_INTEGER(exports, SQLITE_OPEN_READONLY, OPEN_READONLY)
         DEFINE_CONSTANT_INTEGER(exports, SQLITE_OPEN_READWRITE, OPEN_READWRITE)

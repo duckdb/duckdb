@@ -69,8 +69,8 @@ template <class T> void Statement::Error(T* baton) {
     Napi::HandleScope scope(env);
 
     // Fail hard on logic errors.
-    assert(stmt->status != 0);
-    EXCEPTION(Napi::String::New(env, stmt->message.c_str()), stmt->status, exception);
+    assert(stmt->status);
+    EXCEPTION(Napi::String::New(env, stmt->message.c_str()), exception);
 
     Napi::Function cb = baton->callback.Value();
 
@@ -811,7 +811,7 @@ void Statement::CleanQueue() {
     if (prepared && !queue.empty()) {
         // This statement has already been prepared and is now finalized.
         // Fire error for all remaining items in the queue.
-        EXCEPTION(Napi::String::New(env, "Statement is already finalized"), -1, exception);
+        EXCEPTION(Napi::String::New(env, "Statement is already finalized"),  exception);
         Napi::Value argv[] = { exception };
         bool called = false;
 

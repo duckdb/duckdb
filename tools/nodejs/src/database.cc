@@ -43,7 +43,7 @@ void Database::Process() {
     Napi::HandleScope scope(env);
 
     if (!open && locked && !queue.empty()) {
-        EXCEPTION(Napi::String::New(env, "Database handle is closed"), -1, exception);
+        EXCEPTION(Napi::String::New(env, "Database handle is closed"), exception);
         Napi::Value argv[] = { exception };
         bool called = false;
 
@@ -89,7 +89,7 @@ void Database::Schedule(Work_Callback callback, Baton* baton, bool exclusive) {
     Napi::HandleScope scope(env);
 
     if (!open && locked) {
-        EXCEPTION(Napi::String::New(env, "Database is closed"), -1, exception);
+        EXCEPTION(Napi::String::New(env, "Database is closed"), exception);
         Napi::Function cb = baton->callback.Value();
         // We don't call the actual callback, so we have to make sure that
         // the baton gets destroyed.
@@ -166,7 +166,7 @@ void Database::Work_Open(napi_env e, void* data) {
 		db->_db_handle = make_unique<duckdb::DuckDB>(baton->filename);
         db->_conn_handle = make_unique<duckdb::Connection>(*db->_db_handle);
     } catch (...) {
-		baton->status = -1;
+		baton->status = DUCKDB_NODEJS_ERROR;
 		baton->message = "Failed to open database";
 	}
 }
@@ -180,8 +180,8 @@ void Database::Work_AfterOpen(napi_env e, napi_status status, void* data) {
     Napi::HandleScope scope(env);
 
     Napi::Value argv[1];
-    if (baton->status != 0) {
-        EXCEPTION(Napi::String::New(env, baton->message.c_str()), baton->status, exception);
+    if (baton->status) {
+        EXCEPTION(Napi::String::New(env, baton->message.c_str()), exception);
         argv[0] = exception;
     }
     else {
@@ -266,8 +266,8 @@ void Database::Work_AfterClose(napi_env e, napi_status status, void* data) {
     db->closing = false;
 
     Napi::Value argv[1];
-    if (baton->status != 0) {
-        EXCEPTION(Napi::String::New(env, baton->message.c_str()), baton->status, exception);
+    if (baton->status) {
+        EXCEPTION(Napi::String::New(env, baton->message.c_str()), exception);
         argv[0] = exception;
     }
     else {
@@ -428,7 +428,7 @@ void Database::Work_Exec(napi_env e, void* data) {
 	auto res = baton->db->_conn_handle->Query(baton->sql);
 	if (!res->success) {
         baton->message = res->error;
-		baton->status = -1;
+		baton->status = DUCKDB_NODEJS_ERROR;
 	}
 }
 
@@ -443,9 +443,8 @@ void Database::Work_AfterExec(napi_env e, napi_status status, void* data) {
 
     Napi::Function cb = baton->callback.Value();
 
-	// FIXME this 0 is ugly
-    if (baton->status != 0) {
-        EXCEPTION(Napi::String::New(env, baton->message.c_str()), baton->status, exception);
+    if (baton->status) {
+        EXCEPTION(Napi::String::New(env, baton->message.c_str()), exception);
 
         if (!cb.IsUndefined() && cb.IsFunction()) {
             Napi::Value argv[] = { exception };

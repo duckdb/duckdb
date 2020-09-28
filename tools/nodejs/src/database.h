@@ -10,6 +10,9 @@
 #include "duckdb.hpp"
 #include <napi.h>
 
+
+#define DUCKDB_NODEJS_ERROR -1
+
 //#include "async.h"
 
 using namespace Napi;

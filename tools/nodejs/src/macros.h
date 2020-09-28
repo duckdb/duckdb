@@ -93,20 +93,12 @@ inline bool OtherIsInt(Napi::Number source) {
     Napi::PropertyDescriptor::Value(#name, Napi::String::New(env, constant),   \
         static_cast<napi_property_attributes>(napi_enumerable | napi_configurable)),
 
-#define EXCEPTION(msg, errno, name)                                            \
-    Napi::Value name = Napi::Error::New(env,                                   \
-        StringConcat(                                                          \
-            StringConcat(                                                      \
-                Napi::String::New(env, "xx"),             \
-                Napi::String::New(env, ": ")                                   \
-            ),                                                                 \
-            (msg)                                                              \
-        ).Utf8Value()                                                          \
-    ).Value();                                                                 \
+#define EXCEPTION(msg,  name)                                            \
+    Napi::Value name = Napi::Error::New(env, (msg).Utf8Value()).Value();       \
     Napi::Object name ##_obj = name.As<Napi::Object>();                        \
-    (name ##_obj).Set( Napi::String::New(env, "errno"), Napi::Number::New(env, errno)); \
+    (name ##_obj).Set( Napi::String::New(env, "errno"), Napi::Number::New(env, DUCKDB_NODEJS_ERROR)); \
     (name ##_obj).Set( Napi::String::New(env, "code"),                         \
-        Napi::String::New(env, "xx"));
+        Napi::String::New(env, "DUCKDB_NODEJS_ERROR"));
 
 
 #define EMIT_EVENT(obj, argc, argv)                                            \
