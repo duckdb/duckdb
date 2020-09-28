@@ -2,13 +2,16 @@
 
 all: build
 
+src/duckdb.cpp:
+	./configure
+
 ./node_modules:
 	npm install --build-from-source
 
-build: ./node_modules
+build: ./node_modules src/duckdb.cpp
 	./node_modules/.bin/node-pre-gyp build --loglevel=silent
 
-debug: ./node_modules
+debug: ./node_modules src/duckdb.cpp
 	./node_modules/.bin/node-pre-gyp rebuild --debug
 
 clean:
