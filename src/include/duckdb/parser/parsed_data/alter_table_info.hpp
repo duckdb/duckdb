@@ -13,20 +13,29 @@
 
 namespace duckdb {
 
-enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1 };
+enum class AlterType : uint8_t {
+	INVALID = 0,
+	ALTER_TABLE = 1,
+	ALTER_VIEW = 2
+};
 
 struct AlterInfo : public ParseInfo {
-	AlterInfo(AlterType type) : type(type) {
+	AlterInfo(AlterType type, string schema) : type(type), schema(schema) {
 	}
 	virtual ~AlterInfo() {
 	}
 
 	AlterType type;
+	//! Schema name to alter to
+	string schema;
 
 	virtual void Serialize(Serializer &serializer);
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
 
+//===--------------------------------------------------------------------===//
+// Alter Table
+//===--------------------------------------------------------------------===//
 enum class AlterTableType : uint8_t {
 	INVALID = 0,
 	RENAME_COLUMN = 1,
@@ -34,21 +43,18 @@ enum class AlterTableType : uint8_t {
 	ADD_COLUMN = 3,
 	REMOVE_COLUMN = 4,
 	ALTER_COLUMN_TYPE = 5,
-	SET_DEFAULT = 6,
-	RENAME_VIEW = 7
+	SET_DEFAULT = 6
 };
 
 struct AlterTableInfo : public AlterInfo {
 	AlterTableInfo(AlterTableType type, string schema, string table)
-	    : AlterInfo(AlterType::ALTER_TABLE), alter_table_type(type), schema(schema), table(table) {
+	    : AlterInfo(AlterType::ALTER_TABLE, schema), alter_table_type(type), table(table) {
 	}
 	virtual ~AlterTableInfo() override {
 	}
 
 	AlterTableType alter_table_type;
-	//! Schema name to alter to
-	string schema;
-	//! Table name to alter to
+	//! Table name to alter
 	string table;
 
 public:
@@ -80,8 +86,8 @@ public:
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
 struct RenameTableInfo : public AlterTableInfo {
-	RenameTableInfo(string schema, string table, string new_name, bool is_view)
-	    : AlterTableInfo(is_view ? AlterTableType::RENAME_VIEW : AlterTableType::RENAME_TABLE, schema, table),
+	RenameTableInfo(string schema, string table, string new_name)
+	    : AlterTableInfo(AlterTableType::RENAME_TABLE, schema, table),
 	      new_table_name(new_name) {
 	}
 	~RenameTableInfo() override {
@@ -92,7 +98,7 @@ struct RenameTableInfo : public AlterTableInfo {
 
 public:
 	void Serialize(Serializer &serializer) override;
-	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table, bool is_view);
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
 };
 
 //===--------------------------------------------------------------------===//
@@ -173,6 +179,50 @@ struct SetDefaultInfo : public AlterTableInfo {
 	string column_name;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
+
+public:
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
+};
+
+//===--------------------------------------------------------------------===//
+// Alter View
+//===--------------------------------------------------------------------===//
+enum class AlterViewType : uint8_t {
+	INVALID = 0,
+	RENAME_VIEW = 1
+};
+
+struct AlterViewInfo : public AlterInfo {
+	AlterViewInfo(AlterViewType type, string schema, string view)
+	    : AlterInfo(AlterType::ALTER_VIEW, schema), alter_view_type(type), view(view) {
+	}
+	virtual ~AlterViewInfo() override {
+	}
+
+	AlterViewType alter_view_type;
+	//! View name to alter to
+	string view;
+
+public:
+	virtual void Serialize(Serializer &serializer) override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+};
+
+
+//===--------------------------------------------------------------------===//
+// RenameViewInfo
+//===--------------------------------------------------------------------===//
+struct RenameViewInfo : public AlterViewInfo {
+	RenameViewInfo(string schema, string view, string new_name)
+	    : AlterViewInfo(AlterViewType::RENAME_VIEW, schema, view),
+	      new_view_name(new_name) {
+	}
+	~RenameViewInfo() override {
+	}
+
+	//! Relation new name
+	string new_view_name;
 
 public:
 	void Serialize(Serializer &serializer) override;

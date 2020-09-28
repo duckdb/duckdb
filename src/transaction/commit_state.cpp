@@ -54,7 +54,21 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateSchema((SchemaCatalogEntry *)parent);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		log->WriteCreateView((ViewCatalogEntry *)parent);
+		if (parent->temporary) {
+			return;
+		}
+		if (entry->type == CatalogType::VIEW_ENTRY) {
+			// ALTER TABLE statement, read the extra data after the entry
+			auto extra_data_size = Load<idx_t>(dataptr);
+			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
+			// deserialize it
+			BufferedDeserializer source(extra_data, extra_data_size);
+			auto info = AlterInfo::Deserialize(source);
+			// write the alter table in the log
+			log->WriteAlter(*info);
+		} else {
+			log->WriteCreateView((ViewCatalogEntry *)parent);
+		}
 		break;
 	case CatalogType::SEQUENCE_ENTRY:
 		log->WriteCreateSequence((SequenceCatalogEntry *)parent);

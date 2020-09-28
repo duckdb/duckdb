@@ -5,28 +5,38 @@
 namespace duckdb {
 using namespace std;
 
+Dependency::Dependency(CatalogEntry *entry) {
+	this->set = entry->set;
+	this->entry_index = set->GetEntryIndex(entry);
+}
+
+idx_t Dependency::Hash() const {
+	return entry_index;
+}
+
 DependencyManager::DependencyManager(Catalog &catalog) : catalog(catalog) {
 }
 
 void DependencyManager::AddObject(Transaction &transaction, CatalogEntry *object,
-                                  unordered_set<CatalogEntry *> &dependencies) {
+                                  unordered_set<CatalogEntry *> &dependency_entries) {
+	Dependency object_dependency(object);
 	// check for each object in the sources if they were not deleted yet
-	for (auto &dependency : dependencies) {
-		auto entry = dependency->set->data.find(dependency->name);
-		assert(entry != dependency->set->data.end());
-
-		if (CatalogSet::HasConflict(transaction, *entry->second)) {
+	for (auto &dependency : dependency_entries) {
+		if (CatalogSet::HasConflict(transaction, *dependency)) {
 			// transaction conflict with this entry
 			throw TransactionException("Catalog write-write conflict on create with \"%s\"", object->name);
 		}
 	}
 	// add the object to the dependents_map of each object that it depends on
-	for (auto &dependency : dependencies) {
-		dependents_map[dependency].insert(object);
+	dependency_set_t dependencies;
+	for (auto &dependency : dependency_entries) {
+		Dependency dep(dependency);
+		dependents_map[dep].insert(object_dependency);
+		dependencies.insert(dep);
 	}
 	// create the dependents map for this object: it starts out empty
-	dependents_map[object] = unordered_set<CatalogEntry *>();
-	dependencies_map[object] = dependencies;
+	dependents_map[object_dependency] = dependency_set_t();
+	dependencies_map[object_dependency] = move(dependencies);
 }
 
 void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *object, bool cascade,
@@ -37,23 +47,15 @@ void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *objec
 	auto &dependent_objects = dependents_map[object];
 	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
-		auto &catalog_set = *dep->set;
-		auto entry = catalog_set.data.find(dep->name);
-		assert(entry != catalog_set.data.end());
-		if (CatalogSet::HasConflict(transaction, *entry->second)) {
-			// current version has been written to by a currently active transaction
-			throw TransactionException("Catalog write-write conflict on drop with \"%s\": conflict with dependency",
-			                           object->name);
-		}
-		// there is a current version that has been committed
-		if (entry->second->deleted) {
-			// the dependent object was already deleted, no conflict
+		CatalogEntry *entry;
+		auto &catalog_set = *dep.set;
+		if (!catalog_set.GetEntryInternal(transaction, dep.entry_index, entry)) {
 			continue;
 		}
 		// conflict: attempting to delete this object but the dependent object still exists
 		if (cascade) {
 			// cascade: drop the dependent object
-			catalog_set.DropEntryInternal(transaction, *entry->second, cascade, lock_set);
+			catalog_set.DropEntryInternal(transaction, dep.entry_index, *entry, cascade, lock_set);
 		} else {
 			// no cascade and there are objects that depend on this object: throw error
 			throw CatalogException("Cannot drop entry \"%s\" because there are entries that "
@@ -63,49 +65,14 @@ void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *objec
 	}
 }
 
-void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *old_obj, CatalogEntry *new_obj) {
-	assert(dependents_map.find(old_obj) != dependents_map.end());
-	assert(dependencies_map.find(old_obj) != dependencies_map.end());
-
-	// first check the objects that depend on this object
-	auto &dependent_objects = dependents_map[old_obj];
-	for (auto &dep : dependent_objects) {
-		// look up the entry in the catalog set
-		auto &catalog_set = *dep->set;
-		auto entry = catalog_set.data.find(dep->name);
-		assert(entry != catalog_set.data.end());
-		if (CatalogSet::HasConflict(transaction, *entry->second)) {
-			// current version has been written to by a currently active transaction
-			throw TransactionException("Catalog write-write conflict on drop with \"%s\"", old_obj->name);
-		}
-		// there is a current version that has been committed
-		if (entry->second->deleted) {
-			// the dependent object was already deleted, no conflict
-			continue;
-		}
-		// conflict: attempting to alter this object but the dependent object still exists
-		// no cascade and there are objects that depend on this object: throw error
-		throw CatalogException("Cannot alter entry \"%s\" because there are entries that "
-		                       "depend on it.",
-		                       old_obj->name);
-	}
-	// add the new object to the dependents_map of each object that it depents on
-	auto &old_dependencies = dependencies_map[old_obj];
-	for (auto &dependency : old_dependencies) {
-		dependents_map[dependency].insert(new_obj);
-	}
-	// add the new object to the dependency manager
-	dependents_map[new_obj] = unordered_set<CatalogEntry *>();
-	dependencies_map[new_obj] = old_dependencies;
-}
-
 void DependencyManager::EraseObject(CatalogEntry *object) {
 	// obtain the writing lock
 	lock_guard<mutex> write_lock(catalog.write_lock);
 	EraseObjectInternal(object);
 }
 
-void DependencyManager::EraseObjectInternal(CatalogEntry *object) {
+void DependencyManager::EraseObjectInternal(CatalogEntry *entry) {
+	Dependency object(entry);
 	if (dependents_map.find(object) == dependents_map.end()) {
 		// dependencies already removed
 		return;
@@ -130,7 +97,7 @@ void DependencyManager::ClearDependencies(CatalogSet &set) {
 	lock_guard<mutex> write_lock(catalog.write_lock);
 
 	// iterate over the objects in the CatalogSet
-	for (auto &entry : set.data) {
+	for (auto &entry : set.entries) {
 		CatalogEntry *centry = entry.second.get();
 		while (centry) {
 			EraseObjectInternal(centry);

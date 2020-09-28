@@ -84,7 +84,7 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 		throw CatalogException("Cannot create built-in schema \"%s\"", info->schema);
 	}
 
-	unordered_set<CatalogEntry *> dependencies;
+	unordered_set<CatalogEntry*> dependencies;
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {
@@ -223,14 +223,9 @@ CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_nam
 	return (CollateCatalogEntry *)GetEntry(context, CatalogType::COLLATION_ENTRY, move(schema_name), name, if_exists);
 }
 
-void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
-	if (info->schema == INVALID_SCHEMA) {
-		// invalid schema, look for table in temp schema
-		auto entry = GetEntry(context, CatalogType::TABLE_ENTRY, TEMP_SCHEMA, info->table, true);
-		info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
-	}
+void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	auto schema = GetSchema(context, info->schema);
-	schema->AlterTable(context, info);
+	return schema->Alter(context, info);
 }
 
 void Catalog::ParseRangeVar(string input, string &schema, string &name) {
