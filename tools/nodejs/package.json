@@ -1,6 +1,6 @@
 {
   "name": "node_duckdb",
-  "main": "./lib/duckdb.js", 
+  "main": "./lib/duckdb.js",
   "version": "0.2.2",
   "description": "DuckDB node.js API",
   "private": true,
@@ -20,5 +20,11 @@
     "napi_versions": [
       3
     ]
+  },
+  "scripts": {
+    "install": "node-pre-gyp install --fallback-to-build",
+    "pretest": "node test/support/createdb.js",
+    "test": "mocha -R spec --timeout 480000",
+    "pack": "node-pre-gyp package"
   }
 }
