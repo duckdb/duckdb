@@ -1,7 +1,7 @@
 {
     "targets": [
         {
-            "target_name": "node_duckdb",
+            "target_name": "<(module_name)",
             "sources": [
                  "src/node_duckdb.cc",
                 "src/database.cc",
@@ -36,7 +36,9 @@
         {
       "target_name": "action_after_build",
       "type": "none",
-      "dependencies": [ "<(module_name)" ],
+            "dependencies": [
+              "<!(node -p \"require('node-addon-api').gyp\")"
+            ],
       "copies": [
           {
             "files": [ "<(PRODUCT_DIR)/<(module_name).node" ],
