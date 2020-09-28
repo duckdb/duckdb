@@ -953,6 +953,8 @@ struct DuckDBPyConnection {
 		auto datetime_date = datetime_mod.attr("date");
 		auto datetime_datetime = datetime_mod.attr("datetime");
 		auto datetime_time = datetime_mod.attr("time");
+		auto decimal_mod = py::module::import("decimal");
+		auto decimal_decimal = decimal_mod.attr("Decimal");
 
 		for (auto &ele : params) {
 			if (ele.is_none()) {
@@ -965,6 +967,8 @@ struct DuckDBPyConnection {
 				args.push_back(Value::DOUBLE(ele.cast<double>()));
 			} else if (py::isinstance<py::str>(ele)) {
 				args.push_back(Value(ele.cast<string>()));
+			} else if (py::isinstance(ele, decimal_decimal)) {
+				args.push_back(Value(py::str(ele).cast<string>()));
 			} else if (py::isinstance(ele, datetime_datetime)) {
 				auto year = PyDateTime_GET_YEAR(ele.ptr());
 				auto month = PyDateTime_GET_MONTH(ele.ptr());
