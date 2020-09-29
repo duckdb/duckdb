@@ -51,7 +51,7 @@ struct AlterTableInfo : public AlterInfo {
 	AlterTableInfo(AlterTableType type, string schema, string table)
 	    : AlterInfo(AlterType::ALTER_TABLE, schema, table), alter_table_type(type) {
 	}
-	virtual ~AlterTableInfo() override {
+	~AlterTableInfo() override {
 	}
 
 	AlterTableType alter_table_type;
@@ -60,7 +60,7 @@ public:
 	CatalogType GetCatalogType() override {
 		return CatalogType::TABLE_ENTRY;
 	}
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
 
@@ -195,7 +195,7 @@ struct AlterViewInfo : public AlterInfo {
 	AlterViewInfo(AlterViewType type, string schema, string view)
 	    : AlterInfo(AlterType::ALTER_VIEW, schema, view), alter_view_type(type) {
 	}
-	virtual ~AlterViewInfo() override {
+	~AlterViewInfo() override {
 	}
 
 	AlterViewType alter_view_type;
@@ -204,7 +204,7 @@ public:
 	CatalogType GetCatalogType() override {
 		return CatalogType::VIEW_ENTRY;
 	}
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
 
