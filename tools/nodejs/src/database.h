@@ -12,6 +12,7 @@
 
 
 #define DUCKDB_NODEJS_ERROR -1
+#define DUCKDB_NODEJS_READONLY 0x00000001
 
 //#include "async.h"
 

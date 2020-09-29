@@ -126,14 +126,10 @@ Database::Database(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Database>(
 
     unsigned int pos = 1;
 
-//    int mode;
-//    if (info.Length() >= pos && info[pos].IsNumber() && OtherIsInt(info[pos].As<Napi::Number>())) {
-//        mode = info[pos++].As<Napi::Number>().Int32Value();
-//    }
-//    else {
-//		// FIXME
-//       // mode = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
-//    }
+	int mode = 0;
+    if (info.Length() >= pos && info[pos].IsNumber() && OtherIsInt(info[pos].As<Napi::Number>())) {
+        mode = info[pos++].As<Napi::Number>().Int32Value();
+    }
 
     Napi::Function callback;
     if (info.Length() >= pos && info[pos].IsFunction()) {
@@ -141,10 +137,10 @@ Database::Database(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Database>(
     }
 
     info.This().As<Napi::Object>().DefineProperty(Napi::PropertyDescriptor::Value("filename", info[0].As<Napi::String>(), napi_default));
-    //info.This().As<Napi::Object>().DefineProperty(Napi::PropertyDescriptor::Value("mode", Napi::Number::New(env, mode), napi_default));
+    info.This().As<Napi::Object>().DefineProperty(Napi::PropertyDescriptor::Value("mode", Napi::Number::New(env, mode), napi_default));
 
     // Start opening the database.
-    OpenBaton* baton = new OpenBaton(this, callback, filename.c_str(), 0);
+    OpenBaton* baton = new OpenBaton(this, callback, filename.c_str(), mode);
     Work_BeginOpen(baton);
 }
 
@@ -161,12 +157,16 @@ void Database::Work_BeginOpen(Baton* baton) {
 void Database::Work_Open(napi_env e, void* data) {
     OpenBaton* baton = static_cast<OpenBaton*>(data);
     Database* db = baton->db;
+    duckdb::DBConfig config;
+	if ((baton->mode & DUCKDB_NODEJS_READONLY) != 0) {
+		config.access_mode = duckdb::AccessMode::READ_ONLY;
+	}
 
 	try {
-		db->_db_handle = make_unique<duckdb::DuckDB>(baton->filename);
+		db->_db_handle = make_unique<duckdb::DuckDB>(baton->filename, &config);
         db->_conn_handle = make_unique<duckdb::Connection>(*db->_db_handle);
     } catch (...) {
-		baton->status = DUCKDB_NODEJS_CANTOPEN;
+		baton->status = DUCKDB_NODEJS_ERROR;
 		baton->message = "Failed to open database " + baton->filename;
 	}
 }
@@ -249,9 +249,13 @@ void Database::Work_Close(napi_env e, void* data) {
     Baton* baton = static_cast<Baton*>(data);
     Database* db = baton->db;
 
+	if (!db->_db_handle) {
+        baton->message = std::string("Database was already closed");
+		baton->status = DUCKDB_NODEJS_ERROR;
+        return;
+    }
 	db->_conn_handle.reset();
     db->_db_handle.reset();
-
 }
 
 void Database::Work_AfterClose(napi_env e, napi_status status, void* data) {

@@ -12,11 +12,13 @@ describe('parallel', function() {
 
     var columns = [];
     for (var i = 0; i < 128; i++) {
-        columns.push('id' + i);
+        columns.push('id' + i + " INTEGER");
     }
 
     it('should create the table', function(done) {
-        db.run("CREATE TABLE foo (" + columns + ")", done);
+        db.run("CREATE TABLE foo (" + columns + ")", function(err) {
+            done();
+        });
     });
 
     it('should insert in parallel', function(done) {

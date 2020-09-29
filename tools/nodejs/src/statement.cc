@@ -286,7 +286,6 @@ void Statement::Work_BeginBind(Baton* baton) {
 
 void Statement::Work_Bind(napi_env e, void* data) {
     STATEMENT_INIT(Baton);
-	printf("work_bind()\n");
 	stmt->Bind(baton->parameters);
 }
 
@@ -328,27 +327,34 @@ static Napi::Value convert_chunk(Napi::Env& env, vector<string> names, duckdb::D
         for (duckdb::idx_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
             Napi::Value value;
 
+            auto dval = chunk.GetValue(col_idx, row_idx);
+            if (dval.is_null) {
+                row_result.Set(node_names[col_idx], env.Null());
+				continue;
+            }
+
             // TODO templateroo here
-            // TODO NULL handling
             switch (chunk.data[col_idx].type.id()) {
             case duckdb::LogicalTypeId::INTEGER: {
-                value = Napi::Number::New(env, chunk.GetValue(col_idx, row_idx).value_.integer);
+                value = Napi::Number::New(env, dval.value_.integer);
+            } break;
+            case duckdb::LogicalTypeId::FLOAT: {
+                value = Napi::Number::New(env, dval.value_.float_);
             } break;
             case duckdb::LogicalTypeId::BIGINT: {
-                value = Napi::Number::New(env, chunk.GetValue(col_idx, row_idx).value_.bigint);
+                value = Napi::Number::New(env, dval.value_.bigint);
             } break;
             case duckdb::LogicalTypeId::VARCHAR: {
-                value = Napi::String::New(env, chunk.GetValue(col_idx, row_idx).str_value);
+                value = Napi::String::New(env, dval.str_value);
             } break;
-
-                //                            case SQLITE_BLOB: {
-                //                                value = Napi::Buffer<char>::Copy(env, ((Values::Blob*)field)->value, ((Values::Blob*)field)->length);
-                //                            } break;
+            case duckdb::LogicalTypeId::BLOB: {
+                value = Napi::Buffer<char>::Copy(env, dval.str_value.c_str(), dval.str_value.length());
+            } break;
             case duckdb::LogicalTypeId::SQLNULL: {
                 value = env.Null();
             } break;
             default:
-                Napi::Error::New(env, "Data type is not supported " + chunk.data[col_idx].type.ToString()).ThrowAsJavaScriptException();
+                Napi::Error::New(env, "Data type is not supported " + dval.type().ToString()).ThrowAsJavaScriptException();
                 return env.Null();
             }
             row_result.Set(node_names[col_idx], value);
@@ -414,7 +420,7 @@ void Statement::Work_AfterGet(napi_env e, napi_status status, void* data) {
                 // error was set before
                 return;
             }
-			
+
             // Create the result array from the data we acquired.
             Napi::Value argv[] = { env.Null(), chunk_converted.Get((uint32_t)0) };
             TRY_CATCH_CALL(stmt->Value(), cb, 2, argv);
