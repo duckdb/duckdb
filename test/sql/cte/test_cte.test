@@ -16,6 +16,11 @@ with cte1 as (Select i as j from a) select * from cte1;
 ----
 42
 
+query I
+with cte1(xxx) as (Select i as j from a) select xxx from cte1;
+----
+42
+
 query II
 with cte1 as (Select i as j from a), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) select * from cte2 , cte3;
 ----

@@ -45,6 +45,7 @@ struct BinaryLambdaWrapper {
 struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+
 	static void ExecuteFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
 	                            RESULT_TYPE *__restrict result_data, idx_t count, nullmask_t &nullmask, FUNC fun) {
 		if (!LEFT_CONSTANT) {
@@ -53,7 +54,11 @@ struct BinaryExecutor {
 		if (!RIGHT_CONSTANT) {
 			ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 		}
-		if (IGNORE_NULL && nullmask.any()) {
+		if (
+#ifdef DUCKDB_ALLOW_UNDEFINED
+		    IGNORE_NULL &&
+#endif
+		    nullmask.any()) {
 			for (idx_t i = 0; i < count; i++) {
 				if (!nullmask[i]) {
 					auto lentry = ldata[LEFT_CONSTANT ? 0 : i];

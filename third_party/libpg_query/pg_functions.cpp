@@ -49,13 +49,15 @@ static void allocate_new(parser_state *state, size_t n) {
 }
 
 void *palloc(size_t n) {
-	if (pg_parser_state.malloc_pos + n > PG_MALLOC_SIZE) {
-		allocate_new(&pg_parser_state, n);
+	// we need to align our pointers for the sanitizer
+	auto aligned_n = ((n + 7) / 8) * 8;
+	if (pg_parser_state.malloc_pos + aligned_n > PG_MALLOC_SIZE) {
+		allocate_new(&pg_parser_state, aligned_n);
 	}
 
 	void *ptr = pg_parser_state.malloc_ptrs[pg_parser_state.malloc_ptr_idx - 1] + pg_parser_state.malloc_pos;
 	memset(ptr, 0, n);
-	pg_parser_state.malloc_pos += n;
+	pg_parser_state.malloc_pos += aligned_n;
 	return ptr;
 }
 
@@ -224,4 +226,10 @@ unsigned char *unicode_to_utf8(pg_wchar c, unsigned char *utf8string) {
 	throw std::runtime_error("unicode_to_utf8 NOT IMPLEMENTED");
 }
 
+// this replaces a brain damaged macro in nodes.hpp
+PGNode *newNode(size_t size, PGNodeTag type) {
+	auto result = (PGNode *)palloc0fast(size);
+	result->type = type;
+	return result;
+}
 }

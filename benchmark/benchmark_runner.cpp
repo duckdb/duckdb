@@ -53,34 +53,11 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
 		fs.CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
 	}
-	// first export the schema
-	// create two files, "[name].sql" and "[name].list"
-	// [name].sql contains the SQL used to re-create the tables
-	// [name].list contains a list of the exported tables
-	ofstream sql_file(fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name + ".sql"));
-	ofstream list_file(fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name + ".list"));
-
-	vector<string> table_list;
 	Connection con(db);
-	auto result = con.Query("SELECT name, sql FROM sqlite_master()");
-	for (auto &row : *result) {
-		auto table_name = row.GetValue<string>(0);
-		auto table_sql = row.GetValue<string>(1);
-		table_list.push_back(table_name);
-
-		list_file << table_name << std::endl;
-		sql_file << table_sql << std::endl;
-	}
-	sql_file.close();
-	list_file.close();
-
-	// now for each table, write it to a separate file "[name]_[tablename].csv"
-	for (auto &table : table_list) {
-		auto target_path = fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name + "_" + table + ".csv");
-		result = con.Query("COPY " + table + " TO '" + target_path + "'");
-		if (!result->success) {
-			throw Exception("Failed to save database: " + result->error);
-		}
+	auto result = con.Query(
+	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT CSV)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
+	if (!result->success) {
+		throw Exception("Failed to save database: " + result->error);
 	}
 }
 
@@ -89,32 +66,15 @@ bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
 	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
 		return false;
 	}
-	auto sql_fname = fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name + ".sql");
-	auto list_fname = fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name + ".list");
-	// check if the [name].list and [name].sql files exist
-	if (!fs.FileExists(list_fname) || !fs.FileExists(sql_fname)) {
+	string base_dir = fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name);
+	// check if the [name]/schema.sql file exists
+	if (!fs.FileExists(fs.JoinPath(base_dir, "schema.sql"))) {
 		return false;
 	}
 	Connection con(db);
-	// the files exist, load the data into the database
-	// first load the entire SQL and execute it
-	ifstream sql_file(sql_fname);
-	std::stringstream buffer;
-	buffer << sql_file.rdbuf();
-	auto result = con.Query(buffer.str());
+	auto result = con.Query(StringUtil::Format("IMPORT DATABASE '%s'", base_dir));
 	if (!result->success) {
 		throw Exception("Failed to load database: " + result->error);
-	}
-	// now read the tables line by line
-	ifstream list_file(list_fname);
-	string table_name;
-	while (getline(list_file, table_name)) {
-		// for each table, copy the files
-		auto target_path = fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name + "_" + table_name + ".csv");
-		result = con.Query("COPY " + table_name + " FROM '" + target_path + "'");
-		if (!result->success) {
-			throw Exception("Failed to load database: " + result->error);
-		}
 	}
 	return true;
 }
@@ -255,9 +215,6 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const 
 		if (arg == "--list") {
 			// list names of all benchmarks
 			for (auto &benchmark : benchmarks) {
-				if (StringUtil::StartsWith(benchmark->name, "sqlite_")) {
-					continue;
-				}
 				fprintf(stdout, "%s\n", benchmark->name.c_str());
 			}
 			exit(0);
@@ -316,12 +273,16 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 		for (idx_t index = 0; index < benchmarks.size(); ++index) {
 			if (RE2::FullMatch(benchmarks[index]->name, configuration.name_pattern)) {
 				benchmark_indices.emplace_back(index);
+			} else if (RE2::FullMatch(benchmarks[index]->group, configuration.name_pattern)) {
+				benchmark_indices.emplace_back(index);
 			}
 		}
 		benchmark_indices.shrink_to_fit();
 		if (benchmark_indices.empty()) {
 			return ConfigurationError::BenchmarkNotFound;
 		}
+		std::sort(benchmark_indices.begin(), benchmark_indices.end(),
+		          [&](const int a, const int b) -> bool { return benchmarks[a]->name < benchmarks[b]->name; });
 		if (configuration.meta == BenchmarkMetaType::INFO) {
 			// print info of benchmarks
 			for (const auto &benchmark_index : benchmark_indices) {

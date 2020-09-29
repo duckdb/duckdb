@@ -5,7 +5,7 @@
 require vector_size 512
 
 statement ok
-CREATE TABLE greek_utf8 AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/greek_utf8.csv');
+CREATE TABLE greek_utf8 AS SELECT i, nfc_normalize(j) j, k FROM read_csv_auto ('test/sql/copy/csv/data/real/greek_utf8.csv') t(i, j, k)
 
 query I
 SELECT COUNT(*) FROM greek_utf8;

@@ -18,24 +18,25 @@ Parser::Parser() {
 }
 
 void Parser::ParseQuery(string query) {
-	PostgresParser parser;
-	parser.Parse(query);
-
-	if (!parser.success) {
-		throw ParserException("%s [%d]", parser.error_message.c_str(), parser.error_location);
-	}
-
-	if (!parser.parse_tree) {
-		// empty statement
-		return;
-	}
-
-	// if it succeeded, we transform the Postgres parse tree into a list of
-	// SQLStatements
 	Transformer transformer;
-	transformer.TransformParseTree(parser.parse_tree, statements);
-	n_prepared_parameters = transformer.ParamCount();
+	{
+		PostgresParser parser;
+		parser.Parse(query);
 
+		if (!parser.success) {
+			throw ParserException("%s [%d]", parser.error_message.c_str(), parser.error_location);
+		}
+
+		if (!parser.parse_tree) {
+			// empty statement
+			return;
+		}
+
+		// if it succeeded, we transform the Postgres parse tree into a list of
+		// SQLStatements
+		transformer.TransformParseTree(parser.parse_tree, statements);
+		n_prepared_parameters = transformer.ParamCount();
+	}
 	if (statements.size() > 0) {
 		auto &last_statement = statements.back();
 		last_statement->stmt_length = query.size() - last_statement->stmt_location;
@@ -128,7 +129,7 @@ vector<ColumnDefinition> Parser::ParseColumnList(string column_list) {
 		throw ParserException("Expected a single CREATE statement");
 	}
 	auto &create = (CreateStatement &)*parser.statements[0];
-	if (create.info->type != CatalogType::TABLE) {
+	if (create.info->type != CatalogType::TABLE_ENTRY) {
 		throw ParserException("Expected a single CREATE TABLE statement");
 	}
 	auto &info = ((CreateTableInfo &)*create.info);

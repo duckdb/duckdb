@@ -73,8 +73,13 @@ template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, i
 	auto target = (T *)out->columns[col].data;
 	for (auto &chunk : source.chunks) {
 		auto source = FlatVector::GetData<T>(chunk->data[col]);
-		for (idx_t k = 0; k < chunk->size(); k++) {
-			target[row++] = source[k];
+		auto &nullmask = FlatVector::Nullmask(chunk->data[col]);
+
+		for (idx_t k = 0; k < chunk->size(); k++, row++) {
+			if (nullmask[k]) {
+				continue;
+			}
+			target[row] = source[k];
 		}
 	}
 }
@@ -144,7 +149,6 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::FLOAT:
 			WriteData<float>(out, result->collection, col);
 			break;
-		case LogicalTypeId::DECIMAL:
 		case LogicalTypeId::DOUBLE:
 			WriteData<double>(out, result->collection, col);
 			break;
@@ -428,7 +432,6 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 		return DUCKDB_TYPE_HUGEINT;
 	case LogicalTypeId::FLOAT:
 		return DUCKDB_TYPE_FLOAT;
-	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
 	case LogicalTypeId::TIMESTAMP:
@@ -546,6 +549,13 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		assert(0);
 		return Value();
 	}
+}
+
+const char *duckdb_column_name(duckdb_result *result, idx_t col) {
+	if (!result || col >= result->column_count) {
+		return NULL;
+	}
+	return result->columns[col].name;
 }
 
 bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {

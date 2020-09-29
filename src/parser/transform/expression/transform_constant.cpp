@@ -2,6 +2,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -16,30 +17,52 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 	case T_PGString:
 		return make_unique<ConstantExpression>(Value(string(val.val.str)));
 	case T_PGFloat: {
-		bool cast_as_double = false;
-		for (auto ptr = val.val.str; *ptr; ptr++) {
-			if (*ptr == '.' || *ptr == 'e') {
-				// found decimal point or exponent, cast as double
-				cast_as_double = true;
-				break;
+		string_t str_val(val.val.str);
+		bool try_cast_as_integer = true;
+		bool try_cast_as_decimal = true;
+		int decimal_position = -1;
+		for (idx_t i = 0; i < str_val.GetSize(); i++) {
+			if (val.val.str[i] == '.') {
+				// decimal point: cast as either decimal or double
+				try_cast_as_integer = false;
+				decimal_position = i;
+			}
+			if (val.val.str[i] == 'e' || val.val.str[i] == 'E') {
+				// found exponent, cast as double
+				try_cast_as_integer = false;
+				try_cast_as_decimal = false;
 			}
 		}
-		if (!cast_as_double) {
+		if (try_cast_as_integer) {
 			int64_t bigint_value;
 			// try to cast as bigint first
-			if (TryCast::Operation<string_t, int64_t>(string_t(val.val.str), bigint_value)) {
+			if (TryCast::Operation<string_t, int64_t>(str_val, bigint_value)) {
 				// successfully cast to bigint: bigint value
 				return make_unique<ConstantExpression>(Value::BIGINT(bigint_value));
 			}
 			hugeint_t hugeint_value;
 			// if that is not successful; try to cast as hugeint
-			if (TryCast::Operation<string_t, hugeint_t>(string_t(val.val.str), hugeint_value)) {
+			if (TryCast::Operation<string_t, hugeint_t>(str_val, hugeint_value)) {
 				// successfully cast to bigint: bigint value
 				return make_unique<ConstantExpression>(Value::HUGEINT(hugeint_value));
 			}
 		}
+		if (try_cast_as_decimal && decimal_position >= 0) {
+			// figure out the width/scale based on the decimal position
+			int width = str_val.GetSize() - 1;
+			int scale = width - decimal_position;
+			if (val.val.str[0] == '-') {
+				width--;
+			}
+			if (width <= Decimal::MAX_WIDTH_DECIMAL) {
+				// we can cast the value as a decimal
+				Value val = Value(str_val);
+				val = val.CastAs(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+				return make_unique<ConstantExpression>(move(val));
+			}
+		}
 		// if there is a decimal or the value is too big to cast as either hugeint or bigint
-		double dbl_value = Cast::Operation<string_t, double>(string_t(val.val.str));
+		double dbl_value = Cast::Operation<string_t, double>(str_val);
 		if (!Value::DoubleIsValid(dbl_value)) {
 			throw ParserException("Double value \"%s\" is out of range!", val.val.str);
 		}

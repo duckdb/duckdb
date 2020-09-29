@@ -120,6 +120,20 @@ public:
 		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
 	}
 
+	//! A generic CreateAggregateFunction ---------------------------------------------------------------------------//
+	static AggregateFunction CreateAggregateFunction(string name, vector<LogicalType> arguments,
+	                                                 LogicalType return_type, aggregate_size_t state_size,
+	                                                 aggregate_initialize_t initialize, aggregate_update_t update,
+	                                                 aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                                                 aggregate_simple_update_t simple_update = nullptr,
+	                                                 bind_aggregate_function_t bind = nullptr,
+	                                                 aggregate_destructor_t destructor = nullptr) {
+
+		AggregateFunction aggr_function(name, arguments, return_type, state_size, initialize, update, combine, finalize,
+		                                simple_update, bind, destructor);
+		return aggr_function;
+	}
+
 	static void RegisterAggrFunction(AggregateFunction aggr_function, ClientContext &context,
 	                                 LogicalType varargs = LogicalType::INVALID);
 
@@ -306,7 +320,6 @@ private:
 		case LogicalTypeId::FLOAT:
 			return std::is_same<T, float>();
 		case LogicalTypeId::DOUBLE:
-		case LogicalTypeId::DECIMAL:
 			return std::is_same<T, double>();
 		case LogicalTypeId::VARCHAR:
 		case LogicalTypeId::CHAR:
@@ -327,6 +340,7 @@ private:
 		LogicalType input_type = GetArgumentType<TA>();
 		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, return_type, input_type);
 	}
+
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
 	static AggregateFunction CreateUnaryAggregateFunction(string name, LogicalType ret_type, LogicalType input_type) {
 		AggregateFunction aggr_function =
@@ -351,7 +365,6 @@ private:
 		aggr_function.name = name;
 		return aggr_function;
 	}
-
 }; // end UDFWrapper
 
 } // namespace duckdb

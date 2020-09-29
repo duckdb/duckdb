@@ -30,23 +30,23 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// comparison with constant NULL, return NULL
 		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
-	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST &&
-	    constant_expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
+	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST) {
 		//! Here we check if we can apply the expression on the constant side
 		auto cast_expression = (BoundCastExpression *)column_ref_expr;
 		auto target_type = cast_expression->source_type();
 		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression->return_type)) {
 			return nullptr;
 		}
-		auto bound_const_expr = (BoundConstantExpression *)constant_expr;
-		auto new_constant = bound_const_expr->value.TryCastAs(target_type);
+		auto new_constant = constant_value.TryCastAs(target_type);
 		if (new_constant) {
 			auto child_expression = move(cast_expression->child);
-			constant_expr->return_type = target_type;
+			auto new_constant_expr = make_unique<BoundConstantExpression>(constant_value);
 			//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
 			if (column_ref_left) {
 				expr->left = move(child_expression);
+				expr->right = move(new_constant_expr);
 			} else {
+				expr->left = move(new_constant_expr);
 				expr->right = move(child_expression);
 			}
 		}

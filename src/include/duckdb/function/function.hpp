@@ -23,10 +23,13 @@ class Transaction;
 class AggregateFunction;
 class AggregateFunctionSet;
 class CopyFunction;
+class PragmaFunction;
 class ScalarFunctionSet;
 class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
+
+struct PragmaInfo;
 
 struct FunctionData {
 	virtual ~FunctionData() {
@@ -65,12 +68,19 @@ public:
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! or throws an exception if none could be found.
 	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions,
+	                          vector<unique_ptr<Expression>> &arguments);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
 	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments);
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions,
+	                          vector<unique_ptr<Expression>> &arguments);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
 	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments);
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments);
+	//! Bind a pragma function from the set of functions and input arguments
+	static idx_t BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info);
 };
 
 class SimpleFunction : public Function {
@@ -115,7 +125,7 @@ public:
 
 public:
 	//! Cast a set of expressions to the arguments of this function
-	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<LogicalType> &types);
+	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children);
 
 	string ToString() override {
 		return Function::CallToString(name, arguments, return_type);
@@ -133,6 +143,8 @@ public:
 	void AddFunction(AggregateFunctionSet set);
 	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunctionSet set);
+	void AddFunction(PragmaFunction function);
+	void AddFunction(string name, vector<PragmaFunction> functions);
 	void AddFunction(ScalarFunction function);
 	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunctionSet set);
@@ -155,6 +167,8 @@ private:
 	void RegisterSQLiteFunctions();
 	void RegisterReadFunctions();
 	void RegisterTableFunctions();
+	void RegisterArrowFunctions();
+	void RegisterInformationSchemaFunctions();
 
 	// aggregates
 	void RegisterAlgebraicAggregates();
@@ -170,6 +184,9 @@ private:
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
+
+	// pragmas
+	void RegisterPragmaFunctions();
 };
 
 } // namespace duckdb

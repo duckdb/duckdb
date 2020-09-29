@@ -1,0 +1,76 @@
+# name: test/sql/storage/catalog/test_rename_view.test
+# description: Test storage of alter view
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/test_rename_view.db
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+CREATE VIEW vtest AS SELECT * FROM test
+
+statement ok
+BEGIN TRANSACTION
+
+query I
+SELECT a FROM vtest ORDER BY a
+----
+11
+12
+13
+
+statement ok
+ALTER VIEW vtest RENAME TO new_name
+
+query I
+SELECT a FROM new_name ORDER BY 1
+----
+11
+12
+13
+
+statement ok
+ROLLBACK
+
+# restart the database
+restart
+
+statement ok
+BEGIN TRANSACTION
+
+# verify that the table is still there in the original form
+query I
+SELECT a FROM vtest ORDER BY a
+----
+11
+12
+13
+
+# now repeat the process, but this time commit
+statement ok
+ALTER VIEW vtest RENAME TO new_name
+
+query I
+SELECT a FROM new_name ORDER BY 1
+----
+11
+12
+13
+
+statement ok
+COMMIT
+
+restart
+
+# after a restart, the renamed table is still here
+query I
+SELECT a FROM new_name ORDER BY 1
+----
+11
+12
+13

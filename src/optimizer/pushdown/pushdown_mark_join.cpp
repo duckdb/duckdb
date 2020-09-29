@@ -17,7 +17,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 
 	right_bindings.insert(comp_join.mark_index);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
+#ifndef NDEBUG
 	bool found_mark_reference = false;
+#endif
 	// now check the set of filters
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
@@ -29,8 +31,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			i--;
 		} else if (side == JoinSide::RIGHT) {
 			// there can only be at most one filter referencing the marker
+#ifndef NDEBUG
 			assert(!found_mark_reference);
 			found_mark_reference = true;
+#endif
 			// this filter references the marker
 			// we can turn this into a SEMI join if the filter is on only the marker
 			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {

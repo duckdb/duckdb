@@ -5,3 +5,7 @@ endif()
 if(${BUILD_PARQUET_EXTENSION})
   add_subdirectory(parquet)
 endif()
+
+if(${BUILD_TPCH_EXTENSION})
+  add_subdirectory(tpch)
+endif()

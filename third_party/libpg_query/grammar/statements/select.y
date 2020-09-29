@@ -1279,7 +1279,7 @@ opt_float:	'(' Iconst ')'
 				}
 			| /*EMPTY*/
 				{
-					$$ = SystemTypeName("float8");
+					$$ = SystemTypeName("float4");
 				}
 		;
 
@@ -1633,6 +1633,11 @@ a_expr:		c_expr									{ $$ = $1; }
 			| NOT_LA a_expr						%prec NOT
 				{ $$ = makeNotExpr($2, @1); }
 
+			| a_expr GLOB a_expr %prec GLOB
+				{
+					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_GLOB, "~~~",
+												   $1, $3, @2);
+				}
 			| a_expr LIKE a_expr
 				{
 					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_LIKE, "~~",
@@ -2682,6 +2687,10 @@ subquery_Op:
 					{ $$ = list_make1(makeString("~~")); }
 			| NOT_LA LIKE
 					{ $$ = list_make1(makeString("!~~")); }
+			| GLOB
+					{ $$ = list_make1(makeString("~~~")); }
+			| NOT_LA GLOB
+					{ $$ = list_make1(makeString("!~~~")); }
 			| ILIKE
 					{ $$ = list_make1(makeString("~~*")); }
 			| NOT_LA ILIKE

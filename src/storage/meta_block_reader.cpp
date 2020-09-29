@@ -31,7 +31,7 @@ void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	handle = manager.Pin(id);
 
-	next_block = *((block_id_t *)handle->node->buffer);
+	next_block = Load<block_id_t>(handle->node->buffer);
 	offset = sizeof(block_id_t);
 }
 

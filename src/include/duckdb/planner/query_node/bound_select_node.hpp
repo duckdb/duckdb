@@ -70,4 +70,4 @@ public:
 		return need_prune ? prune_index : projection_index;
 	}
 };
-}; // namespace duckdb
+} // namespace duckdb

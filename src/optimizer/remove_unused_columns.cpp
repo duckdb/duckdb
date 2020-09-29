@@ -10,13 +10,14 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_table_function.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -61,12 +62,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
 				aggr.expressions.push_back(
-				    make_unique<BoundAggregateExpression>(count_star_fun.return_type, count_star_fun, false));
+				    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, false));
 			}
 		}
 
 		// then recurse into the children of the aggregate
-		RemoveUnusedColumns remove;
+		RemoveUnusedColumns remove(binder, context);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
 		return;
@@ -108,13 +109,55 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::ANY_JOIN:
 		break;
 	case LogicalOperatorType::UNION:
+		if (!everything_referenced) {
+			// for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
+			// encounter a UNION node that is not preceded by a DISTINCT)
+			// this happens when UNION ALL is used
+			auto &setop = (LogicalSetOperation &)op;
+			vector<idx_t> entries;
+			for (idx_t i = 0; i < setop.column_count; i++) {
+				entries.push_back(i);
+			}
+			ClearUnusedExpressions(entries, setop.table_index);
+			if (entries.size() < setop.column_count) {
+				if (entries.size() == 0) {
+					// no columns referenced: this happens in the case of a COUNT(*)
+					// extract the first column
+					entries.push_back(0);
+				}
+				// columns were cleared
+				setop.column_count = entries.size();
+
+				for(idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
+					RemoveUnusedColumns remove(binder, context, true);
+					auto &child = op.children[child_idx];
+
+					// we push a projection under this child that references the required columns of the union
+					child->ResolveOperatorTypes();
+					auto bindings = child->GetColumnBindings();
+					vector<unique_ptr<Expression>> expressions;
+					for (auto &column_idx : entries) {
+						expressions.push_back(make_unique<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+					}
+					auto new_projection = make_unique<LogicalProjection>(binder.GenerateTableIndex(), move(expressions));
+					new_projection->children.push_back(move(child));
+					op.children[child_idx] = move(new_projection);
+
+					remove.VisitOperator(*op.children[child_idx]);
+				}
+				return;
+			}
+		}
+		for (auto &child : op.children) {
+			RemoveUnusedColumns remove(binder, context, true);
+			remove.VisitOperator(*child);
+		}
+		return;
 	case LogicalOperatorType::EXCEPT:
 	case LogicalOperatorType::INTERSECT:
-		// for set operations we don't remove anything, just recursively visit the children
-		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
-		// encounter a UNION node that is not preceded by a DISTINCT)
+		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
 		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(true);
+			RemoveUnusedColumns remove(binder, context, true);
 			remove.VisitOperator(*child);
 		}
 		return;
@@ -131,7 +174,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		// then recurse into the children of this projection
-		RemoveUnusedColumns remove;
+		RemoveUnusedColumns remove(binder, context);
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(*op.children[0]);
 		return;
@@ -140,6 +183,24 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
+			// for every table filter, push a column binding into the column references map to prevent the column from
+			// being projected out
+			for (auto &filter : get.tableFilters) {
+				idx_t index = INVALID_INDEX;
+				for (idx_t i = 0; i < get.column_ids.size(); i++) {
+					if (get.column_ids[i] == filter.column_index) {
+						index = i;
+						break;
+					}
+				}
+				if (index == INVALID_INDEX) {
+					throw InternalException("Could not find column index for table filter");
+				}
+				ColumnBinding filter_binding(get.table_index, index);
+				if (column_references.find(filter_binding) == column_references.end()) {
+					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
+				}
+			}
 			// table scan: figure out which columns are referenced
 			ClearUnusedExpressions(get.column_ids, get.table_index);
 
@@ -151,19 +212,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
-	case LogicalOperatorType::TABLE_FUNCTION: {
-		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		auto &fun = (LogicalTableFunction &)op;
-		if (!everything_referenced && fun.function.supports_projection) {
-			// table producing function: figure out which columns are referenced
-			ClearUnusedExpressions(fun.column_ids, fun.table_index);
-			// see above for this special case
-			if (fun.column_ids.size() == 0) {
-				fun.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-			}
-		}
-		return;
-	}
 	case LogicalOperatorType::DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children

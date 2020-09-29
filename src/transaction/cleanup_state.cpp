@@ -21,13 +21,16 @@ CleanupState::~CleanupState() {
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
-		CatalogEntry *catalog_entry = *((CatalogEntry **)data);
+		auto catalog_entry = Load<CatalogEntry *>(data);
 		// destroy the backed up entry: it is no longer required
 		assert(catalog_entry->parent);
 		if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
-			if (!catalog_entry->parent->child->deleted) {
+			if (!catalog_entry->deleted) {
 				// delete the entry from the dependency manager, if it is not deleted yet
-				catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry->parent->child.get());
+				catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
+			}
+			if (catalog_entry->name != catalog_entry->parent->name) {
+				catalog_entry->set->ClearEntryName(catalog_entry->name);
 			}
 			catalog_entry->parent->child = move(catalog_entry->child);
 		}

@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tokens.hpp"
 
 #include "pg_definitions.hpp"
@@ -21,6 +22,8 @@ namespace duckdb {
 
 class ColumnDefinition;
 struct OrderByNode;
+struct CopyInfo;
+struct CommonTableExpressionInfo;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -59,11 +62,11 @@ private:
 	// Statement transformation
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres T_PGSelectStmt node into a SelectStatement
-	unique_ptr<SelectStatement> TransformSelect(duckdb_libpgquery::PGNode *node);
-	//! Transform a Postgres T_AlterStmt node into a AlterTableStatement
-	unique_ptr<AlterTableStatement> TransformAlter(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SelectStatement> TransformSelect(duckdb_libpgquery::PGNode *node, bool isSelect = true);
+	//! Transform a Postgres T_AlterStmt node into a AlterStatement
+	unique_ptr<AlterStatement> TransformAlter(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGRenameStmt node into a RenameStatement
-	unique_ptr<AlterTableStatement> TransformRename(duckdb_libpgquery::PGNode *node);
+	unique_ptr<AlterStatement> TransformRename(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGCreateStmt node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateTable(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGCreateStmt node into a CreateStatement
@@ -82,6 +85,7 @@ private:
 	unique_ptr<InsertStatement> TransformInsert(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGCopyStmt node into a CopyStatement
 	unique_ptr<CopyStatement> TransformCopy(duckdb_libpgquery::PGNode *node);
+	void TransformCopyOptions(CopyInfo &info, duckdb_libpgquery::PGList *options);
 	//! Transform a Postgres T_PGTransactionStmt node into a TransactionStatement
 	unique_ptr<TransactionStatement> TransformTransaction(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_DeleteStatement node into a DeleteStatement
@@ -90,12 +94,17 @@ private:
 	unique_ptr<UpdateStatement> TransformUpdate(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGPragmaStmt node into a PragmaStatement
 	unique_ptr<PragmaStatement> TransformPragma(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres T_PGExportStmt node into a ExportStatement
+	unique_ptr<ExportStatement> TransformExport(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres T_PGImportStmt node into a PragmaStatement
+	unique_ptr<PragmaStatement> TransformImport(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExplainStatement> TransformExplain(duckdb_libpgquery::PGNode *node);
 	unique_ptr<VacuumStatement> TransformVacuum(duckdb_libpgquery::PGNode *node);
 	unique_ptr<PragmaStatement> TransformShow(duckdb_libpgquery::PGNode *node);
 
 	unique_ptr<PrepareStatement> TransformPrepare(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);
+	unique_ptr<CallStatement> TransformCall(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
 
 	//===--------------------------------------------------------------------===//
@@ -158,7 +167,8 @@ private:
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(duckdb_libpgquery::PGAlias *root);
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, SelectStatement &select);
-	unique_ptr<QueryNode> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node);
+	unique_ptr<QueryNode> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
+	                                            CommonTableExpressionInfo &info);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
 
@@ -183,7 +193,10 @@ private:
 	//! Transform a VALUES list into a set of expressions
 	unique_ptr<TableRef> TransformValuesList(duckdb_libpgquery::PGList *list);
 
-	//! Transform a Postgres TypeName string into a SQLType
+	//! Transform a range var into a (schema) qualified name
+	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar *root);
+
+	//! Transform a Postgres TypeName string into a LogicalType
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression

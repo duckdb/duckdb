@@ -54,5 +54,7 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateSequenceInfo> Deserialize(Deserializer &source);
+
+	string ToSQL() override;
 };
 } // namespace duckdb

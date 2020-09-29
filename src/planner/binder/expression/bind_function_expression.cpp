@@ -20,9 +20,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindUnnest(function, depth);
 	}
 
-	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, function.schema,
+	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema,
 	                                                  function.function_name);
-	if (func->type == CatalogType::SCALAR_FUNCTION) {
+	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	} else {
@@ -42,31 +42,29 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	// all children bound successfully
 	// extract the children and types
-	vector<LogicalType> arguments;
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = (BoundExpression &)*function.children[i];
-		arguments.push_back(child.expr->return_type);
 		children.push_back(move(child.expr));
 	}
 	// special binder-only functions
 	// FIXME: these shouldn't be special
 	if (function.function_name == "alias") {
-		if (arguments.size() != 1) {
+		if (children.size() != 1) {
 			throw BinderException("alias function expects a single argument");
 		}
 		// alias function: returns the alias of the current expression, or the name of the child
 		string alias = !function.alias.empty() ? function.alias : children[0]->GetName();
 		return BindResult(make_unique<BoundConstantExpression>(Value(alias)));
 	} else if (function.function_name == "typeof") {
-		if (arguments.size() != 1) {
+		if (children.size() != 1) {
 			throw BinderException("typeof function expects a single argument");
 		}
 		// typeof function: returns the type of the child expression
-		string type = arguments[0].ToString();
+		string type = children[0]->return_type.ToString();
 		return BindResult(make_unique<BoundConstantExpression>(Value(type)));
 	}
-	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
+	auto result = ScalarFunction::BindScalarFunction(context, *func, move(children), function.is_operator);
 	return BindResult(move(result));
 }
 

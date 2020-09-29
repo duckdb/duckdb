@@ -18,6 +18,7 @@ struct BoundCreateTableInfo;
 struct AlterTableInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
+struct CreatePragmaFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
@@ -30,9 +31,11 @@ class AggregateFunctionCatalogEntry;
 class CollateCatalogEntry;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
+class ViewCatalogEntry;
 class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
 class CopyFunctionCatalogEntry;
+class PragmaFunctionCatalogEntry;
 class StorageManager;
 class CatalogSet;
 class DependencyManager;
@@ -64,6 +67,8 @@ public:
 	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
 	//! Create a copy function in the catalog
 	CatalogEntry *CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info);
+	//! Create a pragma function in the catalog
+	CatalogEntry *CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info);
 	//! Create a scalar or aggregate function in the catalog
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
 	//! Creates a table in the catalog.
@@ -85,8 +90,8 @@ public:
 	template <class T>
 	T *GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists = false);
 
-	//! Alter an existing table in the catalog.
-	void AlterTable(ClientContext &context, AlterTableInfo *info);
+	//! Alter an existing entry in the catalog.
+	void Alter(ClientContext &context, AlterInfo *info);
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to DEFAULT_SCHEMA
@@ -99,6 +104,8 @@ private:
 template <>
 TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 template <>
+ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
+template <>
 SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 template <>
 TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
@@ -106,6 +113,9 @@ TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string sche
 template <>
 CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                             bool if_exists);
+template <>
+PragmaFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                              bool if_exists);
 template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                                  bool if_exists);

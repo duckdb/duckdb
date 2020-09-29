@@ -125,7 +125,7 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	int sep;
 
 	// skip leading spaces
-	while (std::isspace((unsigned char)buf[pos])) {
+	while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
 		pos++;
 	}
 
@@ -163,7 +163,7 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	}
 
 	// check for an optional trailing " (BC)""
-	if (std::isspace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' && buf[pos + 3] == 'C' &&
+	if (StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' && buf[pos + 3] == 'C' &&
 	    buf[pos + 4] == ')') {
 		year = -year;
 		pos += 5;
@@ -172,7 +172,7 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
-		while (std::isspace((unsigned char)buf[pos])) {
+		while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
 			pos++;
 		}
 		// check position. if end was not reached, non-space chars remaining
@@ -240,6 +240,15 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 		return false;
 
 	return IsLeapYear(year) ? day <= LEAPDAYS[month] : day <= NORMALDAYS[month];
+}
+
+date_t Date::EpochDaysToDate(int32_t epoch) {
+	assert(epoch + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
+	return (date_t)(epoch + EPOCH_DATE);
+}
+
+int32_t Date::EpochDays(date_t date) {
+	return ((int32_t)date - EPOCH_DATE);
 }
 
 date_t Date::EpochToDate(int64_t epoch) {

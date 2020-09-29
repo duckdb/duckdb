@@ -1,39 +1,10 @@
 DBDIR_MEMORY <- ":memory:"
 
-#' @title DuckDB Driver
-#'
-#' @description A DuckDB database instance.
-#'
-#' @param dbdir The file in which the DuckDB database should be stored
-#' @param read_only Whether the database file should be opened in read-only mode
-#'
-#' @name duckdb_driver
-#' @import methods DBI
-#' @export
-#' @examples
-#' \dontrun{
-#' duckdb::duckdb()
-#' }
-#'
-duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE) {
-  check_flag(read_only)
-  new(
-    "duckdb_driver",
-    database_ref = .Call(duckdb_startup_R, dbdir, read_only),
-    dbdir = dbdir,
-    read_only = read_only
-  )
-}
-
 check_flag <- function(x) {
   if (is.null(x) || length(x) != 1 || is.na(x) || !is.logical(x)) {
     stop("flags need to be scalar logicals")
   }
 }
-
-#' @rdname duckdb_driver
-#' @export
-setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "externalptr", dbdir = "character", read_only = "logical"))
 
 extptr_str <- function(e, n = 5) {
   x <- .Call(duckdb_ptr_to_str, e)
@@ -47,21 +18,47 @@ drv_to_string <- function(drv) {
   sprintf("<duckdb_driver %s dbdir='%s' read_only=%s>", extptr_str(drv@database_ref), drv@dbdir, drv@read_only)
 }
 
-#' @rdname duckdb_driver
+#' @rdname duckdb_driver-class
 #' @inheritParams methods::show
 #' @export
 setMethod(
   "show", "duckdb_driver",
   function(object) {
-    cat(drv_to_string(object))
-    cat("\n")
+    message(drv_to_string(object))
+    invisible(NULL)
   }
 )
 
-#' @rdname duckdb_driver
-#' @inheritParams DBI::dbConnect
+#' Connect to a DuckDB database instance
+#'
+#' `dbConnect()` connects to a database instance.
+#'
+#' @param drv Object returned by `duckdb()`
+#' @param dbdir Location for database files. Should be a path to an existing
+#'   directory in the file system. With the default, all
+#'   data is kept in RAM
+#' @param ... Ignored
 #' @param debug Print additional debug information such as queries
+#' @param read_only Set to `TRUE` for read-only operation
+#'
+#' @return `dbConnect()` returns an object of class
+#'   \linkS4class{duckdb_connection}.
+#'
+#' @rdname duckdb
 #' @export
+#' @examples
+#' drv <- duckdb()
+#' con <- dbConnect(drv)
+#'
+#' dbGetQuery(con, "SELECT 'Hello, world!'")
+#'
+#' dbDisconnect(con)
+#' duckdb_shutdown(drv)
+#'
+#' # Shorter:
+#' con <- dbConnect(duckdb())
+#' dbGetQuery(con, "SELECT 'Hello, world!'")
+#' dbDisconnect(con, shutdown = TRUE)
 setMethod(
   "dbConnect", "duckdb_driver",
   function(drv, dbdir = DBDIR_MEMORY, ..., debug = getOption("duckdb.debug", FALSE), read_only = FALSE) {
@@ -82,8 +79,47 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_driver
-#' @inheritParams DBI::dbDataType
+#' @description
+#' `dbDisconnect()` closes a DuckDB database connection, optionally shutting down
+#' the associated instance.
+#'
+#' @param conn A `duckdb_connection` object
+#' @param shutdown Set to `TRUE` to shut down the DuckDB database instance that this connection refers to.
+#' @rdname duckdb
+#' @export
+setMethod(
+  "dbDisconnect", "duckdb_connection",
+  function(conn, ..., shutdown = FALSE) {
+    if (!dbIsValid(conn)) {
+      warning("Connection already closed.", call. = FALSE)
+    }
+    .Call(duckdb_disconnect_R, conn@conn_ref)
+    if (shutdown) {
+      duckdb_shutdown(conn@driver)
+    }
+
+    invisible(TRUE)
+  }
+)
+
+#' @description
+#' `duckdb()` creates or reuses a database instance.
+#'
+#' @return `duckdb()` returns an object of class \linkS4class{duckdb_driver}.
+#'
+#' @import methods DBI
+#' @export
+duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE) {
+  check_flag(read_only)
+  new(
+    "duckdb_driver",
+    database_ref = .Call(duckdb_startup_R, dbdir, read_only),
+    dbdir = dbdir,
+    read_only = read_only
+  )
+}
+
+#' @rdname duckdb_driver-class
 #' @export
 setMethod(
   "dbDataType", "duckdb_driver",
@@ -115,7 +151,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_driver
+#' @rdname duckdb_driver-class
 #' @inheritParams DBI::dbIsValid
 #' @importFrom DBI dbConnect
 #' @export
@@ -137,7 +173,7 @@ setMethod(
   }
 )
 
-#' @rdname duckdb_driver
+#' @rdname duckdb_driver-class
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -148,7 +184,12 @@ setMethod(
 )
 
 
-#' @rdname duckdb_driver
+#' @description
+#' `duckdb_shutdown()` shuts down a database instance.
+#'
+#' @return `dbDisconnect()` and `duckdb_shutdown()` are called for their
+#'   side effect.
+#' @rdname duckdb
 #' @export
 duckdb_shutdown <- function(drv) {
   if (!is(drv, "duckdb_driver")) {

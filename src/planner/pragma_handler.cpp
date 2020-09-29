@@ -1,16 +1,17 @@
 #include "duckdb/planner/pragma_handler.hpp"
-
-#include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
+
+#include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
+#include "duckdb/function/function.hpp"
+
+#include "duckdb/main/client_context.hpp"
+
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -18,82 +19,56 @@ using namespace std;
 PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
 }
 
-unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
-	string keyword = StringUtil::Lower(pragma.name);
-	if (keyword == "table_info") {
-		if (pragma.pragma_type != PragmaType::CALL) {
-			throw ParserException("Invalid PRAGMA table_info: expected table name");
+void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatement>> &statements) {
+	vector<unique_ptr<SQLStatement>> new_statements;
+	for (idx_t i = 0; i < statements.size(); i++) {
+		if (statements[i]->type == StatementType::PRAGMA_STATEMENT) {
+			// PRAGMA statement: check if we need to replace it by a new set of statements
+			PragmaHandler handler(context);
+			auto new_query = handler.HandlePragma(*((PragmaStatement &)*statements[i]).info);
+			if (!new_query.empty()) {
+				// this PRAGMA statement gets replaced by a new query string
+				// push the new query string through the parser again and add it to the transformer
+				Parser parser;
+				parser.ParseQuery(new_query);
+				// insert the new statements and remove the old statement
+				// FIXME: off by one here maybe?
+				for (idx_t j = 0; j < parser.statements.size(); j++) {
+					new_statements.push_back(move(parser.statements[j]));
+				}
+				continue;
+			}
 		}
-		if (pragma.parameters.size() != 1) {
-			throw ParserException("Invalid PRAGMA table_info: table_info takes exactly one argument");
-		}
-		// generate a SelectStatement that selects from the pragma_table_info function
-		// i.e. SELECT * FROM pragma_table_info('table_name')
-		Parser parser;
-		parser.ParseQuery("SELECT * FROM pragma_table_info()");
-
-		// push the table name parameter into the table function
-		auto select_statement = move(parser.statements[0]);
-		auto &select = (SelectStatement &)*select_statement;
-		auto &select_node = (SelectNode &)*select.node;
-		auto &table_function = (TableFunctionRef &)*select_node.from_table;
-		auto &function = (FunctionExpression &)*table_function.function;
-		function.children.push_back(make_unique<ConstantExpression>(pragma.parameters[0]));
-		return select_statement;
-	} else if (keyword == "show_tables") {
-		if (pragma.pragma_type != PragmaType::NOTHING) {
-			throw ParserException("Invalid PRAGMA show_tables: cannot be called");
-		}
-		// turn into SELECT name FROM sqlite_master();
-		Parser parser;
-		parser.ParseQuery("SELECT name FROM sqlite_master() ORDER BY name");
-		return move(parser.statements[0]);
-	} else if (keyword == "database_list") {
-		if (pragma.pragma_type != PragmaType::NOTHING) {
-			throw ParserException("Invalid PRAGMA database_list: cannot be called");
-		}
-		// turn into SELECT * FROM pragma_collations();
-		Parser parser;
-		parser.ParseQuery("SELECT * FROM pragma_database_list() ORDER BY 1");
-		return move(parser.statements[0]);
-	} else if (keyword == "collations") {
-		if (pragma.pragma_type != PragmaType::NOTHING) {
-			throw ParserException("Invalid PRAGMA collations: cannot be called");
-		}
-		// turn into SELECT * FROM pragma_collations();
-		Parser parser;
-		parser.ParseQuery("SELECT * FROM pragma_collations() ORDER BY 1");
-		return move(parser.statements[0]);
-	} else if (keyword == "show") {
-		if (pragma.pragma_type != PragmaType::CALL) {
-			throw ParserException("Invalid PRAGMA show_tables: expected a function call");
-		}
-		if (pragma.parameters.size() != 1) {
-			throw ParserException("Invalid PRAGMA show_tables: show_tables does not take any arguments");
-		}
-		// PRAGMA table_info but with some aliases
-		Parser parser;
-		parser.ParseQuery(
-		    "SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
-		    "NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info()");
-
-		// push the table name parameter into the table function
-		auto select_statement = move(parser.statements[0]);
-		auto &select = (SelectStatement &)*select_statement;
-		auto &select_node = (SelectNode &)*select.node;
-		auto &table_function = (TableFunctionRef &)*select_node.from_table;
-		auto &function = (FunctionExpression &)*table_function.function;
-		function.children.push_back(make_unique<ConstantExpression>(pragma.parameters[0]));
-		return select_statement;
-	} else if (keyword == "version") {
-		if (pragma.pragma_type != PragmaType::NOTHING) {
-			throw ParserException("Invalid PRAGMA version: cannot be called");
-		}
-		Parser parser;
-		parser.ParseQuery("SELECT * FROM pragma_version()");
-		return move(parser.statements[0]);
+		new_statements.push_back(move(statements[i]));
 	}
-	return nullptr;
+	statements = move(new_statements);
+}
+
+void PragmaHandler::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
+	// first check if there are any pragma statements
+	bool found_pragma = false;
+	for (idx_t i = 0; i < statements.size(); i++) {
+		if (statements[i]->type == StatementType::PRAGMA_STATEMENT) {
+			found_pragma = true;
+			break;
+		}
+	}
+	if (!found_pragma) {
+		// no pragmas: skip this step
+		return;
+	}
+	context.RunFunctionInTransactionInternal([&]() { HandlePragmaStatementsInternal(statements); });
+}
+
+string PragmaHandler::HandlePragma(PragmaInfo &info) {
+	auto entry =
+	    Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
+	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, info);
+	auto &bound_function = entry->functions[bound_idx];
+	if (bound_function.query) {
+		return bound_function.query(context, info.parameters);
+	}
+	return string();
 }
 
 } // namespace duckdb

@@ -15,7 +15,7 @@ string BoundBetweenExpression::ToString() const {
 }
 
 bool BoundBetweenExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundBetweenExpression *)other_;

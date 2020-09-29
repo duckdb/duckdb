@@ -19,12 +19,18 @@ endif
 ifeq (${DISABLE_UNITY}, 1)
 	DISABLE_UNITY_FLAG=-DDISABLE_UNITY=1
 endif
+ifeq (${DISABLE_SANITIZER}, 1)
+	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE
+endif
 EXTENSIONS=-DBUILD_PARQUET_EXTENSION=TRUE
 ifeq (${BUILD_BENCHMARK}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_BENCHMARKS=1
 endif
 ifeq (${BUILD_ICU}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_ICU_EXTENSION=1
+endif
+ifeq (${BUILD_TPCH}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCH_EXTENSION=1
 endif
 ifeq (${BUILD_SQLSMITH}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_SQLSMITH=1
@@ -35,6 +41,12 @@ endif
 ifeq (${BUILD_JDBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DJDBC_DRIVER=1
 endif
+ifeq (${BUILD_PYTHON}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1
+endif
+ifeq (${BUILD_R}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
+endif
 
 clean:
 	rm -rf build
@@ -42,13 +54,32 @@ clean:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
+
+ubsandebug:
+	mkdir -p build/ubsandebug && \
+	cd build/ubsandebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DENABLE_SANITIZER=0 -DENABLE_UBSAN=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build .
+	build/ubsandebug/test/unittest
 
 release_expanded:
 	mkdir -p build/release_expanded && \
 	cd build/release_expanded && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build .
+
+cldebug:
+	mkdir -p build/cldebug && \
+	cd build/cldebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build .
+
+clreldebug:
+	mkdir -p build/clreldebug && \
+	cd build/clreldebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 unittest: debug
@@ -67,15 +98,14 @@ doxygen: docs
 
 release:
 	mkdir -p build/release && \
-	python scripts/amalgamation.py && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 reldebug:
 	mkdir -p build/reldebug && \
 	cd build/reldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 amaldebug:

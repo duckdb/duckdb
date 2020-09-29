@@ -9,11 +9,14 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -24,13 +27,15 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 namespace duckdb {
 using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
-    : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
-      copy_functions(*catalog), functions(*catalog), sequences(*catalog), collations(*catalog) {
+    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name), tables(*catalog), indexes(*catalog),
+      table_functions(*catalog), copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog),
+      sequences(*catalog), collations(*catalog) {
 }
 
 CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry,
@@ -48,7 +53,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	} else {
 		entry->temporary = true;
 	}
-	if (on_conflict == OnCreateConflict::REPLACE) {
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
@@ -62,7 +67,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	// now try to add the entry
 	if (!set.CreateEntry(transaction, entry_name, move(entry), dependencies)) {
 		// entry already exists!
-		if (on_conflict == OnCreateConflict::ERROR) {
+		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type), entry_name);
 		} else {
 			return nullptr;
@@ -112,14 +117,19 @@ CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(ClientContext &context, Cre
 	return AddEntry(context, move(copy_function), info->on_conflict);
 }
 
+CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info) {
+	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
+	return AddEntry(context, move(pragma_function), info->on_conflict);
+}
+
 CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
 	unique_ptr<StandardEntry> function;
-	if (info->type == CatalogType::SCALAR_FUNCTION) {
+	if (info->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
 		// create a scalar function
 		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,
 		                                                                       (CreateScalarFunctionInfo *)info);
 	} else {
-		assert(info->type == CatalogType::AGGREGATE_FUNCTION);
+		assert(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 		// create an aggregate function
 		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
 		                                                                          (CreateAggregateFunctionInfo *)info);
@@ -148,48 +158,24 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	}
 }
 
-void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info) {
-	switch (info->alter_table_type) {
-	case AlterTableType::RENAME_TABLE: {
-		auto &transaction = Transaction::GetTransaction(context);
-		auto entry = tables.GetEntry(transaction, info->table);
-		if (entry == nullptr) {
-			throw CatalogException("Table \"%s\" doesn't exist!", info->table);
-		}
-		assert(entry->type == CatalogType::TABLE);
-
-		auto copied_entry = entry->Copy(context);
-
-		// Drop the old table entry
-		if (!tables.DropEntry(transaction, info->table, false)) {
-			throw CatalogException("Could not drop \"%s\" entry!", info->table);
-		}
-
-		// Create a new table entry
-		auto &new_table = ((RenameTableInfo *)info)->new_table_name;
-		unordered_set<CatalogEntry *> dependencies;
-		copied_entry->name = new_table;
-		if (!tables.CreateEntry(transaction, new_table, move(copied_entry), dependencies)) {
-			throw CatalogException("Could not create \"%s\" entry!", new_table);
-		}
-		break;
+void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
+	CatalogType type = info->GetCatalogType();
+	string name = info->name;
+	auto &set = GetCatalogSet(type);
+	if (!set.AlterEntry(context, name, info)) {
+		throw CatalogException("Entry with name \"%s\" does not exist!", name);
 	}
-	default:
-		if (!tables.AlterEntry(context, info->table, info)) {
-			throw CatalogException("Table with name \"%s\" does not exist!", info->table);
-		}
-	} // end switch
 }
 
-CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType type, const string &name,
+CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType type, const string &entry_name,
                                            bool if_exists) {
 	auto &set = GetCatalogSet(type);
 	auto &transaction = Transaction::GetTransaction(context);
 
-	auto entry = set.GetEntry(transaction, name);
+	auto entry = set.GetEntry(transaction, entry_name);
 	if (!entry) {
 		if (!if_exists) {
-			throw CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), name);
+			throw CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), entry_name);
 		}
 		return nullptr;
 	}
@@ -206,23 +192,31 @@ unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &sourc
 	return info;
 }
 
+string SchemaCatalogEntry::ToSQL() {
+	stringstream ss;
+	ss << "CREATE SCHEMA " << name << ";";
+	return ss.str();
+}
+
 CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	switch (type) {
-	case CatalogType::VIEW:
-	case CatalogType::TABLE:
+	case CatalogType::VIEW_ENTRY:
+	case CatalogType::TABLE_ENTRY:
 		return tables;
-	case CatalogType::INDEX:
+	case CatalogType::INDEX_ENTRY:
 		return indexes;
-	case CatalogType::TABLE_FUNCTION:
+	case CatalogType::TABLE_FUNCTION_ENTRY:
 		return table_functions;
-	case CatalogType::COPY_FUNCTION:
+	case CatalogType::COPY_FUNCTION_ENTRY:
 		return copy_functions;
-	case CatalogType::AGGREGATE_FUNCTION:
-	case CatalogType::SCALAR_FUNCTION:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+		return pragma_functions;
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		return functions;
-	case CatalogType::SEQUENCE:
+	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;
-	case CatalogType::COLLATION:
+	case CatalogType::COLLATION_ENTRY:
 		return collations;
 	default:
 		throw CatalogException("Unsupported catalog type in schema");

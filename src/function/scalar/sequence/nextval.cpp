@@ -88,13 +88,14 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
-static unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, ClientContext &context) {
+static unique_ptr<FunctionData> nextval_bind(ClientContext &context, ScalarFunction &bound_function,
+                                             vector<unique_ptr<Expression>> &arguments) {
 	SequenceCatalogEntry *sequence = nullptr;
-	if (expr.children[0]->IsFoldable()) {
+	if (arguments[0]->IsFoldable()) {
 		string schema, seq;
 		// parameter to nextval function is a foldable constant
 		// evaluate the constant and perform the catalog lookup already
-		Value seqname = ExpressionExecutor::EvaluateScalar(*expr.children[0]);
+		Value seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (!seqname.is_null) {
 			assert(seqname.type().id() == LogicalTypeId::VARCHAR);
 			Catalog::ParseRangeVar(seqname.str_value, schema, seq);

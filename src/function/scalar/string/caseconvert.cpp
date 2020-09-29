@@ -42,6 +42,7 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
 			const auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
 			assert(success);
+			(void)success;
 			result_data += new_sz;
 			i += sz;
 		} else {

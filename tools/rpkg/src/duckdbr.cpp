@@ -1,9 +1,17 @@
-#include "duckdb.h"
-#include <sstream>
-#include "parquet-extension.h"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "parquet-extension.hpp"
 
 #include <Rdefines.h>
 #include <algorithm>
+#include <sstream>
 
 // motherfucker
 #undef error
@@ -25,6 +33,25 @@ static void vector_to_r(Vector &src_vec, size_t count, void *dest, uint64_t dest
 	for (size_t row_idx = 0; row_idx < count; row_idx++) {
 		dest_ptr[row_idx] = nullmask[row_idx] ? na_val : src_ptr[row_idx];
 	}
+}
+
+struct RIntegralType {
+	template <class T> static double DoubleCast(T val) {
+		return double(val);
+	}
+};
+
+template <class T> static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
+	auto src_ptr = FlatVector::GetData<T>(src_vec);
+	auto &nullmask = FlatVector::Nullmask(src_vec);
+	double division = pow(10, scale);
+	for (size_t row_idx = 0; row_idx < count; row_idx++) {
+		dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : RIntegralType::DoubleCast<T>(src_ptr[row_idx]) / division;
+	}
+}
+
+template <> double RIntegralType::DoubleCast<>(hugeint_t val) {
+	return Hugeint::Cast<double>(val);
 }
 
 struct RDoubleType {
@@ -122,12 +149,7 @@ static void AppendFactor(SEXP coldata, Vector &result, idx_t row_idx, idx_t coun
 }
 
 static SEXP cstr_to_charsexp(const char *s) {
-	SEXP retsexp = PROTECT(mkCharCE(s, CE_UTF8));
-	if (!retsexp) {
-		Rf_error("cpp_str_to_charsexp: Memory allocation failed");
-		UNPROTECT(1);
-	}
-	return retsexp;
+	return mkCharCE(s, CE_UTF8);
 }
 
 static SEXP cpp_str_to_charsexp(string s) {
@@ -136,14 +158,10 @@ static SEXP cpp_str_to_charsexp(string s) {
 
 static SEXP cpp_str_to_strsexp(vector<string> s) {
 	SEXP retsexp = PROTECT(NEW_STRING(s.size()));
-	if (!retsexp) {
-		Rf_error("cpp_str_to_strsexp: Memory allocation failed");
-		UNPROTECT(1);
-	}
 	for (idx_t i = 0; i < s.size(); i++) {
 		SET_STRING_ELT(retsexp, i, cpp_str_to_charsexp(s[i]));
-		UNPROTECT(1);
 	}
+	UNPROTECT(1);
 	return retsexp;
 }
 
@@ -214,17 +232,13 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 	auto stmtholder = new RStatement();
 	stmtholder->stmt = move(stmt);
 
+	SEXP retlist = PROTECT(NEW_LIST(6));
+
 	SEXP stmtsexp = PROTECT(R_MakeExternalPtr(stmtholder, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(stmtsexp, (void (*)(SEXP))duckdb_finalize_statement_R);
 
-	SEXP retlist = PROTECT(NEW_LIST(6));
-	if (!retlist) {
-		UNPROTECT(2); // retlist, stmtsexp
-		Rf_error("duckdb_prepare_R: Memory allocation failed");
-	}
 	SEXP ret_names = cpp_str_to_strsexp({"str", "ref", "type", "names", "rtypes", "n_param"});
 	SET_NAMES(retlist, ret_names);
-	UNPROTECT(1); // ret_names
 
 	SET_VECTOR_ELT(retlist, 0, querysexp);
 	SET_VECTOR_ELT(retlist, 1, stmtsexp);
@@ -232,11 +246,9 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 
 	SEXP stmt_type = cpp_str_to_strsexp({StatementTypeToString(stmtholder->stmt->type)});
 	SET_VECTOR_ELT(retlist, 2, stmt_type);
-	UNPROTECT(1); // stmt_type
 
 	SEXP col_names = cpp_str_to_strsexp(stmtholder->stmt->names);
 	SET_VECTOR_ELT(retlist, 3, col_names);
-	UNPROTECT(1); // col_names
 
 	vector<string> rtypes;
 
@@ -264,6 +276,7 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
+		case LogicalTypeId::DECIMAL:
 			rtype = "numeric";
 			break;
 		case LogicalTypeId::VARCHAR: {
@@ -280,7 +293,6 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 
 	SEXP rtypessexp = cpp_str_to_strsexp(rtypes);
 	SET_VECTOR_ELT(retlist, 4, rtypessexp);
-	UNPROTECT(1); // rtypessexp
 
 	SET_VECTOR_ELT(retlist, 5, ScalarInteger(stmtholder->stmt->n_param));
 
@@ -396,12 +408,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 
 	if (ncols > 0) {
 		SEXP retlist = PROTECT(NEW_LIST(ncols));
-		if (!retlist) {
-			UNPROTECT(1); // retlist
-			Rf_error("duckdb_execute_R: Memory allocation failed");
-		}
 		SET_NAMES(retlist, cpp_str_to_strsexp(result->names));
-		UNPROTECT(1); // names
 
 		for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 			SEXP varvalue = NULL;
@@ -431,10 +438,6 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				UNPROTECT(1); // retlist
 				Rf_error("duckdb_execute_R: Unknown column type for execute: %s",
 				         result->types[col_idx].ToString().c_str());
-			}
-			if (!varvalue) {
-				UNPROTECT(2); // varvalue, retlist
-				Rf_error("duckdb_execute_R: Memory allocation failed");
 			}
 			SET_VECTOR_ELT(retlist, col_idx, varvalue);
 			UNPROTECT(1); /* varvalue */
@@ -547,6 +550,29 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					}
 					break;
 				}
+				case LogicalTypeId::DECIMAL: {
+					auto &src_vec = chunk->data[col_idx];
+					auto &decimal_type = result->types[col_idx];
+					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+					auto dec_scale = decimal_type.scale();
+					switch (decimal_type.InternalType()) {
+					case PhysicalType::INT16:
+						RDecimalCastLoop<int16_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					case PhysicalType::INT32:
+						RDecimalCastLoop<int32_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					case PhysicalType::INT64:
+						RDecimalCastLoop<int64_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					case PhysicalType::INT128:
+						RDecimalCastLoop<hugeint_t>(src_vec, chunk->size(), dest_ptr, dec_scale);
+						break;
+					default:
+						throw NotImplementedException("Unimplemented internal type for DECIMAL");
+					}
+					break;
+				}
 				case LogicalTypeId::FLOAT:
 					vector_to_r<float, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
 					                           NA_REAL);
@@ -600,18 +626,24 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 
 struct DataFrameScanFunctionData : public TableFunctionData {
 	DataFrameScanFunctionData(SEXP df, idx_t row_count, vector<RType> rtypes)
-	    : df(df), row_count(row_count), rtypes(rtypes), position(0) {
+	    : df(df), row_count(row_count), rtypes(rtypes) {
 	}
 	SEXP df;
 	idx_t row_count;
 	vector<RType> rtypes;
+};
+
+struct DataFrameScanState : public FunctionOperatorData {
+	DataFrameScanState() : position(0) {
+	}
+
 	idx_t position;
 };
 
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
-	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_bind, dataframe_scan_function,
-	                    nullptr){};
+	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_function, dataframe_scan_bind,
+	                    dataframe_scan_init, nullptr, nullptr, dataframe_scan_cardinality){};
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,
@@ -657,14 +689,20 @@ struct DataFrameScanFunction : public TableFunction {
 		return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
 	}
 
-	static void dataframe_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
-	                                    FunctionData *dataptr) {
-		auto &data = *((DataFrameScanFunctionData *)dataptr);
+	static unique_ptr<FunctionOperatorData>
+	dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
+	                    vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+		return make_unique<DataFrameScanState>();
+	}
 
-		if (data.position >= data.row_count) {
+	static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data,
+	                                    FunctionOperatorData *operator_state, DataChunk &output) {
+		auto &data = (DataFrameScanFunctionData &)*bind_data;
+		auto &state = (DataFrameScanState &)*operator_state;
+		if (state.position >= data.row_count) {
 			return;
 		}
-		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - data.position);
+		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - state.position);
 
 		output.SetCardinality(this_count);
 
@@ -675,33 +713,33 @@ struct DataFrameScanFunction : public TableFunction {
 
 			switch (data.rtypes[col_idx]) {
 			case RType::LOGICAL: {
-				auto data_ptr = INTEGER_POINTER(coldata) + data.position;
+				auto data_ptr = INTEGER_POINTER(coldata) + state.position;
 				AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::INTEGER: {
-				auto data_ptr = INTEGER_POINTER(coldata) + data.position;
+				auto data_ptr = INTEGER_POINTER(coldata) + state.position;
 				AppendColumnSegment<int, int, RIntegerType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::NUMERIC: {
-				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 				AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::STRING:
-				AppendStringSegment(coldata, v, data.position, this_count);
+				AppendStringSegment(coldata, v, state.position, this_count);
 				break;
 			case RType::FACTOR:
-				AppendFactor(coldata, v, data.position, this_count);
+				AppendFactor(coldata, v, state.position, this_count);
 				break;
 			case RType::TIMESTAMP: {
-				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 				AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::DATE: {
-				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 				AppendColumnSegment<double, date_t, RDateType>(data_ptr, v, this_count);
 				break;
 			}
@@ -710,7 +748,12 @@ struct DataFrameScanFunction : public TableFunction {
 			}
 		}
 
-		data.position += this_count;
+		state.position += this_count;
+	}
+
+	static idx_t dataframe_scan_cardinality(const FunctionData *bind_data) {
+		auto &data = (DataFrameScanFunctionData &)*bind_data;
+		return data.row_count;
 	}
 };
 

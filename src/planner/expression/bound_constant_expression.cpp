@@ -15,7 +15,7 @@ string BoundConstantExpression::ToString() const {
 }
 
 bool BoundConstantExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+	if (!Expression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundConstantExpression *)other_;

@@ -28,6 +28,7 @@ class ViewCatalogEntry;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
+struct CommonTableExpressionInfo;
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
@@ -60,7 +61,7 @@ public:
 	//! The client context
 	ClientContext &context;
 	//! A mapping of names to common table expressions
-	unordered_map<string, QueryNode *> CTE_bindings;
+	unordered_map<string, CommonTableExpressionInfo *> CTE_bindings;
 	//! The bind context
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
@@ -87,9 +88,9 @@ public:
 	idx_t GenerateTableIndex();
 
 	//! Add a common table expression to the binder
-	void AddCTE(const string &name, QueryNode *cte);
+	void AddCTE(const string &name, CommonTableExpressionInfo *cte);
 	//! Find a common table expression by name; returns nullptr if none exists
-	unique_ptr<QueryNode> FindCTE(const string &name);
+	CommonTableExpressionInfo *FindCTE(const string &name);
 
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();
@@ -130,12 +131,14 @@ private:
 	BoundStatement Bind(CreateStatement &stmt);
 	BoundStatement Bind(ExecuteStatement &stmt);
 	BoundStatement Bind(DropStatement &stmt);
-	BoundStatement Bind(AlterTableStatement &stmt);
+	BoundStatement Bind(AlterStatement &stmt);
 	BoundStatement Bind(TransactionStatement &stmt);
 	BoundStatement Bind(PragmaStatement &stmt);
 	BoundStatement Bind(ExplainStatement &stmt);
 	BoundStatement Bind(VacuumStatement &stmt);
 	BoundStatement Bind(RelationStatement &stmt);
+	BoundStatement Bind(CallStatement &stmt);
+	BoundStatement Bind(ExportStatement &stmt);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);

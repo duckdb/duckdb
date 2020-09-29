@@ -75,7 +75,7 @@ COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (N
 
 # delimiter must not appear in the NULL specification
 statement error
-COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null,');
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null,', DELIMITER ',');
 
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (DELIMITER 'null', NULL 'null');

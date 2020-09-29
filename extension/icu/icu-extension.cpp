@@ -57,8 +57,9 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 	});
 }
 
-static unique_ptr<FunctionData> icu_collate_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	auto splits = StringUtil::Split(expr.function.name, "_");
+static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
+	auto splits = StringUtil::Split(bound_function.name, "_");
 	if (splits.size() == 1) {
 		return make_unique<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
@@ -93,7 +94,7 @@ void ICUExtension::Load(DuckDB &db) {
 		collation = StringUtil::Lower(collation);
 
 		CreateCollationInfo info(collation, get_icu_function(collation), false, true);
-		info.on_conflict = OnCreateConflict::IGNORE;
+		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		db.catalog->CreateCollation(*con.context, &info);
 	}
 

@@ -7,7 +7,6 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
-#include "duckdb/optimizer/index_scan.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -51,12 +50,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = filter_pushdown.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
-	// check if filters match with existing indexes, if true transforms filters to index scans
-	context.profiler.StartPhase("index_scan");
-	IndexScan index_scan;
-	plan = index_scan.Optimize(move(plan));
-	context.profiler.EndPhase();
-
 	context.profiler.StartPhase("regex_range");
 	RegexRangeFilter regex_opt;
 	plan = regex_opt.Rewrite(move(plan));
@@ -81,7 +74,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// context.profiler.EndPhase();
 
 	context.profiler.StartPhase("unused_columns");
-	RemoveUnusedColumns unused(true);
+	RemoveUnusedColumns unused(binder, context, true);
 	unused.VisitOperator(*plan);
 	context.profiler.EndPhase();
 

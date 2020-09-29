@@ -17,11 +17,11 @@ template <class T> static void templated_gather_loop(Vector &source, Vector &des
 	auto &nullmask = FlatVector::Nullmask(dest);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto dataptr = (T *)addresses[i];
-		if (IsNullValue<T>(*dataptr)) {
+		auto val = Load<T>((const_data_ptr_t)addresses[i]);
+		if (IsNullValue<T>(val)) {
 			nullmask[i] = true;
 		} else {
-			data[i] = *dataptr;
+			data[i] = val;
 		}
 		addresses[i] += sizeof(T);
 	}

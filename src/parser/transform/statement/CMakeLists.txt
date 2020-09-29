@@ -1,26 +1,30 @@
-add_library_unity(duckdb_transformer_statement
-                  OBJECT
-                  transform_alter_table.cpp
-                  transform_copy.cpp
-                  transform_create_table_as.cpp
-                  transform_create_index.cpp
-                  transform_create_schema.cpp
-                  transform_create_table.cpp
-                  transform_create_view.cpp
-                  transform_delete.cpp
-                  transform_explain.cpp
-                  transform_drop.cpp
-                  transform_insert.cpp
-                  transform_pragma.cpp
-                  transform_rename.cpp
-                  transform_select.cpp
-                  transform_select_node.cpp
-                  transform_prepare.cpp
-                  transform_show.cpp
-                  transform_transaction.cpp
-                  transform_update.cpp
-                  transform_create_sequence.cpp
-                  transform_vacuum.cpp)
+add_library_unity(
+  duckdb_transformer_statement
+  OBJECT
+  transform_alter_table.cpp
+  transform_call.cpp
+  transform_copy.cpp
+  transform_create_table_as.cpp
+  transform_create_index.cpp
+  transform_create_schema.cpp
+  transform_create_table.cpp
+  transform_create_view.cpp
+  transform_delete.cpp
+  transform_explain.cpp
+  transform_export.cpp
+  transform_drop.cpp
+  transform_import.cpp
+  transform_insert.cpp
+  transform_pragma.cpp
+  transform_rename.cpp
+  transform_select.cpp
+  transform_select_node.cpp
+  transform_prepare.cpp
+  transform_show.cpp
+  transform_transaction.cpp
+  transform_update.cpp
+  transform_create_sequence.cpp
+  transform_vacuum.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_transformer_statement>
     PARENT_SCOPE)

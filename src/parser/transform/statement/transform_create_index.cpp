@@ -28,7 +28,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(PGNode *node) {
 	auto info = make_unique<CreateIndexInfo>();
 
 	info->unique = stmt->unique;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE : OnCreateConflict::ERROR;
+	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
 		auto index_element = (PGIndexElem *)cell->data.ptr_value;

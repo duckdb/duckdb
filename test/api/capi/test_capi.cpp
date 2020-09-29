@@ -31,6 +31,11 @@ public:
 		return result.columns[col].nullmask[row];
 	}
 
+	string ColumnName(idx_t col) {
+		auto colname = duckdb_column_name(&result, col);
+		return colname ? string(colname) : string();
+	}
+
 public:
 	bool success = false;
 
@@ -179,6 +184,10 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(result->Fetch<int32_t>(1, 0) == 21);
 	REQUIRE(result->Fetch<int32_t>(1, 1) == 22);
 	REQUIRE(result->Fetch<int32_t>(1, 2) == 22);
+
+	REQUIRE(result->ColumnName(0) == "a");
+	REQUIRE(result->ColumnName(1) == "b");
+	REQUIRE(result->ColumnName(2) == "");
 }
 
 TEST_CASE("Test different types of C API", "[capi]") {

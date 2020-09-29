@@ -368,6 +368,7 @@ typedef enum PGNodeTag {
 	T_PGAlterOpFamilyStmt,
 	T_PGPrepareStmt,
 	T_PGExecuteStmt,
+	T_PGCallStmt,
 	T_PGDeallocateStmt,
 	T_PGDeclareCursorStmt,
 	T_PGCreateTableSpaceStmt,
@@ -416,6 +417,8 @@ typedef enum PGNodeTag {
 	T_PGCreateStatsStmt,
 	T_PGAlterCollationStmt,
 	T_PGPragmaStmt,
+	T_PGExportStmt,
+	T_PGImportStmt,
 
 	/*
 	 * TAGS FOR PARSE TREE NODES (parsenodes.h)
@@ -515,44 +518,8 @@ typedef struct PGNode {
 
 #define nodeTag(nodeptr) (((const PGNode *)(nodeptr))->type)
 
-/*
- * newNode -
- *	  create a new node of the specified size and tag the node with the
- *	  specified tag.
- *
- * !WARNING!: Avoid using newNode directly. You should be using the
- *	  macro makeNode.  eg. to create a PGQuery node, use makeNode(PGQuery)
- *
- * Note: the size argument should always be a compile-time constant, so the
- * apparent risk of multiple evaluation doesn't matter in practice.
- */
-#ifdef __GNUC__
-
-/* With GCC, we can use a compound statement within an expression */
-#define newNode(size, tag) \
-({	PGNode *_result; \
-	AssertMacro((size) >= sizeof(PGNode)); /* need the tag, at least */ \
-	_result = (PGNode *)palloc0fast(size); \
-	_result->type = (tag); \
-	_result; \
-})
-#else
-
-/*
- *	There is no way to dereference the palloc'ed pointer to assign the
- *	tag, and also return the pointer itself, so we need a holder variable.
- *	Fortunately, this macro isn't recursive so we just define
- *	a global variable for this purpose.
- */
-extern __thread PGNode *duckdb_newNodeMacroHolder;
-
-#define newNode(size, tag) \
-(AssertMacro((size) >= sizeof(PGNode)), /* need the tag, at least */ \
-	duckdb_newNodeMacroHolder = (PGNode *)palloc0fast(size), duckdb_newNodeMacroHolder->type = (tag), \
-	duckdb_newNodeMacroHolder)
-#endif /* __GNUC__ */
-
 #define makeNode(_type_) ((_type_ *)newNode(sizeof(_type_), T_##_type_))
+
 #define NodeSetTag(nodeptr, t) (((PGNode *)(nodeptr))->type = (t))
 
 #define IsA(nodeptr, _type_) (nodeTag(nodeptr) == T_##_type_)
@@ -584,6 +551,8 @@ static inline PGNode *castNodeImpl(PGNodeTag type, void *ptr) {
  */
 struct PGBitmapset;      /* not to include bitmapset.h here */
 struct PGStringInfoData; /* not to include stringinfo.h here */
+
+PGNode* newNode(size_t size, PGNodeTag type);
 
 void outNode(struct PGStringInfoData *str, const void *obj);
 void outToken(struct PGStringInfoData *str, const char *s);

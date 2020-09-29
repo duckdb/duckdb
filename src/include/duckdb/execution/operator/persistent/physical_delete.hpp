@@ -17,7 +17,7 @@ class DataTable;
 class PhysicalDelete : public PhysicalSink {
 public:
 	PhysicalDelete(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table, idx_t row_id_index)
-	    : PhysicalSink(PhysicalOperatorType::DELETE, move(types)), tableref(tableref), table(table),
+	    : PhysicalSink(PhysicalOperatorType::DELETE_OPERATOR, move(types)), tableref(tableref), table(table),
 	      row_id_index(row_id_index) {
 	}
 

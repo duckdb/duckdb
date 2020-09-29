@@ -8,6 +8,7 @@
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <iostream>
 #include <utility>
@@ -36,7 +37,7 @@ void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
-	switch(op_type) {
+	switch (op_type) {
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::LIMIT:
 	case PhysicalOperatorType::TOP_N:
@@ -49,11 +50,8 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::SORT_GROUP_BY:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
-	case PhysicalOperatorType::COPY_FROM_FILE:
 	case PhysicalOperatorType::COPY_TO_FILE:
-	case PhysicalOperatorType::TABLE_FUNCTION:
-	case PhysicalOperatorType::SEQ_SCAN:
-	case PhysicalOperatorType::INDEX_SCAN:
+	case PhysicalOperatorType::TABLE_SCAN:
 	case PhysicalOperatorType::CHUNK_SCAN:
 	case PhysicalOperatorType::DELIM_SCAN:
 	case PhysicalOperatorType::EXTERNAL_FILE_SCAN:

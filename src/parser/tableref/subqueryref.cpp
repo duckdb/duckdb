@@ -29,11 +29,7 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 void SubqueryRef::Serialize(Serializer &serializer) {
 	TableRef::Serialize(serializer);
 	subquery->Serialize(serializer);
-	assert(column_name_alias.size() <= NumericLimits<uint32_t>::Maximum());
-	serializer.Write<uint32_t>((uint32_t)column_name_alias.size());
-	for (auto &alias : column_name_alias) {
-		serializer.WriteString(alias);
-	}
+	serializer.WriteStringVector(column_name_alias);
 }
 
 unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
@@ -42,11 +38,8 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 		return nullptr;
 	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
-	idx_t column_count = (idx_t)source.Read<uint32_t>();
-	for (idx_t i = 0; i < column_count; i++) {
-		result->column_name_alias.push_back(source.Read<string>());
-	}
+	source.ReadStringVector(result->column_name_alias);
 	return move(result);
 }
 
-}
+} // namespace duckdb

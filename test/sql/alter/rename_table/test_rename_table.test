@@ -4,6 +4,8 @@
 
 statement ok
 CREATE TABLE tbl(i INTEGER);
+
+statement ok
 INSERT INTO tbl VALUES (999), (100);
 
 statement ok
@@ -56,4 +58,65 @@ SELECT * FROM tbl2
 ----
 999
 100
+
+# multiple renames in the same transaction
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE tbl2 RENAME TO tbl3
+
+statement ok
+ALTER TABLE tbl3 RENAME TO tbl4
+
+statement ok
+ALTER TABLE tbl4 RENAME TO tbl5
+
+statement ok
+ROLLBACK
+
+# everything was rolled back
+query I
+SELECT * FROM tbl2
+----
+999
+100
+
+statement error
+SELECT * FROM tbl5
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE tbl2 RENAME TO tbl3
+
+statement ok
+ALTER TABLE tbl3 RENAME TO tbl4
+
+statement ok
+ALTER TABLE tbl4 RENAME TO tbl5
+
+statement ok
+COMMIT
+
+# everything was committed
+statement error
+SELECT * FROM tbl2
+
+query I
+SELECT * FROM tbl5
+----
+999
+100
+
+# we can create these tables again
+statement ok
+CREATE TABLE tbl2(i INTEGER);
+
+statement ok
+CREATE TABLE tbl3(i INTEGER);
+
+statement ok
+CREATE TABLE tbl4(i INTEGER);
 

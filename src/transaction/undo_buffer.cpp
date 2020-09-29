@@ -38,9 +38,10 @@ UndoChunk::~UndoChunk() {
 }
 
 data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
-	*((UndoFlags *)(data.get() + current_position)) = type;
+	assert(sizeof(UndoFlags) + sizeof(len) == 8);
+	Store<UndoFlags>(type, data.get() + current_position);
 	current_position += sizeof(UndoFlags);
-	*((uint32_t *)(data.get() + current_position)) = len;
+	Store<uint32_t>(len, data.get() + current_position);
 	current_position += sizeof(uint32_t);
 
 	data_ptr_t result = data.get() + current_position;
@@ -68,9 +69,10 @@ template <class T> void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &st
 		state.start = state.current->data.get();
 		state.end = state.start + state.current->current_position;
 		while (state.start < state.end) {
-			UndoFlags type = *((UndoFlags *)state.start);
+			UndoFlags type = Load<UndoFlags>(state.start);
 			state.start += sizeof(UndoFlags);
-			uint32_t len = *((uint32_t *)state.start);
+
+			uint32_t len = Load<uint32_t>(state.start);
 			state.start += sizeof(uint32_t);
 			callback(type, state.start);
 			state.start += len;
@@ -88,9 +90,9 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 		state.end =
 		    state.current == end_state.current ? end_state.start : state.start + state.current->current_position;
 		while (state.start < state.end) {
-			UndoFlags type = *((UndoFlags *)state.start);
+			auto type = Load<UndoFlags>(state.start);
 			state.start += sizeof(UndoFlags);
-			uint32_t len = *((uint32_t *)state.start);
+			auto len = Load<uint32_t>(state.start);
 			state.start += sizeof(uint32_t);
 			callback(type, state.start);
 			state.start += len;
@@ -112,9 +114,9 @@ template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
 		// create a vector with all nodes in this chunk
 		vector<pair<UndoFlags, data_ptr_t>> nodes;
 		while (start < end) {
-			UndoFlags type = *((UndoFlags *)start);
+			auto type = Load<UndoFlags>(start);
 			start += sizeof(UndoFlags);
-			uint32_t len = *((uint32_t *)start);
+			auto len = Load<uint32_t>(start);
 			start += sizeof(uint32_t);
 			nodes.push_back(make_pair(type, start));
 			start += len;

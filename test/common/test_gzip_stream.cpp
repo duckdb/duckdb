@@ -2,7 +2,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream_util.hpp"
 #include "duckdb/common/gzip_stream.hpp"
-#include "test_gzip_stream_header.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -34,29 +33,4 @@ TEST_CASE("Test basic stream read from GZIP files", "[gzip_stream]") {
 
 	GzipStream gz3("XXX_THIS_DOES_NOT_EXIST");
 	REQUIRE_THROWS(s = string(std::istreambuf_iterator<char>(gz3), {}));
-}
-
-TEST_CASE("Test COPY with GZIP files", "[gzip_stream]") {
-	string gzip_file_path = TestCreatePath("lineitem1k.tbl.gz");
-
-	ofstream ofp(gzip_file_path, ios::out | ios::binary);
-	ofp.write((const char *)lineitem_tbl_small_gz, lineitem_tbl_small_gz_len);
-	ofp.close();
-
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	REQUIRE_NO_FAIL(con.Query(
-	    "CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber "
-	    "INT NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) "
-	    "NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR(1) NOT NULL, l_linestatus VARCHAR(1) NOT NULL, "
-	    "l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR(25) "
-	    "NOT NULL, l_shipmode VARCHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);"));
-	result = con.Query("COPY lineitem FROM '" + gzip_file_path + "' DELIMITER '|'");
-
-	REQUIRE(CHECK_COLUMN(result, 0, {1000}));
-	// stolen from test_copy.cpp
-	result = con.Query("SELECT l_partkey FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber");
-	REQUIRE(CHECK_COLUMN(result, 0, {155190, 67310, 63700, 2132, 24027, 15635}));
 }

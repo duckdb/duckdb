@@ -1,0 +1,11 @@
+# name: test/sql/cte/test_bug_922.test
+# description: Test for a crash reported in issue #922
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+WITH my_list(value) AS (VALUES (1), (2), (3))
+    SELECT * FROM my_list LIMIT 0 OFFSET 1
+----

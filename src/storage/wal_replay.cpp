@@ -167,7 +167,7 @@ void ReplayState::ReplayCreateTable() {
 void ReplayState::ReplayDropTable() {
 	DropInfo info;
 
-	info.type = CatalogType::TABLE;
+	info.type = CatalogType::TABLE_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
@@ -176,11 +176,7 @@ void ReplayState::ReplayDropTable() {
 
 void ReplayState::ReplayAlter() {
 	auto info = AlterInfo::Deserialize(source);
-	if (info->type != AlterType::ALTER_TABLE) {
-		throw Exception("Expected ALTER TABLE!");
-	}
-
-	db.catalog->AlterTable(context, (AlterTableInfo *)info.get());
+	db.catalog->Alter(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -194,7 +190,7 @@ void ReplayState::ReplayCreateView() {
 
 void ReplayState::ReplayDropView() {
 	DropInfo info;
-	info.type = CatalogType::VIEW;
+	info.type = CatalogType::VIEW_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	db.catalog->DropEntry(context, &info);
@@ -213,7 +209,7 @@ void ReplayState::ReplayCreateSchema() {
 void ReplayState::ReplayDropSchema() {
 	DropInfo info;
 
-	info.type = CatalogType::SCHEMA;
+	info.type = CatalogType::SCHEMA_ENTRY;
 	info.name = source.Read<string>();
 
 	db.catalog->DropEntry(context, &info);
@@ -230,7 +226,7 @@ void ReplayState::ReplayCreateSequence() {
 
 void ReplayState::ReplayDropSequence() {
 	DropInfo info;
-	info.type = CatalogType::SEQUENCE;
+	info.type = CatalogType::SEQUENCE_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 

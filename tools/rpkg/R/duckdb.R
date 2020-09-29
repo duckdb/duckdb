@@ -1,8 +1,12 @@
 #' DuckDB client package for R
 #'
-#' @description R client package for DuckDB: an embeddable SQL OLAP Database Management System.
+#' R client package for DuckDB: an embeddable SQL OLAP Database Management System.
 #'
-#' More information at at https://duckdb.org/.
+#' @seealso
+#' [duckdb()] for connection instructions.
+#'
+#' <https://duckdb.org/> for the project website.
+#'
 ## usethis namespace: start
 #' @useDynLib duckdb, .registration = TRUE
 ## usethis namespace: end

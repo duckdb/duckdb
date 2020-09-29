@@ -47,7 +47,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	tuple_size = condition_size + build_size;
 	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
-	entry_size = tuple_size + std::max(sizeof(hash_t), sizeof(uintptr_t));
+	entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 	if (join_type == JoinType::OUTER) {
 		// outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
@@ -55,7 +55,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		pointer_offset += sizeof(bool);
 	}
 	// compute the per-block capacity of this HT
-	block_capacity = std::max((idx_t)STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
+	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -124,11 +124,8 @@ static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &
 			auto source_idx = vdata.sel->get_index(idx);
 
 			auto target = (T *)key_locations[i];
-			if ((*vdata.nullmask)[source_idx]) {
-				*target = NullValue<T>();
-			} else {
-				*target = source[source_idx];
-			}
+			T value = (*vdata.nullmask)[source_idx] ? NullValue<T>() : source[source_idx];
+			Store<T>(value, (data_ptr_t)target);
 			key_locations[i] += sizeof(T);
 		}
 	} else {
@@ -137,7 +134,7 @@ static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &
 			auto source_idx = vdata.sel->get_index(idx);
 
 			auto target = (T *)key_locations[i];
-			*target = source[source_idx];
+			Store<T>(source[source_idx], (data_ptr_t)target);
 			key_locations[i] += sizeof(T);
 		}
 	}
@@ -189,14 +186,15 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 
-			auto target = (string_t *)key_locations[i];
+			string_t new_val;
 			if ((*vdata.nullmask)[source_idx]) {
-				*target = NullValue<string_t>();
+				new_val = NullValue<string_t>();
 			} else if (source[source_idx].IsInlined()) {
-				*target = source[source_idx];
+				new_val = source[source_idx];
 			} else {
-				*target = local_heap.AddString(source[source_idx]);
+				new_val = local_heap.AddString(source[source_idx]);
 			}
+			Store<string_t>(new_val, key_locations[i]);
 			key_locations[i] += sizeof(string_t);
 		}
 		lock_guard<mutex> append_lock(ht_lock);
@@ -218,7 +216,7 @@ void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVect
 
 idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
                                    idx_t remaining) {
-	idx_t append_count = std::min(remaining, block.capacity - block.count);
+	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
 	append_entries.push_back(BlockAppendEntry(dataptr, append_count));
 	block.count += append_count;
@@ -378,7 +376,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
 		auto prev_pointer = (data_ptr_t *)(key_locations[i] + pointer_offset);
-		*prev_pointer = pointers[index];
+		Store<data_ptr_t>(pointers[index], (data_ptr_t)prev_pointer);
 
 		// set pointer to current tuple
 		pointers[index] = key_locations[i];
@@ -388,7 +386,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
-	idx_t capacity = NextPowerOfTwo(std::max(count * 2, (idx_t)(Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
+	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
 	assert((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
@@ -410,9 +408,9 @@ void JoinHashTable::Finalize() {
 		idx_t entry = 0;
 		while (entry < block.count) {
 			// fetch the next vector of entries from the blocks
-			idx_t next = std::min((idx_t)STANDARD_VECTOR_SIZE, block.count - entry);
+			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
 			for (idx_t i = 0; i < next; i++) {
-				hash_data[i] = *((hash_t *)(dataptr + pointer_offset));
+				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
 				dataptr += entry_size;
 			}
@@ -512,8 +510,9 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 		auto idx = current_sel.get_index(i);
 		auto kidx = vdata.sel->get_index(idx);
 		auto gdata = (T *)(ptrs[idx] + offset);
+		T val = Load<T>((data_ptr_t)gdata);
 		if ((*vdata.nullmask)[kidx]) {
-			if (IsNullValue<T>(*gdata)) {
+			if (IsNullValue<T>(val)) {
 				match_sel->set_index(result_count++, idx);
 			} else {
 				if (NO_MATCH_SEL) {
@@ -521,7 +520,7 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 				}
 			}
 		} else {
-			if (OP::template Operation<T>(data[kidx], *gdata)) {
+			if (OP::template Operation<T>(data[kidx], val)) {
 				match_sel->set_index(result_count++, idx);
 			} else {
 				if (NO_MATCH_SEL) {
@@ -660,7 +659,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto idx = sel.get_index(i);
 		auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.pointer_offset);
-		ptrs[idx] = *chain_pointer;
+		ptrs[idx] = Load<data_ptr_t>((data_ptr_t)chain_pointer);
 		if (ptrs[idx]) {
 			this->sel_vector.set_index(new_count++, idx);
 		}
@@ -680,11 +679,11 @@ static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const Sel
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
-		auto hdata = (T *)(pointers[pidx] + offset);
-		if (IsNullValue<T>(*hdata)) {
+		T hdata = Load<T>((data_ptr_t)(pointers[pidx] + offset));
+		if (IsNullValue<T>(hdata)) {
 			nullmask[ridx] = true;
 		} else {
-			rdata[ridx] = *hdata;
+			rdata[ridx] = hdata;
 		}
 	}
 }

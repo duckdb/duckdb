@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
 

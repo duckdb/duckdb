@@ -57,6 +57,7 @@ public:
 	static void BindTableNames(Binder &binder, ParsedExpression &expr);
 	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source, string collation,
 	                                            bool equality_only = false);
+	static void TestCollation(ClientContext &context, string collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 

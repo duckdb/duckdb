@@ -2,12 +2,17 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/planner/operator/logical_copy_from_file.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 #include <algorithm>
 
@@ -91,20 +96,39 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	auto function_data =
 	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
-
-	// now create the copy statement and set it as a child of the insert statement
-	auto copy =
-	    make_unique<LogicalCopyFromFile>(0, copy_function->function, move(function_data), bound_insert.expected_types);
-	insert_statement.plan->children.push_back(move(copy));
+	auto get = make_unique<LogicalGet>(0, copy_function->function.copy_from_function, move(function_data),
+	                                   bound_insert.expected_types, expected_names);
+	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
+		get->column_ids.push_back(i);
+	}
+	insert_statement.plan->children.push_back(move(get));
 	result.plan = move(insert_statement.plan);
 	return result;
 }
 
 BoundStatement Binder::Bind(CopyStatement &stmt) {
-	if (stmt.select_statement) {
-		return BindCopyTo(stmt);
-	} else {
+	if (!stmt.info->is_from && !stmt.select_statement) {
+		// copy table into file without a query
+		// generate SELECT * FROM table;
+		auto ref = make_unique<BaseTableRef>();
+		ref->schema_name = stmt.info->schema;
+		ref->table_name = stmt.info->table;
+
+		auto statement = make_unique<SelectNode>();
+		statement->from_table = move(ref);
+		if (stmt.info->select_list.size() > 0) {
+			for (auto &name : stmt.info->select_list) {
+				statement->select_list.push_back(make_unique<ColumnRefExpression>(name));
+			}
+		} else {
+			statement->select_list.push_back(make_unique<StarExpression>());
+		}
+		stmt.select_statement = move(statement);
+	}
+	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt);
+	} else {
+		return BindCopyTo(stmt);
 	}
 }
 

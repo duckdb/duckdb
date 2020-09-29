@@ -63,4 +63,4 @@ private:
 	join_value value;
 };
 
-}; // namespace duckdb
+} // namespace duckdb

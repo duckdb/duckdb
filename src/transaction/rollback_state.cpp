@@ -15,7 +15,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// undo this catalog entry
-		CatalogEntry *catalog_entry = *((CatalogEntry **)data);
+		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->set);
 		catalog_entry->set->Undo(catalog_entry);
 		break;

@@ -4,6 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -41,7 +42,8 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	ConstantVector::SetNull(result, true);
 }
 
-unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientContext &context) {
+unique_ptr<FunctionData> setseed_bind(ClientContext &context, ScalarFunction &bound_function,
+                                      vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<SetseedBindData>(context);
 }
 

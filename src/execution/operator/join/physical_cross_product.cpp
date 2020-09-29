@@ -7,8 +7,8 @@ using namespace std;
 
 class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalCrossProductOperatorState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), left_position(0) {
+	PhysicalCrossProductOperatorState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(op, left), left_position(0) {
 		assert(left && right);
 	}
 
@@ -87,7 +87,7 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
-	return make_unique<PhysicalCrossProductOperatorState>(children[0].get(), children[1].get());
+	return make_unique<PhysicalCrossProductOperatorState>(*this, children[0].get(), children[1].get());
 }
 
 } // namespace duckdb

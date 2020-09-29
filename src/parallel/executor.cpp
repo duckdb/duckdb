@@ -3,6 +3,7 @@
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -61,6 +62,7 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 
 void Executor::Reset() {
 	delim_join_dependencies.clear();
+	recursive_cte = nullptr;
 	physical_plan = nullptr;
 	physical_state = nullptr;
 	completed_pipelines = 0;
@@ -81,7 +83,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		}
 		switch (op->type) {
 		case PhysicalOperatorType::INSERT:
-		case PhysicalOperatorType::DELETE:
+		case PhysicalOperatorType::DELETE_OPERATOR:
 		case PhysicalOperatorType::UPDATE:
 		case PhysicalOperatorType::CREATE:
 		case PhysicalOperatorType::HASH_GROUP_BY:
@@ -109,8 +111,10 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			// create a pipeline with the duplicate eliminated path as source
 			pipeline->child = op->children[0].get();
 			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
-			// we add an entry to the mapping of (ChunkCollection*) -> (Pipeline*)
-			delim_join_dependencies[&delim_join.delim_data] = pipeline.get();
+			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
+			for (auto &delim_scan : delim_join.delim_scans) {
+				delim_join_dependencies[delim_scan] = pipeline.get();
+			}
 			// recurse into the actual join; any pipelines in there depend on the main pipeline
 			BuildPipelines(delim_join.join.get(), parent);
 			break;
@@ -120,15 +124,28 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		}
 		// recurse into the pipeline child
 		BuildPipelines(pipeline->child, pipeline.get());
-		pipelines.push_back(move(pipeline));
+		for (auto &dependency : pipeline->GetDependencies()) {
+			auto dependency_cte = dependency->GetRecursiveCTE();
+			if (dependency_cte) {
+				pipeline->SetRecursiveCTE(dependency_cte);
+			}
+		}
+		auto pipeline_cte = pipeline->GetRecursiveCTE();
+		if (!pipeline_cte) {
+			// regular pipeline: schedule it
+			pipelines.push_back(move(pipeline));
+		} else {
+			// add it to the set of dependent pipelines in the CTE
+			auto &cte = (PhysicalRecursiveCTE &)*pipeline_cte;
+			cte.pipelines.push_back(move(pipeline));
+		}
 	} else {
 		// operator is not a sink! recurse in children
 		// first check if there is any additional action we need to do depending on the type
 		switch (op->type) {
 		case PhysicalOperatorType::DELIM_SCAN: {
-			auto &chunk_scan = (PhysicalChunkScan &)*op;
 			// check if this chunk scan scans a duplicate eliminated join collection
-			auto entry = delim_join_dependencies.find(chunk_scan.collection);
+			auto entry = delim_join_dependencies.find(op);
 			assert(entry != delim_join_dependencies.end());
 			// this chunk scan introduces a dependency to the current pipeline
 			// namely a dependency on the duplicate elimination pipeline to finish
@@ -142,6 +159,33 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			BuildPipelines(execute.plan, parent);
 			break;
 		}
+		case PhysicalOperatorType::RECURSIVE_CTE: {
+			// recursive CTE: we build pipelines on the LHS as normal
+			BuildPipelines(op->children[0].get(), parent);
+			// for the RHS, we gather all pipelines that depend on the recursive cte
+			// these pipelines need to be rerun
+			if (recursive_cte) {
+				throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
+			}
+			recursive_cte = op;
+			BuildPipelines(op->children[1].get(), nullptr);
+			// finalize the pipelines: re-order them so that they are executed in the correct order
+			((PhysicalRecursiveCTE &)*op).FinalizePipelines();
+
+			recursive_cte = nullptr;
+			return;
+		}
+		case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
+			if (!recursive_cte) {
+				throw InternalException("Recursive CTE scan found without recursive CTE node");
+			}
+			if (parent) {
+				// found a recursive CTE scan in a child pipeline
+				// mark the child pipeline as recursive
+				parent->SetRecursiveCTE(recursive_cte);
+			}
+			break;
+		}
 		default:
 			break;
 		}
@@ -149,7 +193,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			BuildPipelines(child.get(), parent);
 		}
 	}
-};
+}
 
 vector<LogicalType> Executor::GetTypes() {
 	assert(physical_plan);
@@ -178,7 +222,7 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 
 	auto chunk = make_unique<DataChunk>();
 	// run the plan to get the next chunks
-	physical_plan->InitializeChunk(*chunk);
+	physical_plan->InitializeChunkEmpty(*chunk);
 	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
 	return chunk;
 }

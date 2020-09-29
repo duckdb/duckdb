@@ -41,7 +41,6 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 
 	assert(expressions.size() == result.column_count());
 	assert(expressions.size() > 0);
-	result.Reset();
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
@@ -179,14 +178,14 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 }
 
 template <bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, bool *__restrict bdata, nullmask_t &nullmask,
+static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, uint8_t *__restrict bdata, nullmask_t &nullmask,
                                       const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                       SelectionVector *false_sel) {
 	idx_t true_count = 0, false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto bidx = bsel->get_index(i);
 		auto result_idx = sel->get_index(i);
-		if (bdata[bidx] && (NO_NULL || !nullmask[bidx])) {
+		if (bdata[bidx] > 0 && (NO_NULL || !nullmask[bidx])) {
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count++, result_idx);
 			}
@@ -207,14 +206,14 @@ template <bool NO_NULL>
 static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
-		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
 		                                              true_sel, false_sel);
 	} else if (true_sel) {
-		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
 		                                               true_sel, false_sel);
 	} else {
 		assert(false_sel);
-		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
 		                                               true_sel, false_sel);
 	}
 }

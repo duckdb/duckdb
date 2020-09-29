@@ -101,8 +101,14 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	bindings[alias] = move(binding);
 }
 
-void BindContext::AddBaseTable(idx_t index, const string &alias, TableCatalogEntry &table, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, table, get, index));
+void BindContext::AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
+                               unordered_map<string, column_t> name_map, LogicalGet &get) {
+	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), move(name_map), get, index));
+}
+
+void BindContext::AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
+                                   LogicalGet &get) {
+	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index));
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
@@ -123,11 +129,11 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 }
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types) {
-	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
+	AddBinding(alias, make_unique<Binding>(alias, move(types), move(names), index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types) {
-	auto binding = make_shared<GenericBinding>(alias, move(types), move(names), index);
+	auto binding = make_shared<Binding>(alias, move(types), move(names), index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

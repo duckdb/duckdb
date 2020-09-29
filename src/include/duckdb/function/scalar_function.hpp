@@ -22,7 +22,8 @@ class ScalarFunctionCatalogEntry;
 //! The type used for scalar functions
 typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_function_t;
 //! Binds the scalar function and creates the function data
-typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(BoundFunctionExpression &expr, ClientContext &context);
+typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function,
+                                                           vector<unique_ptr<Expression>> &arguments);
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
@@ -49,12 +50,16 @@ public:
 	dependency_function_t dependency;
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
-	                                                              vector<LogicalType> &arguments,
 	                                                              vector<unique_ptr<Expression>> children,
 	                                                              bool is_operator = false);
-	static unique_ptr<BoundFunctionExpression>
-	BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &function, vector<LogicalType> &arguments,
-	                   vector<unique_ptr<Expression>> children, bool is_operator = false);
+	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
+	                                                              ScalarFunctionCatalogEntry &function,
+	                                                              vector<unique_ptr<Expression>> children,
+	                                                              bool is_operator = false);
+
+	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, ScalarFunction bound_function,
+	                                                              vector<unique_ptr<Expression>> children,
+	                                                              bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {
 		return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency;
@@ -82,20 +87,20 @@ public:
 	static void NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count() >= 1);
 		result.Reference(input.data[0]);
-	};
+	}
 
 	template <class TA, class TR, class OP, bool SKIP_NULLS = false>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count() >= 1);
 		UnaryExecutor::Execute<TA, TR, OP, SKIP_NULLS>(input.data[0], result, input.size());
-	};
+	}
 
 	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count() == 2);
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result,
 		                                                             input.size());
-	};
+	}
 
 public:
 	template <class OP> static scalar_function_t GetScalarUnaryFunction(LogicalType type) {

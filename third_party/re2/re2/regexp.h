@@ -271,6 +271,29 @@ class CharClass {
   CharClass& operator=(const CharClass&) = delete;
 };
 
+struct repeat_t {  // Repeat
+    int max_;
+    int min_;
+};
+
+struct capture_t {  // Capture
+    int cap_;
+    std::string* name_;
+};
+
+struct literal_string_t{  // LiteralString
+    int nrunes_;
+    Rune* runes_;
+};
+
+struct char_class_t {  // CharClass
+    // These two could be in separate union members,
+    // but it wouldn't save any space (there are other two-word structs)
+    // and keeping them separate avoids confusion during parsing.
+    CharClass* cc_;
+    CharClassBuilder* ccb_;
+};
+
 class Regexp {
  public:
 
@@ -331,14 +354,14 @@ class Regexp {
       return submany_;
   }
 
-  int min() { DCHECK_EQ(op_, kRegexpRepeat); return min_; }
-  int max() { DCHECK_EQ(op_, kRegexpRepeat); return max_; }
+  int min() { DCHECK_EQ(op_, kRegexpRepeat); return repeat_.min_; }
+  int max() { DCHECK_EQ(op_, kRegexpRepeat); return repeat_.max_; }
   Rune rune() { DCHECK_EQ(op_, kRegexpLiteral); return rune_; }
-  CharClass* cc() { DCHECK_EQ(op_, kRegexpCharClass); return cc_; }
-  int cap() { DCHECK_EQ(op_, kRegexpCapture); return cap_; }
-  const std::string* name() { DCHECK_EQ(op_, kRegexpCapture); return name_; }
-  Rune* runes() { DCHECK_EQ(op_, kRegexpLiteralString); return runes_; }
-  int nrunes() { DCHECK_EQ(op_, kRegexpLiteralString); return nrunes_; }
+  CharClass* cc() { DCHECK_EQ(op_, kRegexpCharClass); return char_class_.cc_; }
+  int cap() { DCHECK_EQ(op_, kRegexpCapture); return capture_.cap_; }
+  const std::string* name() { DCHECK_EQ(op_, kRegexpCapture); return capture_.name_; }
+  Rune* runes() { DCHECK_EQ(op_, kRegexpLiteralString); return literal_string_.runes_; }
+  int nrunes() { DCHECK_EQ(op_, kRegexpLiteralString); return literal_string_.nrunes_; }
   int match_id() { DCHECK_EQ(op_, kRegexpHaveMatch); return match_id_; }
 
   // Increments reference count, returns object as convenience.
@@ -558,25 +581,10 @@ class Regexp {
 
   // Arguments to operator.  See description of operators above.
   union {
-    struct {  // Repeat
-      int max_;
-      int min_;
-    };
-    struct {  // Capture
-      int cap_;
-      std::string* name_;
-    };
-    struct {  // LiteralString
-      int nrunes_;
-      Rune* runes_;
-    };
-    struct {  // CharClass
-      // These two could be in separate union members,
-      // but it wouldn't save any space (there are other two-word structs)
-      // and keeping them separate avoids confusion during parsing.
-      CharClass* cc_;
-      CharClassBuilder* ccb_;
-    };
+    repeat_t repeat_;
+    capture_t capture_;
+    literal_string_t literal_string_;
+    char_class_t char_class_;
     Rune rune_;  // Literal
     int match_id_;  // HaveMatch
     void *the_union_[2];  // as big as any other element, for memset

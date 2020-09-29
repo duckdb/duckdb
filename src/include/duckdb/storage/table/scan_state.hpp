@@ -22,10 +22,6 @@ class PersistentSegment;
 class TransientSegment;
 
 struct IndexScanState {
-	vector<column_t> column_ids;
-
-	IndexScanState(vector<column_t> column_ids) : column_ids(column_ids) {
-	}
 	virtual ~IndexScanState() {
 	}
 };
@@ -44,9 +40,9 @@ struct ColumnScanState {
 	//! The locks that are held during the scan, only used by the index scan
 	vector<unique_ptr<StorageLockKey>> locks;
 	//! Whether or not InitializeState has been called for this segment
-	bool initialized;
+	bool initialized = false;
 	//! If this segment has already been checked for skipping puorposes
-	bool segment_checked;
+	bool segment_checked = false;
 
 public:
 	//! Move on to the next vector in the scan
@@ -84,14 +80,6 @@ class CreateIndexScanState : public TableScanState {
 public:
 	vector<unique_ptr<StorageLockKey>> locks;
 	std::unique_lock<std::mutex> append_lock;
-};
-
-struct TableIndexScanState {
-	Index *index;
-	unique_ptr<IndexScanState> index_state;
-	ColumnFetchState fetch_state;
-	LocalScanState local_state;
-	vector<column_t> column_ids;
 };
 
 } // namespace duckdb

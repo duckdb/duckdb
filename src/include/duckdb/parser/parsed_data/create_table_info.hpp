@@ -17,9 +17,9 @@
 namespace duckdb {
 
 struct CreateTableInfo : public CreateInfo {
-	CreateTableInfo() : CreateInfo(CatalogType::TABLE, INVALID_SCHEMA) {
+	CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, INVALID_SCHEMA) {
 	}
-	CreateTableInfo(string schema, string name) : CreateInfo(CatalogType::TABLE, schema), table(name) {
+	CreateTableInfo(string schema, string name) : CreateInfo(CatalogType::TABLE_ENTRY, schema), table(name) {
 	}
 
 	//! Table name to insert to

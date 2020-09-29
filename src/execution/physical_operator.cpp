@@ -28,9 +28,10 @@ string PhysicalOperator::ToString(idx_t depth) const {
 	return result;
 }
 
-PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child) : finished(false) {
+PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator &op, PhysicalOperator *child) : finished(false) {
+	op.InitializeChunk(initial_chunk);
 	if (child) {
-		child->InitializeChunk(child_chunk);
+		child->InitializeChunkEmpty(child_chunk);
 		child_state = child->GetOperatorState();
 	}
 }
@@ -39,12 +40,14 @@ void PhysicalOperator::GetChunk(ExecutionContext &context, DataChunk &chunk, Phy
 	if (context.client.interrupted) {
 		throw InterruptException();
 	}
+	// reset the chunk back to its initial state
+	chunk.Reference(state->initial_chunk);
 
-	chunk.Reset();
 	if (state->finished) {
 		return;
 	}
 
+	// execute the operator
 	context.thread.profiler.StartOperator(this);
 	GetChunkInternal(context, chunk, state);
 	context.thread.profiler.EndOperator(&chunk);
@@ -54,11 +57,6 @@ void PhysicalOperator::GetChunk(ExecutionContext &context, DataChunk &chunk, Phy
 
 void PhysicalOperator::Print() {
 	Printer::Print(ToString());
-}
-
-void PhysicalOperator::ParallelScanInfo(ClientContext &context,
-                                        std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
-	throw InternalException("Unsupported operator for parallel scan!");
 }
 
 } // namespace duckdb
