@@ -135,7 +135,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 		mapping[value->name] = entry_index;
 	}
 	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
-	catalog.dependency_manager->AlterObject(transaction, entry);
+	catalog.dependency_manager->AlterObject(transaction, entry, value.get());
 
 	value->timestamp = transaction.transaction_id;
 	value->child = move(entries[entry_index]);
@@ -259,7 +259,7 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	}
 	if (entry->name != to_be_removed_node->name) {
 		// rename: clean up the new name when the rename is rolled back
-		mapping.erase(mapping.find(to_be_removed_node->name));
+		mapping.erase(to_be_removed_node->name);
 	}
 	if (to_be_removed_node->parent) {
 		// if the to be removed node has a parent, set the child pointer to the

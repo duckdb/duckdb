@@ -224,8 +224,8 @@ CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_nam
 }
 
 void Catalog::Alter(ClientContext &context, AlterInfo *info) {
-	auto catalog_type = info->GetCatalogType();
 	if (info->schema == INVALID_SCHEMA) {
+		auto catalog_type = info->GetCatalogType();
 		// invalid schema: first search the temporary schema
 		auto entry = GetEntry(context, catalog_type, TEMP_SCHEMA, info->name, true);
 		if (entry) {
