@@ -166,8 +166,8 @@ void Database::Work_Open(napi_env e, void* data) {
 		db->_db_handle = make_unique<duckdb::DuckDB>(baton->filename);
         db->_conn_handle = make_unique<duckdb::Connection>(*db->_db_handle);
     } catch (...) {
-		baton->status = DUCKDB_NODEJS_ERROR;
-		baton->message = "Failed to open database";
+		baton->status = DUCKDB_NODEJS_CANTOPEN;
+		baton->message = "Failed to open database " + baton->filename;
 	}
 }
 

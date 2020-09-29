@@ -313,6 +313,51 @@ void Statement::Work_AfterBind(napi_env e, napi_status status, void* data) {
 }
 
 
+static Napi::Value convert_chunk(Napi::Env& env, vector<string> names, duckdb::DataChunk& chunk) {
+    Napi::EscapableHandleScope scope(env);
+    vector<Napi::String> node_names;
+    assert(names.size() == chunk.column_count());
+    for (auto& name : names) {
+        node_names.push_back(Napi::String::New(env, name));
+    }
+    Napi::Array result(Napi::Array::New(env, chunk.size()));
+
+    for (duckdb::idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
+        Napi::Object row_result = Napi::Object::New(env);
+
+        for (duckdb::idx_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
+            Napi::Value value;
+
+            // TODO templateroo here
+            // TODO NULL handling
+            switch (chunk.data[col_idx].type.id()) {
+            case duckdb::LogicalTypeId::INTEGER: {
+                value = Napi::Number::New(env, chunk.GetValue(col_idx, row_idx).value_.integer);
+            } break;
+            case duckdb::LogicalTypeId::BIGINT: {
+                value = Napi::Number::New(env, chunk.GetValue(col_idx, row_idx).value_.bigint);
+            } break;
+            case duckdb::LogicalTypeId::VARCHAR: {
+                value = Napi::String::New(env, chunk.GetValue(col_idx, row_idx).str_value);
+            } break;
+
+                //                            case SQLITE_BLOB: {
+                //                                value = Napi::Buffer<char>::Copy(env, ((Values::Blob*)field)->value, ((Values::Blob*)field)->length);
+                //                            } break;
+            case duckdb::LogicalTypeId::SQLNULL: {
+                value = env.Null();
+            } break;
+            default:
+                Napi::Error::New(env, "Data type is not supported " + chunk.data[col_idx].type.ToString()).ThrowAsJavaScriptException();
+                return env.Null();
+            }
+            row_result.Set(node_names[col_idx], value);
+        }
+        result.Set(row_idx, row_result);
+    }
+
+    return scope.Escape(result);
+}
 
 Napi::Value Statement::Get(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
@@ -336,33 +381,16 @@ void Statement::Work_BeginGet(Baton* baton) {
 void Statement::Work_Get(napi_env e, void* data) {
     STATEMENT_INIT(RowBaton);
 
-	assert(0);
+    stmt->_res_handle.reset();
 
-	if (!stmt->_chunk_handle || stmt->chunk_offset > stmt->_chunk_handle->size()) {
-        stmt->_chunk_handle = stmt->_res_handle->Fetch();
-		stmt->chunk_offset = 0;
-    }
-
-	// TODO error handling
-
-   // GetRow(&baton->row, stmt->_stmt_handle);
-
-/* FIXME
-    if (stmt->status != SQLITE_DONE || baton->parameters.size()) {
-
-        if (stmt->Bind(baton->parameters)) {
-            stmt->status = sqlite3_step(stmt->_handle);
-
-            if (!(stmt->status == SQLITE_ROW || stmt->status == SQLITE_DONE)) {
-                stmt->message = std::string(sqlite3_errmsg(stmt->db->_handle));
-            }
-        }
-        if (stmt->status == SQLITE_ROW) {
-            // Acquire one result row before returning.
-            GetRow(&baton->row, stmt->_handle);
+    if (stmt->Bind(baton->parameters)) {
+        stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, false);
+        if (!stmt->_res_handle->success) {
+            stmt->status = -1;
+            stmt->message = stmt->_res_handle->error;
+            stmt->_res_handle.reset();
         }
     }
-     */
 }
 
 void Statement::Work_AfterGet(napi_env e, napi_status status, void* data) {
@@ -370,29 +398,32 @@ void Statement::Work_AfterGet(napi_env e, napi_status status, void* data) {
     Statement* stmt = baton->stmt;
 
     Napi::Env env = stmt->Env();
-    Napi::HandleScope scope(env);
+	auto chunk = stmt->_res_handle->Fetch();
 
-	assert(0);
+	chunk->SetCardinality(duckdb::MaxValue((duckdb::idx_t)1, chunk->size())); // only need one row
 
-	/* FIXME
-    if (stmt->status != SQLITE_ROW && stmt->status != SQLITE_DONE) {
-        Error(baton.get());
-    }
-    else {
-        // Fire callbacks.
-        Napi::Function cb = baton->callback.Value();
-        if (!cb.IsUndefined() && cb.IsFunction()) {
-            if (stmt->status == SQLITE_ROW) {
-                // Create the result array from the data we acquired.
-                Napi::Value argv[] = { env.Null(), RowToJS(env, &baton->row) };
-                TRY_CATCH_CALL(stmt->Value(), cb, 2, argv);
+
+
+    // Fire callbacks.
+    Napi::Function cb = baton->callback.Value();
+    if (!cb.IsUndefined() && cb.IsFunction()) {
+        if (chunk->size() > 0) {
+
+            auto chunk_converted = convert_chunk(env, stmt->_res_handle->names, *chunk).ToObject();
+            if (!chunk_converted.IsArray()) {
+                // error was set before
+                return;
             }
-            else {
-                Napi::Value argv[] = { env.Null() };
-                TRY_CATCH_CALL(stmt->Value(), cb, 1, argv);
-            }
+			
+            // Create the result array from the data we acquired.
+            Napi::Value argv[] = { env.Null(), chunk_converted.Get((uint32_t)0) };
+            TRY_CATCH_CALL(stmt->Value(), cb, 2, argv);
         }
-    } */
+        else {
+            Napi::Value argv[] = { env.Null() };
+            TRY_CATCH_CALL(stmt->Value(), cb, 1, argv);
+        }
+    }
 
     STATEMENT_END();
 }
@@ -411,6 +442,8 @@ Napi::Value Statement::Run(const Napi::CallbackInfo& info) {
         return info.This();
     }
 }
+
+
 
 void Statement::Work_BeginRun(Baton* baton) {
     STATEMENT_BEGIN(Run);
@@ -489,51 +522,7 @@ void Statement::Work_All(napi_env e, void* data) {
     }
 }
 
-static Napi::Value convert_chunk(Napi::Env& env, vector<string> names, duckdb::DataChunk& chunk) {
-    Napi::EscapableHandleScope scope(env);
-	vector<Napi::String> node_names;
-	assert(names.size() == chunk.column_count());
-	for (auto& name : names) {
-        node_names.push_back(Napi::String::New(env, name));
-    }
-    Napi::Array result(Napi::Array::New(env, chunk.size()));
 
-    for (duckdb::idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
-        Napi::Object row_result = Napi::Object::New(env);
-
-        for (duckdb::idx_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
-            Napi::Value value;
-
-			// TODO templateroo here
-			// TODO NULL handling
-            switch (chunk.data[col_idx].type.id()) {
-            case duckdb::LogicalTypeId::INTEGER: {
-                value = Napi::Number::New(env, chunk.GetValue(col_idx, row_idx).value_.integer);
-            } break;
-            case duckdb::LogicalTypeId::BIGINT: {
-                value = Napi::Number::New(env, chunk.GetValue(col_idx, row_idx).value_.bigint);
-            } break;
-            case duckdb::LogicalTypeId::VARCHAR: {
-                value = Napi::String::New(env, chunk.GetValue(col_idx, row_idx).str_value);
-            } break;
-
-                //                            case SQLITE_BLOB: {
-                //                                value = Napi::Buffer<char>::Copy(env, ((Values::Blob*)field)->value, ((Values::Blob*)field)->length);
-                //                            } break;
-            case duckdb::LogicalTypeId::SQLNULL: {
-                value = env.Null();
-            } break;
-            default:
-                Napi::Error::New(env, "Data type is not supported " + chunk.data[col_idx].type.ToString()).ThrowAsJavaScriptException();
-                return env.Null();
-            }
-            row_result.Set(node_names[col_idx], value);
-        }
-        result.Set(row_idx, row_result);
-    }
-
-    return scope.Escape(result);
-}
 
 void Statement::Work_AfterAll(napi_env e, napi_status status, void* data) {
     std::unique_ptr<RowsBaton> baton(static_cast<RowsBaton*>(data));
@@ -631,7 +620,7 @@ void Statement::Work_Each(napi_env e, void* data) {
     Async* async = baton->async;
 
 	stmt->_res_handle.reset();
-    stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, true);
+    stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, false);
 
 	if (!stmt->_res_handle->success) {
         stmt->status = -1;
@@ -642,19 +631,17 @@ void Statement::Work_Each(napi_env e, void* data) {
         return;
     }
 
-	async->names = stmt->_res_handle->names;
+    async->names = stmt->_res_handle->names;
 
-    while (true) {
-        auto chunk = stmt->_res_handle->Fetch();
-        if (chunk->size() == 0) {
-            break;
-        }
-        {
-            std::lock_guard<std::mutex> lock(async->mutex);
-            async->data = move(chunk);
-        }
-		uv_async_send(&async->watcher);
-    }
+    // FIXME this should be a streaming impl
+    auto& mat_qr = (duckdb::MaterializedQueryResult&) *stmt->_res_handle;
+
+	{
+        std::lock_guard<std::mutex> lock(async->mutex);
+        for (auto& chunk : mat_qr.collection.chunks) {
+			async->data.Append(*chunk);
+		}
+	}
 
     async->completed = true;
     uv_async_send(&async->watcher);
@@ -673,39 +660,49 @@ void Statement::AsyncEach(uv_async_t* handle) {
     Napi::Env env = async->stmt->Env();
     Napi::HandleScope scope(env);
 
-    while (true) {
+    Napi::Function item_cb = async->item_cb.Value();
+    if (item_cb.IsUndefined() || !item_cb.IsFunction()) {
+		return;
+	}
+    Napi::Value argv[2];
+    argv[0] = env.Null();
+
+   // while (true) {
         // Get the contents out of the data cache for us to process in the JS callback.
-        unique_ptr<duckdb::DataChunk> rows;
-		{
-			std::lock_guard<std::mutex> lock(async->mutex);
-            rows.swap(async->data);
-		}
-        if (!rows || rows->size() == 0) {
-            break;
-        }
-		auto converted_chunk = convert_chunk(env, async->names, *rows).ToObject();
+//        unique_ptr<duckdb::ChunkCollection> rows;
+//		{
+//			std::lock_guard<std::mutex> lock(async->mutex);
+//            rows.swap(async->data);
+//		}
+//        if (!rows || rows->count == 0) {
+//            break;
+//        }
+//		if (async->data.count == 0) {
+//			break;
+//		}
 
-        Napi::Function cb = async->item_cb.Value();
-        if (!cb.IsUndefined() && cb.IsFunction()) {
-            Napi::Value argv[2];
-            argv[0] = env.Null();
-
-			for (duckdb::idx_t row_idx = 0; row_idx < rows->size(); row_idx++) {
+		for (auto& chunk: async->data.chunks) {
+            auto converted_chunk = convert_chunk(env, async->names, *chunk).ToObject();
+		    if (!converted_chunk.IsArray()) {
+			    // TODO complain
+		    }
+            for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
                 argv[1] = converted_chunk.Get(row_idx);
-                TRY_CATCH_CALL(async->stmt->Value(), cb, 2, argv);
-			}
+                TRY_CATCH_CALL(async->stmt->Value(), item_cb, 2, argv);
+			    async->retrieved++;
+            }
         }
-    }
+    //}
 
-    Napi::Function cb = async->completed_cb.Value();
+    Napi::Function final_cb = async->completed_cb.Value();
     if (async->completed) {
-        if (!cb.IsEmpty() &&
-                cb.IsFunction()) {
+        if (!final_cb.IsEmpty() &&
+            final_cb.IsFunction()) {
             Napi::Value argv[] = {
                 env.Null(),
                 Napi::Number::New(env, async->retrieved)
             };
-            TRY_CATCH_CALL(async->stmt->Value(), cb, 2, argv);
+            TRY_CATCH_CALL(async->stmt->Value(), final_cb, 2, argv);
         }
         uv_close(reinterpret_cast<uv_handle_t*>(handle), CloseCallback);
     }
@@ -800,7 +797,6 @@ void Statement::Finalize_() {
    // sqlite3_finalize(_handle);
     _res_handle.reset();
     _stmt_handle.reset();
-    _chunk_handle.reset();
     db->Unref();
 }
 

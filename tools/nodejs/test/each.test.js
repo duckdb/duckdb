@@ -4,7 +4,7 @@ var assert = require('assert');
 describe('each', function() {
     var db;
     before(function(done) {
-        db = new sqlite3.Database('test/support/big.db', sqlite3.OPEN_READONLY, done);
+        db = new sqlite3.Database('test/support/big.db', done);
     });
 
     it('retrieve 100,000 rows with Statement#each', function(done) {
@@ -12,10 +12,9 @@ describe('each', function() {
         var retrieved = 0;
         
 
-        db.each('SELECT id, txt FROM foo LIMIT 0, ?', total, function(err, row) {
+        db.each('SELECT id, txt FROM foo WHERE ROWID < ?', total, function(err, row) {
             if (err) throw err;
             retrieved++;
-            
             if(retrieved === total) {
                 assert.equal(retrieved, total, "Only retrieved " + retrieved + " out of " + total + " rows.");
                 done();
@@ -27,7 +26,7 @@ describe('each', function() {
         var total = 10000;
         var retrieved = 0;
 
-        db.each('SELECT id, txt FROM foo LIMIT 0, ?', total, function(err, row) {
+        db.each('SELECT id, txt FROM foo WHERE ROWID < ?', total, function(err, row) {
             if (err) throw err;
             retrieved++;
         }, function(err, num) {

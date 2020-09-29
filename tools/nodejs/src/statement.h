@@ -43,7 +43,7 @@ public:
     struct RowBaton : Baton {
         RowBaton(Statement* stmt_, Napi::Function cb_) :
             Baton(stmt_, cb_) {}
-      //  Row row;
+
     };
 
     struct RunBaton : Baton {
@@ -100,7 +100,7 @@ public:
     struct Async {
         uv_async_t watcher;
         Statement* stmt;
-        std::unique_ptr<duckdb::DataChunk> data;
+        duckdb::ChunkCollection data;
 		vector<string> names;
 
         std::mutex mutex;
@@ -176,9 +176,6 @@ protected:
 
     std::unique_ptr<duckdb::PreparedStatement> _stmt_handle;
     std::unique_ptr<duckdb::QueryResult> _res_handle;
-    std::unique_ptr<duckdb::DataChunk> _chunk_handle;
-
-	duckdb::idx_t chunk_offset = 0;
     int status;
     std::string message;
 

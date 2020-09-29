@@ -32,15 +32,15 @@ CREATE TABLE IF NOT EXISTS metadata (
 );
 
 
-CREATE UNIQUE INDEX IF NOT EXISTS map_index ON map (zoom_level, tile_column, tile_row);
-CREATE UNIQUE INDEX IF NOT EXISTS grid_key_lookup ON grid_key (grid_id, key_name);
-CREATE UNIQUE INDEX IF NOT EXISTS keymap_lookup ON keymap (key_name);
-CREATE UNIQUE INDEX IF NOT EXISTS grid_utfgrid_lookup ON grid_utfgrid (grid_id);
-CREATE UNIQUE INDEX IF NOT EXISTS images_id ON images (tile_id);
-CREATE UNIQUE INDEX IF NOT EXISTS name ON metadata (name);
+-- CREATE UNIQUE INDEX IF NOT EXISTS map_index ON map (zoom_level, tile_column, tile_row);
+-- CREATE UNIQUE INDEX IF NOT EXISTS grid_key_lookup ON grid_key (grid_id, key_name);
+-- CREATE UNIQUE INDEX IF NOT EXISTS keymap_lookup ON keymap (key_name);
+-- CREATE UNIQUE INDEX IF NOT EXISTS grid_utfgrid_lookup ON grid_utfgrid (grid_id);
+-- CREATE UNIQUE INDEX IF NOT EXISTS images_id ON images (tile_id);
+-- CREATE UNIQUE INDEX IF NOT EXISTS name ON metadata (name);
 
 
-CREATE VIEW IF NOT EXISTS tiles AS
+CREATE OR REPLACE VIEW tiles AS
     SELECT
         map.zoom_level AS zoom_level,
         map.tile_column AS tile_column,
@@ -49,7 +49,7 @@ CREATE VIEW IF NOT EXISTS tiles AS
     FROM map
     JOIN images ON images.tile_id = map.tile_id;
 
-CREATE VIEW IF NOT EXISTS grids AS
+CREATE OR REPLACE VIEW grids AS
     SELECT
         map.zoom_level AS zoom_level,
         map.tile_column AS tile_column,
@@ -58,7 +58,7 @@ CREATE VIEW IF NOT EXISTS grids AS
     FROM map
     JOIN grid_utfgrid ON grid_utfgrid.grid_id = map.grid_id;
 
-CREATE VIEW IF NOT EXISTS grid_data AS
+CREATE OR REPLACE VIEW grid_data AS
     SELECT
         map.zoom_level AS zoom_level,
         map.tile_column AS tile_column,
