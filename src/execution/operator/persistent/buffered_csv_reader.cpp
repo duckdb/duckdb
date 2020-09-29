@@ -1249,8 +1249,8 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 		return;
 	}
 	if (column >= sql_types.size()) {
-		throw ParserException("Error on line %s: expected %lld values but got %d",
-		                      GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column + 1);
+		throw ParserException("Error on line %s: expected %lld values per row, but got more",
+		                      GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size());
 	}
 
 	// insert the line number into the chunk
@@ -1295,7 +1295,7 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	linenr++;
 
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
-		throw ParserException("Error on line %s: expected %lld values but got %d",
+		throw ParserException("Error on line %s: expected %lld values per row but got %d",
 		                      GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column);
 	}
 
