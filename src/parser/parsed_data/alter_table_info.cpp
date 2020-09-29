@@ -13,6 +13,8 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	switch (type) {
 	case AlterType::ALTER_TABLE:
 		return AlterTableInfo::Deserialize(source);
+	case AlterType::ALTER_VIEW:
+		return AlterViewInfo::Deserialize(source);
 	default:
 		throw SerializationException("Unknown alter type for deserialization!");
 	}
@@ -22,7 +24,7 @@ void AlterTableInfo::Serialize(Serializer &serializer) {
 	AlterInfo::Serialize(serializer);
 	serializer.Write<AlterTableType>(alter_table_type);
 	serializer.WriteString(schema);
-	serializer.WriteString(table);
+	serializer.WriteString(name);
 }
 
 unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &source) {
@@ -143,7 +145,7 @@ void AlterViewInfo::Serialize(Serializer &serializer) {
 	AlterInfo::Serialize(serializer);
 	serializer.Write<AlterViewType>(alter_view_type);
 	serializer.WriteString(schema);
-	serializer.WriteString(view);
+	serializer.WriteString(name);
 }
 
 unique_ptr<AlterInfo> AlterViewInfo::Deserialize(Deserializer &source) {

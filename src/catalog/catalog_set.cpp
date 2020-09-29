@@ -132,6 +132,8 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 		}
 		mapping[value->name] = entry_index;
 	}
+	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
+	catalog.dependency_manager->AlterObject(transaction, entry);
 
 	value->timestamp = transaction.transaction_id;
 	value->child = move(entries[entry_index]);

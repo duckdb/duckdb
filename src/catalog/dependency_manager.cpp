@@ -37,6 +37,7 @@ void DependencyManager::AddObject(Transaction &transaction, CatalogEntry *object
 	// create the dependents map for this object: it starts out empty
 	dependents_map[object_dependency] = dependency_set_t();
 	dependencies_map[object_dependency] = move(dependencies);
+	reference_count[object_dependency]++;
 }
 
 void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *object, bool cascade,
@@ -65,10 +66,35 @@ void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *objec
 	}
 }
 
-void DependencyManager::EraseObject(CatalogEntry *object) {
+void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *object) {
+	Dependency dep(object);
+	assert(dependents_map.find(dep) != dependents_map.end());
+
+	// first check the objects that depend on this object
+	auto &dependent_objects = dependents_map[dep];
+	for (auto &dep : dependent_objects) {
+		// look up the entry in the catalog set
+		CatalogEntry *entry;
+		auto &catalog_set = *dep.set;
+		if (!catalog_set.GetEntryInternal(transaction, dep.entry_index, entry)) {
+			continue;
+		}
+		throw CatalogException("Cannot alter entry \"%s\" because there are entries that depend on it.",
+								object->name);
+	}
+	reference_count[dep]++;
+}
+
+void DependencyManager::EraseObject(CatalogEntry *catalog_entry) {
 	// obtain the writing lock
 	lock_guard<mutex> write_lock(catalog.write_lock);
-	EraseObjectInternal(object);
+	Dependency object(catalog_entry);
+	auto entry = reference_count.find(object);
+	assert(entry != reference_count.end());
+	entry->second--;
+	if (entry->second == 0) {
+		EraseObjectInternal(catalog_entry);
+	}
 }
 
 void DependencyManager::EraseObjectInternal(CatalogEntry *entry) {

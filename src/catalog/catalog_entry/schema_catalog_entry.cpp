@@ -159,24 +159,8 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 }
 
 void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
-	CatalogType type;
-	string name;
-	switch(info->type) {
-	case AlterType::ALTER_TABLE: {
-		auto &table_info = (AlterTableInfo &) *info;
-		type = CatalogType::TABLE_ENTRY;
-		name = table_info.table;
-		break;
-	}
-	case AlterType::ALTER_VIEW: {
-		auto &view_info = (AlterViewInfo &) *info;
-		type = CatalogType::VIEW_ENTRY;
-		name = view_info.view;
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented type for alter");
-	}
+	CatalogType type = info->GetCatalogType();
+	string name = info->name;
 	auto &set = GetCatalogSet(type);
 	if (!set.AlterEntry(context, name, info)) {
 		throw CatalogException("Entry with name \"%s\" does not exist!", name);

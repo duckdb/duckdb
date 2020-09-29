@@ -18,21 +18,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	Catalog &catalog = Catalog::GetCatalog(context);
-	CatalogEntry *entry;
-	switch(stmt.info->type) {
-	case AlterType::ALTER_TABLE: {
-		auto &table_info = (AlterTableInfo &) *stmt.info;
-		entry = catalog.GetEntry<TableCatalogEntry>(context, table_info.schema, table_info.table, true);
-		break;
-	}
-	case AlterType::ALTER_VIEW: {
-		auto &view_info = (AlterViewInfo &) *stmt.info;
-		entry = catalog.GetEntry<ViewCatalogEntry>(context, view_info.schema, view_info.view, true);
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented type for bind alter");
-	}
+	auto entry = catalog.GetEntry(context, stmt.info->GetCatalogType(), stmt.info->schema, stmt.info->name, true);
 	if (entry && !entry->temporary) {
 		// we can only alter temporary tables/views in read-only mode
 		this->read_only = false;

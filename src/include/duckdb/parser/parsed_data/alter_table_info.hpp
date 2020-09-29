@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 
 namespace duckdb {
 
@@ -20,15 +21,18 @@ enum class AlterType : uint8_t {
 };
 
 struct AlterInfo : public ParseInfo {
-	AlterInfo(AlterType type, string schema) : type(type), schema(schema) {
+	AlterInfo(AlterType type, string schema, string name) : type(type), schema(schema), name(name) {
 	}
 	virtual ~AlterInfo() {
 	}
 
 	AlterType type;
-	//! Schema name to alter to
+	//! Schema name to alter
 	string schema;
-
+	//! Entry name to alter
+	string name;
+public:
+	virtual CatalogType GetCatalogType() = 0;
 	virtual void Serialize(Serializer &serializer);
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
@@ -48,16 +52,17 @@ enum class AlterTableType : uint8_t {
 
 struct AlterTableInfo : public AlterInfo {
 	AlterTableInfo(AlterTableType type, string schema, string table)
-	    : AlterInfo(AlterType::ALTER_TABLE, schema), alter_table_type(type), table(table) {
+	    : AlterInfo(AlterType::ALTER_TABLE, schema, table), alter_table_type(type) {
 	}
 	virtual ~AlterTableInfo() override {
 	}
 
 	AlterTableType alter_table_type;
-	//! Table name to alter
-	string table;
 
 public:
+	CatalogType GetCatalogType() override {
+		return CatalogType::TABLE_ENTRY;
+	}
 	virtual void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
@@ -195,16 +200,16 @@ enum class AlterViewType : uint8_t {
 
 struct AlterViewInfo : public AlterInfo {
 	AlterViewInfo(AlterViewType type, string schema, string view)
-	    : AlterInfo(AlterType::ALTER_VIEW, schema), alter_view_type(type), view(view) {
+	    : AlterInfo(AlterType::ALTER_VIEW, schema, view), alter_view_type(type) {
 	}
 	virtual ~AlterViewInfo() override {
 	}
 
 	AlterViewType alter_view_type;
-	//! View name to alter to
-	string view;
-
 public:
+	CatalogType GetCatalogType() override {
+		return CatalogType::VIEW_ENTRY;
+	}
 	virtual void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
