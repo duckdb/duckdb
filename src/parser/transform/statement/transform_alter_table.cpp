@@ -8,12 +8,12 @@ namespace duckdb {
 using namespace std;
 using namespace duckdb_libpgquery;
 
-unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
+unique_ptr<AlterStatement> Transformer::TransformAlter(PGNode *node) {
 	auto stmt = reinterpret_cast<PGAlterTableStmt *>(node);
 	assert(stmt);
 	assert(stmt->relation);
 
-	auto result = make_unique<AlterTableStatement>();
+	auto result = make_unique<AlterStatement>();
 
 	auto qname = TransformQualifiedName(stmt->relation);
 

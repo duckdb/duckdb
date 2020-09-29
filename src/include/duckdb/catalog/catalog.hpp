@@ -90,8 +90,8 @@ public:
 	template <class T>
 	T *GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists = false);
 
-	//! Alter an existing table in the catalog.
-	void AlterTable(ClientContext &context, AlterTableInfo *info);
+	//! Alter an existing entry in the catalog.
+	void Alter(ClientContext &context, AlterInfo *info);
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to DEFAULT_SCHEMA

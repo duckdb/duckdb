@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/common/limits.hpp"
 
@@ -22,6 +23,23 @@ void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
     : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info->view_name) {
 	Initialize(info);
+}
+
+unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+	if (info->type != AlterType::ALTER_VIEW) {
+		throw CatalogException("Can only modify view with ALTER VIEW statement");
+	}
+	auto view_info = (AlterViewInfo *)info;
+	switch (view_info->alter_view_type) {
+	case AlterViewType::RENAME_VIEW: {
+		auto rename_info = (RenameViewInfo *)view_info;
+		auto copied_view = Copy(context);
+		copied_view->name = rename_info->new_view_name;
+		return copied_view;
+	}
+	default:
+		throw InternalException("Unrecognized alter view type!");
+	}
 }
 
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
