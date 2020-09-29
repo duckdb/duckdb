@@ -79,8 +79,7 @@ void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *obje
 		if (!catalog_set.GetEntryInternal(transaction, dep.entry_index, entry)) {
 			continue;
 		}
-		throw CatalogException("Cannot alter entry \"%s\" because there are entries that depend on it.",
-								object->name);
+		throw CatalogException("Cannot alter entry \"%s\" because there are entries that depend on it.", object->name);
 	}
 	reference_count[dep]++;
 }

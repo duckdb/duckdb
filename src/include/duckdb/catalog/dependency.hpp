@@ -36,9 +36,8 @@ struct DependencyEquality {
 	}
 };
 
-template <typename T>
-using dependency_map_t = unordered_map<Dependency, T, DependencyHashFunction, DependencyEquality>;
+template <typename T> using dependency_map_t = unordered_map<Dependency, T, DependencyHashFunction, DependencyEquality>;
 
 using dependency_set_t = unordered_set<Dependency, DependencyHashFunction, DependencyEquality>;
 
-}
+} // namespace duckdb

@@ -84,7 +84,7 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 		throw CatalogException("Cannot create built-in schema \"%s\"", info->schema);
 	}
 
-	unordered_set<CatalogEntry*> dependencies;
+	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {

@@ -14,11 +14,7 @@
 
 namespace duckdb {
 
-enum class AlterType : uint8_t {
-	INVALID = 0,
-	ALTER_TABLE = 1,
-	ALTER_VIEW = 2
-};
+enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1, ALTER_VIEW = 2 };
 
 struct AlterInfo : public ParseInfo {
 	AlterInfo(AlterType type, string schema, string name) : type(type), schema(schema), name(name) {
@@ -31,6 +27,7 @@ struct AlterInfo : public ParseInfo {
 	string schema;
 	//! Entry name to alter
 	string name;
+
 public:
 	virtual CatalogType GetCatalogType() = 0;
 	virtual void Serialize(Serializer &serializer);
@@ -92,8 +89,7 @@ public:
 //===--------------------------------------------------------------------===//
 struct RenameTableInfo : public AlterTableInfo {
 	RenameTableInfo(string schema, string table, string new_name)
-	    : AlterTableInfo(AlterTableType::RENAME_TABLE, schema, table),
-	      new_table_name(new_name) {
+	    : AlterTableInfo(AlterTableType::RENAME_TABLE, schema, table), new_table_name(new_name) {
 	}
 	~RenameTableInfo() override {
 	}
@@ -193,10 +189,7 @@ public:
 //===--------------------------------------------------------------------===//
 // Alter View
 //===--------------------------------------------------------------------===//
-enum class AlterViewType : uint8_t {
-	INVALID = 0,
-	RENAME_VIEW = 1
-};
+enum class AlterViewType : uint8_t { INVALID = 0, RENAME_VIEW = 1 };
 
 struct AlterViewInfo : public AlterInfo {
 	AlterViewInfo(AlterViewType type, string schema, string view)
@@ -206,6 +199,7 @@ struct AlterViewInfo : public AlterInfo {
 	}
 
 	AlterViewType alter_view_type;
+
 public:
 	CatalogType GetCatalogType() override {
 		return CatalogType::VIEW_ENTRY;
@@ -214,14 +208,12 @@ public:
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
 
-
 //===--------------------------------------------------------------------===//
 // RenameViewInfo
 //===--------------------------------------------------------------------===//
 struct RenameViewInfo : public AlterViewInfo {
 	RenameViewInfo(string schema, string view, string new_name)
-	    : AlterViewInfo(AlterViewType::RENAME_VIEW, schema, view),
-	      new_view_name(new_name) {
+	    : AlterViewInfo(AlterViewType::RENAME_VIEW, schema, view), new_view_name(new_name) {
 	}
 	~RenameViewInfo() override {
 	}

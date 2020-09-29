@@ -18,8 +18,7 @@ class AlterStatement : public SQLStatement {
 public:
 	AlterStatement() : SQLStatement(StatementType::ALTER_STATEMENT) {
 	}
-	AlterStatement(unique_ptr<AlterInfo> info)
-	    : SQLStatement(StatementType::ALTER_STATEMENT), info(move(info)) {
+	AlterStatement(unique_ptr<AlterInfo> info) : SQLStatement(StatementType::ALTER_STATEMENT), info(move(info)) {
 	}
 
 	unique_ptr<AlterInfo> info;

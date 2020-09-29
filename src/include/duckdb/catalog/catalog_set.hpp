@@ -64,15 +64,18 @@ public:
 	static bool HasConflict(Transaction &transaction, CatalogEntry &current);
 
 	idx_t GetEntryIndex(CatalogEntry *entry);
-	CatalogEntry* GetEntryFromIndex(idx_t index);
+	CatalogEntry *GetEntryFromIndex(idx_t index);
 	void ClearEntryName(string name);
+
 private:
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(Transaction &transaction, CatalogEntry *current);
 	bool GetEntryInternal(Transaction &transaction, const string &name, idx_t &entry_index, CatalogEntry *&entry);
 	bool GetEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry *&entry);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
-	void DropEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry &entry, bool cascade, set_lock_map_t &lock_set);
+	void DropEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry &entry, bool cascade,
+	                       set_lock_map_t &lock_set);
+
 private:
 	Catalog &catalog;
 	//! The catalog lock is used to make changes to the data

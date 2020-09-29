@@ -87,7 +87,8 @@ bool CatalogSet::GetEntryInternal(Transaction &transaction, idx_t entry_index, C
 	return true;
 }
 
-bool CatalogSet::GetEntryInternal(Transaction &transaction, const string &name, idx_t &entry_index, CatalogEntry *&catalog_entry) {
+bool CatalogSet::GetEntryInternal(Transaction &transaction, const string &name, idx_t &entry_index,
+                                  CatalogEntry *&catalog_entry) {
 	auto entry = mapping.find(name);
 	if (entry == mapping.end()) {
 		// if it does not: entry has never been created and cannot be altered
@@ -128,7 +129,8 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	}
 	if (value->name != name) {
 		if (mapping.find(value->name) != mapping.end()) {
-			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!", name, value->name);
+			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!",
+			                       name, value->name);
 		}
 		mapping[value->name] = entry_index;
 	}
@@ -152,7 +154,8 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	return true;
 }
 
-void CatalogSet::DropEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry &entry, bool cascade, set_lock_map_t &lock_set) {
+void CatalogSet::DropEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry &entry, bool cascade,
+                                   set_lock_map_t &lock_set) {
 	// check any dependencies of this object
 	entry.catalog->dependency_manager->DropObject(transaction, &entry, cascade, lock_set);
 
@@ -197,7 +200,6 @@ idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
 	assert(mapping.find(entry->name) != mapping.end());
 	idx_t entry_index = mapping[entry->name];
 	return entry_index;
-
 }
 
 bool CatalogSet::HasConflict(Transaction &transaction, CatalogEntry &current) {

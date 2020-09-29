@@ -1,4 +1,4 @@
-# name: test/sql/storage/catalog/test_rename_table.test
+# name: test/sql/storage/catalog/test_store_rename_table.test
 # description: Test storage of alter table rename table
 # group: [catalog]
 
