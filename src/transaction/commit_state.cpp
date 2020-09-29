@@ -24,14 +24,14 @@ void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 }
 
 void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
+	if (entry->temporary || entry->parent->temporary) {
+		return;
+	}
 	assert(log);
 	// look at the type of the parent entry
 	auto parent = entry->parent;
 	switch (parent->type) {
 	case CatalogType::TABLE_ENTRY:
-		if (parent->temporary) {
-			return;
-		}
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
@@ -54,9 +54,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateSchema((SchemaCatalogEntry *)parent);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		if (parent->temporary) {
-			return;
-		}
 		if (entry->type == CatalogType::VIEW_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
