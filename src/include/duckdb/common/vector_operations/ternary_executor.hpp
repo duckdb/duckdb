@@ -88,15 +88,15 @@ private:
 			auto aidx = asel.get_index(i);
 			auto bidx = bsel.get_index(i);
 			auto cidx = csel.get_index(i);
-			if ((NO_NULL || (!anullmask[aidx] && !bnullmask[bidx] && !cnullmask[cidx])) &&
-			    OP::Operation(adata[aidx], bdata[bidx], cdata[cidx])) {
-				if (HAS_TRUE_SEL) {
-					true_sel->set_index(true_count++, result_idx);
-				}
-			} else {
-				if (HAS_FALSE_SEL) {
-					false_sel->set_index(false_count++, result_idx);
-				}
+			bool comparison_result = (NO_NULL || (!anullmask[aidx] && !bnullmask[bidx] && !cnullmask[cidx])) &&
+			    OP::Operation(adata[aidx], bdata[bidx], cdata[cidx]);
+			if (HAS_TRUE_SEL) {
+				true_sel->set_index(true_count, result_idx);
+				true_count += comparison_result;
+			}
+			if (HAS_FALSE_SEL) {
+				false_sel->set_index(false_count, result_idx);
+				false_count += !comparison_result;
 			}
 		}
 		if (HAS_TRUE_SEL) {
