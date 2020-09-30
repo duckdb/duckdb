@@ -64,10 +64,10 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 	if (source_nullmask->any()) {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (!(*source_nullmask)[src_idx] && OP::Operation(((T *)source)[src_idx], constant)) {
-				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
-				new_sel.set_index(result_count++, src_idx);
-			}
+			bool comparison_result = !(*source_nullmask)[src_idx] && OP::Operation(((T *)source)[src_idx], constant);
+			((T *)result_data)[src_idx] = ((T *)source)[src_idx];
+			new_sel.set_index(result_count, src_idx);
+			result_count += comparison_result;
 		}
 	} else {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
@@ -92,11 +92,11 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 	if (source_nullmask->any()) {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (!(*source_nullmask)[src_idx] && OPL::Operation(((T *)source)[src_idx], constantLeft) &&
-			    OPR::Operation(((T *)source)[src_idx], constantRight)) {
-				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
-				new_sel.set_index(result_count++, src_idx);
-			}
+			bool comparison_result = !(*source_nullmask)[src_idx] && OPL::Operation(((T *)source)[src_idx], constantLeft) &&
+			    OPR::Operation(((T *)source)[src_idx], constantRight);
+			((T *)result_data)[src_idx] = ((T *)source)[src_idx];
+			new_sel.set_index(result_count, src_idx);
+			result_count += comparison_result;
 		}
 	} else {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
