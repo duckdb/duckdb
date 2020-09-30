@@ -1295,7 +1295,7 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	linenr++;
 
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
-		throw InvalidInputException("Error on line %s: expected %lld values per row but got %d",
+		throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d",
 		                      GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column);
 	}
 
