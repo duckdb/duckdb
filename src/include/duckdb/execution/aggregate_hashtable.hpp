@@ -35,9 +35,6 @@ struct AggregateObject {
 	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
 };
 
-typedef uint64_t AHT_VAL_TPE; // FIXME put me into template
-typedef uint16_t AHT_PFX_TPE; // FIXME put me into template, too
-
 //! GroupedAggregateHashTable is a linear probing HT that is used for computing
 //! aggregates
 /*!
@@ -45,6 +42,34 @@ typedef uint16_t AHT_PFX_TPE; // FIXME put me into template, too
    as input the set of groups and the types of the aggregates to compute and
    stores them in the HT. It uses linear probing for collision resolution.
 */
+
+// two part hash table
+// hashes and payload
+// hashes layout:
+// [SALT][PAGE_NR][PAGE_OFFSET]
+// [SALT] are the high bits of the hash value, e.g. 16 for 64 bit hashes
+// [PAGE_NR] is the buffer managed payload page index
+// [PAGE_OFFSET] is the logical entry offset into said payload payge
+
+// payload layout
+// [HASH][GROUPS][PADDING][PAYLOAD]
+// [HASH] is the hash of the groups
+// [GROUPS] is the group data, could be multiple values, fixed size, strings are elsewhere
+// [PADDING] is gunk data to align payload properly
+// [PAYLOAD] is the payload (i.e. the aggregate states)
+
+struct aggr_ht_entry_64 {
+	uint16_t salt;
+	uint16_t page_nr;
+	uint32_t page_offset;
+};
+
+struct aggr_ht_entry_32 {
+	uint8_t salt;
+	uint8_t page_nr;
+	uint16_t page_offset;
+};
+
 class GroupedAggregateHashTable {
 public:
 	GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
@@ -115,15 +140,15 @@ private:
 	unique_ptr<BufferHandle> hashes_hdl;
 	data_ptr_t hashes_end_ptr; // of hashes
 
-	idx_t payload_end_idx;
+	idx_t hash_prefix_shift = 48;
+
+	idx_t payload_block_idx;
 
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
-	AHT_VAL_TPE bitmask;
-
-	AHT_VAL_TPE hash_prefix_remove_bitmask;
-	AHT_VAL_TPE hash_prefix_get_bitmask;
+	hash_t bitmask;
+	hash_t hash_prefix_get_bitmask;
 
 	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 
@@ -135,7 +160,6 @@ private:
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
 	void Resize(idx_t size);
-	void HashGroups(DataChunk &groups, Vector &addresses);
 	void Destroy();
 	void CallDestructors(Vector &state_vector, idx_t count);
 	void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
@@ -144,7 +168,7 @@ private:
 	void Verify();
 	void FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
-	data_ptr_t GetPtr(AHT_VAL_TPE ht_entry_val);
+	data_ptr_t GetPtr(aggr_ht_entry_64 &ht_entry_val);
 };
 
 } // namespace duckdb
