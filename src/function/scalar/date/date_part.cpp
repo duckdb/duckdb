@@ -119,7 +119,7 @@ template <> int64_t MilleniumOperator::Operation(timestamp_t input) {
 
 struct QuarterOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return Date::ExtractMonth(input) / 4;
+		return (Date::ExtractMonth(input) - 1) / 3 + 1;
 	}
 };
 
