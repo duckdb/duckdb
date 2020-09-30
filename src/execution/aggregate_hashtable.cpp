@@ -61,7 +61,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	assert(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 
 	tuples_per_block = Storage::BLOCK_ALLOC_SIZE / tuple_size;
-	hash_prefix_get_bitmask = ((hash_t)-1 << (hash_width * 8 - sizeof(uint16_t)));
+	hash_prefix_get_bitmask = ((hash_t)-1 << ((hash_width - sizeof(uint16_t)) * 8));
 
 	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 	Resize(initial_capacity);

@@ -54,24 +54,51 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<u
 	}
 }
 
-typedef uint64_t radix_t;
-
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalOperatorState {
 public:
 	HashAggregateGlobalState(BufferManager &buffer_manager, vector<LogicalType> &group_types,
-	                         vector<LogicalType> &payload_types, vector<BoundAggregateExpression *> &bindings)
+	                         vector<LogicalType> &payload_types, vector<BoundAggregateExpression *> &bindings,
+	                         idx_t _parallel_threads)
 	    : is_empty(true) {
+		radix_partitions = 1;
+		radix_bits = 0;
+		// we need one thread to merge the non-partition hts, hence the -1
+		while (radix_partitions <= _parallel_threads - 1) {
+			radix_partitions *= 2;
+			radix_bits++;
+			if (radix_partitions >= 256) {
+				break;
+			}
+		}
+		// finalize_threads needs to be a power of 2
+		assert(radix_partitions > 0);
+		assert(radix_partitions <= 256);
+		assert((radix_partitions & (radix_partitions - 1)) == 0);
+		assert(radix_bits >= 0);
+		assert(radix_bits <= 8);
+
+		// we use the fourth byte of the 64 bit hash as radix source
+		radix_mask = 0;
+		for (idx_t i = 0; i < radix_bits; i++) {
+			radix_mask = (radix_mask << 1) | 1;
+		}
+		radix_mask <<= 32;
 	}
 
-	unordered_map<radix_t, vector<unique_ptr<GroupedAggregateHashTable>>> hts;
+	unordered_map<hash_t, vector<unique_ptr<GroupedAggregateHashTable>>> hts;
 
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
 	//! The lock for updating the global aggregate state
 	std::mutex lock;
+
+	//! how many threads should be used in finalizing this HT
+	idx_t radix_partitions;
+	idx_t radix_bits;
+	hash_t radix_mask;
 };
 
 class HashAggregateLocalState : public LocalSinkState {
@@ -91,8 +118,6 @@ public:
 		if (payload_types.size() > 0) {
 			payload_chunk.Initialize(payload_types);
 		}
-		hts[0].push_back(make_unique<GroupedAggregateHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
-		                                                        payload_types, bound_aggregates));
 	}
 
 	BufferManager &buffer_manager;
@@ -109,7 +134,7 @@ public:
 	DataChunk payload_chunk;
 	//! The aggregate HT
 
-	unordered_map<radix_t, vector<unique_ptr<GroupedAggregateHashTable>>> hts;
+	unordered_map<hash_t, vector<unique_ptr<GroupedAggregateHashTable>>> hts;
 
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
@@ -117,7 +142,7 @@ public:
 
 unique_ptr<GlobalOperatorState> PhysicalHashAggregate::GetGlobalState(ClientContext &context) {
 	return make_unique<HashAggregateGlobalState>(BufferManager::GetBufferManager(context), group_types, payload_types,
-	                                             bindings);
+	                                             bindings, TaskScheduler::GetScheduler(context).NumberOfThreads());
 }
 
 unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionContext &context) {
@@ -128,13 +153,12 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                                  DataChunk &input) {
 	auto &llstate = (HashAggregateLocalState &)lstate;
+	auto &gstate = (HashAggregateGlobalState &)state;
 
-	auto &sink = (HashAggregateLocalState &)lstate;
-
-	DataChunk &group_chunk = sink.group_chunk;
-	DataChunk &payload_chunk = sink.payload_chunk;
-	sink.group_executor.Execute(input, group_chunk);
-	sink.payload_executor.SetChunk(input);
+	DataChunk &group_chunk = llstate.group_chunk;
+	DataChunk &payload_chunk = llstate.payload_chunk;
+	llstate.group_executor.Execute(input, group_chunk);
+	llstate.payload_executor.SetChunk(input);
 
 	payload_chunk.Reset();
 	idx_t payload_idx = 0, payload_expr_idx = 0;
@@ -143,7 +167,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 		if (aggr.children.size()) {
 			for (idx_t j = 0; j < aggr.children.size(); ++j) {
-				sink.payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
+				llstate.payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
 				payload_idx++;
 				payload_expr_idx++;
 			}
@@ -156,51 +180,41 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	payload_chunk.Verify();
 	assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
-	// intermediate ht
-
-	// 32 bit ht entry
-	// 8 bits salt
-	// 24 bit payload idx
-	// 2^24 = 16777216 or 2^24/32 = 524288 entries max
-
-	// final ht
-	// 64 bit ht
-	// 16 bit salt
-	// 48 bit payload idx
-
 	// we need to hash here already
 	Vector hashes(LogicalType::HASH);
 	group_chunk.Hash(hashes);
 
-	idx_t radix_limit = 1000;
-	idx_t dop = 4;
+	// FIXME
+	idx_t ht_load_limit = 1048576; // 2 ^ 20, but needs experimental confirmation
+
 	// radix-partitioned case
-	if (true || llstate.hts[0][0]->Size() > radix_limit) {
+	if (all_combinable && gstate.radix_partitions > 1 && llstate.hts[0].size() > 0 &&
+	    llstate.hts[0][0]->Size() > ht_load_limit) {
 		// we need to generate selection vectors for all radixes and then pick the corresponding ht and add the data
 		// with that selection
 
-		// we use the fourth byte of the 64 bit hash as radix source
-		hash_t radix_mask = 0x0000000300000000; // TODO auto-generate this based on dop
-		Vector radix_mask_vec(Value::HASH(radix_mask));
+		// makes no sense to do this with 1 partition
+		assert(gstate.radix_partitions > 1);
 
-		vector<SelectionVector> sel_vectors(dop);
-		vector<idx_t> sel_vector_sizes(dop);
-		for (hash_t r = 0; r < dop; r++) {
+		Vector radix_mask_vec(Value::HASH(gstate.radix_mask));
+		vector<SelectionVector> sel_vectors(gstate.radix_partitions);
+		vector<idx_t> sel_vector_sizes(gstate.radix_partitions);
+		for (hash_t r = 0; r < gstate.radix_partitions; r++) {
 			sel_vectors[r].Initialize();
 			sel_vector_sizes[r] = 0;
 		}
 
 		auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 		for (idx_t i = 0; i < group_chunk.size(); i++) {
-			auto partition = (hashes_ptr[i] & radix_mask) >> 32;
-			assert(partition < dop);
+			auto partition = (hashes_ptr[i] & gstate.radix_mask) >> 32;
+			assert(partition < gstate.radix_partitions);
 			sel_vectors[partition].set_index(sel_vector_sizes[partition]++, i);
 		}
 
 #ifdef DEBUG
 		// make sure we have lost no rows
 		idx_t total_count = 0;
-		for (idx_t r = 0; r < dop; r++) {
+		for (idx_t r = 0; r < gstate.radix_partitions; r++) {
 			total_count += sel_vector_sizes[r];
 		}
 		assert(total_count == group_chunk.size());
@@ -210,23 +224,24 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		group_subset.Initialize(group_types);
 		payload_subset.Initialize(payload_types);
 
-		for (hash_t r = 0; r < dop; r++) {
+		for (hash_t r = 0; r < gstate.radix_partitions; r++) {
 			group_subset.Slice(group_chunk, sel_vectors[r], sel_vector_sizes[r]);
 			payload_subset.Slice(payload_chunk, sel_vectors[r], sel_vector_sizes[r]);
 
-			if (llstate.hts[r].size() == 0 || llstate.hts[r].back()->Size() > 1000000) {
+			auto ht_idx = r + 1;
+
+			if (llstate.hts[ht_idx].size() == 0 || llstate.hts[ht_idx].back()->Size() > ht_load_limit) {
 				// TODO duplicated code
-				llstate.hts[r].push_back(
+				llstate.hts[ht_idx].push_back(
 				    make_unique<GroupedAggregateHashTable>(llstate.buffer_manager, STANDARD_VECTOR_SIZE * 2,
 				                                           group_types, payload_types, llstate.bound_aggregates));
 			}
-			llstate.hts[r].back()->AddChunk(group_subset, hashes, payload_subset);
+			llstate.hts[ht_idx].back()->AddChunk(group_subset, hashes, payload_subset);
 		}
 
 	} else {
-		if (llstate.hts[0].back()->Size() > 500) {
+		if (all_combinable && (llstate.hts[0].size() == 0 || llstate.hts[0].back()->Size() > ht_load_limit)) {
 			// FIXME this code is duplicated from llstate constructor
-			printf("overflow base\n");
 			llstate.hts[0].push_back(make_unique<GroupedAggregateHashTable>(llstate.buffer_manager,
 			                                                                STANDARD_VECTOR_SIZE * 2, group_types,
 			                                                                payload_types, llstate.bound_aggregates));
@@ -288,19 +303,20 @@ public:
 	    : parent(parent_), state(state_), radix(radix_) {
 	}
 	void Execute() {
-
 		if (state.hts[radix].size() > 1) {
+			// fold all the ht's in a radix partition into the first one
 			for (idx_t i = 1; i < state.hts[radix].size(); i++) {
 				state.hts[radix][0]->Combine(*state.hts[radix][i]);
 				state.hts[radix][i].reset();
 			}
-			state.hts[radix][0]->Finalize();
+			// keep only payload
 			state.hts[radix].erase(state.hts[radix].begin() + 1, state.hts[radix].end());
 		}
+		state.hts[radix][0]->Finalize();
 
 		lock_guard<mutex> glock(state.lock);
-
 		parent.finished_tasks++;
+		// finish the whole pipeline
 		if (parent.total_tasks == parent.finished_tasks) {
 			parent.Finish();
 		}
@@ -318,13 +334,17 @@ void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
 	this->sink_state = move(state);
 	auto gstate = (HashAggregateGlobalState *)this->sink_state.get();
 
-	idx_t dop = 4; // FIXME
-
 	// schedule additional tasks to combine the partial HTs
-	pipeline.total_tasks += dop;
+	pipeline.total_tasks += gstate->hts.size();
+	assert(gstate->hts.size() <= gstate->radix_partitions + 1);
 
-	for (idx_t r = 0; r < dop; r++) {
-		auto t = make_unique<PhysicalHashAggregateFinalizeTask>(pipeline, *gstate, r);
+	for (auto &ht_entry : gstate->hts) {
+		//		printf("\nXX ht %lld\n", ht_entry.first);
+		//		for (auto &ht : ht_entry.second) {
+		//			printf("XX \t %lld\n", ht->Size());
+		//		}
+
+		auto t = make_unique<PhysicalHashAggregateFinalizeTask>(pipeline, *gstate, ht_entry.first);
 		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(t));
 	}
 }
@@ -361,7 +381,10 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 	}
 	idx_t elements_found = 0;
 	while (true) {
-		assert(gstate.hts[state.ht_index].size() == 1);
+		if (gstate.hts[state.ht_index].size() == 0) {
+			// nothing in hash tables since no data was scanned
+			break;
+		}
 		elements_found =
 		    gstate.hts[state.ht_index][0]->Scan(state.ht_scan_position, state.group_chunk, state.aggregate_chunk);
 		if (elements_found > 0) {
