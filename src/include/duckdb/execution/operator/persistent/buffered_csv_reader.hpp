@@ -91,7 +91,7 @@ struct BufferedCSVReaderOptions {
 
 	std::string toString() const {
 		return "delimiter=" + delimiter + ", quote=" + quote + ", escape=" + escape +
-		       ", header=" + (header ? "true" : "false");
+		       ", header=" + (header ? "TRUE" : "FALSE");
 	}
 };
 
