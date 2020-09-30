@@ -35,6 +35,9 @@ struct AggregateObject {
 	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
 };
 
+typedef uint64_t AHT_VAL_TPE; // FIXME put me into template
+typedef uint16_t AHT_PFX_TPE; // FIXME put me into template, too
+
 //! GroupedAggregateHashTable is a linear probing HT that is used for computing
 //! aggregates
 /*!
@@ -54,6 +57,8 @@ public:
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
 	void AddChunk(DataChunk &groups, DataChunk &payload);
+	void AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload);
+
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
 	//! Returns the amount of elements found.
@@ -71,6 +76,10 @@ public:
 
 	void Combine(GroupedAggregateHashTable &other);
 	void Finalize();
+
+	idx_t Size() {
+		return entries;
+	}
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
@@ -93,6 +102,7 @@ private:
 	idx_t hash_width;
 	//! The total tuple size
 	idx_t tuple_size;
+	idx_t tuples_per_block;
 	//! The capacity of the HT. This can be increased using
 	//! GroupedAggregateHashTable::Resize
 	idx_t capacity;
@@ -104,18 +114,16 @@ private:
 	//! unique_ptr to indicate the ownership
 	unique_ptr<BufferHandle> hashes_hdl;
 	data_ptr_t hashes_end_ptr; // of hashes
-	data_ptr_t current_payload_offset_ptr;
-	data_ptr_t current_payload_end_ptr;
+
+	idx_t payload_end_idx;
 
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
-	uint64_t bitmask;
+	AHT_VAL_TPE bitmask;
 
-	hash_t hash_prefix_remove_bitmask;
-	hash_t hash_prefix_get_bitmask;
-
-	const uint8_t hash_prefix_bits = 16;
+	AHT_VAL_TPE hash_prefix_remove_bitmask;
+	AHT_VAL_TPE hash_prefix_get_bitmask;
 
 	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 
@@ -136,6 +144,7 @@ private:
 	void Verify();
 	void FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
+	data_ptr_t GetPtr(AHT_VAL_TPE ht_entry_val);
 };
 
 } // namespace duckdb

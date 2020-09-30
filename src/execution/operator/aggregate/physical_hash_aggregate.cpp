@@ -54,6 +54,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<u
 	}
 }
 
+typedef uint64_t radix_t;
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -62,11 +64,10 @@ public:
 	HashAggregateGlobalState(BufferManager &buffer_manager, vector<LogicalType> &group_types,
 	                         vector<LogicalType> &payload_types, vector<BoundAggregateExpression *> &bindings)
 	    : is_empty(true) {
-		final_ht = make_unique<GroupedAggregateHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
-		                                                  payload_types, bindings);
 	}
 
-	unique_ptr<GroupedAggregateHashTable> final_ht;
+	unordered_map<radix_t, vector<unique_ptr<GroupedAggregateHashTable>>> hts;
+
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
 	//! The lock for updating the global aggregate state
@@ -76,10 +77,10 @@ public:
 class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(BufferManager &buffer_manager, vector<unique_ptr<Expression>> &groups,
-	                        vector<BoundAggregateExpression *> &aggregates, vector<LogicalType> &group_types,
+	                        vector<BoundAggregateExpression *> &bound_aggregates, vector<LogicalType> &group_types,
 	                        vector<LogicalType> &payload_types)
-	    : group_executor(groups) {
-		for (auto &aggr : aggregates) {
+	    : buffer_manager(buffer_manager), bound_aggregates(bound_aggregates), group_executor(groups) {
+		for (auto &aggr : bound_aggregates) {
 			if (aggr->children.size()) {
 				for (idx_t i = 0; i < aggr->children.size(); ++i) {
 					payload_executor.AddExpression(*aggr->children[i]);
@@ -90,9 +91,13 @@ public:
 		if (payload_types.size() > 0) {
 			payload_chunk.Initialize(payload_types);
 		}
-		ht = make_unique<GroupedAggregateHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
-		                                            payload_types, aggregates);
+		hts[0].push_back(make_unique<GroupedAggregateHashTable>(buffer_manager, STANDARD_VECTOR_SIZE * 2, group_types,
+		                                                        payload_types, bound_aggregates));
 	}
+
+	BufferManager &buffer_manager;
+
+	vector<BoundAggregateExpression *> &bound_aggregates;
 
 	//! Expression executor for the GROUP BY chunk
 	ExpressionExecutor group_executor;
@@ -103,7 +108,9 @@ public:
 	//! The payload chunk
 	DataChunk payload_chunk;
 	//! The aggregate HT
-	unique_ptr<GroupedAggregateHashTable> ht;
+
+	unordered_map<radix_t, vector<unique_ptr<GroupedAggregateHashTable>>> hts;
+
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
 };
@@ -149,8 +156,87 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	payload_chunk.Verify();
 	assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
-	llstate.ht->AddChunk(group_chunk, payload_chunk);
-	llstate.is_empty = false;
+	// intermediate ht
+
+	// 32 bit ht entry
+	// 8 bits salt
+	// 24 bit payload idx
+	// 2^24 = 16777216 or 2^24/32 = 524288 entries max
+
+	// final ht
+	// 64 bit ht
+	// 16 bit salt
+	// 48 bit payload idx
+
+	// we need to hash here already
+	Vector hashes(LogicalType::HASH);
+	group_chunk.Hash(hashes);
+
+	idx_t radix_limit = 1000;
+	idx_t dop = 4;
+	// radix-partitioned case
+	if (true || llstate.hts[0][0]->Size() > radix_limit) {
+		// we need to generate selection vectors for all radixes and then pick the corresponding ht and add the data
+		// with that selection
+
+		// we use the fourth byte of the 64 bit hash as radix source
+		hash_t radix_mask = 0x0000000300000000; // TODO auto-generate this based on dop
+		Vector radix_mask_vec(Value::HASH(radix_mask));
+
+		vector<SelectionVector> sel_vectors(dop);
+		vector<idx_t> sel_vector_sizes(dop);
+		for (hash_t r = 0; r < dop; r++) {
+			sel_vectors[r].Initialize();
+			sel_vector_sizes[r] = 0;
+		}
+
+		auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
+		for (idx_t i = 0; i < group_chunk.size(); i++) {
+			auto partition = (hashes_ptr[i] & radix_mask) >> 32;
+			assert(partition < dop);
+			sel_vectors[partition].set_index(sel_vector_sizes[partition]++, i);
+		}
+
+#ifdef DEBUG
+		// make sure we have lost no rows
+		idx_t total_count = 0;
+		for (idx_t r = 0; r < dop; r++) {
+			total_count += sel_vector_sizes[r];
+		}
+		assert(total_count == group_chunk.size());
+#endif
+
+		DataChunk group_subset, payload_subset;
+		group_subset.Initialize(group_types);
+		payload_subset.Initialize(payload_types);
+
+		for (hash_t r = 0; r < dop; r++) {
+			group_subset.Slice(group_chunk, sel_vectors[r], sel_vector_sizes[r]);
+			payload_subset.Slice(payload_chunk, sel_vectors[r], sel_vector_sizes[r]);
+
+			if (llstate.hts[r].size() == 0 || llstate.hts[r].back()->Size() > 1000000) {
+				// TODO duplicated code
+				llstate.hts[r].push_back(
+				    make_unique<GroupedAggregateHashTable>(llstate.buffer_manager, STANDARD_VECTOR_SIZE * 2,
+				                                           group_types, payload_types, llstate.bound_aggregates));
+			}
+			llstate.hts[r].back()->AddChunk(group_subset, hashes, payload_subset);
+		}
+
+	} else {
+		if (llstate.hts[0].back()->Size() > 500) {
+			// FIXME this code is duplicated from llstate constructor
+			printf("overflow base\n");
+			llstate.hts[0].push_back(make_unique<GroupedAggregateHashTable>(llstate.buffer_manager,
+			                                                                STANDARD_VECTOR_SIZE * 2, group_types,
+			                                                                payload_types, llstate.bound_aggregates));
+		}
+
+		llstate.hts[0].back()->AddChunk(group_chunk, hashes, payload_chunk);
+	}
+	if (group_chunk.size() > 0) {
+		llstate.is_empty = false;
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -160,7 +246,7 @@ class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
 	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types,
 	                           vector<LogicalType> &aggregate_types, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), ht_scan_position(0) {
+	    : PhysicalOperatorState(op, child), ht_index(0), ht_scan_position(0) {
 		group_chunk.Initialize(group_types);
 		if (aggregate_types.size() > 0) {
 			aggregate_chunk.Initialize(aggregate_types);
@@ -172,6 +258,7 @@ public:
 	//! Materialized aggregates
 	DataChunk aggregate_chunk;
 	//! The current position to scan the HT for output tuples
+	idx_t ht_index;
 	idx_t ht_scan_position;
 };
 
@@ -180,37 +267,66 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	auto &source = (HashAggregateLocalState &)lstate;
 	assert(all_combinable);
 
+	// this actually does not do a lot but just pushes the local HTs into the global state so we can later combine them
+	// in parallel
 	lock_guard<mutex> glock(gstate.lock);
-
-	gstate.is_empty &= source.is_empty;
-	gstate.final_ht->Combine(*source.ht);
+	if (!source.is_empty) {
+		gstate.is_empty = false;
+	}
+	for (auto &ht_list : source.hts) {
+		for (auto &ht : ht_list.second) {
+			gstate.hts[ht_list.first].push_back(move(ht));
+		}
+	}
 }
 
-class MyTask : public Task {
+// this task is run in multiple threads and combines the radix-partitioned hash tables into a single onen and then
+// folds them into the global ht finally.
+class PhysicalHashAggregateFinalizeTask : public Task {
 public:
-	MyTask(Pipeline &parent) : parent(parent) {
+	PhysicalHashAggregateFinalizeTask(Pipeline &parent_, HashAggregateGlobalState &state_, idx_t radix_)
+	    : parent(parent_), state(state_), radix(radix_) {
 	}
 	void Execute() {
+
+		if (state.hts[radix].size() > 1) {
+			for (idx_t i = 1; i < state.hts[radix].size(); i++) {
+				state.hts[radix][0]->Combine(*state.hts[radix][i]);
+				state.hts[radix][i].reset();
+			}
+			state.hts[radix][0]->Finalize();
+			state.hts[radix].erase(state.hts[radix].begin() + 1, state.hts[radix].end());
+		}
+
+		lock_guard<mutex> glock(state.lock);
+
 		parent.finished_tasks++;
-		parent.Finish();
+		if (parent.total_tasks == parent.finished_tasks) {
+			parent.Finish();
+		}
 	}
 
 private:
 	Pipeline &parent;
+	HashAggregateGlobalState &state;
+	idx_t radix;
 };
 
 void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
                                      unique_ptr<GlobalOperatorState> state) {
 
-	auto gstate = (HashAggregateGlobalState *)state.get();
-	assert(gstate->final_ht);
-	gstate->final_ht->Finalize();
 	this->sink_state = move(state);
+	auto gstate = (HashAggregateGlobalState *)this->sink_state.get();
+
+	idx_t dop = 4; // FIXME
 
 	// schedule additional tasks to combine the partial HTs
-	pipeline.total_tasks += 1;
-	auto t = make_unique<MyTask>(pipeline);
-	TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(t));
+	pipeline.total_tasks += dop;
+
+	for (idx_t r = 0; r < dop; r++) {
+		auto t = make_unique<PhysicalHashAggregateFinalizeTask>(pipeline, *gstate, r);
+		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(t));
+	}
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
@@ -220,11 +336,10 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 
 	state.group_chunk.Reset();
 	state.aggregate_chunk.Reset();
-	idx_t elements_found = gstate.final_ht->Scan(state.ht_scan_position, state.group_chunk, state.aggregate_chunk);
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
-	if (elements_found == 0 && gstate.is_empty && is_implicit_aggr) {
+	if (gstate.is_empty && is_implicit_aggr) {
 		assert(chunk.column_count() == aggregates.size());
 		// for each column in the aggregates, set to initial state
 		chunk.SetCardinality(1);
@@ -240,10 +355,28 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 		state.finished = true;
 		return;
 	}
-	if (elements_found == 0 && !state.finished) {
+	if (gstate.is_empty && !state.finished) {
 		state.finished = true;
 		return;
 	}
+	idx_t elements_found = 0;
+	while (true) {
+		assert(gstate.hts[state.ht_index].size() == 1);
+		elements_found =
+		    gstate.hts[state.ht_index][0]->Scan(state.ht_scan_position, state.group_chunk, state.aggregate_chunk);
+		if (elements_found > 0) {
+			break;
+		}
+		// maybe we have another HT
+		if (state.ht_index < gstate.hts.size() - 1) {
+			state.ht_index++;
+			state.ht_scan_position = 0;
+			continue;
+		} else {
+			return;
+		}
+	}
+
 	// compute the final projection list
 	idx_t chunk_index = 0;
 	chunk.SetCardinality(elements_found);

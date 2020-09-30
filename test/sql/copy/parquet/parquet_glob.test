@@ -32,6 +32,21 @@ select count(*) from parquet_scan('test/sql/copy/parquet/data/g*/t1.parquet')
 ----
 2
 
+# abs path
+query I
+select count(*) from parquet_scan('__WORKING_DIRECTORY__/test/sql/copy/parquet/data/g*/t1.parquet')
+----
+2
+
+# forward slashes
+query I
+select count(*) from parquet_scan('test\sql\copy\parquet\data\g*\t1.parquet')
+----
+2
+
+statement error
+select count(*) from parquet_scan('')
+
 # parquet glob with COPY FROM
 statement ok
 CREATE TABLE vals (i INTEGER, j VARCHAR)

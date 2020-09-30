@@ -13,14 +13,15 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public LogicalOperatorVisitor {
 public:
-	RemoveUnusedColumns(ClientContext &context, bool is_root = false)
-	    : context(context), everything_referenced(is_root) {
+	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false)
+	    : binder(binder), context(context), everything_referenced(is_root) {
 	}
 
 	void VisitOperator(LogicalOperator &op) override;
@@ -30,6 +31,7 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 private:
+	Binder &binder;
 	ClientContext &context;
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
