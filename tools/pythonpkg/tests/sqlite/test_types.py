@@ -25,6 +25,7 @@
 # to remove tests that are for features that are not supported by DuckDB.
 
 import datetime
+import decimal
 import unittest
 import duckdb
 
@@ -65,6 +66,22 @@ class DuckDBTypeTests(unittest.TestCase):
         row = self.cur.fetchone()
         self.assertEqual(row[0], val)
 
+    def test_CheckDecimal(self):
+        val = 17.29
+        self.cur.execute("insert into test(f) values (?)", (decimal.Decimal(val),))
+        self.cur.execute("select f from test")
+        row = self.cur.fetchone()
+        self.assertEqual(row[0], val)
+
+    def test_CheckNaN(self):
+        with self.assertRaises(RuntimeError) as context:
+            self.cur.execute("insert into test(f) values (?)", (decimal.Decimal('nan'),))
+
+    def test_CheckInf(self):
+        with self.assertRaises(RuntimeError) as context:
+            self.cur.execute("insert into test(f) values (?)", (decimal.Decimal('inf'),))
+
+ 
     def test_CheckUnicodeExecute(self):
         self.cur.execute(u"select 'Österreich'")
         row = self.cur.fetchone()

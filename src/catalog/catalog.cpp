@@ -223,14 +223,21 @@ CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_nam
 	return (CollateCatalogEntry *)GetEntry(context, CatalogType::COLLATION_ENTRY, move(schema_name), name, if_exists);
 }
 
-void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
+void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	if (info->schema == INVALID_SCHEMA) {
-		// invalid schema, look for table in temp schema
-		auto entry = GetEntry(context, CatalogType::TABLE_ENTRY, TEMP_SCHEMA, info->table, true);
-		info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+		auto catalog_type = info->GetCatalogType();
+		// invalid schema: first search the temporary schema
+		auto entry = GetEntry(context, catalog_type, TEMP_SCHEMA, info->name, true);
+		if (entry) {
+			// entry exists in temp schema: alter there
+			info->schema = TEMP_SCHEMA;
+		} else {
+			// if the entry does not exist in the temp schema, search in the default schema
+			info->schema = DEFAULT_SCHEMA;
+		}
 	}
 	auto schema = GetSchema(context, info->schema);
-	schema->AlterTable(context, info);
+	return schema->Alter(context, info);
 }
 
 void Catalog::ParseRangeVar(string input, string &schema, string &name) {

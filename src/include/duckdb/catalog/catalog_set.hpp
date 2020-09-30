@@ -52,7 +52,7 @@ public:
 	template <class T> void Scan(Transaction &transaction, T &&callback) {
 		// lock the catalog set
 		std::lock_guard<std::mutex> lock(catalog_lock);
-		for (auto &kv : data) {
+		for (auto &kv : entries) {
 			auto entry = kv.second.get();
 			entry = GetEntryForTransaction(transaction, entry);
 			if (!entry->deleted) {
@@ -63,18 +63,29 @@ public:
 
 	static bool HasConflict(Transaction &transaction, CatalogEntry &current);
 
+	idx_t GetEntryIndex(CatalogEntry *entry);
+	CatalogEntry *GetEntryFromIndex(idx_t index);
+	void ClearEntryName(string name);
+
 private:
-	//! Drops an entry from the catalog set; must hold the catalog_lock to
-	//! safely call this
-	void DropEntryInternal(Transaction &transaction, CatalogEntry &entry, bool cascade, set_lock_map_t &lock_set);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(Transaction &transaction, CatalogEntry *current);
+	bool GetEntryInternal(Transaction &transaction, const string &name, idx_t &entry_index, CatalogEntry *&entry);
+	bool GetEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry *&entry);
+	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
+	void DropEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry &entry, bool cascade,
+	                       set_lock_map_t &lock_set);
 
+private:
 	Catalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
-	//! The set of entries present in the CatalogSet.
-	unordered_map<string, unique_ptr<CatalogEntry>> data;
+	//! Mapping of string to catalog entry
+	unordered_map<string, idx_t> mapping;
+	//! The set of catalog entries
+	unordered_map<idx_t, unique_ptr<CatalogEntry>> entries;
+	//! The current catalog entry index
+	idx_t current_entry = 0;
 };
 
 } // namespace duckdb

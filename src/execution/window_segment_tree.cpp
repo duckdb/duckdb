@@ -46,6 +46,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	if (begin == end) {
 		return;
 	}
+	inputs.Reset();
 	inputs.SetCardinality(end - begin);
 
 	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;

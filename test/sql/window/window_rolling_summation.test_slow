@@ -1,0 +1,37 @@
+# name: test/sql/window/window_rolling_summation.test
+# description: Rolling summation (issue #965)
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table temp as select * from range(0, 10000) temp(x);
+
+query TTTTT
+SELECT *,
+       expected=x_roll
+FROM
+  (SELECT x,
+          rowid,
+          CASE WHEN x=0 THEN 0
+          ELSE x*2-1
+          END AS expected,
+          SUM(x) OVER (ORDER BY rowid ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS x_roll
+   FROM temp) t1(x)
+WHERE x BETWEEN 892 AND 902
+ORDER BY x;
+----
+892	892	1783	1783	1
+893	893	1785	1785	1
+894	894	1787	1787	1
+895	895	1789	1789	1
+896	896	1791	1791	1
+897	897	1793	1793	1
+898	898	1795	1795	1
+899	899	1797	1797	1
+900	900	1799	1799	1
+901	901	1801	1801	1
+902	902	1803	1803	1

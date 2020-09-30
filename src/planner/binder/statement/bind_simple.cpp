@@ -13,18 +13,13 @@ using namespace std;
 
 namespace duckdb {
 
-BoundStatement Binder::Bind(AlterTableStatement &stmt) {
+BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	Catalog &catalog = Catalog::GetCatalog(context);
-	CatalogEntry *table;
-	if (stmt.info->alter_table_type == AlterTableType::RENAME_VIEW) {
-		table = catalog.GetEntry<ViewCatalogEntry>(context, stmt.info->schema, stmt.info->table, true);
-	} else {
-		table = catalog.GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table, true);
-	}
-	if (table && !table->temporary) {
+	auto entry = catalog.GetEntry(context, stmt.info->GetCatalogType(), stmt.info->schema, stmt.info->name, true);
+	if (entry && !entry->temporary) {
 		// we can only alter temporary tables/views in read-only mode
 		this->read_only = false;
 	}
