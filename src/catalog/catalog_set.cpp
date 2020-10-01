@@ -129,7 +129,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	}
 	if (value->name != name) {
 		auto existing = mapping.find(value->name);
-		if (existing != mapping.end() && !entries[existing->second]->deleted) {
+		if (existing != mapping.end() && !GetEntryForTransaction(transaction, entries[existing->second].get())->deleted) {
 			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!",
 			                       name, value->name);
 		}
