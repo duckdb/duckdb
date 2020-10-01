@@ -76,13 +76,14 @@ public:
 	                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates);
 	GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates);
+	GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable();
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	void AddChunk(DataChunk &groups, DataChunk &payload);
-	void AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload);
+	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload);
 
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
@@ -98,6 +99,7 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses, SelectionVector &new_groups);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
+	void Resize(idx_t size);
 
 	void Combine(GroupedAggregateHashTable &other);
 	void Finalize();
@@ -159,7 +161,6 @@ private:
 private:
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
-	void Resize(idx_t size);
 	void Destroy();
 	void CallDestructors(Vector &state_vector, idx_t count);
 	void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,

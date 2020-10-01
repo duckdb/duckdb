@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -52,6 +53,10 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<u
 		}
 		aggregates.push_back(move(expr));
 	}
+
+	// FIXME, figure out some heuristic/constant for those
+	ht_load_limit = 100000;
+	radix_limit = 10000;
 }
 
 //===--------------------------------------------------------------------===//
@@ -99,6 +104,8 @@ public:
 	idx_t radix_partitions;
 	idx_t radix_bits;
 	hash_t radix_mask;
+
+	idx_t lossy_total_groups;
 };
 
 class HashAggregateLocalState : public LocalSinkState {
@@ -184,12 +191,8 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	Vector hashes(LogicalType::HASH);
 	group_chunk.Hash(hashes);
 
-	// FIXME
-	idx_t ht_load_limit = 1048576; // 2 ^ 20, but needs experimental confirmation
-
 	// radix-partitioned case
-	if (all_combinable && gstate.radix_partitions > 1 && llstate.hts[0].size() > 0 &&
-	    llstate.hts[0][0]->Size() > ht_load_limit) {
+	if (gstate.radix_partitions > 1 && llstate.hts[0].size() > 0 && gstate.lossy_total_groups > radix_limit) {
 		// we need to generate selection vectors for all radixes and then pick the corresponding ht and add the data
 		// with that selection
 
@@ -231,23 +234,23 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 			auto ht_idx = r + 1;
 
 			if (llstate.hts[ht_idx].size() == 0 || llstate.hts[ht_idx].back()->Size() > ht_load_limit) {
-				// TODO duplicated code
+				// FIXME this code is duplicated
 				llstate.hts[ht_idx].push_back(
 				    make_unique<GroupedAggregateHashTable>(llstate.buffer_manager, STANDARD_VECTOR_SIZE * 2,
 				                                           group_types, payload_types, llstate.bound_aggregates));
 			}
-			llstate.hts[ht_idx].back()->AddChunk(group_subset, hashes, payload_subset);
+			gstate.lossy_total_groups += llstate.hts[ht_idx].back()->AddChunk(group_subset, hashes, payload_subset);
 		}
 
 	} else {
-		if (all_combinable && (llstate.hts[0].size() == 0 || llstate.hts[0].back()->Size() > ht_load_limit)) {
-			// FIXME this code is duplicated from llstate constructor
+		if ((llstate.hts[0].size() == 0 || llstate.hts[0].back()->Size() > ht_load_limit)) {
+			// FIXME this code is duplicated
 			llstate.hts[0].push_back(make_unique<GroupedAggregateHashTable>(llstate.buffer_manager,
 			                                                                STANDARD_VECTOR_SIZE * 2, group_types,
 			                                                                payload_types, llstate.bound_aggregates));
 		}
 
-		llstate.hts[0].back()->AddChunk(group_chunk, hashes, payload_chunk);
+		gstate.lossy_total_groups += llstate.hts[0].back()->AddChunk(group_chunk, hashes, payload_chunk);
 	}
 	if (group_chunk.size() > 0) {
 		llstate.is_empty = false;
@@ -302,7 +305,7 @@ public:
 	PhysicalHashAggregateFinalizeTask(Pipeline &parent_, HashAggregateGlobalState &state_, idx_t radix_)
 	    : parent(parent_), state(state_), radix(radix_) {
 	}
-	void Execute() {
+	static void FinalizeHT(HashAggregateGlobalState &state, idx_t radix) {
 		if (state.hts[radix].size() > 1) {
 			// fold all the ht's in a radix partition into the first one
 			for (idx_t i = 1; i < state.hts[radix].size(); i++) {
@@ -313,7 +316,10 @@ public:
 			state.hts[radix].erase(state.hts[radix].begin() + 1, state.hts[radix].end());
 		}
 		state.hts[radix][0]->Finalize();
+	}
 
+	void Execute() {
+		FinalizeHT(state, radix);
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
 		// finish the whole pipeline
@@ -339,13 +345,21 @@ void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
 	assert(gstate->hts.size() <= gstate->radix_partitions + 1);
 
 	for (auto &ht_entry : gstate->hts) {
-		//		printf("\nXX ht %lld\n", ht_entry.first);
-		//		for (auto &ht : ht_entry.second) {
-		//			printf("XX \t %lld\n", ht->Size());
-		//		}
-
 		auto t = make_unique<PhysicalHashAggregateFinalizeTask>(pipeline, *gstate, ht_entry.first);
 		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(t));
+	}
+}
+
+// fuck it
+void PhysicalHashAggregate::FinalizeImmediate(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+	this->sink_state = move(state);
+	auto gstate = (HashAggregateGlobalState *)this->sink_state.get();
+
+	// schedule additional tasks to combine the partial HTs
+	assert(gstate->hts.size() <= gstate->radix_partitions + 1);
+
+	for (auto &ht_entry : gstate->hts) {
+		PhysicalHashAggregateFinalizeTask::FinalizeHT(*gstate, ht_entry.first);
 	}
 }
 
