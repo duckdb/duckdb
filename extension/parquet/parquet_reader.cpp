@@ -431,8 +431,27 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
 		break;
 	}
-	default:
-		throw FormatException("Unsupported compression codec. Try uncompressed, gzip or snappy");
+	default: {
+		string codec_name;
+		switch (chunk.meta_data.codec) {
+		case CompressionCodec::LZO:
+			codec_name = "LZ0";
+			break;
+		case CompressionCodec::BROTLI:
+			codec_name = "BROTLI";
+			break;
+		case CompressionCodec::LZ4:
+			codec_name = "LZ4";
+			break;
+		case CompressionCodec::ZSTD:
+			codec_name = "ZSTD";
+			break;
+		default:
+			codec_name = "unknown";
+			break;
+		}
+		throw FormatException("Unsupported compression codec \"" + codec_name + "\". Supported options are uncompressed, gzip or snappy");
+	}
 	}
 	col_data.buf.inc(page_hdr.compressed_page_size);
 
