@@ -88,6 +88,11 @@ struct BufferedCSVReaderOptions {
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+
+	std::string toString() const {
+		return "delimiter=" + delimiter + ", quote=" + quote + ", escape=" + escape +
+		       ", header=" + (header ? "TRUE" : "FALSE");
+	}
 };
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
