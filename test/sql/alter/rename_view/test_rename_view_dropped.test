@@ -1,4 +1,4 @@
-# name: test/sql/alter/rename_view/test_drop_rename_view.test
+# name: test/sql/alter/rename_view/test_rename_view_dropped.test
 # description: Test RENAME VIEW after a DROP VIEW
 # group: [rename_table]
 

@@ -1,0 +1,72 @@
+# name: test/sql/alter/rename_table/test_rename_table_dropped.test
+# description: Test RENAME TABLE after a DROP TABLE
+# group: [rename_table]
+
+statement ok
+CREATE TABLE tbl1(i INTEGER)
+
+statement ok
+DROP TABLE tbl1
+
+statement ok
+CREATE TABLE tbl2 (i INTEGER)
+
+statement ok
+INSERT INTO tbl2 VALUES (999), (100)
+
+statement ok
+ALTER TABLE tbl2 RENAME TO tbl1
+
+query I
+SELECT * FROM tbl1
+----
+999
+100
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE tbl1
+
+query I con2
+SELECT * FROM tbl1
+----
+999
+100
+
+statement ok con2
+CREATE TABLE tbl3 (i INTEGER)
+
+statement error con2
+ALTER TABLE tbl3 RENAME TO tbl1
+
+statement ok con1
+CREATE TABLE tbl4 (i INTEGER)
+
+statement ok con1
+INSERT INTO tbl4 VALUES (1001), (99)
+
+statement ok con1
+ALTER TABLE tbl4 RENAME TO tbl1
+
+query I con1
+SELECT * FROM tbl1
+----
+1001
+99
+
+statement ok con1
+COMMIT
+
+statement ok con2
+COMMIT
+
+query I con2
+SELECT * FROM tbl1
+----
+1001
+99
