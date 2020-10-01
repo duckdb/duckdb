@@ -1,0 +1,27 @@
+# name: test/sql/alter/rename_view/test_drop_rename_view.test
+# description: Test RENAME VIEW after a DROP VIEW
+# group: [rename_table]
+
+statement ok
+CREATE TABLE tbl1(i INTEGER);
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM tbl1;
+
+statement ok
+DROP VIEW v1;
+
+statement ok
+CREATE VIEW v2 AS SELECT * FROM tbl1;
+
+statement ok
+INSERT INTO tbl1 VALUES (999), (100);
+
+statement ok
+ALTER VIEW v2 RENAME TO v1;
+
+query I
+SELECT * FROM v1;
+----
+999
+100 
