@@ -7,7 +7,7 @@ from decimal import Decimal
 import datetime
 
 
-parquet_compression = 'snappy'
+parquet_compression = 'zstd'
 
 outdir = tempfile.mkdtemp()
 parquet_folder = os.path.join(outdir, "out.parquet")
