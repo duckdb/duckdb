@@ -47,6 +47,9 @@ endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
 endif
+ifeq (${BUILD_ZSTD}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_ZSTD=1
+endif
 
 clean:
 	rm -rf build

@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 2.8.7)
 
 project(ParquetExtension)
 
+if (${BUILD_ZSTD})
+  add_definitions(-DBUILD_ZSTD)
+  include_directories(../../third_party/zstd)
+endif()
+
 include_directories(include ../../third_party/parquet ../../third_party/snappy
                     ../../third_party/miniz ../../third_party/thrift)
 
@@ -18,3 +23,7 @@ add_library(
   parquet_reader.cpp
   parquet_timestamp.cpp
   parquet_writer.cpp)
+
+if (${BUILD_ZSTD})
+  target_link_libraries(parquet_extension zstd)
+endif()
