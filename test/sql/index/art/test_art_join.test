@@ -1,0 +1,37 @@
+# name: test/sql/index/art/test_art_join.test
+# description: Test Joins using art indexes
+# group: [art-join]
+
+statement ok
+PRAGMA explain_output='physical';
+
+statement ok
+CREATE TABLE t1(i INTEGER);
+CREATE TABLE t2(i INTEGER);
+
+# insert elements
+loop i 0 100
+
+statement ok
+INSERT INTO t1 VALUES (${i} + 1);
+
+endloop
+
+# insert elements
+loop i 50 100
+
+statement ok
+INSERT INTO t2 VALUES (${i} + 1);
+
+endloop
+
+# standalone limit
+query II
+EXPLAIN select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*
+
+query I
+select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)
+----
+50

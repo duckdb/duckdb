@@ -10,6 +10,7 @@ add_library(
   multiplications.cpp
   orderby.cpp
   indexcreation.cpp
+  index_join.cpp
   rangejoin.cpp
   rangequery.cpp
   string.cpp

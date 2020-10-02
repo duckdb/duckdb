@@ -64,6 +64,8 @@ public:
 	bool force_parallelism = false;
 	//! Output only the logical_opt explain output, used for optimization verification
 	bool explain_output_optimized_only = false;
+	//! Output only the logical_opt explain output, used for optimization verification
+	bool explain_output_physical_only = false;
 	//! The writer used to log queries (if logging is enabled)
 	unique_ptr<BufferedFileWriter> log_query_writer;
 

@@ -42,6 +42,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	}
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
+		//check if one of the tables has an index on column
+
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 		                                     op.left_projection_map, op.right_projection_map);
