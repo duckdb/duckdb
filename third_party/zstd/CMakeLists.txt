@@ -7,10 +7,7 @@ include_directories(.)
 
 set(CMAKE_BUILD_TYPE "Release")
 add_subdirectory(common)
-add_subdirectory(compress)
 add_subdirectory(decompress)
-add_subdirectory(deprecated)
-add_subdirectory(dictBuilder)
 
 add_definitions(-DZDICT_STATIC_LINKING_ONLY)
 
