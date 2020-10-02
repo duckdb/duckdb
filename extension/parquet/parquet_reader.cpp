@@ -21,6 +21,8 @@
 
 #include "utf8proc_wrapper.hpp"
 
+#include <sstream>
+
 namespace duckdb {
 
 using namespace parquet;
@@ -312,6 +314,21 @@ ParquetReader::~ParquetReader() {
 ParquetReaderColumnData::~ParquetReaderColumnData() {
 }
 
+struct ValueIsValid {
+	template<class T>
+	static bool Operation(T value) {
+		return true;
+	}
+};
+
+template<> bool ValueIsValid::Operation(float value) {
+	return Value::FloatIsValid(value);
+}
+
+template<> bool ValueIsValid::Operation(double value) {
+	return Value::DoubleIsValid(value);
+}
+
 template <class T>
 void ParquetReader::fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, Vector &target,
                                    idx_t target_offset) {
@@ -323,7 +340,12 @@ void ParquetReader::fill_from_dict(ParquetReaderColumnData &col_data, idx_t coun
 				                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
 				                    ". Corrupt file?");
 			}
-			((T *)FlatVector::GetData(target))[i + target_offset] = ((const T *)col_data.dict.ptr)[offset];
+			auto value = ((const T *)col_data.dict.ptr)[offset];
+			if (ValueIsValid::Operation(value)) {
+				((T *)FlatVector::GetData(target))[i + target_offset] = value;
+			} else {
+				FlatVector::SetNull(target, i + target_offset, true);
+			}
 		} else {
 			FlatVector::SetNull(target, i + target_offset, true);
 		}
@@ -335,7 +357,12 @@ void ParquetReader::fill_from_plain(ParquetReaderColumnData &col_data, idx_t cou
                                     idx_t target_offset) {
 	for (idx_t i = 0; i < count; i++) {
 		if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
-			((T *)FlatVector::GetData(target))[i + target_offset] = col_data.payload.read<T>();
+			auto value = col_data.payload.read<T>();
+			if (ValueIsValid::Operation(value)) {
+				((T *)FlatVector::GetData(target))[i + target_offset] = value;
+			} else {
+				FlatVector::SetNull(target, i + target_offset, true);
+			}
 		} else {
 			FlatVector::SetNull(target, i + target_offset, true);
 		}
@@ -431,8 +458,11 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
 		break;
 	}
-	default:
-		throw FormatException("Unsupported compression codec. Try uncompressed, gzip or snappy");
+	default: {
+		std::stringstream codec_name;
+		codec_name << chunk.meta_data.codec;
+		throw FormatException("Unsupported compression codec \"" + codec_name.str() + "\". Supported options are uncompressed, gzip or snappy");
+	}
 	}
 	col_data.buf.inc(page_hdr.compressed_page_size);
 
