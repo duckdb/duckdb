@@ -653,7 +653,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	transaction.storage.Append(this, chunk);
 }
 
-void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, transaction_t commit_id, idx_t append_count) {
+void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
 	// obtain the append lock for this table
 	state.append_lock = unique_lock<mutex>(append_lock);
 	if (!is_root) {
@@ -674,7 +674,9 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 
 	// start writing to the morsels
 	lock_guard<mutex> morsel_lock(versions->node_lock);
-	idx_t current_position = state.row_start % MorselInfo::MORSEL_SIZE;
+	auto last_morsel = (MorselInfo*) versions->GetLastSegment();
+	assert(last_morsel->start <= (idx_t) state.row_start);
+	idx_t current_position = state.row_start  - last_morsel->start;
 	idx_t remaining = append_count;
 	while(true) {
 		idx_t remaining_in_morsel = MorselInfo::MORSEL_SIZE - current_position;
@@ -683,20 +685,20 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 		if (to_write > 0) {
 			// write to the last morsel
 			auto morsel = (MorselInfo*) versions->GetLastSegment();
-			morsel->Append(transaction, current_position, to_write, commit_id);
+			morsel->Append(transaction, current_position, to_write, transaction.transaction_id);
 		}
 
 		current_position = 0;
 		if (remaining > 0) {
-			auto last_morsel = (MorselInfo*) versions->GetLastSegment();
 			idx_t start = last_morsel->start + MorselInfo::MORSEL_SIZE;
 			auto morsel = make_unique<MorselInfo>(start, MorselInfo::MORSEL_SIZE);
+			last_morsel = morsel.get();
 			versions->AppendSegment(move(morsel));
 		} else {
 			break;
 		}
 	}
-	info->cardinality += append_count;
+	transaction.PushAppend(this, total_rows, append_count);
 	total_rows += append_count;
 }
 
@@ -709,27 +711,57 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns[i]->Append(state.states[i], chunk.data[i], chunk.size());
 	}
-	info->cardinality += chunk.size();
 	state.current_row += chunk.size();
 }
 
-void DataTable::RevertAppend(TableAppendState &state) {
-	// adjust the cardinality
-	info->cardinality = state.row_start;
-	total_rows = state.row_start;
-	if (state.row_start == state.current_row) {
+void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
+	lock_guard<mutex> lock(append_lock);
+
+	auto morsel = (MorselInfo*) versions->GetSegment(row_start);
+	idx_t current_row = row_start;
+	idx_t remaining = count;
+	while(true) {
+		idx_t start_in_morsel = current_row - morsel->start;
+		idx_t append_count = MinValue<idx_t>(morsel->count - start_in_morsel, remaining);
+
+		morsel->CommitAppend(commit_id, start_in_morsel, append_count);
+
+		current_row += append_count;
+		remaining -= append_count;
+		if (remaining == 0) {
+			break;
+		}
+		morsel = (MorselInfo*) morsel->next.get();
+	}
+	info->cardinality += count;
+}
+
+void DataTable::RevertAppend(idx_t start_row, idx_t count) {
+	if (count == 0) {
 		// nothing to revert!
 		return;
 	}
+	lock_guard<mutex> lock(append_lock);
+	if (total_rows != start_row + count) {
+		// interleaved append: don't do anything
+		// in this case the rows will stay as "inserted by transaction X", but will never be committed
+		// they will never be used by any other transaction and will essentially leave a gap
+		// this situation is rare, and as such we don't care about optimizing it (yet?)
+		// it only happens if C1 appends a lot of data -> C2 appends a lot of data -> C1 rolls back
+		return;
+	}
+	// adjust the cardinality
+	info->cardinality = start_row;
+	total_rows = start_row;
 	assert(is_root);
 	// revert changes in the base columns
 	for (idx_t i = 0; i < types.size(); i++) {
-		columns[i]->RevertAppend(state.row_start);
+		columns[i]->RevertAppend(start_row);
 	}
 	// revert appends made to morsels
 	lock_guard<mutex> tree_lock(versions->node_lock);
 	// find the segment index that the current row belongs to
-	idx_t segment_index = versions->GetSegmentIndex(state.row_start);
+	idx_t segment_index = versions->GetSegmentIndex(start_row);
 	auto segment = versions->nodes[segment_index].node;
 	auto &info = (MorselInfo &)*segment;
 
@@ -738,7 +770,7 @@ void DataTable::RevertAppend(TableAppendState &state) {
 		versions->nodes.erase(versions->nodes.begin() + segment_index + 1, versions->nodes.end());
 	}
 	info.next = nullptr;
-	info.RevertAppend(state.row_start);
+	info.RevertAppend(start_row);
 }
 
 //===--------------------------------------------------------------------===//

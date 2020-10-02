@@ -1,4 +1,5 @@
 #include "duckdb/transaction/commit_state.hpp"
+#include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 
@@ -149,6 +150,16 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 			// push the catalog update to the WAL
 			WriteCatalogEntry(catalog_entry, data + sizeof(CatalogEntry *));
 		}
+		break;
+	}
+	case UndoFlags::INSERT_TUPLE: {
+		// append:
+		auto info = (AppendInfo *)data;
+		if (HAS_LOG && !info->table->info->IsTemporary()) {
+			throw InternalException("FIXME: write to log");
+		}
+		// mark the tuples as committed
+		info->table->CommitAppend(commit_id, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

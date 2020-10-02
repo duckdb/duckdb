@@ -27,6 +27,11 @@ bool ChunkConstantInfo::Fetch(Transaction &transaction, row_t row) {
 	return UseVersion(transaction, insert_id) && !UseVersion(transaction, delete_id);
 }
 
+void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t end) {
+	assert(start == 0 && end == STANDARD_VECTOR_SIZE);
+	insert_id = commit_id;
+}
+
 //===--------------------------------------------------------------------===//
 // Vector info
 //===--------------------------------------------------------------------===//
@@ -108,6 +113,15 @@ void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 	} else if (insert_id != commit_id) {
 		same_inserted_id = false;
 		insert_id = NOT_DELETED_ID;
+	}
+	for (idx_t i = start; i < end; i++) {
+		inserted[i] = commit_id;
+	}
+}
+
+void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t end) {
+	if (same_inserted_id) {
+		insert_id = commit_id;
 	}
 	for (idx_t i = start; i < end; i++) {
 		inserted[i] = commit_id;

@@ -109,12 +109,14 @@ public:
 	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
 
 	//! Begin appending structs to this table, obtaining necessary locks, etc
-	void InitializeAppend(Transaction &transaction, TableAppendState &state, transaction_t commit_id, idx_t append_count);
+	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend
 	void Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state);
+	//! Commit the append
+	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
-	void RevertAppend(TableAppendState &state);
+	void RevertAppend(idx_t start_row, idx_t count);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded

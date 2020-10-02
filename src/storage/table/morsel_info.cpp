@@ -74,6 +74,22 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 	}
 }
 
+void MorselInfo::CommitAppend(transaction_t commit_id, idx_t morsel_start, idx_t count) {
+	assert(root.get());
+	idx_t morsel_end = morsel_start + count;
+	lock_guard<mutex> lock(morsel_lock);
+
+	idx_t start_vector_idx = morsel_start / STANDARD_VECTOR_SIZE;
+	idx_t end_vector_idx = (morsel_end - 1) / STANDARD_VECTOR_SIZE;
+	for(idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
+		idx_t start = vector_idx == start_vector_idx ? morsel_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
+		idx_t end = vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+
+		auto info = root->info[vector_idx].get();
+		info->CommitAppend(commit_id, start, end);
+	}
+}
+
 void MorselInfo::RevertAppend(idx_t morsel_start) {
 	if (!root) {
 		return;

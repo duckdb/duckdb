@@ -42,6 +42,7 @@ public:
 	virtual idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) = 0;
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(Transaction &transaction, row_t row) = 0;
+	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 };
 
 class ChunkConstantInfo : public ChunkInfo {
@@ -53,6 +54,7 @@ public:
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
+	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 };
 
 class ChunkVectorInfo : public ChunkInfo {
@@ -70,6 +72,7 @@ public:
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
+	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 	void Delete(Transaction &transaction, row_t rows[], idx_t count);

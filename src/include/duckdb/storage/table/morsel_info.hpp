@@ -37,6 +37,8 @@ public:
 	//! Append count rows to the morsel info
 	void Append(Transaction &transaction, idx_t start, idx_t count, transaction_t commit_id);
 
+	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
+
 	//! Delete the given set of rows in the version manager
 	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
 

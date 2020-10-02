@@ -4,23 +4,12 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
+#include "duckdb/storage/table/morsel_info.hpp"
 
 namespace duckdb {
 using namespace std;
 
 LocalTableStorage::LocalTableStorage(DataTable &table) : deleted_rows(0) {
-	for (auto &index : table.info->indexes) {
-		assert(index->type == IndexType::ART);
-		auto &art = (ART &)*index;
-		if (art.is_unique) {
-			// unique index: create a local ART index that maintains the same unique constraint
-			vector<unique_ptr<Expression>> unbound_expressions;
-			for (auto &expr : art.unbound_expressions) {
-				unbound_expressions.push_back(expr->Copy());
-			}
-			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), true));
-		}
-	}
 }
 
 LocalTableStorage::~LocalTableStorage() {
@@ -36,7 +25,7 @@ void LocalTableStorage::InitializeScan(LocalScanState &state) {
 
 void LocalTableStorage::Clear() {
 	collection.chunks.clear();
-	indexes.clear();
+	collection.count = 0;
 	deleted_entries.clear();
 }
 
@@ -136,24 +125,13 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	} else {
 		storage = entry->second.get();
 	}
-	// append to unique indices (if any)
-	if (storage->indexes.size() > 0) {
-		idx_t base_id = MAX_ROW_ID + storage->collection.count;
-
-		// first generate the vector of row identifiers
-		Vector row_ids(LOGICAL_ROW_TYPE);
-		VectorOperations::GenerateSequence(row_ids, chunk.size(), base_id, 1);
-
-		// now append the entries to the indices
-		for (auto &index : storage->indexes) {
-			if (!index->Append(chunk, row_ids)) {
-				throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
-			}
-		}
-	}
 
 	//! Append to the chunk
 	storage->collection.Append(chunk);
+	if (storage->collection.count >= MorselInfo::MORSEL_SIZE) {
+		// flush to base storage
+		Flush(*table, *storage);
+	}
 }
 
 LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
@@ -262,18 +240,18 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &c
 	}
 }
 
-template <class T> bool LocalStorage::ScanTableStorage(DataTable *table, LocalTableStorage *storage, T &&fun) {
+template <class T> bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
-	for (idx_t i = 0; i < table->types.size(); i++) {
+	for (idx_t i = 0; i < table.types.size(); i++) {
 		column_ids.push_back(i);
 	}
 
 	DataChunk chunk;
-	chunk.Initialize(table->types);
+	chunk.Initialize(table.types);
 
 	// initialize the scan
 	LocalScanState state;
-	storage->InitializeScan(state);
+	storage.InitializeScan(state);
 
 	while (true) {
 		Scan(state, column_ids, chunk);
@@ -286,70 +264,31 @@ template <class T> bool LocalStorage::ScanTableStorage(DataTable *table, LocalTa
 	}
 }
 
+void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	if (storage.collection.count == 0) {
+		return;
+	}
+	TableAppendState append_state;
+	table.InitializeAppend(transaction, append_state, storage.collection.count - storage.deleted_rows);
+
+	ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
+		// append to base table
+		table.Append(transaction, chunk, append_state);
+		return true;
+	});
+	storage.Clear();
+}
+
 void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,
                           transaction_t commit_id) {
 	// commit local storage, iterate over all entries in the table storage map
 	for (auto &entry : table_storage) {
 		auto table = entry.first;
 		auto storage = entry.second.get();
-
-		// initialize the append state
-		auto append_state_ptr = make_unique<TableAppendState>();
-		auto &append_state = *append_state_ptr;
-		// add it to the set of append states
-		commit_state.append_states[table] = move(append_state_ptr);
-		table->InitializeAppend(transaction, append_state, commit_id, storage->collection.count - storage->deleted_rows);
-
-		if (log && !table->info->IsTemporary()) {
-			log->WriteSetTable(table->info->schema, table->info->table);
-		}
-
-		// scan all chunks in this storage
-		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
-			// append this chunk to the indexes of the table
-			if (!table->AppendToIndexes(append_state, chunk, append_state.current_row)) {
-				throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
-			}
-
-			// append to base table
-			table->Append(transaction, chunk, append_state);
-			// if there is a WAL, write the chunk to there as well
-			if (log && !table->info->IsTemporary()) {
-				log->WriteInsert(chunk);
-			}
-			return true;
-		});
+		Flush(*table, *storage);
 	}
 	// finished commit: clear local storage
-	for (auto &entry : table_storage) {
-		entry.second->Clear();
-	}
 	table_storage.clear();
-}
-
-void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
-	for (auto &entry : commit_state.append_states) {
-		auto table = entry.first;
-		auto storage = table_storage[table].get();
-		auto &append_state = *entry.second;
-		if (table->info->indexes.size() > 0 && !table->info->IsTemporary()) {
-			row_t current_row = append_state.row_start;
-			// remove the data from the indexes, if there are any indexes
-			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
-				// append this chunk to the indexes of the table
-				table->RemoveFromIndexes(append_state, chunk, current_row);
-
-				current_row += chunk.size();
-				if (current_row >= append_state.current_row) {
-					// finished deleting all rows from the index: abort now
-					return false;
-				}
-				return true;
-			});
-		}
-
-		table->RevertAppend(*entry.second);
-	}
 }
 
 void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,
