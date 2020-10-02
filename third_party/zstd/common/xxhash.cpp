@@ -5,7 +5,7 @@
  *  You can contact the author at :
  *  - xxHash homepage: http://www.xxhash.com
  *  - xxHash source repository : https://github.com/Cyan4973/xxHash
- * 
+ *
  * This source code is licensed under both the BSD-style license (found in the
  * LICENSE file in the root directory of this source tree) and the GPLv2 (found
  * in the COPYING file in the root directory of this source tree).
@@ -80,17 +80,13 @@
 /* for malloc(), free() */
 #include <stdlib.h>
 #include <stddef.h>     /* size_t */
-static void* XXH_malloc(size_t s) { return malloc(s); }
-static void  XXH_free  (void* p)  { free(p); }
 /* for memcpy() */
 #include <string.h>
-static void* XXH_memcpy(void* dest, const void* src, size_t size) { return memcpy(dest,src,size); }
 
 #ifndef XXH_STATIC_LINKING_ONLY
 #  define XXH_STATIC_LINKING_ONLY
 #endif
 #include "xxhash.h"
-
 
 /* *************************************
 *  Compiler Specific Options
@@ -138,6 +134,10 @@ static void* XXH_memcpy(void* dest, const void* src, size_t size) { return memcp
 #  endif
 #endif
 
+namespace duckdb_zstd {
+static void* XXH_malloc(size_t s) { return malloc(s); }
+static void  XXH_free  (void* p)  { free(p); }
+static void* XXH_memcpy(void* dest, const void* src, size_t size) { return memcpy(dest,src,size); }
 
 #if (defined(XXH_FORCE_MEMORY_ACCESS) && (XXH_FORCE_MEMORY_ACCESS==2))
 
@@ -861,4 +861,6 @@ XXH_PUBLIC_API XXH32_hash_t XXH32_hashFromCanonical(const XXH32_canonical_t* src
 XXH_PUBLIC_API XXH64_hash_t XXH64_hashFromCanonical(const XXH64_canonical_t* src)
 {
     return XXH_readBE64(src);
+}
+
 }

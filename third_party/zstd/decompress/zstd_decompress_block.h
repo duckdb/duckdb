@@ -20,6 +20,7 @@
 #include "../common/zstd_internal.h"  /* blockProperties_t, and some public functions */
 #include "zstd_decompress_internal.h"  /* ZSTD_seqSymbol */
 
+namespace duckdb_zstd {
 
 /* ===   Prototypes   === */
 
@@ -55,5 +56,6 @@ void ZSTD_buildFSETable(ZSTD_seqSymbol* dt,
              const U32* baseValue, const U32* nbAdditionalBits,
                    unsigned tableLog);
 
+}
 
 #endif /* ZSTD_DEC_BLOCK_H */

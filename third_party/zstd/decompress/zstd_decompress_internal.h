@@ -22,7 +22,7 @@
 #include "../common/mem.h"             /* BYTE, U16, U32 */
 #include "../common/zstd_internal.h"   /* ZSTD_seqSymbol */
 
-
+namespace duckdb_zstd {
 
 /*-*******************************************************
  *  Constants
@@ -185,5 +185,6 @@ size_t ZSTD_loadDEntropy(ZSTD_entropyDTables_t* entropy,
  *  This function cannot fail. */
 void ZSTD_checkContinuity(ZSTD_DCtx* dctx, const void* dst);
 
+}
 
 #endif /* ZSTD_DECOMPRESS_INTERNAL_H */

@@ -54,6 +54,7 @@
 #define FSE_FUNCTION_NAME(X,Y) FSE_CAT(X,Y)
 #define FSE_TYPE_NAME(X,Y) FSE_CAT(X,Y)
 
+namespace duckdb_zstd {
 
 /* Function templates */
 FSE_DTable* FSE_createDTable (unsigned tableLog)
@@ -281,6 +282,6 @@ size_t FSE_decompress(void* dst, size_t dstCapacity, const void* cSrc, size_t cS
     return FSE_decompress_wksp(dst, dstCapacity, cSrc, cSrcSize, dt, FSE_MAX_TABLELOG);
 }
 
-
+}
 
 #endif   /* FSE_COMMONDEFS_ONLY */

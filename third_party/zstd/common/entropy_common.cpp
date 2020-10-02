@@ -22,6 +22,7 @@
 #define HUF_STATIC_LINKING_ONLY  /* HUF_TABLELOG_ABSOLUTEMAX */
 #include "huf.h"
 
+namespace duckdb_zstd {
 
 /*===   Version   ===*/
 unsigned FSE_versionNumber(void) { return FSE_VERSION_NUMBER; }
@@ -213,4 +214,6 @@ size_t HUF_readStats(BYTE* huffWeight, size_t hwSize, U32* rankStats,
     /* results */
     *nbSymbolsPtr = (U32)(oSize+1);
     return iSize+1;
+}
+
 }

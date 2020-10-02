@@ -37,9 +37,7 @@
 #endif
 #include "xxhash.h"                /* XXH_reset, update, digest */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
+namespace duckdb_zstd {
 
 /* ---- static assert (debug) --- */
 #define ZSTD_STATIC_ASSERT(c) DEBUG_STATIC_ASSERT(c)
@@ -261,7 +259,7 @@ typedef enum {
  *         - ZSTD_overlap_src_before_dst: The src and dst may overlap, but they MUST be at least 8 bytes apart.
  *           The src buffer must be before the dst buffer.
  */
-MEM_STATIC FORCE_INLINE_ATTR 
+MEM_STATIC FORCE_INLINE_ATTR
 void ZSTD_wildcopy(void* dst, const void* src, ptrdiff_t length, ZSTD_overlap_e const ovtype)
 {
     ptrdiff_t diff = (BYTE*)dst - (const BYTE*)src;
@@ -439,9 +437,6 @@ size_t ZSTD_getcBlockSize(const void* src, size_t srcSize,
 size_t ZSTD_decodeSeqHeaders(ZSTD_DCtx* dctx, int* nbSeqPtr,
                        const void* src, size_t srcSize);
 
-
-#if defined (__cplusplus)
 }
-#endif
 
 #endif   /* ZSTD_CCOMMON_H_MODULE */

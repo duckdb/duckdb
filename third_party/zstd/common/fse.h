@@ -12,10 +12,6 @@
  * You may select, at your option, one of the above-listed licenses.
 ****************************************************************** */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #ifndef FSE_H
 #define FSE_H
 
@@ -26,6 +22,7 @@ extern "C" {
 #include <stddef.h>    /* size_t, ptrdiff_t */
 
 
+namespace duckdb_zstd {
 /*-*****************************************
 *  FSE_PUBLIC_API : control library symbols visibility
 ******************************************/
@@ -274,6 +271,8 @@ FSE_decompress_usingDTable() result will tell how many bytes were regenerated (<
 If there is an error, the function will return an error code, which can be tested using FSE_isError(). (ex: dst buffer too small)
 */
 
+}
+
 #endif  /* FSE_H */
 
 #if defined(FSE_STATIC_LINKING_ONLY) && !defined(FSE_H_FSE_STATIC_LINKING_ONLY)
@@ -282,6 +281,7 @@ If there is an error, the function will return an error code, which can be teste
 /* *** Dependency *** */
 #include "bitstream.h"
 
+namespace duckdb_zstd {
 
 /* *****************************************
 *  Static allocation
@@ -679,10 +679,7 @@ MEM_STATIC unsigned FSE_endOfDState(const FSE_DState_t* DStatePtr)
 
 #define FSE_TABLESTEP(tableSize) ((tableSize>>1) + (tableSize>>3) + 3)
 
+}
 
 #endif /* FSE_STATIC_LINKING_ONLY */
 
-
-#if defined (__cplusplus)
-}
-#endif

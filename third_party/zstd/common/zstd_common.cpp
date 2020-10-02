@@ -18,6 +18,7 @@
 #include "error_private.h"
 #include "zstd_internal.h"
 
+namespace duckdb_zstd {
 
 /*-****************************************
 *  Version
@@ -80,4 +81,6 @@ void ZSTD_free(void* ptr, ZSTD_customMem customMem)
         else
             free(ptr);
     }
+}
+
 }

@@ -56,7 +56,6 @@
 *  Dependencies
 *********************************************************/
 #include <string.h>      /* memcpy, memmove, memset */
-#include "../common/cpu.h"         /* bmi2 */
 #include "../common/mem.h"         /* low level memory routines */
 #define FSE_STATIC_LINKING_ONLY
 #include "../common/fse.h"
@@ -70,7 +69,7 @@
 #if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
 #  include "../legacy/zstd_legacy.h"
 #endif
-
+namespace duckdb_zstd {
 
 /*-*************************************************************
 *   Context management
@@ -112,7 +111,7 @@ static void ZSTD_initDCtx_internal(ZSTD_DCtx* dctx)
     dctx->previousLegacyVersion = 0;
     dctx->noForwardProgress = 0;
     dctx->oversizedDuration = 0;
-    dctx->bmi2 = ZSTD_cpuid_bmi2(ZSTD_cpuid());
+    dctx->bmi2 = 0;
     dctx->outBufferMode = ZSTD_obm_buffered;
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     dctx->dictContentEndForFuzzing = NULL;
@@ -1524,7 +1523,7 @@ static void ZSTD_DCtx_updateOversizedDuration(ZSTD_DStream* zds, size_t const ne
 {
     if (ZSTD_DCtx_isOverflow(zds, neededInBuffSize, neededOutBuffSize))
         zds->oversizedDuration++;
-    else 
+    else
         zds->oversizedDuration = 0;
 }
 
@@ -1731,7 +1730,7 @@ size_t ZSTD_decompressStream(ZSTD_DStream* zds, ZSTD_outBuffer* output, ZSTD_inB
 
                 {   int const tooSmall = (zds->inBuffSize < neededInBuffSize) || (zds->outBuffSize < neededOutBuffSize);
                     int const tooLarge = ZSTD_DCtx_isOversizedTooLong(zds);
-                    
+
                     if (tooSmall || tooLarge) {
                         size_t const bufferSize = neededInBuffSize + neededOutBuffSize;
                         DEBUGLOG(4, "inBuff  : from %u to %u",
@@ -1882,4 +1881,6 @@ size_t ZSTD_decompressStream_simpleArgs (
     *dstPos = output.pos;
     *srcPos = input.pos;
     return cErr;
+}
+
 }

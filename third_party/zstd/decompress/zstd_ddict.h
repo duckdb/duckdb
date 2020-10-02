@@ -18,7 +18,7 @@
 #include <stddef.h>   /* size_t */
 #include "../zstd.h"     /* ZSTD_DDict, and several public functions */
 
-
+namespace duckdb_zstd {
 /*-*******************************************************
  *  Interface
  *********************************************************/
@@ -39,6 +39,6 @@ size_t ZSTD_DDict_dictSize(const ZSTD_DDict* ddict);
 
 void ZSTD_copyDDictParameters(ZSTD_DCtx* dctx, const ZSTD_DDict* ddict);
 
-
+}
 
 #endif /* ZSTD_DDICT_H */

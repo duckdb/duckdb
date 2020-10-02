@@ -7,10 +7,6 @@
  * in the COPYING file in the root directory of this source tree).
  * You may select, at your option, one of the above-listed licenses.
  */
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #ifndef ZSTD_H_235446
 #define ZSTD_H_235446
 
@@ -35,6 +31,7 @@ extern "C" {
 #  define ZSTDLIB_API ZSTDLIB_VISIBILITY
 #endif
 
+namespace duckdb_zstd {
 
 /*******************************************************************************
   Introduction
@@ -1014,6 +1011,7 @@ ZSTDLIB_API size_t ZSTD_sizeof_DStream(const ZSTD_DStream* zds);
 ZSTDLIB_API size_t ZSTD_sizeof_CDict(const ZSTD_CDict* cdict);
 ZSTDLIB_API size_t ZSTD_sizeof_DDict(const ZSTD_DDict* ddict);
 
+}
 #endif  /* ZSTD_H_235446 */
 
 
@@ -1028,6 +1026,8 @@ ZSTDLIB_API size_t ZSTD_sizeof_DDict(const ZSTD_DDict* ddict);
 
 #if defined(ZSTD_STATIC_LINKING_ONLY) && !defined(ZSTD_H_ZSTD_STATIC_LINKING_ONLY)
 #define ZSTD_H_ZSTD_STATIC_LINKING_ONLY
+
+namespace duckdb_zstd {
 
 /****************************************************************************************
  *   experimental API (static linking only)
@@ -2082,9 +2082,6 @@ ZSTDLIB_API size_t ZSTD_compressBlock  (ZSTD_CCtx* cctx, void* dst, size_t dstCa
 ZSTDLIB_API size_t ZSTD_decompressBlock(ZSTD_DCtx* dctx, void* dst, size_t dstCapacity, const void* src, size_t srcSize);
 ZSTDLIB_API size_t ZSTD_insertBlock    (ZSTD_DCtx* dctx, const void* blockStart, size_t blockSize);  /**< insert uncompressed block into `dctx` history. Useful for multi-blocks decompression. */
 
+}
 
 #endif   /* ZSTD_H_ZSTD_STATIC_LINKING_ONLY */
-
-#if defined (__cplusplus)
-}
-#endif

@@ -131,7 +131,6 @@ option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
-option(BUILD_ZSTD "Build ZSTD compression for the Parquet extension." FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 

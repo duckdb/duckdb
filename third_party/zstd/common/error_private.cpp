@@ -12,6 +12,8 @@
 
 #include "error_private.h"
 
+namespace duckdb_zstd {
+
 const char* ERR_getErrorString(ERR_enum code)
 {
 #ifdef ZSTD_STRIP_ERROR_STRINGS
@@ -52,4 +54,6 @@ const char* ERR_getErrorString(ERR_enum code)
     default: return notErrorCode;
     }
 #endif
+}
+
 }

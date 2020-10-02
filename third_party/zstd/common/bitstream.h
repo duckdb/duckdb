@@ -14,10 +14,6 @@
 #ifndef BITSTREAM_H_MODULE
 #define BITSTREAM_H_MODULE
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 /*
 *  This API consists of small unitary functions, which must be inlined for best performance.
 *  Since link-time-optimization is not available for all compilers,
@@ -46,6 +42,7 @@ extern "C" {
 #define STREAM_ACCUMULATOR_MIN_64  57
 #define STREAM_ACCUMULATOR_MIN    ((U32)(MEM_32bits() ? STREAM_ACCUMULATOR_MIN_32 : STREAM_ACCUMULATOR_MIN_64))
 
+namespace duckdb_zstd {
 
 /*-******************************************
 *  bitStream encoding API (write forward)
@@ -447,8 +444,6 @@ MEM_STATIC unsigned BIT_endOfDStream(const BIT_DStream_t* DStream)
     return ((DStream->ptr == DStream->start) && (DStream->bitsConsumed == sizeof(DStream->bitContainer)*8));
 }
 
-#if defined (__cplusplus)
 }
-#endif
 
 #endif /* BITSTREAM_H_MODULE */

@@ -12,10 +12,6 @@
  * You may select, at your option, one of the above-listed licenses.
 ****************************************************************** */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #ifndef HUF_H_298734234
 #define HUF_H_298734234
 
@@ -37,6 +33,7 @@ extern "C" {
 #  define HUF_PUBLIC_API
 #endif
 
+namespace duckdb_zstd {
 
 /* ========================== */
 /* ***  simple functions  *** */
@@ -333,8 +330,7 @@ size_t HUF_decompress1X1_DCtx_wksp_bmi2(HUF_DTable* dctx, void* dst, size_t dstS
 size_t HUF_decompress4X_usingDTable_bmi2(void* dst, size_t maxDstSize, const void* cSrc, size_t cSrcSize, const HUF_DTable* DTable, int bmi2);
 size_t HUF_decompress4X_hufOnly_wksp_bmi2(HUF_DTable* dctx, void* dst, size_t dstSize, const void* cSrc, size_t cSrcSize, void* workSpace, size_t wkspSize, int bmi2);
 
+}
+
 #endif /* HUF_STATIC_LINKING_ONLY */
 
-#if defined (__cplusplus)
-}
-#endif

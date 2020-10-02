@@ -5,7 +5,7 @@
  *
  * You can contact the author at :
  * - xxHash source repository : https://github.com/Cyan4973/xxHash
- * 
+ *
  * This source code is licensed under both the BSD-style license (found in the
  * LICENSE file in the root directory of this source tree) and the GPLv2 (found
  * in the COPYING file in the root directory of this source tree).
@@ -44,10 +44,6 @@ XXH64       13.8 GB/s            1.9 GB/s
 XXH32        6.8 GB/s            6.0 GB/s
 */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #ifndef XXHASH_H_5627135585666179
 #define XXHASH_H_5627135585666179 1
 
@@ -56,6 +52,7 @@ extern "C" {
 *  Definitions
 ******************************/
 #include <stddef.h>   /* size_t */
+namespace duckdb_zstd {
 typedef enum { XXH_OK=0, XXH_ERROR } XXH_errorcode;
 
 
@@ -272,14 +269,9 @@ XXH_PUBLIC_API XXH64_hash_t XXH64_hashFromCanonical(const XXH64_canonical_t* src
        unsigned reserved[2];          /* never read nor write, will be removed in a future version */
    };   /* typedef'd to XXH64_state_t */
 
-
+}
 #  ifdef XXH_PRIVATE_API
-#    include "xxhash.c"   /* include xxhash functions as `static`, for inlining */
+#    include "xxhash.cpp"   /* include xxhash functions as `static`, for inlining */
 #  endif
 
 #endif /* XXH_STATIC_LINKING_ONLY && XXH_STATIC_H_3543687687345 */
-
-
-#if defined (__cplusplus)
-}
-#endif

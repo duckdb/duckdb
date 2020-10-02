@@ -9,10 +9,6 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(utf8proc)
 endif()
 
-if (${BUILD_ZSTD})
-  add_subdirectory(zstd)
-endif()
-
 if(NOT WIN32
    AND NOT SUN
    AND ${BUILD_UNITTESTS})

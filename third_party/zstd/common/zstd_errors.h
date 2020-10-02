@@ -11,10 +11,6 @@
 #ifndef ZSTD_ERRORS_H_398273423
 #define ZSTD_ERRORS_H_398273423
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 /*===== dependency =====*/
 #include <stddef.h>   /* size_t */
 
@@ -34,7 +30,7 @@ extern "C" {
 #else
 #  define ZSTDERRORLIB_API ZSTDERRORLIB_VISIBILITY
 #endif
-
+namespace duckdb_zstd {
 /*-*********************************************
  *  Error codes list
  *-*********************************************
@@ -86,9 +82,6 @@ typedef enum {
 ZSTDERRORLIB_API ZSTD_ErrorCode ZSTD_getErrorCode(size_t functionResult);
 ZSTDERRORLIB_API const char* ZSTD_getErrorString(ZSTD_ErrorCode code);   /**< Same as ZSTD_getErrorName, but using a `ZSTD_ErrorCode` enum argument */
 
-
-#if defined (__cplusplus)
 }
-#endif
 
 #endif /* ZSTD_ERRORS_H_398273423 */

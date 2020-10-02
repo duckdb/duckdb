@@ -15,7 +15,6 @@
 *  Dependencies
 *********************************************************/
 #include <string.h>      /* memcpy, memmove, memset */
-#include "../common/cpu.h"         /* bmi2 */
 #include "../common/mem.h"         /* low level memory routines */
 #define FSE_STATIC_LINKING_ONLY
 #include "../common/fse.h"
@@ -28,7 +27,7 @@
 #  include "../legacy/zstd_legacy.h"
 #endif
 
-
+namespace duckdb_zstd {
 
 /*-*******************************************************
 *  Types
@@ -241,4 +240,6 @@ unsigned ZSTD_getDictID_fromDDict(const ZSTD_DDict* ddict)
 {
     if (ddict==NULL) return 0;
     return ZSTD_getDictID_fromDict(ddict->dictContent, ddict->dictSize);
+}
+
 }
