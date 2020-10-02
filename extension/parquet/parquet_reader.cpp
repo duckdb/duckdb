@@ -21,6 +21,8 @@
 
 #include "utf8proc_wrapper.hpp"
 
+#include <sstream>
+
 namespace duckdb {
 
 using namespace parquet;
@@ -457,25 +459,9 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 		break;
 	}
 	default: {
-		string codec_name;
-		switch (chunk.meta_data.codec) {
-		case CompressionCodec::LZO:
-			codec_name = "LZ0";
-			break;
-		case CompressionCodec::BROTLI:
-			codec_name = "BROTLI";
-			break;
-		case CompressionCodec::LZ4:
-			codec_name = "LZ4";
-			break;
-		case CompressionCodec::ZSTD:
-			codec_name = "ZSTD";
-			break;
-		default:
-			codec_name = "unknown";
-			break;
-		}
-		throw FormatException("Unsupported compression codec \"" + codec_name + "\". Supported options are uncompressed, gzip or snappy");
+		std::stringstream codec_name;
+		codec_name << chunk.meta_data.codec;
+		throw FormatException("Unsupported compression codec \"" + codec_name.str() + "\". Supported options are uncompressed, gzip or snappy");
 	}
 	}
 	col_data.buf.inc(page_hdr.compressed_page_size);
