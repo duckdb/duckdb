@@ -83,7 +83,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		if (aggr.distinct) {
 			// group types plus aggr return type
 			vector<LogicalType> distinct_group_types(group_types);
-			distinct_group_types.push_back(payload_types[payload_idx]);
+			for (idx_t child_idx = 0; child_idx < aggr.child_count; child_idx++) {
+				distinct_group_types.push_back(payload_types[payload_idx]);
+			}
 			distinct_hashes[i] =
 			    make_unique<GroupedAggregateHashTable>(buffer_manager, initial_capacity, distinct_group_types);
 		}
@@ -532,6 +534,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 		Resize(capacity * 4);
 	}
 
+	assert(groups.column_count() == group_types.size());
 	// we need to be able to fit at least one vector of data
 	assert(capacity - entries >= groups.size());
 	assert(group_hashes.type == LogicalType::HASH);
@@ -591,6 +594,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 
 				// copy the group hash to the payload for use in resize
 				memcpy(entry_payload_ptr, &group_hashes_ptr[index], hash_width);
+				assert((*(hash_t *)entry_payload_ptr) == group_hashes_ptr[index]);
+
 				// initialize the payload info for the column
 				memcpy(entry_payload_ptr + hash_width + group_width, empty_payload_data.get(), payload_width);
 
@@ -600,6 +605,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 				assert(payload_block_idx + 1 < NumericLimits<uint32_t>::Maximum());
 
 				ht_entry_ptr->salt = group_hashes_ptr[index] >> hash_prefix_shift;
+
+				assert(((*(hash_t *)entry_payload_ptr) >> hash_prefix_shift) == ht_entry_ptr->salt);
+
 				// page numbers start at one so we can use 0 as empty flag
 				// GetPtr undoes this
 				ht_entry_ptr->page_nr = payload_hds.size();

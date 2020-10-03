@@ -19,7 +19,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<u
 
 PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, PhysicalOperatorType type)
-    : PhysicalSink(type, types), groups(move(groups_p)) {
+    : PhysicalSink(type, types), groups(move(groups_p)), all_combinable(true), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (this->groups.size() == 0) {
@@ -32,12 +32,16 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<u
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
-	all_combinable = true;
+
 	for (auto &expr : expressions) {
 		assert(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		assert(expr->IsAggregate());
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		bindings.push_back(&aggr);
+
+		if (aggr.distinct) {
+			any_distinct = true;
+		}
 
 		aggregate_types.push_back(aggr.return_type);
 		if (aggr.children.size()) {
@@ -54,9 +58,10 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<LogicalType> types, vector<u
 		aggregates.push_back(move(expr));
 	}
 
-	// FIXME, figure out some heuristic/constant for those
+	// TODO, figure out some heuristic/constant for those
 	ht_load_limit = 100000;
 	radix_limit = 10000;
+	ht_initial_size = STANDARD_VECTOR_SIZE * 2;
 }
 
 //===--------------------------------------------------------------------===//
@@ -67,9 +72,8 @@ public:
 	HashAggregateGlobalState(BufferManager &buffer_manager, vector<LogicalType> &group_types,
 	                         vector<LogicalType> &payload_types, vector<BoundAggregateExpression *> &bindings,
 	                         idx_t _parallel_threads)
-	    : is_empty(true) {
-		radix_partitions = 1;
-		radix_bits = 0;
+	    : is_empty(true), radix_partitions(1), radix_bits(0), lossy_total_groups(0) {
+
 		// we need one thread to merge the non-partition hts, hence the -1
 		while (radix_partitions <= _parallel_threads - 1) {
 			radix_partitions *= 2;
@@ -113,7 +117,7 @@ public:
 	HashAggregateLocalState(BufferManager &buffer_manager, vector<unique_ptr<Expression>> &groups,
 	                        vector<BoundAggregateExpression *> &bound_aggregates, vector<LogicalType> &group_types,
 	                        vector<LogicalType> &payload_types)
-	    : buffer_manager(buffer_manager), bound_aggregates(bound_aggregates), group_executor(groups) {
+	    : buffer_manager(buffer_manager), bound_aggregates(bound_aggregates), group_executor(groups), is_empty(true) {
 		for (auto &aggr : bound_aggregates) {
 			if (aggr->children.size()) {
 				for (idx_t i = 0; i < aggr->children.size(); ++i) {
@@ -157,6 +161,13 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 	                                            group_types, payload_types);
 }
 
+unique_ptr<GroupedAggregateHashTable> PhysicalHashAggregate::NewHT(LocalSinkState &lstate) {
+	auto &llstate = (HashAggregateLocalState &)lstate;
+
+	return make_unique<GroupedAggregateHashTable>(llstate.buffer_manager, ht_initial_size, group_types, payload_types,
+	                                              llstate.bound_aggregates);
+}
+
 void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                                  DataChunk &input) {
 	auto &llstate = (HashAggregateLocalState &)lstate;
@@ -190,6 +201,23 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	// we need to hash here already
 	Vector hashes(LogicalType::HASH);
 	group_chunk.Hash(hashes);
+
+	// if we have non-combinable aggregates (e.g. string_agg) or any distinct aggregates we cannot keep parallel hash
+	// tables
+	if (!all_combinable || any_distinct) {
+		lock_guard<mutex> glock(gstate.lock);
+		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
+		if (gstate.hts[0].empty()) {
+			gstate.hts[0].push_back(NewHT(lstate));
+		}
+		assert(gstate.hts[0].size() == 1);
+		assert(gstate.hts.size() == 1);
+		gstate.lossy_total_groups += gstate.hts[0].back()->AddChunk(group_chunk, hashes, payload_chunk);
+		return;
+	}
+
+	assert(all_combinable);
+	assert(!any_distinct);
 
 	// radix-partitioned case
 	if (gstate.radix_partitions > 1 && llstate.hts[0].size() > 0 && gstate.lossy_total_groups > radix_limit) {
@@ -233,21 +261,15 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 
 			auto ht_idx = r + 1;
 
-			if (llstate.hts[ht_idx].size() == 0 || llstate.hts[ht_idx].back()->Size() > ht_load_limit) {
-				// FIXME this code is duplicated
-				llstate.hts[ht_idx].push_back(
-				    make_unique<GroupedAggregateHashTable>(llstate.buffer_manager, STANDARD_VECTOR_SIZE * 2,
-				                                           group_types, payload_types, llstate.bound_aggregates));
+			if (llstate.hts[ht_idx].empty() || llstate.hts[ht_idx].back()->Size() > ht_load_limit) {
+				llstate.hts[ht_idx].push_back(NewHT(lstate));
 			}
 			gstate.lossy_total_groups += llstate.hts[ht_idx].back()->AddChunk(group_subset, hashes, payload_subset);
 		}
 
 	} else {
-		if ((llstate.hts[0].size() == 0 || llstate.hts[0].back()->Size() > ht_load_limit)) {
-			// FIXME this code is duplicated
-			llstate.hts[0].push_back(make_unique<GroupedAggregateHashTable>(llstate.buffer_manager,
-			                                                                STANDARD_VECTOR_SIZE * 2, group_types,
-			                                                                payload_types, llstate.bound_aggregates));
+		if ((llstate.hts[0].empty() || llstate.hts[0].back()->Size() > ht_load_limit)) {
+			llstate.hts[0].push_back(NewHT(lstate));
 		}
 
 		gstate.lossy_total_groups += llstate.hts[0].back()->AddChunk(group_chunk, hashes, payload_chunk);
@@ -283,11 +305,18 @@ public:
 void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
 	auto &gstate = (HashAggregateGlobalState &)state;
 	auto &source = (HashAggregateLocalState &)lstate;
-	assert(all_combinable);
 
 	// this actually does not do a lot but just pushes the local HTs into the global state so we can later combine them
 	// in parallel
 	lock_guard<mutex> glock(gstate.lock);
+	if (!all_combinable) {
+		assert(source.hts.size() == 0);
+		assert(gstate.hts.size() <= 1);
+		assert(gstate.hts.size() == 1 && gstate.hts[0].size() == 1);
+		return;
+	}
+
+	assert(all_combinable);
 	if (!source.is_empty) {
 		gstate.is_empty = false;
 	}
@@ -339,6 +368,11 @@ void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
 
 	this->sink_state = move(state);
 	auto gstate = (HashAggregateGlobalState *)this->sink_state.get();
+
+	if (!all_combinable) {
+		assert(gstate->hts.size() <= 1);
+		assert(gstate->hts.size() == 1 && gstate->hts[0].size() == 1);
+	}
 
 	// schedule additional tasks to combine the partial HTs
 	pipeline.total_tasks += gstate->hts.size();

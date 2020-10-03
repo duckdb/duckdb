@@ -33,6 +33,9 @@ public:
 	//! Whether or not all aggregates are combinable
 	bool all_combinable;
 
+	//! Whether or not any aggregation is DISTINCT
+	bool any_distinct;
+
 	//! The group types
 	vector<LogicalType> group_types;
 	//! The payload types
@@ -60,6 +63,9 @@ private:
 	idx_t ht_load_limit;
 	idx_t radix_limit;
 	idx_t ht_initial_size;
+
+private:
+	unique_ptr<GroupedAggregateHashTable> NewHT(LocalSinkState &lstate);
 };
 
 } // namespace duckdb
