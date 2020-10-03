@@ -108,11 +108,6 @@
 #define FORCE_INLINE_TEMPLATE static INLINE_KEYWORD FORCE_INLINE_ATTR
 
 
-#ifdef _MSC_VER
-#  pragma warning(disable : 4127)      /* disable: C4127: conditional expression is constant */
-#endif
-
-
 /* *************************************
 *  Basic Types
 ***************************************/
