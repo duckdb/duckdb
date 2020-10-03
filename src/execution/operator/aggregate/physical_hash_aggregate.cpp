@@ -344,7 +344,6 @@ public:
 			// keep only payload
 			state.hts[radix].erase(state.hts[radix].begin() + 1, state.hts[radix].end());
 		}
-		state.hts[radix][0]->Finalize();
 	}
 
 	void Execute() {

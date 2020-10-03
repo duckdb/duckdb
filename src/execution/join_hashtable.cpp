@@ -421,10 +421,6 @@ void JoinHashTable::Finalize() {
 		}
 		pinned_handles.push_back(move(handle));
 	}
-	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
-		auto &info = correlated_mark_join_info;
-		info.correlated_counts->Finalize();
-	}
 
 	finalized = true;
 }

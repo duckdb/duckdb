@@ -43,8 +43,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
                                                      vector<AggregateObject> aggregate_objects)
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
-      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), payload_block_idx(0),
-      finalized(false) {
+      payload_types(payload_types), group_width(0), payload_width(0), capacity(0), entries(0), payload_block_idx(0) {
 
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
@@ -245,9 +244,6 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload)
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
-	if (finalized) {
-		throw InternalException("HT already finalized");
-	}
 
 	if (groups.size() == 0) {
 		return 0;
@@ -711,9 +707,6 @@ void GroupedAggregateHashTable::FlushMerge(Vector &source_addresses, Vector &sou
 }
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
-	if (finalized) {
-		throw InternalException("HT already finalized");
-	}
 	assert(other.payload_width == payload_width);
 	assert(other.group_width == group_width);
 	assert(other.tuple_size == tuple_size);
@@ -757,9 +750,6 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 }
 
 idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
-	if (!finalized) {
-		throw InternalException("HT not finalized");
-	}
 	Vector addresses(LogicalType::POINTER);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
@@ -799,11 +789,6 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, D
 	}
 	scan_position += this_n;
 	return this_n;
-}
-
-void GroupedAggregateHashTable::Finalize() {
-	// FIXME this breaks FetchAggregates hashes_hdl.reset();
-	finalized = true;
 }
 
 } // namespace duckdb

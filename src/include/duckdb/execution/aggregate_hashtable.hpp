@@ -99,10 +99,8 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses, SelectionVector &new_groups);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
-	void Resize(idx_t size);
 
 	void Combine(GroupedAggregateHashTable &other);
-	void Finalize();
 
 	idx_t Size() {
 		return entries;
@@ -154,8 +152,6 @@ private:
 
 	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 
-	bool finalized;
-
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
 
 private:
@@ -170,6 +166,7 @@ private:
 	void FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
 	data_ptr_t GetPtr(aggr_ht_entry_64 &ht_entry_val);
+	void Resize(idx_t size);
 };
 
 } // namespace duckdb
