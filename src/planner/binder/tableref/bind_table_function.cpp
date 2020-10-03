@@ -92,6 +92,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	for (idx_t i = 0; i < ref.column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = ref.column_name_alias[i];
 	}
+	for(idx_t i = 0; i < return_names.size(); i++) {
+		if (return_names[i].empty()) {
+			return_names[i] = "C" + to_string(i);
+		}
+	}
 	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, return_names,

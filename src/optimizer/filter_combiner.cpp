@@ -255,6 +255,14 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 	return tableFilters;
 }
 
+static bool IsGreaterThan(ExpressionType type) {
+	return type == ExpressionType::COMPARE_GREATERTHAN || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+}
+
+static bool IsLessThan(ExpressionType type) {
+	return type == ExpressionType::COMPARE_LESSTHAN || type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+}
+
 FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	if (expr->HasParameter()) {
 		return FilterResult::UNSUPPORTED;
@@ -348,6 +356,9 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			// comparison between two non-scalars
 			// only handle comparisons for now
 			if (expr->type != ExpressionType::COMPARE_EQUAL) {
+				if(IsGreaterThan(expr->type) || IsLessThan(expr->type)) {
+					return AddTransitiveFilters(comparison);
+				}
 				return FilterResult::UNSUPPORTED;
 			}
 			// get the LHS and RHS nodes
@@ -393,12 +404,83 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	return FilterResult::UNSUPPORTED;
 }
 
-static bool IsGreaterThan(ExpressionType type) {
-	return type == ExpressionType::COMPARE_GREATERTHAN || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-}
+/*
+* Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
+* It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
+*/
+FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison) {
+	assert(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
+	// get the LHS and RHS nodes
+	Expression *left_node = GetNode(comparison.left.get());
+	Expression *right_node = GetNode(comparison.right.get());
+	if (BaseExpression::Equals(left_node, right_node)) {
+		return FilterResult::UNSUPPORTED;
+	}
+	// get the equivalence sets of the LHS and RHS
+	idx_t left_equivalence_set = GetEquivalenceSet(left_node);
+	idx_t right_equivalence_set = GetEquivalenceSet(right_node);
+	if (left_equivalence_set == right_equivalence_set) {
+		// this equality filter already exists, prune it
+		return FilterResult::SUCCESS;
+	}
 
-static bool IsLessThan(ExpressionType type) {
-	return type == ExpressionType::COMPARE_LESSTHAN || type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+	vector<ExpressionValueInformation> &left_constants = constant_values.find(left_equivalence_set)->second;
+	vector<ExpressionValueInformation> &right_constants = constant_values.find(right_equivalence_set)->second;
+	bool isSuccessful = false;
+	bool isInserted = false;
+	// read every constant filters already inserted for the right scalar variable
+	// and see if we can create new trasitive filters, e.g., there is already a filter i > 10,
+	// suppose that we have now the j >= i, then we can infer a new filter j > 10
+	for(auto right_constant: right_constants) {
+		ExpressionValueInformation info;
+		info.constant = right_constant.constant;
+		// there is already an equality filter, e.g., i = 10
+		if(right_constant.comparison_type == ExpressionType::COMPARE_EQUAL) {
+			// create filter j [>, >=, <, <=] 10
+			// suppose the new comparsion is j >= i and we have already a filter i = 10,
+			// then we create a new filter j >= 10
+			// and the filter j >= i can be pruned by not adding it into the remaining filters
+			info.comparison_type = comparison.type;
+		} else if( (comparison.type == ExpressionType::COMPARE_GREATERTHANOREQUALTO && IsGreaterThan(right_constant.comparison_type)) ||
+				   (comparison.type == ExpressionType::COMPARE_LESSTHANOREQUALTO && IsLessThan(right_constant.comparison_type)) ) {
+			// filters (j >= i AND i [>, >=] 10) OR (j <= i AND i [<, <=] 10)
+			// create filter j [>, >=] 10 and add the filter j [>=, <=] i into the remaining filters
+			info.comparison_type = right_constant.comparison_type; // create filter j [>, >=, <, <=] 10
+			if(!isInserted) {
+				//Add the filter j >= i in the remaing filters
+				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
+				                                                     comparison.right->Copy());
+				remaining_filters.push_back(move(filter));
+				isInserted = true;
+			}
+		} else if( (comparison.type == ExpressionType::COMPARE_GREATERTHAN && IsGreaterThan(right_constant.comparison_type)) ||
+				   (comparison.type == ExpressionType::COMPARE_LESSTHAN && IsLessThan(right_constant.comparison_type)) ) {
+			// filters (j > i AND i [>, >=] 10) OR j < i AND i [<, <=] 10
+			// create filter j [>, <] 10 and add the filter j [>, <] i into the remaining filters
+			// the comparisons j > i and j < i are more restrictive
+			info.comparison_type = comparison.type;
+			if(!isInserted) {
+				//Add the filter j [>, <] i
+				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
+				                                                     comparison.right->Copy());
+				remaining_filters.push_back(move(filter));
+				isInserted = true;
+			}
+		} else {
+			// we cannot add a new filter
+			continue;
+		}
+		// Add the new filer into the left set
+		if(AddConstantComparison(left_constants, info) == FilterResult::UNSATISFIABLE) {
+			return FilterResult::UNSATISFIABLE;
+		}
+		isSuccessful = true;
+	}
+	if(isSuccessful) {
+		return FilterResult::SUCCESS;
+	}
+
+	return FilterResult::UNSUPPORTED;
 }
 
 ValueComparisonResult InvertValueComparisonResult(ValueComparisonResult result) {
