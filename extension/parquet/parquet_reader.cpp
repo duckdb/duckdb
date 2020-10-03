@@ -463,7 +463,7 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	case CompressionCodec::ZSTD: {
 		col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
 		auto res = duckdb_zstd::ZSTD_decompress(col_data.decompressed_buf.ptr, page_hdr.uncompressed_page_size, col_data.buf.ptr, page_hdr.compressed_page_size);
-		if (duckdb_zstd::ZSTD_isError(res) || res != page_hdr.uncompressed_page_size) {
+		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t) page_hdr.uncompressed_page_size) {
 			throw FormatException("ZSTD Decompression failure");
 		}
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
