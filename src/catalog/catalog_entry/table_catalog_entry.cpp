@@ -310,7 +310,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 	if (!found) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.name, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -336,7 +336,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->columns.push_back(move(copy));
 	}
 	if (change_idx == INVALID_INDEX) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.name, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {

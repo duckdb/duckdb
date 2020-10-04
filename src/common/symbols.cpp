@@ -39,7 +39,7 @@
 using namespace duckdb;
 using namespace std;
 template class std::unique_ptr<SQLStatement>;
-template class std::unique_ptr<AlterTableStatement>;
+template class std::unique_ptr<AlterStatement>;
 template class std::unique_ptr<CopyStatement>;
 template class std::unique_ptr<CreateStatement>;
 template class std::unique_ptr<DeleteStatement>;

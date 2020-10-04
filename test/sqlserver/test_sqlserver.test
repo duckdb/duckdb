@@ -388,9 +388,6 @@ Information Services	Conroy	39.6635	2009-02-04	2009-02-04
 Information Services	Trenary	50.4808	2008-12-11	2008-12-11
 
 
-# FIXME: quarter gives inconsistent results with postgres?
-mode skip
-
 query IIIRRR
 SELECT BusinessEntityID, DATEPART('QUARTER', QuotaDate) AS Quarter, YEAR(QuotaDate) AS SalesYear, SalesQuota AS QuotaThisQuarter, SalesQuota - FIRST_VALUE(SalesQuota) OVER (PARTITION BY BusinessEntityID, YEAR(QuotaDate) ORDER BY DATEPART('QUARTER',QuotaDate) ) AS DifferenceFromFirstQuarter, SalesQuota - LAST_VALUE(SalesQuota) OVER (PARTITION BY BusinessEntityID, YEAR(QuotaDate) ORDER BY DATEPART('QUARTER', QuotaDate) RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING ) AS DifferenceFromLastQuarter FROM Sales.SalesPersonQuotaHistory WHERE YEAR(QuotaDate) > 2005 AND BusinessEntityID BETWEEN 274 AND 275 ORDER BY BusinessEntityID, SalesYear, Quarter;
 ----
@@ -418,8 +415,6 @@ SELECT BusinessEntityID, DATEPART('QUARTER', QuotaDate) AS Quarter, YEAR(QuotaDa
 275	3	2013	1218000.0000	24000.0000	369000.0000
 275	4	2013	849000.0000	-345000.0000	0.0000
 275	1	2014	869000.0000	0.0000	0.0000
-
-mode unskip
 
 # FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/lag-transact-sql?view=sql-server-2017
 query IIRR

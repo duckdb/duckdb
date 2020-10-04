@@ -176,11 +176,7 @@ void ReplayState::ReplayDropTable() {
 
 void ReplayState::ReplayAlter() {
 	auto info = AlterInfo::Deserialize(source);
-	if (info->type != AlterType::ALTER_TABLE) {
-		throw Exception("Expected ALTER TABLE!");
-	}
-
-	db.catalog->AlterTable(context, (AlterTableInfo *)info.get());
+	db.catalog->Alter(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//

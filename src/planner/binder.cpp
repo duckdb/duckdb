@@ -43,7 +43,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::DROP_STATEMENT:
 		return Bind((DropStatement &)statement);
 	case StatementType::ALTER_STATEMENT:
-		return Bind((AlterTableStatement &)statement);
+		return Bind((AlterStatement &)statement);
 	case StatementType::TRANSACTION_STATEMENT:
 		return Bind((TransactionStatement &)statement);
 	case StatementType::PRAGMA_STATEMENT:

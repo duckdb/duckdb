@@ -5,12 +5,12 @@ namespace duckdb {
 using namespace std;
 using namespace duckdb_libpgquery;
 
-unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
+unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 	auto stmt = reinterpret_cast<PGRenameStmt *>(node);
 	assert(stmt);
 	assert(stmt->relation);
 
-	unique_ptr<AlterTableInfo> info;
+	unique_ptr<AlterInfo> info;
 
 	// first we check the type of ALTER
 	switch (stmt->renameType) {
@@ -47,7 +47,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
 			schema = stmt->relation->schemaname;
 		}
 		string new_name = stmt->newname;
-		info = make_unique<RenameTableInfo>(schema, table, new_name, false /* is_view */);
+		info = make_unique<RenameTableInfo>(schema, table, new_name);
 		break;
 	}
 
@@ -65,7 +65,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
 			schema = stmt->relation->schemaname;
 		}
 		string new_name = stmt->newname;
-		info = make_unique<RenameTableInfo>(schema, view, new_name, true /* is_view */);
+		info = make_unique<RenameViewInfo>(schema, view, new_name);
 		break;
 	}
 	case PG_OBJECT_DATABASE:
@@ -73,7 +73,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
 		throw NotImplementedException("Schema element not supported yet!");
 	}
 	assert(info);
-	return make_unique<AlterTableStatement>(move(info));
+	return make_unique<AlterStatement>(move(info));
 }
 
 } // namespace duckdb
