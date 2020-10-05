@@ -1,7 +1,7 @@
 Package: duckdb
 Title: DBI Package for the DuckDB Database Management System
 Version: 0.2.1-1
-Authors@R: 
+Authors@R:
     c(person(given = "Hannes",
              family = "Mühleisen",
              role = c("aut", "cre"),
@@ -25,6 +25,7 @@ Authors@R:
       person("Tenacious Software LLC", role = "cph"),
       person("The RE2 Authors", role = "cph"),
       person("Google Inc.", role = "cph"),
+      person("Facebook Inc.", role = "cph"),
       person("Steven G. Johnson", role = "cph"),
       person("Jiahao Chen", role = "cph"),
       person("Tony Kelman", role = "cph"),
@@ -36,13 +37,13 @@ Description: The DuckDB project is an embedded analytical data
 License: MPL
 URL: https://duckdb.org/, https://github.com/cwida/duckdb
 BugReports: https://github.com/cwida/duckdb/issues
-Depends: 
+Depends:
     DBI,
     R (>= 3.5.0)
 Imports:
     methods,
     utils
-Suggests: 
+Suggests:
     callr,
     DBItest,
     dbplyr,

@@ -19,6 +19,8 @@
 #include "snappy.h"
 #include "miniz.hpp"
 
+#include "zstd.h"
+
 #include "utf8proc_wrapper.hpp"
 
 #include <sstream>
@@ -455,6 +457,15 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 			throw FormatException("Decompression failure: " + string(mz_error(mz_ret)));
 		}
 
+		col_data.payload.ptr = col_data.decompressed_buf.ptr;
+		break;
+	}
+	case CompressionCodec::ZSTD: {
+		col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
+		auto res = duckdb_zstd::ZSTD_decompress(col_data.decompressed_buf.ptr, page_hdr.uncompressed_page_size, col_data.buf.ptr, page_hdr.compressed_page_size);
+		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t) page_hdr.uncompressed_page_size) {
+			throw FormatException("ZSTD Decompression failure");
+		}
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
 		break;
 	}
