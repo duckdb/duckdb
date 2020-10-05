@@ -1,0 +1,15 @@
+# name: test/sql/copy/parquet/parquet_arrow_timestamp.test
+# description: Test loading a timestamp column from an arrow-parquet generated file
+# group: [parquet]
+
+require parquet
+
+query T
+select * from parquet_scan('test/sql/copy/parquet/data/timestamp.parquet') order by 1
+----
+2020-10-05 17:21:49.488
+
+query T
+select * from parquet_scan('test/sql/copy/parquet/data/timestamp-ms.parquet') order by 1
+----
+2020-10-05 17:21:49
