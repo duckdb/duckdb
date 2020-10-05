@@ -71,6 +71,10 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
+		// first we visit the set of CTEs and add them to the bind context
+        for (auto &cte_it : view_catalog_entry->query->cte_map) {
+                AddCTE(cte_it.first, cte_it.second.get());
+        }
 		SubqueryRef subquery(view_catalog_entry->query->node->Copy());
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		subquery.column_name_alias = view_catalog_entry->aliases;
