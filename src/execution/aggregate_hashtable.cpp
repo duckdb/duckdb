@@ -29,10 +29,19 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                 (vector<BoundAggregateExpression *>){}) {
 }
 
+#ifndef DUCKDB_ALLOW_UNDEFINED
+static idx_t Align(idx_t n) {
+	return ((n + 7) / 8) * 8;
+}
+#endif
+
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
 	vector<AggregateObject> aggregates;
 	for (auto &binding : bindings) {
 		auto payload_size = binding->function.state_size();
+#ifndef DUCKDB_ALLOW_UNDEFINED
+		payload_size = Align(payload_size);
+#endif
 		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
 		                                     binding->distinct, binding->return_type.InternalType()));
 	}
@@ -62,9 +71,19 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 
 	assert(group_width > 0);
 
+#ifndef DUCKDB_ALLOW_UNDEFINED
+	auto aligned_flag_and_group_width = Align(group_width);
+	group_padding = aligned_flag_and_group_width - group_width;
+	group_width += group_padding;
+#endif
+
 	// HT layout
 	hash_width = sizeof(hash_t);
-	tuple_size = hash_width + group_width + payload_width;
+	tuple_size = hash_width + group_width + group_padding + payload_width;
+#ifndef DUCKDB_ALLOW_UNDEFINED
+	tuple_size = Align(tuple_size);
+#endif
+
 	assert(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 
 	tuples_per_block = Storage::BLOCK_ALLOC_SIZE / tuple_size;
@@ -347,11 +366,8 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 			auto group_idx = gdata.sel->get_index(pointer_idx);
 			auto ptr = (T *)pointers[pointer_idx];
 
-			if ((*gdata.nullmask)[group_idx]) {
-				*ptr = NullValue<T>();
-			} else {
-				*ptr = data[group_idx];
-			}
+			T store_value = (*gdata.nullmask)[group_idx] ? NullValue<T>() : data[group_idx];
+			Store<T>(store_value, (data_ptr_t)ptr);
 			pointers[pointer_idx] += type_size;
 		}
 	} else {
@@ -360,7 +376,7 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 			auto group_idx = gdata.sel->get_index(pointer_idx);
 			auto ptr = (T *)pointers[pointer_idx];
 
-			*ptr = data[group_idx];
+			Store<T>(data[group_idx], (data_ptr_t)ptr);
 			pointers[pointer_idx] += type_size;
 		}
 	}
@@ -439,10 +455,10 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = (T *)pointers[idx];
+			auto value = Load<T>((data_ptr_t)pointers[idx]);
 
 			if ((*gdata.nullmask)[group_idx]) {
-				if (IsNullValue<T>(*value)) {
+				if (IsNullValue<T>(value)) {
 					// match: move to next value to compare
 					sel.set_index(match_count++, idx);
 					pointers[idx] += type_size;
@@ -450,7 +466,7 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 					no_match.set_index(no_match_count++, idx);
 				}
 			} else {
-				if (Equals::Operation<T>(data[group_idx], *value)) {
+				if (Equals::Operation<T>(data[group_idx], value)) {
 					sel.set_index(match_count++, idx);
 					pointers[idx] += type_size;
 				} else {
@@ -462,9 +478,9 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = (T *)pointers[idx];
+			auto value = Load<T>((data_ptr_t)pointers[idx]);
 
-			if (Equals::Operation<T>(data[group_idx], *value)) {
+			if (Equals::Operation<T>(data[group_idx], value)) {
 				sel.set_index(match_count++, idx);
 				pointers[idx] += type_size;
 			} else {
@@ -780,6 +796,8 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, D
 		auto &column = groups.data[i];
 		VectorOperations::Gather::Set(addresses, column, groups.size());
 	}
+
+	VectorOperations::AddInPlace(addresses, group_padding, groups.size());
 
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[i];
