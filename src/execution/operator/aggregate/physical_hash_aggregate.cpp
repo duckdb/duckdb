@@ -86,7 +86,6 @@ public:
 		assert(radix_partitions > 0);
 		assert(radix_partitions <= 256);
 		assert((radix_partitions & (radix_partitions - 1)) == 0);
-		assert(radix_bits >= 0);
 		assert(radix_bits <= 8);
 
 		// we use the fourth byte of the 64 bit hash as radix source
