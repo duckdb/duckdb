@@ -165,7 +165,6 @@ protected:
 
     template <class T> inline duckdb::Value BindParameter(const Napi::Value source, T pos);
     template <class T> T* Bind(const Napi::CallbackInfo& info, int start = 0, int end = -1);
-    bool Bind(const Parameters &parameters);
     void Schedule(Work_Callback callback, Baton* baton);
     void Process();
     void CleanQueue();
@@ -176,6 +175,8 @@ protected:
 
     std::unique_ptr<duckdb::PreparedStatement> _stmt_handle;
     std::unique_ptr<duckdb::QueryResult> _res_handle;
+    std::unique_ptr<duckdb::DataChunk> _chunk_handle;
+    duckdb::idx_t chunk_idx;
     int status;
     std::string message;
 

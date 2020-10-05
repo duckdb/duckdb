@@ -251,20 +251,6 @@ template <class T> T* Statement::Bind(const Napi::CallbackInfo& info, int start,
     return baton;
 }
 
-bool Statement::Bind(const Parameters & parameters) {
-    if (parameters.size() == 0) {
-        return true;
-    }
-
-	_res_handle = _stmt_handle->Execute(parameters);
-	if (!_res_handle->success) {
-        _res_handle.reset();
-		return false;
-	}
-
-    return true;
-}
-
 Napi::Value Statement::Bind(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     Statement* stmt = this;
@@ -286,7 +272,7 @@ void Statement::Work_BeginBind(Baton* baton) {
 
 void Statement::Work_Bind(napi_env e, void* data) {
     STATEMENT_INIT(Baton);
-	stmt->Bind(baton->parameters);
+//	stmt->Bind(baton->parameters);
 }
 
 void Statement::Work_AfterBind(napi_env e, napi_status status, void* data) {
@@ -387,15 +373,19 @@ void Statement::Work_BeginGet(Baton* baton) {
 void Statement::Work_Get(napi_env e, void* data) {
     STATEMENT_INIT(RowBaton);
 
-    stmt->_res_handle.reset();
-
-    if (stmt->Bind(baton->parameters)) {
+    if (!stmt->_res_handle) {
         stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, false);
         if (!stmt->_res_handle->success) {
             stmt->status = -1;
             stmt->message = stmt->_res_handle->error;
             stmt->_res_handle.reset();
+            return;
         }
+        stmt->_chunk_handle.reset();
+    }
+    if (!stmt->_chunk_handle || stmt->chunk_idx >= stmt->_chunk_handle->size()) {
+        stmt->_chunk_handle = stmt->_res_handle->Fetch();
+        stmt->chunk_idx = 0;
     }
 }
 
@@ -404,33 +394,26 @@ void Statement::Work_AfterGet(napi_env e, napi_status status, void* data) {
     Statement* stmt = baton->stmt;
 
     Napi::Env env = stmt->Env();
-	auto chunk = stmt->_res_handle->Fetch();
-
-	chunk->SetCardinality(duckdb::MaxValue((duckdb::idx_t)1, chunk->size())); // only need one row
-
-
 
     // Fire callbacks.
     Napi::Function cb = baton->callback.Value();
-    if (!cb.IsUndefined() && cb.IsFunction()) {
-        if (chunk->size() > 0) {
-
-            auto chunk_converted = convert_chunk(env, stmt->_res_handle->names, *chunk).ToObject();
-            if (!chunk_converted.IsArray()) {
-                // error was set before
-                return;
-            }
-
-            // Create the result array from the data we acquired.
-            Napi::Value argv[] = { env.Null(), chunk_converted.Get((uint32_t)0) };
-            TRY_CATCH_CALL(stmt->Value(), cb, 2, argv);
-        }
-        else {
-            Napi::Value argv[] = { env.Null() };
-            TRY_CATCH_CALL(stmt->Value(), cb, 1, argv);
-        }
+    if (cb.IsUndefined() || cb.IsFunction()) {
+        STATEMENT_END();
+        return;
     }
 
+    if (stmt->chunk_idx < stmt->_chunk_handle->size()) {
+        // FIXME this always converts everything
+        auto chunk_converted = convert_chunk(env, stmt->_res_handle->names, *stmt->_chunk_handle).ToObject();
+
+        // Create the result array from the data we acquired.
+        Napi::Value argv[] = { env.Null(), chunk_converted.Get((uint32_t)stmt->chunk_idx++) };
+        TRY_CATCH_CALL(stmt->Value(), cb, 2, argv);
+    }
+    else {
+        Napi::Value argv[] = { env.Null() };
+        TRY_CATCH_CALL(stmt->Value(), cb, 1, argv);
+    }
     STATEMENT_END();
 }
 
@@ -518,14 +501,13 @@ void Statement::Work_All(napi_env e, void* data) {
 
 	stmt->_res_handle.reset();
 
-    if (stmt->Bind(baton->parameters)) {
-        stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, false);
-        if (!stmt->_res_handle->success) {
-            stmt->status = -1;
-            stmt->message = stmt->_res_handle->error;
-            stmt->_res_handle.reset();
-        }
+    stmt->_res_handle = stmt->_stmt_handle->Execute(baton->parameters, false);
+    if (!stmt->_res_handle->success) {
+        stmt->status = -1;
+        stmt->message = stmt->_res_handle->error;
+        stmt->_res_handle.reset();
     }
+
 }
 
 

@@ -83,7 +83,6 @@ describe('prepare', function() {
                         assert.equal(row.flt, i * Math.PI);
                         assert.equal(row.blb, null);
                     }
-
                     retrieved++;
                 });
             })(i);
@@ -118,7 +117,9 @@ describe('prepare', function() {
                 // The second time we pass undefined as a parameter. This is
                 // a mistake, but it should either throw an error or be ignored,
                 // not silently fail to run the statement.
-                if (err) throw err;
+                if (err) {
+                    // errors are fine
+                };
                 inserted++;
             }).finalize(function(err) {
                 if (err) throw err;
@@ -152,7 +153,11 @@ describe('prepare', function() {
 
     describe('retrieving reset() function', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database('test/support/prepare.db', sqlite3.OPEN_READONLY, done); });
+        before(function(done) { db = new sqlite3.Database(':memory:', 
+            function(err) {
+                db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
+            }
+            ); });
 
         var retrieved = 0;
 
@@ -181,7 +186,11 @@ describe('prepare', function() {
 
     describe('multiple get() parameter binding', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database('test/support/prepare.db', sqlite3.OPEN_READONLY, done); });
+        before(function(done) { db = new sqlite3.Database(':memory:', 
+            function(err) {
+                db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
+            }
+            ); });
 
         var retrieved = 0;
 
@@ -212,7 +221,11 @@ describe('prepare', function() {
 
     describe('prepare() parameter binding', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database('test/support/prepare.db', sqlite3.OPEN_READONLY, done); });
+        before(function(done) { db = new sqlite3.Database(':memory:', 
+            function(err) {
+                db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
+            }
+            ); });
 
         var retrieved = 0;
 
@@ -238,7 +251,11 @@ describe('prepare', function() {
 
     describe('all()', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database('test/support/prepare.db', sqlite3.OPEN_READONLY, done); });
+        before(function(done) { db = new sqlite3.Database(':memory:', 
+            function(err) {
+                db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
+            }
+            ); });
 
         var retrieved = 0;
         var count = 1000;
@@ -267,7 +284,11 @@ describe('prepare', function() {
 
     describe('all()', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database('test/support/prepare.db', sqlite3.OPEN_READONLY, done); });
+        before(function(done) { db = new sqlite3.Database(':memory:', 
+            function(err) {
+                db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
+            }
+            ); });
 
         it('should retrieve particular rows', function(done) {
            db.prepare("SELECT txt, num, flt, blb FROM foo WHERE num > 5000")
@@ -351,7 +372,11 @@ describe('prepare', function() {
 
     describe('test Database#get()', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database('test/support/prepare.db', sqlite3.OPEN_READONLY, done); });
+        before(function(done) { db = new sqlite3.Database(':memory:', 
+            function(err) {
+                db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
+            }
+            ); });
 
         var retrieved = 0;
 
