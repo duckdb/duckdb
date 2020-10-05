@@ -145,7 +145,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 void Pipeline::Reset(ClientContext &context) {
 	sink_state = sink->GetGlobalState(context);
 	finished_tasks = 0;
-	total_tasks = 1;
+	total_tasks = 0;
 	finished = false;
 }
 

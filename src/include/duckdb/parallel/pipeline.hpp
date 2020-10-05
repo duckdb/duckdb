@@ -61,10 +61,15 @@ public:
 	}
 	void ClearParents() {
 		parents.clear();
+		dependencies.clear();
 	}
 
 	void IncrementTasks(idx_t amount) {
 		this->total_tasks += amount;
+	}
+
+	bool IsFinished() {
+		return finished;
 	}
 
 public:

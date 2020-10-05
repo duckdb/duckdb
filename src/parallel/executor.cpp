@@ -160,6 +160,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			break;
 		}
 		case PhysicalOperatorType::RECURSIVE_CTE: {
+			auto &cte_node = (PhysicalRecursiveCTE &)*op;
 			// recursive CTE: we build pipelines on the LHS as normal
 			BuildPipelines(op->children[0].get(), parent);
 			// for the RHS, we gather all pipelines that depend on the recursive cte
@@ -169,8 +170,21 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			}
 			recursive_cte = op;
 			BuildPipelines(op->children[1].get(), nullptr);
-			// finalize the pipelines: re-order them so that they are executed in the correct order
-			((PhysicalRecursiveCTE &)*op).FinalizePipelines();
+			// re-order the pipelines such that they are executed in the correct order of dependencies
+			for (idx_t i = 0; i < cte_node.pipelines.size(); i++) {
+				auto &deps = cte_node.pipelines[i]->GetDependencies();
+				for (idx_t j = i + 1; j < cte_node.pipelines.size(); j++) {
+					if (deps.find(cte_node.pipelines[j].get()) != deps.end()) {
+						// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before pipeline "j"
+						std::swap(cte_node.pipelines[i], cte_node.pipelines[j]);
+						i--;
+						continue;
+					}
+				}
+			}
+			for (idx_t i = 0; i < cte_node.pipelines.size(); i++) {
+				cte_node.pipelines[i]->ClearParents();
+			}
 
 			recursive_cte = nullptr;
 			return;
