@@ -27,7 +27,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 	}
 	info->on_conflict = stmt->replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
-	info->query = TransformSelectNode((PGSelectStmt *)stmt->query);
+	info->query = TransformSelect(stmt->query, false);
 
 	if (stmt->aliases && stmt->aliases->length > 0) {
 		for (auto c = stmt->aliases->head; c != NULL; c = lnext(c)) {

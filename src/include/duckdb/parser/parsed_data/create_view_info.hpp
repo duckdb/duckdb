@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -28,7 +29,7 @@ struct CreateViewInfo : public CreateInfo {
 	//! Return types
 	vector<LogicalType> types;
 	//! The QueryNode of the view
-	unique_ptr<QueryNode> query;
+	unique_ptr<SelectStatement> query;
 };
 
 } // namespace duckdb
