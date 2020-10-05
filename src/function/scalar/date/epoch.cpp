@@ -9,14 +9,14 @@ using namespace std;
 
 namespace duckdb {
 
-template<int DIVISION>
+template<int FACTOR>
 static void epoch_function(DataChunk &input, ExpressionState &state, Vector &result) {
 	assert(input.column_count() == 1);
 
 	string output_buffer;
 	UnaryExecutor::Execute<int64_t, timestamp_t, true>(input.data[0], result, input.size(), [&](int64_t input) {
 		auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
-		input *= DIVISION;
+		input *= FACTOR;
 		auto date = Date::EpochToDate(input / 1000);
 		auto time = (dtime_t)(std::abs(input) % ms_per_day);
 		if (input < 0) { // for dates before 1970 time goes backwards
