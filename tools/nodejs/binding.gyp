@@ -30,15 +30,18 @@
                 }
             },
             # "libraries": [
-            #   "/Users/hannes/source/duckdb/build/release/src/libduckdb.dylib"
+            #   "/Users/hannes/source/duckdb/build/release/src/libduckdb_static.a",
+            #   "/Users/hannes/source/duckdb/build/release/third_party/fmt/libfmt.a",
+            #   "/Users/hannes/source/duckdb/build/release/third_party/libpg_query/libpg_query.a",
+            #   "/Users/hannes/source/duckdb/build/release/third_party/utf8proc/libutf8proc.a"
             #   ]
         },
         {
       "target_name": "action_after_build",
       "type": "none",
-            "dependencies": [
-              "<!(node -p \"require('node-addon-api').gyp\")"
-            ],
+        "dependencies": [
+          "<!(node -p \"require('node-addon-api').gyp\")"
+        ],
       "copies": [
           {
             "files": [ "<(PRODUCT_DIR)/<(module_name).node" ],
