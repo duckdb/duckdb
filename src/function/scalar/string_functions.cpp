@@ -29,6 +29,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<TrimFun>();
 	Register<UnicodeFun>();
 	Register<NFCNormalizeFun>();
+	Register<TokenizeFun>();
 }
 
 } // namespace duckdb

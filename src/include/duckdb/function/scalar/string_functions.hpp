@@ -144,4 +144,8 @@ struct UnicodeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct TokenizeFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
