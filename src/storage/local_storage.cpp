@@ -268,15 +268,42 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	if (storage.collection.count == 0) {
 		return;
 	}
+	idx_t append_count = storage.collection.count - storage.deleted_rows;
 	TableAppendState append_state;
-	table.InitializeAppend(transaction, append_state, storage.collection.count - storage.deleted_rows);
+	table.InitializeAppend(transaction, append_state, append_count);
 
+	bool constraint_violated = false;
 	ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
+		// append this chunk to the indexes of the table
+		if (!table.AppendToIndexes(append_state, chunk, append_state.current_row)) {
+			constraint_violated = true;
+			return false;
+		}
 		// append to base table
 		table.Append(transaction, chunk, append_state);
 		return true;
 	});
+	if (constraint_violated) {
+		// need to revert the append
+		row_t current_row = append_state.row_start;
+		// remove the data from the indexes, if there are any indexes
+		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
+			// append this chunk to the indexes of the table
+			table.RemoveFromIndexes(append_state, chunk, current_row);
+
+			current_row += chunk.size();
+			if (current_row >= append_state.current_row) {
+				// finished deleting all rows from the index: abort now
+				return false;
+			}
+			return true;
+		});
+		table.RevertAppendInternal(append_state.row_start, append_count);
+		storage.Clear();
+		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+	}
 	storage.Clear();
+	transaction.PushAppend(&table, append_state.row_start, append_count);
 }
 
 void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,

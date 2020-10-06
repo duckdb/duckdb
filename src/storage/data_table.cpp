@@ -699,7 +699,6 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 			break;
 		}
 	}
-	transaction.PushAppend(this, total_rows, append_count);
 	total_rows += append_count;
 }
 
@@ -749,8 +748,6 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
 			SelectionVector sel(chunk_start % STANDARD_VECTOR_SIZE, chunk_count);
 			chunk.Slice(sel, chunk_count);
 		}
-
-
 		log.WriteInsert(chunk);
 		chunk.Reset();
 	}
@@ -778,12 +775,12 @@ void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t cou
 	info->cardinality += count;
 }
 
-void DataTable::RevertAppend(idx_t start_row, idx_t count) {
+void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
 	if (count == 0) {
 		// nothing to revert!
 		return;
 	}
-	lock_guard<mutex> lock(append_lock);
+
 	if (total_rows != start_row + count) {
 		// interleaved append: don't do anything
 		// in this case the rows will stay as "inserted by transaction X", but will never be committed
@@ -813,6 +810,11 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	}
 	info.next = nullptr;
 	info.RevertAppend(start_row);
+}
+
+void DataTable::RevertAppend(idx_t start_row, idx_t count) {
+	lock_guard<mutex> lock(append_lock);
+	RevertAppendInternal(start_row, count);
 }
 
 //===--------------------------------------------------------------------===//
