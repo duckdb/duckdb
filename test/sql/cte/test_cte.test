@@ -55,3 +55,11 @@ with cte1 as (Select i as j from a) select * from cte1 where j = (select max(j) 
 ----
 42
 
+# use a CTE in a view definition
+statement ok
+create view va AS (with cte as (Select i as j from a) select * from cte);
+
+query I
+select * from va
+----
+42
