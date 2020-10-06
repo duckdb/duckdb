@@ -714,10 +714,9 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 	state.current_row += chunk.size();
 }
 
-void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
+void DataTable::ScanTableSegment(idx_t row_start, idx_t count, std::function<void(DataChunk &chunk)> function) {
 	idx_t end = row_start + count;
 
-	log.WriteSetTable(info->schema, info->table);
 	vector<column_t> column_ids;
 	vector<LogicalType> types;
 	for(idx_t i = 0; i < columns.size(); i++) {
@@ -748,9 +747,17 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
 			SelectionVector sel(chunk_start % STANDARD_VECTOR_SIZE, chunk_count);
 			chunk.Slice(sel, chunk_count);
 		}
-		log.WriteInsert(chunk);
+		function(chunk);
 		chunk.Reset();
 	}
+
+}
+
+void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
+	log.WriteSetTable(info->schema, info->table);
+	ScanTableSegment(row_start, count, [&](DataChunk &chunk) {
+		log.WriteInsert(chunk);
+	});
 }
 
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
@@ -814,6 +821,24 @@ void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
 
 void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
+	if (info->indexes.size() > 0) {
+		auto index_locks = unique_ptr<IndexLock[]>(new IndexLock[info->indexes.size()]);
+		for (idx_t i = 0; i < info->indexes.size(); i++) {
+			info->indexes[i]->InitializeLock(index_locks[i]);
+		}
+		idx_t current_row_base = start_row;
+		row_t row_data[STANDARD_VECTOR_SIZE];
+		Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t) row_data);
+		ScanTableSegment(start_row, count, [&](DataChunk &chunk) {
+			for(idx_t i = 0; i < chunk.size(); i++) {
+				row_data[i] = current_row_base + i;
+			}
+			for (idx_t i = 0; i < info->indexes.size(); i++) {
+				info->indexes[i]->Delete(index_locks[i], chunk, row_identifiers);
+			}
+			current_row_base += chunk.size();
+		});
+	}
 	RevertAppendInternal(start_row, count);
 }
 

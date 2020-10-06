@@ -41,7 +41,7 @@ SELECT * FROM test ORDER BY a
 12	24
 13	22
 
-query I
+query II
 SELECT * FROM test WHERE a=12
 ----
 12	24
@@ -61,7 +61,7 @@ SELECT * FROM test ORDER BY a
 12	24
 13	22
 
-query I
+query II
 SELECT * FROM test WHERE a=12
 ----
 12	24

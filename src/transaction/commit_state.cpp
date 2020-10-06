@@ -198,10 +198,8 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
-		// append:
 		auto info = (AppendInfo *)data;
 		// revert this append
-		// FIXME: revert already committed rows
 		info->table->RevertAppend(info->start_row, info->count);
 		break;
 	}

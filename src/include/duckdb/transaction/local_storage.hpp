@@ -21,8 +21,11 @@ public:
 	LocalTableStorage(DataTable &table);
 	~LocalTableStorage();
 
+	DataTable &table;
 	//! The main chunk collection holding the data
 	ChunkCollection collection;
+	//! The set of unique indexes
+	vector<unique_ptr<Index>> indexes;
 	//! The set of deleted entries
 	unordered_map<idx_t, unique_ptr<bool[]>> deleted_entries;
 	//! The number of deleted rows

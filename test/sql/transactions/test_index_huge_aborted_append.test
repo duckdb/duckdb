@@ -5,51 +5,44 @@
 statement ok
 PRAGMA enable_verification
 
-statement ok con1
+statement ok
 CREATE TABLE integers(i INTEGER PRIMARY KEY);
 
-statement ok con1
-BEGIN TRANSACTION;
-
-statement ok con2
-BEGIN TRANSACTION;
-
-# insert two blocks worth of values into the table in con2, plus the value [1]
-# and the value [1] in con
-statement ok con1
+# insert the value [1] into the table
+statement ok
 INSERT INTO integers VALUES (1);
 
-statement ok con2
+# start a transaction where we insert a lot of values, and finally insert the conflict
+statement ok
+BEGIN TRANSACTION
+
+statement ok
 INSERT INTO integers SELECT i FROM range(2, 131068, 1) t1(i)
 
-# finally insert the value "1"
-statement ok con2
+# inserting the value "1" here fails
+statement error
 INSERT INTO integers VALUES (1)
 
-# con commits first
-statement ok con1
-COMMIT;
+# now we need to rollback
+statement ok
+ROLLBACK
 
-# con2 fails to commit because of the conflict
-statement error con2
-COMMIT;
-
-query I con1
+query I
 SELECT * FROM integers
 ----
 1
 
 # now append some rows again
-statement ok con1
+statement ok
 INSERT INTO integers VALUES (2);
 
-statement ok con1
+statement ok
 INSERT INTO integers VALUES (3);
 
-statement ok con1
+statement ok
 INSERT INTO integers VALUES (4);
 
-query I con1
+query I
 SELECT * FROM integers ORDER BY 1
 ----
 1

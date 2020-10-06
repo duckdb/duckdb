@@ -23,7 +23,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	}
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = (AppendInfo *)data;
-		// mark the tuples as committed
+		// revert the append in the base table
 		info->table->RevertAppend(info->start_row, info->count);
 		break;
 	}

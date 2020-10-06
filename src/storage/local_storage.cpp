@@ -9,7 +9,8 @@
 namespace duckdb {
 using namespace std;
 
-LocalTableStorage::LocalTableStorage(DataTable &table) : deleted_rows(0) {
+LocalTableStorage::LocalTableStorage(DataTable &table) : table(table) {
+	Clear();
 }
 
 LocalTableStorage::~LocalTableStorage() {
@@ -27,6 +28,20 @@ void LocalTableStorage::Clear() {
 	collection.chunks.clear();
 	collection.count = 0;
 	deleted_entries.clear();
+	indexes.clear();
+	deleted_rows = 0;
+	for (auto &index : table.info->indexes) {
+		assert(index->type == IndexType::ART);
+		auto &art = (ART &)*index;
+		if (art.is_unique) {
+			// unique index: create a local ART index that maintains the same unique constraint
+			vector<unique_ptr<Expression>> unbound_expressions;
+			for (auto &expr : art.unbound_expressions) {
+				unbound_expressions.push_back(expr->Copy());
+			}
+			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), true));
+		}
+	}
 }
 
 void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
@@ -125,7 +140,21 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	} else {
 		storage = entry->second.get();
 	}
+	// append to unique indices (if any)
+	if (storage->indexes.size() > 0) {
+		idx_t base_id = MAX_ROW_ID + storage->collection.count;
 
+		// first generate the vector of row identifiers
+		Vector row_ids(LOGICAL_ROW_TYPE);
+		VectorOperations::GenerateSequence(row_ids, chunk.size(), base_id, 1);
+
+		// now append the entries to the indices
+		for (auto &index : storage->indexes) {
+			if (!index->Append(chunk, row_ids)) {
+				throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+			}
+		}
+	}
 	//! Append to the chunk
 	storage->collection.Append(chunk);
 	if (storage->collection.count >= MorselInfo::MORSEL_SIZE) {
