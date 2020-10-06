@@ -100,6 +100,17 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	return Timestamp::FromDatetime(date, time);
 }
 
+timestamp_t Timestamp::FromEpochMs(int64_t ms) {
+	auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
+	date_t date = Date::EpochToDate(ms / 1000);
+	dtime_t time = (dtime_t)(ms % ms_per_day);
+	return Timestamp::FromDatetime(date, time);
+}
+
+timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
+	return Timestamp::FromEpochMs(micros / 1000);
+}
+
 int64_t Timestamp::GetEpoch(timestamp_t timestamp) {
 	return Date::Epoch(Timestamp::GetDate(timestamp)) + (int64_t)(Timestamp::GetTime(timestamp) / 1000);
 }

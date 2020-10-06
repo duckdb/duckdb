@@ -11,4 +11,4 @@ PRAGMA enable_verification
 query III
 SELECT * FROM parquet_scan('test/sql/copy/parquet/data/aws1.snappy.parquet') limit 100
 ----
-11000 values hashing to 0b833adf2bf2598946618c9fe26156b4
+11000 values hashing to 87979b751d9522579a0a395c9adede02
