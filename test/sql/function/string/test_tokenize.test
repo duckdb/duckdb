@@ -1,0 +1,17 @@
+# name: test/sql/function/string/test_tokenize.test
+# description: Tokenize test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE documents(s VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('hello world'), ('Hello, World!'), ('ĥéĺĺó ŵóŕĺɗ'), ('Ĥéĺĺó, Ŵóŕĺɗ!')
+
+query T
+SELECT tokenize(s) FROM documents
+----
+# TODO: output??
