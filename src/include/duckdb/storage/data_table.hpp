@@ -28,6 +28,7 @@ class DataTable;
 class StorageManager;
 class TableCatalogEntry;
 class Transaction;
+class WriteAheadLog;
 
 typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
 
@@ -114,6 +115,8 @@ public:
 	void Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state);
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
+	//! Write a segment of the table to the WAL
+	void WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count);
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
 	void RevertAppend(idx_t start_row, idx_t count);
@@ -139,7 +142,7 @@ private:
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);
+	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t start_row, idx_t end_row);
 	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
 	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,

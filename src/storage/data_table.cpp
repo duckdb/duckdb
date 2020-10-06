@@ -225,22 +225,28 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 }
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-                                         unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset) {
+                                         unordered_map<idx_t, vector<TableFilter>> *table_filters,
+										 idx_t start_row, idx_t end_row) {
+	assert(start_row % STANDARD_VECTOR_SIZE == 0);
+	assert(end_row > start_row);
+	idx_t vector_offset = start_row / STANDARD_VECTOR_SIZE;
 	// initialize a column scan state for each column
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
-			columns[column]->InitializeScanWithOffset(state.column_scans[i], offset);
+			columns[column]->InitializeScanWithOffset(state.column_scans[i], vector_offset);
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
 	}
+
 	// initialize the chunk scan state
 	state.column_count = column_ids.size();
-	state.current_row = 0;
-	state.base_row = 0;
-	state.max_row = 0;
+	state.current_row = start_row;
+	state.base_row = start_row;
+	state.max_row = end_row;
+	state.version_info = (MorselInfo*) versions->GetSegment(state.current_row);
 	if (table_filters && table_filters->size() > 0 && !state.adaptive_filter) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
 	}
@@ -273,13 +279,8 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	if (state.current_row < total_rows) {
 		idx_t next = MinValue(state.current_row + PARALLEL_SCAN_TUPLE_COUNT, total_rows);
 
-		idx_t vector_offset = state.current_row / STANDARD_VECTOR_SIZE;
 		// scan a morsel from the persistent rows
-		InitializeScanWithOffset(scan_state, column_ids, table_filters, vector_offset);
-		scan_state.current_row = state.current_row;
-		scan_state.base_row = scan_state.current_row;
-		scan_state.max_row = next;
-		scan_state.version_info = (MorselInfo*) versions->GetSegment(scan_state.current_row);
+		InitializeScanWithOffset(scan_state, column_ids, table_filters, state.current_row, next);
 
 		state.current_row = next;
 		return true;
@@ -714,6 +715,46 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 	state.current_row += chunk.size();
 }
 
+void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
+	idx_t end = row_start + count;
+
+	log.WriteSetTable(info->schema, info->table);
+	vector<column_t> column_ids;
+	vector<LogicalType> types;
+	for(idx_t i = 0; i < columns.size(); i++) {
+		column_ids.push_back(i);
+		types.push_back(columns[i]->type);
+	}
+	DataChunk chunk;
+	chunk.Initialize(types);
+
+	CreateIndexScanState state;
+
+	idx_t row_start_aligned = row_start / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	InitializeScanWithOffset(state, column_ids, nullptr, row_start_aligned, row_start + count);
+
+	while(true) {
+		idx_t current_row = state.current_row;
+		CreateIndexScan(state, column_ids, chunk);
+		if (chunk.size() == 0) {
+			break;
+		}
+		idx_t end_row = state.current_row;
+		// figure out if we need to write the entire chunk or just part of it
+		idx_t chunk_start = current_row < row_start ? row_start : current_row;
+		idx_t chunk_end = end_row > end ? end : end_row;
+		idx_t chunk_count = chunk_end - chunk_start;
+		if (chunk_count != chunk.size()) {
+			// need to slice the chunk before insert
+			SelectionVector sel(chunk_start % STANDARD_VECTOR_SIZE, chunk_count);
+			chunk.Slice(sel, chunk_count);
+		}
+
+		log.WriteInsert(chunk);
+		chunk.Reset();
+	}
+}
+
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 
@@ -869,14 +910,6 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		auto morsel = (MorselInfo*) versions->GetSegment(first_id);
 		morsel->Delete(transaction, this, row_identifiers, count);
 	}
-
-	// else if ((idx_t)first_id < persistent_manager->max_row) {
-		// deletion is in persistent storage: delete in the persistent version manager
-		// persistent_manager->Delete(transaction, this, row_identifiers, count);
-	// } else {
-		// deletion is in transient storage: delete in the persistent version manager
-		// transient_manager->Delete(transaction, this, row_identifiers, count);
-	// }
 }
 
 //===--------------------------------------------------------------------===//

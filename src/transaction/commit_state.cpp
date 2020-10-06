@@ -156,7 +156,7 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 		// append:
 		auto info = (AppendInfo *)data;
 		if (HAS_LOG && !info->table->info->IsTemporary()) {
-			throw InternalException("FIXME: write to log");
+			info->table->WriteToLog(*log, info->start_row, info->count);
 		}
 		// mark the tuples as committed
 		info->table->CommitAppend(commit_id, info->start_row, info->count);
@@ -195,6 +195,14 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
 		catalog_entry->parent->timestamp = transaction_id;
+		break;
+	}
+	case UndoFlags::INSERT_TUPLE: {
+		// append:
+		auto info = (AppendInfo *)data;
+		// revert this append
+		// FIXME: revert already committed rows
+		info->table->RevertAppend(info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
