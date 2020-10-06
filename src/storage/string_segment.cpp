@@ -552,7 +552,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
 			}
-			assert(RemainingSpace(handle) >= 0);
+			assert(RemainingSpace(handle) <= Storage::BLOCK_SIZE);
 			// place the dictionary offset into the set of vectors
 			assert(dictionary_offset <= Storage::BLOCK_SIZE);
 			result_data[target_idx] = dictionary_offset;
