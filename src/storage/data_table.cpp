@@ -750,6 +750,7 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
 			chunk.Slice(sel, chunk_count);
 		}
 
+
 		log.WriteInsert(chunk);
 		chunk.Reset();
 	}
@@ -941,7 +942,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_i
 	if (found_columns != desired_column_ids.size()) {
 		// FIXME: not all columns in UPDATE clause are present!
 		// this should not be triggered at all as the binder should add these columns
-		throw NotImplementedException(
+		throw InternalException(
 		    "Not all columns required for the CHECK constraint are present in the UPDATED chunk!");
 	}
 	// construct a mock DataChunk

@@ -1,4 +1,4 @@
-# name: test/sql/storage/test_large_inserts_single_transaction.test
+# name: test/sql/storage/test_large_inserts_single_transaction.test_slow
 # description: Test large inserts in a single transaction
 # group: [storage]
 
