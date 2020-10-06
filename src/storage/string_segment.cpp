@@ -483,7 +483,9 @@ static void update_min_max_string_segment(string value, char *__restrict min, ch
 }
 
 idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
-	return Storage::BLOCK_SIZE - GetDictionaryOffset(handle) - max_vector_count * vector_size;
+	idx_t used_space = GetDictionaryOffset(handle) + max_vector_count * vector_size;
+	assert(Storage::BLOCK_SIZE >= used_space);
+	return Storage::BLOCK_SIZE - used_space;
 }
 
 void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset,
@@ -497,7 +499,6 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 	auto min = (char *)stats.minimum.get();
 	auto max = (char *)stats.maximum.get();
 
-	auto dictionary_offset = GetDictionaryOffset(handle);
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = adata.sel->get_index(offset + i);
@@ -508,6 +509,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			result_nullmask[target_idx] = true;
 			stats.has_null = true;
 		} else {
+			auto dictionary_offset = GetDictionaryOffset(handle);
 			assert(dictionary_offset < Storage::BLOCK_SIZE);
 			// non-null value, check if we can fit it within the block
 			idx_t string_length = sdata[source_idx].GetSize();
@@ -550,13 +552,14 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
 			}
+			assert(RemainingSpace(handle) >= 0);
 			// place the dictionary offset into the set of vectors
 			assert(dictionary_offset <= Storage::BLOCK_SIZE);
 			result_data[target_idx] = dictionary_offset;
+			SetDictionaryOffset(handle, dictionary_offset);
 		}
 		remaining_strings--;
 	}
-	SetDictionaryOffset(handle, dictionary_offset);
 }
 
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {

@@ -15,10 +15,10 @@ statement ok
 INSERT INTO test SELECT a, b FROM (VALUES (11, 22), (13, 22), (12, 21)) tbl1(a,b), repeat(0, 100000) tbl2(c)
 
 statement ok
-DELETE FROM test WHERE a=12
+COMMIT
 
 statement ok
-COMMIT
+DELETE FROM test WHERE a=12
 
 query III
 SELECT SUM(a), SUM(b), COUNT(*) FROM test

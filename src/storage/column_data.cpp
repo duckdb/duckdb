@@ -67,8 +67,9 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 }
 
 void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
-	if (state.vector_index == 0) {
+	if (!state.initialized) {
 		state.current->InitializeScan(state);
+		state.initialized = true;
 	}
 	// perform a scan of this segment
 	state.current->IndexScan(state, result);
