@@ -41,6 +41,7 @@ using parquet::format::PageHeader;
 using parquet::format::PageType;
 using parquet::format::RowGroup;
 using parquet::format::Type;
+using parquet::format::ConvertedType;
 
 // adapted from arrow parquet reader
 class RleBpDecoder {
@@ -279,7 +280,15 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 			type = LogicalType::INTEGER;
 			break;
 		case Type::INT64:
-			type = LogicalType::BIGINT;
+			switch(s_ele.converted_type) {
+			case ConvertedType::TIMESTAMP_MICROS:
+			case ConvertedType::TIMESTAMP_MILLIS:
+				type = LogicalType::TIMESTAMP;
+				break;
+			default:
+				type = LogicalType::BIGINT;
+				break;
+			}
 			break;
 		case Type::INT96: // always a timestamp?
 			type = LogicalType::TIMESTAMP;
@@ -371,6 +380,19 @@ void ParquetReader::fill_from_plain(ParquetReaderColumnData &col_data, idx_t cou
 	}
 }
 
+template<class T, timestamp_t (*FUNC)(const T &input)>
+static void fill_timestamp_plain(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
+	for (idx_t i = 0; i < count; i++) {
+		if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
+			auto value = col_data.payload.read<T>();
+			((timestamp_t *)FlatVector::GetData(target))[i + target_offset] =
+				FUNC(value);
+		} else {
+			FlatVector::SetNull(target, i + target_offset, true);
+		}
+	}
+}
+
 RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	assert(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
 	assert(state.group_idx_list[state.current_group] >= 0 &&
@@ -378,8 +400,25 @@ RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	return file_meta_data.row_groups[state.group_idx_list[state.current_group]];
 }
 
+timestamp_t arrow_timestamp_micros_to_timestamp(const int64_t &raw_ts) {
+	return Timestamp::FromEpochMicroSeconds(raw_ts);
+}
+timestamp_t arrow_timestamp_ms_to_timestamp(const int64_t &raw_ts) {
+	return Timestamp::FromEpochMs(raw_ts);
+}
+
+template<class T, timestamp_t (*FUNC)(const T &input)>
+static void fill_timestamp_dict(ParquetReaderColumnData &col_data) {
+	// immediately convert timestamps to duckdb format, potentially fewer conversions
+	for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
+		auto impala_ts = Load<T>((data_ptr_t)(col_data.payload.ptr + dict_index * sizeof(T)));
+		((timestamp_t *)col_data.dict.ptr)[dict_index] = FUNC(impala_ts);
+	}
+}
+
 bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx) {
 	auto &col_data = *state.column_data[col_idx];
+	auto &s_ele = file_meta_data.schema[col_idx + 1];
 	auto &chunk = GetGroup(state).columns[col_idx];
 
 	// clean up a bit to avoid nasty surprises
@@ -513,12 +552,27 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 			break;
 		case LogicalTypeId::TIMESTAMP:
 			col_data.payload.available(dict_byte_size);
-			// immediately convert timestamps to duckdb format, potentially fewer conversions
-			for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
-				auto impala_ts = Load<Int96>((data_ptr_t)(col_data.payload.ptr + dict_index * sizeof(Int96)));
-				((timestamp_t *)col_data.dict.ptr)[dict_index] = impala_timestamp_to_timestamp_t(impala_ts);
+			switch(s_ele.type) {
+			case Type::INT64:
+				// arrow timestamp
+				switch(s_ele.converted_type) {
+				case ConvertedType::TIMESTAMP_MICROS:
+					fill_timestamp_dict<int64_t, arrow_timestamp_micros_to_timestamp>(col_data);
+					break;
+				case ConvertedType::TIMESTAMP_MILLIS:
+					fill_timestamp_dict<int64_t, arrow_timestamp_ms_to_timestamp>(col_data);
+					break;
+				default:
+					throw InternalException("Unsupported converted type for timestamp");
+				}
+				break;
+			case Type::INT96:
+				// impala timestamp
+				fill_timestamp_dict<Int96, impala_timestamp_to_timestamp_t>(col_data);
+				break;
+			default:
+				throw InternalException("Unsupported type for timestamp");
 			}
-
 			break;
 		case LogicalTypeId::VARCHAR: {
 			// strings we directly fill a string heap that we can use for the vectors later
@@ -702,7 +756,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 			output.data[out_col_idx].Reference(constant_42);
 			continue;
 		}
-
+		auto &s_ele = file_meta_data.schema[file_col_idx + 1];
 		auto &col_data = *state.column_data[file_col_idx];
 
 		// we might need to read multiple pages to fill the data chunk
@@ -829,18 +883,29 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 				case LogicalTypeId::DOUBLE:
 					fill_from_plain<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
-				case LogicalTypeId::TIMESTAMP: {
-					for (idx_t i = 0; i < current_batch_size; i++) {
-						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
-							((timestamp_t *)FlatVector::GetData(output.data[out_col_idx]))[i + output_offset] =
-							    impala_timestamp_to_timestamp_t(col_data.payload.read<Int96>());
-						} else {
-							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
+				case LogicalTypeId::TIMESTAMP:
+					switch(s_ele.type) {
+					case Type::INT64:
+						// arrow timestamp
+						switch(s_ele.converted_type) {
+						case ConvertedType::TIMESTAMP_MICROS:
+							fill_timestamp_plain<int64_t, arrow_timestamp_micros_to_timestamp>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
+							break;
+						case ConvertedType::TIMESTAMP_MILLIS:
+							fill_timestamp_plain<int64_t, arrow_timestamp_ms_to_timestamp>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
+							break;
+						default:
+							throw InternalException("Unsupported converted type for timestamp");
 						}
+						break;
+					case Type::INT96:
+						// impala timestamp
+						fill_timestamp_plain<Int96, impala_timestamp_to_timestamp_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
+						break;
+					default:
+						throw InternalException("Unsupported type for timestamp");
 					}
-
 					break;
-				}
 				case LogicalTypeId::VARCHAR: {
 					for (idx_t i = 0; i < current_batch_size; i++) {
 						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
