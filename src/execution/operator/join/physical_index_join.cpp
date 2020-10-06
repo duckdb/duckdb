@@ -6,7 +6,8 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 using namespace std;
 
 namespace duckdb {
@@ -31,11 +32,27 @@ namespace duckdb {
             if (state->child_chunk.size() == 0) {
                 return;
             }
+		    // resolve the join keys for the left chunk
             // Probe the index
-		    // Perform tuple reconstruction for RHS projection
+		    auto& art = (ART&)*index;
+		    SelectionVector result_vector(STANDARD_VECTOR_SIZE);
+		    for (size_t i = 0; i < state->child_chunk.size(); i ++){
+	            vector<row_t> result_ids;
+                auto equal_value = state->child_chunk.data.data()->GetValue(i);
+		        auto &transaction = Transaction::GetTransaction(context.client);
+		        unique_ptr<IndexScanState> t_state = index->InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
+			    auto i_state = (ARTIndexScanState *)t_state.get();
+			    art.SearchEqual(i_state,STANDARD_VECTOR_SIZE,result_ids);
+			    for (size_t j = 0; j  < result_ids.size(); j ++){
+				    auto &vector = chunk.data[0];
+				    auto &vector_2 = chunk.data[1];
+				    vector.SetValue(chunk.size(),equal_value);
+				    vector_2.SetValue(chunk.size(),equal_value);
+				    chunk.SetCardinality(chunk.size()+1);
+			    }
+		    }
         } while (chunk.size() == 0);
 
-	    int a = 0;
 	    return;
     }
     void PhysicalIndexJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input){

@@ -94,6 +94,8 @@ public:
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
+	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
+
 private:
 	DataChunk expression_result;
 
@@ -118,7 +120,7 @@ private:
 	//! Gets next node for range queries
 	bool IteratorNext(Iterator &iter);
 
-	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
+
 	bool SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
