@@ -63,3 +63,9 @@ query I
 select * from va
 ----
 42
+
+# nested CTE views
+query I
+with v AS (SELECT * FROM va) SELECT * FROM v;
+----
+42
