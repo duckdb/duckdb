@@ -15,6 +15,7 @@
 
 namespace duckdb {
 class DataTable;
+class Vector;
 struct VersionNode;
 
 class MorselInfo : public SegmentBase {

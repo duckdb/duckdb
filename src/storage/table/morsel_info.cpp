@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/morsel_info.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
