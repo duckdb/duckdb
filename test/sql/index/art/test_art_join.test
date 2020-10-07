@@ -30,7 +30,7 @@ endloop
 query II
 EXPLAIN select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*
+physical_plan	<REGEX>:.*INDEX_JOIN.*
 
 query I
 select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)

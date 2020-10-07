@@ -51,7 +51,7 @@ enum class PhysicalOperatorType : uint8_t {
 	CROSS_PRODUCT,
 	PIECEWISE_MERGE_JOIN,
 	DELIM_JOIN,
-
+    INDEX_JOIN,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
