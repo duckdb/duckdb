@@ -153,11 +153,7 @@ string Time::ToString(dtime_t time) {
 	int32_t hour, min, sec, msec;
 	number_to_time(time, hour, min, sec, msec);
 
-	if (msec > 0) {
-		return StringUtil::Format("%02d:%02d:%02d.%03d", hour, min, sec, msec);
-	} else {
-		return StringUtil::Format("%02d:%02d:%02d", hour, min, sec);
-	}
+	return StringUtil::Format("%02d:%02d:%02d.%03d", hour, min, sec, msec);
 }
 
 string Time::Format(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
