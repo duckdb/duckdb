@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
 #include "duckdb/storage/table/morsel_info.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 using namespace std;
