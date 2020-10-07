@@ -692,8 +692,15 @@ template <> date_t StrictCastToDate::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 struct TimeToStringCast {
 	static idx_t Length(int32_t time[]) {
-		// format is HH:MM:DD.msec
-		return 12;
+		// format is HH:MM:DD
+		// regular length is 8
+		idx_t length = 8;
+		if (time[3] > 0) {
+			// if there are msecs, we add the miliseconds after the time with a period separator
+			// i.e. the format becomes HH:MM:DD.msec
+			length += 4;
+		}
+		return length;
 	}
 
 	static void Format(char *data, idx_t length, int32_t time[]) {
@@ -711,13 +718,15 @@ struct TimeToStringCast {
 			ptr[2] = ':';
 			ptr += 3;
 		}
-		// now write ms at the end
-		auto start = ptr;
-		ptr = NumericHelper::FormatUnsigned(time[3], data + length);
-		while (ptr > start) {
-			*--ptr = '0';
+		// now optionally write ms at the end
+		if (time[3] > 0) {
+			auto start = ptr;
+			ptr = NumericHelper::FormatUnsigned(time[3], data + length);
+			while (ptr > start) {
+				*--ptr = '0';
+			}
+			*--ptr = '.';
 		}
-		*--ptr = '.';
 	}
 };
 
