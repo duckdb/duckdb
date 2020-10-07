@@ -64,8 +64,10 @@ select * from va
 ----
 42
 
-# nested CTE views
+# nested CTE views that re-use CTE aliases
 query I
-with v AS (SELECT * FROM va) SELECT * FROM v;
+with cte AS (SELECT * FROM va) SELECT * FROM cte;
 ----
 42
+
+

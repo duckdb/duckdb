@@ -73,6 +73,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
 		// first we visit the set of CTEs and add them to the bind context
 		Binder view_binder(context, this);
+		view_binder.CTE_bindings.clear();
 		for (auto &cte_it : view_catalog_entry->query->cte_map) {
 			view_binder.AddCTE(cte_it.first, cte_it.second.get());
 		}
