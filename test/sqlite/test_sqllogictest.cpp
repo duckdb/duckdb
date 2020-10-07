@@ -81,6 +81,10 @@ public:
 	int loop_idx;
 	int loop_start;
 	int loop_end;
+
+	//! The map converting the labels to the hash values
+	unordered_map<string, string> hash_label_map;
+	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
 };
 
 /*
@@ -247,10 +251,6 @@ static void tokenizeLine(Script *p) {
 		j += n + 1;
 	}
 }
-
-//! The map converting the labels to the hash values
-unordered_map<string, string> hash_label_map;
-unordered_map<string, unique_ptr<QueryResult>> result_label_map;
 
 static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
 	if (row_wise) {
@@ -927,11 +927,11 @@ void Query::Execute() {
 		bool hash_compare_error = false;
 		if (query_has_label) {
 			// the query has a label: check if the hash has already been computed
-			auto entry = hash_label_map.find(query_label);
-			if (entry == hash_label_map.end()) {
+			auto entry = runner.hash_label_map.find(query_label);
+			if (entry == runner.hash_label_map.end()) {
 				// not computed yet: add it tot he map
-				hash_label_map[query_label] = string(zHash);
-				result_label_map[query_label] = move(result);
+				runner.hash_label_map[query_label] = string(zHash);
+				runner.result_label_map[query_label] = move(result);
 			} else {
 				hash_compare_error = strcmp(entry->second.c_str(), zHash) != 0;
 			}
@@ -950,8 +950,8 @@ void Query::Execute() {
 			print_line_sep();
 			print_header("Expected result:");
 			print_line_sep();
-			if (result_label_map.find(query_label) != result_label_map.end()) {
-				result_label_map[query_label]->Print();
+			if (runner.result_label_map.find(query_label) != runner.result_label_map.end()) {
+				runner.result_label_map[query_label]->Print();
 			} else {
 				std::cerr << "???" << std::endl;
 			}
