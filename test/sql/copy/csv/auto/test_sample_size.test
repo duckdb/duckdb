@@ -15,12 +15,12 @@ CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/i
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
 ----
-5	1.1	01.05.2015	fdf
+5	1.1	2015-05-01	fdf
 
 query TTTT
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
 ----
-INTEGER	DOUBLE	VARCHAR	VARCHAR
+INTEGER	DOUBLE	DATE	VARCHAR
 
 statement ok
 drop table test;
@@ -32,12 +32,12 @@ CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/i
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
 ----
-5	1.1	01.05.2015	fdf
+5	1.1	2015-05-01	fdf
 
 query TTTT
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
 ----
-INTEGER	DOUBLE	VARCHAR	VARCHAR
+INTEGER	DOUBLE	DATE	VARCHAR
 
 statement ok
 drop table test;
@@ -49,12 +49,12 @@ CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/i
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
 ----
-5	1.1	01.05.2015	fdf
+5	1.1	2015-05-01	fdf
 
 query TTTT
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
 ----
-INTEGER	DOUBLE	VARCHAR	VARCHAR
+INTEGER	DOUBLE	DATE	VARCHAR
 
 statement ok
 drop table test;

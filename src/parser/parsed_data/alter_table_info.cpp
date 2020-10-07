@@ -13,6 +13,8 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	switch (type) {
 	case AlterType::ALTER_TABLE:
 		return AlterTableInfo::Deserialize(source);
+	case AlterType::ALTER_VIEW:
+		return AlterViewInfo::Deserialize(source);
 	default:
 		throw SerializationException("Unknown alter type for deserialization!");
 	}
@@ -22,7 +24,7 @@ void AlterTableInfo::Serialize(Serializer &serializer) {
 	AlterInfo::Serialize(serializer);
 	serializer.Write<AlterTableType>(alter_table_type);
 	serializer.WriteString(schema);
-	serializer.WriteString(table);
+	serializer.WriteString(name);
 }
 
 unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &source) {
@@ -135,4 +137,41 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(Deserializer &source, string s
 	auto new_default = source.ReadOptional<ParsedExpression>();
 	return make_unique<SetDefaultInfo>(schema, table, move(column_name), move(new_default));
 }
+
+//===--------------------------------------------------------------------===//
+// Alter View
+//===--------------------------------------------------------------------===//
+void AlterViewInfo::Serialize(Serializer &serializer) {
+	AlterInfo::Serialize(serializer);
+	serializer.Write<AlterViewType>(alter_view_type);
+	serializer.WriteString(schema);
+	serializer.WriteString(name);
+}
+
+unique_ptr<AlterInfo> AlterViewInfo::Deserialize(Deserializer &source) {
+	auto type = source.Read<AlterViewType>();
+	auto schema = source.Read<string>();
+	auto view = source.Read<string>();
+	unique_ptr<AlterViewInfo> info;
+	switch (type) {
+	case AlterViewType::RENAME_VIEW:
+		return RenameViewInfo::Deserialize(source, schema, view);
+	default:
+		throw SerializationException("Unknown alter view type for deserialization!");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// RenameViewInfo
+//===--------------------------------------------------------------------===//
+void RenameViewInfo::Serialize(Serializer &serializer) {
+	AlterViewInfo::Serialize(serializer);
+	serializer.WriteString(new_view_name);
+}
+
+unique_ptr<AlterInfo> RenameViewInfo::Deserialize(Deserializer &source, string schema, string view) {
+	auto new_name = source.Read<string>();
+	return make_unique<RenameViewInfo>(schema, view, new_name);
+}
+
 } // namespace duckdb

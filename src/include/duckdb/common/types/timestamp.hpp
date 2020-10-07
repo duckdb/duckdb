@@ -41,6 +41,11 @@ public:
 	//! Returns current timestamp
 	static timestamp_t GetCurrentTimestamp();
 
+	//! Convert the epoch (in ms) to a timestamp
+	static timestamp_t FromEpochMs(int64_t ms);
+	//! Convert the epoch (in microseconds) to a timestamp
+	static timestamp_t FromEpochMicroSeconds(int64_t micros);
+
 	// Unix epoch: milliseconds since 1970
 	static int64_t GetEpoch(timestamp_t timestamp);
 	// Seconds including fractional part multiplied by 1000

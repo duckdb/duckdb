@@ -2,6 +2,8 @@
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
 
 using namespace std;
@@ -11,14 +13,14 @@ using namespace std;
 
 namespace duckdb {
 
-BoundStatement Binder::Bind(AlterTableStatement &stmt) {
+BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	auto table =
-	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table, true);
-	if (table && !table->temporary) {
-		// we can only alter temporary tables in read-only mode
+	Catalog &catalog = Catalog::GetCatalog(context);
+	auto entry = catalog.GetEntry(context, stmt.info->GetCatalogType(), stmt.info->schema, stmt.info->name, true);
+	if (entry && !entry->temporary) {
+		// we can only alter temporary tables/views in read-only mode
 		this->read_only = false;
 	}
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::ALTER, move(stmt.info));

@@ -35,10 +35,14 @@ public:
 	vector<LogicalType> types;
 
 public:
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
+
 	//! Serialize the meta information of the ViewCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &source);
+
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
 
 	string ToSQL() override;
 

@@ -82,8 +82,8 @@ public:
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);
 
-	//! Alters a table
-	void AlterTable(ClientContext &context, AlterTableInfo *info);
+	//! Alters a catalog entry
+	void Alter(ClientContext &context, AlterInfo *info);
 
 	//! Gets a catalog entry from the given catalog set matching the given name
 	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &name, bool if_exists);

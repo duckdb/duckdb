@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/parquet_zstd.test
+# description: Read a parquet file with ZSTD
+# group: [parquet]
+
+require parquet
+
+query TTT
+select * from parquet_scan('test/sql/copy/parquet/data/zstd.parquet') order by 1
+----
+NULL	bar	0
+-1	foo	1
+2.5	baz	1
+

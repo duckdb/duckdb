@@ -82,7 +82,7 @@ void StringSegment::read_string(string_t *result_data, buffer_handle_set_t &hand
                                 size_t vector_index) {
 	if (string_updates && string_updates[vector_index]) {
 		auto &info = *string_updates[vector_index];
-		while (info.ids[update_idx] < src_idx) {
+		while (update_idx < STANDARD_VECTOR_SIZE && info.ids[update_idx] < src_idx) {
 			//! We need to catch the update_idx up to the src_idx
 			update_idx++;
 		}
@@ -599,9 +599,9 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 
 	// copy the string and the length there
 	auto ptr = handle->node->buffer + head->offset;
-	memcpy(ptr, &string.length, sizeof(uint32_t));
+	Store<uint32_t>(string.GetSize(), ptr);
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.GetData(), string.length + 1);
+	memcpy(ptr, string.GetData(), string.GetSize() + 1);
 	head->offset += total_length;
 }
 

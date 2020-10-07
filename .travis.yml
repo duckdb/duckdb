@@ -120,6 +120,24 @@ matrix:
       script:
         - make unit
 
+    - os: linux
+      dist: bionic
+      name: GCC 10 UBSAN
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
+
+      addons:
+        apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+          packages:
+            - g++-10
+      env:
+        - CC=gcc-10
+        - CXX=g++-10
+        - TREAT_WARNINGS_AS_ERRORS=1
+      script:
+        - make ubsandebug
+
 
     - os: osx
       name: Xcode 11.5 Debug
@@ -179,6 +197,19 @@ matrix:
       script:
         - python3 scripts/test_vector_sizes.py
 
+    - os: linux
+      dist: bionic
+      name: SQLogicTests
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
+
+      python: 3.7
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+      script:
+        - make sqlite
 
 # old compiler
     - os: linux
@@ -196,6 +227,7 @@ matrix:
         - CXX=g++-4.9
       script:
         make allunit
+
 
 # weird platforms: 32 bit linux & windows, arm, solaris, openbsd
 

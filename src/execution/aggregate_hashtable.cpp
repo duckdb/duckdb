@@ -407,15 +407,16 @@ void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData
 			for (idx_t i = 0; i < count; i++) {
 				auto pointer_idx = sel.get_index(i);
 				auto group_idx = gdata.sel->get_index(pointer_idx);
-				auto ptr = (string_t *)pointers[pointer_idx];
+				string_t new_val;
 
 				if ((*gdata.nullmask)[group_idx]) {
-					*ptr = NullValue<string_t>();
+					new_val = NullValue<string_t>();
 				} else if (data[group_idx].IsInlined()) {
-					*ptr = data[group_idx];
+					new_val = data[group_idx];
 				} else {
-					*ptr = string_heap.AddString(data[group_idx]);
+					new_val = string_heap.AddString(data[group_idx]);
 				}
+				Store<string_t>(new_val, (data_ptr_t)pointers[pointer_idx]);
 				pointers[pointer_idx] += type_size;
 			}
 			break;

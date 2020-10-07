@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/parquet_silly.test
+# description: Read a parquet file with silly names
+# group: [parquet]
+
+require parquet
+
+query TTT
+select "önë", "C1", "🦆" from parquet_scan('test/sql/copy/parquet/data/silly-names.parquet') order by 1
+----
+1	foo	1
+2	bar	0
+3	baz	1
+

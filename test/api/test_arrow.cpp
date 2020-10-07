@@ -62,20 +62,47 @@ struct MyArrowArrayStream {
 	string last_error;
 };
 
-TEST_CASE("Test Arrow API round trip", "[arrow]") {
+static void test_arrow_round_trip(string q) {
 	DuckDB db(nullptr);
 	Connection con(db);
-
-	auto q =
-	    "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000 c_smallint, "
-	    "c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::hugeint*10000000000000000000000000000000 "
-	    "c_hugeint, c::float c_float, c::double c_double, 'c_' || c::string c_string from (select case when range % 2 "
-	    "== 0 then range else null end as c from range(-10000, 10000)) sq";
 
 	// query that creates a bunch of values across the types
 	auto result = con.Query(q);
 	auto my_stream = new MyArrowArrayStream(move(result));
 	auto result2 = con.TableFunction("arrow_scan", {Value::POINTER((uintptr_t)&my_stream->stream)})->Execute();
-	REQUIRE(con.Query(q)->Equals(*result2));
+
+	idx_t column_count = result2->column_count();
+	vector<vector<Value>> values;
+	values.resize(column_count);
+	while (true) {
+		auto chunk = result2->Fetch();
+		if (chunk->size() == 0) {
+			break;
+		}
+		for (idx_t c = 0; c < column_count; c++) {
+			for (idx_t r = 0; r < chunk->size(); r++) {
+				values[c].push_back(chunk->GetValue(c, r));
+			}
+		}
+	}
+	auto original_result = con.Query(q);
+	for (idx_t c = 0; c < column_count; c++) {
+		REQUIRE(CHECK_COLUMN(*original_result, c, values[c]));
+	}
+}
+
+TEST_CASE("Test Arrow API round trip", "[arrow]") {
+	test_arrow_round_trip(
+	    "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000 c_smallint, "
+	    "c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::hugeint*10000000000000000000000000000000 "
+	    "c_hugeint, c::float c_float, c::double c_double, 'c_' || c::string c_string, current_date::date c_date, "
+	    "'1969-01-01'::date, current_time::time c_time, now()::timestamp c_timestamp "
+	    "from (select case when range % 2 == 0 then range else null end as c from range(-10, 10)) sq");
+	// test_arrow_round_trip(
+	//     "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000 c_smallint, "
+	//     "c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::hugeint*10000000000000000000000000000000 "
+	//     "c_hugeint, c::float c_float, c::double c_double, 'c_' || c::string c_string, current_date::date c_date, "
+	//     "'1969-01-01'::date, current_time::time c_time, now()::timestamp c_timestamp "
+	//     "from (select case when range % 2 == 0 then range else null end as c from range(-1000, 1000)) sq");
 }
 // TODO timestamp date time interval decimal

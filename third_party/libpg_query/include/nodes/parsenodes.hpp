@@ -219,6 +219,7 @@ typedef enum PGAExpr_Kind {
 	PG_AEXPR_IN,              /* [NOT] IN - name must be "=" or "<>" */
 	PG_AEXPR_LIKE,            /* [NOT] LIKE - name must be "~~" or "!~~" */
 	PG_AEXPR_ILIKE,           /* [NOT] ILIKE - name must be "~~*" or "!~~*" */
+	PG_AEXPR_GLOB,            /* [NOT] GLOB - name must be "~~~" or "!~~~" */
 	PG_AEXPR_SIMILAR,         /* [NOT] SIMILAR - name must be "~" or "!~" */
 	PG_AEXPR_BETWEEN,         /* name must be "BETWEEN" */
 	PG_AEXPR_NOT_BETWEEN,     /* name must be "NOT BETWEEN" */

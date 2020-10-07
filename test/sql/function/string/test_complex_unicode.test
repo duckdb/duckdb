@@ -79,3 +79,7 @@ SELECT substring('S̈a', 1, 1)
 ----
 S̈
 
+query T
+SELECT substring('S̈a︍', -1, 1)
+----
+a︍

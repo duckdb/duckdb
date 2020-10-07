@@ -74,7 +74,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// context.profiler.EndPhase();
 
 	context.profiler.StartPhase("unused_columns");
-	RemoveUnusedColumns unused(context, true);
+	RemoveUnusedColumns unused(binder, context, true);
 	unused.VisitOperator(*plan);
 	context.profiler.EndPhase();
 

@@ -63,7 +63,10 @@ template <class T> static void TestExponent() {
 			REQUIRE(TryCast::Operation<string_t, T>(string_t(str), parse_result));
 			REQUIRE(parse_result == -expected_value);
 			value *= 10;
-			expected_value *= 10;
+			// check again because otherwise this overflows
+			if (value < NumericLimits<T>::Maximum()) {
+				expected_value *= 10;
+			}
 		} else {
 			// expect failure
 			str = "1e" + to_string(exponent);

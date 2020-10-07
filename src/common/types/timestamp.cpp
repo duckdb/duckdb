@@ -5,7 +5,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/string_util.hpp"
 
-#include <chrono>  // chrono::system_clock
+#include <chrono> // chrono::system_clock
 #include <ctime>
 
 using namespace std;
@@ -31,7 +31,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	}
 	if (pos == len) {
 		// no time: only a date
-		return (int64_t)date << 32;
+		return (uint64_t)date << 32;
 	}
 	// try to parse a time field
 	if (str[pos] == ' ' || str[pos] == 'T') {
@@ -50,16 +50,17 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 			pos++;
 		}
 		// skip any spaces at the end
-		while(pos < len && StringUtil::CharacterIsSpace(str[pos])) {
+		while (pos < len && StringUtil::CharacterIsSpace(str[pos])) {
 			pos++;
 		}
 		if (pos < len) {
 			throw ConversionException("timestamp field value out of range: \"%s\", "
-									"expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-									str);
+			                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
+			                          str);
 		}
 	}
-	return ((int64_t)date << 32 | (int32_t)time);
+	// use uint here because otherwise the shift is undefined
+	return ((uint64_t)date << 32 | (int32_t)time);
 }
 
 timestamp_t Timestamp::FromString(string str) {
@@ -71,7 +72,7 @@ string Timestamp::ToString(timestamp_t timestamp) {
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
-	return (date_t)(((int64_t)timestamp) >> 32);
+	return (date_t)(((uint64_t)timestamp) >> 32);
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
@@ -79,7 +80,7 @@ dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
-	return ((int64_t)date << 32 | (int64_t)time);
+	return ((uint64_t)date << 32 | (int64_t)time);
 }
 
 void Timestamp::Convert(timestamp_t date, date_t &out_date, dtime_t &out_time) {
@@ -97,6 +98,17 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	auto time = Time::FromTime(utc->tm_hour, utc->tm_min, utc->tm_sec);
 
 	return Timestamp::FromDatetime(date, time);
+}
+
+timestamp_t Timestamp::FromEpochMs(int64_t ms) {
+	auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
+	date_t date = Date::EpochToDate(ms / 1000);
+	dtime_t time = (dtime_t)(ms % ms_per_day);
+	return Timestamp::FromDatetime(date, time);
+}
+
+timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
+	return Timestamp::FromEpochMs(micros / 1000);
 }
 
 int64_t Timestamp::GetEpoch(timestamp_t timestamp) {
@@ -125,4 +137,4 @@ int64_t Timestamp::GetHours(timestamp_t timestamp) {
 	return Timestamp::GetTime(timestamp) / 3600000;
 }
 
-}
+} // namespace duckdb

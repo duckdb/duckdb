@@ -23,17 +23,18 @@ public:
 	static constexpr idx_t INLINE_LENGTH = 12;
 
 	string_t() = default;
-	string_t(uint32_t len) : length(len) {
-		memset(prefix, 0, PREFIX_LENGTH);
-		value_.data = nullptr;
+	string_t(uint32_t len) {
+		value.inlined.length = len;
+		memset(value.inlined.inlined, 0, INLINE_LENGTH);
 	}
-	string_t(const char *data, uint32_t len) : length(len) {
-		assert(data || length == 0);
+	string_t(const char *data, uint32_t len) {
+		value.inlined.length = len;
+		assert(data || GetSize() == 0);
 		if (IsInlined()) {
 			// zero initialize the prefix first
 			// this makes sure that strings with length smaller than 4 still have an equal prefix
-			memset(prefix, 0, PREFIX_LENGTH);
-			if (length == 0) {
+			memset(value.inlined.inlined, 0, PREFIX_LENGTH);
+			if (GetSize() == 0) {
 				return;
 			}
 			// small string: inlined
@@ -41,12 +42,12 @@ public:
 			 but this is not the case because the `value_` union `inlined` char array directly
 			 follows it with 8 more chars to use for the string value.
 			 */
-			memcpy(prefix, data, length);
-			prefix[length] = '\0';
+			memcpy(value.inlined.inlined, data, GetSize());
+			value.inlined.inlined[GetSize()] = '\0';
 		} else {
 			// large string: store pointer
-			memcpy(prefix, data, PREFIX_LENGTH);
-			value_.data = (char *)data;
+			memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
+			value.pointer.ptr = (char *)data;
 		}
 	}
 	string_t(const char *data) : string_t(data, strlen(data)) {
@@ -55,23 +56,23 @@ public:
 	}
 
 	bool IsInlined() const {
-		return length < INLINE_LENGTH;
+		return GetSize() < INLINE_LENGTH;
 	}
 
 	char *GetData() {
-		return IsInlined() ? (char *)prefix : value_.data;
+		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
 	}
 
 	const char *GetData() const {
-		return IsInlined() ? (const char *)prefix : value_.data;
+		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
 	}
 
 	const char *GetPrefix() const {
-		return prefix;
+		return value.pointer.prefix;
 	}
 
 	idx_t GetSize() const {
-		return length;
+		return value.inlined.length;
 	}
 
 	string GetString() const {
@@ -81,27 +82,32 @@ public:
 	void Finalize() {
 		// set trailing NULL byte
 		auto dataptr = (char *)GetData();
-		dataptr[length] = '\0';
-		if (length < INLINE_LENGTH) {
+		dataptr[GetSize()] = '\0';
+		if (GetSize() < INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
-			for (idx_t i = length; i < PREFIX_LENGTH; i++) {
-				prefix[i] = '\0';
+			for (idx_t i = GetSize(); i < PREFIX_LENGTH; i++) {
+				value.inlined.inlined[i] = '\0';
 			}
 		} else {
 			// copy the data into the prefix
-			memcpy(prefix, dataptr, PREFIX_LENGTH);
+			memcpy(value.pointer.prefix, dataptr, PREFIX_LENGTH);
 		}
 	}
 
 	void Verify();
 
 private:
-	uint32_t length;
-	char prefix[4];
 	union {
-		char inlined[8];
-		char *data;
-	} value_;
+		struct {
+			uint32_t length;
+			char prefix[4];
+			char *ptr;
+		} pointer;
+		struct {
+			uint32_t length;
+			char inlined[12];
+		} inlined;
+	} value;
 };
 
 } // namespace duckdb

@@ -15,7 +15,7 @@ statement error
 ALTER TABLE v1 RENAME TO v2
 
 query I
-SELECT * FROM  v1
+SELECT * FROM v1
 ----
 999
 100
