@@ -25,8 +25,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity,
                                                      vector<LogicalType> group_types)
-    : GroupedAggregateHashTable(buffer_manager, initial_capacity, move(group_types), {},
-                                (vector<BoundAggregateExpression *>){}) {
+    : GroupedAggregateHashTable(buffer_manager, initial_capacity, move(group_types), {}, vector<AggregateObject>()) {
 }
 
 #ifndef DUCKDB_ALLOW_UNDEFINED
