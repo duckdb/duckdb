@@ -273,10 +273,21 @@ static void print_expected_result(vector<string> &values, idx_t columns, bool ro
 	}
 }
 
-static string sqllogictest_convert_value(Value value, LogicalType sql_type) {
+static string sqllogictest_convert_value(Value value, LogicalType sql_type, bool for_hash) {
 	if (value.is_null) {
 		return "NULL";
 	} else {
+		if (for_hash) {
+			// sqlite test hashes want us to convert floating point numbers to integers
+			switch (sql_type.id()) {
+			case LogicalTypeId::DECIMAL:
+			case LogicalTypeId::FLOAT:
+			case LogicalTypeId::DOUBLE:
+				return value.CastAs(LogicalType::BIGINT).ToString();
+			default:
+				break;
+			}
+		}
 		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			return value.value_.boolean ? "1" : "0";
@@ -294,8 +305,8 @@ static string sqllogictest_convert_value(Value value, LogicalType sql_type) {
 
 // standard result conversion: one line per value
 static int duckdbConvertResult(MaterializedQueryResult &result,
-                               vector<string> &pazResult, /* RETURN:  Array of result values */
-                               int &pnResult              /* RETURN:  Number of result values */
+                               bool for_hash,
+                               vector<string> &pazResult /* RETURN:  Array of result values */
 ) {
 	size_t r, c;
 	idx_t row_count = result.collection.count;
@@ -305,11 +316,10 @@ static int duckdbConvertResult(MaterializedQueryResult &result,
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
 			auto value = result.GetValue(c, r);
-			auto converted_value = sqllogictest_convert_value(value, result.types[c]);
+			auto converted_value = sqllogictest_convert_value(value, result.types[c], for_hash);
 			pazResult[r * column_count + c] = converted_value;
 		}
 	}
-	pnResult = column_count * row_count;
 	return 0;
 }
 
@@ -680,9 +690,17 @@ void Query::Execute() {
 		result->Print();
 		FAIL_LINE(file_name, query_line);
 	}
+	idx_t row_count = result->collection.count;
+	idx_t column_count = result->column_count();
+	int nResult = row_count * column_count;
+	int compare_hash = query_has_label || (runner.hashThreshold > 0 && nResult > runner.hashThreshold);
+	// check if the current line (the first line of the result) is a hash value
+	if (values.size() == 1 && result_is_hash(values[0])) {
+		compare_hash = true;
+	}
+
 	vector<string> azResult;
-	int nResult;
-	duckdbConvertResult(*result, azResult, nResult);
+	duckdbConvertResult(*result, compare_hash, azResult);
 	if (runner.output_result_mode) {
 		// names
 		for (idx_t c = 0; c < result->column_count(); c++) {
@@ -750,11 +768,6 @@ void Query::Execute() {
 		std::sort(azResult.begin(), azResult.end());
 	}
 	char zHash[100]; /* Storage space for hash results */
-	int compare_hash = query_has_label || (runner.hashThreshold > 0 && nResult > runner.hashThreshold);
-	// check if the current line (the first line of the result) is a hash value
-	if (values.size() == 1 && result_is_hash(values[0])) {
-		compare_hash = true;
-	}
 	vector<string> comparison_values;
 	if (values.size() == 1 && result_is_file(values[0])) {
 		comparison_values = LoadResultFromFile(
