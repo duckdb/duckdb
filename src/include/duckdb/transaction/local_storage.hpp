@@ -31,7 +31,7 @@ public:
 	//! The number of deleted rows
 	idx_t deleted_rows;
 	//! The number of active scans
-	idx_t active_scans;
+	idx_t active_scans = 0;
 
 public:
 	void InitializeScan(LocalScanState &state);

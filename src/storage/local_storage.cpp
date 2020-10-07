@@ -17,20 +17,27 @@ LocalTableStorage::~LocalTableStorage() {
 }
 
 void LocalTableStorage::InitializeScan(LocalScanState &state) {
-	if (state.storage != nullptr) {
-		state.storage->active_scans--;
-	}
-	state.storage = this;
+	state.SetStorage(this);
 
 	state.chunk_index = 0;
 	state.max_index = collection.chunks.size() - 1;
 	state.last_chunk_count = collection.chunks.back()->size();
-	active_scans++;
 }
 
+
+
 LocalScanState::~LocalScanState() {
-	if (storage) {
+	SetStorage(nullptr);
+}
+
+void LocalScanState::SetStorage(LocalTableStorage *new_storage) {
+	if (storage != nullptr) {
+		assert(storage->active_scans > 0);
 		storage->active_scans--;
+	}
+	storage = new_storage;
+	if (storage) {
+		storage->active_scans++;
 	}
 }
 
@@ -58,28 +65,29 @@ void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
 	auto entry = table_storage.find(table);
 	if (entry == table_storage.end()) {
 		// no local storage for table: set scan to nullptr
-		state.storage = nullptr;
+		state.SetStorage(nullptr);
 		return;
 	}
-	state.storage = entry->second.get();
-	state.storage->InitializeScan(state);
+	auto storage = entry->second.get();
+	storage->InitializeScan(state);
 }
 
 void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result,
                         unordered_map<idx_t, vector<TableFilter>> *table_filters) {
-	if (!state.storage || state.chunk_index > state.max_index) {
+	auto storage = state.GetStorage();
+	if (!storage || state.chunk_index > state.max_index) {
 		// nothing left to scan
 		result.Reset();
 		return;
 	}
-	auto &chunk = *state.storage->collection.chunks[state.chunk_index];
+	auto &chunk = *storage->collection.chunks[state.chunk_index];
 	idx_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
 	idx_t count = chunk_count;
 
 	// first create a selection vector from the deleted entries (if any)
 	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
-	auto entry = state.storage->deleted_entries.find(state.chunk_index);
-	if (entry != state.storage->deleted_entries.end()) {
+	auto entry = storage->deleted_entries.find(state.chunk_index);
+	if (entry != storage->deleted_entries.end()) {
 		// deleted entries! create a selection vector
 		auto deleted = entry->second.get();
 		idx_t new_count = 0;
