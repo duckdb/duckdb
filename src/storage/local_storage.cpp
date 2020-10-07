@@ -17,11 +17,21 @@ LocalTableStorage::~LocalTableStorage() {
 }
 
 void LocalTableStorage::InitializeScan(LocalScanState &state) {
+	if (state.storage != nullptr) {
+		state.storage->active_scans--;
+	}
 	state.storage = this;
 
 	state.chunk_index = 0;
 	state.max_index = collection.chunks.size() - 1;
 	state.last_chunk_count = collection.chunks.back()->size();
+	active_scans++;
+}
+
+LocalScanState::~LocalScanState() {
+	if (storage) {
+		storage->active_scans--;
+	}
 }
 
 void LocalTableStorage::Clear() {
@@ -157,7 +167,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	}
 	//! Append to the chunk
 	storage->collection.Append(chunk);
-	if (storage->collection.count >= MorselInfo::MORSEL_SIZE) {
+	if (storage->active_scans == 0 && storage->collection.count >= MorselInfo::MORSEL_SIZE) {
 		// flush to base storage
 		Flush(*table, *storage);
 	}

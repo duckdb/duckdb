@@ -56,6 +56,8 @@ struct ColumnFetchState {
 };
 
 struct LocalScanState {
+	~LocalScanState();
+
 	LocalTableStorage *storage = nullptr;
 
 	idx_t chunk_index;
