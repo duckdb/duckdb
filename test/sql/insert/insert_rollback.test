@@ -1,4 +1,4 @@
-# name: test/sql/insert/insert_rollback.test_slow
+# name: test/sql/insert/insert_rollback.test
 # description: Rollback insert statement
 # group: [insert]
 

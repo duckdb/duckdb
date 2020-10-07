@@ -76,6 +76,7 @@ public:
 	void RollbackUpdate(UpdateInfo *info) override;
 
 	void ToTemporary() override;
+
 protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
@@ -91,8 +92,8 @@ protected:
 	                         idx_t &approved_tuple_count) override;
 
 private:
-	void AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset, Vector &source,
-	                idx_t offset, idx_t count);
+	void AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
+	                idx_t target_offset, Vector &source, idx_t offset, idx_t count);
 
 	//! Fetch all the strings of a vector from the base table and place their locations in the result vector
 	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, idx_t vector_index, Vector &result, idx_t count);
@@ -196,6 +197,7 @@ private:
 
 	void SetDictionaryOffset(BufferHandle &handle, idx_t offset);
 	idx_t GetDictionaryOffset(BufferHandle &handle);
+
 private:
 	//! The max string size that is allowed within a block. Strings bigger than this will be labeled as a BIG STRING and
 	//! offloaded to the overflow blocks.

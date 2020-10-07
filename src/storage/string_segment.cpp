@@ -443,8 +443,8 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 		idx_t append_count = MinValue(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		AppendData(*handle, stats, handle->node->buffer + vector_size * vector_index, handle->node->buffer + Storage::BLOCK_SIZE,
-		           current_tuple_count, data, offset, append_count);
+		AppendData(*handle, stats, handle->node->buffer + vector_size * vector_index,
+		           handle->node->buffer + Storage::BLOCK_SIZE, current_tuple_count, data, offset, append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -488,8 +488,8 @@ idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
 	return Storage::BLOCK_SIZE - used_space;
 }
 
-void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset,
-                               Vector &source, idx_t offset, idx_t count) {
+void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
+                               idx_t target_offset, Vector &source, idx_t offset, idx_t count) {
 	VectorData adata;
 	source.Orrify(count, adata);
 

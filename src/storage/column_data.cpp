@@ -107,9 +107,9 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 		// cannot append to persistent segment, convert the last segment into a transient segment
-		auto transient = make_unique<TransientSegment>((PersistentSegment &) *segment);
-		state.current = (TransientSegment *) transient.get();
-		data.nodes.back().node = (SegmentBase*) transient.get();
+		auto transient = make_unique<TransientSegment>((PersistentSegment &)*segment);
+		state.current = (TransientSegment *)transient.get();
+		data.nodes.back().node = (SegmentBase *)transient.get();
 		if (data.root_node.get() == segment) {
 			data.root_node = move(transient);
 		} else {

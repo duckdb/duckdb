@@ -16,15 +16,11 @@ class MorselInfo;
 struct SelectionVector;
 class Transaction;
 
-enum class ChunkInfoType : uint8_t {
-	CONSTANT_INFO,
-	VECTOR_INFO
-};
+enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO };
 
 class ChunkInfo {
 public:
-	ChunkInfo(idx_t start, MorselInfo &morsel, ChunkInfoType type)
-	    : start(start), morsel(morsel), type(type) {
+	ChunkInfo(idx_t start, MorselInfo &morsel, ChunkInfoType type) : start(start), morsel(morsel), type(type) {
 	}
 	virtual ~ChunkInfo() {
 	}
@@ -51,6 +47,7 @@ public:
 
 	transaction_t insert_id;
 	transaction_t delete_id;
+
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
@@ -69,6 +66,7 @@ public:
 	//! The transaction ids of the transactions that deleted the tuples (if any)
 	transaction_t deleted[STANDARD_VECTOR_SIZE];
 	bool any_deleted;
+
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;

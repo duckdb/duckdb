@@ -1,6 +1,6 @@
-# name: test/sql/tpch/tpch_sf01.test_slow
+# name: test/sql/storage/storage_tpch.test_slow
 # description: Test TPC-H SF0.1
-# group: [tpch]
+# group: [storage]
 
 require tpch
 

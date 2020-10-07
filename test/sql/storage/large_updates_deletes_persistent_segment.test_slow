@@ -1,4 +1,4 @@
-# name: test/sql/storage/large_updates_deletes_persistent_segments.test_slow
+# name: test/sql/storage/large_updates_deletes_persistent_segment.test_slow
 # description: Test large updates/deletes/insertions on persistent segments
 # group: [storage]
 

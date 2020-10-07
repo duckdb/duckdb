@@ -1,4 +1,4 @@
-# name: test/sql/storage/catalog/test_store_remove_column.test
+# name: test/sql/storage/catalog/test_store_alter_type.test
 # description: Remove column from persistent table
 # group: [catalog]
 

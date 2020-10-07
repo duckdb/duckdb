@@ -1,4 +1,4 @@
-# name: test/sql/storage/test_large_interleaved_transactions.test_slow
+# name: test/sql/storage/test_large_interleaved_updates_deletes.test_slow
 # description: Test large interleaved transactions
 # group: [storage]
 

@@ -145,7 +145,8 @@ private:
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t start_row, idx_t end_row);
+	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t start_row,
+	                              idx_t end_row);
 	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
 	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,

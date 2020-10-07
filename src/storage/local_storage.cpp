@@ -25,8 +25,6 @@ void LocalTableStorage::InitializeScan(LocalScanState &state) {
 	state.last_chunk_count = collection.chunks.back()->size();
 }
 
-
-
 LocalScanState::~LocalScanState() {
 	SetStorage(nullptr);
 }

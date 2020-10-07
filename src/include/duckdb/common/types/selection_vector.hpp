@@ -34,7 +34,7 @@ struct SelectionVector {
 	}
 	SelectionVector(idx_t start, idx_t count) {
 		Initialize(STANDARD_VECTOR_SIZE);
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			set_index(i, start + i);
 		}
 	}

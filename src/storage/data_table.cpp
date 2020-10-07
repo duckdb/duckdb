@@ -42,7 +42,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 		total_rows = columns[0]->persistent_rows;
 		// create empty morsel info's
 		// in the future, we should lazily load these from the file as well (once we support deleted flags)
-		for(idx_t i = 0; i < total_rows; i += MorselInfo::MORSEL_SIZE) {
+		for (idx_t i = 0; i < total_rows; i += MorselInfo::MORSEL_SIZE) {
 			auto segment = make_unique<MorselInfo>(i, MorselInfo::MORSEL_SIZE);
 			versions->AppendSegment(move(segment));
 		}
@@ -54,9 +54,8 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), types(parent.types), storage(parent.storage),
-	  versions(parent.versions), total_rows(parent.total_rows),
-	  columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
+      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
@@ -100,9 +99,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), types(parent.types), storage(parent.storage),
-	  versions(parent.versions), total_rows(parent.total_rows),
-	  columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
+      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// first check if there are any indexes that exist that point to the removed column
@@ -126,9 +124,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
-    : info(parent.info), types(parent.types), storage(parent.storage),
-	  versions(parent.versions), total_rows(parent.total_rows),
-	  columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
+      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
 
 	// prevent any new tuples from being added to the parent
 	CreateIndexScanState scan_state;
@@ -212,7 +209,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 	state.current_row = 0;
 	state.base_row = 0;
 	state.max_row = total_rows;
-	state.version_info = (MorselInfo*) versions->GetRootSegment();
+	state.version_info = (MorselInfo *)versions->GetRootSegment();
 	if (table_filters && table_filters->size() > 0) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
 	}
@@ -225,8 +222,8 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 }
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-                                         unordered_map<idx_t, vector<TableFilter>> *table_filters,
-										 idx_t start_row, idx_t end_row) {
+                                         unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t start_row,
+                                         idx_t end_row) {
 	assert(start_row % STANDARD_VECTOR_SIZE == 0);
 	assert(end_row > start_row);
 	idx_t vector_offset = start_row / STANDARD_VECTOR_SIZE;
@@ -246,7 +243,7 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	state.current_row = start_row;
 	state.base_row = start_row;
 	state.max_row = end_row;
-	state.version_info = (MorselInfo*) versions->GetSegment(state.current_row);
+	state.version_info = (MorselInfo *)versions->GetSegment(state.current_row);
 	if (table_filters && table_filters->size() > 0 && !state.adaptive_filter) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
 	}
@@ -448,7 +445,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	// second, scan the version chunk manager to figure out which tuples to load for this transaction
 	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 	if (vector_offset >= MorselInfo::MORSEL_VECTOR_COUNT) {
-		state.version_info = (MorselInfo*) state.version_info->next.get();
+		state.version_info = (MorselInfo *)state.version_info->next.get();
 		state.base_row += MorselInfo::MORSEL_SIZE;
 		vector_offset = 0;
 	}
@@ -564,7 +561,7 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, id
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	for (idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
-		auto segment = (MorselInfo*) versions->GetSegment(row_id);
+		auto segment = (MorselInfo *)versions->GetSegment(row_id);
 		bool use_row = segment->Fetch(transaction, row_id);
 		if (use_row) {
 			// row is not deleted; use the row
@@ -675,17 +672,17 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 
 	// start writing to the morsels
 	lock_guard<mutex> morsel_lock(versions->node_lock);
-	auto last_morsel = (MorselInfo*) versions->GetLastSegment();
-	assert(last_morsel->start <= (idx_t) state.row_start);
-	idx_t current_position = state.row_start  - last_morsel->start;
+	auto last_morsel = (MorselInfo *)versions->GetLastSegment();
+	assert(last_morsel->start <= (idx_t)state.row_start);
+	idx_t current_position = state.row_start - last_morsel->start;
 	idx_t remaining = append_count;
-	while(true) {
+	while (true) {
 		idx_t remaining_in_morsel = MorselInfo::MORSEL_SIZE - current_position;
 		idx_t to_write = MinValue<idx_t>(remaining, remaining_in_morsel);
 		remaining -= to_write;
 		if (to_write > 0) {
 			// write to the last morsel
-			auto morsel = (MorselInfo*) versions->GetLastSegment();
+			auto morsel = (MorselInfo *)versions->GetLastSegment();
 			morsel->Append(transaction, current_position, to_write, transaction.transaction_id);
 		}
 
@@ -719,7 +716,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, std::function<voi
 
 	vector<column_t> column_ids;
 	vector<LogicalType> types;
-	for(idx_t i = 0; i < columns.size(); i++) {
+	for (idx_t i = 0; i < columns.size(); i++) {
 		column_ids.push_back(i);
 		types.push_back(columns[i]->type);
 	}
@@ -731,7 +728,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, std::function<voi
 	idx_t row_start_aligned = row_start / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
 	InitializeScanWithOffset(state, column_ids, nullptr, row_start_aligned, row_start + count);
 
-	while(true) {
+	while (true) {
 		idx_t current_row = state.current_row;
 		CreateIndexScan(state, column_ids, chunk);
 		if (chunk.size() == 0) {
@@ -750,23 +747,20 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, std::function<voi
 		function(chunk);
 		chunk.Reset();
 	}
-
 }
 
 void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
 	log.WriteSetTable(info->schema, info->table);
-	ScanTableSegment(row_start, count, [&](DataChunk &chunk) {
-		log.WriteInsert(chunk);
-	});
+	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 
-	auto morsel = (MorselInfo*) versions->GetSegment(row_start);
+	auto morsel = (MorselInfo *)versions->GetSegment(row_start);
 	idx_t current_row = row_start;
 	idx_t remaining = count;
-	while(true) {
+	while (true) {
 		idx_t start_in_morsel = current_row - morsel->start;
 		idx_t append_count = MinValue<idx_t>(morsel->count - start_in_morsel, remaining);
 
@@ -777,7 +771,7 @@ void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t cou
 		if (remaining == 0) {
 			break;
 		}
-		morsel = (MorselInfo*) morsel->next.get();
+		morsel = (MorselInfo *)morsel->next.get();
 	}
 	info->cardinality += count;
 }
@@ -828,9 +822,9 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 		}
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
-		Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t) row_data);
+		Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_data);
 		ScanTableSegment(start_row, count, [&](DataChunk &chunk) {
-			for(idx_t i = 0; i < chunk.size(); i++) {
+			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = current_row_base + i;
 			}
 			for (idx_t i = 0; i < info->indexes.size(); i++) {
@@ -935,7 +929,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		// deletion is in transaction-local storage: push delete into local chunk collection
 		transaction.storage.Delete(this, row_identifiers, count);
 	} else {
-		auto morsel = (MorselInfo*) versions->GetSegment(first_id);
+		auto morsel = (MorselInfo *)versions->GetSegment(first_id);
 		morsel->Delete(transaction, this, row_identifiers, count);
 	}
 }
@@ -969,8 +963,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_i
 	if (found_columns != desired_column_ids.size()) {
 		// FIXME: not all columns in UPDATE clause are present!
 		// this should not be triggered at all as the binder should add these columns
-		throw InternalException(
-		    "Not all columns required for the CHECK constraint are present in the UPDATED chunk!");
+		throw InternalException("Not all columns required for the CHECK constraint are present in the UPDATED chunk!");
 	}
 	// construct a mock DataChunk
 	auto types = table.GetTypes();

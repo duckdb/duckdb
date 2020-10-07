@@ -59,11 +59,14 @@ struct LocalScanState {
 	~LocalScanState();
 
 	void SetStorage(LocalTableStorage *storage);
-	LocalTableStorage *GetStorage() { return storage; }
+	LocalTableStorage *GetStorage() {
+		return storage;
+	}
 
 	idx_t chunk_index;
 	idx_t max_index;
 	idx_t last_chunk_count;
+
 private:
 	LocalTableStorage *storage = nullptr;
 };

@@ -50,8 +50,7 @@ void Transaction::PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t row
 }
 
 void Transaction::PushAppend(DataTable *table, idx_t start_row, idx_t row_count) {
-	auto append_info =
-	    (AppendInfo *)undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
+	auto append_info = (AppendInfo *)undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
 	append_info->table = table;
 	append_info->start_row = start_row;
 	append_info->count = row_count;

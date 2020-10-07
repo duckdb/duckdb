@@ -24,10 +24,13 @@ public:
 
 	constexpr static idx_t MORSEL_LAYER_COUNT = 10;
 	constexpr static idx_t MORSEL_LAYER_SIZE = MORSEL_SIZE / MORSEL_LAYER_COUNT;
+
 public:
-	MorselInfo(idx_t start, idx_t count) : SegmentBase(start, count) {}
+	MorselInfo(idx_t start, idx_t count) : SegmentBase(start, count) {
+	}
 
 	unique_ptr<VersionNode> root;
+
 public:
 	idx_t GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
@@ -43,8 +46,10 @@ public:
 	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
 
 	void RevertAppend(idx_t start);
+
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
+
 private:
 	mutex morsel_lock;
 };
@@ -53,4 +58,4 @@ struct VersionNode {
 	unique_ptr<ChunkInfo> info[MorselInfo::MORSEL_VECTOR_COUNT];
 };
 
-}
+} // namespace duckdb

@@ -16,7 +16,8 @@ ChunkInfo *MorselInfo::GetChunkInfo(idx_t vector_idx) {
 	return root->info[vector_idx].get();
 }
 
-idx_t MorselInfo::GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
+idx_t MorselInfo::GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector,
+                               idx_t max_count) {
 	lock_guard<mutex> lock(morsel_lock);
 
 	auto info = GetChunkInfo(vector_idx);
@@ -47,9 +48,10 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 	}
 	idx_t start_vector_idx = morsel_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (morsel_end - 1) / STANDARD_VECTOR_SIZE;
-	for(idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
+	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
 		idx_t start = vector_idx == start_vector_idx ? morsel_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
-		idx_t end = vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		idx_t end =
+		    vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
 			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE, *this);
@@ -67,7 +69,7 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 			} else {
 				assert(root->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 				// use existing vector
-				info = (ChunkVectorInfo*) root->info[vector_idx].get();
+				info = (ChunkVectorInfo *)root->info[vector_idx].get();
 			}
 			info->Append(start, end, commit_id);
 		}
@@ -81,9 +83,10 @@ void MorselInfo::CommitAppend(transaction_t commit_id, idx_t morsel_start, idx_t
 
 	idx_t start_vector_idx = morsel_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (morsel_end - 1) / STANDARD_VECTOR_SIZE;
-	for(idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
+	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
 		idx_t start = vector_idx == start_vector_idx ? morsel_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
-		idx_t end = vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		idx_t end =
+		    vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 
 		auto info = root->info[vector_idx].get();
 		info->CommitAppend(commit_id, start, end);
@@ -95,7 +98,7 @@ void MorselInfo::RevertAppend(idx_t morsel_start) {
 		return;
 	}
 	idx_t start_vector_idx = (morsel_start + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
-	for(idx_t vector_idx = start_vector_idx; vector_idx < MorselInfo::MORSEL_VECTOR_COUNT; vector_idx++) {
+	for (idx_t vector_idx = start_vector_idx; vector_idx < MorselInfo::MORSEL_VECTOR_COUNT; vector_idx++) {
 		root->info[vector_idx].reset();
 	}
 }
@@ -149,16 +152,17 @@ void VersionDeleteState::Delete(row_t row_id) {
 
 		if (!info.root->info[vector_idx]) {
 			// no info yet: create it
-			info.root->info[vector_idx] = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
+			info.root->info[vector_idx] =
+			    make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
 		} else if (info.root->info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
-			auto &constant = (ChunkConstantInfo &) *info.root->info[vector_idx];
+			auto &constant = (ChunkConstantInfo &)*info.root->info[vector_idx];
 			// info exists but it's a constant info: convert to a vector info
 			auto new_info = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
 			new_info->insert_id = constant.insert_id;
 			info.root->info[vector_idx] = move(new_info);
 		}
 		assert(info.root->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
-		current_info = (ChunkVectorInfo *) info.root->info[vector_idx].get();
+		current_info = (ChunkVectorInfo *)info.root->info[vector_idx].get();
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;
 	}
@@ -176,4 +180,4 @@ void VersionDeleteState::Flush() {
 	count = 0;
 }
 
-}
+} // namespace duckdb

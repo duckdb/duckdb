@@ -69,7 +69,7 @@ void DuckDB::Configure(DBConfig &new_config) {
 	} else {
 		config.file_system = make_unique<FileSystem>();
 	}
-	if (config.maximum_memory == (idx_t) -1) {
+	if (config.maximum_memory == (idx_t)-1) {
 		config.maximum_memory = config.file_system->GetAvailableMemory() * 8 / 10;
 	} else {
 		config.maximum_memory = new_config.maximum_memory;

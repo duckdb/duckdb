@@ -47,7 +47,8 @@ public:
 	};
 
 public:
-	LocalStorage(Transaction &transaction) : transaction(transaction) {}
+	LocalStorage(Transaction &transaction) : transaction(transaction) {
+	}
 
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable *table, LocalScanState &state);
