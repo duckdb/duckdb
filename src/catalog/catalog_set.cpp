@@ -14,6 +14,26 @@ using namespace std;
 CatalogSet::CatalogSet(Catalog &catalog) : catalog(catalog) {
 }
 
+CatalogEntry* CatalogSet::CreateEntry(const string &name, unique_ptr<CatalogEntry> value) {
+	// lock the catalog for writing
+	lock_guard<mutex> write_lock(catalog.write_lock);
+	// lock this catalog set to disallow reading
+	lock_guard<mutex> read_lock(catalog_lock);
+	auto entry = mapping.find(value->name);
+	if (entry != mapping.end()) {
+		// entry already exists: return that entry
+		return entries[entry->second].get();
+	}
+	idx_t entry_index = current_entry++;
+
+	value->timestamp = 0;
+
+	auto result = value.get();
+	mapping[value->name] = entry_index;
+	entries[entry_index] = move(value);
+	return result;
+}
+
 bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
                              unordered_set<CatalogEntry *> &dependencies) {
 	// lock the catalog for writing

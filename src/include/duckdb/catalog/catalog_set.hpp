@@ -36,6 +36,10 @@ public:
 	bool CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
 	                 unordered_set<CatalogEntry *> &dependencies);
 
+	//! Creates an entry in the catalog without any transactional semantics (i.e. it is instantly committed)
+	//! Returns either the entry as written, or the entry that was already there (if any)
+	CatalogEntry* CreateEntry(const string &name, unique_ptr<CatalogEntry> value);
+
 	bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
 
 	bool DropEntry(Transaction &transaction, const string &name, bool cascade);

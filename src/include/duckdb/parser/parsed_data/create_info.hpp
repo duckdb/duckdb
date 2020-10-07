@@ -24,7 +24,7 @@ enum class OnCreateConflict : uint8_t {
 
 struct CreateInfo : public ParseInfo {
 	CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
-	    : type(type), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false) {
+	    : type(type), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	}
 	virtual ~CreateInfo() {
 	}
@@ -37,6 +37,8 @@ struct CreateInfo : public ParseInfo {
 	OnCreateConflict on_conflict;
 	//! Whether or not the entry is temporary
 	bool temporary;
+	//! Whether or not the entry is an internal entry
+	bool internal;
 };
 
 } // namespace duckdb

@@ -63,14 +63,15 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 		// finished returning values
 		return;
 	}
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
-	output.SetCardinality(next - data.offset);
 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	for (idx_t i = data.offset; i < next; i++) {
-		auto index = i - data.offset;
-		auto &entry = data.entries[i];
+	idx_t count = 0;
+	while(data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &entry = data.entries[data.offset++];
+		if (entry->internal) {
+			continue;
+		}
 
 		// return values:
 		// "type", PhysicalType::VARCHAR
@@ -91,17 +92,18 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 		default:
 			type_str = "unknown";
 		}
-		output.SetValue(0, index, Value(type_str));
+		output.SetValue(0, count, Value(type_str));
 		// "name", PhysicalType::VARCHAR
-		output.SetValue(1, index, Value(entry->name));
+		output.SetValue(1, count, Value(entry->name));
 		// "tbl_name", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(entry->name));
+		output.SetValue(2, count, Value(entry->name));
 		// "rootpage", PhysicalType::INT32
-		output.SetValue(3, index, Value::INTEGER(0));
+		output.SetValue(3, count, Value::INTEGER(0));
 		// "sql", PhysicalType::VARCHAR
-		output.SetValue(4, index, Value(entry->ToSQL()));
+		output.SetValue(4, count, Value(entry->ToSQL()));
+		count++;
 	}
-	data.offset = next;
+	output.SetCardinality(count);
 }
 
 void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
