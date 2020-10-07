@@ -59,6 +59,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		payload_width += aggregates[i].payload_size;
+#ifndef DUCKDB_ALLOW_UNDEFINED
+		assert(aggregates[i].payload_size == Align(aggregates[i].payload_size));
+#endif
 	}
 	empty_payload_data = unique_ptr<data_t[]>(new data_t[payload_width]);
 	// initialize the aggregates to the NULL value
@@ -72,14 +75,14 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	assert(group_width > 0);
 
 #ifndef DUCKDB_ALLOW_UNDEFINED
-	auto aligned_flag_and_group_width = Align(group_width);
-	group_padding = aligned_flag_and_group_width - group_width;
+	auto aligned_group_width = Align(group_width);
+	group_padding = aligned_group_width - group_width;
 	group_width += group_padding;
 #endif
 
 	// HT layout
 	hash_width = sizeof(hash_t);
-	tuple_size = hash_width + group_width + group_padding + payload_width;
+	tuple_size = hash_width + group_width + payload_width;
 #ifndef DUCKDB_ALLOW_UNDEFINED
 	tuple_size = Align(tuple_size);
 #endif
@@ -706,6 +709,8 @@ void GroupedAggregateHashTable::FlushMerge(Vector &source_addresses, Vector &sou
 		auto &column = groups.data[i];
 		VectorOperations::Gather::Set(source_addresses, column, groups.size());
 	}
+
+	VectorOperations::AddInPlace(source_addresses, group_padding, groups.size());
 
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 	Vector group_addresses(LogicalType::POINTER);
