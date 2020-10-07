@@ -81,6 +81,7 @@ public:
 	int loop_idx;
 	int loop_start;
 	int loop_end;
+	bool original_sqlite_test = false;
 
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
@@ -273,11 +274,11 @@ static void print_expected_result(vector<string> &values, idx_t columns, bool ro
 	}
 }
 
-static string sqllogictest_convert_value(Value value, LogicalType sql_type, bool for_hash) {
+static string sqllogictest_convert_value(Value value, LogicalType sql_type, bool original_sqlite_test) {
 	if (value.is_null) {
 		return "NULL";
 	} else {
-		if (for_hash) {
+		if (original_sqlite_test) {
 			// sqlite test hashes want us to convert floating point numbers to integers
 			switch (sql_type.id()) {
 			case LogicalTypeId::DECIMAL:
@@ -305,7 +306,7 @@ static string sqllogictest_convert_value(Value value, LogicalType sql_type, bool
 
 // standard result conversion: one line per value
 static int duckdbConvertResult(MaterializedQueryResult &result,
-                               bool for_hash,
+                               bool original_sqlite_test,
                                vector<string> &pazResult /* RETURN:  Array of result values */
 ) {
 	size_t r, c;
@@ -316,7 +317,7 @@ static int duckdbConvertResult(MaterializedQueryResult &result,
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
 			auto value = result.GetValue(c, r);
-			auto converted_value = sqllogictest_convert_value(value, result.types[c], for_hash);
+			auto converted_value = sqllogictest_convert_value(value, result.types[c], original_sqlite_test);
 			pazResult[r * column_count + c] = converted_value;
 		}
 	}
@@ -700,7 +701,7 @@ void Query::Execute() {
 	}
 
 	vector<string> azResult;
-	duckdbConvertResult(*result, compare_hash, azResult);
+	duckdbConvertResult(*result, runner.original_sqlite_test, azResult);
 	if (runner.output_result_mode) {
 		// names
 		for (idx_t c = 0; c < result->column_count(); c++) {
@@ -1006,11 +1007,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	int bHt = 0;      /* True if -ht command-line option */
 	bool skip_execution = false;
 	vector<unique_ptr<Command>> loop_statements;
-	bool skip_index = false;
 
 	// for the original SQLite tests we skip the index (for now)
 	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
-		skip_index = true;
+		original_sqlite_test = true;
 	}
 
 	// initialize an in-memory database
@@ -1109,8 +1109,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// perform any renames in zScript
 			command->sql_query = ReplaceKeywords(zScript);
 
-			// skip CREATE INDEX (for now...)
-			if (skip_index && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
+			// skip CREATE INDEX in original sqlite tests (for now...)
+			if (original_sqlite_test && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
 				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
 				continue;
 			}
@@ -1465,7 +1465,8 @@ struct AutoRegTests {
 		    "evidence/slt_lang_reindex.test",                  // "
 		    "evidence/slt_lang_dropindex.test",                // "
 		    "evidence/slt_lang_createtrigger.test",            // "
-		    "evidence/slt_lang_droptrigger.test"               // "
+		    "evidence/slt_lang_droptrigger.test",              // "
+			"evidence/slt_lang_update.test"                    //  Multiple assignments to same column "x"
 		};
 		FileSystem fs;
 		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
