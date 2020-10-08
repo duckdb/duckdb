@@ -125,10 +125,9 @@ static void pragma_explain_output(ClientContext &context, vector<Value> paramete
 	string val = parameters[0].ToString();
 	if (val == "optimized") {
 		context.explain_output_optimized_only = true;
-	}else if (val == "physical"){
+	} else if (val == "physical") {
 		context.explain_output_physical_only = true;
-	}
-	else if (val == "all") {
+	} else if (val == "all") {
 		context.explain_output_optimized_only = true;
 	} else {
 		throw ParserException("Expected PRAGMA explain_output={optimized, all}");

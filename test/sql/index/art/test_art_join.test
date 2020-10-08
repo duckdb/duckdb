@@ -1,6 +1,6 @@
 # name: test/sql/index/art/test_art_join.test
 # description: Test Joins using art indexes
-# group: [art-join]
+# group: [art]
 
 statement ok
 PRAGMA explain_output='physical';

@@ -68,7 +68,7 @@ public:
 		return table_storage.size() > 0;
 	}
 
-	bool Find(DataTable* table){
+	bool Find(DataTable *table) {
 		return table_storage.find(table) != table_storage.end();
 	}
 

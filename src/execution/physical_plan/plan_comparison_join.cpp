@@ -82,7 +82,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 				auto &tbl_scan = (PhysicalTableScan &)*left;
 				swap(op.conditions[0].left, op.conditions[0].right);
 				return make_unique<PhysicalIndexJoin>(op, move(right), move(left), move(op.conditions), op.join_type,
-				                                      op.right_projection_map, op.left_projection_map,tbl_scan.column_ids, left_index, false);
+				                                      op.right_projection_map, op.left_projection_map,
+				                                      tbl_scan.column_ids, left_index, false);
 				//				if (right){
 				//					// Uh, index in both condition sides, which one to use?
 				//				}
@@ -90,7 +91,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			if (right_index) {
 				auto &tbl_scan = (PhysicalTableScan &)*right;
 				return make_unique<PhysicalIndexJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
-				                                      op.left_projection_map, op.right_projection_map,tbl_scan.column_ids, right_index, true);
+				                                      op.left_projection_map, op.right_projection_map,
+				                                      tbl_scan.column_ids, right_index, true);
 			}
 		}
 		// equality join: use hash join

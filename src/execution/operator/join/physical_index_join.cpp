@@ -30,12 +30,12 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
                                      unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                      const vector<idx_t> &left_projection_map, vector<idx_t> right_projection_map,
                                      vector<column_t> column_ids, Index *index, bool lhs_first)
-    : PhysicalOperator(PhysicalOperatorType::INDEX_JOIN, move(op.types)), column_ids(move(column_ids)), left_projection_map(left_projection_map),
-      right_projection_map(move(right_projection_map)), index(index), conditions(move(cond)), join_type(join_type),
-      lhs_first(lhs_first) {
+    : PhysicalOperator(PhysicalOperatorType::INDEX_JOIN, move(op.types)), column_ids(move(column_ids)),
+      left_projection_map(left_projection_map), right_projection_map(move(right_projection_map)), index(index),
+      conditions(move(cond)), join_type(join_type), lhs_first(lhs_first) {
 	children.push_back(move(left));
 	children.push_back(move(right));
-	//assert(left_projection_map.empty());
+	// assert(left_projection_map.empty());
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
@@ -55,7 +55,7 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				right_projection_map.push_back(i);
 			}
 		}
-		if (left_projection_map.empty()){
+		if (left_projection_map.empty()) {
 			for (size_t i = 0; i < state->child_chunk.column_count(); i++) {
 				left_projection_map.push_back(i);
 			}
@@ -72,7 +72,7 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			    index->InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
 			auto i_state = (ARTIndexScanState *)t_state.get();
 			art.Scan(transaction, *tbl, *i_state, STANDARD_VECTOR_SIZE, result_ids);
-			if(result_ids.empty()){
+			if (result_ids.empty()) {
 				return;
 			}
 			DataChunk rhs_tuple;
@@ -86,24 +86,23 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				if (!lhs_first) {
 					for (idx_t i = 0; i < right_projection_map.size(); i++) {
 						auto rvalue = rhs_tuple.GetValue(right_projection_map[i], state->last_match);
-						chunk.data[i].SetValue(cur_vec_size,rvalue);
+						chunk.data[i].SetValue(cur_vec_size, rvalue);
 					}
 					for (idx_t i = 0; i < left_projection_map.size(); i++) {
 						auto lvalue = state->child_chunk.GetValue(left_projection_map[i], state->left_position);
-						chunk.data[right_projection_map.size()+i].SetValue(cur_vec_size,lvalue);
+						chunk.data[right_projection_map.size() + i].SetValue(cur_vec_size, lvalue);
 					}
-				}
-				else  {
-									//! We have to duplicate LRS to number of matches
+				} else {
+					//! We have to duplicate LRS to number of matches
 					for (idx_t i = 0; i < left_projection_map.size(); i++) {
 						auto lvalue = state->child_chunk.GetValue(left_projection_map[i], state->left_position);
-						chunk.data[i].SetValue(cur_vec_size,lvalue);
+						chunk.data[i].SetValue(cur_vec_size, lvalue);
 					}
 					//! Add actual value
 					//! We have to fetch RHS row based on the index ids
 					for (idx_t i = 0; i < right_projection_map.size(); i++) {
 						auto rvalue = rhs_tuple.GetValue(right_projection_map[i], state->last_match);
-						chunk.data[state->child_chunk.column_count() + i].SetValue(cur_vec_size,rvalue);
+						chunk.data[state->child_chunk.column_count() + i].SetValue(cur_vec_size, rvalue);
 					}
 				}
 				cur_vec_size++;
