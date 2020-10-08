@@ -23,7 +23,8 @@ public:
 
 	idx_t left_position = 0;
 	idx_t last_match = 0;
-	DataChunk *lhs_data = nullptr;
+	DataChunk join_keys;
+	ExpressionExecutor probe_executor;
 };
 
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -35,7 +36,6 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
       conditions(move(cond)), join_type(join_type), lhs_first(lhs_first) {
 	children.push_back(move(left));
 	children.push_back(move(right));
-	// assert(left_projection_map.empty());
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
@@ -49,32 +49,28 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
 	auto tbl = bind_tbl.table->storage.get();
-	if (!state->lhs_data) {
-		if (right_projection_map.empty()) {
-			for (size_t i = 0; i < column_ids.size(); i++) {
-				right_projection_map.push_back(i);
-			}
+
+	while (state->left_position <= state->child_chunk.size()) {
+		if (state->child_chunk.size() == state->left_position){
+			//! Get a new chunk
+            children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			if (state->child_chunk.size() == 0) {
+				//! If chunk is empty there is nothing else to probe
+			    chunk.SetCardinality(cur_vec_size);
+			    return;
+		    }
+			state->last_match = 0;
+			state->left_position = 0;
+			state->probe_executor.Execute(state->child_chunk, state->join_keys);
 		}
-		if (left_projection_map.empty()) {
-			for (size_t i = 0; i < state->child_chunk.column_count(); i++) {
-				left_projection_map.push_back(i);
-			}
-		}
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		state->lhs_data = &state->child_chunk;
-	}
-	while (state->left_position < state->lhs_data->size()) {
 		//! Probe the index
 		for (; state->left_position < state->child_chunk.size(); state->left_position++) {
 			vector<row_t> result_ids;
-			auto equal_value = state->child_chunk.data.data()->GetValue(state->left_position);
+			auto equal_value = state->join_keys.GetValue(0,state->left_position);
 			unique_ptr<IndexScanState> t_state =
 			    index->InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
 			auto i_state = (ARTIndexScanState *)t_state.get();
 			art.Scan(transaction, *tbl, *i_state, STANDARD_VECTOR_SIZE, result_ids);
-			if (result_ids.empty()) {
-				return;
-			}
 			DataChunk rhs_tuple;
 			rhs_tuple.Initialize(children[1]->types);
 			ColumnFetchState fetch_state;
@@ -107,23 +103,33 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				}
 				cur_vec_size++;
 				if (cur_vec_size == STANDARD_VECTOR_SIZE) {
-					chunk.SetCardinality(cur_vec_size);
+					state->last_match++;
+					chunk.SetCardinality(STANDARD_VECTOR_SIZE);
 					return;
 				}
 			}
 			state->last_match = 0;
 		}
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		state->left_position = 0;
-		if (state->child_chunk.size() == 0) {
-			chunk.SetCardinality(cur_vec_size);
-			return;
-		}
 	}
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
-	return make_unique<PhysicalIndexJoinOperatorState>(*this, children[0].get(), children[1].get());
+	auto state = make_unique<PhysicalIndexJoinOperatorState>(*this, children[0].get(), children[1].get());
+	    if (right_projection_map.empty()) {
+			for (size_t i = 0; i < column_ids.size(); i++) {
+				right_projection_map.push_back(i);
+			}
+		}
+		if (left_projection_map.empty()) {
+			for (size_t i = 0; i < state->child_chunk.column_count(); i++) {
+				left_projection_map.push_back(i);
+			}
+		}
+		state->join_keys.Initialize(condition_types);
+        for (auto &cond : conditions) {
+            state->probe_executor.AddExpression(*cond.left);
+        }
+	return state;
 }
 
 } // namespace duckdb
