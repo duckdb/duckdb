@@ -22,6 +22,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
+#include "duckdb/catalog/default/default_schemas.hpp"
+
 namespace duckdb {
 using namespace std;
 
@@ -85,7 +87,7 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 	}
 
 	unordered_set<CatalogEntry *> dependencies;
-	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema);
+	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {
 		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
@@ -102,10 +104,6 @@ void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
 	if (info->name == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
 	}
-	if (info->name == DEFAULT_SCHEMA || info->name == TEMP_SCHEMA) {
-		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system", info->name);
-	}
-
 	if (!schemas->DropEntry(context.ActiveTransaction(), info->name, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Schema with name \"%s\" does not exist!", info->name);
@@ -137,9 +135,20 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
 	}
 	auto entry = schemas->GetEntry(context.ActiveTransaction(), schema_name);
 	if (!entry) {
+		if (DefaultSchemas::GetDefaultSchema(schema_name)) {
+			// this schema does not exist yet, but it is a default schema
+			// create it
+			auto schema = make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, schema_name, true);
+			return (SchemaCatalogEntry *) schemas->CreateEntry(schema_name, move(schema));
+		}
 		throw CatalogException("Schema with name %s does not exist!", schema_name);
 	}
 	return (SchemaCatalogEntry *)entry;
+}
+
+void Catalog::ScanSchemas(Transaction &transaction, std::function<void(CatalogEntry*)> callback) {
+	// create all default schemas
+	schemas->Scan(transaction, [&](CatalogEntry *entry) { callback(entry); });
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name,

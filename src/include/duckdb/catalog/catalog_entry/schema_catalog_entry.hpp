@@ -40,7 +40,7 @@ struct DropInfo;
 //! A schema in the catalog
 class SchemaCatalogEntry : public CatalogEntry {
 public:
-	SchemaCatalogEntry(Catalog *catalog, string name);
+	SchemaCatalogEntry(Catalog *catalog, string name, bool is_internal);
 
 	//! The catalog set holding the tables
 	CatalogSet tables;

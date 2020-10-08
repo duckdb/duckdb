@@ -25,7 +25,8 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/catalog/default_views.hpp"
+
+#include "duckdb/catalog/default/default_views.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -33,10 +34,11 @@
 namespace duckdb {
 using namespace std;
 
-SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
+SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name, bool internal)
     : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name), tables(*catalog), indexes(*catalog),
       table_functions(*catalog), copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog),
       sequences(*catalog), collations(*catalog) {
+	this->internal = internal;
 }
 
 CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry,
@@ -150,9 +152,6 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		}
 		return;
 	}
-	if (existing_entry->internal) {
-		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", info->name);
-	}
 	if (existing_entry->type != info->type) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
@@ -174,7 +173,7 @@ void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
 CatalogEntry *SchemaCatalogEntry::CreateDefaultEntry(ClientContext &context, CatalogType type, const string &entry_name) {
 	if (type == CatalogType::TABLE_ENTRY || type == CatalogType::VIEW_ENTRY) {
 		// check if we can create a default view entry
-		auto info = DefaultViews::GetDefaultView(entry_name);
+		auto info = DefaultViews::GetDefaultView(name, entry_name);
 		if (info) {
 			auto &set = GetCatalogSet(type);
 			Binder binder(context);
@@ -195,12 +194,10 @@ CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType t
 
 	auto entry = set.GetEntry(transaction, entry_name);
 	if (!entry) {
-		if (name == DEFAULT_SCHEMA) {
-			// default schema: check default entries
-			auto entry = CreateDefaultEntry(context, type, entry_name);
-			if (entry) {
-				return entry;
-			}
+		// check if there are any default entries we can use here
+		auto entry = CreateDefaultEntry(context, type, entry_name);
+		if (entry) {
+			return entry;
 		}
 		if (!if_exists) {
 			throw CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), entry_name);

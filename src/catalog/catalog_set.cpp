@@ -209,6 +209,9 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool ca
 	if (!GetEntryInternal(transaction, name, entry_index, entry)) {
 		return false;
 	}
+	if (entry->internal) {
+		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
+	}
 
 	// create the lock set for this delete operation
 	set_lock_map_t lock_set;

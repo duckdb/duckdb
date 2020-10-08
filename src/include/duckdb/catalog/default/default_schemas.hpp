@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/default_views.hpp
+// duckdb/catalog/default/default_schemas.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,8 +12,8 @@
 
 namespace duckdb {
 
-struct DefaultViews {
-	static unique_ptr<CreateViewInfo> GetDefaultView(string name);
+struct DefaultSchemas {
+	static bool GetDefaultSchema(string schema);
 };
 
 } // namespace duckdb
