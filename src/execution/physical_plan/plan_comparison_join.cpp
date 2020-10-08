@@ -7,6 +7,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -45,6 +46,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	}
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
+		auto &transaction = Transaction::GetTransaction(context);
 		// check if one of the tables has an index on column
 		if (op.join_type == JoinType::INNER && op.conditions.size() == 1) {
 			// check if one of the children are table scans and if they have an index in the join attribute
@@ -53,7 +55,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			if (left->type == PhysicalOperatorType::TABLE_SCAN) {
 				auto &tbl_scan = (PhysicalTableScan &)*left;
 				auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-				if (tbl) {
+				if (tbl && !transaction.storage.Find(tbl->table->storage.get())) {
 					for (auto &index : tbl->table->storage->info->indexes) {
 						if (index->unbound_expressions[0]->alias == op.conditions[0].left->alias) {
 							// Hooray, this column is indexed
@@ -66,7 +68,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 				auto &tbl_scan = (PhysicalTableScan &)*right;
 				auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-				if (tbl) {
+				if (tbl && !transaction.storage.Find(tbl->table->storage.get())) {
 					for (auto &index : tbl->table->storage->info->indexes) {
 						if (index->unbound_expressions[0]->alias == op.conditions[0].right->alias) {
 							// Hooray, this column is indexed
@@ -77,16 +79,18 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 				}
 			}
 			if (left_index) {
+				auto &tbl_scan = (PhysicalTableScan &)*left;
 				swap(op.conditions[0].left, op.conditions[0].right);
 				return make_unique<PhysicalIndexJoin>(op, move(right), move(left), move(op.conditions), op.join_type,
-				                                      op.right_projection_map, op.left_projection_map, left_index);
+				                                      op.right_projection_map, op.left_projection_map,tbl_scan.column_ids, left_index, false);
 				//				if (right){
 				//					// Uh, index in both condition sides, which one to use?
 				//				}
 			}
 			if (right_index) {
+				auto &tbl_scan = (PhysicalTableScan &)*right;
 				return make_unique<PhysicalIndexJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
-				                                      op.left_projection_map, op.right_projection_map, right_index);
+				                                      op.left_projection_map, op.right_projection_map,tbl_scan.column_ids, right_index, true);
 			}
 		}
 		// equality join: use hash join

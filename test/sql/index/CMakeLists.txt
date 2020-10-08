@@ -2,7 +2,6 @@ add_library_unity(test_index
                   OBJECT
                   test_art_index.cpp
                   test_art_keys.cpp
-                  test_art_join.cpp
                   # test_concurrent_index.cpp
                   )
 set(ALL_OBJECT_FILES
