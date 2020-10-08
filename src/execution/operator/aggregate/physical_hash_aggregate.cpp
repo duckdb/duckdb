@@ -259,7 +259,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 
 			group_subset.Slice(group_chunk, sel_vectors[r], sel_vector_sizes[r]);
 			payload_subset.Slice(payload_chunk, sel_vectors[r], sel_vector_sizes[r]);
-			hashes.Slice(hashes_subset, sel_vectors[r], sel_vector_sizes[r]);
+			hashes_subset.Slice(hashes, sel_vectors[r], sel_vector_sizes[r]);
 
 			auto ht_idx = r + 1;
 
@@ -267,7 +267,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 				llstate.hts[ht_idx].push_back(NewHT(lstate));
 			}
 			gstate.lossy_total_groups +=
-			    llstate.hts[ht_idx].back()->AddChunk(group_subset, /* FIXME hashes_subset,*/ payload_subset);
+			    llstate.hts[ht_idx].back()->AddChunk(group_subset, hashes_subset, payload_subset);
 		}
 
 	} else {
