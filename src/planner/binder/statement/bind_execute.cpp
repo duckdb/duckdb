@@ -14,7 +14,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	// bind the prepared statement
 	auto entry =
-	    (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(context.ActiveTransaction(), stmt.name);
+	    (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(context, stmt.name);
 	if (!entry || entry->deleted) {
 		throw BinderException("Could not find prepared statement with that name");
 	}

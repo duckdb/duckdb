@@ -96,8 +96,6 @@ public:
 	string ToSQL() override;
 
 private:
-	//! Creates a default catalog entry (if it has not been created yet). Returns nullptr if no default entry with "entry_name" exists.
-	CatalogEntry *CreateDefaultEntry(ClientContext &context, CatalogType type, const string &entry_name);
 	//! Add a catalog entry to this schema
 	CatalogEntry *AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict);
 	//! Add a catalog entry to this schema

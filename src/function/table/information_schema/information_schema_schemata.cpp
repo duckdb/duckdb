@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/transaction/transaction.hpp"
 
 using namespace std;
 
@@ -52,8 +51,7 @@ information_schema_schemata_init(ClientContext &context, const FunctionData *bin
 	auto result = make_unique<InformationSchemaSchemataData>();
 
 	// scan all the schemas and collect them
-	auto &transaction = Transaction::GetTransaction(context);
-	Catalog::GetCatalog(context).ScanSchemas(transaction, [&](CatalogEntry *entry) {
+	Catalog::GetCatalog(context).ScanSchemas(context, [&](CatalogEntry *entry) {
 		result->entries.push_back((SchemaCatalogEntry *)entry);
 	});
 	// get the temp schema as well

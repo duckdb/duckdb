@@ -84,7 +84,7 @@ public:
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
 	SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA);
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
-	void ScanSchemas(Transaction &transaction, std::function<void(CatalogEntry*)> callback);
+	void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry*)> callback);
 	//! Gets the "schema.name" entry of the specified type, if if_exists=true returns nullptr if entry does not exist,
 	//! otherwise an exception is thrown
 	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, string schema, const string &name,

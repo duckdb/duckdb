@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
 
@@ -47,10 +46,9 @@ unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, cons
 	auto result = make_unique<SQLiteMasterData>();
 
 	// scan all the schemas for tables and views and collect them
-	auto &transaction = Transaction::GetTransaction(context);
-	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
+	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	return move(result);

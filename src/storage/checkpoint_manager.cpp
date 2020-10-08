@@ -20,6 +20,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -40,7 +41,9 @@ void CheckpointManager::CreateCheckpoint() {
 	// assert that the checkpoint manager hasn't been used before
 	assert(!metadata_writer);
 
-	auto transaction = database.transaction_manager->StartTransaction();
+	Connection con(database);
+	con.BeginTransaction();
+
 	block_manager.StartCheckpoint();
 
 	//! Set up the writers for the checkpoints
@@ -52,13 +55,13 @@ void CheckpointManager::CreateCheckpoint() {
 
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the schemas
-	database.catalog->schemas->Scan(*transaction,
+	database.catalog->schemas->Scan(*con.context,
 	                                [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());
 	for (auto &schema : schemas) {
-		WriteSchema(*transaction, *schema);
+		WriteSchema(*con.context, *schema);
 	}
 	// flush the meta data to disk
 	metadata_writer->Flush();
@@ -91,13 +94,13 @@ void CheckpointManager::LoadFromStorage() {
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema) {
+void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &schema) {
 	// write the schema data
 	schema.Serialize(*metadata_writer);
 	// then, we fetch the tables/views/sequences information
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
-	schema.tables.Scan(transaction, [&](CatalogEntry *entry) {
+	schema.tables.Scan(context, [&](CatalogEntry *entry) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			tables.push_back((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
@@ -107,7 +110,7 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
-	schema.sequences.Scan(transaction,
+	schema.sequences.Scan(context,
 	                      [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
 
 	// write the sequences
@@ -118,7 +121,7 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 	// now write the tables
 	metadata_writer->Write<uint32_t>(tables.size());
 	for (auto &table : tables) {
-		WriteTable(transaction, *table);
+		WriteTable(context, *table);
 	}
 	// finally write the views
 	metadata_writer->Write<uint32_t>(views.size());
@@ -180,7 +183,7 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 //===--------------------------------------------------------------------===//
 // Table Metadata
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteTable(Transaction &transaction, TableCatalogEntry &table) {
+void CheckpointManager::WriteTable(ClientContext &context, TableCatalogEntry &table) {
 	// write the table meta data
 	table.Serialize(*metadata_writer);
 	//! write the blockId for the table info
@@ -189,7 +192,7 @@ void CheckpointManager::WriteTable(Transaction &transaction, TableCatalogEntry &
 	metadata_writer->Write<uint64_t>(tabledata_writer->offset);
 	// now we need to write the table data
 	TableDataWriter writer(*this, table);
-	writer.WriteTableData(transaction);
+	writer.WriteTableData(context);
 }
 
 void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reader) {

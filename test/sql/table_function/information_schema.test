@@ -32,7 +32,7 @@ SELECT ordinal_position, column_name, data_type FROM information_schema_columns(
 1	i	INTEGER
 
 query ITT
-SELECT ordinal_position, column_name, data_type FROM information_schema.columns() WHERE table_name='integers'
+SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_name='integers'
 ----
 1	i	INTEGER
 
@@ -63,7 +63,7 @@ SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' A
 VIEW
 
 query T
-SELECT table_type FROM information_schema.tables() WHERE table_schema='scheme' AND table_name='vintegers'
+SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND table_name='vintegers'
 ----
 VIEW
 

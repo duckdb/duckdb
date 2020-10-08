@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -20,7 +21,7 @@
 namespace duckdb {
 struct AlterInfo;
 
-class Transaction;
+class ClientContext;
 
 typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
 
@@ -29,22 +30,18 @@ class CatalogSet {
 	friend class DependencyManager;
 
 public:
-	CatalogSet(Catalog &catalog);
+	CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
 
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
-	bool CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
+	bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
 	                 unordered_set<CatalogEntry *> &dependencies);
-
-	//! Creates an entry in the catalog without any transactional semantics (i.e. it is instantly committed)
-	//! Returns either the entry as written, or the entry that was already there (if any)
-	CatalogEntry* CreateEntry(const string &name, unique_ptr<CatalogEntry> value);
 
 	bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
 
-	bool DropEntry(Transaction &transaction, const string &name, bool cascade);
+	bool DropEntry(ClientContext &context, const string &name, bool cascade);
 	//! Returns the entry with the specified name
-	CatalogEntry *GetEntry(Transaction &transaction, const string &name);
+	CatalogEntry *GetEntry(ClientContext &context, const string &name);
 	//! Returns the root entry with the specified name regardless of transaction (or nullptr if there are none)
 	CatalogEntry *GetRootEntry(const string &name);
 
@@ -53,19 +50,19 @@ public:
 	void Undo(CatalogEntry *entry);
 
 	//! Scan the catalog set, invoking the callback method for every entry
-	template <class T> void Scan(Transaction &transaction, T &&callback) {
+	template <class T> void Scan(ClientContext &context, T &&callback) {
 		// lock the catalog set
 		std::lock_guard<std::mutex> lock(catalog_lock);
 		for (auto &kv : entries) {
 			auto entry = kv.second.get();
-			entry = GetEntryForTransaction(transaction, entry);
+			entry = GetEntryForTransaction(context, entry);
 			if (!entry->deleted) {
 				callback(entry);
 			}
 		}
 	}
 
-	static bool HasConflict(Transaction &transaction, CatalogEntry &current);
+	static bool HasConflict(ClientContext &context, CatalogEntry &current);
 
 	idx_t GetEntryIndex(CatalogEntry *entry);
 	CatalogEntry *GetEntryFromIndex(idx_t index);
@@ -73,11 +70,11 @@ public:
 
 private:
 	//! Given a root entry, gets the entry valid for this transaction
-	CatalogEntry *GetEntryForTransaction(Transaction &transaction, CatalogEntry *current);
-	bool GetEntryInternal(Transaction &transaction, const string &name, idx_t &entry_index, CatalogEntry *&entry);
-	bool GetEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry *&entry);
+	CatalogEntry *GetEntryForTransaction(ClientContext &context, CatalogEntry *current);
+	bool GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index, CatalogEntry *&entry);
+	bool GetEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry *&entry);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
-	void DropEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry &entry, bool cascade,
+	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
 	                       set_lock_map_t &lock_set);
 
 private:
@@ -90,6 +87,8 @@ private:
 	unordered_map<idx_t, unique_ptr<CatalogEntry>> entries;
 	//! The current catalog entry index
 	idx_t current_entry = 0;
+	//! The generator used to generate default internal entries
+	unique_ptr<DefaultGenerator> defaults;
 };
 
 } // namespace duckdb

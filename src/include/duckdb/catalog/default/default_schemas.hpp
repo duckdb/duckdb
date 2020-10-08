@@ -8,12 +8,15 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/catalog/default/default_generator.hpp"
 
 namespace duckdb {
 
-struct DefaultSchemas {
-	static bool GetDefaultSchema(string schema);
+class DefaultSchemaGenerator : public DefaultGenerator {
+public:
+	DefaultSchemaGenerator(Catalog &catalog);
+public:
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
 };
 
 } // namespace duckdb
