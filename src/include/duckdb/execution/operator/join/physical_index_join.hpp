@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
 
