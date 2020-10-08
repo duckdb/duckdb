@@ -29,6 +29,7 @@ idx_t MorselInfo::GetSelVector(Transaction &transaction, idx_t vector_idx, Selec
 }
 
 bool MorselInfo::Fetch(Transaction &transaction, idx_t row) {
+	assert(row < MorselInfo::MORSEL_SIZE);
 	lock_guard<mutex> lock(morsel_lock);
 
 	idx_t vector_index = row / STANDARD_VECTOR_SIZE;

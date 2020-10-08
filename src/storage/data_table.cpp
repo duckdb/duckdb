@@ -562,7 +562,7 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, id
 	for (idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
 		auto segment = (MorselInfo *)versions->GetSegment(row_id);
-		bool use_row = segment->Fetch(transaction, row_id);
+		bool use_row = segment->Fetch(transaction, row_id - segment->start);
 		if (use_row) {
 			// row is not deleted; use the row
 			result_rows[count++] = row_id;
