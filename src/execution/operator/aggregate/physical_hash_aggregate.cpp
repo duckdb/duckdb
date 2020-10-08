@@ -219,7 +219,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	assert(!any_distinct);
 
 	// radix-partitioned case
-	if (gstate.radix_partitions > 1 && llstate.hts[0].size() > 0 && gstate.lossy_total_groups > radix_limit) {
+	if (gstate.radix_partitions > 1 /* && gstate.lossy_total_groups > radix_limit*/) {
 		// we need to generate selection vectors for all radixes and then pick the corresponding ht and add the data
 		// with that selection
 
@@ -233,7 +233,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 			sel_vectors[r].Initialize();
 			sel_vector_sizes[r] = 0;
 		}
-
+		assert(hashes.vector_type == VectorType::FLAT_VECTOR);
 		auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 		for (idx_t i = 0; i < group_chunk.size(); i++) {
 			auto partition = (hashes_ptr[i] & gstate.radix_mask) >> 32;
@@ -255,15 +255,19 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		payload_subset.Initialize(payload_types);
 
 		for (hash_t r = 0; r < gstate.radix_partitions; r++) {
+			Vector hashes_subset(LogicalType::HASH);
+
 			group_subset.Slice(group_chunk, sel_vectors[r], sel_vector_sizes[r]);
 			payload_subset.Slice(payload_chunk, sel_vectors[r], sel_vector_sizes[r]);
+			hashes.Slice(hashes_subset, sel_vectors[r], sel_vector_sizes[r]);
 
 			auto ht_idx = r + 1;
 
 			if (llstate.hts[ht_idx].empty() || llstate.hts[ht_idx].back()->Size() > ht_load_limit) {
 				llstate.hts[ht_idx].push_back(NewHT(lstate));
 			}
-			gstate.lossy_total_groups += llstate.hts[ht_idx].back()->AddChunk(group_subset, hashes, payload_subset);
+			gstate.lossy_total_groups +=
+			    llstate.hts[ht_idx].back()->AddChunk(group_subset, /* FIXME hashes_subset,*/ payload_subset);
 		}
 
 	} else {
@@ -426,24 +430,27 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 		return;
 	}
 	idx_t elements_found = 0;
+
 	while (true) {
+		if (state.ht_index == gstate.hts.size()) {
+			state.finished = true;
+			return;
+		}
 		if (gstate.hts[state.ht_index].size() == 0) {
 			// nothing in hash tables since no data was scanned
-			break;
-		}
-		elements_found =
-		    gstate.hts[state.ht_index][0]->Scan(state.ht_scan_position, state.group_chunk, state.aggregate_chunk);
-		if (elements_found > 0) {
-			break;
-		}
-		// maybe we have another HT
-		if (state.ht_index < gstate.hts.size() - 1) {
 			state.ht_index++;
 			state.ht_scan_position = 0;
 			continue;
-		} else {
-			return;
 		}
+		assert(gstate.hts[state.ht_index].size() == 1);
+		elements_found =
+		    gstate.hts[state.ht_index][0]->Scan(state.ht_scan_position, state.group_chunk, state.aggregate_chunk);
+
+		if (elements_found > 0) {
+			break;
+		}
+		state.ht_index++;
+		state.ht_scan_position = 0;
 	}
 
 	// compute the final projection list

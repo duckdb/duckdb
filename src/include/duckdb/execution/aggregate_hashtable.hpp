@@ -100,7 +100,7 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
 
-	void Combine(GroupedAggregateHashTable &other);
+	void Combine(GroupedAggregateHashTable &other, hash_t radix_mask = 0);
 
 	idx_t Size() {
 		return entries;
