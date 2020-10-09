@@ -140,7 +140,7 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
 	return (SchemaCatalogEntry *)entry;
 }
 
-void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntry*)> callback) {
+void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
 	// create all default schemas first
 	schemas->Scan(context, [&](CatalogEntry *entry) { callback(entry); });
 }

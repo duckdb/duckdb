@@ -11,7 +11,8 @@
 namespace duckdb {
 using namespace std;
 
-CatalogSet::CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults) : catalog(catalog), defaults(move(defaults)) {
+CatalogSet::CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults)
+    : catalog(catalog), defaults(move(defaults)) {
 }
 
 bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,

@@ -110,8 +110,7 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
-	schema.sequences.Scan(context,
-	                      [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
+	schema.sequences.Scan(context, [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
 
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());

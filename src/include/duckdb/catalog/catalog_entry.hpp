@@ -23,7 +23,8 @@ class ClientContext;
 class CatalogEntry {
 public:
 	CatalogEntry(CatalogType type, Catalog *catalog, string name)
-	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), temporary(false), internal(false), parent(nullptr) {
+	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), temporary(false), internal(false),
+	      parent(nullptr) {
 	}
 	virtual ~CatalogEntry();
 

@@ -65,7 +65,7 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
-	while(data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
+	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 		if (entry->internal) {
 			continue;

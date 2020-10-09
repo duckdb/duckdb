@@ -2,6 +2,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 
 namespace duckdb {
@@ -13,15 +14,14 @@ struct DefaultView {
 };
 
 static DefaultView internal_views[] = {
-	{ DEFAULT_SCHEMA, "sqlite_master", "SELECT * FROM sqlite_master()" },
-	{ "information_schema", "columns", "SELECT * FROM information_schema_columns()"},
-	{ "information_schema", "schemata", "SELECT * FROM information_schema_schemata()"},
-	{ "information_schema", "tables", "SELECT * FROM information_schema_tables()"},
-	{ nullptr, nullptr, nullptr }
-};
+    {DEFAULT_SCHEMA, "sqlite_master", "SELECT * FROM sqlite_master()"},
+    {"information_schema", "columns", "SELECT * FROM information_schema_columns()"},
+    {"information_schema", "schemata", "SELECT * FROM information_schema_schemata()"},
+    {"information_schema", "tables", "SELECT * FROM information_schema_tables()"},
+    {nullptr, nullptr, nullptr}};
 
 static unique_ptr<CreateViewInfo> GetDefaultView(string schema, string name) {
-	for(idx_t index = 0; internal_views[index].name != nullptr; index++) {
+	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
 		if (internal_views[index].schema == schema && internal_views[index].name == name) {
 			auto result = make_unique<CreateViewInfo>();
 			result->schema = schema;
@@ -30,7 +30,7 @@ static unique_ptr<CreateViewInfo> GetDefaultView(string schema, string name) {
 			Parser parser;
 			parser.ParseQuery(internal_views[index].sql);
 			assert(parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT);
-			result->query = move(((SelectStatement &) *parser.statements[0]).node);
+			result->query = move(((SelectStatement &)*parser.statements[0]).node);
 			result->temporary = true;
 			result->internal = true;
 			result->view_name = name;
@@ -40,8 +40,9 @@ static unique_ptr<CreateViewInfo> GetDefaultView(string schema, string name) {
 	return nullptr;
 }
 
-DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry *schema) :
-	DefaultGenerator(catalog), schema(schema) {}
+DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry *schema)
+    : DefaultGenerator(catalog), schema(schema) {
+}
 
 unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
 	auto info = GetDefaultView(schema->name, entry_name);
@@ -54,4 +55,4 @@ unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext 
 	return nullptr;
 }
 
-}
+} // namespace duckdb
