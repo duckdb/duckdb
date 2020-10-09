@@ -23,6 +23,14 @@ Binder::Binder(ClientContext &context, Binder *parent_)
 	}
 }
 
+void Binder::DisableParentCTEs() {
+	unordered_map<string, shared_ptr<Binding>> cleared_bindings;
+	bind_context.SetCTEBindings(cleared_bindings);
+	bind_context.cte_references.clear();
+	CTE_bindings.clear();
+	use_parent_CTEs = false;
+}
+
 BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
@@ -162,7 +170,7 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
 CommonTableExpressionInfo *Binder::FindCTE(const string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
-		if (parent) {
+		if (parent && use_parent_CTEs) {
 			return parent->FindCTE(name);
 		}
 		return nullptr;
