@@ -378,6 +378,8 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+		return SQLITE_TEXT;
+	case LogicalTypeId::BLOB:
 		return SQLITE_BLOB;
 	default:
 		return 0;

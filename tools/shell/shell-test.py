@@ -325,13 +325,10 @@ PRAGMA enable_profiling;
 SELECT 42;
 ''', out="42", err="<<Query Profiling Information>>")
 
-# not working for now, probably for the better
+test('.system echo 42', out="42")
+test('.shell echo 42', out="42")
 
-# test('.system echo 42', out="42")
-# test('.shell echo 42', out="42")
-
-# this fails because strlike and db_config are missing
-
+# this fails because db_config is missing
 # test('''
 # .eqp full
 # SELECT 42;
@@ -340,7 +337,6 @@ SELECT 42;
 # this fails because the sqlite printf accepts %w for table names
 
 # test('''
-# CREATE VIEW sqlite_master AS SELECT * FROM sqlite_master(); -- hack!
 # CREATE TABLE a (I INTEGER);
 # INSERT INTO a VALUES (42);
 # .clone %s
@@ -348,19 +344,41 @@ SELECT 42;
 
 
 
-# fails because view pragma_database_list does not exist
-
 test('.databases', out='main:')
 
+# .dump test
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump
+''', 'COMMIT')
 
-# fails
-# test('''
-# CREATE TABLE a (I INTEGER);
-# .changes off
-# INSERT INTO a VALUES (42);
-# .dump a
-# ''')
+# .dump a specific table
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump a
+''', 'COMMIT')
 
+# .dump LIKE
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump a%
+''', 'COMMIT')
+
+# more types, tables and views
+test('''
+CREATE TABLE a (d DATE, k FLOAT, t TIMESTAMP);
+CREATE TABLE b (c INTEGER);
+.changes off
+INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());
+INSERT INTO b SELECT * FROM range(0,10);
+.dump
+''', 'COMMIT')
 
 
 # printf %q
