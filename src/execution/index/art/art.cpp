@@ -445,12 +445,14 @@ bool ART::SearchEqualJoin(ARTIndexScanState *state, vector<row_t> &result_ids) {
 		//! We need to look for a leaf
 		auto key = CreateKey(*this, types[0], state->values[0]);
 		state->cur_leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
-        if (!state->cur_leaf) {
-            return true;
-        }
+		if (!state->cur_leaf) {
+			return true;
+		}
 	}
-	size_t next_pos = state->cur_leaf->num_elements - state->result_index > STANDARD_VECTOR_SIZE ? state->result_index+ STANDARD_VECTOR_SIZE : state->cur_leaf->num_elements;
-	for (;state->result_index < next_pos; state->result_index++) {
+	size_t next_pos = state->cur_leaf->num_elements - state->result_index > STANDARD_VECTOR_SIZE
+	                      ? state->result_index + STANDARD_VECTOR_SIZE
+	                      : state->cur_leaf->num_elements;
+	for (; state->result_index < next_pos; state->result_index++) {
 		row_t row_id = state->cur_leaf->GetRowId(state->result_index);
 		row_ids.push_back(row_id);
 	}
@@ -465,7 +467,7 @@ bool ART::SearchEqualJoin(ARTIndexScanState *state, vector<row_t> &result_ids) {
 			result_ids.push_back(row_ids[i]);
 		}
 	}
-	if (next_pos ==  state->cur_leaf->num_elements){
+	if (next_pos == state->cur_leaf->num_elements) {
 		//! We are done with this leaf
 		return true;
 	}

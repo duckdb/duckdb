@@ -16,8 +16,6 @@
 
 namespace duckdb {
 
-
-
 //! PhysicalIndexJoin represents an index join between two tables
 class PhysicalIndexJoin : public PhysicalOperator {
 public:
@@ -44,7 +42,6 @@ public:
 	bool lhs_first = true;
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-
 };
 
 } // namespace duckdb

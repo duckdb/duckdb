@@ -55,7 +55,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			if (left->type == PhysicalOperatorType::TABLE_SCAN) {
 				auto &tbl_scan = (PhysicalTableScan &)*left;
 				auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-				if (tbl && !transaction.storage.Find(tbl->table->storage.get())&& tbl_scan.table_filters.empty()) {
+				if (tbl && !transaction.storage.Find(tbl->table->storage.get()) && tbl_scan.table_filters.empty()) {
 					for (auto &index : tbl->table->storage->info->indexes) {
 						if (index->unbound_expressions[0]->alias == op.conditions[0].left->alias) {
 							// Hooray, this column is indexed
@@ -68,7 +68,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 				auto &tbl_scan = (PhysicalTableScan &)*right;
 				auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-				if (tbl && !transaction.storage.Find(tbl->table->storage.get())&& tbl_scan.table_filters.empty()) {
+				if (tbl && !transaction.storage.Find(tbl->table->storage.get()) && tbl_scan.table_filters.empty()) {
 					for (auto &index : tbl->table->storage->info->indexes) {
 						if (index->unbound_expressions[0]->alias == op.conditions[0].right->alias) {
 							// Hooray, this column is indexed

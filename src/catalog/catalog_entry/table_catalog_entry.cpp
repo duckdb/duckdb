@@ -80,8 +80,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				for (auto &key : unique.keys) {
 					assert(key < columns.size());
 
-					unbound_expressions.push_back(
-					    make_unique<BoundColumnRefExpression>(columns[key].name,columns[key].type, ColumnBinding(0, column_ids.size())));
+					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
+					    columns[key].name, columns[key].type, ColumnBinding(0, column_ids.size())));
 
 					bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
 					column_ids.push_back(key);
