@@ -5,20 +5,42 @@
 statement ok
 PRAGMA enable_verification
 
+query T
+SELECT UNNEST(tokenize('🦆 🦆 🦆 🦆 🦆'))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
 statement ok
 CREATE TABLE documents(s VARCHAR)
 
 statement ok
-INSERT INTO documents VALUES ('  Hello, World!  '), ('helloworld'), (NULL), (''), ('  Ĥéĺĺó, Ŵóŕĺɗ!  ')
+INSERT INTO documents VALUES ('  Hello, World!  '), ('helloworld'), (''), ('  Ĥéĺĺó, Ŵóŕĺɗ!  '), ('🦆 🦆 🦆 🦆 🦆')
 
 query T
-SELECT tokenize(s) FROM documents
+SELECT UNNEST(tokenize(s)) FROM documents
 ----
-hello
-world
+Hello,
+World!
+helloworld
+Ĥéĺĺó,
+Ŵóŕĺɗ!
+🦆
+🦆
+🦆
+🦆
+🦆
 
-#query T
-#SELECT tokenize(string_agg(range, ' ')), mod(range, 10) xx from range(100) group by xx
-#----
+statement ok
+SELECT tokenize(string_agg(range, ' ')), mod(range, 10000) xx FROM range(100000) GROUP BY xx
+----
+
+query T
+SELECT UNNEST(tokenize(NULL))
+----
+NULL
 
 # TODO: add where clause, constants, a million strings, and full circle with concat
