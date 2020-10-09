@@ -7,8 +7,6 @@ struct DefaultSchema {
 	const char *name;
 };
 
-static idx_t total_internal_schemas = 1;
-
 static DefaultSchema internal_schemas[] = {
 	{ "information_schema" },
 	{ nullptr }
