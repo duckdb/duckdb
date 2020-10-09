@@ -380,6 +380,14 @@ INSERT INTO b SELECT * FROM range(0,10);
 .dump
 ''', 'COMMIT')
 
+# dump blobs: FIXME
+# test('''
+# CREATE TABLE a (b BLOB);
+# .changes off
+# INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());
+# .dump
+# ''', 'COMMIT')
+
 
 # printf %q
 
