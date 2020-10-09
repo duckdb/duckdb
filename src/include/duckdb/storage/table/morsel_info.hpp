@@ -20,11 +20,11 @@ struct VersionNode;
 
 class MorselInfo : public SegmentBase {
 public:
-	constexpr static idx_t MORSEL_VECTOR_COUNT = 100;
-	constexpr static idx_t MORSEL_SIZE = STANDARD_VECTOR_SIZE * MORSEL_VECTOR_COUNT;
+	const static idx_t MORSEL_VECTOR_COUNT = 100;
+	const static idx_t MORSEL_SIZE = STANDARD_VECTOR_SIZE * MORSEL_VECTOR_COUNT;
 
-	constexpr static idx_t MORSEL_LAYER_COUNT = 10;
-	constexpr static idx_t MORSEL_LAYER_SIZE = MORSEL_SIZE / MORSEL_LAYER_COUNT;
+	const static idx_t MORSEL_LAYER_COUNT = 10;
+	const static idx_t MORSEL_LAYER_SIZE = MORSEL_SIZE / MORSEL_LAYER_COUNT;
 
 public:
 	MorselInfo(idx_t start, idx_t count) : SegmentBase(start, count) {
