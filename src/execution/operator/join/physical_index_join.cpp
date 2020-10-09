@@ -57,9 +57,11 @@ bool PhysicalIndexJoin::FillResultChunk(PhysicalIndexJoinOperatorState *state, D
 		if (result_size == STANDARD_VECTOR_SIZE) {
 			state->rhs_idx++;
 			chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+			//cerr << "Result Size: " << result_size << endl;
 			return true;
 		}
 	}
+	//cerr << "Result Size: " << result_size << endl;
 	return false;
 }
 
@@ -75,6 +77,8 @@ void PhysicalIndexJoin::GetRHSChunk(ExecutionContext &context, PhysicalIndexJoin
 		state->idx_state.reset();
 		assert(!state->idx_state);
 	}
+	//cerr << "LHS Index: " << state->lhs_idx << endl;
+	//cerr << "Result Ids: " << result_ids.size() << endl;
 	state->rhs_chunk.Initialize(children[1]->types);
 	ColumnFetchState fetch_state;
 	Vector row_ids;
@@ -92,7 +96,7 @@ void PhysicalIndexJoin::SetProbe(ExecutionContext &context, PhysicalIndexJoinOpe
 
 void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
-	size_t result_size = 0;
+	idx_t result_size = 0;
 	while (result_size < STANDARD_VECTOR_SIZE) {
 		//! Check if we need to get a new LHS chunk
 		if (state->get_new_chunk) {
@@ -103,14 +107,16 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				chunk.SetCardinality(result_size);
 				return;
 			}
+			state->first_row = true;
 			state->lhs_idx = 0;
 			state->rhs_idx = 0;
+			state->rhs_chunk.Reset();
 			state->get_new_chunk = false;
 			state->probe_executor.Execute(state->child_chunk, state->join_keys);
 			state->cur_chunk++;
 		}
 		//! Iterate over LHS chunk
-		for (; state->lhs_idx < state->child_chunk.size(); state->lhs_idx++) {
+		while (state->lhs_idx < state->child_chunk.size()){
 			//! First, Check if we must continue from a previous unfinished RHS Chunk
 			if (FillResultChunk(state, chunk, result_size)) {
 				return;
@@ -125,12 +131,20 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 						return;
 					}
 				} else {
+					if (state->first_row){
+						state->first_row = false;
+					}
+					else{
+						state->lhs_idx++;
+					}
+					if (state->lhs_idx == state->child_chunk.size()){
+						break;
+					}
 					//! If we are not Scanning the leaf we move to the next LHS key
 					SetProbe(context, state);
 					//! We get a chunk and fill result
 					GetRHSChunk(context, state);
 					if (FillResultChunk(state, chunk, result_size)) {
-						state->lhs_idx++;
 						return;
 					}
 				}

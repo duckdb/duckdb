@@ -59,15 +59,15 @@ CREATE INDEX w_index ON words using art(word);
 COPY words FROM 'benchmark/micro/index/indexjoin.csv.gz' (DELIMITER ',' , AUTO_DETECT FALSE)
 
 query III
-SELECT w1.doc AS doc1, w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON (w1.word=w2.word) GROUP BY doc1, doc2 ORDER BY c DESC LIMIT 10
+SELECT w1.doc AS doc1, w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON (w1.word=w2.word) GROUP BY doc1, doc2 ORDER BY c DESC, 1,2 LIMIT 10
 ----
 144	144	24524255
 70	70	106542
-366	70	72067
 70	366	72067
+366	70	72067
 366	366	67162
 70	303	37235
 303	70	37235
-70	59	35259
 59	70	35259
-153	70	35159
+70	59	35259
+70	153	35159

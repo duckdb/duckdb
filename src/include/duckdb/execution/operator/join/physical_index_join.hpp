@@ -31,6 +31,8 @@ public:
 	bool get_new_chunk = true;
 	unique_ptr<IndexScanState> idx_state;
 	idx_t cur_chunk  = 0;
+	bool first_row = true;
+
 };
 
 //! PhysicalIndexJoin represents an index join between two tables
