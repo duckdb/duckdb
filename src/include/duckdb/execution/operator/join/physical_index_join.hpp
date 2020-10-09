@@ -16,6 +16,23 @@
 
 namespace duckdb {
 
+class PhysicalIndexJoinOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalIndexJoinOperatorState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(op, left) {
+		assert(left && right);
+	}
+
+	idx_t lhs_idx = 0;
+	idx_t rhs_idx = 0;
+	DataChunk join_keys;
+	DataChunk rhs_chunk;
+	ExpressionExecutor probe_executor;
+	bool get_new_chunk = true;
+	unique_ptr<IndexScanState> idx_state;
+	idx_t cur_chunk  = 0;
+};
+
 //! PhysicalIndexJoin represents an index join between two tables
 class PhysicalIndexJoin : public PhysicalOperator {
 public:
@@ -42,6 +59,13 @@ public:
 	bool lhs_first = true;
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+private:
+	void GetRHSChunk(ExecutionContext &context,PhysicalIndexJoinOperatorState *state);
+	//! Fills result chunk.
+	//! Returns True is result chunk is already full. False OW
+	inline bool FillResultChunk(PhysicalIndexJoinOperatorState *state, DataChunk &chunk, idx_t& result_size);
+	//! Set Element to probe the index with
+	inline void SetProbe(ExecutionContext &context, PhysicalIndexJoinOperatorState *state);
 };
 
 } // namespace duckdb

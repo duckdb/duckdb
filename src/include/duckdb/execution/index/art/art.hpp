@@ -54,9 +54,12 @@ struct ARTIndexScanState : public IndexScanState {
 	Value values[2];
 	ExpressionType expressions[2];
 	bool checked;
-	idx_t result_index = 0;
 	vector<row_t> result_ids;
 	Iterator iterator;
+	//! Stores the current leaf
+	Leaf * cur_leaf = nullptr;
+	//! Offset to leaf
+	idx_t result_index = 0;
 };
 
 class ART : public Index {
@@ -92,9 +95,11 @@ public:
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
-
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+    //! Search Equal used for Joins
+    //! Returns True if we finished scanning for this leaf
+	bool SearchEqualJoin(ARTIndexScanState *state,  vector<row_t> &result_ids);
 
 private:
 	DataChunk expression_result;
