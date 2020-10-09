@@ -18,6 +18,10 @@ LocalTableStorage::~LocalTableStorage() {
 }
 
 void LocalTableStorage::InitializeScan(LocalScanState &state) {
+	if (collection.chunks.size() == 0) {
+		// nothing to scan
+		return;
+	}
 	state.SetStorage(this);
 
 	state.chunk_index = 0;
