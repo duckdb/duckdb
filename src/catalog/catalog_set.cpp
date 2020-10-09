@@ -11,11 +11,13 @@
 namespace duckdb {
 using namespace std;
 
-CatalogSet::CatalogSet(Catalog &catalog) : catalog(catalog) {
+CatalogSet::CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults)
+    : catalog(catalog), defaults(move(defaults)) {
 }
 
-bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value,
+bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
                              unordered_set<CatalogEntry *> &dependencies) {
+	auto &transaction = Transaction::GetTransaction(context);
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 	// lock this catalog set to disallow reading
@@ -42,7 +44,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 		entry_index = entry->second;
 		auto &current = *entries[entry_index];
 		// if it does, we have to check version numbers
-		if (HasConflict(transaction, current)) {
+		if (HasConflict(context, current)) {
 			// current version has been written to by a currently active
 			// transaction
 			throw TransactionException("Catalog write-write conflict on create with \"%s\"", current.name);
@@ -60,7 +62,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 	value->set = this;
 
 	// now add the dependency set of this object to the dependency manager
-	catalog.dependency_manager->AddObject(transaction, value.get(), dependencies);
+	catalog.dependency_manager->AddObject(context, value.get(), dependencies);
 
 	value->child = move(entries[entry_index]);
 	value->child->parent = value.get();
@@ -70,10 +72,10 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 	return true;
 }
 
-bool CatalogSet::GetEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry *&catalog_entry) {
+bool CatalogSet::GetEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry *&catalog_entry) {
 	catalog_entry = entries[entry_index].get();
 	// if it does: we have to retrieve the entry and to check version numbers
-	if (HasConflict(transaction, *catalog_entry)) {
+	if (HasConflict(context, *catalog_entry)) {
 		// current version has been written to by a currently active
 		// transaction
 		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", catalog_entry->name);
@@ -87,15 +89,15 @@ bool CatalogSet::GetEntryInternal(Transaction &transaction, idx_t entry_index, C
 	return true;
 }
 
-bool CatalogSet::GetEntryInternal(Transaction &transaction, const string &name, idx_t &entry_index,
+bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index,
                                   CatalogEntry *&catalog_entry) {
 	auto entry = mapping.find(name);
 	if (entry == mapping.end()) {
-		// if it does not: entry has never been created and cannot be altered
+		// the entry does not exist, check if we can create a default entry
 		return false;
 	}
 	entry_index = entry->second;
-	return GetEntryInternal(transaction, entry_index, catalog_entry);
+	return GetEntryInternal(context, entry_index, catalog_entry);
 }
 
 void CatalogSet::ClearEntryName(string name) {
@@ -112,8 +114,11 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	// first check if the entry exists in the unordered set
 	idx_t entry_index;
 	CatalogEntry *entry;
-	if (!GetEntryInternal(transaction, name, entry_index, entry)) {
+	if (!GetEntryInternal(context, name, entry_index, entry)) {
 		return false;
+	}
+	if (entry->internal) {
+		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
 	// lock this catalog set to disallow reading
@@ -135,7 +140,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 		mapping[value->name] = entry_index;
 	}
 	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
-	catalog.dependency_manager->AlterObject(transaction, entry, value.get());
+	catalog.dependency_manager->AlterObject(context, entry, value.get());
 
 	value->timestamp = transaction.transaction_id;
 	value->child = move(entries[entry_index]);
@@ -154,10 +159,11 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	return true;
 }
 
-void CatalogSet::DropEntryInternal(Transaction &transaction, idx_t entry_index, CatalogEntry &entry, bool cascade,
+void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
                                    set_lock_map_t &lock_set) {
+	auto &transaction = Transaction::GetTransaction(context);
 	// check any dependencies of this object
-	entry.catalog->dependency_manager->DropObject(transaction, &entry, cascade, lock_set);
+	entry.catalog->dependency_manager->DropObject(context, &entry, cascade, lock_set);
 
 	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
@@ -180,19 +186,22 @@ void CatalogSet::DropEntryInternal(Transaction &transaction, idx_t entry_index, 
 	entries[entry_index] = move(value);
 }
 
-bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool cascade) {
+bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool cascade) {
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 	// we can only delete an entry that exists
 	idx_t entry_index;
 	CatalogEntry *entry;
-	if (!GetEntryInternal(transaction, name, entry_index, entry)) {
+	if (!GetEntryInternal(context, name, entry_index, entry)) {
 		return false;
+	}
+	if (entry->internal) {
+		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
 	// create the lock set for this delete operation
 	set_lock_map_t lock_set;
-	DropEntryInternal(transaction, entry_index, *entry, cascade, lock_set);
+	DropEntryInternal(context, entry_index, *entry, cascade, lock_set);
 	return true;
 }
 
@@ -202,12 +211,14 @@ idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
 	return entry_index;
 }
 
-bool CatalogSet::HasConflict(Transaction &transaction, CatalogEntry &current) {
+bool CatalogSet::HasConflict(ClientContext &context, CatalogEntry &current) {
+	auto &transaction = Transaction::GetTransaction(context);
 	return (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) ||
 	       (current.timestamp < TRANSACTION_ID_START && current.timestamp > transaction.start_time);
 }
 
-CatalogEntry *CatalogSet::GetEntryForTransaction(Transaction &transaction, CatalogEntry *current) {
+CatalogEntry *CatalogSet::GetEntryForTransaction(ClientContext &context, CatalogEntry *current) {
+	auto &transaction = Transaction::GetTransaction(context);
 	while (current->child) {
 		if (current->timestamp == transaction.transaction_id) {
 			// we created this version
@@ -223,16 +234,33 @@ CatalogEntry *CatalogSet::GetEntryForTransaction(Transaction &transaction, Catal
 	return current;
 }
 
-CatalogEntry *CatalogSet::GetEntry(Transaction &transaction, const string &name) {
+CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	auto entry = mapping.find(name);
 	if (entry == mapping.end()) {
+		// no entry found with this name
+		if (defaults) {
+			// ... but this catalog set has a default map defined
+			// check if there is a default entry that we can create with this name
+			auto entry = defaults->CreateDefaultEntry(context, name);
+			if (entry) {
+				// there is a default entry!
+				auto entry_index = current_entry++;
+				auto catalog_entry = entry.get();
+
+				entry->timestamp = 0;
+
+				mapping[entry->name] = entry_index;
+				entries[entry_index] = move(entry);
+				return catalog_entry;
+			}
+		}
 		return nullptr;
 	}
 	auto catalog_entry = entries[entry->second].get();
 	// if it does, we have to check version numbers
-	CatalogEntry *current = GetEntryForTransaction(transaction, catalog_entry);
+	CatalogEntry *current = GetEntryForTransaction(context, catalog_entry);
 	if (current->deleted || current->name != name) {
 		return nullptr;
 	}

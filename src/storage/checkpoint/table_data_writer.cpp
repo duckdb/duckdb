@@ -9,6 +9,7 @@
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -43,7 +44,8 @@ TableDataWriter::TableDataWriter(CheckpointManager &manager, TableCatalogEntry &
 TableDataWriter::~TableDataWriter() {
 }
 
-void TableDataWriter::WriteTableData(Transaction &transaction) {
+void TableDataWriter::WriteTableData(ClientContext &context) {
+	auto &transaction = Transaction::GetTransaction(context);
 	// allocate segments to write the table to
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
