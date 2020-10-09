@@ -36,9 +36,9 @@ using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name, bool internal)
     : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name),
-      tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog),
-      table_functions(*catalog), copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog),
-      sequences(*catalog), collations(*catalog) {
+      tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
+      copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog), sequences(*catalog),
+      collations(*catalog) {
 	this->internal = internal;
 }
 

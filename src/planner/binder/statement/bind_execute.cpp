@@ -13,8 +13,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	BoundStatement result;
 
 	// bind the prepared statement
-	auto entry =
-	    (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(context, stmt.name);
+	auto entry = (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(context, stmt.name);
 	if (!entry || entry->deleted) {
 		throw BinderException("Could not find prepared statement with that name");
 	}

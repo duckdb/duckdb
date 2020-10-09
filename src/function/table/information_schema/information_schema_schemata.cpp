@@ -51,9 +51,8 @@ information_schema_schemata_init(ClientContext &context, const FunctionData *bin
 	auto result = make_unique<InformationSchemaSchemataData>();
 
 	// scan all the schemas and collect them
-	Catalog::GetCatalog(context).ScanSchemas(context, [&](CatalogEntry *entry) {
-		result->entries.push_back((SchemaCatalogEntry *)entry);
-	});
+	Catalog::GetCatalog(context).ScanSchemas(
+	    context, [&](CatalogEntry *entry) { result->entries.push_back((SchemaCatalogEntry *)entry); });
 	// get the temp schema as well
 	result->entries.push_back(context.temporary_objects.get());
 
@@ -70,7 +69,7 @@ void information_schema_schemata(ClientContext &context, const FunctionData *bin
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
-	while(data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
+	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
 		// return values:
