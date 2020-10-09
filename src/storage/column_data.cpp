@@ -147,6 +147,12 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 
 void ColumnData::RevertAppend(row_t start_row) {
 	lock_guard<mutex> tree_lock(data.node_lock);
+	// check if this row is in the segment tree at all
+	if (idx_t(start_row) >= data.nodes.back().row_start + data.nodes.back().node->count) {
+		// the start row is equal to the final portion of the column data: nothing was ever appended here
+		assert(idx_t(start_row) == data.nodes.back().row_start + data.nodes.back().node->count);
+		return;
+	}
 	// find the segment index that the current row belongs to
 	idx_t segment_index = data.GetSegmentIndex(start_row);
 	auto segment = data.nodes[segment_index].node;
