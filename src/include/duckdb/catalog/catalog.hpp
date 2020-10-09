@@ -11,6 +11,8 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/mutex.hpp"
 
+#include <functional>
+
 namespace duckdb {
 struct CreateSchemaInfo;
 struct DropInfo;
