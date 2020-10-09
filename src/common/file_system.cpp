@@ -339,6 +339,7 @@ string FileSystem::GetWorkingDirectory() {
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <sysinfoapi.h>
 
 #undef CreateDirectory
 #undef MoveFile
