@@ -21,7 +21,7 @@ public:
 	TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table);
 	~TableDataWriter();
 
-	void WriteTableData(Transaction &transaction);
+	void WriteTableData(ClientContext &context);
 
 private:
 	void AppendData(Transaction &transaction, idx_t col_idx, Vector &data, idx_t count);

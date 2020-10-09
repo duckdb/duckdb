@@ -59,8 +59,8 @@ public:
 	unique_ptr<MetaBlockWriter> tabledata_writer;
 
 private:
-	void WriteSchema(Transaction &transaction, SchemaCatalogEntry &schema);
-	void WriteTable(Transaction &transaction, TableCatalogEntry &table);
+	void WriteSchema(ClientContext &context, SchemaCatalogEntry &schema);
+	void WriteTable(ClientContext &context, TableCatalogEntry &table);
 	void WriteView(ViewCatalogEntry &table);
 	void WriteSequence(SequenceCatalogEntry &table);
 

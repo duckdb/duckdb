@@ -18,6 +18,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	this->types = info->types;
 	this->temporary = info->temporary;
 	this->sql = info->sql;
+	this->internal = info->internal;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
@@ -26,6 +27,9 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+	if (internal) {
+		throw CatalogException("Cannot use ALTER VIEW to alter a system view");
+	}
 	if (info->type != AlterType::ALTER_VIEW) {
 		throw CatalogException("Can only modify view with ALTER VIEW statement");
 	}
@@ -43,6 +47,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 }
 
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
+	assert(!internal);
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	serializer.WriteString(sql);
@@ -83,6 +88,7 @@ string ViewCatalogEntry::ToSQL() {
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
+	assert(!internal);
 	auto create_info = make_unique<CreateViewInfo>(schema->name, name);
 	create_info->query = query->Copy();
 	for (idx_t i = 0; i < aliases.size(); i++) {
