@@ -1,0 +1,27 @@
+# name: test/sql/table_function/sqlite_master_connections.test
+# description: Use the internal sqlite_master view from different tables
+# group: [table_function]
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+SELECT * FROM sqlite_master;
+
+statement ok con2
+SELECT * FROM sqlite_master;
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+statement ok
+SELECT * FROM sqlite_master;
+
+statement error
+DROP VIEW sqlite_master

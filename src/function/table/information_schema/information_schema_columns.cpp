@@ -6,7 +6,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
-#include "duckdb/transaction/transaction.hpp"
 
 #include <set>
 
@@ -75,14 +74,13 @@ information_schema_columns_init(ClientContext &context, const FunctionData *bind
 	auto result = make_unique<InformationSchemaColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
-	auto &transaction = Transaction::GetTransaction(context);
-	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
+	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	// check the temp schema as well
-	context.temporary_objects->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	context.temporary_objects->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
