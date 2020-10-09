@@ -46,7 +46,7 @@ static void pragma_collate(ClientContext &context, const FunctionData *bind_data
 		// finished returning values
 		return;
 	}
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
 	output.SetCardinality(next - data.offset);
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
