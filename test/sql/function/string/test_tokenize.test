@@ -9,9 +9,16 @@ statement ok
 CREATE TABLE documents(s VARCHAR)
 
 statement ok
-INSERT INTO documents VALUES ('hello world'), ('Hello, World!'), ('ĥéĺĺó ŵóŕĺɗ'), ('Ĥéĺĺó, Ŵóŕĺɗ!')
+INSERT INTO documents VALUES ('  Hello, World!  '), ('helloworld'), (NULL), (''), ('  Ĥéĺĺó, Ŵóŕĺɗ!  ')
 
 query T
 SELECT tokenize(s) FROM documents
 ----
-# TODO: output??
+hello
+world
+
+#query T
+#SELECT tokenize(string_agg(range, ' ')), mod(range, 10) xx from range(100) group by xx
+#----
+
+# TODO: add where clause, constants, a million strings, and full circle with concat

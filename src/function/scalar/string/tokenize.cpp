@@ -18,27 +18,24 @@ static bool whitespace_utf8(const char &c) {
 	return c == ' ';
 }
 
-vector<unique_ptr<DataChunk>> tokenize_ascii(const char *input_data, size_t input_size) {
-    vector<unique_ptr<DataChunk>> result;
-
+void tokenize_ascii(const char *input_data, size_t input_size, ChunkCollection &result) {
     auto append_chunk = make_unique<DataChunk>();
     vector<LogicalType> types = {LogicalType::VARCHAR};
     append_chunk->Initialize(types);
 
     for (idx_t offset = 0; offset < input_size; offset++) {
-
-        if (append_chunk->size() == STANDARD_VECTOR_SIZE) {
-            result.push_back(move(append_chunk));
-            auto append_chunk = make_unique<DataChunk>();
-            append_chunk->Initialize(types);
-        }
-
-        // skip leading whitespace
         while (offset < input_size && whitespace_ascii(input_data[offset])) {
             offset++;
         }
+        if (offset == input_size) break;
 
-        // identify length of next token
+        if (append_chunk->size() == STANDARD_VECTOR_SIZE) {
+            result.count += append_chunk->size();
+            result.chunks.push_back(move(append_chunk));
+            append_chunk = make_unique<DataChunk>();
+            append_chunk->Initialize(types);
+        }
+
         idx_t token_end;
         for (token_end = offset + 1; token_end < input_size; token_end++) {
             if (whitespace_ascii(input_data[token_end])) {
@@ -47,38 +44,39 @@ vector<unique_ptr<DataChunk>> tokenize_ascii(const char *input_data, size_t inpu
         }
         size_t length = token_end - offset;
 
-        StringVector::AddString(append_chunk->data[0], &input_data[offset], length);
+        FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
+            StringVector::AddString(append_chunk->data[0], &input_data[offset], length);
         append_chunk->SetCardinality(append_chunk->size() + 1);
-
-		offset = token_end;
+        offset = token_end;
     }
-    return result;
+    if (append_chunk->size() > 0) {
+        result.count += append_chunk->size();
+        result.chunks.push_back(move(append_chunk));
+    }
+    result.Verify();
 }
 
-vector<unique_ptr<DataChunk>> tokenize_unicode(const char *input_data, size_t input_size) {
-    vector<unique_ptr<DataChunk>> result;
-
+void tokenize_unicode(const char *input_data, size_t input_size, ChunkCollection &result) {
     auto append_chunk = make_unique<DataChunk>();
     vector<LogicalType> types = {LogicalType::VARCHAR};
     append_chunk->Initialize(types);
 
-    // TODO: unsure whether offset + utf8proc_charwidth(input_data[offset]) is valid
 	for (idx_t offset = 0;
          offset + utf8proc_charwidth(input_data[offset]) < input_size;
 	     offset = utf8proc_next_grapheme(input_data, input_size, offset)) {
         
+        while (offset < input_size && whitespace_utf8(input_data[offset])) {
+            offset++;
+        }
+        if (offset == input_size) break;
+
         if (append_chunk->size() == STANDARD_VECTOR_SIZE) {
-            result.push_back(move(append_chunk));
-            auto append_chunk = make_unique<DataChunk>();
+            result.count += append_chunk->size();
+            result.chunks.push_back(move(append_chunk));
+            append_chunk = make_unique<DataChunk>();
             append_chunk->Initialize(types);
         }
 
-		// skip leading whitespace
-		while (offset + utf8proc_charwidth(input_data[offset]) < input_size && whitespace_utf8(input_data[offset])) {
-			offset = utf8proc_next_grapheme(input_data, input_size, offset);
-		}
-
-        // identify length of next token
 		idx_t token_end;
 		for (token_end = utf8proc_next_grapheme(input_data, input_size, offset);
 		     token_end + utf8proc_charwidth(input_data[token_end]) < input_size;
@@ -89,15 +87,19 @@ vector<unique_ptr<DataChunk>> tokenize_unicode(const char *input_data, size_t in
 		}
         size_t length = token_end - offset;
 
-        StringVector::AddString(append_chunk->data[0], &input_data[offset], length);
+        FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
+            StringVector::AddString(append_chunk->data[0], &input_data[offset], length);
         append_chunk->SetCardinality(append_chunk->size() + 1);
-
-		offset = token_end;
+        offset = token_end;
 	}
-    return result;
+    if (append_chunk->size() > 0) {
+        result.count += append_chunk->size();
+        result.chunks.push_back(move(append_chunk));
+    }
+    result.Verify();
 }
 
-idx_t tokenize(Vector &result, string_t input) {
+unique_ptr<ChunkCollection> tokenize(string_t input) {
 	const char *input_data = input.GetData();
 	size_t input_size = input.GetSize();
 
@@ -110,32 +112,43 @@ idx_t tokenize(Vector &result, string_t input) {
 		}
 	}
 
-    vector<unique_ptr<DataChunk>> token_data;
-	if (ascii_only) {
-		token_data = tokenize_ascii(input_data, input_size);
-	} else {
-        token_data = tokenize_unicode(input_data, input_size);
-    }
-
-    // hand-roll a chunk collection to avoid copying strings
-	auto output = make_unique<ChunkCollection>();
+    auto list_child = make_unique<ChunkCollection>();
     vector<LogicalType> types = {LogicalType::VARCHAR};
-    output->types = types;
-    for (auto &td : token_data) {
-        output->count += td->size();
-        output->chunks.push_back(move(td));
+    list_child->types = types;
+	if (ascii_only) {
+		tokenize_ascii(input_data, input_size, *list_child);
+	} else {
+        tokenize_unicode(input_data, input_size, *list_child);
     }
 
-    idx_t count = output->count;
-    ListVector::SetEntry(result, move(output));
-
-    return count;
+    return list_child;
 }
 
 static void tokenize_function(DataChunk &args, ExpressionState &state, Vector &result) {
-    UnaryExecutor::Execute<string_t, idx_t, true>(args.data[0], result, args.size(), [&](string_t input) {
-        return tokenize(result, input);
-    });
+    VectorData sdata;
+	args.data[0].Orrify(args.size(), sdata);
+	auto input = (string_t *)sdata.data;
+
+	result.Initialize(LogicalType::LIST);
+	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
+
+    auto list_child = make_unique<ChunkCollection>();
+	size_t total_len = 0;
+	for (idx_t i = 0; i < args.size(); i++) {
+        if ((*sdata.nullmask)[sdata.sel->get_index(i)]) {
+            FlatVector::SetNull(result, i, true);
+            continue;
+        }
+        string_t input_string = input[sdata.sel->get_index(i)];
+        auto lc = tokenize(input_string);
+		list_struct_data[i].length = lc->count;
+		list_struct_data[i].offset = total_len;
+		total_len += lc->count;
+        list_child->Append(*lc);
+	}
+	
+	assert(list_child->count == total_len);
+	ListVector::SetEntry(result, move(list_child));
 }
 
 void TokenizeFun::RegisterFunction(BuiltinFunctions &set) {
