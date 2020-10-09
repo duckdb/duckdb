@@ -39,12 +39,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
 			                                                                      all_combinable);
 		} else {
-			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(op.types, move(op.expressions));
+			groupby =
+			    make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions));
 		}
 	} else {
 		// groups! create a GROUP BY aggregator
-		groupby =
-		    make_unique_base<PhysicalOperator, PhysicalHashAggregate>(op.types, move(op.expressions), move(op.groups));
+		groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
+		                                                                    move(op.groups));
 	}
 	groupby->children.push_back(move(plan));
 	return groupby;

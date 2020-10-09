@@ -70,13 +70,17 @@ struct aggr_ht_entry_32 {
 	uint16_t page_offset;
 };
 
+enum HtEntryType { HT_WIDTH_32, HT_WIDTH_64 };
+
 class GroupedAggregateHashTable {
 public:
-	GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
-	                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates);
-	GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types,
-	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates);
-	GroupedAggregateHashTable(BufferManager &buffer_manager, idx_t initial_capacity, vector<LogicalType> group_types);
+	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
+	                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates,
+	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
+	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
+	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
+	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
+	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable();
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
@@ -96,9 +100,10 @@ public:
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
 	//! created groups. The return value is the amount of newly created groups.
-	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses, SelectionVector &new_groups);
-	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
-	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
+	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses_out,
+	                         SelectionVector &new_groups_out);
+	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
+	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
 	void Combine(GroupedAggregateHashTable &other, hash_t radix_mask = 0);
 
@@ -124,6 +129,8 @@ private:
 	//! The size of the payload (aggregations) in bytes
 	idx_t payload_width;
 
+	HtEntryType entry_type;
+
 	idx_t hash_width;
 	//! The total tuple size
 	idx_t tuple_size;
@@ -141,7 +148,6 @@ private:
 	data_ptr_t hashes_end_ptr; // of hashes
 
 	idx_t hash_prefix_shift = 48;
-
 	idx_t payload_block_idx;
 
 	//! The empty payload data
@@ -165,8 +171,12 @@ private:
 	void Verify();
 	void FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
-	data_ptr_t GetPtr(aggr_ht_entry_64 &ht_entry_val);
-	void Resize(idx_t size);
+
+	template <class T> data_ptr_t GetPtr(T &ht_entry_val);
+	template <class T> void Resize(idx_t size);
+	template <class T>
+	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
+	                                 SelectionVector &new_groups);
 };
 
 } // namespace duckdb

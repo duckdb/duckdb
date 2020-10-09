@@ -42,9 +42,8 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
 	if (!state->ht) {
-		state->ht = make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client),
-		                                                   STANDARD_VECTOR_SIZE * 2, types, vector<LogicalType>(),
-		                                                   vector<BoundAggregateExpression *>());
+		state->ht = make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client), types,
+		                                                   vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	}
 
 	if (!state->recursing) {
@@ -130,7 +129,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 			task.reset();
 		}
 		bool finished = true;
-		for(auto &pipeline : pipelines) {
+		for (auto &pipeline : pipelines) {
 			if (!pipeline->IsFinished()) {
 				finished = false;
 				break;

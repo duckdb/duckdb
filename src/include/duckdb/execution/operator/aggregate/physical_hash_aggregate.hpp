@@ -14,13 +14,16 @@
 
 namespace duckdb {
 
+class ClientContext;
+class BufferManager;
+
 //! PhysicalHashAggregate is an group-by and aggregate implementation that uses
 //! a hash table to perform the grouping
 class PhysicalHashAggregate : public PhysicalSink {
 public:
-	PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
-	PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
@@ -60,12 +63,23 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
+	//! how many groups can be in a ht before we make a new one
 	idx_t ht_load_limit;
+	//! how many groups can we have in the operator before we switch to radix partitioning
 	idx_t radix_limit;
-	idx_t ht_initial_size;
+
+	//! how many threads should be used in finalizing this HT
+	idx_t radix_partitions;
+	//! how many bits are used for the radix partitions
+	idx_t radix_bits;
+	//! bit mask to get radix partition
+	hash_t radix_mask;
+
+	BufferManager &buffer_manager;
 
 private:
-	unique_ptr<GroupedAggregateHashTable> NewHT(LocalSinkState &lstate);
+	unique_ptr<GroupedAggregateHashTable> NewHT(LocalSinkState &lstate,
+	                                            HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
 };
 
 } // namespace duckdb
