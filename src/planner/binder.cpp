@@ -10,25 +10,15 @@
 namespace duckdb {
 using namespace std;
 
-Binder::Binder(ClientContext &context, Binder *parent_)
-    : context(context), read_only(true), parent(parent_), bound_tables(0) {
-	if (parent_) {
+Binder::Binder(ClientContext &context, Binder *parent_, bool disable_parent_CTEs_)
+    : context(context), read_only(true), parent(parent_), bound_tables(0), disable_parent_CTEs(disable_parent_CTEs_) {
+	if (parent_ && !disable_parent_CTEs_) {
 		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
 		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
 		bind_context.cte_references = parent_->bind_context.cte_references;
+		parameters = parent_->parameters;
+		CTE_bindings = parent_->CTE_bindings;
 	}
-	if (parent) {
-		parameters = parent->parameters;
-		CTE_bindings = parent->CTE_bindings;
-	}
-}
-
-void Binder::DisableParentCTEs() {
-	unordered_map<string, shared_ptr<Binding>> cleared_bindings;
-	bind_context.SetCTEBindings(cleared_bindings);
-	bind_context.cte_references.clear();
-	CTE_bindings.clear();
-	use_parent_CTEs = false;
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
@@ -170,7 +160,7 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
 CommonTableExpressionInfo *Binder::FindCTE(const string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
-		if (parent && use_parent_CTEs) {
+		if (parent && !disable_parent_CTEs) {
 			return parent->FindCTE(name);
 		}
 		return nullptr;

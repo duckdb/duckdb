@@ -71,10 +71,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
-		// first we visit the set of CTEs and add them to the bind context
-		Binder view_binder(context, this);
-		// isolate the view's CTEs from the parent's
-		view_binder.DisableParentCTEs();
+		// We need to use a new binder for the view that doesn't reference any CTEs
+		// defined for this binder so there are no collisions between the CTEs defined
+		// for the view and for the current query
+		bool disable_parent_CTEs = true;
+		Binder view_binder(context, this, disable_parent_CTEs);
 		for (auto &cte_it : view_catalog_entry->query->cte_map) {
 			view_binder.AddCTE(cte_it.first, cte_it.second.get());
 		}

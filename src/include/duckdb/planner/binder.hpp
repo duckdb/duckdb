@@ -56,7 +56,7 @@ class Binder {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	Binder(ClientContext &context, Binder *parent = nullptr);
+	Binder(ClientContext &context, Binder *parent = nullptr, bool disable_parent_CTEs = false);
 
 	//! The client context
 	ClientContext &context;
@@ -88,8 +88,6 @@ public:
 	//! Generates an unused index for a table
 	idx_t GenerateTableIndex();
 
-	//! Disable the use of the parent binder for CTE references
-	void DisableParentCTEs();
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo *cte);
 	//! Find a common table expression by name; returns nullptr if none exists
@@ -119,7 +117,7 @@ private:
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
 	//! Whether CTEs should reference the parent binder (if it exists)
-	bool use_parent_CTEs = true;
+	bool disable_parent_CTEs = false;
 
 private:
 	//! Bind the default values of the columns of a table
