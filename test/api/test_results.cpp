@@ -53,7 +53,7 @@ TEST_CASE("Test iterating over results", "[api]") {
 	REQUIRE(row_count == 2);
 }
 
-TEST_CASE("Error in streaming result after initial query", "[api]") {
+TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
