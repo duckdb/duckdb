@@ -24,6 +24,12 @@ public:
 	                  vector<idx_t> right_projection_map, vector<column_t> column_ids, Index *index, bool lhs_first);
 	//! Columns from RHS used in the query
 	vector<column_t> column_ids;
+	//! Columns to be fetched
+	vector<column_t> fetch_ids;
+	//! Types of fetch columns
+	vector<LogicalType> fetch_types;
+	//! Columns indexed by index
+    unordered_set<column_t> index_ids;
 	//! Projected ids from LHS
 	vector<idx_t> left_projection_map;
 	//! Projected ids from RHS

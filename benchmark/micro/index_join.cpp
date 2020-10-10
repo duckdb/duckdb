@@ -14,8 +14,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual string GetQuery() {
-	return "SELECT w1.doc AS doc1, w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON "
-	       "(w1.word=w2.word) GROUP BY doc1, doc2 ORDER BY c DESC LIMIT 10";
+	return "SELECT w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON "
+	       "(w1.word=w2.word) GROUP BY doc2 ORDER BY c DESC LIMIT 10";
 }
 
 virtual string VerifyResult(QueryResult *result) {
@@ -42,8 +42,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual string GetQuery() {
-	return "SELECT w1.doc AS doc1, w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON "
-	       "(w1.word=w2.word) GROUP BY doc1, doc2 ORDER BY c DESC LIMIT 10";
+	return "SELECT w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON "
+	       "(w1.word=w2.word) GROUP BY doc2 ORDER BY c DESC LIMIT 10";
 }
 
 virtual string VerifyResult(QueryResult *result) {
