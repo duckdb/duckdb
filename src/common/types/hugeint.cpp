@@ -402,7 +402,7 @@ template <> bool Hugeint::TryCast(hugeint_t input, double &result) {
 	switch (input.upper) {
 	case -1:
 		// special case for upper = -1 to avoid rounding issues in small negative numbers
-		result = -double(NumericLimits<uint64_t>::Maximum() - input.lower + 1);
+		result = -double(NumericLimits<uint64_t>::Maximum() - input.lower) + 1;
 		break;
 	default:
 		result = double(input.lower) + double(input.upper) * double(NumericLimits<uint64_t>::Maximum());
