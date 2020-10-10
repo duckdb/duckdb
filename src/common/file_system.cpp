@@ -339,7 +339,12 @@ string FileSystem::GetWorkingDirectory() {
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include <sysinfoapi.h>
+
+#ifdef __MINGW32__
+// need to manually define this for mingw
+extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory (PULONGLONG );
+#endif
+
 
 #undef CreateDirectory
 #undef MoveFile
