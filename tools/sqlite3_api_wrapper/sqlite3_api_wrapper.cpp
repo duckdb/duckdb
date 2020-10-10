@@ -129,7 +129,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	if (pzTail) {
 		*pzTail = zSql + query.size();
 	}
-    printf("%s\n", zSql);
+    // printf("%s\n", zSql);
 	try {
 		// extract the statements from the SQL query
 		auto statements = db->con->ExtractStatements(query);

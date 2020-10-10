@@ -14,7 +14,11 @@ struct DefaultView {
 };
 
 static DefaultView internal_views[] = {
+    {DEFAULT_SCHEMA, "pragma_database_list", "SELECT * FROM pragma_database_list()"},
     {DEFAULT_SCHEMA, "sqlite_master", "SELECT * FROM sqlite_master()"},
+    {DEFAULT_SCHEMA, "sqlite_schema", "SELECT * FROM sqlite_master()"},
+    {DEFAULT_SCHEMA, "sqlite_temp_master", "SELECT * FROM sqlite_master()"},
+    {DEFAULT_SCHEMA, "sqlite_temp_schema", "SELECT * FROM sqlite_master()"},
     {"information_schema", "columns", "SELECT * FROM information_schema_columns()"},
     {"information_schema", "schemata", "SELECT * FROM information_schema_schemata()"},
     {"information_schema", "tables", "SELECT * FROM information_schema_tables()"},

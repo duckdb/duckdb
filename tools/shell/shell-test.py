@@ -96,7 +96,7 @@ DROP TABLE a;
 ''')
 
 # maybe at some point we can do something meaningful here
-test('.dbinfo', err='unable to read database header')
+# test('.dbinfo', err='unable to read database header')
 
 test('''
 .echo on
@@ -143,10 +143,6 @@ test('.limit length 42', err='sqlite3_limit')
 # ???
 test('.lint fkey-indexes')
 
-# this should probably be fixed, sqlite generates an internal query that duckdb does not like
-test('.indexes', err='indexes not supported')
-
-
 test('.timeout', err='sqlite3_busy_timeout')
 
 
@@ -188,13 +184,14 @@ CREATE TABLE csda (i INTEGER);
 .tables %da
 ''', out="asda  csda")
 
-test('.indexes',  err="indexes not supported")
+test('.indexes',  out="")
 
-test('''
-CREATE TABLE a (i INTEGER);
-CREATE INDEX a_idx ON a(i);
-.indexes a_%
-''',  err="indexes not supported")
+# FIXME: indexes currently not exported in sqlite_master
+# test('''
+# CREATE TABLE a (i INTEGER);
+# CREATE INDEX a_idx ON a(i);
+# .indexes a%
+# ''',  err="a_idx")
 
 # this does not seem to output anything
 test('.sha3sum')

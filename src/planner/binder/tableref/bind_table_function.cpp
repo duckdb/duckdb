@@ -41,7 +41,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		if (!expr->IsFoldable()) {
-			throw BinderException("Named parameter requires a constant parameter");
+			throw BinderException("Table function requires a constant parameter");
 		}
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
 		if (parameter_name.empty()) {
