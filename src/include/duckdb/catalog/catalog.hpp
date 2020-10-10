@@ -11,6 +11,8 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/mutex.hpp"
 
+#include <functional>
+
 namespace duckdb {
 struct CreateSchemaInfo;
 struct DropInfo;
@@ -83,6 +85,8 @@ public:
 
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
 	SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA);
+	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
+	void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback);
 	//! Gets the "schema.name" entry of the specified type, if if_exists=true returns nullptr if entry does not exist,
 	//! otherwise an exception is thrown
 	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, string schema, const string &name,
@@ -90,8 +94,8 @@ public:
 	template <class T>
 	T *GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists = false);
 
-	//! Alter an existing table in the catalog.
-	void AlterTable(ClientContext &context, AlterTableInfo *info);
+	//! Alter an existing entry in the catalog.
+	void Alter(ClientContext &context, AlterInfo *info);
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to DEFAULT_SCHEMA

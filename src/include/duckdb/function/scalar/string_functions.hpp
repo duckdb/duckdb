@@ -66,6 +66,7 @@ struct LengthFun {
 
 struct LikeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static bool Glob(const char *s, const char *pattern, const char *escape);
 };
 
 struct LikeEscapeFun {

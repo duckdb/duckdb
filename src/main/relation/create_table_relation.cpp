@@ -26,7 +26,7 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 	info->schema = schema_name;
 	info->table = table_name;
 	info->query = move(select);
-	info->on_conflict = OnCreateConflict::ERROR;
+	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = move(info);
 	return binder.Bind((SQLStatement &)stmt);
 }

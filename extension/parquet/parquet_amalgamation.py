@@ -7,8 +7,11 @@ header_file = os.path.join(amal_dir, "parquet-extension.hpp")
 source_file = os.path.join(amal_dir, "parquet-extension.cpp")
 temp_source = 'parquet-extension.cpp.tmp'
 
-include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/include', 'third_party/parquet', 'third_party/snappy', 'third_party/thrift']]
+include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/include', 'third_party/parquet', 'third_party/snappy', 'third_party/thrift', 'third_party/zstd']]
 source_files = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/parquet-extension.cpp', 'third_party/parquet/parquet_constants.cpp',  'third_party/parquet/parquet_types.cpp',  'third_party/thrift/thrift/protocol/TProtocol.cpp',  'third_party/thrift/thrift/transport/TTransportException.cpp',  'third_party/thrift/thrift/transport/TBufferTransports.cpp',  'third_party/snappy/snappy.cc',  'third_party/snappy/snappy-sinksource.cc']]
+# zstd
+source_files += [os.path.sep.join(x.split('/')) for x in ['third_party/zstd/decompress/zstd_ddict.cpp', 'third_party/zstd/decompress/huf_decompress.cpp', 'third_party/zstd/decompress/zstd_decompress.cpp', 'third_party/zstd/decompress/zstd_decompress_block.cpp', 'third_party/zstd/common/entropy_common.cpp', 'third_party/zstd/common/fse_decompress.cpp', 'third_party/zstd/common/zstd_common.cpp', 'third_party/zstd/common/error_private.cpp', 'third_party/zstd/common/xxhash.cpp']]
+source_files += [os.path.sep.join(x.split('/')) for x in ['extension/parquet/parquet_reader.cpp', 'extension/parquet/parquet_timestamp.cpp', 'extension/parquet/parquet_writer.cpp']]
 
 def generate_amalgamation(source_file, header_file):
     def copy_if_different(src, dest):

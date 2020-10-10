@@ -79,6 +79,7 @@ public:
 	BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
+	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
@@ -131,7 +132,7 @@ private:
 	BoundStatement Bind(CreateStatement &stmt);
 	BoundStatement Bind(ExecuteStatement &stmt);
 	BoundStatement Bind(DropStatement &stmt);
-	BoundStatement Bind(AlterTableStatement &stmt);
+	BoundStatement Bind(AlterStatement &stmt);
 	BoundStatement Bind(TransactionStatement &stmt);
 	BoundStatement Bind(PragmaStatement &stmt);
 	BoundStatement Bind(ExplainStatement &stmt);

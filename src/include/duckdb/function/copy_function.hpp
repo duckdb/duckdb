@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/function.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 
 namespace duckdb {
@@ -37,9 +38,6 @@ typedef void (*copy_to_finalize_t)(ClientContext &context, FunctionData &bind_da
 typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info,
                                                      vector<string> &expected_names,
                                                      vector<LogicalType> &expected_types);
-typedef unique_ptr<GlobalFunctionData> (*copy_from_initialize_t)(ClientContext &context, FunctionData &bind_data);
-typedef void (*copy_from_get_chunk_t)(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data,
-                                      DataChunk &chunk);
 
 class CopyFunction : public Function {
 public:
@@ -56,8 +54,7 @@ public:
 	copy_to_finalize_t copy_to_finalize;
 
 	copy_from_bind_t copy_from_bind;
-	copy_from_initialize_t copy_from_initialize;
-	copy_from_get_chunk_t copy_from_get_chunk;
+	TableFunction copy_from_function;
 
 	string extension;
 };

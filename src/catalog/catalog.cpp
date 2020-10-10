@@ -22,11 +22,13 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
+#include "duckdb/catalog/default/default_schemas.hpp"
+
 namespace duckdb {
 using namespace std;
 
 Catalog::Catalog(StorageManager &storage)
-    : storage(storage), schemas(make_unique<CatalogSet>(*this)),
+    : storage(storage), schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
       dependency_manager(make_unique<DependencyManager>(*this)) {
 }
 Catalog::~Catalog() {
@@ -85,13 +87,13 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 	}
 
 	unordered_set<CatalogEntry *> dependencies;
-	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema);
+	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
 	auto result = entry.get();
-	if (!schemas->CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {
-		if (info->on_conflict == OnCreateConflict::ERROR) {
+	if (!schemas->CreateEntry(context, info->schema, move(entry), dependencies)) {
+		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("Schema with name %s already exists!", info->schema);
 		} else {
-			assert(info->on_conflict == OnCreateConflict::IGNORE);
+			assert(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
 		}
 		return nullptr;
 	}
@@ -102,11 +104,7 @@ void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
 	if (info->name == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
 	}
-	if (info->name == DEFAULT_SCHEMA || info->name == TEMP_SCHEMA) {
-		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system", info->name);
-	}
-
-	if (!schemas->DropEntry(context.ActiveTransaction(), info->name, info->cascade)) {
+	if (!schemas->DropEntry(context, info->name, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Schema with name \"%s\" does not exist!", info->name);
 		}
@@ -135,11 +133,16 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
 	if (schema_name == TEMP_SCHEMA) {
 		return context.temporary_objects.get();
 	}
-	auto entry = schemas->GetEntry(context.ActiveTransaction(), schema_name);
+	auto entry = schemas->GetEntry(context, schema_name);
 	if (!entry) {
 		throw CatalogException("Schema with name %s does not exist!", schema_name);
 	}
 	return (SchemaCatalogEntry *)entry;
+}
+
+void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
+	// create all default schemas first
+	schemas->Scan(context, [&](CatalogEntry *entry) { callback(entry); });
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name,
@@ -223,14 +226,21 @@ CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_nam
 	return (CollateCatalogEntry *)GetEntry(context, CatalogType::COLLATION_ENTRY, move(schema_name), name, if_exists);
 }
 
-void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
+void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	if (info->schema == INVALID_SCHEMA) {
-		// invalid schema, look for table in temp schema
-		auto entry = GetEntry(context, CatalogType::TABLE_ENTRY, TEMP_SCHEMA, info->table, true);
-		info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+		auto catalog_type = info->GetCatalogType();
+		// invalid schema: first search the temporary schema
+		auto entry = GetEntry(context, catalog_type, TEMP_SCHEMA, info->name, true);
+		if (entry) {
+			// entry exists in temp schema: alter there
+			info->schema = TEMP_SCHEMA;
+		} else {
+			// if the entry does not exist in the temp schema, search in the default schema
+			info->schema = DEFAULT_SCHEMA;
+		}
 	}
 	auto schema = GetSchema(context, info->schema);
-	schema->AlterTable(context, info);
+	return schema->Alter(context, info);
 }
 
 void Catalog::ParseRangeVar(string input, string &schema, string &name) {

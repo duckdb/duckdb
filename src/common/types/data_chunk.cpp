@@ -5,6 +5,8 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
@@ -259,9 +261,30 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 			case LogicalTypeId::FLOAT:
 			case LogicalTypeId::DOUBLE:
 			case LogicalTypeId::HUGEINT:
+			case LogicalTypeId::TIME:
 				child.n_buffers = 2;
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				break;
+
+			case LogicalTypeId::DATE: {
+				child.n_buffers = 2;
+				child.buffers[1] = (void *)FlatVector::GetData(vector);
+				auto target_ptr = (uint32_t *)child.buffers[1];
+				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+					target_ptr[row_idx] = Date::EpochDays(target_ptr[row_idx]);
+				}
+				break;
+			}
+
+			case LogicalTypeId::TIMESTAMP: {
+				child.n_buffers = 2;
+				child.buffers[1] = (void *)FlatVector::GetData(vector);
+				auto target_ptr = (uint64_t *)child.buffers[1];
+				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+					target_ptr[row_idx] = Timestamp::GetEpoch(target_ptr[row_idx]) * 1e9;
+				}
+				break;
+			}
 
 			case LogicalTypeId::VARCHAR: {
 				child.n_buffers = 3;

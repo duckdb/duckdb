@@ -62,7 +62,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalTopN &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalProjection &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalInsert &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyFromFile &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyToFile &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExplain &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);
@@ -76,7 +75,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
 
-	unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child);
 	unique_ptr<PhysicalOperator> CreateDistinctOn(unique_ptr<PhysicalOperator> child,
 	                                              vector<unique_ptr<Expression>> distinct_targets);
 

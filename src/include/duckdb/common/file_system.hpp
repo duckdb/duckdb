@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include <functional>
 
@@ -114,6 +115,11 @@ public:
 
 	//! Sets the working directory
 	virtual void SetWorkingDirectory(string path);
+	//! Gets the working directory
+	virtual string GetWorkingDirectory();
+
+	//! Runs a glob on the file system, returning a list of matching files
+	virtual vector<string> Glob(string path);
 
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location

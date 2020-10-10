@@ -987,6 +987,29 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_crash_autocommit_bug939() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		PreparedStatement stmt = conn.prepareStatement("CREATE TABLE ontime(flightdate DATE)");
+		conn.setAutoCommit(false); // The is the key to getting the crash to happen.
+		stmt.executeUpdate();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_explain_bug958() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs = stmt
+				.executeQuery("EXPLAIN SELECT 42");
+		assertTrue(rs.next());
+		assertTrue(rs.getString(1) != null);
+		assertTrue(rs.getString(2) != null);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();

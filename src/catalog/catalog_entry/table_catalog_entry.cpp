@@ -98,6 +98,7 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+	assert(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
@@ -310,7 +311,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 	if (!found) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.name, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -336,7 +337,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->columns.push_back(move(copy));
 	}
 	if (change_idx == INVALID_INDEX) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.name, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {

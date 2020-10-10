@@ -59,11 +59,11 @@ struct BufferedCSVReaderOptions {
 	//! Whether or not a delimiter was defined by the user
 	bool has_delimiter = false;
 	//! Delimiter to separate columns within each line
-	string delimiter;
+	string delimiter = ",";
 	//! Whether or not a quote sign was defined by the user
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
-	string quote;
+	string quote = "\"";
 	//! Whether or not an escape character was defined by the user
 	bool has_escape = false;
 	//! Escape character to escape quote character
@@ -88,6 +88,11 @@ struct BufferedCSVReaderOptions {
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+
+	std::string toString() const {
+		return "delimiter=" + delimiter + ", quote=" + quote + ", escape=" + escape +
+		       ", header=" + (header ? "TRUE" : "FALSE");
+	}
 };
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };

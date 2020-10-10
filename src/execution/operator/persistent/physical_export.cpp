@@ -84,22 +84,21 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	vector<CatalogEntry *> views;
 	vector<CatalogEntry *> indexes;
 
-	auto &transaction = Transaction::GetTransaction(ccontext);
-	Catalog::GetCatalog(ccontext).schemas->Scan(transaction, [&](CatalogEntry *entry) {
+	Catalog::GetCatalog(ccontext).schemas->Scan(context.client, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
 		if (schema->name != DEFAULT_SCHEMA) {
 			// export schema
 			schemas.push_back(schema);
 		}
-		schema->tables.Scan(transaction, [&](CatalogEntry *entry) {
+		schema->tables.Scan(context.client, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back(entry);
 			} else {
 				views.push_back(entry);
 			}
 		});
-		schema->sequences.Scan(transaction, [&](CatalogEntry *entry) { sequences.push_back(entry); });
-		schema->indexes.Scan(transaction, [&](CatalogEntry *entry) { indexes.push_back(entry); });
+		schema->sequences.Scan(context.client, [&](CatalogEntry *entry) { sequences.push_back(entry); });
+		schema->indexes.Scan(context.client, [&](CatalogEntry *entry) { indexes.push_back(entry); });
 	});
 
 	// write the schema.sql file

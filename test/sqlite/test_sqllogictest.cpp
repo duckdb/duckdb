@@ -63,6 +63,8 @@ public:
 	void ExecuteFile(string script);
 	void LoadDatabase(string dbpath);
 
+	string ReplaceKeywords(string input);
+
 public:
 	string dbpath;
 	unique_ptr<DuckDB> db;
@@ -79,6 +81,11 @@ public:
 	int loop_idx;
 	int loop_start;
 	int loop_end;
+	bool original_sqlite_test = false;
+
+	//! The map converting the labels to the hash values
+	unordered_map<string, string> hash_label_map;
+	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
 };
 
 /*
@@ -246,10 +253,6 @@ static void tokenizeLine(Script *p) {
 	}
 }
 
-//! The map converting the labels to the hash values
-unordered_map<string, string> hash_label_map;
-unordered_map<string, unique_ptr<QueryResult>> result_label_map;
-
 static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
 	if (row_wise) {
 		for (idx_t r = 0; r < values.size(); r++) {
@@ -271,10 +274,21 @@ static void print_expected_result(vector<string> &values, idx_t columns, bool ro
 	}
 }
 
-static string sqllogictest_convert_value(Value value, LogicalType sql_type) {
+static string sqllogictest_convert_value(Value value, LogicalType sql_type, bool original_sqlite_test) {
 	if (value.is_null) {
 		return "NULL";
 	} else {
+		if (original_sqlite_test) {
+			// sqlite test hashes want us to convert floating point numbers to integers
+			switch (sql_type.id()) {
+			case LogicalTypeId::DECIMAL:
+			case LogicalTypeId::FLOAT:
+			case LogicalTypeId::DOUBLE:
+				return value.CastAs(LogicalType::BIGINT).ToString();
+			default:
+				break;
+			}
+		}
 		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			return value.value_.boolean ? "1" : "0";
@@ -292,8 +306,8 @@ static string sqllogictest_convert_value(Value value, LogicalType sql_type) {
 
 // standard result conversion: one line per value
 static int duckdbConvertResult(MaterializedQueryResult &result,
-                               vector<string> &pazResult, /* RETURN:  Array of result values */
-                               int &pnResult              /* RETURN:  Number of result values */
+                               bool original_sqlite_test,
+                               vector<string> &pazResult /* RETURN:  Array of result values */
 ) {
 	size_t r, c;
 	idx_t row_count = result.collection.count;
@@ -303,11 +317,10 @@ static int duckdbConvertResult(MaterializedQueryResult &result,
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
 			auto value = result.GetValue(c, r);
-			auto converted_value = sqllogictest_convert_value(value, result.types[c]);
+			auto converted_value = sqllogictest_convert_value(value, result.types[c], original_sqlite_test);
 			pazResult[r * column_count + c] = converted_value;
 		}
 	}
-	pnResult = column_count * row_count;
 	return 0;
 }
 
@@ -678,9 +691,17 @@ void Query::Execute() {
 		result->Print();
 		FAIL_LINE(file_name, query_line);
 	}
+	idx_t row_count = result->collection.count;
+	idx_t column_count = result->column_count();
+	int nResult = row_count * column_count;
+	int compare_hash = query_has_label || (runner.hashThreshold > 0 && nResult > runner.hashThreshold);
+	// check if the current line (the first line of the result) is a hash value
+	if (values.size() == 1 && result_is_hash(values[0])) {
+		compare_hash = true;
+	}
+
 	vector<string> azResult;
-	int nResult;
-	duckdbConvertResult(*result, azResult, nResult);
+	duckdbConvertResult(*result, runner.original_sqlite_test, azResult);
 	if (runner.output_result_mode) {
 		// names
 		for (idx_t c = 0; c < result->column_count(); c++) {
@@ -748,11 +769,6 @@ void Query::Execute() {
 		std::sort(azResult.begin(), azResult.end());
 	}
 	char zHash[100]; /* Storage space for hash results */
-	int compare_hash = query_has_label || (runner.hashThreshold > 0 && nResult > runner.hashThreshold);
-	// check if the current line (the first line of the result) is a hash value
-	if (values.size() == 1 && result_is_hash(values[0])) {
-		compare_hash = true;
-	}
 	vector<string> comparison_values;
 	if (values.size() == 1 && result_is_file(values[0])) {
 		comparison_values = LoadResultFromFile(
@@ -912,11 +928,11 @@ void Query::Execute() {
 		bool hash_compare_error = false;
 		if (query_has_label) {
 			// the query has a label: check if the hash has already been computed
-			auto entry = hash_label_map.find(query_label);
-			if (entry == hash_label_map.end()) {
+			auto entry = runner.hash_label_map.find(query_label);
+			if (entry == runner.hash_label_map.end()) {
 				// not computed yet: add it tot he map
-				hash_label_map[query_label] = string(zHash);
-				result_label_map[query_label] = move(result);
+				runner.hash_label_map[query_label] = string(zHash);
+				runner.result_label_map[query_label] = move(result);
 			} else {
 				hash_compare_error = strcmp(entry->second.c_str(), zHash) != 0;
 			}
@@ -935,8 +951,8 @@ void Query::Execute() {
 			print_line_sep();
 			print_header("Expected result:");
 			print_line_sep();
-			if (result_label_map.find(query_label) != result_label_map.end()) {
-				result_label_map[query_label]->Print();
+			if (runner.result_label_map.find(query_label) != runner.result_label_map.end()) {
+				runner.result_label_map[query_label]->Print();
 			} else {
 				std::cerr << "???" << std::endl;
 			}
@@ -969,6 +985,13 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	}
 }
 
+string SQLLogicTestRunner::ReplaceKeywords(string input) {
+	FileSystem fs;
+	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
+	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs.GetWorkingDirectory());
+	return input;
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	int haltOnError = 0; /* Stop on first error if true */
 	const char *zDbEngine = "DuckDB";
@@ -984,11 +1007,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	int bHt = 0;      /* True if -ht command-line option */
 	bool skip_execution = false;
 	vector<unique_ptr<Command>> loop_statements;
-	bool skip_index = false;
 
 	// for the original SQLite tests we skip the index (for now)
 	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
-		skip_index = true;
+		original_sqlite_test = true;
 	}
 
 	// initialize an in-memory database
@@ -1085,10 +1107,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			zScript[k] = 0;
 
 			// perform any renames in zScript
-			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
+			command->sql_query = ReplaceKeywords(zScript);
 
-			// skip CREATE INDEX (for now...)
-			if (skip_index && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
+			// skip CREATE INDEX in original sqlite tests (for now...)
+			if (original_sqlite_test && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
 				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
 				continue;
 			}
@@ -1158,7 +1180,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			zScript[k] = 0;
 
 			// perform any renames in zScript
-			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
+			command->sql_query = ReplaceKeywords(zScript);
 
 			// figure out the sort style/connection style
 			command->sort_style = SortStyle::NO_SORT;
@@ -1308,7 +1330,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				FAIL();
 			}
 			bool readonly = string(sScript.azToken[2]) == "readonly";
-			dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
+			dbpath = ReplaceKeywords(sScript.azToken[1]);
 			if (dbpath.empty() || dbpath == ":memory:") {
 				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n",
 				        zScriptFile, sScript.startLine);
@@ -1443,7 +1465,8 @@ struct AutoRegTests {
 		    "evidence/slt_lang_reindex.test",                  // "
 		    "evidence/slt_lang_dropindex.test",                // "
 		    "evidence/slt_lang_createtrigger.test",            // "
-		    "evidence/slt_lang_droptrigger.test"               // "
+		    "evidence/slt_lang_droptrigger.test",              // "
+			"evidence/slt_lang_update.test"                    //  Multiple assignments to same column "x"
 		};
 		FileSystem fs;
 		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);

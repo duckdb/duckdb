@@ -1,0 +1,93 @@
+# name: test/sql/function/string/test_glob.test
+# description: Test GLOB statement
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar glob
+query T
+SELECT 'aaa' GLOB 'bbb'
+----
+0
+
+query T
+SELECT 'aaa' GLOB 'aaa'
+----
+1
+
+query T
+SELECT 'aaa' GLOB '*'
+----
+1
+
+query T
+SELECT 'aaa' GLOB '*a'
+----
+1
+
+query T
+SELECT 'aaa' GLOB '*b'
+----
+0
+
+query T
+SELECT 'aaa' GLOB 'a*'
+----
+1
+
+query T
+SELECT 'aaa' GLOB 'b*'
+----
+0
+
+query T
+SELECT 'aaa' GLOB 'a?a'
+----
+1
+
+query T
+SELECT 'aaa' GLOB 'a?'
+----
+0
+
+query T
+SELECT 'aaa' GLOB '??*'
+----
+1
+
+query T
+SELECT 'aaa' GLOB '????*'
+----
+0
+
+query T
+SELECT 'ababac' GLOB '*abac'
+----
+1
+
+# like with table
+statement ok
+CREATE TABLE strings(s STRING, pat STRING);
+
+statement ok
+INSERT INTO strings VALUES ('abab', 'ab*'), ('aaa', 'a?a'), ('aaa', '*b*')
+
+query T
+SELECT s FROM strings WHERE s GLOB 'ab*'
+----
+abab
+
+query T
+SELECT s FROM strings WHERE 'aba' GLOB pat
+----
+abab
+aaa
+aaa
+
+query T
+SELECT s FROM strings WHERE s GLOB pat
+----
+abab
+aaa
+

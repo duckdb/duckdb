@@ -66,7 +66,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 		info->schema = stmt->relation->schemaname;
 	}
 	info->table = stmt->relation->relname;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE : OnCreateConflict::ERROR;
+	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = stmt->relation->relpersistence == PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
 
 	if (info->temporary && stmt->oncommit != PGOnCommitAction::PG_ONCOMMIT_PRESERVE_ROWS &&

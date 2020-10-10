@@ -12,6 +12,10 @@
 
 namespace duckdb {
 
+struct GlobTableFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct RangeTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
