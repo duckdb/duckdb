@@ -13,7 +13,7 @@
 
 namespace duckdb {
 class Catalog;
-class Transaction;
+class ClientContext;
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
@@ -37,9 +37,9 @@ private:
 	unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> dependencies_map;
 
 private:
-	void AddObject(Transaction &transaction, CatalogEntry *object, unordered_set<CatalogEntry *> &dependencies);
-	void DropObject(Transaction &transaction, CatalogEntry *object, bool cascade, set_lock_map_t &lock_set);
-	void AlterObject(Transaction &transaction, CatalogEntry *old_obj, CatalogEntry *new_obj);
+	void AddObject(ClientContext &context, CatalogEntry *object, unordered_set<CatalogEntry *> &dependencies);
+	void DropObject(ClientContext &context, CatalogEntry *object, bool cascade, set_lock_map_t &lock_set);
+	void AlterObject(ClientContext &context, CatalogEntry *old_obj, CatalogEntry *new_obj);
 	void EraseObjectInternal(CatalogEntry *object);
 };
 } // namespace duckdb

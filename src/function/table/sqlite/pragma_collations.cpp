@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/transaction/transaction.hpp"
 
 using namespace std;
 
@@ -32,10 +31,9 @@ unique_ptr<FunctionOperatorData> pragma_collate_init(ClientContext &context, con
                                                      unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	auto result = make_unique<PragmaCollateData>();
 
-	auto &transaction = Transaction::GetTransaction(context);
-	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
+	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->collations.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry->name); });
+		schema->collations.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry->name); });
 	});
 
 	return move(result);
@@ -48,7 +46,7 @@ static void pragma_collate(ClientContext &context, const FunctionData *bind_data
 		// finished returning values
 		return;
 	}
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
 	output.SetCardinality(next - data.offset);
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;

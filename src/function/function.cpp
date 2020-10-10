@@ -257,49 +257,20 @@ idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vect
 	return BindFunctionFromArguments(name, functions, arguments);
 }
 
-string PragmaTypeToString(string name, PragmaType type) {
-	switch (type) {
-	case PragmaType::PRAGMA_STATEMENT:
-		return "STATEMENT";
-	case PragmaType::PRAGMA_ASSIGNMENT:
-		return "ASSIGNMENT";
-	case PragmaType::PRAGMA_CALL:
-		return "CALL";
-	}
-	return "UNKNOWN";
-}
-
 idx_t Function::BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info) {
-	vector<PragmaFunction> candidates;
-	vector<idx_t> indexes;
-	for (idx_t i = 0; i < functions.size(); i++) {
-		auto &function = functions[i];
-		if (info.pragma_type == function.type) {
-			candidates.push_back(function);
-			indexes.push_back(i);
-		}
-	}
-	if (candidates.size() == 0) {
-		string candidate_str = "";
-		for (auto &f : functions) {
-			candidate_str += "\t" + f.ToString() + "\n";
-		}
-		throw BinderException("No pragma function matches the given pragma type.\n\tCandidate functions:\n%s",
-		                      candidate_str);
-	}
 	vector<LogicalType> types;
 	for (auto &value : info.parameters) {
 		types.push_back(value.type());
 	}
-	idx_t entry = BindFunctionFromArguments(name, candidates, types);
-	auto &candidate_function = candidates[entry];
+	idx_t entry = BindFunctionFromArguments(name, functions, types);
+	auto &candidate_function = functions[entry];
 	// cast the input parameters
 	for (idx_t i = 0; i < info.parameters.size(); i++) {
 		auto target_type =
 		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
 		info.parameters[i] = info.parameters[i].CastAs(target_type);
 	}
-	return indexes[entry];
+	return entry;
 }
 
 vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
