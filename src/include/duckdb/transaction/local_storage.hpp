@@ -10,7 +10,6 @@
 
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
 class DataTable;
@@ -22,14 +21,17 @@ public:
 	LocalTableStorage(DataTable &table);
 	~LocalTableStorage();
 
+	DataTable &table;
 	//! The main chunk collection holding the data
 	ChunkCollection collection;
 	//! The set of unique indexes
 	vector<unique_ptr<Index>> indexes;
 	//! The set of deleted entries
 	unordered_map<idx_t, unique_ptr<bool[]>> deleted_entries;
-	//! The max row
-	row_t max_row;
+	//! The number of deleted rows
+	idx_t deleted_rows;
+	//! The number of active scans
+	idx_t active_scans = 0;
 
 public:
 	void InitializeScan(LocalScanState &state);
@@ -45,6 +47,9 @@ public:
 	};
 
 public:
+	LocalStorage(Transaction &transaction) : transaction(transaction) {
+	}
+
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable *table, LocalScanState &state);
 	//! Scan
@@ -61,8 +66,6 @@ public:
 	//! Commits the local storage, writing it to the WAL and completing the commit
 	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,
 	            transaction_t commit_id);
-	//! Revert the commit made so far by the LocalStorage
-	void RevertCommit(LocalStorage::CommitState &commit_state);
 
 	bool ChangesMade() noexcept {
 		return table_storage.size() > 0;
@@ -75,10 +78,13 @@ public:
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 
-	template <class T> bool ScanTableStorage(DataTable *table, LocalTableStorage *storage, T &&fun);
+	template <class T> bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
 
 private:
+	Transaction &transaction;
 	unordered_map<DataTable *, unique_ptr<LocalTableStorage>> table_storage;
+
+	void Flush(DataTable &table, LocalTableStorage &storage);
 };
 
 } // namespace duckdb

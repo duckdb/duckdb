@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/transaction/delete_info.hpp
+// duckdb/transaction/append_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,15 +11,12 @@
 #include "duckdb/common/constants.hpp"
 
 namespace duckdb {
-class ChunkVectorInfo;
 class DataTable;
 
-struct DeleteInfo {
+struct AppendInfo {
 	DataTable *table;
-	ChunkVectorInfo *vinfo;
+	idx_t start_row;
 	idx_t count;
-	idx_t base_row;
-	row_t rows[1];
 };
 
 } // namespace duckdb

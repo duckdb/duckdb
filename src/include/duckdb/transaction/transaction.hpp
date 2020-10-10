@@ -22,7 +22,7 @@ class CatalogEntry;
 class DataTable;
 class WriteAheadLog;
 
-class ChunkInfo;
+class ChunkVectorInfo;
 
 struct DeleteInfo;
 struct UpdateInfo;
@@ -34,7 +34,7 @@ class Transaction {
 public:
 	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp)
 	    : start_time(start_time), transaction_id(transaction_id), commit_id(0), highest_active_query(0),
-	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), is_invalidated(false) {
+	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), storage(*this), is_invalidated(false) {
 	}
 
 	//! The start timestamp of this transaction
@@ -78,8 +78,8 @@ public:
 		return start_timestamp;
 	}
 
-	void PushDelete(DataTable *table, ChunkInfo *vinfo, row_t rows[], idx_t count, idx_t base_row);
-
+	void PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row);
+	void PushAppend(DataTable *table, idx_t row_start, idx_t row_count);
 	UpdateInfo *CreateUpdateInfo(idx_t type_size, idx_t entries);
 
 private:
