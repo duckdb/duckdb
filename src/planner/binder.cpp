@@ -10,9 +10,9 @@
 namespace duckdb {
 using namespace std;
 
-Binder::Binder(ClientContext &context, Binder *parent_, bool disable_parent_CTEs_)
-    : context(context), read_only(true), parent(parent_), bound_tables(0), disable_parent_CTEs(disable_parent_CTEs_) {
-	if (parent_ && !disable_parent_CTEs_) {
+Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
+    : context(context), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
+	if (parent_ && inherit_ctes_) {
 		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
 		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
 		bind_context.cte_references = parent_->bind_context.cte_references;
@@ -160,7 +160,7 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
 CommonTableExpressionInfo *Binder::FindCTE(const string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
-		if (parent && !disable_parent_CTEs) {
+		if (parent && inherit_ctes) {
 			return parent->FindCTE(name);
 		}
 		return nullptr;

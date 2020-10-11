@@ -70,4 +70,12 @@ with cte AS (SELECT * FROM va) SELECT * FROM cte;
 ----
 42
 
+# multiple ctes in a view definition
+statement ok
+create view vb AS (with cte1 as (Select i as j from a), cte2 as (select ref.j+1 as k from cte1 as ref) select * from cte2);
 
+query I
+select * from vb
+----
+43
+ 

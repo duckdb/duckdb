@@ -74,8 +74,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query
-		bool disable_parent_CTEs = true;
-		Binder view_binder(context, this, disable_parent_CTEs);
+		bool inherit_ctes = false;
+		Binder view_binder(context, this, inherit_ctes);
 		for (auto &cte_it : view_catalog_entry->query->cte_map) {
 			view_binder.AddCTE(cte_it.first, cte_it.second.get());
 		}
