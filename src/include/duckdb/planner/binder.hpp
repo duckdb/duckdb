@@ -56,7 +56,7 @@ class Binder {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	Binder(ClientContext &context, Binder *parent = nullptr);
+	Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
@@ -116,6 +116,8 @@ private:
 	bool has_unplanned_subqueries = false;
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
+	//! Whether CTEs should reference the parent binder (if it exists)
+	bool inherit_ctes = true;
 
 private:
 	//! Bind the default values of the columns of a table
