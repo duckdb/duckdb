@@ -14,5 +14,7 @@ public:
 	duckdb_libpgquery::PGList *parse_tree;
 	std::string error_message;
 	int error_location;
+
+	static std::string FormatErrorMessage(std::string query, std::string error_message, int error_location);
 };
 }
