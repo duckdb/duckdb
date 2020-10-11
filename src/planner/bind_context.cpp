@@ -33,6 +33,18 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	return result;
 }
 
+vector<string> BindContext::GetSimilarBindings(const string &column_name) {
+	vector<pair<string, idx_t>> scores;
+	for (auto &kv : bindings) {
+		auto binding = kv.second.get();
+		for(auto &name : binding->names) {
+			idx_t distance = StringUtil::LevenshteinDistance(name, column_name);
+			scores.push_back(make_pair(binding->alias + "." + name, distance));
+		}
+	}
+	return StringUtil::TopNStrings(scores);
+}
+
 bool BindContext::BindingIsHidden(const string &binding_name, const string &column_name) {
 	string total_binding = binding_name + "." + column_name;
 	return hidden_columns.find(total_binding) != hidden_columns.end();
@@ -57,17 +69,31 @@ Binding *BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
+Binding *BindContext::GetBinding(const string &name, string &out_error) {
+	auto match = bindings.find(name);
+	if (match == bindings.end()) {
+		// alias not found in this BindContext
+		vector<string> candidates;
+		for(auto &kv : bindings) {
+			candidates.push_back(kv.first);
+		}
+		string candidate_str = StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
+		out_error =StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str);
+		return nullptr;
+	}
+	return match->second.get();
+}
+
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.table_name.empty()) {
 		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name));
 	}
 
-	auto match = bindings.find(colref.table_name);
-	if (match == bindings.end()) {
-		// alias not found in this BindContext
-		return BindResult(StringUtil::Format("Referenced table \"%s\" not found!", colref.table_name));
+	string error;
+	auto binding = GetBinding(colref.table_name, error);
+	if (!binding) {
+		return BindResult(error);
 	}
-	auto binding = match->second.get();
 	return binding->Bind(colref, depth);
 }
 
@@ -83,12 +109,11 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 			binding->GenerateAllColumnExpressions(*this, new_select_list);
 		}
 	} else { // SELECT tbl.* case
-		auto match = bindings.find(relation_name);
-		if (match == bindings.end()) {
-			// alias not found in this BindContext
-			throw BinderException("SELECT table.* expression but can't find table");
+		string error;
+		auto binding = GetBinding(relation_name, error);
+		if (!binding) {
+			throw BinderException(error);
 		}
-		auto binding = match->second.get();
 		binding->GenerateAllColumnExpressions(*this, new_select_list);
 	}
 }

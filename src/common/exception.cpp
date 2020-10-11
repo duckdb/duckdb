@@ -12,7 +12,7 @@ Exception::Exception(string message) : std::exception(), type(ExceptionType::INV
 }
 
 Exception::Exception(ExceptionType exception_type, string message) : std::exception(), type(exception_type) {
-	exception_message_ = ExceptionTypeToString(exception_type) + ": " + message;
+	exception_message_ = ExceptionTypeToString(exception_type) + " Error: " + message;
 }
 
 const char *Exception::what() const noexcept {
@@ -92,6 +92,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Catalog";
 	case ExceptionType::PARSER:
 		return "Parser";
+	case ExceptionType::BINDER:
+		return "Binder";
 	case ExceptionType::PLANNER:
 		return "Planner";
 	case ExceptionType::SCHEDULER:

@@ -153,4 +153,78 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	return source;
 }
 
+// adapted from https://www.tutorialspoint.com/cplusplus-program-to-implement-levenshtein-distance-computing-algorithm
+idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
+    idx_t l1 = s1.size();
+    idx_t l2 = s2.size();
+    if (l1 == 0) {
+        return l2;
+    }
+    if (l2 == 0) {
+        return l1;
+    }
+	auto dist = unique_ptr<idx_t[]>(new idx_t[(l1 + 1) * (l2 + 1)]);
+   for(idx_t j = 0; j <= l2; j++) {
+       dist[j * l1 + 0] = j;
+   }
+   for(idx_t i = 0; i <= l1; i++) {
+      dist[i] = i;
+   }
+
+   for (idx_t j=1;j<=l1;j++) {
+      for(idx_t i=1;i<=l2;i++) {
+		idx_t track;
+         if(s1[i-1] == s2[j-1]) {
+            track= 0;
+         } else {
+            track = 1;
+         }
+		 idx_t adjacent_score1 = dist[(i - 1) * l1 + j] + 1;
+		 idx_t adjacent_score2 = dist[i * l1 + (j - 1)] + 1;
+		 idx_t adjacent_score3 = dist[(i - 1) * l1 + (j - 1)] + track;
+
+         idx_t t = MinValue<idx_t>(adjacent_score1, adjacent_score2);
+         dist[i * l1 + j] = MinValue<idx_t>(t, adjacent_score3);
+      }
+   }
+    return dist[l2 * l1 + l1];
+}
+
+vector<string> StringUtil::TopNStrings(vector<std::pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
+	sort(scores.begin(), scores.end(), [](const pair<string, idx_t> & a, const pair<string, idx_t> & b) -> bool {
+		return a.second < b.second;
+	});
+	vector<string> result;
+	result.push_back(scores[0].first);
+	for(idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {
+		if (scores[i].second > threshold) {
+			break;
+		}
+		result.push_back(scores[i].first);
+	}
+	return result;
+}
+
+vector<string> StringUtil::TopNLevenshtein(vector<string> strings, const string &target, idx_t n, idx_t threshold) {
+	vector<std::pair<string, idx_t>> scores;
+	for(auto &str : strings) {
+		scores.push_back(make_pair(str, LevenshteinDistance(str, target)));
+	}
+	return TopNStrings(scores, n, threshold);
+}
+
+string StringUtil::CandidatesMessage(const vector<string> &candidates, string candidate) {
+	string result_str;
+	if (candidates.size() > 0) {
+		result_str = "\n" + candidate + ": ";
+		for(idx_t i = 0; i < candidates.size(); i++) {
+			if (i > 0) {
+				result_str += ", ";
+			}
+			result_str += "\"" + candidates[i] + "\"";
+		}
+	}
+	return result_str;
+}
+
 } // namespace duckdb
