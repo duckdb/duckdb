@@ -1108,14 +1108,6 @@ extern void core_yyset_column(int column_no, yyscan_t yyscanner);
 #define xusend 11
 #define xeu 12
 
-#ifndef YY_NO_UNISTD_H
-/* Special case for "unistd.h", since it is non-ANSI. We include it way
- * down here because we want the user's section 1 to have been scanned first.
- * The user has a chance to override it with an option.
- */
-#include <unistd.h>
-#endif
-
 #ifndef YY_EXTRA_TYPE
 #define YY_EXTRA_TYPE void *
 #endif
@@ -1346,7 +1338,7 @@ YY_DECL
 #line 410 "scan.l"
 
 
-#line 1349 "lex.core_yy.c"
+#line 1341 "lex.core_yy.c"
 
     yylval = yylval_param;
 
@@ -2425,7 +2417,7 @@ YY_RULE_SETUP
 #line 1085 "scan.l"
 YY_FATAL_ERROR( "flex scanner jammed" );
 	YY_BREAK
-#line 2428 "lex.core_yy.c"
+#line 2420 "lex.core_yy.c"
 
 	case YY_END_OF_BUFFER:
 		{
