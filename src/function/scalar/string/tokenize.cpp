@@ -1,5 +1,5 @@
 #include "duckdb/function/scalar/string_functions.hpp"
-
+#include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -9,13 +9,14 @@
 namespace duckdb {
 
 static bool whitespace_ascii(const char &c) {
-	// TODO: implement
-	return c == ' ';
+	return c == ' ' || c == '\r' || c == '\n' || c == '\t' || c == '\f' || c == '\v';
 }
 
 static bool whitespace_utf8(const char &c) {
-	// TODO: implement
-	return c == ' ';
+	const utf8proc_property_t *char_props = utf8proc_get_property(c);
+	return char_props->bidi_class == UTF8PROC_BIDI_CLASS_B ||
+		   char_props->bidi_class == UTF8PROC_BIDI_CLASS_S ||
+	       char_props->bidi_class == UTF8PROC_BIDI_CLASS_WS;
 }
 
 void tokenize_ascii(const char *input_data, size_t input_size, ChunkCollection &result) {
@@ -112,17 +113,17 @@ unique_ptr<ChunkCollection> tokenize(string_t input) {
 		}
 	}
 
-	auto tokenized_string = make_unique<ChunkCollection>();
+	auto output = make_unique<ChunkCollection>();
 	vector<LogicalType> types = {LogicalType::VARCHAR};
-	tokenized_string->types = types;
+	output->types = types;
 
 	if (ascii_only) {
-		tokenize_ascii(input_data, input_size, *tokenized_string);
+		tokenize_ascii(input_data, input_size, *output);
 	} else {
-		tokenize_unicode(input_data, input_size, *tokenized_string);
+		tokenize_unicode(input_data, input_size, *output);
 	}
 
-	return tokenized_string;
+	return output;
 }
 
 static void tokenize_function(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -134,8 +135,8 @@ static void tokenize_function(DataChunk &args, ExpressionState &state, Vector &r
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 
 	auto list_child = make_unique<ChunkCollection>();
-    vector<LogicalType> types = {LogicalType::VARCHAR};
-    list_child->types = types;
+	vector<LogicalType> types = {LogicalType::VARCHAR};
+	list_child->types = types;
 
 	size_t total_len = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
@@ -152,16 +153,15 @@ static void tokenize_function(DataChunk &args, ExpressionState &state, Vector &r
 	}
 
 	assert(list_child->count == total_len);
-    result.vector_type = VectorType::CONSTANT_VECTOR;
+	result.vector_type = VectorType::CONSTANT_VECTOR;
 	ListVector::SetEntry(result, move(list_child));
 }
 
 void TokenizeFun::RegisterFunction(BuiltinFunctions &set) {
-    child_list_t<LogicalType> child_types;
-    child_types.push_back(std::make_pair("token",LogicalType::VARCHAR));
-    auto varchar_list_type = LogicalType(LogicalTypeId::LIST, child_types);
-	set.AddFunction(
-	    ScalarFunction("tokenize", {LogicalType::VARCHAR}, varchar_list_type, tokenize_function));
+	child_list_t<LogicalType> child_types;
+	child_types.push_back(std::make_pair("token", LogicalType::VARCHAR));
+	auto varchar_list_type = LogicalType(LogicalTypeId::LIST, child_types);
+	set.AddFunction(ScalarFunction("tokenize", {LogicalType::VARCHAR}, varchar_list_type, tokenize_function));
 }
 
 } // namespace duckdb
