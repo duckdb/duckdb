@@ -31,6 +31,7 @@ public:
 
 	//! The location in the query (if any)
 	idx_t query_location = INVALID_INDEX;
+
 public:
 	bool IsAggregate() const override;
 	bool IsWindow() const override;
