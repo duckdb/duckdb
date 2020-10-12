@@ -4083,6 +4083,22 @@ core_yyfree(void *ptr, core_yyscan_t yyscanner)
 #undef YY_EXTRA_TYPE
 #undef SET_YYLLOC
 #undef ADVANCE_YYLLOC
+#undef BEGIN
+#undef REJECT
+#undef INITIAL
+#undef xb
+#undef xc
+#undef xd
+#undef xh
+#undef xe
+#undef xq
+#undef xdolq
+#undef xui
+#undef xuiend
+#undef xus
+#undef xusend
+#undef xeu
+#undef ECHO
 
 
 } /* duckdb_libpgquery */
