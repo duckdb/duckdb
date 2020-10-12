@@ -34,13 +34,22 @@ helloworld
 🦆
 🦆
 
-statement ok
-SELECT tokenize(string_agg(range, ' ')), mod(range, 10000) xx FROM range(100000) GROUP BY xx
+query T
+SELECT UNNEST(tokenize('🦆
+ 🦆'))
 ----
+🦆
+🦆
+
+statement ok
+SELECT tokenize(string_agg(range, ' ')), mod(range, 1000) xx FROM range(500000) GROUP BY xx
+
+statement ok
+SELECT tokenize(string_agg(range, '🦆 ')), mod(range, 1000) xx FROM range(500000) GROUP BY xx
 
 query T
 SELECT UNNEST(tokenize(NULL))
 ----
 NULL
 
-# TODO: add where clause, constants, a million strings, and full circle with concat
+# TODO: add where clause, and full circle with concat
