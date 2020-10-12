@@ -378,6 +378,8 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+		return SQLITE_TEXT;
+	case LogicalTypeId::BLOB:
 		return SQLITE_BLOB;
 	default:
 		return 0;
@@ -692,19 +694,6 @@ int sqlite3_reset(sqlite3_stmt *stmt) {
 
 // support functions for shell.c
 // most are dummies, we don't need them really
-
-// TODO use re2 here?
-int sqlite3_strglob(const char *zGlobPattern, const char *zString) {
-	fprintf(stderr, "sqlite3_strglob: unsupported.\n");
-
-	return -1;
-}
-
-int sqlite3_strlike(const char *zPattern, const char *zStr, unsigned int esc) {
-	fprintf(stderr, "sqlite3_strlike: unsupported.\n");
-
-	return -1;
-}
 
 int sqlite3_db_status(sqlite3 *, int op, int *pCur, int *pHiwtr, int resetFlg) {
 	fprintf(stderr, "sqlite3_db_status: unsupported.\n");

@@ -101,3 +101,13 @@ with recursive t as (select 1 as x union select sum(x+1) from t where x < 3 OFFS
 statement error
 with recursive t as (select 1 as x union select sum(x+1) from t where x < 3 LIMIT 1 OFFSET 1) select * from t
 
+# create a view from a recursive cte
+statement ok
+create view vr as (with recursive t(x) as (select 1 union select x+1 from t where x < 3) select * from t order by x)
+
+query I
+select * from vr
+----
+1
+2
+3

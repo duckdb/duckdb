@@ -7,6 +7,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/storage/table/chunk_info.hpp"
 
 namespace duckdb {
 using namespace std;

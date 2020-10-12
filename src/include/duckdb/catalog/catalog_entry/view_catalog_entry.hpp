@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -26,7 +26,7 @@ public:
 	ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info);
 
 	//! The query of the view
-	unique_ptr<QueryNode> query;
+	unique_ptr<SelectStatement> query;
 	//! The SQL query (if any)
 	string sql;
 	//! The set of aliases associated with the view

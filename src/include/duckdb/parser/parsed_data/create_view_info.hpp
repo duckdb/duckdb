@@ -9,14 +9,15 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
 struct CreateViewInfo : public CreateInfo {
 	CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY) {
 	}
-	CreateViewInfo(string schema, string view_name) : CreateInfo(CatalogType::VIEW_ENTRY, schema), view_name(view_name) {
+	CreateViewInfo(string schema, string view_name)
+	    : CreateInfo(CatalogType::VIEW_ENTRY, schema), view_name(view_name) {
 	}
 
 	//! Table name to insert to
@@ -27,8 +28,8 @@ struct CreateViewInfo : public CreateInfo {
 	vector<string> aliases;
 	//! Return types
 	vector<LogicalType> types;
-	//! The QueryNode of the view
-	unique_ptr<QueryNode> query;
+	//! The SelectStatement of the view
+	unique_ptr<SelectStatement> query;
 };
 
 } // namespace duckdb
