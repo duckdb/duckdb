@@ -1,14 +1,5 @@
 #include "stripped_sqlite_int.h"
-
-/*
-** Assuming zIn points to the first byte of a UTF-8 character,
-** advance zIn to point to the first byte of the next UTF-8 character.
-*/
-#define SQLITE_SKIP_UTF8(zIn) {                        \
-  if( (*(zIn++))>=0xc0 ){                              \
-    while( (*zIn & 0xc0)==0x80 ){ zIn++; }             \
-  }                                                    \
-}
+#include <ctype.h>
 
 # define sqlite3Toupper(x)   toupper((unsigned char)(x))
 # define sqlite3Tolower(x)   tolower((unsigned char)(x))
