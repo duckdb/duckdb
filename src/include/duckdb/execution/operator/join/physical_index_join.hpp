@@ -31,9 +31,9 @@ public:
 	//! Columns indexed by index
     unordered_set<column_t> index_ids;
 	//! Projected ids from LHS
-	vector<idx_t> left_projection_map;
+	vector<column_t> left_projection_map;
 	//! Projected ids from RHS
-	vector<idx_t> right_projection_map;
+	vector<column_t> right_projection_map;
 	//! The types of the keys
 	vector<LogicalType> condition_types;
 	//! The types of all conditions

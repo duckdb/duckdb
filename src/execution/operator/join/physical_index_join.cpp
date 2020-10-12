@@ -37,8 +37,8 @@ public:
 	                 vector<LogicalType> &fetch_types);
 	//! Fills result chunk.
 	//! Returns True is result chunk is already full. False OW
-	inline bool FillResultChunk(DataChunk &chunk, bool lhs_first, vector<idx_t> &left_projection_map,
-	                            vector<idx_t> &right_projection_map, unordered_set<column_t> index_ids);
+	inline bool FillResultChunk(DataChunk &chunk, bool lhs_first, vector<column_t> &left_projection_map,
+	                            vector<column_t> &right_projection_map,vector<column_t> &column_ids, unordered_set<column_t> index_ids);
 	//! Set Element to probe the index with
 	inline bool SetProbe(ExecutionContext &context, Index &index);
 };
@@ -53,7 +53,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	column_ids = move(column_ids_);
 	children.push_back(move(left));
 	children.push_back(move(right));
-	for (const auto &condition : conditions) {
+	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
 	//! Only add to fetch_ids columns that are not indexed
@@ -70,13 +70,14 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 }
 
 bool PhysicalIndexJoinOperatorState::FillResultChunk(DataChunk &chunk, bool lhs_first,
-                                                     vector<idx_t> &left_projection_map,
-                                                     vector<idx_t> &right_projection_map,
+                                                     vector<column_t> &left_projection_map,
+                                                     vector<column_t> &right_projection_map,
+                                                     vector<column_t> &column_ids,
                                                      unordered_set<column_t> index_ids) {
 	idx_t rhs_c_idx = 0;
 	if (!lhs_first) {
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			auto it = index_ids.find(right_projection_map[i]);
+			auto it = index_ids.find(column_ids[right_projection_map[i]]);
 			if (it == index_ids.end()) {
 				chunk.data[i].Reference(rhs_chunk.data[rhs_c_idx++]);
 			} else {
@@ -97,7 +98,7 @@ bool PhysicalIndexJoinOperatorState::FillResultChunk(DataChunk &chunk, bool lhs_
 		//! Add actual value
 		//! We have to fetch RHS row based on the index ids
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			auto it = index_ids.find(right_projection_map[i]);
+			auto it = index_ids.find(column_ids[right_projection_map[i]]);
 			if (it == index_ids.end()) {
 				chunk.data[left_projection_map.size() +i].Reference(rhs_chunk.data[rhs_c_idx++]);
 			} else {
@@ -163,8 +164,8 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			state->first_row = true;
 			state->lhs_idx = 0;
 			state->rhs_chunk.Reset();
-			vector<LogicalType> mock_vec {state->probe_executor.expressions[0]->return_type };
-			state->join_keys.Initialize(mock_vec);
+//			vector<LogicalType> mock_vec {state->probe_executor.expressions[0]->return_type };
+//			state->join_keys.Initialize(mock_vec);
 			state->get_new_chunk = false;
 			state->probe_executor.Execute(state->child_chunk, state->join_keys);
 		}
@@ -181,7 +182,7 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			if (state->idx_state) {
 				//! If still scanning leaf, fetch RHS chunk and Fill Result
 				state->GetRHSChunk(context, *index, *(children[1]), fetch_ids, fetch_types);
-				state->FillResultChunk(chunk, lhs_first, left_projection_map, right_projection_map, index_ids);
+				state->FillResultChunk(chunk, lhs_first, left_projection_map, right_projection_map,column_ids, index_ids);
 				if (state->result_size > 0) {
 					state->result_size = 0;
 					return;
@@ -199,7 +200,7 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				if (state->SetProbe(context, *index)) {
 					//! We get a chunk and fill result
 					state->GetRHSChunk(context, *index, *(children[1]), fetch_ids, fetch_types);
-					state->FillResultChunk(chunk, lhs_first, left_projection_map, right_projection_map, index_ids);
+					state->FillResultChunk(chunk, lhs_first, left_projection_map, right_projection_map,column_ids, index_ids);
 					if (state->result_size > 0) {
 						state->result_size = 0;
 						return;
@@ -215,21 +216,22 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
 	auto state = make_unique<PhysicalIndexJoinOperatorState>(*this, children[0].get(), children[1].get());
 	if (right_projection_map.empty()) {
-		for (auto &column_id : column_ids) {
-			right_projection_map.push_back(column_id);
+//		for (auto &column_id : column_ids) {
+//			right_projection_map.push_back(column_id);
+//		}
+        for (column_t i = 0; i < column_ids.size(); i++) {
+			right_projection_map.push_back(i);
 		}
 	}
 	if (left_projection_map.empty()) {
-		for (size_t i = 0; i < state->child_chunk.column_count(); i++) {
+		for (column_t i = 0; i < state->child_chunk.column_count(); i++) {
 			left_projection_map.push_back(i);
 		}
 	}
-	vector<LogicalType> condition_types_aux;
-	for (const auto &cond : conditions) {
+	state->join_keys.Initialize(condition_types);
+	for (auto &cond : conditions) {
 		state->probe_executor.AddExpression(*cond.left);
-		condition_types_aux.push_back(cond.left->return_type);
 	}
-//	state->join_keys.Initialize(condition_types_aux);
 	return state;
 }
 
