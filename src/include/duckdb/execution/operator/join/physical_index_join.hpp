@@ -29,7 +29,7 @@ public:
 	//! Types of fetch columns
 	vector<LogicalType> fetch_types;
 	//! Columns indexed by index
-    unordered_set<column_t> index_ids;
+	unordered_set<column_t> index_ids;
 	//! Projected ids from LHS
 	vector<column_t> left_projection_map;
 	//! Projected ids from RHS

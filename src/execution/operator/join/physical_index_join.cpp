@@ -9,7 +9,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "iostream"
 
 #include <utility>
 using namespace std;
@@ -38,7 +37,8 @@ public:
 	//! Fills result chunk.
 	//! Returns True is result chunk is already full. False OW
 	inline bool FillResultChunk(DataChunk &chunk, bool lhs_first, vector<column_t> &left_projection_map,
-	                            vector<column_t> &right_projection_map,vector<column_t> &column_ids, unordered_set<column_t> index_ids);
+	                            vector<column_t> &right_projection_map, vector<column_t> &column_ids,
+	                            unordered_set<column_t> index_ids);
 	//! Set Element to probe the index with
 	inline bool SetProbe(ExecutionContext &context, Index &index);
 };
@@ -72,8 +72,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 bool PhysicalIndexJoinOperatorState::FillResultChunk(DataChunk &chunk, bool lhs_first,
                                                      vector<column_t> &left_projection_map,
                                                      vector<column_t> &right_projection_map,
-                                                     vector<column_t> &column_ids,
-                                                     unordered_set<column_t> index_ids) {
+                                                     vector<column_t> &column_ids, unordered_set<column_t> index_ids) {
 	idx_t rhs_c_idx = 0;
 	if (!lhs_first) {
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
@@ -100,7 +99,7 @@ bool PhysicalIndexJoinOperatorState::FillResultChunk(DataChunk &chunk, bool lhs_
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			auto it = index_ids.find(column_ids[right_projection_map[i]]);
 			if (it == index_ids.end()) {
-				chunk.data[left_projection_map.size() +i].Reference(rhs_chunk.data[rhs_c_idx++]);
+				chunk.data[left_projection_map.size() + i].Reference(rhs_chunk.data[rhs_c_idx++]);
 			} else {
 				auto rvalue = join_keys.GetValue(0, lhs_idx);
 				chunk.data[left_projection_map.size() + i].Reference(rvalue);
@@ -164,8 +163,8 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			state->first_row = true;
 			state->lhs_idx = 0;
 			state->rhs_chunk.Reset();
-//			vector<LogicalType> mock_vec {state->probe_executor.expressions[0]->return_type };
-//			state->join_keys.Initialize(mock_vec);
+			//			vector<LogicalType> mock_vec {state->probe_executor.expressions[0]->return_type };
+			//			state->join_keys.Initialize(mock_vec);
 			state->get_new_chunk = false;
 			state->probe_executor.Execute(state->child_chunk, state->join_keys);
 		}
@@ -182,7 +181,8 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			if (state->idx_state) {
 				//! If still scanning leaf, fetch RHS chunk and Fill Result
 				state->GetRHSChunk(context, *index, *(children[1]), fetch_ids, fetch_types);
-				state->FillResultChunk(chunk, lhs_first, left_projection_map, right_projection_map,column_ids, index_ids);
+				state->FillResultChunk(chunk, lhs_first, left_projection_map, right_projection_map, column_ids,
+				                       index_ids);
 				if (state->result_size > 0) {
 					state->result_size = 0;
 					return;
@@ -200,7 +200,8 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				if (state->SetProbe(context, *index)) {
 					//! We get a chunk and fill result
 					state->GetRHSChunk(context, *index, *(children[1]), fetch_ids, fetch_types);
-					state->FillResultChunk(chunk, lhs_first, left_projection_map, right_projection_map,column_ids, index_ids);
+					state->FillResultChunk(chunk, lhs_first, left_projection_map, right_projection_map, column_ids,
+					                       index_ids);
 					if (state->result_size > 0) {
 						state->result_size = 0;
 						return;
@@ -216,10 +217,10 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
 	auto state = make_unique<PhysicalIndexJoinOperatorState>(*this, children[0].get(), children[1].get());
 	if (right_projection_map.empty()) {
-//		for (auto &column_id : column_ids) {
-//			right_projection_map.push_back(column_id);
-//		}
-        for (column_t i = 0; i < column_ids.size(); i++) {
+		//		for (auto &column_id : column_ids) {
+		//			right_projection_map.push_back(column_id);
+		//		}
+		for (column_t i = 0; i < column_ids.size(); i++) {
 			right_projection_map.push_back(i);
 		}
 	}
