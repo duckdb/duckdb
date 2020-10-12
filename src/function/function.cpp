@@ -265,6 +265,9 @@ idx_t Function::BindFunction(string name, vector<PragmaFunction> &functions, Pra
 		types.push_back(value.type());
 	}
 	idx_t entry = BindFunctionFromArguments(name, functions, types, error);
+	if (entry == INVALID_INDEX) {
+		throw BinderException(error);
+	}
 	auto &candidate_function = functions[entry];
 	// cast the input parameters
 	for (idx_t i = 0; i < info.parameters.size(); i++) {
