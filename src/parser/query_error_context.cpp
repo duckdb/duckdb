@@ -1,5 +1,6 @@
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "utf8proc_wrapper.h"
 
 namespace duckdb {
