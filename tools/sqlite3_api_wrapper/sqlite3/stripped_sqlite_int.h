@@ -16,6 +16,7 @@ typedef int64_t sqlite3_int64;
 typedef uint64_t sqlite_uint64;
 
 #define sqlite3Malloc malloc
+#define sqlite3_free free
 #define sqlite3_realloc64 realloc
 #define sqlite3IsNaN isnan
 
@@ -36,6 +37,9 @@ typedef uint64_t sqlite_uint64;
 
 #ifndef MAX
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
+#endif
+#ifndef MIN
+#define MIN(A, B) ((A) < (B) ? (A) : (B))
 #endif
 
 #ifndef SQLITE_MAX_LENGTH
