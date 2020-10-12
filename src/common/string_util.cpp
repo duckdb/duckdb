@@ -171,8 +171,8 @@ vector<string> StringUtil::TopNStrings(vector<std::pair<string, idx_t>> scores, 
 	return result;
 }
 
-struct Simple2DArray {
-	Simple2DArray(idx_t len1, idx_t len2) : len1(len1) {
+struct LevenshteinArray {
+	LevenshteinArray(idx_t len1, idx_t len2) : len1(len1) {
 		dist = unique_ptr<idx_t[]>(new idx_t[len1 * len2]);
 	}
 
@@ -199,7 +199,7 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 	if (len2 == 0) {
 		return len1;
 	}
-	Simple2DArray array(len1 + 1, len2 + 1);
+	LevenshteinArray array(len1 + 1, len2 + 1);
 	array.score(0, 0) = 0;
 	for (idx_t i = 0; i <= len1; i++) {
 		array.score(i, 0) = i;
@@ -212,7 +212,7 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 			// d[i][j] = std::min({ d[i - 1][j] + 1,
 			//                      d[i][j - 1] + 1,
 			//                      d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
-			int equal = s1[i - 1] == s2[j - 1] ? 1 : 0;
+			int equal = s1[i - 1] == s2[j - 1] ? 0 : 1;
 			idx_t adjacent_score1 = array.score(i - 1, j) + 1;
 			idx_t adjacent_score2 = array.score(i, j - 1) + 1;
 			idx_t adjacent_score3 = array.score(i - 1, j - 1) + equal;

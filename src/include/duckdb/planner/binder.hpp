@@ -105,6 +105,10 @@ public:
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(CorrelatedColumnInfo info);
 
+	string FormatError(ParsedExpression &expr_context, string message);
+	string FormatError(TableRef &ref_context, string message);
+	string FormatError(idx_t query_location, string message);
+
 private:
 	//! The parent binder (if any)
 	Binder *parent;
@@ -118,7 +122,7 @@ private:
 	bool plan_subquery = true;
 	//! Whether CTEs should reference the parent binder (if it exists)
 	bool inherit_ctes = true;
-
+	//! The root statement of the query that is currently being parsed
 	SQLStatement *root_statement = nullptr;
 
 private:

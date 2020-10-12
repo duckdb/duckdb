@@ -57,7 +57,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	idx_t epos = 0;
 	// start by finding the error location inside the array
 	for (idx_t i = 0; i < positions.size(); i++) {
-		if (positions[i] >= error_location) {
+		if (positions[i] >= (error_location - start_pos)) {
 			epos = i;
 			break;
 		}

@@ -10,7 +10,11 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	auto &catalog = Catalog::GetCatalog(context);
 	// bind the pragma function
 	auto entry = catalog.GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->name, false);
-	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, *stmt.info);
+	string error;
+	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, *stmt.info, error);
+	if (bound_idx != INVALID_INDEX) {
+		throw BinderException(FormatError(stmt.stmt_location, error));
+	}
 	auto &bound_function = entry->functions[bound_idx];
 	if (!bound_function.function) {
 		throw BinderException("PRAGMA function does not have a function specified");

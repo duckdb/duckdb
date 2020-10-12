@@ -12,8 +12,36 @@ SELEC 42, 'thisisareallylongstringloremipsumblablathisisareallylongstringloremip
 statement error
 SELEC 42, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
 
+# unrecognized column
 statement error
 SELECT '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆', x, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
+
+# unrecognized scalar function
+statement error
+SELECT FUNFUNFUN();
+
+statement error
+CREATE VIEW v1
+AS SELECT FUNFUNFUN();
+
+# unrecognized aggregate parameters
+statement error
+SELECT SUM(42, 84, 11, 'hello')
+
+# no matching function
+statement error
+SELECT cos(0, 1, 2, 3);
+
+# unrecognized table function
+statement error
+SELECT * FROM RANG();
+
+# unknown named parameters
+statement error
+SELECT * FROM RANGE(1, hello=3);
+
+statement error
+SELECT * FROM READ_CSV('x', hello=3);
 
 # multiple where clauses
 statement error
