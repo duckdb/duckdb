@@ -48,6 +48,9 @@ public:
 	bool lhs_first = true;
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
+private:
+	void GetAllRHSChunks(ExecutionContext &context, PhysicalOperatorState *state_);
 };
 
 } // namespace duckdb
