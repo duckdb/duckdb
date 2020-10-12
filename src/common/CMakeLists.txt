@@ -10,6 +10,7 @@ add_library_unity(duckdb_common
                   constants.cpp
                   checksum.cpp
                   exception.cpp
+                  exception_format_value.cpp
                   file_buffer.cpp
                   file_system.cpp
                   gzip_stream.cpp

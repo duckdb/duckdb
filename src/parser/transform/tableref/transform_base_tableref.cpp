@@ -15,6 +15,7 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
 	if (root->schemaname) {
 		result->schema_name = root->schemaname;
 	}
+	result->query_location = root->location;
 	return move(result);
 }
 

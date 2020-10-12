@@ -24,6 +24,9 @@ public:
 	static bool CharacterIsSpace(char c) {
 		return c == ' ' || c == '\t' || c == '\n' || c == '\v'  || c ==  '\f'  || c == '\r';
 	}
+	static bool CharacterIsNewline(char c) {
+		return c == '\n' || c == '\r';
+	}
 
 	//! Returns true if the needle string exists in the haystack
 	static bool Contains(const string &haystack, const string &needle);

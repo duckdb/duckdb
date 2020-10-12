@@ -33,8 +33,6 @@ public:
 	//! variable.
 	void ParseQuery(string query);
 
-	//! Formats an error message that has occurred within a query at a specified location
-	static std::string FormatErrorMessage(std::string query, std::string error_message, int error_location);
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(string select_list);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)

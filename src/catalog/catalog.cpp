@@ -126,7 +126,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 	}
 }
 
-SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name) {
+SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name, QueryErrorContext error_context) {
 	if (schema_name == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
 	}
@@ -135,7 +135,7 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
 	}
 	auto entry = schemas->GetEntry(context, schema_name);
 	if (!entry) {
-		throw CatalogException("Schema with name %s does not exist!", schema_name);
+		throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
 	}
 	return (SchemaCatalogEntry *)entry;
 }
@@ -146,7 +146,7 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name,
-                                bool if_exists) {
+                                bool if_exists, QueryErrorContext error_context) {
 	if (schema_name == INVALID_SCHEMA) {
 		// invalid schema: first search the temporary schema
 		auto entry = GetEntry(context, type, TEMP_SCHEMA, name, true);
@@ -156,8 +156,8 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
 		// if the entry does not exist in the temp schema, search in the default schema
 		schema_name = DEFAULT_SCHEMA;
 	}
-	auto schema = GetSchema(context, schema_name);
-	return schema->GetEntry(context, type, name, if_exists);
+	auto schema = GetSchema(context, schema_name, error_context);
+	return schema->GetEntry(context, type, name, if_exists, error_context);
 }
 
 template <>

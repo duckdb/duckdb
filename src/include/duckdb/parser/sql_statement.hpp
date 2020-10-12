@@ -24,5 +24,6 @@ public:
 	StatementType type;
 	idx_t stmt_location;
 	idx_t stmt_length;
+	string query;
 };
 } // namespace duckdb

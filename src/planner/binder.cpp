@@ -22,6 +22,7 @@ Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
+	root_statement = &statement;
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind((SelectStatement &)statement);

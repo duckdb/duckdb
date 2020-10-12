@@ -191,6 +191,9 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 }
 
 vector<string> StringUtil::TopNStrings(vector<std::pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
+	if (scores.size() == 0) {
+		return vector<string>();
+	}
 	sort(scores.begin(), scores.end(), [](const pair<string, idx_t> & a, const pair<string, idx_t> & b) -> bool {
 		return a.second < b.second;
 	});

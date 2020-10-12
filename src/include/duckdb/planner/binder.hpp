@@ -119,6 +119,8 @@ private:
 	//! Whether CTEs should reference the parent binder (if it exists)
 	bool inherit_ctes = true;
 
+	SQLStatement *root_statement = nullptr;
+
 private:
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);
