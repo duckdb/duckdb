@@ -43,6 +43,39 @@ void Parser::ParseQuery(string query) {
 	}
 }
 
+vector<SimplifiedToken> Parser::Tokenize(string query) {
+	auto pg_tokens = PostgresParser::Tokenize(query);
+	vector<SimplifiedToken> result;
+	result.reserve(pg_tokens.size());
+	for(auto &pg_token : pg_tokens) {
+		SimplifiedToken token;
+		switch(pg_token.type) {
+		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_IDENTIFIER:
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+			break;
+		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT;
+			break;
+		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_STRING_CONSTANT:
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
+			break;
+		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_OPERATOR:
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR;
+			break;
+		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_KEYWORD:
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD;
+			break;
+		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_COMMENT:
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
+			break;
+		}
+		token.start = pg_token.start;
+		result.push_back(move(token));
+	}
+	return result;
+
+}
+
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(string select_list) {
 	// construct a mock query prefixed with SELECT
 	string mock_query = "SELECT " + select_list;
