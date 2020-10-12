@@ -24,6 +24,8 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 	BindResult result = binder.bind_context.BindColumn(colref, depth);
 	if (!result.HasError()) {
 		bound_columns = true;
+	} else {
+		result.error = binder.FormatError(colref, result.error);
 	}
 	return result;
 }
