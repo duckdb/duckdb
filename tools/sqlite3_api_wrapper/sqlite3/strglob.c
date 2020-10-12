@@ -1,16 +1,4 @@
-#define LONGDOUBLE_TYPE long double
-#include <stdint.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <assert.h>
-#include <ctype.h>
-
-typedef uint8_t u8;
-typedef uint32_t u32;
-typedef int64_t i64;
-typedef uint64_t u64;
+#include "stripped_sqlite_int.h"
 
 /*
 ** Assuming zIn points to the first byte of a UTF-8 character,

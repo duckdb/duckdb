@@ -1,44 +1,4 @@
-#define LONGDOUBLE_TYPE long double
-#include <stdint.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-
-typedef uint8_t u8;
-typedef uint32_t u32;
-typedef int64_t i64;
-typedef uint64_t u64;
-
-typedef int64_t sqlite3_int64;
-typedef uint64_t sqlite_uint64;
-
-#define sqlite3Malloc malloc
-#define sqlite3_realloc64 realloc
-#define sqlite3IsNaN isnan
-
-#define ArraySize(X) ((int)(sizeof(X) / sizeof(X[0])))
-#define LARGEST_INT64 (0xffffffff | (((i64)0x7fffffff) << 32))
-#define SMALLEST_INT64 (((i64)-1) - LARGEST_INT64)
-
-#include <assert.h>
-
-#define SQLITE_SKIP_UTF8(zIn)                                                                                          \
-	{                                                                                                                  \
-		if ((*(zIn++)) >= 0xc0) {                                                                                      \
-			while ((*zIn & 0xc0) == 0x80) {                                                                            \
-				zIn++;                                                                                                 \
-			}                                                                                                          \
-		}                                                                                                              \
-	}
-
-#ifndef MAX
-#define MAX(A, B) ((A) > (B) ? (A) : (B))
-#endif
-
-#ifndef SQLITE_MAX_LENGTH
-#define SQLITE_MAX_LENGTH 1000000000
-#endif
+#include "stripped_sqlite_int.h"
 
 struct StrAccum {
 	void *db;       /* Optional database for lookaside.  Can be NULL */
