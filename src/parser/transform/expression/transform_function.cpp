@@ -199,7 +199,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		return move(expr);
 	}
 
-	return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
+	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
+	function->query_location = root->location;
+	return move(function);
 }
 
 static string SQLValueOpToString(PGSQLValueFunctionOp op) {

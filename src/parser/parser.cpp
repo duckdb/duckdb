@@ -8,6 +8,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "postgres_parser.hpp"
+#include "duckdb/parser/query_error_context.hpp"
 
 #include "parser/parser.hpp"
 
@@ -24,7 +25,7 @@ void Parser::ParseQuery(string query) {
 		parser.Parse(query);
 
 		if (!parser.success) {
-			throw ParserException("%s [%d]", parser.error_message.c_str(), parser.error_location);
+			throw ParserException(QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1));
 		}
 
 		if (!parser.parse_tree) {
@@ -38,6 +39,9 @@ void Parser::ParseQuery(string query) {
 		n_prepared_parameters = transformer.ParamCount();
 	}
 	if (statements.size() > 0) {
+		for (auto &statement : statements) {
+			statement->query = query;
+		}
 		auto &last_statement = statements.back();
 		last_statement->stmt_length = query.size() - last_statement->stmt_location;
 	}

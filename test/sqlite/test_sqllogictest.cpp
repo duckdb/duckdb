@@ -305,8 +305,7 @@ static string sqllogictest_convert_value(Value value, LogicalType sql_type, bool
 }
 
 // standard result conversion: one line per value
-static int duckdbConvertResult(MaterializedQueryResult &result,
-                               bool original_sqlite_test,
+static int duckdbConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
                                vector<string> &pazResult /* RETURN:  Array of result values */
 ) {
 	size_t r, c;
@@ -1466,7 +1465,7 @@ struct AutoRegTests {
 		    "evidence/slt_lang_dropindex.test",                // "
 		    "evidence/slt_lang_createtrigger.test",            // "
 		    "evidence/slt_lang_droptrigger.test",              // "
-			"evidence/slt_lang_update.test"                    //  Multiple assignments to same column "x"
+		    "evidence/slt_lang_update.test"                    //  Multiple assignments to same column "x"
 		};
 		FileSystem fs;
 		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);

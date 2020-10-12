@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/main/config.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -95,7 +96,11 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 			throw BinderException("Unknown windowed aggregate");
 		}
 		// bind the aggregate
-		auto best_function = Function::BindFunction(func->name, func->functions, types);
+		string error;
+		auto best_function = Function::BindFunction(func->name, func->functions, types, error);
+		if (best_function == INVALID_INDEX) {
+			throw BinderException(binder.FormatError(window, error));
+		}
 		// found a matching function! bind it as an aggregate
 		auto &bound_function = func->functions[best_function];
 		auto bound_aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children));

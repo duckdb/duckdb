@@ -22,6 +22,7 @@ Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
+	root_statement = &statement;
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind((SelectStatement &)statement);
@@ -220,6 +221,19 @@ void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
 	if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
 		correlated_columns.push_back(info);
 	}
+}
+
+string Binder::FormatError(ParsedExpression &expr_context, string message) {
+	return FormatError(expr_context.query_location, message);
+}
+
+string Binder::FormatError(TableRef &ref_context, string message) {
+	return FormatError(ref_context.query_location, message);
+}
+
+string Binder::FormatError(idx_t query_location, string message) {
+	QueryErrorContext context(root_statement, query_location);
+	return context.FormatError(message);
 }
 
 } // namespace duckdb

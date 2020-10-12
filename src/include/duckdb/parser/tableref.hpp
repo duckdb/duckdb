@@ -25,6 +25,8 @@ public:
 
 	TableReferenceType type;
 	string alias;
+	//! The location in the query (if any)
+	idx_t query_location = INVALID_INDEX;
 
 public:
 	//! Convert the object to a string

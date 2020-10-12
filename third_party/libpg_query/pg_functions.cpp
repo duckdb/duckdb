@@ -70,7 +70,6 @@ void pg_parser_init() {
 }
 
 void pg_parser_parse(const char *query, parse_result *res) {
-
 	res->parse_tree = nullptr;
 	try {
 		res->parse_tree = duckdb_libpgquery::raw_parser(query);

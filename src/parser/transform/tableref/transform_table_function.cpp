@@ -28,15 +28,17 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(PGRangeFunction *root) 
 	if (coldef) {
 		throw NotImplementedException("Explicit column definition not supported yet");
 	}
+	auto func_call = (PGFuncCall *)call_tree;
 	// transform the function call
 	auto result = make_unique<TableFunctionRef>();
-	result->function = TransformFuncCall((PGFuncCall *)call_tree);
+	result->function = TransformFuncCall(func_call);
 	result->alias = TransformAlias(root->alias);
 	if (root->alias && root->alias->colnames) {
 		for (auto node = root->alias->colnames->head; node != nullptr; node = node->next) {
 			result->column_name_alias.push_back(reinterpret_cast<PGValue *>(node->data.ptr_value)->val.str);
 		}
 	}
+	result->query_location = func_call->location;
 	return move(result);
 }
 

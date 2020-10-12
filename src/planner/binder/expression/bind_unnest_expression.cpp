@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -15,7 +16,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	// bind the children of the function expression
 	string error;
 	if (function.children.size() != 1) {
-		return BindResult("Unnest() needs exactly one child expressions");
+		return BindResult(binder.FormatError(function, "Unnest() needs exactly one child expressions"));
 	}
 	BindChild(function.children[0], depth, error);
 	if (!error.empty()) {
@@ -24,7 +25,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	auto &child = (BoundExpression &)*function.children[0];
 	LogicalType child_type = child.expr->return_type;
 	if (child_type.id() != LogicalTypeId::LIST) {
-		return BindResult("Unnest() can only be applied to lists");
+		return BindResult(binder.FormatError(function, "Unnest() can only be applied to lists"));
 	}
 	LogicalType return_type = LogicalType::ANY;
 	assert(child_type.child_types().size() <= 1);

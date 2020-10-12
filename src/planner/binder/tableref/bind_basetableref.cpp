@@ -13,6 +13,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
+	QueryErrorContext error_context(root_statement, ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
 	auto cte = FindCTE(ref.table_name);
@@ -44,8 +45,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto table_or_view =
-	    Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name);
+	auto table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name,
+	                                                           ref.table_name, false, error_context);
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
@@ -95,7 +96,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		return bound_child;
 	}
 	default:
-		throw NotImplementedException("Catalog entry type");
+		throw InternalException("Catalog entry type");
 	}
 }
 } // namespace duckdb

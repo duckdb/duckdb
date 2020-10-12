@@ -42,9 +42,11 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	// bind the view as if it were a query so we can catch errors
-	// note that we bind a copy and don't actually use the bind result
+	// note that we bind the original, and replace the original with a copy
+	// this is because the original has
 	auto copy = base.query->Copy();
-	auto query_node = Bind(*copy);
+	auto query_node = Bind(*base.query);
+	base.query = move(copy);
 	if (base.aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}

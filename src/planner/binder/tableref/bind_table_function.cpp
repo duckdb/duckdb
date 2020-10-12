@@ -14,6 +14,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
+	QueryErrorContext error_context(root_statement, ref.query_location);
 	auto bind_index = GenerateTableIndex();
 
 	assert(ref.function->type == ExpressionType::FUNCTION);
@@ -41,13 +42,13 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		if (!expr->IsFoldable()) {
-			throw BinderException("Named parameter requires a constant parameter");
+			throw BinderException(FormatError(ref, "Named parameter requires a constant parameter"));
 		}
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (named_parameters.size() > 0) {
-				throw BinderException("Unnamed parameters cannot come after named parameters");
+				throw BinderException(FormatError(ref, "Unnamed parameters cannot come after named parameters"));
 			}
 			arguments.push_back(sql_type);
 			parameters.push_back(move(constant));
@@ -56,18 +57,33 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		}
 	}
 	// fetch the function from the catalog
+	auto &catalog = Catalog::GetCatalog(context);
 	auto function =
-	    Catalog::GetCatalog(context).GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name);
+	    catalog.GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name, false, error_context);
 
 	// select the function based on the input parameters
-	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments);
+	string error;
+	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);
+	if (best_function_idx == INVALID_INDEX) {
+		throw BinderException(FormatError(ref, error));
+	}
 	auto &table_function = function->functions[best_function_idx];
 
 	// now check the named parameters
 	for (auto &kv : named_parameters) {
 		auto entry = table_function.named_parameters.find(kv.first);
 		if (entry == table_function.named_parameters.end()) {
-			throw BinderException("Invalid named parameter \"%s\" for function %s", kv.first, table_function.name);
+			// create a list of named parameters for the error
+			string named_params;
+			for(auto &kv : table_function.named_parameters) {
+				named_params += "    " + kv.first + " " + kv.second.ToString() + "\n";
+			}
+			if (named_params.empty()) {
+				named_params = "Function does not accept any named parameters.";
+			} else {
+				named_params = "Candidates: " + named_params;
+			}
+			throw BinderException(error_context.FormatError("Invalid named parameter \"%s\" for function %s\n%s", kv.first, table_function.name, named_params));
 		}
 		kv.second = kv.second.CastAs(entry->second);
 	}
