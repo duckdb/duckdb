@@ -1615,3 +1615,20 @@ core_yyfree(void *ptr, core_yyscan_t yyscanner)
 	if (ptr)
 		pfree(ptr);
 }
+
+#undef yyerror
+#undef yylloc
+#undef yylval
+#undef yyin
+#undef yyout
+#undef yyextra
+#undef yyleng
+#undef yytext
+#undef yylineno
+#undef yycolumn
+#undef yy_flex_debug
+#undef yyless
+#undef YYSTYPE
+#undef YY_EXTRA_TYPE
+#undef SET_YYLLOC
+#undef ADVANCE_YYLLOC
