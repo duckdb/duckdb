@@ -71,17 +71,27 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
-		SubqueryRef subquery(view_catalog_entry->query->Copy());
+		// We need to use a new binder for the view that doesn't reference any CTEs
+		// defined for this binder so there are no collisions between the CTEs defined
+		// for the view and for the current query
+		bool inherit_ctes = false;
+		Binder view_binder(context, this, inherit_ctes);
+		for (auto &cte_it : view_catalog_entry->query->cte_map) {
+			view_binder.AddCTE(cte_it.first, cte_it.second.get());
+		}
+		SubqueryRef subquery(view_catalog_entry->query->node->Copy());
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		subquery.column_name_alias = view_catalog_entry->aliases;
 		// bind the child subquery
-		auto bound_child = Bind(subquery);
+		auto bound_child = view_binder.Bind(subquery);
 		assert(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = (BoundSubqueryRef &)*bound_child;
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}
+		bind_context.AddSubquery(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
+		                         *bound_subquery.subquery);
 		return bound_child;
 	}
 	default:

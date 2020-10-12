@@ -34,7 +34,7 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
-	//! The maximum memory used by the database system (in bytes). Default: Infinite
+	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;

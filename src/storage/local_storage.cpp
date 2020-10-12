@@ -4,11 +4,52 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
+#include "duckdb/storage/table/morsel_info.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 using namespace std;
 
-LocalTableStorage::LocalTableStorage(DataTable &table) : max_row(0) {
+LocalTableStorage::LocalTableStorage(DataTable &table) : table(table) {
+	Clear();
+}
+
+LocalTableStorage::~LocalTableStorage() {
+}
+
+void LocalTableStorage::InitializeScan(LocalScanState &state) {
+	if (collection.chunks.size() == 0) {
+		// nothing to scan
+		return;
+	}
+	state.SetStorage(this);
+
+	state.chunk_index = 0;
+	state.max_index = collection.chunks.size() - 1;
+	state.last_chunk_count = collection.chunks.back()->size();
+}
+
+LocalScanState::~LocalScanState() {
+	SetStorage(nullptr);
+}
+
+void LocalScanState::SetStorage(LocalTableStorage *new_storage) {
+	if (storage != nullptr) {
+		assert(storage->active_scans > 0);
+		storage->active_scans--;
+	}
+	storage = new_storage;
+	if (storage) {
+		storage->active_scans++;
+	}
+}
+
+void LocalTableStorage::Clear() {
+	collection.chunks.clear();
+	collection.count = 0;
+	deleted_entries.clear();
+	indexes.clear();
+	deleted_rows = 0;
 	for (auto &index : table.info->indexes) {
 		assert(index->type == IndexType::ART);
 		auto &art = (ART &)*index;
@@ -23,49 +64,33 @@ LocalTableStorage::LocalTableStorage(DataTable &table) : max_row(0) {
 	}
 }
 
-LocalTableStorage::~LocalTableStorage() {
-}
-
-void LocalTableStorage::InitializeScan(LocalScanState &state) {
-	state.storage = this;
-
-	state.chunk_index = 0;
-	state.max_index = collection.chunks.size() - 1;
-	state.last_chunk_count = collection.chunks.back()->size();
-}
-
-void LocalTableStorage::Clear() {
-	collection.chunks.clear();
-	indexes.clear();
-	deleted_entries.clear();
-}
-
 void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
 	auto entry = table_storage.find(table);
 	if (entry == table_storage.end()) {
 		// no local storage for table: set scan to nullptr
-		state.storage = nullptr;
+		state.SetStorage(nullptr);
 		return;
 	}
-	state.storage = entry->second.get();
-	state.storage->InitializeScan(state);
+	auto storage = entry->second.get();
+	storage->InitializeScan(state);
 }
 
 void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result,
                         unordered_map<idx_t, vector<TableFilter>> *table_filters) {
-	if (!state.storage || state.chunk_index > state.max_index) {
+	auto storage = state.GetStorage();
+	if (!storage || state.chunk_index > state.max_index) {
 		// nothing left to scan
 		result.Reset();
 		return;
 	}
-	auto &chunk = *state.storage->collection.chunks[state.chunk_index];
+	auto &chunk = *storage->collection.chunks[state.chunk_index];
 	idx_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
 	idx_t count = chunk_count;
 
 	// first create a selection vector from the deleted entries (if any)
 	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
-	auto entry = state.storage->deleted_entries.find(state.chunk_index);
-	if (entry != state.storage->deleted_entries.end()) {
+	auto entry = storage->deleted_entries.find(state.chunk_index);
+	if (entry != storage->deleted_entries.end()) {
 		// deleted entries! create a selection vector
 		auto deleted = entry->second.get();
 		idx_t new_count = 0;
@@ -151,9 +176,12 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 			}
 		}
 	}
-
 	//! Append to the chunk
 	storage->collection.Append(chunk);
+	if (storage->active_scans == 0 && storage->collection.count >= MorselInfo::MORSEL_SIZE) {
+		// flush to base storage
+		Flush(*table, *storage);
+	}
 }
 
 LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
@@ -187,6 +215,7 @@ void LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	} else {
 		deleted = entry->second.get();
 	}
+	storage->deleted_rows += count;
 
 	// now actually mark the entries as deleted in the deleted vector
 	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
@@ -261,18 +290,18 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &c
 	}
 }
 
-template <class T> bool LocalStorage::ScanTableStorage(DataTable *table, LocalTableStorage *storage, T &&fun) {
+template <class T> bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
-	for (idx_t i = 0; i < table->types.size(); i++) {
+	for (idx_t i = 0; i < table.types.size(); i++) {
 		column_ids.push_back(i);
 	}
 
 	DataChunk chunk;
-	chunk.Initialize(table->types);
+	chunk.Initialize(table.types);
 
 	// initialize the scan
 	LocalScanState state;
-	storage->InitializeScan(state);
+	storage.InitializeScan(state);
 
 	while (true) {
 		Scan(state, column_ids, chunk);
@@ -285,70 +314,58 @@ template <class T> bool LocalStorage::ScanTableStorage(DataTable *table, LocalTa
 	}
 }
 
+void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	if (storage.collection.count == 0) {
+		return;
+	}
+	idx_t append_count = storage.collection.count - storage.deleted_rows;
+	TableAppendState append_state;
+	table.InitializeAppend(transaction, append_state, append_count);
+
+	bool constraint_violated = false;
+	ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
+		// append this chunk to the indexes of the table
+		if (!table.AppendToIndexes(append_state, chunk, append_state.current_row)) {
+			constraint_violated = true;
+			return false;
+		}
+		// append to base table
+		table.Append(transaction, chunk, append_state);
+		return true;
+	});
+	if (constraint_violated) {
+		// need to revert the append
+		row_t current_row = append_state.row_start;
+		// remove the data from the indexes, if there are any indexes
+		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
+			// append this chunk to the indexes of the table
+			table.RemoveFromIndexes(append_state, chunk, current_row);
+
+			current_row += chunk.size();
+			if (current_row >= append_state.current_row) {
+				// finished deleting all rows from the index: abort now
+				return false;
+			}
+			return true;
+		});
+		table.RevertAppendInternal(append_state.row_start, append_count);
+		storage.Clear();
+		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+	}
+	storage.Clear();
+	transaction.PushAppend(&table, append_state.row_start, append_count);
+}
+
 void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,
                           transaction_t commit_id) {
 	// commit local storage, iterate over all entries in the table storage map
 	for (auto &entry : table_storage) {
 		auto table = entry.first;
 		auto storage = entry.second.get();
-
-		// initialize the append state
-		auto append_state_ptr = make_unique<TableAppendState>();
-		auto &append_state = *append_state_ptr;
-		// add it to the set of append states
-		commit_state.append_states[table] = move(append_state_ptr);
-		table->InitializeAppend(append_state);
-
-		if (log && !table->info->IsTemporary()) {
-			log->WriteSetTable(table->info->schema, table->info->table);
-		}
-
-		// scan all chunks in this storage
-		ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
-			// append this chunk to the indexes of the table
-			if (!table->AppendToIndexes(append_state, chunk, append_state.current_row)) {
-				throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
-			}
-
-			// append to base table
-			table->Append(transaction, commit_id, chunk, append_state);
-			// if there is a WAL, write the chunk to there as well
-			if (log && !table->info->IsTemporary()) {
-				log->WriteInsert(chunk);
-			}
-			return true;
-		});
+		Flush(*table, *storage);
 	}
 	// finished commit: clear local storage
-	for (auto &entry : table_storage) {
-		entry.second->Clear();
-	}
 	table_storage.clear();
-}
-
-void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
-	for (auto &entry : commit_state.append_states) {
-		auto table = entry.first;
-		auto storage = table_storage[table].get();
-		auto &append_state = *entry.second;
-		if (table->info->indexes.size() > 0 && !table->info->IsTemporary()) {
-			row_t current_row = append_state.row_start;
-			// remove the data from the indexes, if there are any indexes
-			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
-				// append this chunk to the indexes of the table
-				table->RemoveFromIndexes(append_state, chunk, current_row);
-
-				current_row += chunk.size();
-				if (current_row >= append_state.current_row) {
-					// finished deleting all rows from the index: abort now
-					return false;
-				}
-				return true;
-			});
-		}
-
-		table->RevertAppend(*entry.second);
-	}
 }
 
 void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,

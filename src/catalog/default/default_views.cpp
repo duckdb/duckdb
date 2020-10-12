@@ -30,7 +30,7 @@ static unique_ptr<CreateViewInfo> GetDefaultView(string schema, string name) {
 			Parser parser;
 			parser.ParseQuery(internal_views[index].sql);
 			assert(parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT);
-			result->query = move(((SelectStatement &)*parser.statements[0]).node);
+			result->query = unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0]));
 			result->temporary = true;
 			result->internal = true;
 			result->view_name = name;

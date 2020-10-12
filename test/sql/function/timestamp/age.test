@@ -4,21 +4,7 @@
 
 # age without second timestamp compares to NOW()
 statement ok
-BEGIN TRANSACTION
-
-statement ok
-CREATE TABLE t1 AS SELECT AGE(TIMESTAMP '1957-06-13') t
-
-statement ok
-INSERT INTO t1 SELECT AGE(TIMESTAMP '1957-06-13');
-
-query I
-SELECT COUNT(DISTINCT t) FROM t1
-----
-1
-
-statement ok
-ROLLBACK
+SELECT AGE(TIMESTAMP '1957-06-13') t
 
 query T
 SELECT AGE(TIMESTAMP '2001-04-10', TIMESTAMP '1957-06-13');
