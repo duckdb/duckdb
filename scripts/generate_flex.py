@@ -7,10 +7,9 @@ import re
 
 pg_path = os.path.join('third_party', 'libpg_query')
 flex_bin = 'flex'
-flex_file_path = 'scan.l'
-target_file = 'src_backend_parser_scan.cpp'
+flex_file_path = os.path.join(pg_path, 'scan.l')
+target_file = os.path.join(pg_path, 'src_backend_parser_scan.cpp')
 
-os.chdir(pg_path)
 proc = subprocess.Popen([flex_bin, '--nounistd', '-o', target_file, flex_file_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 stdout = proc.stdout.read().decode('utf8')
 stderr = proc.stderr.read().decode('utf8')
