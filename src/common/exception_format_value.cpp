@@ -46,4 +46,4 @@ string ExceptionFormatValue::Format(string msg, vector<ExceptionFormatValue> &va
 	                                     format_args.data(), static_cast<int>(format_args.size())));
 }
 
-}
+} // namespace duckdb

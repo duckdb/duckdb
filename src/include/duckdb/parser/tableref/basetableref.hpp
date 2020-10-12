@@ -23,6 +23,7 @@ public:
 	string table_name;
 	//! The location in the query (if any)
 	idx_t query_location = INVALID_INDEX;
+
 public:
 	string ToString() const override {
 		return "GET(" + schema_name + "." + table_name + ")";

@@ -126,7 +126,8 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 	}
 }
 
-SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name, QueryErrorContext error_context) {
+SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name,
+                                       QueryErrorContext error_context) {
 	if (schema_name == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
 	}

@@ -45,7 +45,8 @@ public:
 	//! Returns the root entry with the specified name regardless of transaction (or nullptr if there are none)
 	CatalogEntry *GetRootEntry(const string &name);
 
-	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if none is found
+	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
+	//! none is found
 	string SimilarEntry(const string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog

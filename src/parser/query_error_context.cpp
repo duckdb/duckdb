@@ -14,7 +14,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	// and set the start position as the first character of that line
 	idx_t start_pos = 0;
 	idx_t line_number = 1;
-	for(idx_t i = 0; i < error_location; i++) {
+	for (idx_t i = 0; i < error_location; i++) {
 		if (StringUtil::CharacterIsNewline(query[i])) {
 			line_number++;
 			start_pos = i + 1;
@@ -23,7 +23,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	// now find either the next newline token after the query, or find the end of string
 	// this is the initial end position
 	idx_t end_pos = query.size();
-	for(idx_t i = error_location; i < query.size(); i++) {
+	for (idx_t i = error_location; i < query.size(); i++) {
 		if (StringUtil::CharacterIsNewline(query[i])) {
 			end_pos = i;
 			break;
@@ -39,7 +39,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	if (utf8proc_is_valid(buf, len)) {
 		// for unicode awareness, we traverse the graphemes of the current line and keep track of their render widths
 		// and of their position in the string
-		for(idx_t cpos = 0; cpos < len;) {
+		for (idx_t cpos = 0; cpos < len;) {
 			auto char_render_width = utf8proc_render_width(buf, len, cpos);
 			positions.push_back(cpos);
 			render_widths.push_back(char_render_width);
@@ -48,7 +48,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	} else {
 		// invalid utf-8, we can't do much at this point
 		// we just assume every character is a character, and every character has a render width of 1
-		for(idx_t cpos = 0; cpos < len; cpos++) {
+		for (idx_t cpos = 0; cpos < len; cpos++) {
 			positions.push_back(cpos);
 			render_widths.push_back(1);
 		}
@@ -56,7 +56,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	// now we want to find the (unicode aware) start and end position
 	idx_t epos = 0;
 	// start by finding the error location inside the array
-	for(idx_t i = 0; i < positions.size(); i++) {
+	for (idx_t i = 0; i < positions.size(); i++) {
 		if (positions[i] >= error_location) {
 			epos = i;
 			break;
@@ -68,7 +68,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	// now we iterate backwards from the error location
 	// we show max 40 render width before the error location
 	idx_t current_render_width = 0;
-	for(idx_t i = epos; i > 0; i--) {
+	for (idx_t i = epos; i > 0; i--) {
 		current_render_width += render_widths[i];
 		if (current_render_width >= 40) {
 			truncate_beginning = true;
@@ -79,7 +79,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	}
 	// now do the same, but going forward
 	current_render_width = 0;
-	for(idx_t i = epos; i < positions.size(); i++) {
+	for (idx_t i = epos; i < positions.size(); i++) {
 		current_render_width += render_widths[i];
 		if (current_render_width >= 40) {
 			truncate_end = true;
@@ -93,11 +93,10 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 
 	// get the render width of the error indicator (i.e. how many spaces we need to insert before the ^)
 	idx_t error_render_width = 0;
-	for(idx_t i = spos; i < epos; i++) {
+	for (idx_t i = spos; i < epos; i++) {
 		error_render_width += render_widths[i];
 	}
 	error_render_width += line_indicator.size() + begin_trunc.size();
-
 
 	// now first print the error message plus the current line (or a subset of the line)
 	error_message += "\n" + line_indicator + begin_trunc + query.substr(start_pos, end_pos - start_pos) + end_trunc;
@@ -115,4 +114,4 @@ string QueryErrorContext::FormatErrorRecursive(string msg, vector<ExceptionForma
 	return Format(statement->query, error_message, query_location);
 }
 
-}
+} // namespace duckdb

@@ -33,7 +33,8 @@ public:
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
 	unordered_set<string> GetMatchingBindings(const string &column_name);
-	//! Like GetMatchingBindings, but returns the top 3 most similar bindings (in levenshtein distance) instead of the matching ones
+	//! Like GetMatchingBindings, but returns the top 3 most similar bindings (in levenshtein distance) instead of the
+	//! matching ones
 	vector<string> GetSimilarBindings(const string &column_name);
 
 	Binding *GetCTEBinding(const string &ctename);
@@ -76,7 +77,8 @@ public:
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
-	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be found.
+	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
+	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
 
 	//! The set of bindings

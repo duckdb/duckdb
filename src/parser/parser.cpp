@@ -39,7 +39,7 @@ void Parser::ParseQuery(string query) {
 		n_prepared_parameters = transformer.ParamCount();
 	}
 	if (statements.size() > 0) {
-		for(auto &statement : statements) {
+		for (auto &statement : statements) {
 			statement->query = query;
 		}
 		auto &last_statement = statements.back();

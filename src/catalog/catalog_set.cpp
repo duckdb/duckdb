@@ -239,8 +239,8 @@ string CatalogSet::SimilarEntry(const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	string result;
-	idx_t current_score = (idx_t) -1;
-	for(auto &kv : mapping) {
+	idx_t current_score = (idx_t)-1;
+	for (auto &kv : mapping) {
 		auto ldist = StringUtil::LevenshteinDistance(kv.first, name);
 		if (ldist < current_score) {
 			current_score = ldist;

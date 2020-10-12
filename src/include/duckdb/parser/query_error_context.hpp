@@ -15,13 +15,15 @@ class SQLStatement;
 
 class QueryErrorContext {
 public:
-	QueryErrorContext(SQLStatement *statement_ = nullptr, idx_t query_location_ = INVALID_INDEX) :
-	  statement(statement_), query_location(query_location_) {}
+	QueryErrorContext(SQLStatement *statement_ = nullptr, idx_t query_location_ = INVALID_INDEX)
+	    : statement(statement_), query_location(query_location_) {
+	}
 
 	//! The query statement
 	SQLStatement *statement;
 	//! The location in which the error should be thrown
 	idx_t query_location;
+
 public:
 	static string Format(string &query, string error_message, int error_location);
 
@@ -37,6 +39,5 @@ public:
 		return FormatErrorRecursive(msg, values, params...);
 	}
 };
-
 
 } // namespace duckdb

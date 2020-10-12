@@ -17,8 +17,8 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 		if (colref.table_name.empty()) {
 			auto similar_bindings = binder.bind_context.GetSimilarBindings(colref.column_name);
 			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-			return BindResult(
-			    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", colref.column_name.c_str(), candidate_str));
+			return BindResult(StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
+			                                     colref.column_name.c_str(), candidate_str));
 		}
 	}
 	BindResult result = binder.bind_context.BindColumn(colref, depth);

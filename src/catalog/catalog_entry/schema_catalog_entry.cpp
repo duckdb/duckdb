@@ -181,7 +181,8 @@ CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType t
 			if (!entry.empty()) {
 				did_you_mean = "\nDid you mean \"" + entry + "\"?";
 			}
-			throw CatalogException(error_context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type), entry_name, did_you_mean));
+			throw CatalogException(error_context.FormatError("%s with name %s does not exist!%s",
+			                                                 CatalogTypeToString(type), entry_name, did_you_mean));
 		}
 		return nullptr;
 	}

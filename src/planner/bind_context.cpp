@@ -37,7 +37,7 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	vector<pair<string, idx_t>> scores;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
-		for(auto &name : binding->names) {
+		for (auto &name : binding->names) {
 			idx_t distance = StringUtil::LevenshteinDistance(name, column_name);
 			scores.push_back(make_pair(binding->alias + "." + name, distance));
 		}
@@ -74,11 +74,12 @@ Binding *BindContext::GetBinding(const string &name, string &out_error) {
 	if (match == bindings.end()) {
 		// alias not found in this BindContext
 		vector<string> candidates;
-		for(auto &kv : bindings) {
+		for (auto &kv : bindings) {
 			candidates.push_back(kv.first);
 		}
-		string candidate_str = StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
-		out_error =StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str);
+		string candidate_str =
+		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
+		out_error = StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str);
 		return nullptr;
 	}
 	return match->second.get();

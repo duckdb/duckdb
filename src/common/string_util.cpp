@@ -25,7 +25,8 @@ void StringUtil::LTrim(string &str) {
 
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
-	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(), str.end());
+	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
+	          str.end());
 }
 
 void StringUtil::Trim(string &str) {
@@ -153,53 +154,15 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	return source;
 }
 
-// adapted from https://www.tutorialspoint.com/cplusplus-program-to-implement-levenshtein-distance-computing-algorithm
-idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
-    idx_t l1 = s1.size();
-    idx_t l2 = s2.size();
-    if (l1 == 0) {
-        return l2;
-    }
-    if (l2 == 0) {
-        return l1;
-    }
-	auto dist = unique_ptr<idx_t[]>(new idx_t[(l1 + 1) * (l2 + 1)]);
-   for(idx_t j = 0; j <= l2; j++) {
-       dist[j * l1 + 0] = j;
-   }
-   for(idx_t i = 0; i <= l1; i++) {
-      dist[i] = i;
-   }
-
-   for (idx_t j=1;j<=l1;j++) {
-      for(idx_t i=1;i<=l2;i++) {
-		idx_t track;
-         if(s1[i-1] == s2[j-1]) {
-            track= 0;
-         } else {
-            track = 1;
-         }
-		 idx_t adjacent_score1 = dist[(i - 1) * l1 + j] + 1;
-		 idx_t adjacent_score2 = dist[i * l1 + (j - 1)] + 1;
-		 idx_t adjacent_score3 = dist[(i - 1) * l1 + (j - 1)] + track;
-
-         idx_t t = MinValue<idx_t>(adjacent_score1, adjacent_score2);
-         dist[i * l1 + j] = MinValue<idx_t>(t, adjacent_score3);
-      }
-   }
-    return dist[l2 * l1 + l1];
-}
-
 vector<string> StringUtil::TopNStrings(vector<std::pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
 	if (scores.size() == 0) {
 		return vector<string>();
 	}
-	sort(scores.begin(), scores.end(), [](const pair<string, idx_t> & a, const pair<string, idx_t> & b) -> bool {
-		return a.second < b.second;
-	});
+	sort(scores.begin(), scores.end(),
+	     [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) -> bool { return a.second < b.second; });
 	vector<string> result;
 	result.push_back(scores[0].first);
-	for(idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {
+	for (idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {
 		if (scores[i].second > threshold) {
 			break;
 		}
@@ -208,9 +171,62 @@ vector<string> StringUtil::TopNStrings(vector<std::pair<string, idx_t>> scores, 
 	return result;
 }
 
+struct Simple2DArray {
+	Simple2DArray(idx_t len1, idx_t len2) : len1(len1) {
+		dist = unique_ptr<idx_t[]>(new idx_t[len1 * len2]);
+	}
+
+	idx_t &score(idx_t i, idx_t j) {
+		return dist[get_index(i, j)];
+	}
+
+private:
+	idx_t len1;
+	unique_ptr<idx_t[]> dist;
+
+	idx_t get_index(idx_t i, idx_t j) {
+		return j * len1 + i;
+	}
+};
+
+// adapted from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
+idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
+	idx_t len1 = s1.size();
+	idx_t len2 = s2.size();
+	if (len1 == 0) {
+		return len2;
+	}
+	if (len2 == 0) {
+		return len1;
+	}
+	Simple2DArray array(len1 + 1, len2 + 1);
+	array.score(0, 0) = 0;
+	for (idx_t i = 0; i <= len1; i++) {
+		array.score(i, 0) = i;
+	}
+	for (idx_t j = 0; j <= len2; j++) {
+		array.score(0, j) = j;
+	}
+	for (idx_t i = 1; i <= len1; i++) {
+		for (idx_t j = 1; j <= len2; j++) {
+			// d[i][j] = std::min({ d[i - 1][j] + 1,
+			//                      d[i][j - 1] + 1,
+			//                      d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
+			int equal = s1[i - 1] == s2[j - 1] ? 1 : 0;
+			idx_t adjacent_score1 = array.score(i - 1, j) + 1;
+			idx_t adjacent_score2 = array.score(i, j - 1) + 1;
+			idx_t adjacent_score3 = array.score(i - 1, j - 1) + equal;
+
+			idx_t t = MinValue<idx_t>(adjacent_score1, adjacent_score2);
+			array.score(i, j) = MinValue<idx_t>(t, adjacent_score3);
+		}
+	}
+	return array.score(len1, len2);
+}
+
 vector<string> StringUtil::TopNLevenshtein(vector<string> strings, const string &target, idx_t n, idx_t threshold) {
 	vector<std::pair<string, idx_t>> scores;
-	for(auto &str : strings) {
+	for (auto &str : strings) {
 		scores.push_back(make_pair(str, LevenshteinDistance(str, target)));
 	}
 	return TopNStrings(scores, n, threshold);
@@ -220,7 +236,7 @@ string StringUtil::CandidatesMessage(const vector<string> &candidates, string ca
 	string result_str;
 	if (candidates.size() > 0) {
 		result_str = "\n" + candidate + ": ";
-		for(idx_t i = 0; i < candidates.size(); i++) {
+		for (idx_t i = 0; i < candidates.size(); i++) {
 			if (i > 0) {
 				result_str += ", ";
 			}

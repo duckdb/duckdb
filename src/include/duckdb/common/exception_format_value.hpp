@@ -33,6 +33,7 @@ struct ExceptionFormatValue {
 	double dbl_val;
 	int64_t int_val;
 	string str_val;
+
 public:
 	template <class T> static ExceptionFormatValue CreateFormatValue(T value) {
 		return int64_t(value);
@@ -48,4 +49,4 @@ template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string 
 template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
 template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
 
-}
+} // namespace duckdb
