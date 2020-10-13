@@ -19821,8 +19821,8 @@ static int do_meta_command(char *zLine, ShellState *p){
     for(j=1; j<nArg; j++){
       p->colWidth[j-1] = (int)integerValue(azArg[j]);
     }
-  } else
-  {
+  } else {
+#ifdef HAVE_LINENOISE
     const char *error = NULL;
     if (linenoiseParseOption((const char**) azArg, nArg, &error)) {
       if (error) {
@@ -19830,6 +19830,7 @@ static int do_meta_command(char *zLine, ShellState *p){
         rc = 1;
       }
     } else {
+#endif
       utf8_printf(stderr, "Error: unknown command or invalid arguments: "
         " \"%s\". Enter \".help\" for help\n", azArg[0]);
       rc = 1;
