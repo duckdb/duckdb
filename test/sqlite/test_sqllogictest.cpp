@@ -41,6 +41,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include "extension_helper.hpp"
 
@@ -334,33 +335,35 @@ static void print_header(string header) {
 
 static void print_sql(string sql) {
 	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
-	vector<string> keywords = {"SELECT",   "FROM",   "LIMIT",       "WHERE",        "HAVING",
-	                           "GROUP BY", "JOIN",   "INNER",       "CREATE TABLE", "INSERT INTO",
-	                           "ORDER BY", "VALUES", "ALTER TABLE", "INTEGER",      "VARCHAR"};
-	// this is super inefficient, but I don't care for now
-	while (true) {
-		size_t next_keyword_pos = string::npos;
-		string next_keyword;
-		for (auto &keyword : keywords) {
-			size_t next_occurrence = sql.find(keyword);
-			if (next_occurrence < next_keyword_pos) {
-				next_keyword = keyword;
-				next_keyword_pos = next_occurrence;
-			}
-		}
-		if (next_keyword_pos == string::npos) {
+	auto tokens = Parser::Tokenize(sql);
+	for(idx_t i = 0; i < tokens.size(); i++) {
+		auto &token = tokens[i];
+		idx_t next = i  + 1 < tokens.size() ? tokens[i + 1].start : sql.size();
+		// adjust the highlighting based on the type
+		switch(token.type) {
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+			std::cerr << termcolor::yellow;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+			std::cerr << termcolor::magenta;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+			std::cerr << termcolor::green << termcolor::bold;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+			std::cerr << termcolor::grey;
 			break;
 		}
-		// found a keyword!
-		// first print the string until next_keyword_pos normally
-		std::cerr << sql.substr(0, next_keyword_pos);
-		// now print the keyword
-		std::cerr << termcolor::green << termcolor::bold << next_keyword << termcolor::reset;
-		// now subset the sql to skip forward
-		sql = sql.substr(next_keyword_pos + next_keyword.size());
+		// print the current token
+		std::cerr << sql.substr(token.start, next - token.start);
+		// reset and move to the next token
+		std::cerr <<  termcolor::reset;
 	}
-	// print the remainder of the sql string
-	std::cerr << sql << std::endl;
+	std::cerr << std::endl;
 }
 
 static void print_error_header(const char *description, string file_name, int nline) {
