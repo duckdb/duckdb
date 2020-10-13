@@ -1,0 +1,83 @@
+# name: test/sql/function/string/test_string_split.test
+# description: String split test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query T
+SELECT UNNEST(string_split(' 🦆🦆  🦆🦆', '  '))
+----
+ 🦆🦆
+🦆🦆
+
+query T
+SELECT UNNEST(string_split('a a a a a', ' '))
+----
+a
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split('🦆 🦆 🦆 🦆 🦆', ' '))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT UNNEST(string_split('🦆🐈🐈🦆🐈🐈🦆🐈🐈🦆🐈🐈🦆', '🐈🐈'))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+statement ok
+CREATE TABLE documents(s VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('baabbaa'), ('aabbaab'), ('ababababa'), ('b🦆🦆bb🦆🦆'), ('🦆🦆bb🦆🦆b'), ('🦆b🦆b🦆b🦆b🦆')
+
+query T
+SELECT UNNEST(string_split(s, 'bb')) FROM documents
+----
+baa
+aa
+aa
+aa
+ababababa
+b🦆🦆
+🦆🦆
+🦆🦆
+🦆🦆
+🦆b🦆b🦆b🦆b🦆
+
+query T
+SELECT UNNEST(string_split(s, 'bb')) FROM documents WHERE s LIKE 'b%'
+----
+baa
+aa
+b🦆🦆
+🦆🦆
+
+statement ok
+SELECT UNNEST(string_split('', 'delim'))
+
+statement ok
+SELECT string_split(string_agg(range, ' '), ' '), mod(range, 1000) xx FROM range(500000) GROUP BY xx
+
+statement ok
+SELECT string_split(string_agg(range, '🦆 '), ' '), mod(range, 1000) xx FROM range(500000) GROUP BY xx
+
+#query T
+#SELECT UNNEST(string_split(NULL))
+#----
+#NULL
+#
+## TODO: full circle test with concat
