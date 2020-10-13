@@ -1,0 +1,39 @@
+# name: test/sql/prepared/parameter_variants.test
+# description: Test parameter variants
+# group: [prepared]
+
+# question mark as parameter
+statement ok
+PREPARE s1 AS SELECT CAST(? AS INTEGER), CAST(? AS STRING)
+
+query II
+EXECUTE s1(42, 'dpfkg')
+----
+42	dpfkg
+
+statement ok
+DEALLOCATE s1
+
+# question mark with indicator
+statement ok
+PREPARE s1 AS SELECT CAST(?1 AS INTEGER), CAST(?2 AS STRING)
+
+query II
+EXECUTE s1(42, 'dpfkg')
+----
+42	dpfkg
+
+statement ok
+DEALLOCATE s1
+
+# question mark with indicator reversed
+statement ok
+PREPARE s1 AS SELECT CAST(?2 AS INTEGER), CAST(?1 AS STRING)
+
+query II
+EXECUTE s1('dpfkg', 42)
+----
+42	dpfkg
+
+statement ok
+DEALLOCATE s1
