@@ -41,7 +41,13 @@ def tf():
 test('select \'asdf\' as a;', out='asdf')
 
 # test pragma
-test("CREATE TABLE t0(c0 INT);PRAGMA table_info('t0');", out='0|c0|INTEGER|false||false')
+test("""
+.mode csv
+.headers off
+.sep |
+CREATE TABLE t0(c0 INT);
+PRAGMA table_info('t0');
+""", out='0|c0|INTEGER|false||false')
 
 datafile = tf()
 print("42\n84",  file=open(datafile, 'w'))
@@ -198,9 +204,10 @@ test('.sha3sum')
 
 
 test('''
+.mode csv
 .separator XX
 SELECT 42,43;
-''', out="XX")
+''', out="42XX43")
 
 test('''
 .timer on
