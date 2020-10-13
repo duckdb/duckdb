@@ -7,8 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-#define ROW_COUNT 100000000
-#define UPPERBOUND 100000000
+#define ROW_COUNT 10000000
+#define UPPERBOUND 10000000
 #define SUCCESS 0
 
 DUCKDB_BENCHMARK(IndexCreationART, "[micro]")
@@ -33,16 +33,6 @@ virtual void Cleanup(DuckDBBenchmarkState *state) {
 virtual string VerifyResult(QueryResult *result) {
 	if (!result->success) {
 		return result->error;
-	}
-	auto &materialized = (MaterializedQueryResult &)*result;
-	if (materialized.collection.count != 1) {
-		return "Incorrect amount of rows in result";
-	}
-	if (materialized.names.size() != 1) {
-		return "Incorrect amount of columns";
-	}
-	if (materialized.GetValue<int32_t>(0, 0) != SUCCESS) {
-		return "Incorrect result returned, expected " + to_string(SUCCESS);
 	}
 	return string();
 }

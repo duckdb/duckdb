@@ -9,9 +9,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-#include <utility>
-
 #include <iostream>
+#include <utility>
 
 using namespace std;
 
@@ -23,7 +22,7 @@ public:
 	    : PhysicalOperatorState(op, left) {
 		assert(left && right);
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-			rhs_chunks.emplace_back();
+			rhs_rows.emplace_back();
 			result_sizes.emplace_back();
 		}
 	}
@@ -31,30 +30,17 @@ public:
 	idx_t lhs_idx = 0;
 	idx_t rhs_idx = 0;
 	idx_t result_size = 0;
-	vector<vector<idx_t>> result_sizes;
+	vector<idx_t> result_sizes;
 	DataChunk join_keys;
 	//! We store a vector of rhs data chunks, one for each key in the lhs_chunk
 	//! Since one lhs_key might have more then one rhs_chunk as result we store it in a matrix
-	vector<vector<unique_ptr<DataChunk>>> rhs_chunks;
+	vector<vector<row_t>> rhs_rows;
 	ExpressionExecutor probe_executor;
-	unique_ptr<IndexScanState> idx_state;
 	IndexLock lock;
 	idx_t chunk_cur = 0;
-
-	void GetRHSChunk(ExecutionContext &context, Index &index, PhysicalOperator &rhs, vector<column_t> &fetch_ids,
-	                 vector<LogicalType> &fetch_types, bool reset);
-	//! Fills the result chunk and outputs one vector match per execution. Used when one LHS key has tons of matches
-	inline bool OutputPerMatch(DataChunk &chunk, bool lhs_first, vector<column_t> &left_projection_map,
-	                                    vector<column_t> &right_projection_map, vector<column_t> &column_ids,
-	                                    unordered_set<column_t> index_ids);
-	//! Set Element to probe the index with
-	inline bool SetProbe(ExecutionContext &context, Index &index, idx_t lhs_idx_);
-
-	//! Fills the result chunk and outputs depending on the element with the highest number of matches of the LHS
-	//! Chunk
-	bool FillResultChunkPerChunk(DataChunk &chunk, bool lhs_first, vector<column_t> &left_projection_map,
-	                             vector<column_t> &right_projection_map, vector<column_t> &column_ids,
-	                             unordered_set<column_t> index_ids);
+	//! Stores the max matches found in this LHS chunk
+	//! Used to decide how we will output data for this LHS chunk
+	size_t max_matches = 0;
 };
 
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -83,38 +69,43 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	}
 }
 
-bool PhysicalIndexJoinOperatorState::OutputPerMatch(DataChunk &chunk, bool lhs_first,
-                                                             vector<column_t> &left_projection_map,
-                                                             vector<column_t> &right_projection_map,
-                                                             vector<column_t> &column_ids,
-                                                             unordered_set<column_t> index_ids) {
-	result_size = result_sizes[lhs_idx][rhs_idx];
-	chunk.SetCardinality(result_size);
-	if (result_size == 0) {
-		//! Nothing to output
-		lhs_idx++;
-		rhs_idx = 0;
-		return false;
+bool PhysicalIndexJoin::OutputPerMatch(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
+	auto &transaction = Transaction::GetTransaction(context.client);
+	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
+	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
+	auto tbl = bind_tbl.table->storage.get();
+	DataChunk rhs_chunk;
+	auto next_pos = state->result_sizes[state->lhs_idx] - state->rhs_idx > STANDARD_VECTOR_SIZE
+	                    ? state->rhs_idx + STANDARD_VECTOR_SIZE
+	                    : state->result_sizes[state->lhs_idx];
+	if (!fetch_types.empty()) {
+		rhs_chunk.Initialize(fetch_types);
+		ColumnFetchState fetch_state;
+		Vector row_ids;
+		row_ids.type = LOGICAL_ROW_TYPE;
+		FlatVector::SetData(row_ids, (data_ptr_t)&state->rhs_rows[state->lhs_idx][state->rhs_idx]);
+		tbl->Fetch(transaction, rhs_chunk, fetch_ids, row_ids, next_pos - state->rhs_idx, fetch_state);
 	}
 	idx_t rhs_column_idx = 0;
 	if (!lhs_first) {
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			auto it = index_ids.find(column_ids[right_projection_map[i]]);
 			if (it == index_ids.end()) {
-				chunk.data[i].Reference(rhs_chunks[lhs_idx][rhs_idx]->data[rhs_column_idx++]);
+				chunk.data[i].Reference(rhs_chunk.data[rhs_column_idx++]);
 			} else {
-				auto rvalue = join_keys.GetValue(0, lhs_idx);
+				auto rvalue = state->join_keys.GetValue(0, state->lhs_idx);
 				chunk.data[i].Reference(rvalue);
 			}
 		}
 		for (idx_t i = 0; i < left_projection_map.size(); i++) {
-			auto lvalue = child_chunk.GetValue(left_projection_map[i], lhs_idx);
+			auto lvalue = state->child_chunk.GetValue(left_projection_map[i], state->lhs_idx);
 			chunk.data[right_projection_map.size() + i].Reference(lvalue);
 		}
 	} else {
 		//! We have to duplicate LRS to number of matches
 		for (idx_t i = 0; i < left_projection_map.size(); i++) {
-			auto lvalue = child_chunk.GetValue(left_projection_map[i], lhs_idx);
+			auto lvalue = state->child_chunk.GetValue(left_projection_map[i], state->lhs_idx);
 			chunk.data[i].Reference(lvalue);
 		}
 		//! Add actual value
@@ -122,99 +113,93 @@ bool PhysicalIndexJoinOperatorState::OutputPerMatch(DataChunk &chunk, bool lhs_f
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			auto it = index_ids.find(column_ids[right_projection_map[i]]);
 			if (it == index_ids.end()) {
-				chunk.data[left_projection_map.size() + i].Reference(
-				    rhs_chunks[lhs_idx][rhs_idx]->data[rhs_column_idx++]);
+				chunk.data[left_projection_map.size() + i].Reference(rhs_chunk.data[rhs_column_idx++]);
 			} else {
-				auto rvalue = join_keys.GetValue(0, lhs_idx);
+				auto rvalue = state->join_keys.GetValue(0, state->lhs_idx);
 				chunk.data[left_projection_map.size() + i].Reference(rvalue);
 			}
 		}
 	}
-	rhs_idx++;
-	if (rhs_idx == rhs_chunks[lhs_idx].size()) {
-		//! We are done with this rhs vector chain, move to the next rhs chunk chain
-		rhs_idx = 0;
-		lhs_idx++;
+	state->result_size = next_pos - state->rhs_idx;
+	chunk.SetCardinality(state->result_size);
+	state->rhs_idx = next_pos;
+	if (state->rhs_idx == state->result_sizes[state->lhs_idx]) {
+		//! We move to the next lhs value
+		state->rhs_idx = 0;
+		state->lhs_idx++;
 	}
-
 	return false;
 }
 
-bool PhysicalIndexJoinOperatorState::FillResultChunkPerChunk(DataChunk &chunk, bool lhs_first,
-                                                             vector<column_t> &left_projection_map,
-                                                             vector<column_t> &right_projection_map,
-                                                             vector<column_t> &column_ids,
-                                                             unordered_set<column_t> index_ids) {
+// bool PhysicalIndexJoinOperatorState::OutputPerLHSChunk(DataChunk &chunk, bool lhs_first,
+//                                                       vector<column_t> &left_projection_map,
+//                                                       vector<column_t> &right_projection_map,
+//                                                       vector<column_t> &column_ids,
+//                                                       unordered_set<column_t> index_ids) {
+//	idx_t rhs_column_idx = 0;
+//	if (rhs_idx == max_matches) {
+//		//! We are done with this LHS Chunk
+//		lhs_idx++;
+//		rhs_idx = 0;
+//		return false;
+//	} else if (rhs_idx == 0) {
+//		//! First time accessing this LHS chunk
+//		output_sel.Initialize(STANDARD_VECTOR_SIZE);
+//		idx_t output_sel_idx{};
+//		for (idx_t i{}; i < result_sizes.size(); i++) {
+//			if (result_sizes[i][0] > 0) {
+//				output_sel.set_index(output_sel_idx++, i);
+//			}
+//		}
+//		output_sel_size = output_sel_idx;
+//	} else {
+//		//! We need to update the selection vector to remove elements that don't have matches over rhs_idx
+//		for (int i{}; i < output_sel_size; i++) {
+//			if (result_sizes[output_sel.get_index(i)][0] <= lhs_idx) {
+//				output_sel.swap(i, output_sel_size);
+//				//! ug this is hacky
+//				i--;
+//				output_sel_size--;
+//			}
+//		}
+//	}
+//	//! Now we actually output stuff
+//	if (!lhs_first) {
+//		for (idx_t i = 0; i < right_projection_map.size(); i++) {
+//			auto it = index_ids.find(column_ids[right_projection_map[i]]);
+//			if (it == index_ids.end()) {
+//				chunk.data[i].Reference(rhs_chunks[lhs_idx][rhs_idx]->data[rhs_column_idx++]);
+//			} else {
+//				chunk.data[i].Reference(join_keys.data[0]);
+//			}
+//		}
+//		for (idx_t i = 0; i < left_projection_map.size(); i++) {
+//			chunk.data[right_projection_map.size() + i].Reference(child_chunk.data[i]);
+//		}
+//	}
+//}
 
-	assert(0);
-	chunk.SetCardinality(result_size);
-	return false;
-}
-
-void PhysicalIndexJoinOperatorState::GetRHSChunk(ExecutionContext &context, Index &index, PhysicalOperator &rhs,
-                                                 vector<column_t> &fetch_ids, vector<LogicalType> &fetch_types,
-                                                 bool reset) {
-	auto &art = (ART &)index;
-	auto &transaction = Transaction::GetTransaction(context.client);
-	auto &phy_tbl_scan = (PhysicalTableScan &)rhs;
-	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
-	auto tbl = bind_tbl.table->storage.get();
-	auto idx_state_ = (ARTIndexScanState *)idx_state.get();
-	vector<row_t> result_ids;
-	unique_ptr<DataChunk> rhs_chunk = make_unique<DataChunk>();
-	if (reset) {
-		rhs_chunks[lhs_idx].clear();
-		result_sizes[lhs_idx].clear();
-	}
-
-	if (art.SearchEqualJoin(idx_state_, result_ids)) {
-		idx_state.reset();
-		assert(!idx_state);
-	}
-	result_sizes[lhs_idx].push_back(result_ids.size());
-	if (fetch_types.empty()) {
-		//! Nothing to materialize
-		rhs_chunks[lhs_idx].push_back(move(rhs_chunk));
-		return;
-	}
-	rhs_chunk->Initialize(fetch_types);
-	ColumnFetchState fetch_state;
-	Vector row_ids;
-	row_ids.type = LOGICAL_ROW_TYPE;
-	FlatVector::SetData(row_ids, (data_ptr_t)&result_ids[0]);
-	tbl->Fetch(transaction, *rhs_chunk, fetch_ids, row_ids, result_ids.size(), fetch_state);
-	rhs_chunks[lhs_idx].push_back(move(rhs_chunk));
-}
-
-bool PhysicalIndexJoinOperatorState::SetProbe(ExecutionContext &context, Index &index, idx_t lhs_idx_) {
-	auto &transaction = Transaction::GetTransaction(context.client);
-	auto equal_value = join_keys.GetValue(0, lhs_idx_);
-	if (equal_value.is_null) {
-		return false;
-
-	} else {
-		idx_state = index.InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
-		return true;
-	}
-}
-void PhysicalIndexJoin::GetAllRHSChunks(ExecutionContext &context, PhysicalOperatorState *state_) {
+void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_) const {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
+	auto &art = (ART &)*index;
 	for (idx_t i = 0; i < state->child_chunk.size(); i++) {
-		state->SetProbe(context, *index, i);
-		if (!state->idx_state) {
-			state->rhs_chunks[state->lhs_idx].clear();
-			state->result_sizes[state->lhs_idx].clear();
-			state->result_sizes[state->lhs_idx].push_back({0});
+		auto equal_value = state->join_keys.GetValue(0, i);
+		state->rhs_rows[i].clear();
+		if (!equal_value.is_null) {
+			if (fetch_types.empty()) {
+				//! Nothing to materialize
+				art.SearchEqualJoinNoFetch(equal_value, state->result_sizes[i]);
+				state->max_matches = max(state->max_matches, state->result_sizes[i]);
+			} else {
+				art.SearchEqualJoin(equal_value, state->rhs_rows[i]);
+				state->result_sizes[i] = state->rhs_rows[i].size();
+				state->max_matches = max(state->max_matches, state->rhs_rows[i].size());
+			}
 		}
 		else{
-			//! Get first RHS chunk
-			state->GetRHSChunk(context, *index, *(children[1]), fetch_ids, fetch_types, true);
+			//! This is null so no matches
+			state->result_sizes[i] = 0;
 		}
-		while (state->idx_state) {
-			//! If we have more than one RHS chunk for that key, add it in the chain
-			state->GetRHSChunk(context, *index, *(children[1]), fetch_ids, fetch_types, false);
-		}
-		state->lhs_idx++;
 	}
 }
 
@@ -223,6 +208,7 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 	if (!state->lock.index_lock) {
 		index->InitializeLock(state->lock);
 	}
+	state->result_size = 0;
 	while (state->result_size == 0) {
 		//! Check if we need to get a new LHS chunk
 		if (state->lhs_idx >= state->child_chunk.size()) {
@@ -233,20 +219,24 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				return;
 			}
 			state->lhs_idx = 0;
+			state->max_matches = 0;
 			state->probe_executor.Execute(state->child_chunk, state->join_keys);
 		}
-		//! Iterate over LHS chunk
-		//! Fill rhs_chunks with the matches for each LHS chunk key
+		//! Fill Matches for the current LHS chunk
 		if (state->lhs_idx == 0) {
-			GetAllRHSChunks(context, state_);
-			state->lhs_idx = 0;
+			GetRHSMatches(context, state_);
 		}
 		//! Output vectors
 		if (state->lhs_idx < state->child_chunk.size()) {
-			state->OutputPerMatch(chunk, lhs_first, left_projection_map, right_projection_map, column_ids, index_ids);
+			//			if (state->max_matches > 100) {
+			//! At least one element is over 100 matches, lets output per match
+			OutputPerMatch(context, chunk, state_);
+			//			} else {
+			//				state->OutputPerLHSChunk(chunk, lhs_first, left_projection_map, right_projection_map,
+			// column_ids, 				                         index_ids);
+			//			}
 		}
 	}
-	state->result_size = 0;
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {

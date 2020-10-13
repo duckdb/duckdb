@@ -50,7 +50,18 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
-	void GetAllRHSChunks(ExecutionContext &context, PhysicalOperatorState *state_);
+	//! This is the value we use to decide if we do per chunk output or per match output
+	const size_t per_chunk_threshold = 100;
+//	void GetAllRHSChunks(ExecutionContext &context, PhysicalOperatorState *state_);
+
+	void GetRHSMatches(ExecutionContext &context,PhysicalOperatorState *state_) const;
+	//! Fills the result chunk and outputs one vector match per execution. Used when one LHS key has tons of matches
+	inline bool OutputPerMatch(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
+
+
+	//! Fills the result chunk and outputs depending on the element with the highest number of matches of the LHS
+	//! Chunk
+//	bool OutputPerLHSChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_));
 };
 
 } // namespace duckdb

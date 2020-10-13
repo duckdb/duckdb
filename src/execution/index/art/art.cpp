@@ -439,39 +439,39 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 	return true;
 }
 
-bool ART::SearchEqualJoin(ARTIndexScanState *state, vector<row_t> &result_ids) {
+void ART::SearchEqualJoin(Value &equal_value, vector<row_t> &result_ids) {
 	vector<row_t> row_ids;
-	if (!state->cur_leaf) {
-		//! We need to look for a leaf
-		auto key = CreateKey(*this, types[0], state->values[0]);
-		state->cur_leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
-		if (!state->cur_leaf) {
-			return true;
-		}
+	//! We need to look for a leaf
+	auto key = CreateKey(*this, types[0], equal_value);
+	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
+	if (!leaf) {
+		return;
 	}
-	size_t next_pos = state->cur_leaf->num_elements - state->result_index > STANDARD_VECTOR_SIZE
-	                      ? state->result_index + STANDARD_VECTOR_SIZE
-	                      : state->cur_leaf->num_elements;
-	for (; state->result_index < next_pos; state->result_index++) {
-		row_t row_id = state->cur_leaf->GetRowId(state->result_index);
-		row_ids.push_back(row_id);
+	for (idx_t i = 0; i < leaf->num_elements; i++) {
+		result_ids.push_back(leaf->GetRowId(i));
 	}
-	// sort the row ids
-	sort(row_ids.begin(), row_ids.end());
-	// duplicate eliminate the row ids and append them to the row ids of the state
-	result_ids.reserve(row_ids.size());
+//	// sort the row ids
+//	sort(row_ids.begin(), row_ids.end());
+//	// duplicate eliminate the row ids and append them to the row ids of the state
+//	result_ids.reserve(row_ids.size());
+//
+//	result_ids.push_back(row_ids[0]);
+//	for (idx_t i = 1; i < row_ids.size(); i++) {
+//		if (row_ids[i] != row_ids[i - 1]) {
+//			result_ids.push_back(row_ids[i]);
+//		}
+//	}
 
-	result_ids.push_back(row_ids[0]);
-	for (idx_t i = 1; i < row_ids.size(); i++) {
-		if (row_ids[i] != row_ids[i - 1]) {
-			result_ids.push_back(row_ids[i]);
-		}
+}
+
+void ART::SearchEqualJoinNoFetch(Value &equal_value,  idx_t& result_size) {
+	//! We need to look for a leaf
+	auto key = CreateKey(*this, types[0], equal_value);
+	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
+	if (!leaf) {
+		return;
 	}
-	if (next_pos == state->cur_leaf->num_elements) {
-		//! We are done with this leaf
-		return true;
-	}
-	return false;
+	result_size = leaf->num_elements;
 }
 
 Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
