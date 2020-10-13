@@ -38,6 +38,11 @@ SELECT UNNEST(string_split('🦆🐈🐈🦆🐈🐈🦆🐈🐈🦆🐈🐈🦆
 🦆
 🦆
 
+query T
+SELECT UNNEST(string_split('', 'delim'))
+----
+(empty)
+
 statement ok
 CREATE TABLE documents(s VARCHAR)
 
@@ -45,17 +50,17 @@ statement ok
 INSERT INTO documents VALUES ('baabbaa'), ('aabbaab'), ('ababababa'), ('b🦆🦆bb🦆🦆'), ('🦆🦆bb🦆🦆b'), ('🦆b🦆b🦆b🦆b🦆')
 
 query T
-SELECT UNNEST(string_split(s, 'bb')) FROM documents
+SELECT UNNEST(string_split(s, 'bb')) FROM documents WHERE 1
 ----
 baa
 aa
 aa
-aa
+aab
 ababababa
 b🦆🦆
 🦆🦆
 🦆🦆
-🦆🦆
+🦆🦆b
 🦆b🦆b🦆b🦆b🦆
 
 query T
@@ -67,13 +72,10 @@ b🦆🦆
 🦆🦆
 
 statement ok
-SELECT UNNEST(string_split('', 'delim'))
+SELECT string_split(string_agg(range, ' '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
 
 statement ok
-SELECT string_split(string_agg(range, ' '), ' '), mod(range, 1000) xx FROM range(500000) GROUP BY xx
-
-statement ok
-SELECT string_split(string_agg(range, '🦆 '), ' '), mod(range, 1000) xx FROM range(500000) GROUP BY xx
+SELECT string_split(string_agg(range, '🦆 '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
 
 #query T
 #SELECT UNNEST(string_split(NULL))
