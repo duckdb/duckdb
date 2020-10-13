@@ -43,6 +43,38 @@ SELECT UNNEST(string_split('', 'delim'))
 ----
 (empty)
 
+query T
+SELECT UNNEST(string_split('aaaaa', ''))
+----
+a
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split('🦆🦆🦆🦆🦆', ''))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT UNNEST(string_split('abab', 'b'))
+----
+a
+a
+(empty)
+
+query T
+SELECT UNNEST(string_split('🦆b🦆b', 'b'))
+----
+🦆
+🦆
+(empty)
+
 statement ok
 CREATE TABLE documents(s VARCHAR)
 

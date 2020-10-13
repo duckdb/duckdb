@@ -16,35 +16,40 @@ public:
 	bool HasNext() {
 		return offset < size;
 	}
-	idx_t Offset() { return offset; }
+	idx_t Start() { return start; }
 	const size_t size;
 protected:
-	idx_t offset = 0;
+	idx_t start = 0;	// end of last place a delim match was found
+	idx_t offset = 0;	// current position
 };
 
 struct AsciiIterator : virtual public Iterator {
 public:
 	AsciiIterator(size_t size, const char *delim, const size_t delim_size) : Iterator(size), delim(delim), delim_size(delim_size) {}
 	idx_t Next(const char *input) override {
-		while (HasNext()) {
-			// potential delimiter match found
-			if (input[offset] == delim[0] && offset + delim_size < size) {
+		// special case: separate by empty delimiter
+		if (delim_size == 0) {
+			offset++;
+			start = offset;
+			return offset;
+		}
+		for (offset = start; HasNext(); offset++) {
+			// potential delimiter match
+			if (input[offset] == delim[0] && offset + delim_size <= size) {
 				idx_t i = 1;
 				while (i < delim_size) {
-					if (input[offset + i] == delim[i] || delim_size == 0) {
+					if (input[offset + i] == delim[i]) {
 						i++;
 					} else {
 						break;
 					}
 				}
-				// if delimiter was found: return end of string, skip over delimiter
+				// delimiter found: skip start over delimiter
 				if (i == delim_size) {
-					idx_t end = offset;
-					offset += delim_size;
-					return end;
+					start = offset + delim_size;
+					return offset;
 				}
 			}
-			offset++;
 		}
 		return offset;
 	}
@@ -63,10 +68,17 @@ public:
 		}
 	}
 	idx_t Next(const char *input) override {
+		offset = start;
+		// special case: separate by empty delimiter
+		if (delim_size == 0) {
+			offset = utf8proc_next_grapheme(input, size, offset);
+			start = offset;
+			return offset;
+		}
 		int cp_sz;
-		while (HasNext()) {
-			// potential delimiter match found
-			if (utf8proc_codepoint(&input[offset], cp_sz) == delim_cps[0] && offset + delim_size < size) {
+		for (offset = start; HasNext(); offset = utf8proc_next_grapheme(input, size, offset)) {
+			// potential delimiter match
+			if (utf8proc_codepoint(&input[offset], cp_sz) == delim_cps[0] && offset + delim_size <= size) {
 				idx_t delim_offset = cp_sz;
 				idx_t i = 1;
 				while (delim_offset < delim_size) {
@@ -77,14 +89,12 @@ public:
 						break;
 					}
 				}
-				// if delimiter was found: return end of string, skip over delimiter
+				// delimiter found: skip start over delimiter
 				if (delim_offset == delim_size) {
-					idx_t end = offset;
-					offset += delim_size;
-					return end;
+					start = offset + delim_size;
+					return offset;
 				}
 			} 
-			offset = utf8proc_next_grapheme(input, size, offset);
 		}
 		return offset;
 	}
@@ -113,8 +123,9 @@ void string_split(const char *input, Iterator &iter, ChunkCollection &result) {
 			append_chunk->Initialize(types);
 		}
 
-		idx_t start = iter.Offset();
-		size_t length = iter.Next(input) - start;
+		idx_t start = iter.Start();
+		idx_t end = iter.Next(input);
+		size_t length = end - start;
 
 		FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
 		    StringVector::AddString(append_chunk->data[0], &input[start], length);
