@@ -1111,11 +1111,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// perform any renames in zScript
 			command->sql_query = ReplaceKeywords(zScript);
 
-			// skip CREATE INDEX in original sqlite tests (for now...)
-			if (original_sqlite_test && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
-				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
-				continue;
-			}
 			// parse
 			if (strcmp(sScript.azToken[1], "ok") == 0) {
 				command->expect_ok = true;
