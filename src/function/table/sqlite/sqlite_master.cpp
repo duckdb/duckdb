@@ -4,6 +4,8 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 
@@ -49,6 +51,7 @@ unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, cons
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
 		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->indexes.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	return move(result);
@@ -73,6 +76,7 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 
 		// return values:
 		// "type", PhysicalType::VARCHAR
+		string table_name = entry->name;
 		const char *type_str;
 		switch (entry->type) {
 		case CatalogType::TABLE_ENTRY:
@@ -87,6 +91,12 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 		case CatalogType::VIEW_ENTRY:
 			type_str = "view";
 			break;
+		case CatalogType::INDEX_ENTRY: {
+			auto &index = (IndexCatalogEntry &) *entry;
+			table_name = index.info->table;
+			type_str = "index";
+			break;
+		}
 		default:
 			type_str = "unknown";
 		}
@@ -94,7 +104,7 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, count, Value(entry->name));
 		// "tbl_name", PhysicalType::VARCHAR
-		output.SetValue(2, count, Value(entry->name));
+		output.SetValue(2, count, Value(table_name));
 		// "rootpage", PhysicalType::INT32
 		output.SetValue(3, count, Value::INTEGER(0));
 		// "sql", PhysicalType::VARCHAR

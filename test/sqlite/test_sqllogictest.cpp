@@ -344,10 +344,8 @@ static void print_sql(string sql) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-			std::cerr << termcolor::yellow;
-			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			std::cerr << termcolor::magenta;
+			std::cerr << termcolor::yellow;
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
 			break;
