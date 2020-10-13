@@ -20122,7 +20122,7 @@ static char *find_home_dir(int clearFlag){
 
 /*
 ** Read input from the file given by sqliterc_override.  Or if that
-** parameter is NULL, take input from ~/.sqliterc
+** parameter is NULL, take input from ~/.duckdbrc
 **
 ** Returns the number of errors.
 */
@@ -20140,10 +20140,10 @@ static void process_sqliterc(
     home_dir = find_home_dir(0);
     if( home_dir==0 ){
       raw_printf(stderr, "-- warning: cannot find home directory;"
-                      " cannot read ~/.sqliterc\n");
+                      " cannot read ~/.duckdbrc\n");
       return;
     }
-    zBuf = sqlite3_mprintf("%s/.sqliterc",home_dir);
+    zBuf = sqlite3_mprintf("%s/.duckdbrc",home_dir);
     sqliterc = zBuf;
   }
   p->in = fopen(sqliterc,"rb");
