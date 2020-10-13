@@ -6,6 +6,16 @@ statement ok
 PRAGMA enable_verification
 
 query T
+SELECT UNNEST(string_split('üüüüü', '◌̈')) 
+----
+üüüüü
+
+query T
+SELECT UNNEST(string_split('üüüüü', '◌'))
+----
+üüüüü
+
+query T
 SELECT UNNEST(string_split(' 🦆🦆  🦆🦆', '  '))
 ----
  🦆🦆
@@ -108,6 +118,28 @@ SELECT string_split(string_agg(range, ' '), ' '), mod(range, 100) xx FROM range(
 
 statement ok
 SELECT string_split(string_agg(range, '🦆 '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
+
+query T
+SELECT UNNEST(string_split_regex('a1a11a111a', '[0-9]+'))
+----
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split_regex('aaaaa', ''))
+----
+a
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split('aaaaa', NULL))
+----
+aaaaa
 
 #query T
 #SELECT UNNEST(string_split(NULL))
