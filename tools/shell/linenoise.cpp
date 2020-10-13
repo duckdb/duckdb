@@ -118,6 +118,11 @@
 #include "linenoise.h"
 #include "utf8proc_wrapper.h"
 
+#if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
+// disable highlighting on windows (for now?)
+#define DISABLE_HIGHLIGHT
+#endif
+
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
 #define LINENOISE_MAX_LINE 4096
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
@@ -132,6 +137,37 @@ static int atexit_registered = 0;   /* Register atexit just 1 time. */
 static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
 static char **history = NULL;
+#ifndef DISABLE_HIGHLIGHT
+#include <string>
+
+static int enableHighlighting = 1;
+struct Color {
+	const char *color_name;
+	const char *highlight;
+};
+static Color terminal_colors[] = {
+	{"red", "\033[31m"},
+	{"green", "\033[32m"},
+	{"yellow", "\033[33m"},
+	{"blue", "\033[34m"},
+	{"magenta", "\033[35m"},
+	{"cyan", "\033[36m"},
+	{"white", "\033[37m"},
+	{"brightblack", "\033[90m"},
+	{"brightred", "\033[91m"},
+	{"brightgreen", "\033[92m"},
+	{"brightyellow", "\033[93m"},
+	{"brightblue", "\033[94m"},
+	{"brightmagenta", "\033[95m"},
+	{"brightcyan", "\033[96m"},
+	{"brightwhite", "\033[97m"},
+	{nullptr, nullptr}
+};
+static std::string bold = "\033[1m";
+static std::string keyword = "\033[32m\033[1m";
+static std::string constant = "\033[33m";
+static std::string reset = "\033[00m";
+#endif
 
 /* The linenoiseState structure represents the state during line editing.
  * We pass this state to functions implementing specific editing
@@ -534,10 +570,71 @@ static size_t compute_render_width(const char *buf, size_t len) {
 	}
 }
 
-#if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
-// disable highlighting on windows (for now?)
-#define DISABLE_HIGHLIGHT
+#ifndef DISABLE_HIGHLIGHT
+const char *getColorOption(const char *option) {
+	size_t index = 0;
+	while(terminal_colors[index].color_name) {
+		if (strcmp(terminal_colors[index].color_name, option) == 0) {
+			return terminal_colors[index].highlight;
+		}
+		index++;
+	}
+	return nullptr;
+}
 #endif
+
+int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
+#ifndef DISABLE_HIGHLIGHT
+	if (strcmp(azArg[0], "highlight") == 0) {
+		if (nArg == 2) {
+			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
+				enableHighlighting = 0;
+				return 1;
+			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
+				enableHighlighting = 1;
+				return 1;
+			}
+		}
+		*out_error = "Expected usage: .highlight [off|on]";
+		return 1;
+	} else if (strcmp(azArg[0], "keyword") == 0) {
+		if (nArg == 2) {
+			const char *option = getColorOption(azArg[1]);
+			if (option) {
+				keyword = option;
+				return 1;
+			}
+		}
+		*out_error = "Expected usage: .keyword [red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|brightblue|brightmagenta|brightcyan|brightwhite]";
+		return 1;
+	} else if (strcmp(azArg[0], "constant") == 0) {
+		if (nArg == 2) {
+			const char *option = getColorOption(azArg[1]);
+			if (option) {
+				constant = option;
+				return 1;
+			}
+		}
+		*out_error = "Expected usage: .constant [red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|brightblue|brightmagenta|brightcyan|brightwhite]";
+		return 1;
+	} else if (strcmp(azArg[0], "keywordcode") == 0) {
+		if (nArg == 2) {
+			keyword = azArg[1];
+			return 1;
+		}
+		*out_error = "Expected usage: .keywordcode [terminal_code]";
+		return 1;
+	} else if (strcmp(azArg[0], "constantcode") == 0) {
+		if (nArg == 2) {
+			constant = azArg[1];
+			return 1;
+		}
+		*out_error = "Expected usage: .constantcode [terminal_code]";
+		return 1;
+	}
+#endif
+	return 0;
+}
 
 #ifndef DISABLE_HIGHLIGHT
 #include <sstream>
@@ -546,10 +643,6 @@ static size_t compute_render_width(const char *buf, size_t len) {
 std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos) {
 	std::string sql(buf, len);
 	auto tokens = duckdb::Parser::Tokenize(sql);
-	const char *green = "\033[32m";
-	const char *reset = "\033[00m";
-	const char *bold = "\033[1m";
-	const char *yellow = "\033[33m";
 	std::stringstream ss;
 	for(size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i  + 1 < tokens.size() ? tokens[i + 1].start : len;
@@ -564,11 +657,11 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 		std::string text = std::string(buf + start, end - start);
 		switch(token.type) {
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
-			ss << green << bold << text << reset;
+			ss << keyword << text << reset;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			ss << yellow << text << reset;
+			ss << constant << text << reset;
 			break;
 		default:
 			ss << text;
@@ -630,13 +723,16 @@ static void refreshSingleLine(struct linenoiseState *l) {
 			}
 		}
 #ifndef DISABLE_HIGHLIGHT
-		highlight_buffer = highlightText(l->buf, l->len, start_pos, cpos);
-		buf = (char*) highlight_buffer.c_str();
-		len = highlight_buffer.size();
-#else
-		buf = buf + start_pos;
-		len = cpos - start_pos;
+		if (enableHighlighting) {
+			highlight_buffer = highlightText(l->buf, l->len, start_pos, cpos);
+			buf = (char*) highlight_buffer.c_str();
+			len = highlight_buffer.size();
+		} else
 #endif
+		{
+			buf = buf + start_pos;
+			len = cpos - start_pos;
+		}
 	} else {
 		// invalid UTF8: fallback
 		while ((plen + pos) >= l->cols) {
@@ -1205,6 +1301,7 @@ static char *linenoiseNoTTY(void) {
 char *linenoise(const char *prompt) {
 	char buf[LINENOISE_MAX_LINE];
 	int count;
+
 
 	if (!isatty(STDIN_FILENO)) {
 		/* Not a tty: read from file / pipe. In this mode we don't want any
