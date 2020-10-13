@@ -258,9 +258,8 @@ string MD5Context::FinishHex() {
 	return string(digest, MD5_HASH_LENGTH_TEXT);
 }
 
-
 void MD5Context::Add(const char *data) {
-	MD5Update((const_data_ptr_t) data, strlen(data));
+	MD5Update((const_data_ptr_t)data, strlen(data));
 }
 
-}
+} // namespace duckdb

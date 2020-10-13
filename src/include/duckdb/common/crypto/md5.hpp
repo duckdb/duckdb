@@ -6,7 +6,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-
 #pragma once
 
 #include "duckdb/common/common.hpp"
@@ -18,6 +17,7 @@ class MD5Context {
 public:
 	static constexpr idx_t MD5_HASH_LENGTH_BINARY = 16;
 	static constexpr idx_t MD5_HASH_LENGTH_TEXT = 32;
+
 public:
 	MD5Context();
 
@@ -26,10 +26,10 @@ public:
 	}
 	void Add(const char *data);
 	void Add(string_t string) {
-		MD5Update((const_data_ptr_t) string.GetData(), string.GetSize());
+		MD5Update((const_data_ptr_t)string.GetData(), string.GetSize());
 	}
 	void Add(const string &data) {
-		MD5Update((const_data_ptr_t) data.c_str(), data.size());
+		MD5Update((const_data_ptr_t)data.c_str(), data.size());
 	}
 
 	//! Write the 16-byte (binary) digest to the specified location
@@ -48,4 +48,4 @@ private:
 	unsigned char in[64];
 };
 
-}
+} // namespace duckdb
