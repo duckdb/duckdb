@@ -32,6 +32,12 @@ struct SelectionVector {
 	SelectionVector(idx_t count) {
 		Initialize(count);
 	}
+	SelectionVector(idx_t start, idx_t count) {
+		Initialize(STANDARD_VECTOR_SIZE);
+		for (idx_t i = 0; i < count; i++) {
+			set_index(i, start + i);
+		}
+	}
 	SelectionVector(const SelectionVector &sel_vector) {
 		Initialize(sel_vector);
 	}

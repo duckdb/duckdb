@@ -16,7 +16,6 @@
 #include "duckdb/storage/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
-#include "duckdb/storage/table/version_manager.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 
 #include <atomic>
@@ -29,6 +28,7 @@ class DataTable;
 class StorageManager;
 class TableCatalogEntry;
 class Transaction;
+class WriteAheadLog;
 
 typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
 
@@ -52,8 +52,7 @@ struct DataTableInfo {
 };
 
 struct ParallelTableScanState {
-	idx_t persistent_row_idx;
-	idx_t transient_row_idx;
+	idx_t current_row;
 	bool transaction_local_data;
 };
 
@@ -111,12 +110,19 @@ public:
 	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
 
 	//! Begin appending structs to this table, obtaining necessary locks, etc
-	void InitializeAppend(TableAppendState &state);
+	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend
-	void Append(Transaction &transaction, transaction_t commit_id, DataChunk &chunk, TableAppendState &state);
+	void Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state);
+	//! Commit the append
+	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
+	//! Write a segment of the table to the WAL
+	void WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count);
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
-	void RevertAppend(TableAppendState &state);
+	void RevertAppend(idx_t start_row, idx_t count);
+	void RevertAppendInternal(idx_t start_row, idx_t count);
+
+	void ScanTableSegment(idx_t start_row, idx_t count, std::function<void(DataChunk &chunk)> function);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded
@@ -139,14 +145,15 @@ private:
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);
+	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t start_row,
+	                              idx_t end_row);
 	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
 	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
-	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row, idx_t base_row,
-	                   VersionManager &manager, unordered_map<idx_t, vector<TableFilter>> &table_filters);
+	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row,
+	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
 	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-	                     idx_t &current_row, idx_t max_row, idx_t base_row);
+	                     idx_t &current_row, idx_t max_row);
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
 	//! the amount of rows to use and places the row_ids in the result_rows array.
@@ -159,10 +166,10 @@ private:
 private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;
-	//! The version manager of the persistent segments of the tree
-	shared_ptr<VersionManager> persistent_manager;
-	//! The version manager of the transient segments of the tree
-	shared_ptr<VersionManager> transient_manager;
+	//! The segment tree holding the persistent versions
+	shared_ptr<SegmentTree> versions;
+	//! The number of rows in the table
+	idx_t total_rows;
 	//! The physical columns of the table
 	vector<shared_ptr<ColumnData>> columns;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version

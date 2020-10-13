@@ -66,21 +66,21 @@ public:
 	static string CallToString(string name, vector<LogicalType> arguments, LogicalType return_type);
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
-	//! or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments);
+	//! returns INVALID_INDEX and sets error if none could be found
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments, string &error);
 	static idx_t BindFunction(string name, vector<ScalarFunction> &functions,
-	                          vector<unique_ptr<Expression>> &arguments);
+	                          vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
-	//! function, or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments);
+	//! function, returns INVALID_INDEX and sets error if none could be found
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments, string &error);
 	static idx_t BindFunction(string name, vector<AggregateFunction> &functions,
-	                          vector<unique_ptr<Expression>> &arguments);
+	                          vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
-	//! function, or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments);
-	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments);
+	//! function, returns INVALID_INDEX and sets error if none could be found
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments, string &error);
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a pragma function from the set of functions and input arguments
-	static idx_t BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info);
+	static idx_t BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error);
 };
 
 class SimpleFunction : public Function {

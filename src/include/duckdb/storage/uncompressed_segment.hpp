@@ -86,7 +86,7 @@ public:
 
 	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
 	//! temporary in-memory one
-	void ToTemporary();
+	virtual void ToTemporary();
 
 	//! Get the amount of tuples in a vector
 	idx_t GetVectorCount(idx_t vector_index) {

@@ -70,3 +70,24 @@ PRAGMA table_info('test.v1')
 statement error
 PRAGMA table_info('nonexistant_table');
 
+# handle constraints + default values
+statement ok
+create table tconstraint1(i integer primary key default(3), j blob not null);
+
+query ITTTTT
+PRAGMA table_info(tconstraint1)
+----
+0	i	INTEGER	1	3	1
+1	j	BLOB	1	NULL	0
+
+# multi-column pk
+statement ok
+create table tconstraint2(i integer, j integer, k integer, l integer unique, primary key(i, j, k));
+
+query ITTTTT
+PRAGMA table_info(tconstraint2)
+----
+0	i	INTEGER	1	NULL	1
+1	j	INTEGER	1	NULL	1
+2	k	INTEGER	1	NULL	1
+3	l	INTEGER	0	NULL	0

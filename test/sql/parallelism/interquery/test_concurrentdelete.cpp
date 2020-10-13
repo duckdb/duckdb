@@ -12,7 +12,7 @@ using namespace std;
 static constexpr int CONCURRENT_DELETE_THREAD_COUNT = 10;
 static constexpr int CONCURRENT_DELETE_INSERT_ELEMENTS = 100;
 
-TEST_CASE("Single thread delete", "[interquery]") {
+TEST_CASE("Single thread delete", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -41,7 +41,7 @@ TEST_CASE("Single thread delete", "[interquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {sum - 2 * CONCURRENT_DELETE_INSERT_ELEMENTS}));
 }
 
-TEST_CASE("Sequential delete", "[interquery]") {
+TEST_CASE("Sequential delete", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -96,7 +96,7 @@ TEST_CASE("Sequential delete", "[interquery]") {
 	REQUIRE(count == 0);
 }
 
-TEST_CASE("Rollback delete", "[interquery]") {
+TEST_CASE("Rollback delete", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

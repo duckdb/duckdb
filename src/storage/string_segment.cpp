@@ -13,7 +13,6 @@ namespace duckdb {
 StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t block)
     : UncompressedSegment(manager, PhysicalType::VARCHAR, row_start) {
 	this->max_vector_count = 0;
-	this->dictionary_offset = 0;
 	// the vector_size is given in the size of the dictionary offsets
 	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + sizeof(nullmask_t);
 	this->string_updates = nullptr;
@@ -23,9 +22,18 @@ StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t
 		// start off with an empty string segment: allocate space for it
 		auto handle = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 		this->block_id = handle->block_id;
+		SetDictionaryOffset(*handle, sizeof(idx_t));
 
 		ExpandStringSegment(handle->node->buffer);
 	}
+}
+
+void StringSegment::SetDictionaryOffset(BufferHandle &handle, idx_t offset) {
+	Store<idx_t>(offset, handle.node->buffer + Storage::BLOCK_SIZE - sizeof(idx_t));
+}
+
+idx_t StringSegment::GetDictionaryOffset(BufferHandle &handle) {
+	return Load<idx_t>(handle.node->buffer + Storage::BLOCK_SIZE - sizeof(idx_t));
 }
 
 StringSegment::~StringSegment() {
@@ -424,7 +432,7 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 			// we are at the maximum vector, check if there is space to increase the maximum vector count
 			// as a heuristic, we only allow another vector to be added if we have at least 32 bytes per string
 			// remaining (32KB out of a 256KB block, or around 12% empty)
-			if (RemainingSpace() >= STANDARD_VECTOR_SIZE * 32) {
+			if (RemainingSpace(*handle) >= STANDARD_VECTOR_SIZE * 32) {
 				// we have enough remaining space to add another vector
 				ExpandStringSegment(handle->node->buffer);
 			} else {
@@ -435,8 +443,8 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 		idx_t append_count = MinValue(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		AppendData(stats, handle->node->buffer + vector_size * vector_index, handle->node->buffer + Storage::BLOCK_SIZE,
-		           current_tuple_count, data, offset, append_count);
+		AppendData(*handle, stats, handle->node->buffer + vector_size * vector_index,
+		           handle->node->buffer + Storage::BLOCK_SIZE, current_tuple_count, data, offset, append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -474,8 +482,14 @@ static void update_min_max_string_segment(string value, char *__restrict min, ch
 	}
 }
 
-void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset,
-                               Vector &source, idx_t offset, idx_t count) {
+idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
+	idx_t used_space = GetDictionaryOffset(handle) + max_vector_count * vector_size;
+	assert(Storage::BLOCK_SIZE >= used_space);
+	return Storage::BLOCK_SIZE - used_space;
+}
+
+void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
+                               idx_t target_offset, Vector &source, idx_t offset, idx_t count) {
 	VectorData adata;
 	source.Orrify(count, adata);
 
@@ -495,6 +509,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			result_nullmask[target_idx] = true;
 			stats.has_null = true;
 		} else {
+			auto dictionary_offset = GetDictionaryOffset(handle);
 			assert(dictionary_offset < Storage::BLOCK_SIZE);
 			// non-null value, check if we can fit it within the block
 			idx_t string_length = sdata[source_idx].GetSize();
@@ -509,8 +524,8 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			// to always leave enough room for BIG_STRING_MARKER_SIZE for each of the remaining strings
 			if (total_length > BIG_STRING_MARKER_BASE_SIZE &&
 			    (total_length >= STRING_BLOCK_LIMIT ||
-			     total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace())) {
-				assert(RemainingSpace() >= BIG_STRING_MARKER_SIZE);
+			     total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace(handle))) {
+				assert(RemainingSpace(handle) >= BIG_STRING_MARKER_SIZE);
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
 				int32_t offset;
@@ -537,9 +552,11 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
 			}
+			assert(RemainingSpace(handle) <= Storage::BLOCK_SIZE);
 			// place the dictionary offset into the set of vectors
 			assert(dictionary_offset <= Storage::BLOCK_SIZE);
 			result_data[target_idx] = dictionary_offset;
+			SetDictionaryOffset(handle, dictionary_offset);
 		}
 		remaining_strings--;
 	}
@@ -874,6 +891,11 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 		update_info.count = new_count;
 	}
 	CleanupUpdate(info);
+}
+
+void StringSegment::ToTemporary() {
+	UncompressedSegment::ToTemporary();
+	this->max_vector_count = (this->tuple_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 }
 
 } // namespace duckdb

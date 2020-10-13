@@ -13,6 +13,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
+	QueryErrorContext error_context(root_statement, ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
 	auto cte = FindCTE(ref.table_name);
@@ -44,8 +45,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto table_or_view =
-	    Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name);
+	auto table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name,
+	                                                           ref.table_name, false, error_context);
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
@@ -71,21 +72,31 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
-		SubqueryRef subquery(view_catalog_entry->query->Copy());
+		// We need to use a new binder for the view that doesn't reference any CTEs
+		// defined for this binder so there are no collisions between the CTEs defined
+		// for the view and for the current query
+		bool inherit_ctes = false;
+		Binder view_binder(context, this, inherit_ctes);
+		for (auto &cte_it : view_catalog_entry->query->cte_map) {
+			view_binder.AddCTE(cte_it.first, cte_it.second.get());
+		}
+		SubqueryRef subquery(view_catalog_entry->query->node->Copy());
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		subquery.column_name_alias = view_catalog_entry->aliases;
 		// bind the child subquery
-		auto bound_child = Bind(subquery);
+		auto bound_child = view_binder.Bind(subquery);
 		assert(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = (BoundSubqueryRef &)*bound_child;
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}
+		bind_context.AddSubquery(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
+		                         *bound_subquery.subquery);
 		return bound_child;
 	}
 	default:
-		throw NotImplementedException("Catalog entry type");
+		throw InternalException("Catalog entry type");
 	}
 }
 } // namespace duckdb

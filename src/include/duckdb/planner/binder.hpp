@@ -56,7 +56,7 @@ class Binder {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	Binder(ClientContext &context, Binder *parent = nullptr);
+	Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
@@ -105,6 +105,10 @@ public:
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(CorrelatedColumnInfo info);
 
+	string FormatError(ParsedExpression &expr_context, string message);
+	string FormatError(TableRef &ref_context, string message);
+	string FormatError(idx_t query_location, string message);
+
 private:
 	//! The parent binder (if any)
 	Binder *parent;
@@ -116,6 +120,10 @@ private:
 	bool has_unplanned_subqueries = false;
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
+	//! Whether CTEs should reference the parent binder (if it exists)
+	bool inherit_ctes = true;
+	//! The root statement of the query that is currently being parsed
+	SQLStatement *root_statement = nullptr;
 
 private:
 	//! Bind the default values of the columns of a table

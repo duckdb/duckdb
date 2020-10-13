@@ -624,23 +624,23 @@ matrix:
         - R CMD check --as-cran -o /tmp duckdb_*.tar.gz
         - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
 
+    # disabled for now bcause of constant timeouts during setup (i.e. we can't use travis_wait there)
+    # - os: osx
+    #   osx_image: xcode11.5
+    #   name: R Package
+    #   if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-    - os: osx
-      osx_image: xcode11.5
-      name: R Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+    #   language: r
 
-      language: r
+    #   before_install:
+    #     - cd tools/rpkg
 
-      before_install:
-        - cd tools/rpkg
-
-      script:
-        - ./configure
-        - R CMD build .
-        - R CMD INSTALL --build duckdb_*.tar.gz
-        - (cd tests && R -f testthat.R)
-        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
+    #   script:
+    #     - ./configure
+    #     - R CMD build .
+    #     - R CMD INSTALL --build duckdb_*.tar.gz
+    #     - (cd tests && R -f testthat.R)
+    #     - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
 
 
     - os: windows
