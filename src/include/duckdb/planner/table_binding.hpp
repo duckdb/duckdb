@@ -50,8 +50,6 @@ public:
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, LogicalGet &get, idx_t index);
-	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
-	             unordered_map<string, column_t> name_map, LogicalGet &get, idx_t index);
 
 	//! the underlying LogicalGet
 	LogicalGet &get;

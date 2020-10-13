@@ -63,12 +63,6 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vect
     : Binding(alias, move(types_), move(names_), index), get(get) {
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
-                           unordered_map<string, column_t> name_map, LogicalGet &get, idx_t index)
-    : TableBinding(alias, move(types), move(names), get, index) {
-	this->name_map = move(name_map);
-}
-
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto entry = name_map.find(colref.column_name);
 	if (entry == name_map.end()) {
