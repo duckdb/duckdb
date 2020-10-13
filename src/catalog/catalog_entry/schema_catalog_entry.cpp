@@ -170,13 +170,19 @@ void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
 }
 
 CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType type, const string &entry_name,
-                                           bool if_exists) {
+                                           bool if_exists, QueryErrorContext error_context) {
 	auto &set = GetCatalogSet(type);
 
 	auto entry = set.GetEntry(context, entry_name);
 	if (!entry) {
 		if (!if_exists) {
-			throw CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), entry_name);
+			auto entry = set.SimilarEntry(entry_name);
+			string did_you_mean;
+			if (!entry.empty()) {
+				did_you_mean = "\nDid you mean \"" + entry + "\"?";
+			}
+			throw CatalogException(error_context.FormatError("%s with name %s does not exist!%s",
+			                                                 CatalogTypeToString(type), entry_name, did_you_mean));
 		}
 		return nullptr;
 	}
