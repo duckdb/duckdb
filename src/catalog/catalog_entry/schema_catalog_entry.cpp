@@ -100,9 +100,11 @@ CatalogEntry *SchemaCatalogEntry::CreateView(ClientContext &context, CreateViewI
 	return AddEntry(context, move(view), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
+	unordered_set<CatalogEntry *> dependencies;
+	dependencies.insert(table);
 	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(index), info->on_conflict);
+	return AddEntry(context, move(index), info->on_conflict, dependencies);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
