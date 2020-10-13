@@ -186,12 +186,11 @@ CREATE TABLE csda (i INTEGER);
 
 test('.indexes',  out="")
 
-# FIXME: indexes currently not exported in sqlite_master
-# test('''
-# CREATE TABLE a (i INTEGER);
-# CREATE INDEX a_idx ON a(i);
-# .indexes a%
-# ''',  err="a_idx")
+test('''
+CREATE TABLE a (i INTEGER);
+CREATE INDEX a_idx ON a(i);
+.indexes a%
+''',  out="a_idx")
 
 # this does not seem to output anything
 test('.sha3sum')
