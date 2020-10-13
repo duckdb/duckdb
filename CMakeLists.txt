@@ -126,7 +126,6 @@ option(AMALGAMATION_BUILD
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
-option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -301,11 +300,6 @@ function(add_extension_definitions)
     include_directories(${CMAKE_SOURCE_DIR}/extension/tpch/include)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
   endif()
-
-  if(${BUILD_FTS_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/fts/include)
-    add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
-  endif()
 endfunction()
 
 function(link_extension_libraries LIBRARY)
@@ -319,10 +313,6 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_TPCH_EXTENSION})
     target_link_libraries(${LIBRARY} tpch_extension)
-  endif()
-
-  if(${BUILD_FTS_EXTENSION})
-    target_link_libraries(${LIBRARY} fts_extension)
   endif()
 
 endfunction()

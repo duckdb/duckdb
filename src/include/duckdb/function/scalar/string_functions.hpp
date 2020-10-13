@@ -144,7 +144,7 @@ struct UnicodeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct TokenizeFun {
+struct StringSplitFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
