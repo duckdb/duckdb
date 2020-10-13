@@ -1,3 +1,4 @@
+add_subdirectory(crypto)
 add_subdirectory(enums)
 add_subdirectory(operator)
 add_subdirectory(serializer)
