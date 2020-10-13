@@ -53,6 +53,48 @@ TEST_CASE("Test iterating over results", "[api]") {
 	REQUIRE(row_count == 2);
 }
 
+TEST_CASE("Test different result types", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE data(i INTEGER, j VARCHAR, k DECIMAL(38,1), l DECIMAL(18,3), m HUGEINT, n DOUBLE)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO data VALUES (23, '17.1', 94289, 9842, 4982412, 17.3)"));
+
+	idx_t row_count = 0;
+	auto result = con.Query("SELECT * FROM data;");
+	for (auto &row : *result) {
+		REQUIRE(row.GetValue<int>(0) == 23);
+		REQUIRE(row.GetValue<int64_t>(0) == 23);
+		REQUIRE(row.GetValue<double>(0) == 23);
+		REQUIRE(row.GetValue<string>(0) == "23");
+
+		REQUIRE(row.GetValue<int>(1) == 17);
+		REQUIRE(row.GetValue<int64_t>(1) == 17);
+		REQUIRE(row.GetValue<double>(1) == 17.1);
+		REQUIRE(row.GetValue<string>(1) == "17.1");
+
+		REQUIRE(row.GetValue<int>(2) == 94289);
+		REQUIRE(row.GetValue<int64_t>(2) == 94289);
+		REQUIRE(row.GetValue<double>(2) == 94289);
+
+		REQUIRE(row.GetValue<int>(3) == 9842);
+		REQUIRE(row.GetValue<int64_t>(3) == 9842);
+		REQUIRE(row.GetValue<double>(3) == 9842);
+
+		REQUIRE(row.GetValue<int>(4) == 4982412);
+		REQUIRE(row.GetValue<int64_t>(4) == 4982412);
+		REQUIRE(row.GetValue<double>(4) == 4982412);
+		REQUIRE(row.GetValue<string>(4) == "4982412");
+
+		REQUIRE(row.GetValue<int>(5) == 17);
+		REQUIRE(row.GetValue<int64_t>(5) == 17);
+		REQUIRE(row.GetValue<double>(5) == 17.3);
+
+		row_count++;
+	}
+	REQUIRE(row_count == 1);
+}
+
 TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);

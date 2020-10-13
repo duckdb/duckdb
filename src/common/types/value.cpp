@@ -356,26 +356,27 @@ template <class T> T Value::GetValueInternal() const {
 	if (is_null) {
 		return NullValue<T>();
 	}
-	switch (type_.InternalType()) {
-	case PhysicalType::BOOL:
+	switch (type_.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return Cast::Operation<bool, T>(value_.boolean);
-	case PhysicalType::INT8:
+	case LogicalTypeId::TINYINT:
 		return Cast::Operation<int8_t, T>(value_.tinyint);
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		return Cast::Operation<int16_t, T>(value_.smallint);
-	case PhysicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		return Cast::Operation<int32_t, T>(value_.integer);
-	case PhysicalType::INT64:
+	case LogicalTypeId::BIGINT:
 		return Cast::Operation<int64_t, T>(value_.bigint);
-	case PhysicalType::INT128:
+	case LogicalTypeId::HUGEINT:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return Cast::Operation<float, T>(value_.float_);
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
-
-	case PhysicalType::VARCHAR:
+	case LogicalTypeId::VARCHAR:
 		return Cast::Operation<string_t, T>(str_value.c_str());
+	case LogicalTypeId::DECIMAL:
+		return CastAs(LogicalType::DOUBLE).GetValueInternal<T>();
 	default:
 		throw NotImplementedException("Unimplemented type for GetValue()");
 	}
