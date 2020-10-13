@@ -41,6 +41,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/crypto/md5.hpp"
 
 #include "extension_helper.hpp"
 
@@ -778,12 +779,13 @@ void Query::Execute() {
 	/* Hash the results if we are over the hash threshold or if we
 	** there is a hash label */
 	if (runner.output_hash_mode || compare_hash) {
-		md5_add(""); /* make sure md5 is reset, even if no results */
+		MD5Context context;
 		for (int i = 0; i < nResult; i++) {
-			md5_add(azResult[i].c_str());
-			md5_add("\n");
+			context.Add(azResult[i]);
+			context.Add("\n");
 		}
-		snprintf(zHash, sizeof(zHash), "%d values hashing to %s", nResult, md5_finish());
+		string digest = context.FinishHex();
+		snprintf(zHash, sizeof(zHash), "%d values hashing to %s", nResult, digest.c_str());
 		if (runner.output_hash_mode) {
 			print_line_sep();
 			print_sql(sql_query);
