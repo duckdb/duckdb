@@ -5,6 +5,15 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SELECT string_split(string_agg(range, 'DUCK '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
+
+statement ok
+SELECT string_split(string_agg(range, '🦆 '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
+
+statement ok
+SELECT string_split_regex(string_agg(range, 'DUCK '), '\s'), mod(range, 100) xx FROM range(50000) GROUP BY xx
+
 query T
 SELECT UNNEST(string_split('üüüüü', '◌̈')) 
 ----
@@ -12,6 +21,16 @@ SELECT UNNEST(string_split('üüüüü', '◌̈'))
 
 query T
 SELECT UNNEST(string_split('üüüüü', '◌'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(string_split_regex('üüüüü', '◌̈')) 
+----
+üüüüü
+
+query T
+SELECT UNNEST(string_split_regex('üüüüü', '◌'))
 ----
 üüüüü
 
@@ -113,12 +132,6 @@ aa
 b🦆🦆
 🦆🦆
 
-statement ok
-SELECT string_split(string_agg(range, ' '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
-
-statement ok
-SELECT string_split(string_agg(range, '🦆 '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
-
 query T
 SELECT UNNEST(string_split_regex('a1a11a111a', '[0-9]+'))
 ----
@@ -131,6 +144,15 @@ query T
 SELECT UNNEST(string_split_regex('aaaaa', ''))
 ----
 a
+a
+a
+a
+a
+
+
+query T
+SELECT UNNEST(string_split_regex('a a  a   a', '\s'))
+----
 a
 a
 a
