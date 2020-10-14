@@ -96,13 +96,13 @@ TEST_CASE("Test Arrow API round trip", "[arrow]") {
 	    "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000 c_smallint, "
 	    "c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::hugeint*10000000000000000000000000000000 "
 	    "c_hugeint, c::float c_float, c::double c_double, 'c_' || c::string c_string, current_date::date c_date, "
-	    "'1969-01-01'::date, current_time::time c_time, timestamp '1992-01-01 12:00:00' + interval range days c_timestamp "
+	    "'1969-01-01'::date, current_time::time c_time, timestamp '1992-01-01 12:00:00' c_timestamp "
 	    "from (select case when range % 2 == 0 then range else null end as c from range(-10, 10)) sq");
 	test_arrow_round_trip(
 	    "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000 c_smallint, "
 	    "c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::hugeint*10000000000000000000000000000000 "
 	    "c_hugeint, c::float c_float, c::double c_double, 'c_' || c::string c_string, current_date::date c_date, "
-	    "'1969-01-01'::date, current_time::time c_time, timestamp '1992-01-01 12:00:00' + interval range days c_timestamp "
+	    "'1969-01-01'::date, current_time::time c_time, timestamp '1992-01-01 12:00:00' c_timestamp "
 	    "from (select case when range % 2 == 0 then range else null end as c from range(-10000, 10000)) sq");
 }
 // TODO timestamp date time interval decimal
