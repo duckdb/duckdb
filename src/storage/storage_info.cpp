@@ -3,6 +3,6 @@
 namespace duckdb {
 using namespace std;
 
-const uint64_t VERSION_NUMBER = 2;
+const uint64_t VERSION_NUMBER = 3;
 
 } // namespace duckdb

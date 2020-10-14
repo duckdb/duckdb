@@ -165,7 +165,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
-	string TransformAlias(duckdb_libpgquery::PGAlias *root);
+	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, SelectStatement &select);
 	unique_ptr<QueryNode> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                            CommonTableExpressionInfo &info);
