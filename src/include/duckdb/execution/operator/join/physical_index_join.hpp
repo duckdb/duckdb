@@ -54,11 +54,8 @@ private:
 	const size_t per_chunk_threshold = 100;
 
 	void GetRHSMatches(ExecutionContext &context,PhysicalOperatorState *state_) const;
-	//! Fills the result chunk and outputs one vector match per execution. Used when one LHS key has tons of matches
-	void OutputPerMatch(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
-    //! Fills the result chunk and outputs depending on the element with the highest number of matches of the LHS
-	//! Chunk
-	void OutputPerChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
+    //! Fills result chunk
+	void Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
 
 };
 

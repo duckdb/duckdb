@@ -8,14 +8,15 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/transaction/transaction.hpp"
-
+#include "duckdb/main/client_context.hpp"
 namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
 	// now visit the children
 	assert(op.children.size() == 2);
-
+    idx_t lhs_cardinality = op.children[0]->EstimateCardinality();
+	idx_t rhs_cardinality = op.children[1]->EstimateCardinality();
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
 	assert(left && right);
@@ -58,7 +59,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 				if (tbl && !transaction.storage.Find(tbl->table->storage.get()) && tbl_scan.table_filters.empty()) {
 					for (auto &index : tbl->table->storage->info->indexes) {
 						if (index->unbound_expressions[0]->alias == op.conditions[0].left->alias) {
-							// Hooray, this column is indexed
 							left_index = index.get();
 							break;
 						}
@@ -71,24 +71,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 				if (tbl && !transaction.storage.Find(tbl->table->storage.get()) && tbl_scan.table_filters.empty()) {
 					for (auto &index : tbl->table->storage->info->indexes) {
 						if (index->unbound_expressions[0]->alias == op.conditions[0].right->alias) {
-							// Hooray, this column is indexed
 							right_index = index.get();
 							break;
 						}
 					}
 				}
 			}
-			if (left_index) {
+			if (left_index && (context.force_index_join || rhs_cardinality < 0.01*lhs_cardinality)) {
 				auto &tbl_scan = (PhysicalTableScan &)*left;
 				swap(op.conditions[0].left, op.conditions[0].right);
 				return make_unique<PhysicalIndexJoin>(op, move(right), move(left), move(op.conditions), op.join_type,
 				                                      op.right_projection_map, op.left_projection_map,
 				                                      tbl_scan.column_ids, left_index, false);
-				//				if (right){
-				//					// Uh, index in both condition sides, which one to use?
-				//				}
 			}
-			if (right_index) {
+			if (right_index && (context.force_index_join || lhs_cardinality < 0.01*rhs_cardinality)) {
 				auto &tbl_scan = (PhysicalTableScan &)*right;
 				return make_unique<PhysicalIndexJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 				                                      op.left_projection_map, op.right_projection_map,

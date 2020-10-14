@@ -62,6 +62,8 @@ public:
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
 	bool force_parallelism = false;
+	//! Force index join independent of table cardinality, used for testing
+	bool force_index_join = false;
 	//! Output only the logical_opt explain output, used for optimization verification
 	bool explain_output_optimized_only = false;
 	//! Output only the logical_opt explain output, used for optimization verification

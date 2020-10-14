@@ -2,6 +2,9 @@
 # description: ART Integer Type: SMALLINT
 # group: [art]
 
+statement ok
+PRAGMA force_index_join
+
 # BEGIN TYPE SMALLINT
 statement ok
 CREATE TABLE integers(i SMALLINT)

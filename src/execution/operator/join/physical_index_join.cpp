@@ -25,7 +25,6 @@ public:
 			rhs_rows.emplace_back();
 			result_sizes.emplace_back();
 		}
-		output_sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
 
 	idx_t lhs_idx = 0;
@@ -33,18 +32,11 @@ public:
 	idx_t result_size = 0;
 	vector<idx_t> result_sizes;
 	DataChunk join_keys;
-	//! We store a vector of rhs data chunks, one for each key in the lhs_chunk
-	//! Since one lhs_key might have more then one rhs_chunk as result we store it in a matrix
+	//! Vector of rows that mush be fetched for every LHS key
 	vector<vector<row_t>> rhs_rows;
 	ExpressionExecutor probe_executor;
 	IndexLock lock;
-	idx_t chunk_cur = 0;
-	//! Stores the max matches found in this LHS chunk
-	//! Used to decide how we will output data for this LHS chunk
-	size_t max_matches = 0;
-	//! Selection vector used in output per chunk
-	SelectionVector output_sel;
-	size_t output_sel_size = 0;
+
 };
 
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -73,68 +65,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	}
 }
 
-void PhysicalIndexJoin::OutputPerMatch(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
-	auto &transaction = Transaction::GetTransaction(context.client);
-	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
-	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
-	auto tbl = bind_tbl.table->storage.get();
-	DataChunk rhs_chunk;
-	auto next_pos = state->result_sizes[state->lhs_idx] - state->rhs_idx > STANDARD_VECTOR_SIZE
-	                    ? state->rhs_idx + STANDARD_VECTOR_SIZE
-	                    : state->result_sizes[state->lhs_idx];
-	if (!fetch_types.empty()) {
-		rhs_chunk.Initialize(fetch_types);
-		ColumnFetchState fetch_state;
-		Vector row_ids;
-		row_ids.type = LOGICAL_ROW_TYPE;
-		FlatVector::SetData(row_ids, (data_ptr_t)&state->rhs_rows[state->lhs_idx][state->rhs_idx]);
-		tbl->Fetch(transaction, rhs_chunk, fetch_ids, row_ids, next_pos - state->rhs_idx, fetch_state);
-	}
-	idx_t rhs_column_idx = 0;
-	if (!lhs_first) {
-		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			auto it = index_ids.find(column_ids[right_projection_map[i]]);
-			if (it == index_ids.end()) {
-				chunk.data[i].Reference(rhs_chunk.data[rhs_column_idx++]);
-			} else {
-				auto rvalue = state->join_keys.GetValue(0, state->lhs_idx);
-				chunk.data[i].Reference(rvalue);
-			}
-		}
-		for (idx_t i = 0; i < left_projection_map.size(); i++) {
-			auto lvalue = state->child_chunk.GetValue(left_projection_map[i], state->lhs_idx);
-			chunk.data[right_projection_map.size() + i].Reference(lvalue);
-		}
-	} else {
-		//! We have to duplicate LRS to number of matches
-		for (idx_t i = 0; i < left_projection_map.size(); i++) {
-			auto lvalue = state->child_chunk.GetValue(left_projection_map[i], state->lhs_idx);
-			chunk.data[i].Reference(lvalue);
-		}
-		//! Add actual value
-		//! We have to fetch RHS row based on the index ids
-		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			auto it = index_ids.find(column_ids[right_projection_map[i]]);
-			if (it == index_ids.end()) {
-				chunk.data[left_projection_map.size() + i].Reference(rhs_chunk.data[rhs_column_idx++]);
-			} else {
-				auto rvalue = state->join_keys.GetValue(0, state->lhs_idx);
-				chunk.data[left_projection_map.size() + i].Reference(rvalue);
-			}
-		}
-	}
-	state->result_size = next_pos - state->rhs_idx;
-	chunk.SetCardinality(state->result_size);
-	state->rhs_idx = next_pos;
-	if (state->rhs_idx == state->result_sizes[state->lhs_idx]) {
-		//! We move to the next lhs value
-		state->rhs_idx = 0;
-		state->lhs_idx++;
-	}
-}
-
-void PhysicalIndexJoin::OutputPerChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_){
 	auto &transaction = Transaction::GetTransaction(context.client);
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
@@ -144,34 +75,25 @@ void PhysicalIndexJoin::OutputPerChunk(ExecutionContext &context, DataChunk &chu
 	SelectionVector sel;
 	sel.Initialize(STANDARD_VECTOR_SIZE);
 	size_t output_sel_idx{};
+	vector<row_t> fetch_rows;
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
-	if (state->rhs_idx == state->max_matches) {
-		//! We are done with this LHS Chunk
-		state->lhs_idx = state->child_chunk.size();
-		state->rhs_idx = 0;
-		state->max_matches = 0;
-		return;
-	} else if (state->rhs_idx == 0) {
-		//! First time accessing this LHS chunk
-		for (idx_t i{}; i < state->result_sizes.size(); i++) {
-			if (state->result_sizes[i] > 0) {
-				sel.set_index(output_sel_idx++, i);
+	while (output_sel_idx < STANDARD_VECTOR_SIZE && state->lhs_idx < state->child_chunk.size()){
+		if (state->rhs_idx < state->result_sizes[state->lhs_idx]){
+			sel.set_index(output_sel_idx++,state->lhs_idx);
+			if(!fetch_types.empty()){
+				//! We need to collect the rows we want to fetch
+				fetch_rows.push_back(state->rhs_rows[state->lhs_idx][state->rhs_idx]);
 			}
+			state->rhs_idx++;
 		}
-	} else {
-		//! We need to update the selection vector to remove elements that don't have matches over rhs_idx
-		for (idx_t i{}; i < state->output_sel_size; i++) {
-			if (state->result_sizes[state->output_sel.get_index(i)] > state->rhs_idx) {
-				sel.set_index(output_sel_idx++, state->result_sizes[state->output_sel.get_index(i)]);
-			}
+		else{
+			//! We are done with the matches from this LHS Key
+			state->rhs_idx = 0;
+			state->lhs_idx++;
 		}
 	}
-	//! Now we fetch the relevant data
+	//! Now we fetch the RHS data
 	if (!fetch_types.empty()) {
-		vector<row_t> fetch_rows;
-		for (idx_t i{}; i < output_sel_idx; i++) {
-			fetch_rows.push_back(state->rhs_rows[sel.get_index(i)][state->rhs_idx]);
-		}
 		rhs_chunk.Initialize(fetch_types);
 		ColumnFetchState fetch_state;
 		Vector row_ids;
@@ -180,7 +102,7 @@ void PhysicalIndexJoin::OutputPerChunk(ExecutionContext &context, DataChunk &chu
 		tbl->Fetch(transaction, rhs_chunk, fetch_ids, row_ids, output_sel_idx, fetch_state);
 	}
 
-	//! Now we actually output stuff
+	//! Now we actually produce our result chunk
 	if (!lhs_first) {
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			auto it = index_ids.find(column_ids[right_projection_map[i]]);
@@ -213,16 +135,10 @@ void PhysicalIndexJoin::OutputPerChunk(ExecutionContext &context, DataChunk &chu
 			}
 		}
 	}
-	//! Now we copy our selection vector to state and update the variables
-	for (idx_t i{}; i < output_sel_idx; i++) {
-		state->output_sel.set_index(i,sel.get_index(i));
-	}
 	state->result_size = output_sel_idx;
 	chunk.SetCardinality(state->result_size);
-	state->output_sel_size = output_sel_idx;
-	state->rhs_idx++;
-	state->lhs_idx++;
 }
+
 
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_) const {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
@@ -234,11 +150,9 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 			if (fetch_types.empty()) {
 				//! Nothing to materialize
 				art.SearchEqualJoinNoFetch(equal_value, state->result_sizes[i]);
-				state->max_matches = max(state->max_matches, (size_t)state->result_sizes[i]);
 			} else {
 				art.SearchEqualJoin(equal_value, state->rhs_rows[i]);
 				state->result_sizes[i] = state->rhs_rows[i].size();
-				state->max_matches = max(state->max_matches, state->rhs_rows[i].size());
 			}
 		} else {
 			//! This is null so no matches
@@ -267,21 +181,16 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				return;
 			}
 			state->lhs_idx = 0;
-			state->max_matches = 0;
+			state->rhs_idx = 0;
 			state->probe_executor.Execute(state->child_chunk, state->join_keys);
 		}
 		//! Fill Matches for the current LHS chunk
-		if (state->lhs_idx == 0) {
+		if (state->lhs_idx == 0 && state->rhs_idx == 0) {
 			GetRHSMatches(context, state_);
 		}
 		//! Output vectors
 		if (state->lhs_idx < state->child_chunk.size()) {
-			if (state->max_matches > per_chunk_threshold) {
-				//! At least one element is over 100 matches, lets output per match
-				OutputPerMatch(context, chunk, state_);
-			} else {
-				OutputPerMatch(context, chunk, state_);
-			}
+			Output(context, chunk, state_);
 		}
 	}
 }
