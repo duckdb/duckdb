@@ -1,0 +1,81 @@
+# name: test/sql/storage/test_large_interleaved_updates_deletes.test_slow
+# description: Test large interleaved transactions
+# group: [storage]
+
+# this test is related to test/sql/storage/test_large_interleaved_transactions.test_slow
+# but verifies that deletes/updates made to interleaved sections fail on commit
+# this test should be deleted once that behavior isf ixed
+
+# load the DB from disk
+load __TEST_DIR__/test_large_interleaved.db
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+# deletes
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# both con1 and con2 insert a large amount of tuples
+statement ok con1
+INSERT INTO test SELECT a, b FROM (VALUES (11, 22), (13, 22), (12, 21)) tbl1(a,b), repeat(0, 138345) tbl2(c)
+
+statement ok con2
+INSERT INTO test SELECT a, b FROM (VALUES (14, 27), (10, 28), (13, 24)) tbl1(a,b), repeat(0, 218983) tbl2(c)
+
+# both con1 and con2 do some deletes
+statement error con1
+DELETE FROM test WHERE a=12
+
+statement error con2
+DELETE FROM test WHERE a=13
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+# updates
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# both con1 and con2 insert a large amount of tuples
+statement ok con1
+INSERT INTO test SELECT a, b FROM (VALUES (11, 22), (13, 22), (12, 21)) tbl1(a,b), repeat(0, 138345) tbl2(c)
+
+statement ok con2
+INSERT INTO test SELECT a, b FROM (VALUES (14, 27), (10, 28), (13, 24)) tbl1(a,b), repeat(0, 218983) tbl2(c)
+
+# both con1 and con2 do some updates
+statement ok con1
+UPDATE test SET b=30 WHERE a=11
+
+statement ok con2
+UPDATE test SET b=33 WHERE a=10
+
+query III con1
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a, b
+----
+11	30	138345
+12	21	138345
+13	22	138345
+
+query III con2
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a, b
+----
+10	33	218983
+13	24	218983
+14	27	218983
+
+statement error con1
+COMMIT
+
+statement error con2
+COMMIT

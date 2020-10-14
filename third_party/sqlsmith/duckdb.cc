@@ -13,7 +13,7 @@
 using namespace duckdb;
 using namespace std;
 
-static regex e_syntax("Query Error: syntax error at or near .*");
+static regex e_syntax("syntax error at or near .*");
 
 duckdb_connection::duckdb_connection(string &conninfo) {
 	// in-memory database

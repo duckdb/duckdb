@@ -121,6 +121,9 @@ public:
 	//! Runs a glob on the file system, returning a list of matching files
 	virtual vector<string> Glob(string path);
 
+	//! Returns the system-available memory in bytes
+	virtual idx_t GetAvailableMemory();
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);

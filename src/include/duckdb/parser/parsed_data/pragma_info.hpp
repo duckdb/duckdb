@@ -18,8 +18,6 @@ enum class PragmaType : uint8_t { PRAGMA_STATEMENT, PRAGMA_ASSIGNMENT, PRAGMA_CA
 struct PragmaInfo : public ParseInfo {
 	//! Name of the PRAGMA statement
 	string name;
-	//! Type of pragma statement
-	PragmaType pragma_type;
 	//! Parameter list (if any)
 	vector<Value> parameters;
 };

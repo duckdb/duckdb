@@ -16,11 +16,9 @@ unique_ptr<PragmaStatement> Transformer::TransformShow(PGNode *node) {
 	if (string(stmt->name) == "tables") {
 		// show all tables
 		info.name = "show_tables";
-		info.pragma_type = PragmaType::PRAGMA_STATEMENT;
 	} else {
 		// show one specific table
 		info.name = "show";
-		info.pragma_type = PragmaType::PRAGMA_CALL;
 		info.parameters.push_back(Value(stmt->name));
 	}
 

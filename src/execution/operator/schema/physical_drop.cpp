@@ -8,7 +8,7 @@ namespace duckdb {
 void PhysicalDrop::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	switch (info->type) {
 	case CatalogType::PREPARED_STATEMENT:
-		if (!context.client.prepared_statements->DropEntry(context.client.ActiveTransaction(), info->name, false)) {
+		if (!context.client.prepared_statements->DropEntry(context.client, info->name, false)) {
 			// silently ignore
 		}
 		break;

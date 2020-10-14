@@ -40,6 +40,23 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	return schema_obj;
 }
 
+void Binder::BindCreateViewInfo(CreateViewInfo &base) {
+	// bind the view as if it were a query so we can catch errors
+	// note that we bind the original, and replace the original with a copy
+	// this is because the original has
+	auto copy = base.query->Copy();
+	auto query_node = Bind(*base.query);
+	base.query = move(copy);
+	if (base.aliases.size() > query_node.names.size()) {
+		throw BinderException("More VIEW aliases than columns in query result");
+	}
+	// fill up the aliases with the remaining names of the bound query
+	for (idx_t i = base.aliases.size(); i < query_node.names.size(); i++) {
+		base.aliases.push_back(query_node.names[i]);
+	}
+	base.types = query_node.types;
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -59,18 +76,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// bind the schema
 		auto schema = BindSchema(*stmt.info);
 
-		// bind the view as if it were a query so we can catch errors
-		// note that we bind a copy and don't actually use the bind result
-		auto copy = base.query->Copy();
-		auto query_node = Bind(*copy);
-		if (base.aliases.size() > query_node.names.size()) {
-			throw BinderException("More VIEW aliases than columns in query result");
-		}
-		// fill up the aliases with the remaining names of the bound query
-		for (idx_t i = base.aliases.size(); i < query_node.names.size(); i++) {
-			base.aliases.push_back(query_node.names[i]);
-		}
-		base.types = query_node.types;
+		BindCreateViewInfo(base);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_VIEW, move(stmt.info), schema);
 		break;
 	}

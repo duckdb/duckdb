@@ -67,8 +67,9 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 }
 
 void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
-	if (state.vector_index == 0) {
+	if (!state.initialized) {
 		state.current->InitializeScan(state);
+		state.initialized = true;
 	}
 	// perform a scan of this segment
 	state.current->IndexScan(state, result);
@@ -105,9 +106,16 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-		// cannot append to persistent segment, add a transient one
-		AppendTransientSegment(persistent_rows);
-		state.current = (TransientSegment *)data.GetLastSegment();
+		// cannot append to persistent segment, convert the last segment into a transient segment
+		auto transient = make_unique<TransientSegment>((PersistentSegment &)*segment);
+		state.current = (TransientSegment *)transient.get();
+		data.nodes.back().node = (SegmentBase *)transient.get();
+		if (data.root_node.get() == segment) {
+			data.root_node = move(transient);
+		} else {
+			assert(data.nodes.size() >= 2);
+			data.nodes[data.nodes.size() - 2].node->next = move(transient);
+		}
 	} else {
 		state.current = (TransientSegment *)segment;
 	}
@@ -139,6 +147,12 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 
 void ColumnData::RevertAppend(row_t start_row) {
 	lock_guard<mutex> tree_lock(data.node_lock);
+	// check if this row is in the segment tree at all
+	if (idx_t(start_row) >= data.nodes.back().row_start + data.nodes.back().node->count) {
+		// the start row is equal to the final portion of the column data: nothing was ever appended here
+		assert(idx_t(start_row) == data.nodes.back().row_start + data.nodes.back().node->count);
+		return;
+	}
 	// find the segment index that the current row belongs to
 	idx_t segment_index = data.GetSegmentIndex(start_row);
 	auto segment = data.nodes[segment_index].node;

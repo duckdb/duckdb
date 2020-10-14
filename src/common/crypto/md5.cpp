@@ -19,36 +19,18 @@
  * needed on buffers full of bytes, and then call MD5Final, which
  * will fill a supplied 16-byte array with the digest.
  */
-#include <string.h>
+#include "duckdb/common/crypto/md5.hpp"
 
-/*
- * If compiled on a machine that doesn't have a 32-bit integer,
- * you just set "uint32" to the appropriate datatype for an
- * unsigned 32-bit integer.  For example:
- *
- *       cc -Duint32='unsigned long' md5.c
- *
- */
-#ifndef uint32
-#define uint32 unsigned int
-#endif
-
-struct Context {
-	int isInit;
-	uint32 buf[4];
-	uint32 bits[2];
-	unsigned char in[64];
-};
-typedef struct Context MD5Context;
+namespace duckdb {
 
 /*
  * Note: this code is harmless on little-endian machines.
  */
 static void byteReverse(unsigned char *buf, unsigned longs) {
-	uint32 t;
+	uint32_t t;
 	do {
-		t = (uint32)((unsigned)buf[3] << 8 | buf[2]) << 16 | ((unsigned)buf[1] << 8 | buf[0]);
-		*(uint32 *)buf = t;
+		t = (uint32_t)((unsigned)buf[3] << 8 | buf[2]) << 16 | ((unsigned)buf[1] << 8 | buf[0]);
+		*(uint32_t *)buf = t;
 		buf += 4;
 	} while (--longs);
 }
@@ -68,8 +50,8 @@ static void byteReverse(unsigned char *buf, unsigned longs) {
  * reflect the addition of 16 longwords of new data.  MD5Update blocks
  * the data and converts bytes into longwords for this routine.
  */
-static void MD5Transform(uint32 buf[4], const uint32 in[16]) {
-	uint32 a, b, c, d;
+static void MD5Transform(uint32_t buf[4], const uint32_t in[16]) {
+	uint32_t a, b, c, d;
 
 	a = buf[0];
 	b = buf[1];
@@ -154,80 +136,76 @@ static void MD5Transform(uint32 buf[4], const uint32 in[16]) {
  * Start MD5 accumulation.  Set bit count to 0 and buffer to mysterious
  * initialization constants.
  */
-static void MD5Init(MD5Context *ctx) {
-	ctx->isInit = 1;
-	ctx->buf[0] = 0x67452301;
-	ctx->buf[1] = 0xefcdab89;
-	ctx->buf[2] = 0x98badcfe;
-	ctx->buf[3] = 0x10325476;
-	ctx->bits[0] = 0;
-	ctx->bits[1] = 0;
+MD5Context::MD5Context() {
+	buf[0] = 0x67452301;
+	buf[1] = 0xefcdab89;
+	buf[2] = 0x98badcfe;
+	buf[3] = 0x10325476;
+	bits[0] = 0;
+	bits[1] = 0;
 }
 
 /*
  * Update context to reflect the concatenation of another buffer full
  * of bytes.
  */
-static void MD5Update(MD5Context *pCtx, const unsigned char *buf, unsigned int len) {
-	struct Context *ctx = (struct Context *)pCtx;
-	uint32 t;
+void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
+	uint32_t t;
 
 	/* Update bitcount */
 
-	t = ctx->bits[0];
-	if ((ctx->bits[0] = t + ((uint32)len << 3)) < t)
-		ctx->bits[1]++; /* Carry from low to high */
-	ctx->bits[1] += len >> 29;
+	t = bits[0];
+	if ((bits[0] = t + ((uint32_t)len << 3)) < t)
+		bits[1]++; /* Carry from low to high */
+	bits[1] += len >> 29;
 
 	t = (t >> 3) & 0x3f; /* Bytes already in shsInfo->data */
 
 	/* Handle any leading odd-sized chunks */
 
 	if (t) {
-		unsigned char *p = (unsigned char *)ctx->in + t;
+		unsigned char *p = (unsigned char *)in + t;
 
 		t = 64 - t;
 		if (len < t) {
-			memcpy(p, buf, len);
+			memcpy(p, input, len);
 			return;
 		}
-		memcpy(p, buf, t);
-		byteReverse(ctx->in, 16);
-		MD5Transform(ctx->buf, (uint32 *)ctx->in);
-		buf += t;
+		memcpy(p, input, t);
+		byteReverse(in, 16);
+		MD5Transform(buf, (uint32_t *)in);
+		input += t;
 		len -= t;
 	}
 
 	/* Process data in 64-byte chunks */
 
 	while (len >= 64) {
-		memcpy(ctx->in, buf, 64);
-		byteReverse(ctx->in, 16);
-		MD5Transform(ctx->buf, (uint32 *)ctx->in);
-		buf += 64;
+		memcpy(in, input, 64);
+		byteReverse(in, 16);
+		MD5Transform(buf, (uint32_t *)in);
+		input += 64;
 		len -= 64;
 	}
 
 	/* Handle any remaining bytes of data. */
-
-	memcpy(ctx->in, buf, len);
+	memcpy(in, input, len);
 }
 
 /*
  * Final wrapup - pad to 64-byte boundary with the bit pattern
  * 1 0* (64-bit count of bits processed, MSB-first)
  */
-static void MD5Final(unsigned char digest[16], MD5Context *pCtx) {
-	struct Context *ctx = (struct Context *)pCtx;
+void MD5Context::Finish(data_ptr_t out_digest) {
 	unsigned count;
 	unsigned char *p;
 
 	/* Compute number of bytes mod 64 */
-	count = (ctx->bits[0] >> 3) & 0x3F;
+	count = (bits[0] >> 3) & 0x3F;
 
 	/* Set the first char of padding to 0x80.  This is safe since there is
 	   always at least one byte free */
-	p = ctx->in + count;
+	p = in + count;
 	*p++ = 0x80;
 
 	/* Bytes of padding needed to make 64 bytes */
@@ -237,34 +215,27 @@ static void MD5Final(unsigned char digest[16], MD5Context *pCtx) {
 	if (count < 8) {
 		/* Two lots of padding:  Pad the first block to 64 bytes */
 		memset(p, 0, count);
-		byteReverse(ctx->in, 16);
-		MD5Transform(ctx->buf, (uint32 *)ctx->in);
+		byteReverse(in, 16);
+		MD5Transform(buf, (uint32_t *)in);
 
 		/* Now fill the next block with 56 bytes */
-		memset(ctx->in, 0, 56);
+		memset(in, 0, 56);
 	} else {
 		/* Pad block to 56 bytes */
 		memset(p, 0, count - 8);
 	}
-	byteReverse(ctx->in, 14);
+	byteReverse(in, 14);
 
 	/* Append length in bits and transform */
-	((uint32 *)ctx->in)[14] = ctx->bits[0];
-	((uint32 *)ctx->in)[15] = ctx->bits[1];
+	((uint32_t *)in)[14] = bits[0];
+	((uint32_t *)in)[15] = bits[1];
 
-	MD5Transform(ctx->buf, (uint32 *)ctx->in);
-	byteReverse((unsigned char *)ctx->buf, 4);
-	memcpy(digest, ctx->buf, 16);
-	memset(&ctx, 0, sizeof(ctx)); /* In case it is sensitive */
+	MD5Transform(buf, (uint32_t *)in);
+	byteReverse((unsigned char *)buf, 4);
+	memcpy(out_digest, buf, 16);
 }
 
-/*
-** Convert a digest into base-16.  digest should be declared as
-** "unsigned char digest[16]" in the calling function.  The MD5
-** digest is stored in the first 16 bytes.  zBuf should
-** be "char zBuf[33]".
-*/
-static void DigestToBase16(unsigned char *digest, char *zBuf) {
+void MD5Context::DigestToBase16(const_data_ptr_t digest, char *zBuf) {
 	static char const zEncode[] = "0123456789abcdef";
 	int i, j;
 
@@ -273,41 +244,22 @@ static void DigestToBase16(unsigned char *digest, char *zBuf) {
 		zBuf[j++] = zEncode[(a >> 4) & 0xf];
 		zBuf[j++] = zEncode[a & 0xf];
 	}
-	zBuf[j] = 0;
 }
 
-/*
-** Status of an MD5 hash.
-*/
-static MD5Context ctx;
-static int isInit = 0;
-static char zResult[34] = "";
-
-/*
-** Add additional text to the current MD5 hash.
-*/
-void md5_add(const char *z);
-
-void md5_add(const char *z) {
-	if (!isInit) {
-		MD5Init(&ctx);
-		isInit = 1;
-	}
-	MD5Update(&ctx, (unsigned char *)z, (unsigned)strlen(z));
+void MD5Context::FinishHex(char *out_digest) {
+	data_t digest[MD5_HASH_LENGTH_BINARY];
+	Finish(digest);
+	DigestToBase16(digest, out_digest);
 }
 
-/*
-** Compute the final signature.  Reset the hash generator in preparation
-** for the next round.
-*/
-const char *md5_finish(void);
-
-const char *md5_finish(void) {
-	if (isInit) {
-		unsigned char digest[16];
-		MD5Final(digest, &ctx);
-		isInit = 0;
-		DigestToBase16(digest, zResult);
-	}
-	return zResult;
+string MD5Context::FinishHex() {
+	char digest[MD5_HASH_LENGTH_TEXT];
+	FinishHex(digest);
+	return string(digest, MD5_HASH_LENGTH_TEXT);
 }
+
+void MD5Context::Add(const char *data) {
+	MD5Update((const_data_ptr_t)data, strlen(data));
+}
+
+} // namespace duckdb

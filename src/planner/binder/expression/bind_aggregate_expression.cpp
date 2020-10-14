@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -51,7 +52,10 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// bind the aggregate
-	idx_t best_function = Function::BindFunction(func->name, func->functions, types);
+	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error);
+	if (best_function == INVALID_INDEX) {
+		throw BinderException(binder.FormatError(aggr, error));
+	}
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
 

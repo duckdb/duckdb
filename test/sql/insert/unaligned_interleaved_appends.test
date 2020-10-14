@@ -1,0 +1,81 @@
+# name: test/sql/insert/unaligned_interleaved_appends.test
+# description: Test unaligned interleaved appends
+# group: [insert]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+# con2 insert 5 rows and begins a transaction
+statement ok con2
+INSERT INTO integers SELECT * FROM range(0, 5)
+
+statement ok con2
+BEGIN TRANSACTION
+
+# con3 inserts 17 rows and begins a transaction
+statement ok con3
+INSERT INTO integers SELECT * FROM range(0, 17)
+
+statement ok con3
+BEGIN TRANSACTION
+
+# con4 inserts 1007 rows and begins a transaction
+statement ok con4
+INSERT INTO integers SELECT * FROM range(0, 1007)
+
+statement ok con4
+BEGIN TRANSACTION
+
+# con5 inserts 3020 rows and begins a transaction
+statement ok con5
+INSERT INTO integers SELECT * FROM range(0, 3020)
+
+statement ok con5
+BEGIN TRANSACTION
+
+# con6 inserts 3 rows and begins a transaction
+statement ok con6
+INSERT INTO integers SELECT * FROM range(0, 3)
+
+statement ok con6
+BEGIN TRANSACTION
+
+# now we verify all the counts
+# con1: 0
+query I con1
+SELECT COUNT(*) FROM integers
+----
+0
+
+# con2: 5
+query I con2
+SELECT COUNT(*) FROM integers
+----
+5
+
+# con3: 22
+query I con3
+SELECT COUNT(*) FROM integers
+----
+22
+
+# con4: 1029
+query I con4
+SELECT COUNT(*) FROM integers
+----
+1029
+
+# con5: 4049
+query I con5
+SELECT COUNT(*) FROM integers
+----
+4049
+
+# con6: 4052
+query I con6
+SELECT COUNT(*) FROM integers
+----
+4052

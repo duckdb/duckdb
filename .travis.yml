@@ -164,7 +164,7 @@ matrix:
         - mkdir -p build/coverage
         - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
         - build/coverage/test/unittest
-        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
+        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
 
 
     - os: linux
@@ -624,23 +624,23 @@ matrix:
         - R CMD check --as-cran -o /tmp duckdb_*.tar.gz
         - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
 
+    # disabled for now bcause of constant timeouts during setup (i.e. we can't use travis_wait there)
+    # - os: osx
+    #   osx_image: xcode11.5
+    #   name: R Package
+    #   if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-    - os: osx
-      osx_image: xcode11.5
-      name: R Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+    #   language: r
 
-      language: r
+    #   before_install:
+    #     - cd tools/rpkg
 
-      before_install:
-        - cd tools/rpkg
-
-      script:
-        - ./configure
-        - R CMD build .
-        - R CMD INSTALL --build duckdb_*.tar.gz
-        - (cd tests && R -f testthat.R)
-        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
+    #   script:
+    #     - ./configure
+    #     - R CMD build .
+    #     - R CMD INSTALL --build duckdb_*.tar.gz
+    #     - (cd tests && R -f testthat.R)
+    #     - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
 
 
     - os: windows

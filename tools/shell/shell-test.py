@@ -96,7 +96,7 @@ DROP TABLE a;
 ''')
 
 # maybe at some point we can do something meaningful here
-test('.dbinfo', err='unable to read database header')
+# test('.dbinfo', err='unable to read database header')
 
 test('''
 .echo on
@@ -124,7 +124,7 @@ test("select 'yo' where 'abc' like 'a%c';", out='yo')
 
 test("select regexp_matches('abc','abc')", out='true')
 
-test('.help', 'Show this message')
+test('.help', 'Show help text for PATTERN')
 
 test('.load %s' % tf(), err="Error")
 
@@ -142,10 +142,6 @@ test('.limit length 42', err='sqlite3_limit')
 
 # ???
 test('.lint fkey-indexes')
-
-# this should probably be fixed, sqlite generates an internal query that duckdb does not like
-test('.indexes', err='indexes not supported')
-
 
 test('.timeout', err='sqlite3_busy_timeout')
 
@@ -188,13 +184,14 @@ CREATE TABLE csda (i INTEGER);
 .tables %da
 ''', out="asda  csda")
 
-test('.indexes',  err="indexes not supported")
+test('.indexes',  out="")
 
-test('''
-CREATE TABLE a (i INTEGER);
-CREATE INDEX a_idx ON a(i);
-.indexes a_%
-''',  err="indexes not supported")
+# FIXME: indexes currently not exported in sqlite_master
+# test('''
+# CREATE TABLE a (i INTEGER);
+# CREATE INDEX a_idx ON a(i);
+# .indexes a%
+# ''',  err="a_idx")
 
 # this does not seem to output anything
 test('.sha3sum')
@@ -325,13 +322,10 @@ PRAGMA enable_profiling;
 SELECT 42;
 ''', out="42", err="<<Query Profiling Information>>")
 
-# not working for now, probably for the better
+test('.system echo 42', out="42")
+test('.shell echo 42', out="42")
 
-# test('.system echo 42', out="42")
-# test('.shell echo 42', out="42")
-
-# this fails because strlike and db_config are missing
-
+# this fails because db_config is missing
 # test('''
 # .eqp full
 # SELECT 42;
@@ -340,7 +334,6 @@ SELECT 42;
 # this fails because the sqlite printf accepts %w for table names
 
 # test('''
-# CREATE VIEW sqlite_master AS SELECT * FROM sqlite_master(); -- hack!
 # CREATE TABLE a (I INTEGER);
 # INSERT INTO a VALUES (42);
 # .clone %s
@@ -348,19 +341,49 @@ SELECT 42;
 
 
 
-# fails because view pragma_database_list does not exist
-
 test('.databases', out='main:')
 
+# .dump test
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump
+''', 'COMMIT')
 
-# fails
+# .dump a specific table
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump a
+''', 'COMMIT')
+
+# .dump LIKE
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump a%
+''', 'COMMIT')
+
+# more types, tables and views
+test('''
+CREATE TABLE a (d DATE, k FLOAT, t TIMESTAMP);
+CREATE TABLE b (c INTEGER);
+.changes off
+INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());
+INSERT INTO b SELECT * FROM range(0,10);
+.dump
+''', 'COMMIT')
+
+# dump blobs: FIXME
 # test('''
-# CREATE TABLE a (I INTEGER);
+# CREATE TABLE a (b BLOB);
 # .changes off
-# INSERT INTO a VALUES (42);
-# .dump a
-# ''')
-
+# INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());
+# .dump
+# ''', 'COMMIT')
 
 
 # printf %q

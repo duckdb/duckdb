@@ -129,7 +129,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	if (pzTail) {
 		*pzTail = zSql + query.size();
 	}
-
+    // printf("%s\n", zSql);
 	try {
 		// extract the statements from the SQL query
 		auto statements = db->con->ExtractStatements(query);
@@ -378,6 +378,8 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+		return SQLITE_TEXT;
+	case LogicalTypeId::BLOB:
 		return SQLITE_BLOB;
 	default:
 		return 0;
@@ -514,6 +516,11 @@ int sqlite3_bind_double(sqlite3_stmt *stmt, int idx, double val) {
 
 int sqlite3_bind_null(sqlite3_stmt *stmt, int idx) {
 	return sqlite3_internal_bind_value(stmt, idx, Value());
+}
+
+SQLITE_API int sqlite3_bind_value(sqlite3_stmt*, int, const sqlite3_value*) {
+    fprintf(stderr, "sqlite3_bind_value: unsupported.\n");
+    return SQLITE_ERROR;
 }
 
 int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, void (*free_func)(void *)) {
@@ -692,19 +699,6 @@ int sqlite3_reset(sqlite3_stmt *stmt) {
 
 // support functions for shell.c
 // most are dummies, we don't need them really
-
-// TODO use re2 here?
-int sqlite3_strglob(const char *zGlobPattern, const char *zString) {
-	fprintf(stderr, "sqlite3_strglob: unsupported.\n");
-
-	return -1;
-}
-
-int sqlite3_strlike(const char *zPattern, const char *zStr, unsigned int esc) {
-	fprintf(stderr, "sqlite3_strlike: unsupported.\n");
-
-	return -1;
-}
 
 int sqlite3_db_status(sqlite3 *, int op, int *pCur, int *pHiwtr, int resetFlg) {
 	fprintf(stderr, "sqlite3_db_status: unsupported.\n");
@@ -1157,4 +1151,78 @@ SQLITE_API int sqlite3_value_numeric_type(sqlite3_value *) {
 }
 SQLITE_API int sqlite3_value_nochange(sqlite3_value *) {
 	return 0;
+}
+
+
+SQLITE_API void *sqlite3_aggregate_context(sqlite3_context*, int nBytes) {
+    fprintf(stderr, "sqlite3_aggregate_context: unsupported.\n");
+
+    return nullptr;
+}
+
+
+SQLITE_API int sqlite3_create_collation(
+    sqlite3*,
+    const char *zName,
+    int eTextRep,
+    void *pArg,
+    int(*xCompare)(void*,int,const void*,int,const void*)
+) {
+
+    return SQLITE_ERROR;
+}
+
+SQLITE_API int sqlite3_create_window_function(
+    sqlite3 *db,
+    const char *zFunctionName,
+    int nArg,
+    int eTextRep,
+    void *pApp,
+    void (*xStep)(sqlite3_context*,int,sqlite3_value**),
+    void (*xFinal)(sqlite3_context*),
+    void (*xValue)(sqlite3_context*),
+    void (*xInverse)(sqlite3_context*,int,sqlite3_value**),
+    void(*xDestroy)(void*)
+) {
+    fprintf(stderr, "sqlite3_create_window_function: unsupported.\n");
+    return SQLITE_ERROR;
+}
+
+SQLITE_API sqlite3 *sqlite3_db_handle(sqlite3_stmt* s) {
+    return s->db;
+}
+
+SQLITE_API char *sqlite3_expanded_sql(sqlite3_stmt *pStmt) {
+    fprintf(stderr, "sqlite3_expanded_sql: unsupported.\n");
+    return nullptr;
+}
+
+SQLITE_API int sqlite3_keyword_check(const char*,int) {
+    fprintf(stderr, "sqlite3_keyword_check: unsupported.\n");
+    return 0;
+}
+
+SQLITE_API int sqlite3_keyword_count(void) {
+    fprintf(stderr, "sqlite3_keyword_count: unsupported.\n");
+    return 0;
+}
+
+SQLITE_API int sqlite3_keyword_name(int,const char**,int*) {
+    fprintf(stderr, "sqlite3_keyword_name: unsupported.\n");
+    return 0;
+}
+
+
+SQLITE_API void sqlite3_progress_handler(sqlite3*, int, int(*)(void*), void*) {
+    fprintf(stderr, "sqlite3_progress_handler: unsupported.\n");
+}
+
+SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
+    // lie its probably not
+    return 0;
+}
+
+SQLITE_API int sqlite3_vtab_config(sqlite3*, int op, ...) {
+    fprintf(stderr, "sqlite3_vtab_config: unsupported.\n");
+    return SQLITE_ERROR;
 }

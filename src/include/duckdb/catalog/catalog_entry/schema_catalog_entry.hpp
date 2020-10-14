@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/parser/query_error_context.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -40,7 +41,7 @@ struct DropInfo;
 //! A schema in the catalog
 class SchemaCatalogEntry : public CatalogEntry {
 public:
-	SchemaCatalogEntry(Catalog *catalog, string name);
+	SchemaCatalogEntry(Catalog *catalog, string name, bool is_internal);
 
 	//! The catalog set holding the tables
 	CatalogSet tables;
@@ -86,7 +87,8 @@ public:
 	void Alter(ClientContext &context, AlterInfo *info);
 
 	//! Gets a catalog entry from the given catalog set matching the given name
-	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &name, bool if_exists);
+	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &name, bool if_exists,
+	                       QueryErrorContext error_context = QueryErrorContext());
 
 	//! Serialize the meta information of the SchemaCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);

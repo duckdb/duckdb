@@ -11,6 +11,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/exception_format_value.hpp"
 
 #include <stdexcept>
 
@@ -73,40 +74,6 @@ enum class ExceptionType {
 	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
 	INVALID_INPUT = 32 // Input or arguments error
 };
-
-enum class ExceptionFormatValueType : uint8_t {
-	FORMAT_VALUE_TYPE_DOUBLE,
-	FORMAT_VALUE_TYPE_INTEGER,
-	FORMAT_VALUE_TYPE_STRING
-};
-
-struct ExceptionFormatValue {
-	ExceptionFormatValue(double dbl_val) : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), dbl_val(dbl_val) {
-	}
-	ExceptionFormatValue(int64_t int_val)
-	    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {
-	}
-	ExceptionFormatValue(string str_val) : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(str_val) {
-	}
-
-	ExceptionFormatValueType type;
-
-	double dbl_val;
-	int64_t int_val;
-	string str_val;
-
-	template <class T> static ExceptionFormatValue CreateFormatValue(T value) {
-		return int64_t(value);
-	}
-};
-
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value);
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value);
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value);
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value);
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
 
 class Exception : public std::exception {
 public:

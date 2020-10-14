@@ -98,6 +98,7 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+	assert(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
@@ -431,18 +432,36 @@ string TableCatalogEntry::ToSQL() {
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	unordered_set<idx_t> not_null_columns;
-	unordered_set<string> pk_columns;
+	unordered_set<idx_t> unique_columns;
+	unordered_set<idx_t> pk_columns;
+	unordered_set<string> multi_key_pks;
+	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {
 			auto &not_null = (NotNullConstraint &)*constraint;
 			not_null_columns.insert(not_null.index);
 		} else if (constraint->type == ConstraintType::UNIQUE) {
 			auto &pk = (UniqueConstraint &)*constraint;
-			if (pk.is_primary_key) {
-				for (auto &col : pk.columns) {
-					pk_columns.insert(col);
+			vector<string> constraint_columns = pk.columns;
+			if (pk.columns.empty()) {
+				// no columns specified: single column constraint
+				if (pk.is_primary_key) {
+					pk_columns.insert(pk.index);
+				} else {
+					unique_columns.insert(pk.index);
 				}
+			} else {
+				// multi-column constraint, this constraint needs to go at the end after all columns
+				if (pk.is_primary_key) {
+					// multi key pk column: insert set of columns into multi_key_pks
+					for (auto &col : pk.columns) {
+						multi_key_pks.insert(col);
+					}
+				}
+				extra_constraints.push_back(constraint->ToString());
 			}
+		} else {
+			extra_constraints.push_back(constraint->ToString());
 		}
 	}
 
@@ -452,20 +471,30 @@ string TableCatalogEntry::ToSQL() {
 		}
 		auto &column = columns[i];
 		ss << column.name << " " << column.type.ToString();
-		if (not_null_columns.find(column.oid) != not_null_columns.end() &&
-		    pk_columns.find(column.name) == pk_columns.end()) {
-			// NOT NULL but not a priamry key column
+		bool not_null = not_null_columns.find(column.oid) != not_null_columns.end();
+		bool is_single_key_pk = pk_columns.find(column.oid) != pk_columns.end();
+		bool is_multi_key_pk = multi_key_pks.find(column.name) != multi_key_pks.end();
+		bool is_unique = unique_columns.find(column.oid) != unique_columns.end();
+		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
+			// NOT NULL but not a primary key column
 			ss << " NOT NULL";
 		}
-	}
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto &constraint = constraints[i];
-		if (constraint->type == ConstraintType::NOT_NULL) {
-			// handled above
-			continue;
+		if (is_single_key_pk) {
+			// single column pk: insert constraint here
+			ss << " PRIMARY KEY";
 		}
+		if (is_unique) {
+			// single column unique: insert constraint here
+			ss << " UNIQUE";
+		}
+		if (column.default_value) {
+			ss << " DEFAULT(" << column.default_value->ToString() << ")";
+		}
+	}
+	// print any extra constraints that still need to be printed
+	for (auto &extra_constraint : extra_constraints) {
 		ss << ", ";
-		ss << constraint->ToString();
+		ss << extra_constraint;
 	}
 
 	ss << ");";

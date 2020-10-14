@@ -315,6 +315,15 @@ void FileSystem::SetWorkingDirectory(string path) {
 	}
 }
 
+idx_t FileSystem::GetAvailableMemory() {
+	errno = 0;
+	idx_t max_memory = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
+	if (errno != 0) {
+		throw IOException("Could not fetch available system memory!");
+	}
+	return max_memory;
+}
+
 string FileSystem::GetWorkingDirectory() {
 	auto buffer = unique_ptr<char[]>(new char[PATH_MAX]);
 	char *ret = getcwd(buffer.get(), PATH_MAX);
@@ -330,6 +339,12 @@ string FileSystem::GetWorkingDirectory() {
 #define NOMINMAX
 #endif
 #include <windows.h>
+
+#ifdef __MINGW32__
+// need to manually define this for mingw
+extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory (PULONGLONG );
+#endif
+
 
 #undef CreateDirectory
 #undef MoveFile
@@ -586,6 +601,14 @@ void FileSystem::SetWorkingDirectory(string path) {
 	if (!SetCurrentDirectory(path.c_str())) {
 		throw IOException("Could not change working directory!");
 	}
+}
+
+idx_t FileSystem::GetAvailableMemory() {
+	ULONGLONG available_memory_kb;
+	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
+		throw IOException("Could not fetch available system memory!");
+	}
+	return available_memory_kb * 1024;
 }
 
 string FileSystem::GetWorkingDirectory() {

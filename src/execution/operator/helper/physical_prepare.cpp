@@ -14,7 +14,7 @@ void PhysicalPrepare::GetChunkInternal(ExecutionContext &context, DataChunk &chu
 
 	// now store plan in context
 	auto &dependencies = entry->prepared->dependencies;
-	if (!client.prepared_statements->CreateEntry(client.ActiveTransaction(), name, move(entry), dependencies)) {
+	if (!client.prepared_statements->CreateEntry(client, name, move(entry), dependencies)) {
 		throw Exception("Failed to prepare statement");
 	}
 	state->finished = true;

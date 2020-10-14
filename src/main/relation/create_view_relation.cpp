@@ -17,9 +17,12 @@ unique_ptr<QueryNode> CreateViewRelation::GetQueryNode() {
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {
+	auto select = make_unique<SelectStatement>();
+	select->node = child->GetQueryNode();
+
 	CreateStatement stmt;
 	auto info = make_unique<CreateViewInfo>();
-	info->query = child->GetQueryNode();
+	info->query = move(select);
 	info->view_name = view_name;
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = move(info);
