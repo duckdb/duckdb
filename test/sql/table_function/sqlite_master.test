@@ -50,3 +50,11 @@ query IIIII
 SELECT * FROM sqlite_master WHERE name='tconstraint2';
 ----
 table	tconstraint2	tconstraint2	0	CREATE TABLE tconstraint2(i INTEGER, j INTEGER, k INTEGER, l INTEGER UNIQUE, PRIMARY KEY(i, j, k));
+
+statement ok
+CREATE INDEX i_index ON integers(i);
+
+query IIIII
+SELECT * FROM sqlite_master WHERE name='i_index';
+----
+index	i_index	integers	0	CREATE INDEX i_index ON integers(i);

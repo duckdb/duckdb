@@ -39,11 +39,15 @@ void Parser::ParseQuery(string query) {
 		n_prepared_parameters = transformer.ParamCount();
 	}
 	if (statements.size() > 0) {
-		for (auto &statement : statements) {
-			statement->query = query;
-		}
 		auto &last_statement = statements.back();
 		last_statement->stmt_length = query.size() - last_statement->stmt_location;
+		for (auto &statement : statements) {
+			statement->query = query;
+			if (statement->type == StatementType::CREATE_STATEMENT) {
+				auto &create = (CreateStatement &) *statement;
+				create.info->sql = query.substr(statement->stmt_location, statement->stmt_length);
+			}
+		}
 	}
 }
 
