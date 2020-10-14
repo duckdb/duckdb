@@ -351,7 +351,19 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			assert(constant_values.find(equivalence_set) != constant_values.end());
 			auto &info_list = constant_values.find(equivalence_set)->second;
 			// check the existing constant comparisons to see if we can do any pruning
-			return AddConstantComparison(info_list, info);
+			auto ret = AddConstantComparison(info_list, info);
+
+			auto non_scalar = left_is_scalar ? comparison.right.get(): comparison.left.get();
+			auto transitive_filter = FindTransitiveFilter(non_scalar);
+			if(transitive_filter.get() != nullptr) {
+				//try to add transitive filters
+				if(AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter.get()) == FilterResult::UNSUPPORTED) {
+					//in case of unsuccessful re-add filter into remaining ones
+					remaining_filters.push_back(move(transitive_filter));
+				}
+			}
+			return ret;
+
 		} else {
 			// comparison between two non-scalars
 			// only handle comparisons for now
@@ -481,6 +493,28 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	}
 
 	return FilterResult::UNSUPPORTED;
+}
+
+/*
+* Find a transitive filter already inserted into the remaining filters
+* Check for a match between the right column of bound comparisons and the expression,
+* then removes the bound comparison from the remaining filters and returns it
+*/
+unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression *expr) {
+	// We only check for bound column ref
+	if(expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		for (idx_t i = 0; i < remaining_filters.size(); i++) {
+			if(remaining_filters[i]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+				auto comparison = (BoundComparisonExpression *)remaining_filters[i].get();
+				if(expr->Equals(comparison->right.get()) && comparison->type != ExpressionType::COMPARE_NOTEQUAL) {
+					auto filter = move(remaining_filters[i]);
+					remaining_filters.erase(remaining_filters.begin() + i);
+					return filter;
+				}
+			}
+		}
+	}
+	return nullptr;
 }
 
 ValueComparisonResult InvertValueComparisonResult(ValueComparisonResult result) {

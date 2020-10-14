@@ -137,3 +137,126 @@ query II
 SELECT * FROM vals1 WHERE i<=0 AND j<i
 ----
 0	-1
+
+
+#################################################################################################
+# Non-scalar comparisons followed by simple constant comparisons
+# e.g., j >= i AND i>10
+
+### j >= i followed by constant comparison [=, >, >=, <, <=]  #########################
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i=5
+----
+5	5
+5	6
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i>9
+----
+10	10
+10	11
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i>=10
+----
+10	10
+10	11
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i<1
+----
+0	0
+0	1
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i<=0
+----
+0	0
+0	1
+
+### j <= i followed by constant comparison [=, >, >=, <, <=] #########################
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i=5
+----
+5	5
+5	4
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i>9
+----
+10	10
+10	9
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i>=10
+----
+10	10
+10	9
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i<1
+----
+0	0
+0	-1
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i<=0
+----
+0	0
+0	-1
+
+### j > i followed by constant comparison [=, >, >=, <, <=] #########################
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i=5
+----
+5	6
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i>9
+----
+10	11
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i>=10
+----
+10	11
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i<1
+----
+0	1
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i<=0
+----
+0	1
+
+### j < i followed by constant comparison [=, >, >=, <, <=] #########################
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i=5
+----
+5	4
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i>9
+----
+10	9
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i>=10
+----
+10	9
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i<1
+----
+0	-1
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i<=0
+----
+0	-1
