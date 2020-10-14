@@ -81,6 +81,10 @@ struct LeftFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct MD5Fun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct NFCNormalizeFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);

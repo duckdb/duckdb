@@ -1,0 +1,645 @@
+# name: test/sqlserver/test_sqlserver.test
+# description: SQL Server functions tests
+# group: [sqlserver]
+
+require vector_size 512
+
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+statement ok
+CREATE SCHEMA Sales;
+
+statement ok
+CREATE TABLE Sales.SalesPerson( BusinessEntityID int NOT NULL, TerritoryID int, SalesQuota decimal(22,4), Bonus decimal(22,4) NOT NULL, CommissionPct decimal(10,4) NOT NULL, SalesYTD decimal(22,4) NOT NULL, SalesLastYear decimal(22,4) NOT NULL , rowguid string , ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Sales.SalesPerson FROM 'test/sqlserver/data/SalesPerson.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE Sales.SalesTaxRate( SalesTaxRateID int NOT NULL, StateProvinceID int NOT NULL, TaxType tinyint NOT NULL, TaxRate decimal(10,4) NOT NULL , Name string NOT NULL, rowguid string , ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Sales.SalesTaxRate FROM 'test/sqlserver/data/SalesTaxRate.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE Sales.SalesPersonQuotaHistory( BusinessEntityID int NOT NULL, QuotaDate datetime NOT NULL, SalesQuota decimal(22,4) NOT NULL, rowguid string , ModifiedDate datetime NOT NULL);
+
+statement ok
+COPY Sales.SalesPersonQuotaHistory FROM 'test/sqlserver/data/SalesPersonQuotaHistory.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE Sales.SalesTerritory( TerritoryID int NOT NULL, Name string NOT NULL, CountryRegionCode string NOT NULL, Group_ string NOT NULL, SalesYTD decimal(22,4) NOT NULL , SalesLastYear decimal(22,4) NOT NULL , CostYTD decimal(22,4) NOT NULL , CostLastYear decimal(22,4) NOT NULL , rowguid string , ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Sales.SalesTerritory FROM 'test/sqlserver/data/SalesTerritory.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE SCHEMA HumanResources;
+
+statement ok
+CREATE TABLE HumanResources.Employee( BusinessEntityID int NOT NULL, NationalIDNumber string NOT NULL, LoginID string NOT NULL, OrganizationNode VARCHAR, 	OrganizationLevel integer not null, JobTitle string NOT NULL, BirthDate date NOT NULL, MaritalStatus string NOT NULL, Gender string NOT NULL, HireDate date NOT NULL, SalariedFlag string NOT NULL , VacationHours smallint NOT NULL , SickLeaveHours smallint NOT NULL, CurrentFlag string NOT NULL , rowguid string , ModifiedDate datetime NOT NULL);
+
+statement ok
+COPY HumanResources.Employee FROM 'test/sqlserver/data/Employee.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE HumanResources.EmployeePayHistory( BusinessEntityID int NOT NULL, RateChangeDate datetime NOT NULL, Rate decimal(22,4) NOT NULL, PayFrequency tinyint NOT NULL, ModifiedDate datetime NOT NULL);
+
+statement ok
+COPY HumanResources.EmployeePayHistory FROM 'test/sqlserver/data/EmployeePayHistory.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE HumanResources.EmployeeDepartmentHistory( BusinessEntityID int NOT NULL, DepartmentID smallint NOT NULL, ShiftID tinyint NOT NULL, StartDate date NOT NULL, EndDate date, ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY HumanResources.EmployeeDepartmentHistory FROM 'test/sqlserver/data/EmployeeDepartmentHistory.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE HumanResources.Department( DepartmentID smallint NOT NULL, Name string NOT NULL, GroupName string NOT NULL, ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY HumanResources.Department FROM 'test/sqlserver/data/Department.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE HumanResources.Shift( ShiftID tinyint NOT NULL, Name string NOT NULL, StartTime string NOT NULL, EndTime string NOT NULL, ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY HumanResources.Shift FROM 'test/sqlserver/data/Shift.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE SCHEMA Person;
+
+statement ok
+CREATE TABLE Person.Person( BusinessEntityID int NOT NULL, PersonType string NOT NULL, NameStyle string NOT NULL, Title string , FirstName string NOT NULL, MiddleName string, LastName string NOT NULL, Suffix string, EmailPromotion int NOT NULL, AdditionalContactInfo string, Demographics string, rowguid string, ModifiedDate datetime NOT NULL);
+
+statement ok
+COPY Person.Person FROM 'test/sqlserver/data/Person.csv.gz' (DELIMITER '|', QUOTE '*');
+
+statement ok
+CREATE TABLE Person.BusinessEntityAddress( BusinessEntityID int NOT NULL, AddressID int NOT NULL, AddressTypeID int NOT NULL, rowguid string, ModifiedDate datetime NOT NULL ) ;
+
+statement ok
+COPY Person.BusinessEntityAddress FROM 'test/sqlserver/data/BusinessEntityAddress.csv.gz' DELIMITER '|';
+
+statement ok
+CREATE TABLE Person.Address( AddressID int NOT NULL, AddressLine1 string NOT NULL, AddressLine2 string, City string NOT NULL, StateProvinceID int NOT NULL, PostalCode string NOT NULL, SpatialLocation string, rowguid string, ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Person.Address FROM 'test/sqlserver/data/Address.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE Person.StateProvince( StateProvinceID int NOT NULL, StateProvinceCode string NOT NULL, CountryRegionCode string NOT NULL, IsOnlyStateProvinceFlag string NOT NULL , Name string NOT NULL, TerritoryID int NOT NULL, rowguid string , ModifiedDate datetime NOT NULL);
+
+statement ok
+COPY Person.StateProvince FROM 'test/sqlserver/data/StateProvince.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE Person.CountryRegion( CountryRegionCode string NOT NULL, Name string NOT NULL, ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Person.CountryRegion FROM 'test/sqlserver/data/CountryRegion.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE TABLE Person.EmailAddress( BusinessEntityID int NOT NULL, EmailAddressID int NOT NULL, EmailAddress string, rowguid string , ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Person.EmailAddress FROM 'test/sqlserver/data/EmailAddress.csv.gz' DELIMITER '|';
+
+statement ok
+CREATE TABLE Person.PersonPhone( BusinessEntityID int NOT NULL, PhoneNumber string NOT NULL, PhoneNumberTypeID int NOT NULL, ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Person.PersonPhone FROM 'test/sqlserver/data/PersonPhone.csv.gz' DELIMITER '|';
+
+statement ok
+CREATE TABLE Person.PhoneNumberType( PhoneNumberTypeID int NOT NULL, Name string NOT NULL, ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Person.PhoneNumberType FROM 'test/sqlserver/data/PhoneNumberType.csv.gz' DELIMITER '|';
+
+statement ok
+CREATE SCHEMA Production;
+
+statement ok
+CREATE TABLE Production.Product( ProductID int NOT NULL, Name string NOT NULL, ProductNumber string NOT NULL, MakeFlag string NOT NULL , FinishedGoodsFlag string NOT NULL , Color string, SafetyStockLevel smallint NOT NULL, ReorderPoint smallint NOT NULL, StandardCost decimal(22,4) NOT NULL, ListPrice decimal(22,4) NOT NULL, Size string, SizeUnitMeasureCode string, WeightUnitMeasureCode string, Weight decimal(8, 2), DaysToManufacture int NOT NULL, ProductLine string, Class string, Style string, ProductSubcategoryID int, ProductModelID int, SellStartDate datetime NOT NULL, SellEndDate datetime, DiscontinuedDate datetime, rowguid string  , ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Production.Product FROM 'test/sqlserver/data/Product.csv.gz' DELIMITER '	';
+
+statement ok
+ CREATE TABLE Production.ProductInventory( ProductID int NOT NULL, LocationID smallint NOT NULL, Shelf string NOT NULL, Bin tinyint NOT NULL, Quantity smallint NOT NULL , rowguid string , ModifiedDate datetime NOT NULL );
+
+statement ok
+COPY Production.ProductInventory FROM 'test/sqlserver/data/ProductInventory.csv.gz' DELIMITER '	';
+
+statement ok
+CREATE VIEW Sales.vSalesPerson AS SELECT s.BusinessEntityID ,p.Title ,p.FirstName ,p.MiddleName ,p.LastName ,p.Suffix ,e.JobTitle ,pp.PhoneNumber ,pnt.Name AS PhoneNumberType ,ea.EmailAddress ,p.EmailPromotion ,a.AddressLine1 ,a.AddressLine2 ,a.City ,sp.Name AS StateProvinceName ,a.PostalCode ,cr.Name AS CountryRegionName ,st.Name AS TerritoryName ,st.Group_ AS TerritoryGroup ,s.SalesQuota ,s.SalesYTD ,s.SalesLastYear FROM Sales.SalesPerson s INNER JOIN HumanResources.Employee e ON e.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.Person p ON p.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.BusinessEntityAddress bea ON bea.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.Address a ON a.AddressID = bea.AddressID INNER JOIN Person.StateProvince sp ON sp.StateProvinceID = a.StateProvinceID INNER JOIN Person.CountryRegion cr ON cr.CountryRegionCode = sp.CountryRegionCode LEFT OUTER JOIN Sales.SalesTerritory st ON st.TerritoryID = s.TerritoryID LEFT OUTER JOIN Person.EmailAddress ea ON ea.BusinessEntityID = p.BusinessEntityID LEFT OUTER JOIN Person.PersonPhone pp ON pp.BusinessEntityID = p.BusinessEntityID LEFT OUTER JOIN Person.PhoneNumberType pnt ON pnt.PhoneNumberTypeID = pp.PhoneNumberTypeID;
+
+statement ok
+CREATE VIEW HumanResources.vEmployeeDepartmentHistory AS SELECT e.BusinessEntityID ,p.Title ,p.FirstName ,p.MiddleName ,p.LastName ,p.Suffix ,s.Name AS Shift ,d.Name AS Department ,d.GroupName ,edh.StartDate ,edh.EndDate FROM HumanResources.Employee e INNER JOIN Person.Person p ON p.BusinessEntityID = e.BusinessEntityID INNER JOIN HumanResources.EmployeeDepartmentHistory edh ON e.BusinessEntityID = edh.BusinessEntityID INNER JOIN HumanResources.Department d ON edh.DepartmentID = d.DepartmentID INNER JOIN HumanResources.Shift s ON s.ShiftID = edh.ShiftID;
+
+# https:docs.microsoft.com/en-us/sql/t-sql/functions/avg-transact-sql?view=sql-server-2017
+query RR
+SELECT AVG(VacationHours)AS a, SUM(SickLeaveHours) AS b  FROM HumanResources.Employee WHERE JobTitle LIKE 'Vice President%';
+----
+25.000000	97.000000
+
+query IRR
+SELECT TerritoryID, AVG(Bonus)as a, SUM(SalesYTD) as b FROM Sales.SalesPerson GROUP BY TerritoryID order by TerritoryID;
+----
+1	4133.3333333333333333	4502152.2674
+2	4100.0000000000000000	3763178.1787
+3	2500.0000000000000000	3189418.3662
+4	2775.0000000000000000	6709904.1666
+5	6700.0000000000000000	2315185.6110
+6	2750.0000000000000000	4058260.1825
+7	985.0000000000000000	3121616.3202
+8	75.0000000000000000	1827066.7118
+9	5650.0000000000000000	1421810.9242
+10	5150.0000000000000000	4116871.2277
+NULL	0.00000000000000000000	1252127.9471
+
+
+query R
+SELECT AVG(DISTINCT ListPrice) FROM Production.Product;
+----
+437.4042718446601942
+
+query R
+SELECT AVG(ListPrice) FROM Production.Product;
+----
+438.6662500000000000
+
+query IIIRRR
+SELECT BusinessEntityID, TerritoryID ,YEAR(ModifiedDate) AS SalesYear ,SalesYTD ,AVG(SalesYTD) OVER (PARTITION BY TerritoryID ORDER BY YEAR(ModifiedDate) ) AS MovingAvg ,SUM(SalesYTD) OVER (PARTITION BY TerritoryID ORDER BY YEAR(ModifiedDate) ) AS CumulativeTotal FROM Sales.SalesPerson WHERE TerritoryID IS NULL OR TerritoryID < 5 ORDER BY TerritoryID, SalesYear, BusinessEntityID;
+----
+280	1	2011	1352577.1325	1462795.035400000000	2925590.0708
+283	1	2011	1573012.9383	1462795.035400000000	2925590.0708
+284	1	2012	1576562.1966	1500717.422466666667	4502152.2674
+275	2	2011	3763178.1787	3763178.178700000000	3763178.1787
+277	3	2011	3189418.3662	3189418.366200000000	3189418.3662
+276	4	2011	4251368.5497	3354952.083300000000	6709904.1666
+281	4	2011	2458535.6169	3354952.083300000000	6709904.1666
+274	NULL	2010	559697.5639	559697.563900000000	559697.5639
+287	NULL	2012	519905.9320	539801.747950000000	1079603.4959
+285	NULL	2013	172524.4512	417375.982366666667	1252127.9471
+
+query IIIRRR
+SELECT BusinessEntityID, TerritoryID ,YEAR(ModifiedDate) AS SalesYear ,SalesYTD  ,AVG(SalesYTD) OVER (ORDER BY YEAR(ModifiedDate) ) AS MovingAvg ,SUM(SalesYTD) OVER (ORDER BY YEAR(ModifiedDate) ) AS CumulativeTotal FROM Sales.SalesPerson WHERE TerritoryID IS NULL OR TerritoryID < 5 ORDER BY SalesYear, TerritoryID, BusinessEntityID;
+----
+274	NULL	2010	559697.5639	559697.563900000000	559697.5639
+280	1	2011	1352577.1325	2449684.049457142857	17147788.3462
+283	1	2011	1573012.9383	2449684.049457142857	17147788.3462
+275	2	2011	3763178.1787	2449684.049457142857	17147788.3462
+277	3	2011	3189418.3662	2449684.049457142857	17147788.3462
+276	4	2011	4251368.5497	2449684.049457142857	17147788.3462
+281	4	2011	2458535.6169	2449684.049457142857	17147788.3462
+284	1	2012	1576562.1966	2138250.719422222222	19244256.4748
+287	NULL	2012	519905.9320	2138250.719422222222	19244256.4748
+285	NULL	2013	172524.4512	1941678.092600000000	19416780.9260
+
+# https:docs.microsoft.com/en-us/sql/t-sql/functions/count-transact-sql?view=sql-server-2017
+query I
+SELECT COUNT(DISTINCT JobTitle) FROM HumanResources.Employee;
+----
+67
+
+query I
+SELECT COUNT(*) FROM HumanResources.Employee;
+----
+290
+
+query IR
+SELECT COUNT(*), AVG(Bonus) FROM Sales.SalesPerson WHERE SalesQuota > 25000;
+----
+14	3472.1428571428571429
+
+query TRRRI
+SELECT DISTINCT Name, MIN(Rate) OVER (PARTITION BY edh.DepartmentID) AS MinSalary , MAX(Rate) OVER (PARTITION BY edh.DepartmentID) AS MaxSalary , AVG(Rate) OVER (PARTITION BY edh.DepartmentID) AS AvgSalary ,COUNT(edh.BusinessEntityID) OVER (PARTITION BY edh.DepartmentID) AS EmployeesPerDept FROM HumanResources.EmployeePayHistory AS eph JOIN HumanResources.EmployeeDepartmentHistory AS edh ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;
+----
+Document Control	10.2500	17.7885	14.3884600000000000	5
+Engineering	32.6923	63.4615	40.1442166666666667	6
+Executive	39.0600	125.5000	68.3034750000000000	4
+Facilities and Maintenance	9.2500	24.0385	13.0316000000000000	7
+Finance	13.4615	43.2692	23.9350900000000000	10
+Human Resources	13.9423	27.1394	18.0248166666666667	6
+Information Services	27.4038	50.4808	34.1586300000000000	10
+Marketing	13.4615	37.5000	18.4318181818181818	11
+Production	6.5000	84.1346	13.5537671794871795	195
+Production Control	8.6200	24.5192	16.7746125000000000	8
+Purchasing	9.8600	30.0000	18.0202000000000000	14
+Quality Assurance	10.5769	28.8462	15.4647333333333333	6
+Research and Development	40.8654	50.4808	43.6731000000000000	4
+Sales	23.0769	72.1154	29.9719444444444444	18
+Shipping and Receiving	9.0000	19.2308	10.8718000000000000	6
+Tool Design	8.6200	29.8462	23.5054000000000000	6
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/max-transact-sql?view=sql-server-2017
+query R
+SELECT MAX(TaxRate) FROM Sales.SalesTaxRate;
+----
+19.600000
+
+query TRRRI
+SELECT DISTINCT Name, MIN(Rate) OVER (PARTITION BY edh.DepartmentID) AS MinSalary , MAX(Rate) OVER (PARTITION BY edh.DepartmentID) AS MaxSalary , AVG(Rate) OVER (PARTITION BY edh.DepartmentID) AS AvgSalary ,COUNT(edh.BusinessEntityID) OVER (PARTITION BY edh.DepartmentID) AS EmployeesPerDept FROM HumanResources.EmployeePayHistory AS eph JOIN HumanResources.EmployeeDepartmentHistory AS edh ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;
+----
+Document Control	10.2500	17.7885	14.3884600000000000	5
+Engineering	32.6923	63.4615	40.1442166666666667	6
+Executive	39.0600	125.5000	68.3034750000000000	4
+Facilities and Maintenance	9.2500	24.0385	13.0316000000000000	7
+Finance	13.4615	43.2692	23.9350900000000000	10
+Human Resources	13.9423	27.1394	18.0248166666666667	6
+Information Services	27.4038	50.4808	34.1586300000000000	10
+Marketing	13.4615	37.5000	18.4318181818181818	11
+Production	6.5000	84.1346	13.5537671794871795	195
+Production Control	8.6200	24.5192	16.7746125000000000	8
+Purchasing	9.8600	30.0000	18.0202000000000000	14
+Quality Assurance	10.5769	28.8462	15.4647333333333333	6
+Research and Development	40.8654	50.4808	43.6731000000000000	4
+Sales	23.0769	72.1154	29.9719444444444444	18
+Shipping and Receiving	9.0000	19.2308	10.8718000000000000	6
+Tool Design	8.6200	29.8462	23.5054000000000000	6
+
+query R
+SELECT MIN(TaxRate) FROM Sales.SalesTaxRate;
+----
+5.000000
+
+query TRRRI
+SELECT DISTINCT Name , MIN(Rate) OVER (PARTITION BY edh.DepartmentID) AS MinSalary , MAX(Rate) OVER (PARTITION BY edh.DepartmentID) AS MaxSalary , AVG(Rate) OVER (PARTITION BY edh.DepartmentID) AS AvgSalary ,COUNT(edh.BusinessEntityID) OVER (PARTITION BY edh.DepartmentID) AS EmployeesPerDept FROM HumanResources.EmployeePayHistory AS eph JOIN HumanResources.EmployeeDepartmentHistory AS edh ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;
+----
+Document Control	10.2500	17.7885	14.3884600000000000	5
+Engineering	32.6923	63.4615	40.1442166666666667	6
+Executive	39.0600	125.5000	68.3034750000000000	4
+Facilities and Maintenance	9.2500	24.0385	13.0316000000000000	7
+Finance	13.4615	43.2692	23.9350900000000000	10
+Human Resources	13.9423	27.1394	18.0248166666666667	6
+Information Services	27.4038	50.4808	34.1586300000000000	10
+Marketing	13.4615	37.5000	18.4318181818181818	11
+Production	6.5000	84.1346	13.5537671794871795	195
+Production Control	8.6200	24.5192	16.7746125000000000	8
+Purchasing	9.8600	30.0000	18.0202000000000000	14
+Quality Assurance	10.5769	28.8462	15.4647333333333333	6
+Research and Development	40.8654	50.4808	43.6731000000000000	4
+Sales	23.0769	72.1154	29.9719444444444444	18
+Shipping and Receiving	9.0000	19.2308	10.8718000000000000	6
+Tool Design	8.6200	29.8462	23.5054000000000000	6
+
+# https:docs.microsoft.com/en-us/sql/t-sql/functions/sum-transact-sql?view=sql-server-2017
+query TRR
+SELECT Color, SUM(ListPrice), SUM(StandardCost) FROM Production.Product WHERE Color IS NOT NULL AND ListPrice != 0.00 AND Name LIKE 'Mountain%' GROUP BY Color ORDER BY Color;
+----
+Black	27404.8400	15214.9616
+Silver	26462.8400	14665.6792
+White	19.0000	6.7926
+
+query IIIRRR
+SELECT BusinessEntityID, TerritoryID ,YEAR(ModifiedDate) AS SalesYear ,SalesYTD ,AVG(SalesYTD) OVER (PARTITION BY TerritoryID ORDER BY YEAR(ModifiedDate) ) AS MovingAvg ,SUM(SalesYTD) OVER (PARTITION BY TerritoryID ORDER BY YEAR(ModifiedDate) ) AS CumulativeTotal FROM Sales.SalesPerson WHERE TerritoryID IS NULL OR TerritoryID < 5 ORDER BY TerritoryID,SalesYear, BusinessEntityID;
+----
+280	1	2011	1352577.1325	1462795.035400000000	2925590.0708
+283	1	2011	1573012.9383	1462795.035400000000	2925590.0708
+284	1	2012	1576562.1966	1500717.422466666667	4502152.2674
+275	2	2011	3763178.1787	3763178.178700000000	3763178.1787
+277	3	2011	3189418.3662	3189418.366200000000	3189418.3662
+276	4	2011	4251368.5497	3354952.083300000000	6709904.1666
+281	4	2011	2458535.6169	3354952.083300000000	6709904.1666
+274	NULL	2010	559697.5639	559697.563900000000	559697.5639
+287	NULL	2012	519905.9320	539801.747950000000	1079603.4959
+285	NULL	2013	172524.4512	417375.982366666667	1252127.9471
+
+query IIIRRR
+SELECT BusinessEntityID, TerritoryID ,YEAR(ModifiedDate) AS SalesYear ,SalesYTD  ,AVG(SalesYTD) OVER (ORDER BY YEAR(ModifiedDate) ) AS MovingAvg ,SUM(SalesYTD) OVER (ORDER BY YEAR(ModifiedDate) ) AS CumulativeTotal FROM Sales.SalesPerson WHERE TerritoryID IS NULL OR TerritoryID < 5 ORDER BY SalesYear, TerritoryID, BusinessEntityID;
+----
+274	NULL	2010	559697.5639	559697.563900000000	559697.5639
+280	1	2011	1352577.1325	2449684.049457142857	17147788.3462
+283	1	2011	1573012.9383	2449684.049457142857	17147788.3462
+275	2	2011	3763178.1787	2449684.049457142857	17147788.3462
+277	3	2011	3189418.3662	2449684.049457142857	17147788.3462
+276	4	2011	4251368.5497	2449684.049457142857	17147788.3462
+281	4	2011	2458535.6169	2449684.049457142857	17147788.3462
+284	1	2012	1576562.1966	2138250.719422222222	19244256.4748
+287	NULL	2012	519905.9320	2138250.719422222222	19244256.4748
+285	NULL	2013	172524.4512	1941678.092600000000	19416780.9260
+
+# https:docs.microsoft.com/en-us/sql/t-sql/functions/var-transact-sql?view=sql-server-2017
+#  TODO not supported
+# SELECT VAR(Bonus) FROM Sales.SalesPerson;
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/cume-dist-transact-sql?view=sql-server-2017
+query TTRRR
+SELECT Department, LastName, Rate, CUME_DIST () OVER (PARTITION BY Department ORDER BY Rate) AS CumeDist, PERCENT_RANK() OVER (PARTITION BY Department ORDER BY Rate ) AS PctRank FROM HumanResources.vEmployeeDepartmentHistory AS edh INNER JOIN HumanResources.EmployeePayHistory AS e ON e.BusinessEntityID = edh.BusinessEntityID WHERE Department IN (N'Information Services',N'Document Control') ORDER BY Department, Rate DESC, LastName;
+----
+Document Control	Arifin	17.7885	1	1
+Document Control	Kharatishvili	16.8269	0.8	0.5
+Document Control	Norred	16.8269	0.8	0.5
+Document Control	Berge	10.2500	0.4	0
+Document Control	Chai	10.2500	0.4	0
+Information Services	Trenary	50.4808	1	1
+Information Services	Conroy	39.6635	0.9	0.8888888888888888
+Information Services	Ajenstat	38.4615	0.8	0.6666666666666666
+Information Services	Wilson	38.4615	0.8	0.6666666666666666
+Information Services	Connelly	32.4519	0.6	0.4444444444444444
+Information Services	Sharma	32.4519	0.6	0.4444444444444444
+Information Services	Bacon	27.4038	0.4	0
+Information Services	Berg	27.4038	0.4	0
+Information Services	Bueno	27.4038	0.4	0
+Information Services	Meyyappan	27.4038	0.4	0
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/first-value-transact-sql?view=sql-server-2017
+query TRT
+SELECT Name, ListPrice, FIRST_VALUE(Name) OVER (ORDER BY ListPrice ASC) AS LeastExpensive FROM Production.Product WHERE ProductSubcategoryID = 37 ORDER BY ListPrice, Name DESC;
+----
+Patch Kit/8 Patches	2.2900	Patch Kit/8 Patches
+Road Tire Tube	3.9900	Patch Kit/8 Patches
+Touring Tire Tube	4.9900	Patch Kit/8 Patches
+Mountain Tire Tube	4.9900	Patch Kit/8 Patches
+LL Road Tire	21.4900	Patch Kit/8 Patches
+ML Road Tire	24.9900	Patch Kit/8 Patches
+LL Mountain Tire	24.9900	Patch Kit/8 Patches
+Touring Tire	28.9900	Patch Kit/8 Patches
+ML Mountain Tire	29.9900	Patch Kit/8 Patches
+HL Road Tire	32.6000	Patch Kit/8 Patches
+HL Mountain Tire	35.0000	Patch Kit/8 Patches
+
+query TTIT
+SELECT JobTitle, LastName, VacationHours, FIRST_VALUE(LastName) OVER (PARTITION BY JobTitle ORDER BY VacationHours ASC ROWS UNBOUNDED PRECEDING ) AS FewestVacationHours FROM HumanResources.Employee AS e INNER JOIN Person.Person AS p ON e.BusinessEntityID = p.BusinessEntityID ORDER BY JobTitle, LastName;
+----
+1160 values hashing to 2d7dea029628bcba179722012d0e5865
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/last-value-transact-sql?view=sql-server-2017
+query TTRTT
+SELECT Department, LastName, Rate, HireDate, LAST_VALUE(HireDate) OVER (PARTITION BY Department ORDER BY Rate, LastName) AS LastValue FROM HumanResources.vEmployeeDepartmentHistory AS edh INNER JOIN HumanResources.EmployeePayHistory AS eph ON eph.BusinessEntityID = edh.BusinessEntityID INNER JOIN HumanResources.Employee AS e ON e.BusinessEntityID = edh.BusinessEntityID WHERE Department IN (N'Information Services',N'Document Control') ORDER BY 1, 3, 2, 4, 5;
+----
+Document Control	Berge	10.2500	2009-02-09	2009-02-09
+Document Control	Chai	10.2500	2009-01-22	2009-01-22
+Document Control	Kharatishvili	16.8269	2008-12-16	2008-12-16
+Document Control	Norred	16.8269	2009-03-06	2009-03-06
+Document Control	Arifin	17.7885	2009-01-04	2009-01-04
+Information Services	Bacon	27.4038	2009-01-11	2009-01-11
+Information Services	Berg	27.4038	2009-02-16	2009-02-16
+Information Services	Bueno	27.4038	2008-12-23	2008-12-23
+Information Services	Meyyappan	27.4038	2009-02-03	2009-02-03
+Information Services	Connelly	32.4519	2009-02-23	2009-02-23
+Information Services	Sharma	32.4519	2008-12-04	2008-12-04
+Information Services	Ajenstat	38.4615	2009-01-17	2009-01-17
+Information Services	Wilson	38.4615	2009-01-22	2009-01-22
+Information Services	Conroy	39.6635	2009-02-04	2009-02-04
+Information Services	Trenary	50.4808	2008-12-11	2008-12-11
+
+
+query IIIRRR
+SELECT BusinessEntityID, DATEPART('QUARTER', QuotaDate) AS Quarter, YEAR(QuotaDate) AS SalesYear, SalesQuota AS QuotaThisQuarter, SalesQuota - FIRST_VALUE(SalesQuota) OVER (PARTITION BY BusinessEntityID, YEAR(QuotaDate) ORDER BY DATEPART('QUARTER',QuotaDate) ) AS DifferenceFromFirstQuarter, SalesQuota - LAST_VALUE(SalesQuota) OVER (PARTITION BY BusinessEntityID, YEAR(QuotaDate) ORDER BY DATEPART('QUARTER', QuotaDate) RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING ) AS DifferenceFromLastQuarter FROM Sales.SalesPersonQuotaHistory WHERE YEAR(QuotaDate) > 2005 AND BusinessEntityID BETWEEN 274 AND 275 ORDER BY BusinessEntityID, SalesYear, Quarter;
+----
+274	2	2011	28000.0000	0.0000	-63000.0000
+274	3	2011	7000.0000	-21000.0000	-84000.0000
+274	4	2011	91000.0000	63000.0000	0.0000
+274	1	2012	140000.0000	0.0000	33000.0000
+274	2	2012	70000.0000	-70000.0000	-37000.0000
+274	3	2012	154000.0000	14000.0000	47000.0000
+274	4	2012	107000.0000	-33000.0000	0.0000
+274	1	2013	58000.0000	0.0000	-26000.0000
+274	2	2013	263000.0000	205000.0000	179000.0000
+274	3	2013	116000.0000	58000.0000	32000.0000
+274	4	2013	84000.0000	26000.0000	0.0000
+274	1	2014	187000.0000	0.0000	0.0000
+275	2	2011	367000.0000	0.0000	-135000.0000
+275	3	2011	556000.0000	189000.0000	54000.0000
+275	4	2011	502000.0000	135000.0000	0.0000
+275	1	2012	550000.0000	0.0000	-179000.0000
+275	2	2012	1429000.0000	879000.0000	700000.0000
+275	3	2012	1324000.0000	774000.0000	595000.0000
+275	4	2012	729000.0000	179000.0000	0.0000
+275	1	2013	1194000.0000	0.0000	345000.0000
+275	2	2013	1575000.0000	381000.0000	726000.0000
+275	3	2013	1218000.0000	24000.0000	369000.0000
+275	4	2013	849000.0000	-345000.0000	0.0000
+275	1	2014	869000.0000	0.0000	0.0000
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/lag-transact-sql?view=sql-server-2017
+query IIRR
+SELECT BusinessEntityID, YEAR(QuotaDate) AS SalesYear, SalesQuota AS CurrentQuota, LAG(SalesQuota, 1,0) OVER (ORDER BY YEAR(QuotaDate)) AS PreviousQuota FROM Sales.SalesPersonQuotaHistory WHERE BusinessEntityID = 275 and YEAR(QuotaDate) IN ('2005','2006');
+----
+
+query TIRR
+ SELECT TerritoryName, BusinessEntityID, SalesYTD, LAG (SalesYTD, 1, 0) OVER (PARTITION BY TerritoryName ORDER BY SalesYTD DESC) AS PrevRepSales FROM Sales.vSalesPerson WHERE TerritoryName IN (N'Northwest', N'Canada') ORDER BY TerritoryName, SalesYTD DESC;
+----
+Canada	282	2604540.7172	0.0
+Canada	278	1453719.4653	2604540.7172
+Northwest	284	1576562.1966	0.0
+Northwest	283	1573012.9383	1576562.1966
+Northwest	280	1352577.1325	1573012.9383
+
+statement ok
+CREATE TABLE T (a int, b int, c int);
+
+statement ok
+INSERT INTO T VALUES (1, 1, -3), (2, 2, 4), (3, 1, NULL), (4, 3, 1), (5, 2, NULL), (6, 1, 5);
+
+query III
+SELECT b, c, LAG(2*c, b*(SELECT MIN(b) FROM T), -c/2.0) OVER (ORDER BY a) AS i FROM T;
+----
+1	-3	1
+2	4	-2
+1	NULL	8
+3	1	-6
+2	NULL	NULL
+1	5	NULL
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/lead-transact-sql?view=sql-server-2017
+query IIRR
+SELECT BusinessEntityID, YEAR(QuotaDate) AS SalesYear, SalesQuota AS CurrentQuota, LEAD(SalesQuota, 1,0) OVER (ORDER BY YEAR(QuotaDate)) AS NextQuota FROM Sales.SalesPersonQuotaHistory WHERE BusinessEntityID = 275 and YEAR(QuotaDate) IN ('2005','2006');
+----
+
+query TIRR
+SELECT TerritoryName, BusinessEntityID, SalesYTD, LEAD (SalesYTD, 1, 0) OVER (PARTITION BY TerritoryName ORDER BY SalesYTD DESC) AS NextRepSales FROM Sales.vSalesPerson WHERE TerritoryName IN (N'Northwest', N'Canada') ORDER BY TerritoryName, BusinessEntityID DESC;
+----
+Canada	282	2604540.717200	1453719.465300
+Canada	278	1453719.465300	0.000000
+Northwest	284	1576562.196600	1573012.938300
+Northwest	283	1573012.938300	1352577.132500
+Northwest	280	1352577.132500	0.000000
+
+query IIII
+SELECT a, b, c, LEAD(2.0*c, b*(SELECT MIN(b) FROM T), -c/2.0) OVER (ORDER BY a, b, c) AS i FROM T ORDER BY a, b, c;
+----
+1	1	-3	8.0
+2	2	4	2.0
+3	1	NULL	2.0
+4	3	1	-0.50000000000000000000
+5	2	NULL	NULL
+6	1	5	-2.5000000000000000
+
+statement ok
+DROP TABLE T;
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/percent-rank-transact-sql?view=sql-server-2017
+query TTRRR
+SELECT Department, LastName, Rate, CUME_DIST () OVER (PARTITION BY Department ORDER BY Rate) AS CumeDist, PERCENT_RANK() OVER (PARTITION BY Department ORDER BY Rate ) AS PctRank FROM HumanResources.vEmployeeDepartmentHistory AS edh INNER JOIN HumanResources.EmployeePayHistory AS e ON e.BusinessEntityID = edh.BusinessEntityID WHERE Department IN (N'Information Services',N'Document Control') ORDER BY Department, Rate DESC, LastName;
+----
+Document Control	Arifin	17.7885	1	1
+Document Control	Kharatishvili	16.8269	0.8	0.5
+Document Control	Norred	16.8269	0.8	0.5
+Document Control	Berge	10.2500	0.4	0
+Document Control	Chai	10.2500	0.4	0
+Information Services	Trenary	50.4808	1	1
+Information Services	Conroy	39.6635	0.9	0.8888888888888888
+Information Services	Ajenstat	38.4615	0.8	0.6666666666666666
+Information Services	Wilson	38.4615	0.8	0.6666666666666666
+Information Services	Connelly	32.4519	0.6	0.4444444444444444
+Information Services	Sharma	32.4519	0.6	0.4444444444444444
+Information Services	Bacon	27.4038	0.4	0
+Information Services	Berg	27.4038	0.4	0
+Information Services	Bueno	27.4038	0.4	0
+Information Services	Meyyappan	27.4038	0.4	0
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/dense-rank-transact-sql?view=sql-server-2017
+query ITIII
+SELECT i.ProductID, p.Name, i.LocationID, i.Quantity ,DENSE_RANK() OVER (PARTITION BY i.LocationID ORDER BY i.Quantity DESC) AS Rank FROM Production.ProductInventory AS i INNER JOIN Production.Product AS p ON i.ProductID = p.ProductID WHERE i.LocationID BETWEEN 3 AND 4 ORDER BY i.LocationID, Quantity DESC, p.Name;
+----
+495	Paint - Blue	3	49	1
+494	Paint - Silver	3	49	1
+493	Paint - Red	3	41	2
+496	Paint - Yellow	3	30	3
+492	Paint - Black	3	17	4
+495	Paint - Blue	4	35	1
+496	Paint - Yellow	4	25	2
+493	Paint - Red	4	24	3
+492	Paint - Black	4	14	4
+494	Paint - Silver	4	12	5
+
+query IRI
+SELECT BusinessEntityID, Rate, DENSE_RANK() OVER (ORDER BY Rate DESC) AS RankBySalary FROM HumanResources.EmployeePayHistory order by Rate DESC, BusinessEntityID DESC LIMIT 10;
+----
+1	125.5000	1
+25	84.1346	2
+273	72.1154	3
+2	63.4615	4
+234	60.0962	5
+263	50.4808	6
+7	50.4808	6
+234	48.5577	7
+287	48.1010	8
+285	48.1010	8
+
+query TTIIIIRT
+SELECT p.FirstName, p.LastName, ROW_NUMBER() OVER (ORDER BY a.PostalCode, p.FirstName) AS "Row Number" ,RANK() OVER (ORDER BY a.PostalCode) AS Rank ,DENSE_RANK() OVER (ORDER BY a.PostalCode) AS "Dense Rank" ,NTILE(4) OVER (ORDER BY a.PostalCode, p.FirstName) AS Quartile ,s.SalesYTD ,a.PostalCode FROM Sales.SalesPerson AS s INNER JOIN Person.Person AS p ON s.BusinessEntityID = p.BusinessEntityID INNER JOIN Person.Address AS a ON a.AddressID = p.BusinessEntityID WHERE TerritoryID IS NOT NULL AND SalesYTD <> 0 ORDER BY a.PostalCode, p.FirstName;
+----
+Garrett	Vargas	1	1	1	1	1453719.4653	98027
+Jillian	Carson	2	1	1	1	3189418.3662	98027
+Linda	Mitchell	3	1	1	1	4251368.5497	98027
+Michael	Blythe	4	1	1	1	3763178.1787	98027
+Pamela	Ansman-Wolfe	5	1	1	2	1352577.1325	98027
+Tsvi	Reiter	6	1	1	2	2315185.6110	98027
+David	Campbell	7	7	2	2	1573012.9383	98055
+Jae	Pak	8	7	2	2	4116871.2277	98055
+José	Saraiva	9	7	2	3	2604540.7172	98055
+Lynn	Tsoflias	10	7	2	3	1421810.9242	98055
+Rachel	Valdez	11	7	2	3	1827066.7118	98055
+Ranjit	Varkey Chudukatil	12	7	2	4	3121616.3202	98055
+Shu	Ito	13	7	2	4	2458535.6169	98055
+Tete	Mensa-Annan	14	7	2	4	1576562.1966	98055
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/ntile-transact-sql?view=sql-server-2017
+query TTIRT
+SELECT p.FirstName, p.LastName ,NTILE(4) OVER(ORDER BY SalesYTD DESC, p.FirstName) AS Quartile ,s.SalesYTD AS SalesYTD , a.PostalCode FROM Sales.SalesPerson AS s INNER JOIN Person.Person AS p ON s.BusinessEntityID = p.BusinessEntityID INNER JOIN Person.Address AS a ON a.AddressID = p.BusinessEntityID WHERE TerritoryID IS NOT NULL AND SalesYTD <> 0 ORDER BY SalesYTD, p.FirstName;
+----
+Pamela	Ansman-Wolfe	4	1352577.1325	98027
+Lynn	Tsoflias	4	1421810.9242	98055
+Garrett	Vargas	4	1453719.4653	98027
+David	Campbell	3	1573012.9383	98055
+Tete	Mensa-Annan	3	1576562.1966	98055
+Rachel	Valdez	3	1827066.7118	98055
+Tsvi	Reiter	2	2315185.6110	98027
+Shu	Ito	2	2458535.6169	98055
+José	Saraiva	2	2604540.7172	98055
+Ranjit	Varkey Chudukatil	2	3121616.3202	98055
+Jillian	Carson	1	3189418.3662	98027
+Michael	Blythe	1	3763178.1787	98027
+Jae	Pak	1	4116871.2277	98055
+Linda	Mitchell	1	4251368.5497	98027
+
+# FIXME: ntile bug?
+query TTIRT
+SELECT p.FirstName, p.LastName ,NTILE(4) OVER(PARTITION BY PostalCode ORDER BY SalesYTD DESC, p.FirstName) AS Quartile ,s.SalesYTD AS SalesYTD ,a.PostalCode FROM Sales.SalesPerson AS s INNER JOIN Person.Person AS p ON s.BusinessEntityID = p.BusinessEntityID INNER JOIN Person.Address AS a ON a.AddressID = p.BusinessEntityID WHERE TerritoryID IS NOT NULL AND SalesYTD <> 0 ORDER BY PostalCode, SalesYTD DESC, p.FirstName;
+----
+Linda	Mitchell	1	4251368.5497	98027
+Michael	Blythe	1	3763178.1787	98027
+Jillian	Carson	2	3189418.3662	98027
+Tsvi	Reiter	2	2315185.6110	98027
+Garrett	Vargas	3	1453719.4653	98027
+Pamela	Ansman-Wolfe	4	1352577.1325	98027
+Jae	Pak	1	4116871.2277	98055
+Ranjit	Varkey Chudukatil	1	3121616.3202	98055
+José	Saraiva	2	2604540.7172	98055
+Shu	Ito	2	2458535.6169	98055
+Rachel	Valdez	3	1827066.7118	98055
+Tete	Mensa-Annan	3	1576562.1966	98055
+David	Campbell	4	1573012.9383	98055
+Lynn	Tsoflias	4	1421810.9242	98055
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/rank-transact-sql?view=sql-server-2017
+query ITIII
+SELECT i.ProductID, p.Name, i.LocationID, i.Quantity ,RANK() OVER (PARTITION BY i.LocationID ORDER BY i.Quantity DESC) AS Rank FROM Production.ProductInventory AS i INNER JOIN Production.Product AS p ON i.ProductID = p.ProductID WHERE i.LocationID BETWEEN 3 AND 4 ORDER BY i.LocationID, i.Quantity DESC, i.ProductID;
+----
+494	Paint - Silver	3	49	1
+495	Paint - Blue	3	49	1
+493	Paint - Red	3	41	3
+496	Paint - Yellow	3	30	4
+492	Paint - Black	3	17	5
+495	Paint - Blue	4	35	1
+496	Paint - Yellow	4	25	2
+493	Paint - Red	4	24	3
+492	Paint - Black	4	14	4
+494	Paint - Silver	4	12	5
+
+query IRI
+SELECT BusinessEntityID, Rate, RANK() OVER (ORDER BY Rate DESC) AS RankBySalary FROM HumanResources.EmployeePayHistory AS eph1 WHERE RateChangeDate = (SELECT MAX(RateChangeDate) FROM HumanResources.EmployeePayHistory AS eph2 WHERE eph1.BusinessEntityID = eph2.BusinessEntityID) ORDER BY BusinessEntityID LIMIT 10;
+----
+1	125.5000	1
+2	63.4615	4
+3	43.2692	11
+4	29.8462	28
+5	32.6923	22
+6	32.6923	22
+7	50.4808	6
+8	40.8654	14
+9	40.8654	14
+10	42.4808	13
+
+# FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/row-number-transact-sql?view=sql-server-2017
+query ITTR
+SELECT ROW_NUMBER() OVER(ORDER BY SalesYTD DESC) AS Row, FirstName, LastName, SalesYTD FROM Sales.vSalesPerson WHERE TerritoryName IS NOT NULL AND SalesYTD <> 0 ORDER BY 1;
+----
+1	Linda	Mitchell	4251368.5497
+2	Jae	Pak	4116871.2277
+3	Michael	Blythe	3763178.1787
+4	Jillian	Carson	3189418.3662
+5	Ranjit	Varkey Chudukatil	3121616.3202
+6	José	Saraiva	2604540.7172
+7	Shu	Ito	2458535.6169
+8	Tsvi	Reiter	2315185.6110
+9	Rachel	Valdez	1827066.7118
+10	Tete	Mensa-Annan	1576562.1966
+11	David	Campbell	1573012.9383
+12	Garrett	Vargas	1453719.4653
+13	Lynn	Tsoflias	1421810.9242
+14	Pamela	Ansman-Wolfe	1352577.1325
+
+query TTTRI
+SELECT FirstName, LastName, TerritoryName,  SalesYTD, ROW_NUMBER() OVER(PARTITION BY TerritoryName ORDER BY SalesYTD DESC) AS Row FROM Sales.vSalesPerson WHERE TerritoryName IS NOT NULL AND SalesYTD <> 0 ORDER BY TerritoryName, SalesYTD DESC;
+----
+Lynn	Tsoflias	Australia	1421810.9242	1
+José	Saraiva	Canada	2604540.7172	1
+Garrett	Vargas	Canada	1453719.4653	2
+Jillian	Carson	Central	3189418.3662	1
+Ranjit	Varkey Chudukatil	France	3121616.3202	1
+Rachel	Valdez	Germany	1827066.7118	1
+Michael	Blythe	Northeast	3763178.1787	1
+Tete	Mensa-Annan	Northwest	1576562.1966	1
+David	Campbell	Northwest	1573012.9383	2
+Pamela	Ansman-Wolfe	Northwest	1352577.1325	3
+Tsvi	Reiter	Southeast	2315185.6110	1
+Linda	Mitchell	Southwest	4251368.5497	1
+Shu	Ito	Southwest	2458535.6169	2
+Jae	Pak	United Kingdom	4116871.2277	1

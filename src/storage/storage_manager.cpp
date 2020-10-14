@@ -46,6 +46,7 @@ void StorageManager::Initialize() {
 	// create the default schema
 	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
+	info.internal = true;
 	database.catalog->CreateSchema(context, &info);
 
 	// initialize default functions

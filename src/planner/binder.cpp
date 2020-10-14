@@ -10,21 +10,19 @@
 namespace duckdb {
 using namespace std;
 
-Binder::Binder(ClientContext &context, Binder *parent_)
-    : context(context), read_only(true), parent(!parent_ ? nullptr : (parent_->parent ? parent_->parent : parent_)),
-      bound_tables(0) {
-	if (parent_) {
+Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
+    : context(context), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
+	if (parent_ && inherit_ctes_) {
 		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
 		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
 		bind_context.cte_references = parent_->bind_context.cte_references;
-	}
-	if (parent) {
-		parameters = parent->parameters;
-		CTE_bindings = parent->CTE_bindings;
+		parameters = parent_->parameters;
+		CTE_bindings = parent_->CTE_bindings;
 	}
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
+	root_statement = &statement;
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind((SelectStatement &)statement);
@@ -163,7 +161,7 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
 CommonTableExpressionInfo *Binder::FindCTE(const string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
-		if (parent) {
+		if (parent && inherit_ctes) {
 			return parent->FindCTE(name);
 		}
 		return nullptr;
@@ -223,6 +221,19 @@ void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
 	if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
 		correlated_columns.push_back(info);
 	}
+}
+
+string Binder::FormatError(ParsedExpression &expr_context, string message) {
+	return FormatError(expr_context.query_location, message);
+}
+
+string Binder::FormatError(TableRef &ref_context, string message) {
+	return FormatError(ref_context.query_location, message);
+}
+
+string Binder::FormatError(idx_t query_location, string message) {
+	QueryErrorContext context(root_statement, query_location);
+	return context.FormatError(message);
 }
 
 } // namespace duckdb

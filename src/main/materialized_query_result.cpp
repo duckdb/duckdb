@@ -37,7 +37,7 @@ string MaterializedQueryResult::ToString() {
 		}
 		result += "\n";
 	} else {
-		result = "Query Error: " + error + "\n";
+		result = error + "\n";
 	}
 	return result;
 }

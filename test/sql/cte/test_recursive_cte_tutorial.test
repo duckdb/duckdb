@@ -81,6 +81,29 @@ SELECT * FROM ctename;
 7902	FORD	JONES -> FORD
 7369	SMITH	JONES -> FORD -> SMITH
 
+statement ok
+CREATE VIEW ctenames AS (
+  WITH RECURSIVE ctename AS (
+      SELECT empno, ename,
+             ename AS path
+      FROM emp
+      WHERE empno = 7566
+     UNION ALL
+      SELECT emp.empno, emp.ename,
+             ctename.path || ' -> ' || emp.ename
+      FROM emp
+         JOIN ctename ON emp.mgr = ctename.empno
+  )
+  SELECT * FROM ctename
+);
+
+query III
+SELECT * FROM ctenames;
+----
+7566	JONES	JONES
+7902	FORD	JONES -> FORD
+7369	SMITH	JONES -> FORD -> SMITH
+
 query II
 WITH RECURSIVE fib AS (
       SELECT 1 AS n,

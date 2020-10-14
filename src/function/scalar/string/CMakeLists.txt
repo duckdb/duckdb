@@ -6,6 +6,7 @@ add_library_unity(
   concat.cpp
   length.cpp
   like.cpp
+  md5.cpp
   nfc_normalize.cpp
   printf.cpp
   regexp.cpp

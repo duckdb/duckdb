@@ -1,0 +1,25 @@
+# name: test/sql/insert/big_insert_rollback.test_slow
+# description: Rollback big insert statement
+# group: [insert]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 500000)
+
+query I
+SELECT COUNT(*) FROM integers
+----
+500000
+
+statement ok
+ROLLBACK
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0

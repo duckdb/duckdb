@@ -9,40 +9,81 @@ static bool UseVersion(Transaction &transaction, transaction_t id) {
 }
 
 //===--------------------------------------------------------------------===//
-// Delete info
+// Constant info
 //===--------------------------------------------------------------------===//
-ChunkDeleteInfo::ChunkDeleteInfo(VersionManager &manager, idx_t start_row, ChunkInfoType type)
-    : ChunkInfo(manager, start_row, type), any_deleted(false) {
+ChunkConstantInfo::ChunkConstantInfo(idx_t start, MorselInfo &morsel)
+    : ChunkInfo(start, morsel, ChunkInfoType::CONSTANT_INFO), insert_id(0), delete_id(NOT_DELETED_ID) {
+}
+
+idx_t ChunkConstantInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
+	if (UseVersion(transaction, insert_id) && !UseVersion(transaction, delete_id)) {
+		return max_count;
+	}
+	return 0;
+}
+
+bool ChunkConstantInfo::Fetch(Transaction &transaction, row_t row) {
+	return UseVersion(transaction, insert_id) && !UseVersion(transaction, delete_id);
+}
+
+void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t end) {
+	assert(start == 0 && end == STANDARD_VECTOR_SIZE);
+	insert_id = commit_id;
+}
+
+//===--------------------------------------------------------------------===//
+// Vector info
+//===--------------------------------------------------------------------===//
+ChunkVectorInfo::ChunkVectorInfo(idx_t start, MorselInfo &morsel)
+    : ChunkInfo(start, morsel, ChunkInfoType::VECTOR_INFO), insert_id(0), same_inserted_id(true), any_deleted(false) {
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		inserted[i] = 0;
 		deleted[i] = NOT_DELETED_ID;
 	}
 }
 
-ChunkDeleteInfo::ChunkDeleteInfo(ChunkDeleteInfo &info, ChunkInfoType type)
-    : ChunkInfo(info.manager, info.start, type), any_deleted(false) {
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		deleted[i] = info.deleted[i];
-	}
-}
-
-idx_t ChunkDeleteInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
-	if (!any_deleted) {
-		return max_count;
-	}
+idx_t ChunkVectorInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
 	idx_t count = 0;
-	for (idx_t i = 0; i < max_count; i++) {
-		if (!UseVersion(transaction, deleted[i])) {
-			sel_vector.set_index(count++, i);
+	if (same_inserted_id && !any_deleted) {
+		// all tuples have the same inserted id: and no tuples were deleted
+		if (UseVersion(transaction, insert_id)) {
+			return max_count;
+		} else {
+			return 0;
+		}
+	} else if (same_inserted_id) {
+		if (!UseVersion(transaction, insert_id)) {
+			return 0;
+		}
+		// have to check deleted flag
+		for (idx_t i = 0; i < max_count; i++) {
+			if (!UseVersion(transaction, deleted[i])) {
+				sel_vector.set_index(count++, i);
+			}
+		}
+	} else if (!any_deleted) {
+		// have to check inserted flag
+		for (idx_t i = 0; i < max_count; i++) {
+			if (UseVersion(transaction, inserted[i])) {
+				sel_vector.set_index(count++, i);
+			}
+		}
+	} else {
+		// have to check both flags
+		for (idx_t i = 0; i < max_count; i++) {
+			if (UseVersion(transaction, inserted[i]) && !UseVersion(transaction, deleted[i])) {
+				sel_vector.set_index(count++, i);
+			}
 		}
 	}
 	return count;
 }
 
-bool ChunkDeleteInfo::Fetch(Transaction &transaction, row_t row) {
-	return !UseVersion(transaction, deleted[row]);
+bool ChunkVectorInfo::Fetch(Transaction &transaction, row_t row) {
+	return UseVersion(transaction, inserted[row]) && !UseVersion(transaction, deleted[row]);
 }
 
-void ChunkDeleteInfo::Delete(Transaction &transaction, row_t rows[], idx_t count) {
+void ChunkVectorInfo::Delete(Transaction &transaction, row_t rows[], idx_t count) {
 	any_deleted = true;
 
 	// first check the chunk for conflicts
@@ -51,6 +92,9 @@ void ChunkDeleteInfo::Delete(Transaction &transaction, row_t rows[], idx_t count
 			// tuple was already deleted by another transaction
 			throw TransactionException("Conflict on tuple deletion!");
 		}
+		if (inserted[rows[i]] >= TRANSACTION_ID_START) {
+			throw TransactionException("Deleting non-committed tuples is not supported (for now...)");
+		}
 	}
 	// after verifying that there are no conflicts we mark the tuples as deleted
 	for (idx_t i = 0; i < count; i++) {
@@ -58,78 +102,27 @@ void ChunkDeleteInfo::Delete(Transaction &transaction, row_t rows[], idx_t count
 	}
 }
 
-void ChunkDeleteInfo::CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) {
+void ChunkVectorInfo::CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
 		deleted[rows[i]] = commit_id;
 	}
 }
 
-//===--------------------------------------------------------------------===//
-// Insert info
-//===--------------------------------------------------------------------===//
-ChunkInsertInfo::ChunkInsertInfo(VersionManager &manager, idx_t start_row)
-    : ChunkDeleteInfo(manager, start_row, ChunkInfoType::INSERT_INFO), all_same_id(true) {
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		inserted[i] = NOT_DELETED_ID;
-	}
-}
-
-ChunkInsertInfo::ChunkInsertInfo(ChunkDeleteInfo &info)
-    : ChunkDeleteInfo(info, ChunkInfoType::INSERT_INFO), all_same_id(true) {
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		inserted[i] = NOT_DELETED_ID;
-	}
-}
-
-idx_t ChunkInsertInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
-	if (all_same_id && !any_deleted) {
-		// all tuples have the same id, and nothing is deleted: only need to check same id
-		if (UseVersion(transaction, same_id)) {
-			return max_count;
-		} else {
-			return 0;
-		}
-	} else if (all_same_id) {
-		// all same id, but elements are deleted
-		// first check the insertion flag to see if we need to use any elements at all
-		if (!UseVersion(transaction, same_id)) {
-			return 0;
-		}
-		// have to check the deleted count
-		return ChunkDeleteInfo::GetSelVector(transaction, sel_vector, max_count);
-	} else if (!any_deleted) {
-		// not same id, but nothing is deleted
-		// only check insertion flag
-		idx_t count = 0;
-		for (idx_t i = 0; i < max_count; i++) {
-			if (UseVersion(transaction, inserted[i])) {
-				sel_vector.set_index(count++, i);
-			}
-		}
-		return count;
-	} else {
-		// not same id, and elements are deleted
-		// have to check both flags
-		idx_t count = 0;
-		for (idx_t i = 0; i < max_count; i++) {
-			if (UseVersion(transaction, inserted[i]) && !UseVersion(transaction, deleted[i])) {
-				sel_vector.set_index(count++, i);
-			}
-		}
-		return count;
-	}
-}
-
-bool ChunkInsertInfo::Fetch(Transaction &transaction, row_t row) {
-	return UseVersion(transaction, inserted[row]) && !UseVersion(transaction, deleted[row]);
-}
-
-void ChunkInsertInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
+void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 	if (start == 0) {
-		same_id = commit_id;
-	} else if (same_id != commit_id) {
-		all_same_id = false;
-		same_id = NOT_DELETED_ID;
+		insert_id = commit_id;
+	} else if (insert_id != commit_id) {
+		same_inserted_id = false;
+		insert_id = NOT_DELETED_ID;
+	}
+	for (idx_t i = start; i < end; i++) {
+		inserted[i] = commit_id;
+	}
+}
+
+void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t end) {
+	if (same_inserted_id) {
+		insert_id = commit_id;
 	}
 	for (idx_t i = start; i < end; i++) {
 		inserted[i] = commit_id;

@@ -26,16 +26,20 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
+#include "duckdb/catalog/default/default_views.hpp"
+
 #include <algorithm>
 #include <sstream>
 
 namespace duckdb {
 using namespace std;
 
-SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
-    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name), tables(*catalog), indexes(*catalog),
-      table_functions(*catalog), copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog),
-      sequences(*catalog), collations(*catalog) {
+SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name, bool internal)
+    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name),
+      tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
+      copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog), sequences(*catalog),
+      collations(*catalog) {
+	this->internal = internal;
 }
 
 CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry,
@@ -43,7 +47,6 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
-	auto &transaction = Transaction::GetTransaction(context);
 
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
@@ -55,17 +58,17 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	}
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
-		auto old_entry = set.GetEntry(transaction, entry_name);
+		auto old_entry = set.GetEntry(context, entry_name);
 		if (old_entry) {
 			if (old_entry->type != entry_type) {
 				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
 				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
 			}
-			(void)set.DropEntry(transaction, entry_name, false);
+			(void)set.DropEntry(context, entry_name, false);
 		}
 	}
 	// now try to add the entry
-	if (!set.CreateEntry(transaction, entry_name, move(entry), dependencies)) {
+	if (!set.CreateEntry(context, entry_name, move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type), entry_name);
@@ -97,9 +100,11 @@ CatalogEntry *SchemaCatalogEntry::CreateView(ClientContext &context, CreateViewI
 	return AddEntry(context, move(view), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
+	unordered_set<CatalogEntry *> dependencies;
+	dependencies.insert(table);
 	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(index), info->on_conflict);
+	return AddEntry(context, move(index), info->on_conflict, dependencies);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
@@ -139,10 +144,9 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 
 void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	auto &set = GetCatalogSet(info->type);
-	auto &transaction = Transaction::GetTransaction(context);
 
 	// first find the entry
-	auto existing_entry = set.GetEntry(transaction, info->name);
+	auto existing_entry = set.GetEntry(context, info->name);
 	if (!existing_entry) {
 		if (!info->if_exists) {
 			throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(info->type), info->name);
@@ -153,7 +157,7 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
 	}
-	if (!set.DropEntry(transaction, info->name, info->cascade)) {
+	if (!set.DropEntry(context, info->name, info->cascade)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
 }
@@ -168,14 +172,19 @@ void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
 }
 
 CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType type, const string &entry_name,
-                                           bool if_exists) {
+                                           bool if_exists, QueryErrorContext error_context) {
 	auto &set = GetCatalogSet(type);
-	auto &transaction = Transaction::GetTransaction(context);
 
-	auto entry = set.GetEntry(transaction, entry_name);
+	auto entry = set.GetEntry(context, entry_name);
 	if (!entry) {
 		if (!if_exists) {
-			throw CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), entry_name);
+			auto entry = set.SimilarEntry(entry_name);
+			string did_you_mean;
+			if (!entry.empty()) {
+				did_you_mean = "\nDid you mean \"" + entry + "\"?";
+			}
+			throw CatalogException(error_context.FormatError("%s with name %s does not exist!%s",
+			                                                 CatalogTypeToString(type), entry_name, did_you_mean));
 		}
 		return nullptr;
 	}

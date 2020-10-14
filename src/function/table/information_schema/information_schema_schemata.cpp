@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/transaction/transaction.hpp"
 
 using namespace std;
 
@@ -52,9 +51,8 @@ information_schema_schemata_init(ClientContext &context, const FunctionData *bin
 	auto result = make_unique<InformationSchemaSchemataData>();
 
 	// scan all the schemas and collect them
-	auto &transaction = Transaction::GetTransaction(context);
-	Catalog::GetCatalog(context).schemas->Scan(
-	    transaction, [&](CatalogEntry *entry) { result->entries.push_back((SchemaCatalogEntry *)entry); });
+	Catalog::GetCatalog(context).ScanSchemas(
+	    context, [&](CatalogEntry *entry) { result->entries.push_back((SchemaCatalogEntry *)entry); });
 	// get the temp schema as well
 	result->entries.push_back(context.temporary_objects.get());
 
@@ -68,32 +66,30 @@ void information_schema_schemata(ClientContext &context, const FunctionData *bin
 		// finished returning values
 		return;
 	}
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
-	output.SetCardinality(next - data.offset);
-
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	for (idx_t i = data.offset; i < next; i++) {
-		auto index = i - data.offset;
-		auto &entry = data.entries[i];
+	idx_t count = 0;
+	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &entry = data.entries[data.offset++];
 
 		// return values:
 		// "catalog_name", PhysicalType::VARCHAR
-		output.SetValue(0, index, Value());
+		output.SetValue(0, count, Value());
 		// "schema_name", PhysicalType::VARCHAR
-		output.SetValue(1, index, Value(entry->name));
+		output.SetValue(1, count, Value(entry->name));
 		// "schema_owner", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value());
+		output.SetValue(2, count, Value());
 		// "default_character_set_catalog", PhysicalType::VARCHAR
-		output.SetValue(3, index, Value());
+		output.SetValue(3, count, Value());
 		// "default_character_set_schema", PhysicalType::VARCHAR
-		output.SetValue(4, index, Value());
+		output.SetValue(4, count, Value());
 		// "default_character_set_name", PhysicalType::VARCHAR
-		output.SetValue(5, index, Value());
+		output.SetValue(5, count, Value());
 		// "sql_path", PhysicalType::VARCHAR
-		output.SetValue(6, index, Value());
+		output.SetValue(6, count, Value());
+		count++;
 	}
-	data.offset = next;
+	output.SetCardinality(count);
 }
 
 void InformationSchemaSchemata::RegisterFunction(BuiltinFunctions &set) {

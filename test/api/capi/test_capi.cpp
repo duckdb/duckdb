@@ -325,7 +325,7 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	duckdb_destroy_prepare(NULL);
 }
 
-TEST_CASE("Test prepared statements in C API", "[capi]") {
+TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
 	duckdb_result res;

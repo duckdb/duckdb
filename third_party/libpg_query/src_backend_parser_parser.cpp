@@ -68,6 +68,73 @@ PGList *raw_parser(const char *str) {
 	return yyextra.parsetree;
 }
 
+std::vector<PGSimplifiedToken> tokenize(const char *str) {
+	core_yyscan_t yyscanner;
+	base_yy_extra_type yyextra;
+	int yyresult;
+
+	std::vector<PGSimplifiedToken> result;
+	yyscanner = scanner_init(str, &yyextra.core_yy_extra, ScanKeywords, NumScanKeywords);
+	yyextra.have_lookahead = false;
+
+	while(true) {
+		YYSTYPE type;
+		YYLTYPE loc;
+		int token;
+		try {
+			token = base_yylex(&type, &loc, yyscanner);
+		} catch(...) {
+			token = 0;
+		}
+		if (token == 0) {
+			break;
+		}
+		PGSimplifiedToken current_token;
+		switch(token) {
+		case IDENT:
+			current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_IDENTIFIER;
+			break;
+		case ICONST:
+		case FCONST:
+			current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_NUMERIC_CONSTANT;
+			break;
+		case SCONST:
+		case BCONST:
+		case XCONST:
+			current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_STRING_CONSTANT;
+			break;
+		case Op:
+		case PARAM:
+		case COLON_EQUALS:
+		case EQUALS_GREATER:
+		case LESS_EQUALS:
+		case GREATER_EQUALS:
+		case NOT_EQUALS:
+			current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_OPERATOR;
+			break;
+		case COMMENT:
+			current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_COMMENT;
+			break;
+		default:
+			if (token >= 255) {
+				// non-ascii value, probably a keyword
+				current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_KEYWORD;
+			} else {
+				// ascii value, probably an operator
+				current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_OPERATOR;
+			}
+			break;
+		}
+		current_token.start = loc;
+		result.push_back(current_token);
+	}
+
+	scanner_finish(yyscanner);
+	return result;
+}
+
+
+
 /*
  * Intermediate filter between parser and core lexer (core_yylex in scan.l).
  *

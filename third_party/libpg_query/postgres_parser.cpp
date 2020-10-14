@@ -3,8 +3,9 @@
 #include "pg_functions.hpp"
 #include "parser/parser.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_message(""), error_location(0) {}
 
@@ -23,6 +24,15 @@ void PostgresParser::Parse(string query) {
 	}
 }
 
+vector<duckdb_libpgquery::PGSimplifiedToken> PostgresParser::Tokenize(std::string query) {
+	duckdb_libpgquery::pg_parser_init();
+	auto tokens = duckdb_libpgquery::tokenize(query.c_str());
+	duckdb_libpgquery::pg_parser_cleanup();
+	return tokens;
+}
+
 PostgresParser::~PostgresParser()  {
     duckdb_libpgquery::pg_parser_cleanup();
+}
+
 }
