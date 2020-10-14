@@ -13,9 +13,6 @@
 namespace duckdb {
 using namespace std;
 
-Binding::Binding(const string &alias, idx_t index) : alias(alias), index(index) {
-}
-
 Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, idx_t index)
     : alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {
 	assert(types.size() == names.size());
@@ -59,8 +56,13 @@ void Binding::GenerateAllColumnExpressions(BindContext &context, vector<unique_p
 }
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vector<string> names_, LogicalGet &get,
-                           idx_t index)
+                           idx_t index, bool add_row_id)
     : Binding(alias, move(types_), move(names_), index), get(get) {
+	if (add_row_id) {
+		if (name_map.find("rowid") == name_map.end()) {
+			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
+		}
+	}
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {

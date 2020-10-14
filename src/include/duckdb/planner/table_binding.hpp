@@ -27,7 +27,6 @@ class BoundTableFunction;
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
 	Binding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index);
-	Binding(const string &alias, idx_t index);
 	virtual ~Binding() = default;
 
 	//! The alias of the binding
@@ -49,7 +48,7 @@ public:
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
-	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, LogicalGet &get, idx_t index);
+	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, LogicalGet &get, idx_t index, bool add_row_id = false);
 
 	//! the underlying LogicalGet
 	LogicalGet &get;
