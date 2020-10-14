@@ -13,11 +13,11 @@ using namespace std;
 
 namespace duckdb {
 
-struct Iterator {
+struct StringSplitIterator {
 public:
-	Iterator(const size_t size) : size(size) {
+	StringSplitIterator(const size_t size) : size(size) {
 	}
-	virtual ~Iterator() {
+	virtual ~StringSplitIterator() {
 	}
 	virtual idx_t Next(const char *input) {
 		return 0;
@@ -35,10 +35,10 @@ protected:
 	idx_t offset = 0; // current position
 };
 
-struct AsciiIterator : virtual public Iterator {
+struct AsciiStringSplitIterator : virtual public StringSplitIterator {
 public:
-	AsciiIterator(size_t size, const char *delim, const size_t delim_size)
-	    : Iterator(size), delim(delim), delim_size(delim_size) {
+	AsciiStringSplitIterator(size_t size, const char *delim, const size_t delim_size)
+	    : StringSplitIterator(size), delim(delim), delim_size(delim_size) {
 	}
 	idx_t Next(const char *input) override {
 		// special case: separate by empty delimiter
@@ -70,10 +70,10 @@ protected:
 	const size_t delim_size;
 };
 
-struct UnicodeIterator : virtual public Iterator {
+struct UnicodeStringSplitIterator : virtual public StringSplitIterator {
 public:
-	UnicodeIterator(size_t input_size, const char *delim, const size_t delim_size)
-	    : Iterator(input_size), delim_size(delim_size) {
+	UnicodeStringSplitIterator(size_t input_size, const char *delim, const size_t delim_size)
+	    : StringSplitIterator(input_size), delim_size(delim_size) {
 		int cp_sz;
 		for (idx_t i = 0; i < delim_size; i += cp_sz) {
 			delim_cps.push_back(utf8proc_codepoint(delim, cp_sz));
@@ -111,10 +111,10 @@ protected:
 	const size_t delim_size;
 };
 
-struct RegexIterator : virtual public Iterator {
+struct RegexStringSplitIterator : virtual public StringSplitIterator {
 public:
-	RegexIterator(size_t input_size, unique_ptr<RE2> re, const bool ascii_only)
-	    : Iterator(input_size), re(move(re)), ascii_only(ascii_only) {
+	RegexStringSplitIterator(size_t input_size, unique_ptr<RE2> re, const bool ascii_only)
+	    : StringSplitIterator(input_size), re(move(re)), ascii_only(ascii_only) {
 	}
 	idx_t Next(const char *input) override {
 		duckdb_re2::StringPiece input_sp(input, size);
@@ -142,7 +142,7 @@ protected:
 	const bool ascii_only;
 };
 
-void string_split(const char *input, Iterator &iter, ChunkCollection &result) {
+void string_split(const char *input, StringSplitIterator &iter, ChunkCollection &result) {
 	auto append_chunk = make_unique<DataChunk>();
 	vector<LogicalType> types = {LogicalType::VARCHAR};
 	append_chunk->Initialize(types);
@@ -195,17 +195,17 @@ unique_ptr<ChunkCollection> string_split(string_t input, string_t delim, const b
 	vector<LogicalType> types = {LogicalType::VARCHAR};
 	output->types = types;
 
-	unique_ptr<Iterator> iter;
+	unique_ptr<StringSplitIterator> iter;
 	if (regex) {
 		auto re = make_unique<RE2>(duckdb_re2::StringPiece(delim_data, delim_size));
 		if (!re->ok()) {
 			throw Exception(re->error());
 		}
-		iter = make_unique_base<Iterator, RegexIterator>(input_size, move(re), ascii_only);
+		iter = make_unique_base<StringSplitIterator, RegexStringSplitIterator>(input_size, move(re), ascii_only);
 	} else if (ascii_only) {
-		iter = make_unique_base<Iterator, AsciiIterator>(input_size, delim_data, delim_size);
+		iter = make_unique_base<StringSplitIterator, AsciiStringSplitIterator>(input_size, delim_data, delim_size);
 	} else {
-		iter = make_unique_base<Iterator, UnicodeIterator>(input_size, delim_data, delim_size);
+		iter = make_unique_base<StringSplitIterator, UnicodeStringSplitIterator>(input_size, delim_data, delim_size);
 	}
 	string_split(input_data, *iter, *output);
 
