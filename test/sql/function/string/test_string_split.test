@@ -5,14 +5,20 @@
 statement ok
 PRAGMA enable_verification
 
-statement ok
-SELECT string_split(string_agg(range, 'DUCK '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
+query I
+SELECT UNNEST(string_split(string_agg(range, 'DUCK '), ' ')), mod(range, 100) xx FROM range(50000) GROUP BY xx
+----
+100000 values hashing to 4e6194860e6d79b022b34d526206435d
 
-statement ok
-SELECT string_split(string_agg(range, '🦆 '), ' '), mod(range, 100) xx FROM range(50000) GROUP BY xx
+query I
+SELECT UNNEST(string_split(string_agg(range, '🦆 '), ' ')), mod(range, 100) xx FROM range(50000) GROUP BY xx
+----
+100000 values hashing to 86c1553624f4238ca8c87bbf24072483
 
-statement ok
-SELECT string_split_regex(string_agg(range, 'DUCK '), '\s'), mod(range, 100) xx FROM range(50000) GROUP BY xx
+query I
+SELECT UNNEST(string_split_regex(string_agg(range, 'DUCK '), '\s')), mod(range, 100) xx FROM range(50000) GROUP BY xx
+----
+100000 values hashing to 4e6194860e6d79b022b34d526206435d
 
 query T
 SELECT UNNEST(string_split('üüüüü', '◌̈')) 
@@ -133,6 +139,16 @@ b🦆🦆
 🦆🦆
 
 query T
+SELECT string_agg(ss, 'bb') FROM (SELECT rowid AS id, UNNEST(string_split(s, 'bb')) AS ss FROM documents) AS q GROUP BY id ORDER BY id
+----
+baabbaa
+aabbaab
+ababababa
+b🦆🦆bb🦆🦆
+🦆🦆bb🦆🦆b
+🦆b🦆b🦆b🦆b🦆
+
+query T
 SELECT UNNEST(string_split_regex('a1a11a111a', '[0-9]+'))
 ----
 a
@@ -163,9 +179,160 @@ SELECT UNNEST(string_split('aaaaa', NULL))
 ----
 aaaaa
 
+# copy of postgres string_to_array tests
+query T
+select UNNEST(string_split('1|2|3', '|'))
+----
+1
+2
+3
+
+query T
+select UNNEST(string_split('1|2|3|', '|'))
+----
+1
+2
+3
+(empty)
+
+query T
+select UNNEST(string_split('1||2|3||', '||'))
+----
+1
+2|3
+(empty)
+
+query T
+select UNNEST(string_split('1|2|3', ''))
+----
+1
+|
+2
+|
+3
+
+query T
+select UNNEST(string_split('', '|'))
+----
+(empty)
+
+query T
+select UNNEST(string_split('1|2|3', NULL))
+----
+1|2|3
+
+query T
+select string_split(NULL, '|') IS NULL
+----
+1
+
+query T
+select UNNEST(string_split('abc', ''))
+----
+a
+b
+c
+
+query T
+select UNNEST(string_split_regex('abc', '(|abc)'))
+----
+a
+b
+c
+
+query T
+select UNNEST(string_split_regex('abc', '(abc|)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(string_split('abc', ','))
+----
+abc
+
+query T
+select UNNEST(string_split_regex('abc', '(,|abc)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(string_split_regex('abc', '(abc|,)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(string_split('1,2,3,4,,6', ','))
+----
+1
+2
+3
+4
+(empty)
+6
+
+query T
+select UNNEST(string_split_regex('1,2,3,4,,6', '(,|)'))
+----
+1
+(empty)
+2
+(empty)
+3
+(empty)
+4
+(empty)
+(empty)
+6
+
+
+query T
+select UNNEST(string_split_regex('1,2,3,4,,6', '(|,)'))
+----
+1
+,
+2
+,
+3
+,
+4
+,
+,
+6
+
+query T
+select UNNEST(string_split_regex('1,2,3,4,*,6', '(,|\*)'))
+----
+1
+2
+3
+4
+(empty)
+(empty)
+6
+
+query T
+select UNNEST(string_split_regex('1,2,3,4,*,6', '(\*|,)'))
+----
+1
+2
+3
+4
+(empty)
+(empty)
+6
+
+# test incorrect usage
+statement error
+select string_split()
+
+statement error
+select string_split('a')
+
+# TODO: re-enable when UNNEST(NULL) works
 #query T
-#SELECT UNNEST(string_split(NULL))
+#SELECT UNNEST(string_split(NULL, NULL))
 #----
 #NULL
-#
-## TODO: full circle test with concat
