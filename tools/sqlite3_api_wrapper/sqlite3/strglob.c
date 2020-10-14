@@ -1,26 +1,5 @@
-#define LONGDOUBLE_TYPE long double
-#include <stdint.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <assert.h>
+#include "stripped_sqlite_int.h"
 #include <ctype.h>
-
-typedef uint8_t u8;
-typedef uint32_t u32;
-typedef int64_t i64;
-typedef uint64_t u64;
-
-/*
-** Assuming zIn points to the first byte of a UTF-8 character,
-** advance zIn to point to the first byte of the next UTF-8 character.
-*/
-#define SQLITE_SKIP_UTF8(zIn) {                        \
-  if( (*(zIn++))>=0xc0 ){                              \
-    while( (*zIn & 0xc0)==0x80 ){ zIn++; }             \
-  }                                                    \
-}
 
 # define sqlite3Toupper(x)   toupper((unsigned char)(x))
 # define sqlite3Tolower(x)   tolower((unsigned char)(x))

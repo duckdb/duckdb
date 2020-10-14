@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb_libpgquery {
 struct PGNode;
@@ -32,6 +33,9 @@ public:
 	//! successful, the parsed statements will be stored in the statements
 	//! variable.
 	void ParseQuery(string query);
+
+	//! Tokenize a query, returning the raw tokens together with their locations
+	static vector<SimplifiedToken> Tokenize(string query);
 
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(string select_list);

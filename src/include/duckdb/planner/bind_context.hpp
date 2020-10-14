@@ -33,6 +33,9 @@ public:
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
 	unordered_set<string> GetMatchingBindings(const string &column_name);
+	//! Like GetMatchingBindings, but returns the top 3 most similar bindings (in levenshtein distance) instead of the
+	//! matching ones
+	vector<string> GetSimilarBindings(const string &column_name);
 
 	Binding *GetCTEBinding(const string &ctename);
 	//! Binds a column expression to the base table. Returns the bound expression
@@ -45,8 +48,7 @@ public:
 	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, string relation_name = "");
 
 	//! Adds a base table with the given alias to the BindContext.
-	void AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
-	                  unordered_map<string, column_t> name_map, LogicalGet &get);
+	void AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types, LogicalGet &get);
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
 	                      LogicalGet &get);
@@ -72,8 +74,14 @@ public:
 		cte_bindings = bindings;
 	}
 
+	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases specified.
+	static vector<string> AliasColumnNames(string table_name, const vector<string> &names, const vector<string> &column_aliases);
+
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
+	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
+	//! found.
+	Binding *GetBinding(const string &name, string &out_error);
 
 	//! The set of bindings
 	unordered_map<string, unique_ptr<Binding>> bindings;

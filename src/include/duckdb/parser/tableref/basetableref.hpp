@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 //! Represents a TableReference to a base table in the schema
@@ -21,6 +22,8 @@ public:
 	string schema_name;
 	//! Table name
 	string table_name;
+	//! Alises for the column names
+	vector<string> column_name_alias;
 
 public:
 	string ToString() const override {
