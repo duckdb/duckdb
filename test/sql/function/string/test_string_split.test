@@ -179,7 +179,7 @@ SELECT UNNEST(string_split('aaaaa', NULL))
 ----
 aaaaa
 
-# copy of postgres string_to_array tests
+# taken from postgres string_to_array tests
 query T
 select UNNEST(string_split('1|2|3', '|'))
 ----
