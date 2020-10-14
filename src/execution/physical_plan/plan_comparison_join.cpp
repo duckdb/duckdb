@@ -15,7 +15,7 @@ using namespace std;
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
 	// now visit the children
 	assert(op.children.size() == 2);
-    idx_t lhs_cardinality = op.children[0]->EstimateCardinality();
+	idx_t lhs_cardinality = op.children[0]->EstimateCardinality();
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality();
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
@@ -77,14 +77,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 					}
 				}
 			}
-			if (left_index && (context.force_index_join || rhs_cardinality < 0.01*lhs_cardinality)) {
+			if (left_index && (context.force_index_join || rhs_cardinality < 0.01 * lhs_cardinality)) {
 				auto &tbl_scan = (PhysicalTableScan &)*left;
 				swap(op.conditions[0].left, op.conditions[0].right);
 				return make_unique<PhysicalIndexJoin>(op, move(right), move(left), move(op.conditions), op.join_type,
 				                                      op.right_projection_map, op.left_projection_map,
 				                                      tbl_scan.column_ids, left_index, false);
 			}
-			if (right_index && (context.force_index_join || lhs_cardinality < 0.01*rhs_cardinality)) {
+			if (right_index && (context.force_index_join || lhs_cardinality < 0.01 * rhs_cardinality)) {
 				auto &tbl_scan = (PhysicalTableScan &)*right;
 				return make_unique<PhysicalIndexJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 				                                      op.left_projection_map, op.right_projection_map,

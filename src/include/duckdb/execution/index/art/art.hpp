@@ -100,7 +100,8 @@ public:
 	//! Search Equal used for Joins
 	void SearchEqualJoin(Value &equal_value, vector<row_t> &result_ids);
 	//! Search Equal used for Joins that do not need to fetch data
-    void SearchEqualJoinNoFetch(Value& equal_value,  idx_t& result_size);
+	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
+
 private:
 	DataChunk expression_result;
 

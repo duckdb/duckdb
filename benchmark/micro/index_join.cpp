@@ -38,9 +38,6 @@ virtual string BenchmarkInfo() {
 }
 FINISH_BENCHMARK(HashJoinBennoNoRHSFetch)
 
-
-
-
 DUCKDB_BENCHMARK(HashJoinHighCardinalityRHS, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE t1 (v1 INTEGER,v2 INTEGER)");
@@ -49,17 +46,17 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	Appender appender_t1(state->conn, "t1");
 	Appender appender_t2(state->conn, "t2");
 
-	for (int32_t i {}; i < t2_size; i ++){
+	for (int32_t i{}; i < t2_size; i++) {
 		values.push_back(i);
-		if (i < t1_size){
+		if (i < t1_size) {
 			appender_t1.BeginRow();
 			appender_t1.Append<int32_t>(i);
 			appender_t1.Append<int32_t>(i);
 			appender_t1.EndRow();
 		}
 	}
-	shuffle(values.begin(),values.end(), std::mt19937(std::random_device()()));
-	for (int32_t i {}; i < values.size(); i ++){
+	shuffle(values.begin(), values.end(), std::mt19937(std::random_device()()));
+	for (int32_t i{}; i < values.size(); i++) {
 		appender_t2.BeginRow();
 		appender_t2.Append<int32_t>(values[i]);
 		appender_t2.Append<int32_t>(i);
@@ -68,7 +65,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual string GetQuery() {
-	return "SELECT t1.v2,t2.v2,count(*) from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2 limit 5" ;
+	return "SELECT t1.v2,t2.v2,count(*) from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2 "
+	       "limit 5";
 }
 
 virtual string VerifyResult(QueryResult *result) {
@@ -96,16 +94,15 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	Appender appender_t1(state->conn, "t1");
 	Appender appender_t2(state->conn, "t2");
 
-	for (int32_t i {}; i < t2_size; i ++){
+	for (int32_t i{}; i < t2_size; i++) {
 		values.push_back(i);
-			appender_t1.BeginRow();
-			appender_t1.Append<int32_t>(i);
-			appender_t1.Append<int32_t>(i);
-		    appender_t1.EndRow();
-
+		appender_t1.BeginRow();
+		appender_t1.Append<int32_t>(i);
+		appender_t1.Append<int32_t>(i);
+		appender_t1.EndRow();
 	}
-	shuffle(values.begin(),values.end(), std::mt19937(std::random_device()()));
-	for (int32_t i {}; i < values.size(); i ++){
+	shuffle(values.begin(), values.end(), std::mt19937(std::random_device()()));
+	for (int32_t i{}; i < values.size(); i++) {
 		appender_t2.BeginRow();
 		appender_t2.Append<int32_t>(values[i]);
 		appender_t2.Append<int32_t>(i);
@@ -114,7 +111,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual string GetQuery() {
-	return "SELECT t1.v2,t2.v2,count(*) from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2 limit 5" ;
+	return "SELECT t1.v2,t2.v2,count(*) from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2 "
+	       "limit 5";
 }
 
 virtual string VerifyResult(QueryResult *result) {
@@ -171,17 +169,17 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	Appender appender_t1(state->conn, "t1");
 	Appender appender_t2(state->conn, "t2");
 
-	for (int32_t i {}; i < t2_size; i ++){
+	for (int32_t i{}; i < t2_size; i++) {
 		values.push_back(i);
-		if (i < t1_size){
+		if (i < t1_size) {
 			appender_t1.BeginRow();
 			appender_t1.Append<int32_t>(i);
 			appender_t1.Append<int32_t>(i);
 			appender_t1.EndRow();
 		}
 	}
-	shuffle(values.begin(),values.end(), std::mt19937(std::random_device()()));
-	for (int32_t i {}; i < values.size(); i ++){
+	shuffle(values.begin(), values.end(), std::mt19937(std::random_device()()));
+	for (int32_t i{}; i < values.size(); i++) {
 		appender_t2.BeginRow();
 		appender_t2.Append<int32_t>(values[i]);
 		appender_t2.Append<int32_t>(i);
@@ -190,7 +188,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual string GetQuery() {
-	return "SELECT t1.v2,t2.v2,count(*) from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2 limit 5" ;
+	return "SELECT t1.v2,t2.v2,count(*) from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2 "
+	       "limit 5";
 }
 
 virtual string VerifyResult(QueryResult *result) {
@@ -209,7 +208,6 @@ virtual string BenchmarkInfo() {
 }
 FINISH_BENCHMARK(IndexJoinHighCardinalityRHS)
 
-
 DUCKDB_BENCHMARK(HashJoinLHSArithmeticOperations, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE t1 (v1 INTEGER,v2 INTEGER)");
@@ -218,18 +216,17 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	Appender appender_t1(state->conn, "t1");
 	Appender appender_t2(state->conn, "t2");
 
-	for (int32_t i {}; i < t2_size; i ++){
+	for (int32_t i{}; i < t2_size; i++) {
 		values.push_back(i);
-		if (i < t1_size*10){
+		if (i < t1_size * 10) {
 			appender_t1.BeginRow();
 			appender_t1.Append<int32_t>(i);
 			appender_t1.Append<int32_t>(i);
 			appender_t1.EndRow();
 		}
-
 	}
-	shuffle(values.begin(),values.end(), std::mt19937(std::random_device()()));
-	for (int32_t i {}; i < values.size(); i ++){
+	shuffle(values.begin(), values.end(), std::mt19937(std::random_device()()));
+	for (int32_t i{}; i < values.size(); i++) {
 		appender_t2.BeginRow();
 		appender_t2.Append<int32_t>(values[i]);
 		appender_t2.Append<int32_t>(i);
@@ -238,7 +235,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual string GetQuery() {
-	return "SELECT CASE WHEN t1.v1 > 50 THEN t1.v1+t1.v2 ELSE t1.v1*t1.v2 END FROM t1 JOIN t2 USING (v1);" ;
+	return "SELECT CASE WHEN t1.v1 > 50 THEN t1.v1+t1.v2 ELSE t1.v1*t1.v2 END FROM t1 JOIN t2 USING (v1);";
 }
 
 virtual string VerifyResult(QueryResult *result) {
@@ -267,18 +264,17 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	Appender appender_t1(state->conn, "t1");
 	Appender appender_t2(state->conn, "t2");
 
-	for (int32_t i {}; i < t2_size; i ++){
+	for (int32_t i{}; i < t2_size; i++) {
 		values.push_back(i);
-		if (i < t1_size*10){
+		if (i < t1_size * 10) {
 			appender_t1.BeginRow();
 			appender_t1.Append<int32_t>(i);
 			appender_t1.Append<int32_t>(i);
 			appender_t1.EndRow();
 		}
-
 	}
-	shuffle(values.begin(),values.end(), std::mt19937(std::random_device()()));
-	for (int32_t i {}; i < values.size(); i ++){
+	shuffle(values.begin(), values.end(), std::mt19937(std::random_device()()));
+	for (int32_t i{}; i < values.size(); i++) {
 		appender_t2.BeginRow();
 		appender_t2.Append<int32_t>(values[i]);
 		appender_t2.Append<int32_t>(i);
@@ -287,7 +283,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual string GetQuery() {
-	return "SELECT CASE WHEN t1.v1 > 50 THEN t1.v1+t1.v2 ELSE t1.v1*t1.v2 END FROM t1 JOIN t2 USING (v1);" ;
+	return "SELECT CASE WHEN t1.v1 > 50 THEN t1.v1+t1.v2 ELSE t1.v1*t1.v2 END FROM t1 JOIN t2 USING (v1);";
 }
 
 virtual string VerifyResult(QueryResult *result) {

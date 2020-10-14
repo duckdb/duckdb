@@ -36,7 +36,6 @@ public:
 	vector<vector<row_t>> rhs_rows;
 	ExpressionExecutor probe_executor;
 	IndexLock lock;
-
 };
 
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -65,7 +64,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	}
 }
 
-void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_){
+void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &transaction = Transaction::GetTransaction(context.client);
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
@@ -77,16 +76,15 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 	size_t output_sel_idx{};
 	vector<row_t> fetch_rows;
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
-	while (output_sel_idx < STANDARD_VECTOR_SIZE && state->lhs_idx < state->child_chunk.size()){
-		if (state->rhs_idx < state->result_sizes[state->lhs_idx]){
-			sel.set_index(output_sel_idx++,state->lhs_idx);
-			if(!fetch_types.empty()){
+	while (output_sel_idx < STANDARD_VECTOR_SIZE && state->lhs_idx < state->child_chunk.size()) {
+		if (state->rhs_idx < state->result_sizes[state->lhs_idx]) {
+			sel.set_index(output_sel_idx++, state->lhs_idx);
+			if (!fetch_types.empty()) {
 				//! We need to collect the rows we want to fetch
 				fetch_rows.push_back(state->rhs_rows[state->lhs_idx][state->rhs_idx]);
 			}
 			state->rhs_idx++;
-		}
-		else{
+		} else {
 			//! We are done with the matches from this LHS Key
 			state->rhs_idx = 0;
 			state->lhs_idx++;
@@ -110,18 +108,18 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 				chunk.data[i].Reference(rhs_chunk.data[rhs_column_idx++]);
 			} else {
 				chunk.data[i].Reference(state->join_keys.data[0]);
-				chunk.data[i].Slice(sel,output_sel_idx);
+				chunk.data[i].Slice(sel, output_sel_idx);
 			}
 		}
 		for (idx_t i = 0; i < left_projection_map.size(); i++) {
 			chunk.data[right_projection_map.size() + i].Reference(state->child_chunk.data[left_projection_map[i]]);
-			chunk.data[right_projection_map.size() + i].Slice(sel,output_sel_idx);
+			chunk.data[right_projection_map.size() + i].Slice(sel, output_sel_idx);
 		}
 	} else {
 		//! We have to duplicate LRS to number of matches
 		for (idx_t i = 0; i < left_projection_map.size(); i++) {
 			chunk.data[i].Reference(state->child_chunk.data[left_projection_map[i]]);
-			chunk.data[i].Slice(sel,output_sel_idx);
+			chunk.data[i].Slice(sel, output_sel_idx);
 		}
 		//! Add actual value
 		//! We have to fetch RHS row based on the index ids
@@ -131,14 +129,13 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 				chunk.data[left_projection_map.size() + i].Reference(rhs_chunk.data[rhs_column_idx++]);
 			} else {
 				chunk.data[left_projection_map.size() + i].Reference(state->join_keys.data[0]);
-				chunk.data[left_projection_map.size() + i].Slice(sel,output_sel_idx);
+				chunk.data[left_projection_map.size() + i].Slice(sel, output_sel_idx);
 			}
 		}
 	}
 	state->result_size = output_sel_idx;
 	chunk.SetCardinality(state->result_size);
 }
-
 
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_) const {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
@@ -159,7 +156,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 			state->result_sizes[i] = 0;
 		}
 	}
-	for (idx_t i = state->child_chunk.size(); i < STANDARD_VECTOR_SIZE; i++){
+	for (idx_t i = state->child_chunk.size(); i < STANDARD_VECTOR_SIZE; i++) {
 		//! No LHS chunk value so result size is empty
 		state->result_sizes[i] = 0;
 	}
