@@ -2,6 +2,7 @@
 # description: Test Joins using art indexes
 # group: [art]
 
+
 statement ok
 PRAGMA explain_output='physical';
 
@@ -12,7 +13,7 @@ CREATE TABLE t3(i INTEGER PRIMARY KEY);
 CREATE INDEX i_index ON t1 using art(i);
 
 # insert elements
-loop i 0 100
+loop i 0 2000
 
 statement ok
 INSERT INTO t1 VALUES (${i} + 1);
@@ -21,7 +22,7 @@ INSERT INTO t3 VALUES (${i} + 1);
 endloop
 
 # insert elements
-loop i 50 100
+loop i 50 2000
 
 statement ok
 INSERT INTO t2 VALUES (${i} + 1);
@@ -37,7 +38,7 @@ physical_plan	<REGEX>:.*INDEX_JOIN.*
 query I
 select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)
 ----
-50
+1950
 
 # standalone limit
 query II
@@ -48,7 +49,7 @@ physical_plan	<REGEX>:.*INDEX_JOIN.*
 query I
 select count(t3.i) from t3 inner join t2 on (t3.i = t2.i)
 ----
-50
+1950
 
 statement ok
 CREATE TABLE words(
