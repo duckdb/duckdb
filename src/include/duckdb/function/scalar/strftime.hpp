@@ -54,6 +54,8 @@ enum class StrTimeSpecifier : uint8_t {
 
 struct StrTimeFormat {
 public:
+	virtual ~StrTimeFormat(){}
+
 	static string ParseFormatSpecifier(string format_string, StrTimeFormat &format);
 
 protected:
