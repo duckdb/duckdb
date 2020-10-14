@@ -25,6 +25,18 @@ class ClientContext;
 
 typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
 
+struct MappingValue {
+
+	MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false) {
+	}
+
+	idx_t index;
+	transaction_t timestamp;
+	bool deleted;
+	unique_ptr<MappingValue> child;
+	MappingValue *parent;
+};
+
 //! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
 class CatalogSet {
 	friend class DependencyManager;
@@ -67,10 +79,12 @@ public:
 	}
 
 	static bool HasConflict(ClientContext &context, CatalogEntry &current);
+	static bool HasConflict(ClientContext &context, MappingValue &current);
 
 	idx_t GetEntryIndex(CatalogEntry *entry);
 	CatalogEntry *GetEntryFromIndex(idx_t index);
 	void ClearEntryName(string name);
+	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
 
 private:
 	//! Given a root entry, gets the entry valid for this transaction
@@ -80,13 +94,16 @@ private:
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
 	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
 	                       set_lock_map_t &lock_set);
+	MappingValue *GetMapping(ClientContext &context, const string &name);
+	void PutMapping(ClientContext &context, const string &name, idx_t entry_index);
+	void DeleteMapping(ClientContext &context, const string &name);
 
 private:
 	Catalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
 	//! Mapping of string to catalog entry
-	unordered_map<string, idx_t> mapping;
+	unordered_map<string, unique_ptr<MappingValue>> mapping;
 	//! The set of catalog entries
 	unordered_map<idx_t, unique_ptr<CatalogEntry>> entries;
 	//! The current catalog entry index

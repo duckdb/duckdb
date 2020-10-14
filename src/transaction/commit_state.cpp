@@ -155,7 +155,7 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
-		catalog_entry->parent->timestamp = commit_id;
+		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, commit_id);
 
 		if (HAS_LOG) {
 			// push the catalog update to the WAL
@@ -205,7 +205,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
-		catalog_entry->parent->timestamp = transaction_id;
+		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, transaction_id);
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {

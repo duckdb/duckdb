@@ -26,8 +26,8 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 
 	// first check if the entry exists in the unordered set
 	idx_t entry_index;
-	auto entry = mapping.find(name);
-	if (entry == mapping.end()) {
+	auto mapping_value = GetMapping(context, name);
+	if (mapping_value == nullptr) {
 		// if it does not: entry has never been created
 
 		// first create a dummy deleted entry for this entry
@@ -40,9 +40,9 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 		dummy_node->set = this;
 
 		entries[entry_index] = move(dummy_node);
-		mapping[name] = entry_index;
+		PutMapping(context, name, entry_index);
 	} else {
-		entry_index = entry->second;
+		entry_index = mapping_value->index;
 		auto &current = *entries[entry_index];
 		// if it does, we have to check version numbers
 		if (HasConflict(context, current)) {
@@ -92,12 +92,12 @@ bool CatalogSet::GetEntryInternal(ClientContext &context, idx_t entry_index, Cat
 
 bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index,
                                   CatalogEntry *&catalog_entry) {
-	auto entry = mapping.find(name);
-	if (entry == mapping.end()) {
+	auto mapping_value = GetMapping(context, name);
+	if (mapping_value == nullptr) {
 		// the entry does not exist, check if we can create a default entry
 		return false;
 	}
-	entry_index = entry->second;
+	entry_index = mapping_value->index;
 	return GetEntryInternal(context, entry_index, catalog_entry);
 }
 
@@ -134,11 +134,12 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 		return true;
 	}
 	if (value->name != name) {
-		if (mapping.find(value->name) != mapping.end()) {
+		if (GetMapping(context, value->name)) {
 			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!",
 			                       name, value->name);
 		}
-		mapping[value->name] = entry_index;
+		PutMapping(context, value->name, entry_index);
+		DeleteMapping(context, name);
 	}
 	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
 	catalog.dependency_manager->AlterObject(context, entry, value.get());
@@ -208,14 +209,64 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 
 idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
 	assert(mapping.find(entry->name) != mapping.end());
-	idx_t entry_index = mapping[entry->name];
-	return entry_index;
+	return mapping[entry->name]->index;
 }
 
 bool CatalogSet::HasConflict(ClientContext &context, CatalogEntry &current) {
 	auto &transaction = Transaction::GetTransaction(context);
 	return (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) ||
 	       (current.timestamp < TRANSACTION_ID_START && current.timestamp > transaction.start_time);
+}
+
+bool CatalogSet::HasConflict(ClientContext &context, MappingValue &current) {
+	auto &transaction = Transaction::GetTransaction(context);
+	return (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) ||
+	       (current.timestamp < TRANSACTION_ID_START && current.timestamp > transaction.start_time);
+}
+
+MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name) {
+	auto entry = mapping.find(name);
+	if (entry == mapping.end()) {
+		return nullptr;
+	}
+	auto mapping_value = entry->second.get();
+	auto &transaction = Transaction::GetTransaction(context);
+	while (mapping_value->child) {
+		if (mapping_value->timestamp == transaction.transaction_id) {
+			break;
+		}
+		if (mapping_value->timestamp < transaction.start_time) {
+			break;
+		}
+		mapping_value = mapping_value->child.get();
+		assert(mapping_value);
+	}
+	return mapping_value->deleted ? nullptr : mapping_value;
+}
+
+void CatalogSet::PutMapping(ClientContext &context, const string &name, idx_t entry_index) {
+	auto entry = mapping.find(name);
+	auto new_value = make_unique<MappingValue>(entry_index);
+	new_value->timestamp = Transaction::GetTransaction(context).transaction_id;
+	if (entry != mapping.end()) {
+		if (HasConflict(context, *entry->second)) {
+			throw TransactionException("Catalog write-write conflict on name \"%s\"", name);
+		}
+		new_value->child = move(entry->second);
+		new_value->child->parent = new_value.get();
+	}
+	mapping[name] = move(new_value);
+}
+
+void CatalogSet::DeleteMapping(ClientContext &context, const string &name) {
+	auto entry = mapping.find(name);
+	assert(entry != mapping.end());
+	auto delete_marker = make_unique<MappingValue>(0);
+	delete_marker->deleted = true;
+	delete_marker->timestamp = Transaction::GetTransaction(context).transaction_id;
+	delete_marker->child = move(entry->second);
+	delete_marker->child->parent = delete_marker.get();
+	mapping[name] = move(delete_marker);
 }
 
 CatalogEntry *CatalogSet::GetEntryForTransaction(ClientContext &context, CatalogEntry *current) {
@@ -242,7 +293,7 @@ string CatalogSet::SimilarEntry(const string &name) {
 	idx_t current_score = (idx_t)-1;
 	for (auto &kv : mapping) {
 		auto ldist = StringUtil::LevenshteinDistance(kv.first, name);
-		if (ldist < current_score) {
+		if (ldist < current_score && !kv.second->deleted) {
 			current_score = ldist;
 			result = kv.first;
 		}
@@ -253,8 +304,8 @@ string CatalogSet::SimilarEntry(const string &name) {
 CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
-	auto entry = mapping.find(name);
-	if (entry == mapping.end()) {
+	auto mapping_value = GetMapping(context, name);
+	if (mapping_value == nullptr) {
 		// no entry found with this name
 		if (defaults) {
 			// ... but this catalog set has a default map defined
@@ -267,14 +318,14 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 
 				entry->timestamp = 0;
 
-				mapping[entry->name] = entry_index;
+				PutMapping(context, name, entry_index);
 				entries[entry_index] = move(entry);
 				return catalog_entry;
 			}
 		}
 		return nullptr;
 	}
-	auto catalog_entry = entries[entry->second].get();
+	auto catalog_entry = entries[mapping_value->index].get();
 	// if it does, we have to check version numbers
 	CatalogEntry *current = GetEntryForTransaction(context, catalog_entry);
 	if (current->deleted || current->name != name) {
@@ -283,10 +334,15 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	return current;
 }
 
+void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
+	entry->timestamp = timestamp;
+	mapping[entry->name]->timestamp = timestamp;
+}
+
 CatalogEntry *CatalogSet::GetRootEntry(const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 	auto entry = mapping.find(name);
-	return entry == mapping.end() ? nullptr : entries[entry->second].get();
+	return entry == mapping.end() || entry->second->deleted ? nullptr : entries[entry->second->index].get();
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {
@@ -303,7 +359,19 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	}
 	if (entry->name != to_be_removed_node->name) {
 		// rename: clean up the new name when the rename is rolled back
-		mapping.erase(to_be_removed_node->name);
+		auto removed_entry = mapping.find(to_be_removed_node->name);
+		if (removed_entry->second->child) {
+			removed_entry->second->child->parent = nullptr;
+			mapping[to_be_removed_node->name] = move(removed_entry->second->child);
+		} else {
+			mapping.erase(removed_entry);
+		}
+
+		auto restored_entry = mapping.find(entry->name);
+		if (restored_entry->second->deleted) {
+			restored_entry->second->child->parent = nullptr;
+			mapping[entry->name] = move(restored_entry->second->child);
+		}
 	}
 	if (to_be_removed_node->parent) {
 		// if the to be removed node has a parent, set the child pointer to the
@@ -314,7 +382,7 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		// otherwise we need to update the base entry tables
 		auto &name = entry->name;
 		to_be_removed_node->child->SetAsRoot();
-		entries[mapping[name]] = move(to_be_removed_node->child);
+		entries[mapping[name]->index] = move(to_be_removed_node->child);
 		entry->parent = nullptr;
 	}
 }
