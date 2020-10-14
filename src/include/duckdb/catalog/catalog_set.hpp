@@ -26,8 +26,7 @@ class ClientContext;
 typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
 
 struct MappingValue {
-
-	MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false) {
+	MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false), parent(nullptr) {
 	}
 
 	idx_t index;
