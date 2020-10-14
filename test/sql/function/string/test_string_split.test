@@ -151,7 +151,7 @@ a
 
 
 query T
-SELECT UNNEST(string_split_regex('a a  a   a', '\s'))
+SELECT UNNEST(string_split_regex('a a  a   a', '\s+'))
 ----
 a
 a
