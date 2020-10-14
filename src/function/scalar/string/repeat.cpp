@@ -1,12 +1,10 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 
 #include <string.h>
 #include <ctype.h>
-#include <unordered_map>
 
 using namespace std;
 
