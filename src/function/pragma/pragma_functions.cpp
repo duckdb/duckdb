@@ -132,10 +132,11 @@ static void pragma_explain_output(ClientContext &context, vector<Value> paramete
 		context.default_output_type = OutputType::ALL;
 	} else if (val == "optimized_only") {
 		context.default_output_type = OutputType::OPTIMIZED_ONLY;
-	}else if (val == "physical_only") {
+	} else if (val == "physical_only") {
 		context.default_output_type = OutputType::PHYSICAL_ONLY;
 	} else {
-		throw ParserException("Unrecognized output type '%s', expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY", val);
+		throw ParserException("Unrecognized output type '%s', expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY",
+		                      val);
 	}
 }
 

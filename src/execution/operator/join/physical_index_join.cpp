@@ -113,7 +113,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 		}
 	}
 	for (idx_t i = 0; i < left_projection_map.size(); i++) {
-		chunk.data[left_offset +  i].Reference(state->child_chunk.data[left_projection_map[i]]);
+		chunk.data[left_offset + i].Reference(state->child_chunk.data[left_projection_map[i]]);
 		chunk.data[left_offset + i].Slice(sel, output_sel_idx);
 	}
 

@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-enum class OutputType : uint8_t { ALL = 0, OPTIMIZED_ONLY = 1, PHYSICAL_ONLY = 2};
+enum class OutputType : uint8_t { ALL = 0, OPTIMIZED_ONLY = 1, PHYSICAL_ONLY = 2 };
 
 } // namespace duckdb
