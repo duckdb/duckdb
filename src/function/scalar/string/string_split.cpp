@@ -280,7 +280,7 @@ void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 	child_types.push_back(std::make_pair("string", LogicalType::VARCHAR));
 	auto varchar_list_type = LogicalType(LogicalTypeId::LIST, child_types);
 
-	set.AddFunction({"string_split", "str_split"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR},
+	set.AddFunction({"string_split", "str_split", "string_to_array"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                                              varchar_list_type, string_split_function));
 	set.AddFunction(
 	    {"string_split_regex", "str_split_regex"},
