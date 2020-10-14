@@ -55,6 +55,7 @@ static void AssertValidFileFlags(uint8_t flags) {
 }
 
 
+#ifndef _WIN32
 // somehow sometimes this is missing
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
