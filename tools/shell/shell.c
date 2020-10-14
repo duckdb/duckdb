@@ -19834,7 +19834,9 @@ static int do_meta_command(char *zLine, ShellState *p){
       utf8_printf(stderr, "Error: unknown command or invalid arguments: "
         " \"%s\". Enter \".help\" for help\n", azArg[0]);
       rc = 1;
+#ifdef HAVE_LINENOISE
     }
+#endif
   }
 
 meta_command_exit:
