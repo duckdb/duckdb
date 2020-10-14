@@ -15,13 +15,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 
 	// the output of the explain
 	vector<string> keys, values;
-	if (context.explain_output_optimized_only) {
+	switch (context.default_output_type) {
+	case OutputType::OPTIMIZED_ONLY:
 		keys = {"logical_opt"};
 		values = {logical_plan_opt};
-	} else if (context.explain_output_physical_only) {
+		break;
+	case OutputType::PHYSICAL_ONLY:
 		keys = {"physical_plan"};
 		values = {op.physical_plan};
-	} else {
+		break;
+	default:
 		keys = {"logical_plan", "logical_opt", "physical_plan"};
 		values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
 	}

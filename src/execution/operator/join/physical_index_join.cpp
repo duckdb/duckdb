@@ -101,38 +101,22 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 	}
 
 	//! Now we actually produce our result chunk
-	if (!lhs_first) {
-		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			auto it = index_ids.find(column_ids[right_projection_map[i]]);
-			if (it == index_ids.end()) {
-				chunk.data[i].Reference(rhs_chunk.data[rhs_column_idx++]);
-			} else {
-				chunk.data[i].Reference(state->join_keys.data[0]);
-				chunk.data[i].Slice(sel, output_sel_idx);
-			}
-		}
-		for (idx_t i = 0; i < left_projection_map.size(); i++) {
-			chunk.data[right_projection_map.size() + i].Reference(state->child_chunk.data[left_projection_map[i]]);
-			chunk.data[right_projection_map.size() + i].Slice(sel, output_sel_idx);
-		}
-	} else {
-		//! We have to duplicate LRS to number of matches
-		for (idx_t i = 0; i < left_projection_map.size(); i++) {
-			chunk.data[i].Reference(state->child_chunk.data[left_projection_map[i]]);
-			chunk.data[i].Slice(sel, output_sel_idx);
-		}
-		//! Add actual value
-		//! We have to fetch RHS row based on the index ids
-		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			auto it = index_ids.find(column_ids[right_projection_map[i]]);
-			if (it == index_ids.end()) {
-				chunk.data[left_projection_map.size() + i].Reference(rhs_chunk.data[rhs_column_idx++]);
-			} else {
-				chunk.data[left_projection_map.size() + i].Reference(state->join_keys.data[0]);
-				chunk.data[left_projection_map.size() + i].Slice(sel, output_sel_idx);
-			}
+	idx_t left_offset = lhs_first ? 0 : right_projection_map.size();
+	idx_t right_offset = lhs_first ? left_projection_map.size() : 0;
+	for (idx_t i = 0; i < right_projection_map.size(); i++) {
+		auto it = index_ids.find(column_ids[right_projection_map[i]]);
+		if (it == index_ids.end()) {
+			chunk.data[right_offset + i].Reference(rhs_chunk.data[rhs_column_idx++]);
+		} else {
+			chunk.data[right_offset + i].Reference(state->join_keys.data[0]);
+			chunk.data[right_offset + i].Slice(sel, output_sel_idx);
 		}
 	}
+	for (idx_t i = 0; i < left_projection_map.size(); i++) {
+		chunk.data[left_offset +  i].Reference(state->child_chunk.data[left_projection_map[i]]);
+		chunk.data[left_offset + i].Slice(sel, output_sel_idx);
+	}
+
 	state->result_size = output_sel_idx;
 	chunk.SetCardinality(state->result_size);
 }
@@ -140,15 +124,17 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_) const {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
 	auto &art = (ART &)*index;
+	auto &transaction = Transaction::GetTransaction(context.client);
 	for (idx_t i = 0; i < state->child_chunk.size(); i++) {
 		auto equal_value = state->join_keys.GetValue(0, i);
+		auto index_state = art.InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
 		state->rhs_rows[i].clear();
 		if (!equal_value.is_null) {
 			if (fetch_types.empty()) {
 				//! Nothing to materialize
 				art.SearchEqualJoinNoFetch(equal_value, state->result_sizes[i]);
 			} else {
-				art.SearchEqualJoin(equal_value, state->rhs_rows[i]);
+				art.SearchEqual((ARTIndexScanState *)index_state.get(), (size_t)-1, state->rhs_rows[i]);
 				state->result_sizes[i] = state->rhs_rows[i].size();
 			}
 		} else {

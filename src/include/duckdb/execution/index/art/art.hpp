@@ -97,8 +97,8 @@ public:
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
-	//! Search Equal used for Joins
-	void SearchEqualJoin(Value &equal_value, vector<row_t> &result_ids);
+
+	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
 	//! Search Equal used for Joins that do not need to fetch data
 	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
 
@@ -130,7 +130,7 @@ private:
 	bool SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
 	                      vector<row_t> &result_ids);
-	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
+
 
 private:
 	template <bool HAS_BOUND, bool INCLUSIVE>

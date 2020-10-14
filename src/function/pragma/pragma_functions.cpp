@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-
+#include "duckdb/common/enums/output_type.hpp"
 #include <cctype>
 
 namespace duckdb {
@@ -126,15 +126,16 @@ static void pragma_log_query_path(ClientContext &context, vector<Value> paramete
 }
 
 static void pragma_explain_output(ClientContext &context, vector<Value> parameters) {
-	string val = parameters[0].ToString();
-	if (val == "optimized") {
-		context.explain_output_optimized_only = true;
-	} else if (val == "physical") {
-		context.explain_output_physical_only = true;
-	} else if (val == "all") {
-		context.explain_output_optimized_only = true;
+	auto &config = DBConfig::GetConfig(context);
+	string val = StringUtil::Lower(parameters[0].ToString());
+	if (val == "all") {
+		context.default_output_type = OutputType::ALL;
+	} else if (val == "optimized_only") {
+		context.default_output_type = OutputType::OPTIMIZED_ONLY;
+	}else if (val == "physical_only") {
+		context.default_output_type = OutputType::PHYSICAL_ONLY;
 	} else {
-		throw ParserException("Expected PRAGMA explain_output={optimized, all}");
+		throw ParserException("Unrecognized output type '%s', expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY", val);
 	}
 }
 

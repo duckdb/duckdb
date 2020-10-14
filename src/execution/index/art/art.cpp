@@ -439,30 +439,6 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 	return true;
 }
 
-void ART::SearchEqualJoin(Value &equal_value, vector<row_t> &result_ids) {
-	vector<row_t> row_ids;
-	//! We need to look for a leaf
-	auto key = CreateKey(*this, types[0], equal_value);
-	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
-	if (!leaf) {
-		return;
-	}
-	for (idx_t i = 0; i < leaf->num_elements; i++) {
-		result_ids.push_back(leaf->GetRowId(i));
-	}
-	//	// sort the row ids
-	//	sort(row_ids.begin(), row_ids.end());
-	//	// duplicate eliminate the row ids and append them to the row ids of the state
-	//	result_ids.reserve(row_ids.size());
-	//
-	//	result_ids.push_back(row_ids[0]);
-	//	for (idx_t i = 1; i < row_ids.size(); i++) {
-	//		if (row_ids[i] != row_ids[i - 1]) {
-	//			result_ids.push_back(row_ids[i]);
-	//		}
-	//	}
-}
-
 void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 	//! We need to look for a leaf
 	auto key = CreateKey(*this, types[0], equal_value);
