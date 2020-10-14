@@ -1,5 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -89,6 +92,50 @@ TEST_CASE("Test different result types", "[api]") {
 		REQUIRE(row.GetValue<int>(5) == 17);
 		REQUIRE(row.GetValue<int64_t>(5) == 17);
 		REQUIRE(row.GetValue<double>(5) == 17.3);
+
+		row_count++;
+	}
+	REQUIRE(row_count == 1);
+}
+
+TEST_CASE("Test dates/times/timestamps", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE data(i DATE, j TIME, k TIMESTAMP)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO data VALUES (DATE '1992-01-01', TIME '13:00:17', TIMESTAMP '1993-01-01 14:00:17')"));
+
+	idx_t row_count = 0;
+	auto result = con.Query("SELECT * FROM data;");
+	for (auto &row : *result) {
+		int32_t year, month, day;
+		int32_t hour, minute, second, milisecond;
+
+		auto date = row.GetValue<int32_t>(0);
+		auto time = row.GetValue<int32_t>(1);
+		auto timestamp = row.GetValue<int64_t>(2);
+		Date::Convert(date, year, month, day);
+		REQUIRE(year == 1992);
+		REQUIRE(month == 1);
+		REQUIRE(day == 1);
+
+		Time::Convert(time, hour, minute, second, milisecond);
+		REQUIRE(hour == 13);
+		REQUIRE(minute == 0);
+		REQUIRE(second == 17);
+		REQUIRE(milisecond == 0);
+
+		Timestamp::Convert(timestamp, date, time);
+		Date::Convert(date, year, month, day);
+		Time::Convert(time, hour, minute, second, milisecond);
+
+		REQUIRE(year == 1993);
+		REQUIRE(month == 1);
+		REQUIRE(day == 1);
+		REQUIRE(hour == 14);
+		REQUIRE(minute == 0);
+		REQUIRE(second == 17);
+		REQUIRE(milisecond == 0);
 
 		row_count++;
 	}

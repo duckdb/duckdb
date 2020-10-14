@@ -378,7 +378,7 @@ template <class T> T Value::GetValueInternal() const {
 	case LogicalTypeId::DECIMAL:
 		return CastAs(LogicalType::DOUBLE).GetValueInternal<T>();
 	default:
-		throw NotImplementedException("Unimplemented type for GetValue()");
+		throw NotImplementedException("Unimplemented type \"%s\" for GetValue()", type_.ToString());
 	}
 }
 
@@ -392,9 +392,15 @@ template <> int16_t Value::GetValue() const {
 	return GetValueInternal<int16_t>();
 }
 template <> int32_t Value::GetValue() const {
+	if (type_.id() == LogicalTypeId::DATE || type_.id() == LogicalTypeId::TIME) {
+		return value_.integer;
+	}
 	return GetValueInternal<int32_t>();
 }
 template <> int64_t Value::GetValue() const {
+	if (type_.id() == LogicalTypeId::TIMESTAMP) {
+		return value_.bigint;
+	}
 	return GetValueInternal<int64_t>();
 }
 template <> hugeint_t Value::GetValue() const {
