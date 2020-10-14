@@ -4,6 +4,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "utf8proc_wrapper.hpp"
 #include "utf8proc.hpp"
 
 #include "duckdb/function/scalar/regexp.hpp"
@@ -121,7 +122,7 @@ public:
 		if (re->Match(input_sp, start, size, RE2::UNANCHORED, &match, 1)) {
 			offset = match.data() - input;
 			// special case: 0 length match
-			if (match.size() == 0) {
+			if (match.size() == 0 && start < size) {
 				if (ascii_only)
 					offset++;
 				else
@@ -151,6 +152,12 @@ void string_split(const char *input, Iterator &iter, ChunkCollection &result) {
 		FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
 		    StringVector::AddString(append_chunk->data[0], &input[0], 0);
 		append_chunk->SetCardinality(append_chunk->size() + 1);
+
+		result.count += append_chunk->size();
+		result.chunks.push_back(move(append_chunk));
+
+		result.Verify();
+		return;
 	}
 
 	while (iter.HasNext()) {
@@ -182,32 +189,25 @@ unique_ptr<ChunkCollection> string_split(string_t input, string_t delim, const b
 	const char *delim_data = delim.GetData();
 	size_t delim_size = delim.GetSize();
 
-	bool ascii_only = true;
-	for (auto i = 0; i < (int)input_size; ++i) {
-		if (input_data[i] & 0x80) {
-			ascii_only = false;
-			break;
-		}
-	}
+	bool ascii_only = Utf8Proc::Analyze(input_data, input_size) == UnicodeType::ASCII;
 
 	auto output = make_unique<ChunkCollection>();
 	vector<LogicalType> types = {LogicalType::VARCHAR};
 	output->types = types;
 
-	Iterator *iter;
+	unique_ptr<Iterator> iter;
 	if (regex) {
 		auto re = make_unique<RE2>(duckdb_re2::StringPiece(delim_data, delim_size));
 		if (!re->ok()) {
 			throw Exception(re->error());
 		}
-		iter = new RegexIterator(input_size, move(re), ascii_only);
+		iter = make_unique_base<Iterator, RegexIterator>(input_size, move(re), ascii_only);
 	} else if (ascii_only) {
-		iter = new AsciiIterator(input_size, delim_data, delim_size);
+		iter = make_unique_base<Iterator, AsciiIterator>(input_size, delim_data, delim_size);
 	} else {
-		iter = new UnicodeIterator(input_size, delim_data, delim_size);
+		iter = make_unique_base<Iterator, UnicodeIterator>(input_size, delim_data, delim_size);
 	}
 	string_split(input_data, *iter, *output);
-	delete iter;
 
 	return output;
 }
@@ -245,7 +245,7 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 			auto append_chunk = make_unique<DataChunk>();
 			append_chunk->Initialize(types);
 			FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-		    	StringVector::AddString(append_chunk->data[0], input);
+			    StringVector::AddString(append_chunk->data[0], input);
 			append_chunk->SetCardinality(append_chunk->size() + 1);
 
 			split_input->count += append_chunk->size();
@@ -261,7 +261,9 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 	}
 
 	assert(list_child->count == total_len);
-	result.vector_type = VectorType::CONSTANT_VECTOR;
+	if (args.data[0].vector_type == VectorType::CONSTANT_VECTOR &&
+	    args.data[1].vector_type == VectorType::CONSTANT_VECTOR)
+		result.vector_type = VectorType::CONSTANT_VECTOR;
 	ListVector::SetEntry(result, move(list_child));
 }
 
