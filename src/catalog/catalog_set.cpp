@@ -383,9 +383,13 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 
 	// restore the name if it was deleted
 	auto restored_entry = mapping.find(entry->name);
-	if (restored_entry->second->deleted) {
-		restored_entry->second->child->parent = nullptr;
-		mapping[entry->name] = move(restored_entry->second->child);
+	if (restored_entry->second->deleted || entry->type == CatalogType::INVALID) {
+		if (restored_entry->second->child) {
+			restored_entry->second->child->parent = nullptr;
+			mapping[entry->name] = move(restored_entry->second->child);
+		} else {
+			mapping.erase(restored_entry);
+		}
 	}
 }
 

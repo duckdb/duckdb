@@ -1,0 +1,58 @@
+# name: test/sql/alter/rename_table/test_rename_table_collision.test
+# description: Test RENAME TABLE multiple transactions with rename after drop
+# group: [rename_table]
+
+statement ok con1
+CREATE TABLE t1(i INTEGER);
+
+statement ok con1
+INSERT INTO t1 VALUES (1), (2), (3);
+
+statement ok con2
+CREATE TABLE t2(i VARCHAR);
+
+statement ok con2
+INSERT INTO t2 VALUES (4), (5), (6);
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DROP TABLE t2;
+
+statement ok con2
+ALTER TABLE t1 RENAME TO t2;
+
+query I con2
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+query I con1
+SELECT i FROM t1 ORDER BY i;
+----
+1
+2
+3
+
+query I con1
+SELECT i FROM t2 ORDER BY i;
+----
+4
+5
+6
+
+statement ok con2
+COMMIT
+
+query I con1
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+statement error con1
+SELECT * FROM t1
