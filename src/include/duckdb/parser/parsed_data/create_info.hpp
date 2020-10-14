@@ -40,6 +40,8 @@ struct CreateInfo : public ParseInfo {
 	bool temporary;
 	//! Whether or not the entry is an internal entry
 	bool internal;
+	//! The SQL string of the CREATE statement
+	string sql;
 };
 
 } // namespace duckdb

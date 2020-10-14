@@ -65,6 +65,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::DELIM_JOIN:
 	case PhysicalOperatorType::UNION:
 	case PhysicalOperatorType::RECURSIVE_CTE:
+	case PhysicalOperatorType::EMPTY_RESULT:
 		return true;
 	default:
 		return false;
@@ -199,6 +200,10 @@ void OperatorProfiler::EndOperator(DataChunk *chunk) {
 }
 
 void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elements) {
+	if (!enabled) {
+		return;
+	}
+
 	auto entry = timings.find(op);
 	if (entry == timings.end()) {
 		// add new entry
@@ -211,6 +216,10 @@ void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elemen
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
+	if (!enabled || !running) {
+		return;
+	}
+
 	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
 		assert(entry != tree_map.end());

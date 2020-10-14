@@ -345,10 +345,8 @@ static void print_sql(string sql) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-			std::cerr << termcolor::yellow;
-			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			std::cerr << termcolor::magenta;
+			std::cerr << termcolor::yellow;
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
 			break;
@@ -1113,11 +1111,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// perform any renames in zScript
 			command->sql_query = ReplaceKeywords(zScript);
 
-			// skip CREATE INDEX in original sqlite tests (for now...)
-			if (original_sqlite_test && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
-				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
-				continue;
-			}
 			// parse
 			if (strcmp(sScript.azToken[1], "ok") == 0) {
 				command->expect_ok = true;
