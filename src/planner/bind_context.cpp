@@ -128,8 +128,8 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
-                               unordered_map<string, column_t> name_map, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), move(name_map), get, index));
+                               LogicalGet &get) {
+	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
@@ -137,20 +137,25 @@ void BindContext::AddTableFunction(idx_t index, const string &alias, vector<stri
 	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index));
 }
 
-void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
-	vector<string> names;
-	if (ref.column_name_alias.size() > subquery.names.size()) {
-		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias,
-		                      subquery.names.size(), ref.column_name_alias.size());
+vector<string> BindContext::AliasColumnNames(string table_name, const vector<string> &names, const vector<string> &column_aliases) {
+	vector<string> result;
+	if (column_aliases.size() > names.size()) {
+		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
+		                      names.size(), column_aliases.size());
 	}
-	// use any provided aliases from the subquery
-	for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
-		names.push_back(ref.column_name_alias[i]);
+	// use any provided column aliases first
+	for (idx_t i = 0; i < column_aliases.size(); i++) {
+		result.push_back(column_aliases[i]);
 	}
 	// if not enough aliases were provided, use the default names for remaining columns
-	for (idx_t i = ref.column_name_alias.size(); i < subquery.names.size(); i++) {
-		names.push_back(subquery.names[i]);
+	for (idx_t i = column_aliases.size(); i < names.size(); i++) {
+		result.push_back(names[i]);
 	}
+	return result;
+}
+
+void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 

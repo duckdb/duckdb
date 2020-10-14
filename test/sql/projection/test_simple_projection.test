@@ -18,6 +18,12 @@ SELECT * FROM a;
 ----
 42	84
 
+# name alias
+query II
+SELECT x, y FROM a i1(x, y);
+----
+42	84
+
 # multiple insertions
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
