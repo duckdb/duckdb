@@ -186,6 +186,7 @@ void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, Ca
 	transaction.PushCatalogEntry(value->child.get());
 
 	entries[entry_index] = move(value);
+	DeleteMapping(context, entry.name);
 }
 
 bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool cascade) {
@@ -261,7 +262,7 @@ void CatalogSet::PutMapping(ClientContext &context, const string &name, idx_t en
 void CatalogSet::DeleteMapping(ClientContext &context, const string &name) {
 	auto entry = mapping.find(name);
 	assert(entry != mapping.end());
-	auto delete_marker = make_unique<MappingValue>(0);
+	auto delete_marker = make_unique<MappingValue>(entry->second->index);
 	delete_marker->deleted = true;
 	delete_marker->timestamp = Transaction::GetTransaction(context).transaction_id;
 	delete_marker->child = move(entry->second);
@@ -366,12 +367,6 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		} else {
 			mapping.erase(removed_entry);
 		}
-
-		auto restored_entry = mapping.find(entry->name);
-		if (restored_entry->second->deleted) {
-			restored_entry->second->child->parent = nullptr;
-			mapping[entry->name] = move(restored_entry->second->child);
-		}
 	}
 	if (to_be_removed_node->parent) {
 		// if the to be removed node has a parent, set the child pointer to the
@@ -384,6 +379,13 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		to_be_removed_node->child->SetAsRoot();
 		entries[mapping[name]->index] = move(to_be_removed_node->child);
 		entry->parent = nullptr;
+	}
+
+	// restore the name if it was deleted
+	auto restored_entry = mapping.find(entry->name);
+	if (restored_entry->second->deleted) {
+		restored_entry->second->child->parent = nullptr;
+		mapping[entry->name] = move(restored_entry->second->child);
 	}
 }
 
