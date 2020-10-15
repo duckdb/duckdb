@@ -77,8 +77,8 @@ public:
 		}
 	}
 
-	static bool HasConflict(ClientContext &context, CatalogEntry &current);
-	static bool HasConflict(ClientContext &context, MappingValue &current);
+	static bool HasConflict(ClientContext &context, transaction_t timestamp);
+	static bool UseTimestamp(ClientContext &context, transaction_t timestamp);
 
 	idx_t GetEntryIndex(CatalogEntry *entry);
 	CatalogEntry *GetEntryFromIndex(idx_t index);

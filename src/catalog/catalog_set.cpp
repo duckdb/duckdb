@@ -45,7 +45,7 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 		entry_index = mapping_value->index;
 		auto &current = *entries[entry_index];
 		// if it does, we have to check version numbers
-		if (HasConflict(context, current)) {
+		if (HasConflict(context, current.timestamp)) {
 			// current version has been written to by a currently active
 			// transaction
 			throw TransactionException("Catalog write-write conflict on create with \"%s\"", current.name);
@@ -76,7 +76,7 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 bool CatalogSet::GetEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry *&catalog_entry) {
 	catalog_entry = entries[entry_index].get();
 	// if it does: we have to retrieve the entry and to check version numbers
-	if (HasConflict(context, *catalog_entry)) {
+	if (HasConflict(context, catalog_entry->timestamp)) {
 		// current version has been written to by a currently active
 		// transaction
 		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", catalog_entry->name);
@@ -103,8 +103,9 @@ bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, id
 
 void CatalogSet::ClearEntryName(string name) {
 	auto entry = mapping.find(name);
-	assert(entry != mapping.end());
-	mapping.erase(entry);
+	if (entry != mapping.end()) {
+		mapping.erase(entry);
+	}
 }
 
 bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info) {
@@ -213,16 +214,10 @@ idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
 	return mapping[entry->name]->index;
 }
 
-bool CatalogSet::HasConflict(ClientContext &context, CatalogEntry &current) {
+bool CatalogSet::HasConflict(ClientContext &context, transaction_t timestamp) {
 	auto &transaction = Transaction::GetTransaction(context);
-	return (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) ||
-	       (current.timestamp < TRANSACTION_ID_START && current.timestamp > transaction.start_time);
-}
-
-bool CatalogSet::HasConflict(ClientContext &context, MappingValue &current) {
-	auto &transaction = Transaction::GetTransaction(context);
-	return (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) ||
-	       (current.timestamp < TRANSACTION_ID_START && current.timestamp > transaction.start_time);
+	return (timestamp >= TRANSACTION_ID_START && timestamp != transaction.transaction_id) ||
+	       (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
 }
 
 MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name) {
@@ -231,12 +226,8 @@ MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name)
 		return nullptr;
 	}
 	auto mapping_value = entry->second.get();
-	auto &transaction = Transaction::GetTransaction(context);
 	while (mapping_value->child) {
-		if (mapping_value->timestamp == transaction.transaction_id) {
-			break;
-		}
-		if (mapping_value->timestamp < transaction.start_time) {
+		if (UseTimestamp(context, mapping_value->timestamp)) {
 			break;
 		}
 		mapping_value = mapping_value->child.get();
@@ -250,7 +241,7 @@ void CatalogSet::PutMapping(ClientContext &context, const string &name, idx_t en
 	auto new_value = make_unique<MappingValue>(entry_index);
 	new_value->timestamp = Transaction::GetTransaction(context).transaction_id;
 	if (entry != mapping.end()) {
-		if (HasConflict(context, *entry->second)) {
+		if (HasConflict(context, entry->second->timestamp)) {
 			throw TransactionException("Catalog write-write conflict on name \"%s\"", name);
 		}
 		new_value->child = move(entry->second);
@@ -270,15 +261,22 @@ void CatalogSet::DeleteMapping(ClientContext &context, const string &name) {
 	mapping[name] = move(delete_marker);
 }
 
-CatalogEntry *CatalogSet::GetEntryForTransaction(ClientContext &context, CatalogEntry *current) {
+bool CatalogSet::UseTimestamp(ClientContext &context, transaction_t timestamp) {
 	auto &transaction = Transaction::GetTransaction(context);
+	if (timestamp == transaction.transaction_id) {
+		// we created this version
+		return true;
+	}
+	if (timestamp < transaction.start_time) {
+		// this version was commited before we started the transaction
+		return true;
+	}
+	return false;
+}
+
+CatalogEntry *CatalogSet::GetEntryForTransaction(ClientContext &context, CatalogEntry *current) {
 	while (current->child) {
-		if (current->timestamp == transaction.transaction_id) {
-			// we created this version
-			break;
-		}
-		if (current->timestamp < transaction.start_time) {
-			// this version was commited before we started the transaction
+		if (UseTimestamp(context, current->timestamp)) {
 			break;
 		}
 		current = current->child.get();
