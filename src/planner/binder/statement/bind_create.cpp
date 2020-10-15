@@ -69,10 +69,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
-		// extract the SQL from the query, if any
-		if (stmt.stmt_location + stmt.stmt_length <= context.query.size()) {
-			base.sql = context.query.substr(stmt.stmt_location, stmt.stmt_length);
-		}
 		// bind the schema
 		auto schema = BindSchema(*stmt.info);
 

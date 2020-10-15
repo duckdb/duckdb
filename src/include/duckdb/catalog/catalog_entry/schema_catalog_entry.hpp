@@ -68,7 +68,7 @@ public:
 	//! Creates a sequence with the given name in the schema
 	CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
 	//! Creates an index with the given name in the schema
-	CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
+	CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table);
 	//! Create a table function within the given schema
 	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
 	//! Create a copy function within the given schema
