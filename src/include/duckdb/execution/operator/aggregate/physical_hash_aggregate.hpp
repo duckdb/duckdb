@@ -49,6 +49,10 @@ public:
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
 
+	BufferManager &buffer_manager;
+
+	idx_t radix_partitions;
+
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
@@ -67,15 +71,6 @@ private:
 	idx_t ht_load_limit;
 	//! how many groups can we have in the operator before we switch to radix partitioning
 	idx_t radix_limit;
-
-	//! how many threads should be used in finalizing this HT
-	idx_t radix_partitions;
-	//! how many bits are used for the radix partitions
-	idx_t radix_bits;
-	//! bit mask to get radix partition
-	hash_t radix_mask;
-
-	BufferManager &buffer_manager;
 
 private:
 	unique_ptr<GroupedAggregateHashTable> NewHT(LocalSinkState &lstate,

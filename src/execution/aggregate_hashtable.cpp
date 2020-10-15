@@ -14,7 +14,6 @@
 #include <map>
 
 namespace duckdb {
-using namespace std;
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
                                                      vector<LogicalType> payload_types,
@@ -26,6 +25,19 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types)
     : GroupedAggregateHashTable(buffer_manager, move(group_types), {}, vector<AggregateObject>()) {
+}
+
+template <class FUNC> void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
+	idx_t apply_entries = entries;
+	for (auto &payload_chunk : payload_hds) {
+		auto this_entries = MinValue(tuples_per_block, apply_entries);
+		for (data_ptr_t ptr = payload_chunk->Ptr(), end = payload_chunk->Ptr() + this_entries * tuple_size; ptr < end;
+		     ptr += tuple_size) {
+			fun(ptr);
+		}
+		apply_entries -= this_entries;
+	}
+	assert(apply_entries == 0);
 }
 
 #ifndef DUCKDB_ALLOW_UNDEFINED
@@ -170,21 +182,13 @@ void GroupedAggregateHashTable::Destroy() {
 	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
 	idx_t count = 0;
 
-	idx_t destroy_entries = entries;
-	for (auto &payload_chunk : payload_hds) {
-		auto this_entries = MinValue(tuples_per_block, destroy_entries);
-		for (data_ptr_t ptr = payload_chunk->Ptr(), end = payload_chunk->Ptr() + this_entries * tuple_size; ptr < end;
-		     ptr += tuple_size) {
-			// found entry
-			data_pointers[count++] = ptr + hash_width + group_width;
-			if (count == STANDARD_VECTOR_SIZE) {
-				// vector is full: call the destructors
-				CallDestructors(state_vector, count);
-				count = 0;
-			}
+	PayloadApply([&](data_ptr_t ptr) {
+		data_pointers[count++] = ptr + hash_width + group_width;
+		if (count == STANDARD_VECTOR_SIZE) {
+			CallDestructors(state_vector, count);
+			count = 0;
 		}
-		destroy_entries -= this_entries;
-	}
+	});
 	CallDestructors(state_vector, count);
 }
 
@@ -194,7 +198,7 @@ void GroupedAggregateHashTable::Verify() {
 	idx_t count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		if (hash_ptr[i].page_nr > 0) {
-			// assert((hash_ptr[i].salt) == (*(hash_t *)GetPtr(hash_ptr[i]) >> hash_prefix_shift));
+			assert((hash_ptr[i].salt) == (*(hash_t *)GetPtr(hash_ptr[i]) >> hash_prefix_shift));
 			count++;
 		}
 	}
@@ -232,36 +236,26 @@ template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 	uint32_t payload_page_offset;
 
 	if (entries > 0) {
-		idx_t resize_entries = entries;
-		for (auto &payload_chunk : payload_hds) {
-			payload_page_offset = 0;
-
-			auto this_entries = MinValue(tuples_per_block, resize_entries);
-			for (data_ptr_t ptr = payload_chunk->Ptr(), end = payload_chunk->Ptr() + this_entries * tuple_size;
-			     ptr < end; ptr += tuple_size) {
-				auto entry_hash = *(hash_t *)ptr;
-				assert((entry_hash & bitmask) == (entry_hash % capacity));
-				auto entry_idx = (idx_t)entry_hash & bitmask;
-				while (hashes_arr[entry_idx].page_nr > 0) {
-					entry_idx++;
-					if (entry_idx >= capacity) {
-						entry_idx = 0;
-					}
+		PayloadApply([&](data_ptr_t ptr) {
+			auto hash = Load<hash_t>(ptr);
+			assert((hash & bitmask) == (hash % capacity));
+			auto entry_idx = (idx_t)hash & bitmask;
+			while (hashes_arr[entry_idx].page_nr > 0) {
+				entry_idx++;
+				if (entry_idx >= capacity) {
+					entry_idx = 0;
 				}
-
-				assert(!hashes_arr[entry_idx].page_nr);
-				assert(entry_hash >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
-
-				hashes_arr[entry_idx].salt = entry_hash >> hash_prefix_shift;
-				hashes_arr[entry_idx].page_nr = payload_page_idx;
-				hashes_arr[entry_idx].page_offset = payload_page_offset;
-
-				payload_page_offset++;
 			}
-			resize_entries -= this_entries;
-			payload_page_idx++;
-		}
-		assert(resize_entries == 0);
+
+			assert(!hashes_arr[entry_idx].page_nr);
+			assert(hash >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
+
+			hashes_arr[entry_idx].salt = hash >> hash_prefix_shift;
+			hashes_arr[entry_idx].page_nr = payload_page_idx;
+			hashes_arr[entry_idx].page_offset = payload_page_offset;
+
+			payload_page_offset++;
+		});
 	}
 
 	Verify();
@@ -730,7 +724,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &a
 	return FindOrCreateGroups(groups, hashes, addresses_out, new_groups_out);
 }
 
-void GroupedAggregateHashTable::FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count) {
+void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &source_hashes, idx_t count) {
 	assert(source_addresses.type == LogicalType::POINTER);
 	assert(source_hashes.type == LogicalType::HASH);
 
@@ -759,7 +753,7 @@ void GroupedAggregateHashTable::FlushMerge(Vector &source_addresses, Vector &sou
 	}
 }
 
-void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other, hash_t radix_mask) {
+void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	assert(other.payload_width == payload_width);
 	assert(other.group_width == group_width);
 	assert(other.tuple_size == tuple_size);
@@ -768,8 +762,6 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other, hash_t
 	if (other.entries == 0) {
 		return;
 	}
-	Verify();
-	other.Verify();
 
 	Vector addresses(LogicalType::POINTER);
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
@@ -778,32 +770,69 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other, hash_t
 	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 
 	idx_t group_idx = 0;
-	idx_t merge_entries = other.entries;
-	for (auto &payload_chunk : other.payload_hds) {
-		auto this_entries = MinValue(tuples_per_block, merge_entries);
-		for (data_ptr_t ptr = payload_chunk->Ptr(), end = payload_chunk->Ptr() + this_entries * tuple_size; ptr < end;
-		     ptr += tuple_size) {
-			auto hash = *(hash_t *)ptr;
-			//			if ((hash | radix_mask) != hash) {
-			//				continue;
-			//			}
-			hashes_ptr[group_idx] = hash;
-			addresses_ptr[group_idx] = ptr + hash_width;
-			group_idx++;
-			if (group_idx == STANDARD_VECTOR_SIZE) {
-				FlushMerge(addresses, hashes, group_idx);
-				group_idx = 0;
+
+	other.PayloadApply([&](data_ptr_t ptr) {
+		auto hash = Load<hash_t>(ptr);
+
+		hashes_ptr[group_idx] = hash;
+		addresses_ptr[group_idx] = ptr + hash_width;
+		group_idx++;
+		if (group_idx == STANDARD_VECTOR_SIZE) {
+			FlushMove(addresses, hashes, group_idx);
+			group_idx = 0;
+		}
+	});
+	FlushMove(addresses, hashes, group_idx);
+	string_heap.MergeHeap(other.string_heap);
+	other.entries = 0; // disable finalizers
+	Verify();
+}
+
+struct PartitionInfo {
+	PartitionInfo() : addresses(LogicalType::POINTER), hashes(LogicalType::HASH), group_count(0) {
+		addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
+		hashes_ptr = FlatVector::GetData<hash_t>(hashes);
+	};
+	Vector addresses;
+	Vector hashes;
+	idx_t group_count;
+	data_ptr_t *addresses_ptr;
+	hash_t *hashes_ptr;
+};
+
+void GroupedAggregateHashTable::Partition(unordered_map<hash_t, GroupedAggregateHashTable *> &partition_hts) {
+	assert(partition_hts.size() > 1);
+	vector<PartitionInfo> partition_info(partition_hts.size());
+
+	PayloadApply([&](data_ptr_t ptr) {
+		auto hash = Load<hash_t>(ptr);
+
+		idx_t info_idx = 0;
+		for (auto &partition_entry : partition_hts) {
+			auto &info = partition_info[info_idx++];
+			if ((hash & partition_entry.first) != partition_entry.first) {
+				continue;
+			}
+			info.hashes_ptr[info.group_count] = hash;
+			info.addresses_ptr[info.group_count] = ptr + hash_width;
+			info.group_count++;
+			if (info.group_count == STANDARD_VECTOR_SIZE) {
+				// flush
+				assert(partition_entry.second);
+				partition_entry.second->FlushMove(info.addresses, info.hashes, info.group_count);
+				info.group_count = 0;
 			}
 		}
-		merge_entries -= this_entries;
-	}
-	assert(merge_entries == 0);
-	FlushMerge(addresses, hashes, group_idx);
-	string_heap.MergeHeap(other.string_heap);
-	// need to set the size to 0 since otherwise the destructors would be called and we took that stuff over
-	other.entries = 0;
+	});
 
-	Verify();
+	idx_t info_idx = 0;
+	for (auto &partition_entry : partition_hts) {
+		auto &info = partition_info[info_idx++];
+		partition_entry.second->FlushMove(info.addresses, info.hashes, info.group_count);
+	}
+
+	entries = 0; // disable finalizers
+	// TODO this HT is now done
 }
 
 idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {

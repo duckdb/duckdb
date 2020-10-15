@@ -14,6 +14,8 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 
+#include "duckdb/common/unordered_map.hpp"
+
 namespace duckdb {
 class BoundAggregateExpression;
 class BufferManager;
@@ -105,11 +107,13 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
-	void Combine(GroupedAggregateHashTable &other, hash_t radix_mask = 0);
+	void Combine(GroupedAggregateHashTable &other);
 
 	idx_t Size() {
 		return entries;
 	}
+
+	void Partition(unordered_map<hash_t, GroupedAggregateHashTable *> &partition_hts);
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
@@ -169,7 +173,7 @@ private:
 	                   const SelectionVector &sel, idx_t count);
 
 	void Verify();
-	void FlushMerge(Vector &source_addresses, Vector &source_hashes, idx_t count);
+	void FlushMove(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
 
 	template <class T> data_ptr_t GetPtr(T &ht_entry_val);
@@ -177,6 +181,8 @@ private:
 	template <class T>
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
 	                                 SelectionVector &new_groups);
+
+	template <class FUNC = std::function<void(data_ptr_t)>> void PayloadApply(FUNC fun);
 };
 
 } // namespace duckdb
