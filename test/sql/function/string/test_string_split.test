@@ -8,17 +8,17 @@ PRAGMA enable_verification
 query I
 SELECT UNNEST(string_split(string_agg(range, 'DUCK '), ' ')), mod(range, 100) xx FROM range(50000) GROUP BY xx
 ----
-100000 values hashing to 4e6194860e6d79b022b34d526206435d
+100000 values hashing to 0e9988119219c868acd137d72cb263a9
 
 query I
 SELECT UNNEST(string_split(string_agg(range, '🦆 '), ' ')), mod(range, 100) xx FROM range(50000) GROUP BY xx
 ----
-100000 values hashing to 86c1553624f4238ca8c87bbf24072483
+100000 values hashing to eb3f0f7980d6954889b8c061fe22d701
 
 query I
 SELECT UNNEST(string_split_regex(string_agg(range, 'DUCK '), '\s')), mod(range, 100) xx FROM range(50000) GROUP BY xx
 ----
-100000 values hashing to 4e6194860e6d79b022b34d526206435d
+100000 values hashing to 0e9988119219c868acd137d72cb263a9
 
 query T
 SELECT UNNEST(string_split('üüüüü', '◌̈')) 
