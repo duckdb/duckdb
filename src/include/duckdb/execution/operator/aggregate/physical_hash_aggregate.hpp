@@ -67,14 +67,12 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
-	//! how many groups can be in a ht before we make a new one
-	idx_t ht_load_limit;
 	//! how many groups can we have in the operator before we switch to radix partitioning
 	idx_t radix_limit;
 
 private:
-	unique_ptr<GroupedAggregateHashTable> NewHT(LocalSinkState &lstate,
-	                                            HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
+	void FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
+	                      Pipeline *pipeline);
 };
 
 } // namespace duckdb

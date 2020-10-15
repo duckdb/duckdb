@@ -113,10 +113,15 @@ public:
 		return entries;
 	}
 
-	void Partition(unordered_map<hash_t, GroupedAggregateHashTable *> &partition_hts);
+	idx_t MaxCapacity();
+
+	void Partition(unordered_map<hash_t, GroupedAggregateHashTable *> &partition_hts, hash_t hash_mask);
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
+
+	//! The hash table load factor, when a resize is triggered
+	constexpr static float LOAD_FACTOR = 1.5;
 
 private:
 	BufferManager &buffer_manager;
@@ -151,8 +156,8 @@ private:
 	unique_ptr<BufferHandle> hashes_hdl;
 	data_ptr_t hashes_end_ptr; // of hashes
 
-	idx_t hash_prefix_shift = 48;
-	idx_t payload_block_idx;
+	idx_t hash_prefix_shift;
+	idx_t payload_page_offset;
 
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
@@ -173,16 +178,18 @@ private:
 	                   const SelectionVector &sel, idx_t count);
 
 	void Verify();
+
 	void FlushMove(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
 
+	template <class T> void VerifyInternal();
 	template <class T> data_ptr_t GetPtr(T &ht_entry_val);
 	template <class T> void Resize(idx_t size);
 	template <class T>
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
 	                                 SelectionVector &new_groups);
 
-	template <class FUNC = std::function<void(data_ptr_t)>> void PayloadApply(FUNC fun);
+	template <class FUNC = std::function<void(idx_t, idx_t, data_ptr_t)>> void PayloadApply(FUNC fun);
 };
 
 } // namespace duckdb
