@@ -58,7 +58,7 @@ public:
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found
-	string SimilarEntry(const string &name);
+	string SimilarEntry(ClientContext &context, const string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
