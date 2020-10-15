@@ -126,7 +126,6 @@ static void pragma_log_query_path(ClientContext &context, vector<Value> paramete
 }
 
 static void pragma_explain_output(ClientContext &context, vector<Value> parameters) {
-	auto &config = DBConfig::GetConfig(context);
 	string val = StringUtil::Lower(parameters[0].ToString());
 	if (val == "all") {
 		context.default_output_type = OutputType::ALL;
