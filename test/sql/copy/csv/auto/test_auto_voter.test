@@ -3,10 +3,10 @@
 # group: [auto]
 
 statement ok
-CREATE TABLE movie_info AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/voter.tsv');
+CREATE TABLE voter AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/voter.tsv');
 
 query I
-SELECT COUNT(*) FROM movie_info;
+SELECT COUNT(*) FROM voter;
 ----
 5300
 

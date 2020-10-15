@@ -550,7 +550,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		ParseCSV(ParserMode::SNIFFING_DATATYPES);
 		for (idx_t row = 0; row < parse_chunk.size(); row++) {
 			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-				vector<LogicalType> &col_type_candidates = info_sql_types_candidates[col];
+				auto &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
@@ -628,10 +628,17 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			}
 		}
 
-		// check number of varchar columns
 		idx_t varchar_cols = 0;
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-			const auto &col_type = info_sql_types_candidates[col].back();
+			auto &col_type_candidates = info_sql_types_candidates[col];
+			if (col_type_candidates.size() == type_candidates.size()) {
+				// nothing was cleared: this means we only encountered empty columns
+				// in this case we default to VARCHAR
+				col_type_candidates.clear();
+				col_type_candidates.push_back(LogicalType::VARCHAR);
+			}
+			// check number of varchar columns
+			const auto &col_type = col_type_candidates.back();
 			if (col_type == LogicalType::VARCHAR) {
 				varchar_cols++;
 			}
