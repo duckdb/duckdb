@@ -522,10 +522,11 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	      "%y-%m-%d %H:%M:%S"}},
 	};
 
-	// check which info candiate leads to minimum amount of non-varchar columns...
+	// check which info candidate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
 	vector<vector<LogicalType>> best_sql_types_candidates;
+	vector<bool> column_empty(best_num_cols,true);
 	std::map<LogicalTypeId, vector<string>> best_format_candidates;
 	for (const auto &t : format_template_candidates) {
 		best_format_candidates[t.first].clear();
@@ -688,6 +689,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 						auto &best_type_format_candidates = best_format_candidates[sql_type.id()];
 						auto save_format_candidates = best_type_format_candidates;
 						while (best_type_format_candidates.size()) {
+							if (!parse_chunk.data[col].nullmask_all_set()){
+						        column_empty[col] = false;
+					        }
 							if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 								break;
 							}
@@ -707,7 +711,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 							}
 						}
 					}
-
+                    if (!parse_chunk.data[col].nullmask_all_set()){
+						column_empty[col] = false;
+					}
 					if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 						break;
 					} else {
@@ -719,7 +725,13 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 
 		// set sql types
 		for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
-			LogicalType d_type = best_sql_types_candidates[col].back();
+			LogicalType d_type ;
+			if(column_empty[col]){
+				d_type = LogicalType::VARCHAR;
+			}
+			else{
+				d_type = best_sql_types_candidates[col].back();
+			}
 			detected_types.push_back(d_type);
 		}
 	}
