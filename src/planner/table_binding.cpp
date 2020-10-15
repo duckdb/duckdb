@@ -42,7 +42,8 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = column_entry->second;
 	LogicalType sql_type = types[column_entry->second];
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
+	auto column_name = colref.alias.empty() ? names[column_entry->second] : colref.GetName();
+	return BindResult(make_unique<BoundColumnRefExpression>(column_name, sql_type, binding, depth));
 }
 
 void Binding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
@@ -98,7 +99,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		column_ids.push_back(col_index);
 	}
 	binding.table_index = index;
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
+	auto column_name = colref.alias.empty() ? names[entry->second] : colref.GetName();
+	return BindResult(make_unique<BoundColumnRefExpression>(column_name, col_type, binding, depth));
 }
 
 } // namespace duckdb
