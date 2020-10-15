@@ -169,6 +169,7 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 			// no table name: find a binding that contains this
 			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
 		}
+		binder.bind_context.BindColumn(colref, 0);
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child); });

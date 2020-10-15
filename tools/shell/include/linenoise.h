@@ -66,6 +66,8 @@ int linenoiseHistoryLoad(const char *filename);
 void linenoiseClearScreen(void);
 void linenoiseSetMultiLine(int ml);
 void linenoisePrintKeyCodes(void);
+size_t linenoiseComputeRenderWidth(const char *buf, size_t len);
+int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *n);
 
 #ifdef __cplusplus
 }

@@ -573,6 +573,10 @@ static void utf8_width_print(FILE *pOut, int w, const char *zUtf){
   int aw = w<0 ? -w : w;
   char zBuf[1000];
   if( aw>(int)sizeof(zBuf)/3 ) aw = (int)sizeof(zBuf)/3;
+#ifdef HAVE_LINENOISE
+  i = linenoiseGetRenderPosition(zUtf, strlen(zUtf), aw, &n);
+  if (i < 0)
+#endif
   for(i=n=0; zUtf[i]; i++){
     if( (zUtf[i]&0xc0)!=0x80 ){
       n++;
@@ -630,15 +634,18 @@ static int strlen30(const char *z){
 }
 
 /*
-** Return the length of a string in characters.  Multibyte UTF8 characters
-** count as a single character.
+** Return the length of a string in characters.
 */
 static int strlenChar(const char *z){
+#ifdef HAVE_LINENOISE
+  return linenoiseComputeRenderWidth(z, strlen(z));
+#else
   int n = 0;
   while( *z ){
     if( (0xc0&*(z++))!=0x80 ) n++;
   }
   return n;
+#endif
 }
 
 /*

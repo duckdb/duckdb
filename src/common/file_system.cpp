@@ -8,10 +8,36 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
+#include <cstdio>
+
+#ifndef _WIN32
+#include <dirent.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#else
+#include <string>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#ifdef __MINGW32__
+// need to manually define this for mingw
+extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory (PULONGLONG );
+#endif
+
+
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+#undef FILE_CREATE // woo mingw
+#endif
+
 namespace duckdb {
 using namespace std;
-
-#include <cstdio>
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 	return *context.db.config.file_system;
@@ -28,14 +54,8 @@ static void AssertValidFileFlags(uint8_t flags) {
 	assert(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 }
 
-#ifndef _WIN32
-#include <dirent.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 
+#ifndef _WIN32
 // somehow sometimes this is missing
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
@@ -333,23 +353,6 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get());
 }
 #else
-
-#include <string>
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
-#ifdef __MINGW32__
-// need to manually define this for mingw
-extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory (PULONGLONG );
-#endif
-
-
-#undef CreateDirectory
-#undef MoveFile
-#undef RemoveDirectory
-#undef FILE_CREATE // woo mingw
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string GetLastErrorAsString() {

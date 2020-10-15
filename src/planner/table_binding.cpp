@@ -42,6 +42,9 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = column_entry->second;
 	LogicalType sql_type = types[column_entry->second];
+	if (colref.alias.empty()) {
+		colref.alias = names[column_entry->second];
+	}
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
@@ -80,6 +83,9 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[col_index];
+		if (colref.alias.empty()) {
+			colref.alias = names[entry->second];
+		}
 	}
 
 	auto &column_ids = get.column_ids;

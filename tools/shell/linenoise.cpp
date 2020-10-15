@@ -553,7 +553,7 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
 	}
 }
 
-static size_t compute_render_width(const char *buf, size_t len) {
+size_t linenoiseComputeRenderWidth(const char *buf, size_t len) {
 	if (utf8proc_is_valid(buf, len)) {
 		// utf8 in prompt, get render width
 		size_t cpos = 0;
@@ -567,6 +567,28 @@ static size_t compute_render_width(const char *buf, size_t len) {
 	} else {
 		// invalid utf8 in prompt, use length in bytes
 		return len;
+	}
+}
+
+int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *n) {
+	if (utf8proc_is_valid(buf, len)) {
+		// utf8 in prompt, get render width
+		size_t cpos = 0;
+		size_t render_width = 0;
+		while (cpos < len) {
+			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
+			if (int(render_width + char_render_width) > max_width) {
+				*n = render_width;
+				return cpos;
+			}
+			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			render_width += char_render_width;
+		}
+		*n = render_width;
+		return len;
+	} else {
+		// invalid utf8, return -1
+		return -1;
 	}
 }
 
@@ -678,7 +700,7 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
  * cursor position, and number of columns of the terminal. */
 static void refreshSingleLine(struct linenoiseState *l) {
 	char seq[64];
-	size_t plen = compute_render_width(l->prompt, strlen(l->prompt));
+	size_t plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
 	int fd = l->ofd;
 	char *buf = l->buf;
 	size_t len = l->len;
