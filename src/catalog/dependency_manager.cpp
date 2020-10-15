@@ -37,11 +37,15 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 	auto &dependent_objects = dependents_map[object];
 	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
-		auto &catalog_set = *dep.entry->set;
-		idx_t entry_index;
+		auto &catalog_set = *dep->set;
+		auto mapping_value = catalog_set.GetMapping(context, dep->name, true /* get_latest */);
+		if (mapping_value == nullptr) {
+			continue;
+		}
+		idx_t entry_index = mapping_value->index;
 		CatalogEntry *dependency_entry;
 
-		if (!catalog_set.GetEntryInternal(context, dep.entry->name, entry_index, dependency_entry)) {
+		if (!catalog_set.GetEntryInternal(context, entry_index, dependency_entry)) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}

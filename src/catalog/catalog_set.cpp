@@ -27,7 +27,7 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 	// first check if the entry exists in the unordered set
 	idx_t entry_index;
 	auto mapping_value = GetMapping(context, name);
-	if (mapping_value == nullptr) {
+	if (mapping_value == nullptr || mapping_value->deleted) {
 		// if it does not: entry has never been created
 
 		// first create a dummy deleted entry for this entry
@@ -93,7 +93,7 @@ bool CatalogSet::GetEntryInternal(ClientContext &context, idx_t entry_index, Cat
 bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index,
                                   CatalogEntry *&catalog_entry) {
 	auto mapping_value = GetMapping(context, name);
-	if (mapping_value == nullptr) {
+	if (mapping_value == nullptr || mapping_value->deleted) {
 		// the entry does not exist, check if we can create a default entry
 		return false;
 	}
@@ -135,7 +135,8 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 		return true;
 	}
 	if (value->name != name) {
-		if (GetMapping(context, value->name)) {
+		auto mapping_value = GetMapping(context, value->name);
+		if (mapping_value && !mapping_value->deleted) {
 			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!",
 			                       name, value->name);
 		}
@@ -220,12 +221,15 @@ bool CatalogSet::HasConflict(ClientContext &context, transaction_t timestamp) {
 	       (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
 }
 
-MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name) {
+MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name, bool get_latest) {
 	auto entry = mapping.find(name);
 	if (entry == mapping.end()) {
 		return nullptr;
 	}
 	auto mapping_value = entry->second.get();
+	if (get_latest) {
+		return mapping_value;
+	}
 	while (mapping_value->child) {
 		if (UseTimestamp(context, mapping_value->timestamp)) {
 			break;
@@ -233,7 +237,7 @@ MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name)
 		mapping_value = mapping_value->child.get();
 		assert(mapping_value);
 	}
-	return mapping_value->deleted ? nullptr : mapping_value;
+	return mapping_value;
 }
 
 void CatalogSet::PutMapping(ClientContext &context, const string &name, idx_t entry_index) {
@@ -292,7 +296,7 @@ string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 	idx_t current_score = (idx_t)-1;
 	for (auto &kv : mapping) {
 		auto mapping_value = GetMapping(context, kv.first);
-		if (mapping_value) {
+		if (mapping_value && !mapping_value->deleted) {
 			auto ldist = StringUtil::LevenshteinDistance(kv.first, name);
 			if (ldist < current_score && !kv.second->deleted) {
 				current_score = ldist;
@@ -307,7 +311,7 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	auto mapping_value = GetMapping(context, name);
-	if (mapping_value == nullptr) {
+	if (mapping_value == nullptr || mapping_value->deleted) {
 		// no entry found with this name
 		if (defaults) {
 			// ... but this catalog set has a default map defined
