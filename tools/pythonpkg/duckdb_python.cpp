@@ -1028,10 +1028,6 @@ struct DuckDBPyConnection {
 		context.catalog.CreateTableFunction(context, &info);
 		context.transaction.Commit();
 
-		if (!read_only) {
-			res->connection->Query("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
-		}
-
 		return res;
 	}
 
