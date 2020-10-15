@@ -577,7 +577,7 @@ int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *
 		size_t render_width = 0;
 		while (cpos < len) {
 			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
-			if (render_width + char_render_width > max_width) {
+			if (int(render_width + char_render_width) > max_width) {
 				*n = render_width;
 				return cpos;
 			}
