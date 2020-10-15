@@ -631,12 +631,6 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		idx_t varchar_cols = 0;
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
 			auto &col_type_candidates = info_sql_types_candidates[col];
-			if (col_type_candidates.size() == type_candidates.size()) {
-				// nothing was cleared: this means we only encountered empty columns
-				// in this case we default to VARCHAR
-				col_type_candidates.clear();
-				col_type_candidates.push_back(LogicalType::VARCHAR);
-			}
 			// check number of varchar columns
 			const auto &col_type = col_type_candidates.back();
 			if (col_type == LogicalType::VARCHAR) {
@@ -727,6 +721,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		// set sql types
 		for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
 			LogicalType d_type = best_sql_types_candidates[col].back();
+			if (best_sql_types_candidates[col].size() == type_candidates.size()) {
+				d_type = LogicalType::VARCHAR;
+			}
 			detected_types.push_back(d_type);
 		}
 	}
