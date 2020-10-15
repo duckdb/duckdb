@@ -489,6 +489,15 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		isSuccessful = true;
 	}
 	if(isSuccessful) {
+		//now check for remaining trasitive filters from the left column
+		auto transitive_filter = FindTransitiveFilter(comparison.left.get());
+		if(transitive_filter.get() != nullptr) {
+			//try to add transitive filters
+			if(AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter.get()) == FilterResult::UNSUPPORTED) {
+				//in case of unsuccessful re-add filter into remaining ones
+				remaining_filters.push_back(move(transitive_filter));
+			}
+		}
 		return FilterResult::SUCCESS;
 	}
 
