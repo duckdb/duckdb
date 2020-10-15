@@ -194,7 +194,7 @@ unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
 	for (auto &cond : conditions) {
 		state->probe_executor.AddExpression(*cond.left);
 	}
-	return state;
+	return move(state);
 }
 
 } // namespace duckdb
