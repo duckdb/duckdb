@@ -6,19 +6,19 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT UNNEST(string_split(string_agg(range, 'DUCK '), ' ')), mod(range, 100) xx FROM range(50000) GROUP BY xx
+SELECT UNNEST(string_split(string_agg(range, 'DUCK '), ' ')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
 ----
-100000 values hashing to 0e9988119219c868acd137d72cb263a9
+100000 values hashing to 4df57751b24295162836fcb48d04aa04
 
 query I
-SELECT UNNEST(string_split(string_agg(range, '🦆 '), ' ')), mod(range, 100) xx FROM range(50000) GROUP BY xx
+SELECT UNNEST(string_split(string_agg(range, '🦆 '), ' ')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
 ----
-100000 values hashing to eb3f0f7980d6954889b8c061fe22d701
+100000 values hashing to 6a8c3f073a6f4bb5c62cb51ef2389dcf
 
 query I
-SELECT UNNEST(string_split_regex(string_agg(range, 'DUCK '), '\s')), mod(range, 100) xx FROM range(50000) GROUP BY xx
+SELECT UNNEST(string_split_regex(string_agg(range, 'DUCK '), '\s')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
 ----
-100000 values hashing to 0e9988119219c868acd137d72cb263a9
+100000 values hashing to 4df57751b24295162836fcb48d04aa04
 
 query T
 SELECT UNNEST(string_split('üüüüü', '◌̈')) 
