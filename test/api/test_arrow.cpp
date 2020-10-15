@@ -68,6 +68,7 @@ static void test_arrow_round_trip(string q) {
 
 	// query that creates a bunch of values across the types
 	auto result = con.Query(q);
+	REQUIRE(result->success);
 	auto my_stream = new MyArrowArrayStream(move(result));
 	auto result2 = con.TableFunction("arrow_scan", {Value::POINTER((uintptr_t)&my_stream->stream)})->Execute();
 
@@ -92,17 +93,15 @@ static void test_arrow_round_trip(string q) {
 }
 
 TEST_CASE("Test Arrow API round trip", "[arrow]") {
+	// many types
 	test_arrow_round_trip(
 	    "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000 c_smallint, "
 	    "c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::hugeint*10000000000000000000000000000000 "
-	    "c_hugeint, c::float c_float, c::double c_double, 'c_' || c::string c_string, current_date::date c_date, "
-	    "'1969-01-01'::date, current_time::time c_time, timestamp '1992-01-01 12:00:00' c_timestamp "
+	    "c_hugeint, c::float c_float, c::double c_double, 'c_' || c::string c_string, DATE '1992-01-01'::date c_date, "
+	    "'1969-01-01'::date, TIME '13:07:16'::time c_time, timestamp '1992-01-01 12:00:00' c_timestamp "
 	    "from (select case when range % 2 == 0 then range else null end as c from range(-10, 10)) sq");
+	// big result set
 	test_arrow_round_trip(
-	    "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000 c_smallint, "
-	    "c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::hugeint*10000000000000000000000000000000 "
-	    "c_hugeint, c::float c_float, c::double c_double, 'c_' || c::string c_string, current_date::date c_date, "
-	    "'1969-01-01'::date, current_time::time c_time, timestamp '1992-01-01 12:00:00' c_timestamp "
-	    "from (select case when range % 2 == 0 then range else null end as c from range(-10000, 10000)) sq");
+	    "select i from range(0, 2000) sq(i)");
 }
-// TODO timestamp date time interval decimal
+// TODO interval decimal
