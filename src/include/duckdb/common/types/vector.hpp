@@ -126,6 +126,9 @@ public:
 	//! Deserializes a blob back into a Vector
 	void Deserialize(idx_t count, Deserializer &source);
 
+	bool nullmask_all_set(){
+		return nullmask.all();
+	}
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
