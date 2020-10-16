@@ -291,7 +291,7 @@ string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 		auto mapping_value = GetMapping(context, kv.first);
 		if (mapping_value && !mapping_value->deleted) {
 			auto ldist = StringUtil::LevenshteinDistance(kv.first, name);
-			if (ldist < current_score && !kv.second->deleted) {
+			if (ldist < current_score) {
 				current_score = ldist;
 				result = kv.first;
 			}
