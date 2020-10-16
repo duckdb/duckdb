@@ -1,4 +1,5 @@
 # name: test/sql/alter/rename_table/test_rename_table_chain_commit.test
+# description: test a chain of table creates and renames in a transaction, followed by a commit
 # group: [rename_table]
 
 statement ok con1

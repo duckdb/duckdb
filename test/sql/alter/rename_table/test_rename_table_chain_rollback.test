@@ -1,3 +1,6 @@
+# name: test/sql/alter/rename_table/test_rename_table_chain_rollback.test
+# description: test a chain of table creates and renames in a transaction, followed by a rollback
+# group: [rename_table]
 
 statement ok con1
 CREATE TABLE entry(i INTEGER);
