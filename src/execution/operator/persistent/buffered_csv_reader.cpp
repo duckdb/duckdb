@@ -512,7 +512,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
 	    LogicalType::DATE,    LogicalType::TIME,
 	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN, LogicalType::SQLNULL};
 
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
@@ -719,9 +719,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 
 		// set sql types
-		for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
-			LogicalType d_type = best_sql_types_candidates[col].back();
-			if (best_sql_types_candidates[col].size() == type_candidates.size()) {
+		for (auto & best_sql_types_candidate : best_sql_types_candidates) {
+			LogicalType d_type = best_sql_types_candidate.back();
+			if (best_sql_types_candidate.size() == type_candidates.size()) {
 				d_type = LogicalType::VARCHAR;
 			}
 			detected_types.push_back(d_type);
