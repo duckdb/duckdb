@@ -101,13 +101,6 @@ bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, id
 	return GetEntryInternal(context, entry_index, catalog_entry);
 }
 
-void CatalogSet::ClearEntryName(string name) {
-	auto entry = mapping.find(name);
-	if (entry != mapping.end()) {
-		mapping.erase(entry);
-	}
-}
-
 bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info) {
 	auto &transaction = Transaction::GetTransaction(context);
 	// lock the catalog for writing

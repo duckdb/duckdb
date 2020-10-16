@@ -156,7 +156,9 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
 		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, commit_id);
-
+		if (catalog_entry->name != catalog_entry->parent->name) {
+			catalog_entry->set->UpdateTimestamp(catalog_entry, commit_id);
+		}
 		if (HAS_LOG) {
 			// push the catalog update to the WAL
 			WriteCatalogEntry(catalog_entry, data + sizeof(CatalogEntry *));

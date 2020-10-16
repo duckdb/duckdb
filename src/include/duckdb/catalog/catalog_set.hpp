@@ -82,7 +82,6 @@ public:
 
 	idx_t GetEntryIndex(CatalogEntry *entry);
 	CatalogEntry *GetEntryFromIndex(idx_t index);
-	void ClearEntryName(string name);
 	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
 
 private:

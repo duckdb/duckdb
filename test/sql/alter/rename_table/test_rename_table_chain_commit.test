@@ -1,3 +1,5 @@
+# name: test/sql/alter/rename_table/test_rename_table_chain_commit.test
+# group: [rename_table]
 
 statement ok con1
 CREATE TABLE entry(i INTEGER);
@@ -17,7 +19,7 @@ statement ok con1
 ALTER TABLE entry RENAME TO entry2;
 
 statement ok con1
-CREATE TABLE entry(i INTEGER);
+CREATE TABLE entry(j INTEGER);
 
 statement ok con1
 ALTER TABLE entry2 RENAME TO entry3;
@@ -26,7 +28,7 @@ statement ok con1
 ALTER TABLE entry RENAME TO entry2;
 
 statement ok con1
-CREATE TABLE entry(i INTEGER);
+CREATE TABLE entry(k INTEGER);
 
 statement ok con1
 ALTER TABLE entry3 RENAME TO entry4;
@@ -62,4 +64,8 @@ SELECT * FROM entry4
 ----
 1
 
+statement ok con2
+SELECT * FROM entry3
 
+statement ok con2
+SELECT * FROM entry2
