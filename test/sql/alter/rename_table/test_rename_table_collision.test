@@ -118,3 +118,77 @@ SELECT i FROM t2 ORDER BY i;
 1
 2
 3
+
+# alter/create collision
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE t2 RENAME TO t3
+
+statement error con2
+CREATE TABLE t3 (i INTEGER)
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+# alter/alter collision
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+ALTER TABLE t2 RENAME TO t3
+
+statement error con1
+ALTER TABLE t2 RENAME TO t4
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+# create some additional reference tables
+# for testing, outside of any transaction
+
+statement ok con1
+CREATE TABLE e1 (i INTEGER)
+
+statement ok con2
+CREATE TABLE e2 (i INTEGER)
+
+# crossing drops/renames
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE e2
+
+statement ok con2
+DROP TABLE e1
+
+statement error con1
+ALTER TABLE e1 RENAME TO e2
+
+statement error con2
+ALTER TABLE e2 RENAME TO e1
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK

@@ -22,6 +22,9 @@ statement ok con1
 CREATE TABLE entry(j INTEGER);
 
 statement ok con1
+INSERT INTO entry VALUES (2)
+
+statement ok con1
 ALTER TABLE entry2 RENAME TO entry3;
 
 statement ok con1
@@ -64,8 +67,10 @@ SELECT * FROM entry4
 ----
 1
 
-statement ok con2
+query I con2
 SELECT * FROM entry3
+----
+2
 
 statement ok con2
 SELECT * FROM entry2
