@@ -166,11 +166,11 @@ query II
 EXPLAIN SELECT * FROM (VALUES(5000,5000)) tbl1(i,j), (VALUES(NULL, NULL, 5000, 5000)) tbl2(A, B, k,l) WHERE i>4999 AND k>=j AND j>=i AND l>=k
 ----
 #ckeck for the transivity j > 4999 and k > 4999 and l > 4999
-logical_opt	<REGEX>:(.*col1>4999.*)(.*col2>4999.*)(.*col3>4999.*)
+logical_opt	<REGEX>:(.*col1>4999.*)((.*col2>4999.*)(.*col3>4999.*)|(.*col3>4999.*)(.*col2>4999.*))
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5000,5000)) tbl1(i,j), (VALUES(NULL, NULL, 5000, 5000)) tbl2(A, B, k,l) WHERE i<4999 AND k<=j AND j<=i AND l<=k
 ----
 #ckeck for the transivity j < 4999 and k < 4999 and l < 4999
-logical_opt	<REGEX>:(.*col1<4999.*)(.*col2<4999.*)(.*col3<4999.*)
+logical_opt	<REGEX>:(.*col1<4999.*)((.*col2<4999.*)(.*col3<4999.*)|(.*col3<4999.*)(.*col2<4999.*))
 
