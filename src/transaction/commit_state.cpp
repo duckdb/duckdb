@@ -208,6 +208,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
 		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, transaction_id);
+		if (catalog_entry->name != catalog_entry->parent->name) {
+			catalog_entry->set->UpdateTimestamp(catalog_entry, transaction_id);
+		}
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
