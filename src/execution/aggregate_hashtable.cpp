@@ -332,7 +332,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
-		auto input_count = max((idx_t)1, (idx_t)aggr.child_count);
+		auto input_count = MaxValue((idx_t)1, (idx_t)aggr.child_count);
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(group_types);
@@ -471,20 +471,20 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 			break;
 		case PhysicalType::VARCHAR: {
 			auto string_data = (string_t *)gdata.data;
-			auto pointers = FlatVector::GetData<uintptr_t>(addresses);
+			auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 			for (idx_t i = 0; i < count; i++) {
 				auto pointer_idx = sel.get_index(i);
 				auto group_idx = gdata.sel->get_index(pointer_idx);
-				auto ptr = (string_t *)pointers[pointer_idx];
-
+				auto ptr = pointers[pointer_idx];
 				if ((*gdata.nullmask)[group_idx]) {
-					*ptr = NullValue<string_t>();
+					Store<string_t>(NullValue<string_t>(), ptr);
 				} else if (string_data[group_idx].IsInlined()) {
-					*ptr = string_data[group_idx];
+					Store<string_t>(string_data[group_idx], ptr);
 				} else {
-					*ptr = string_heap.AddString(string_data[group_idx]);
+					Store<string_t>(string_heap.AddString(string_data[group_idx]), ptr);
 				}
+
 				pointers[pointer_idx] += type_size;
 			}
 			break;

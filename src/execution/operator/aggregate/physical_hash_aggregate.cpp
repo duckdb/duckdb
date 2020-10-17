@@ -48,7 +48,7 @@ struct PartitionableHashTable {
 
 		assert(radix_bits <= 8);
 
-		// we use the fourth byte of the 64 bit hash as radix source
+		// we use the fifth byte of the 64 bit hash as radix source
 		radix_mask = 0;
 		for (idx_t i = 0; i < radix_bits; i++) {
 			radix_mask = (radix_mask << 1) | 1;
@@ -398,6 +398,7 @@ public:
 			assert(pht->radix_partitioned_hts.size() == gstate.op.radix_partitions);
 			for (auto &ht : pht->radix_partitioned_hts[radix].hts) {
 				gstate.finalized_hts[radix]->Combine(*ht);
+				ht.reset();
 			}
 		}
 	}
