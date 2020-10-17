@@ -41,7 +41,13 @@ def tf():
 test('select \'asdf\' as a;', out='asdf')
 
 # test pragma
-test("CREATE TABLE t0(c0 INT);PRAGMA table_info('t0');", out='0|c0|INTEGER|false||false')
+test("""
+.mode csv
+.headers off
+.sep |
+CREATE TABLE t0(c0 INT);
+PRAGMA table_info('t0');
+""", out='0|c0|INTEGER|false||false')
 
 datafile = tf()
 print("42\n84",  file=open(datafile, 'w'))
@@ -186,21 +192,21 @@ CREATE TABLE csda (i INTEGER);
 
 test('.indexes',  out="")
 
-# FIXME: indexes currently not exported in sqlite_master
-# test('''
-# CREATE TABLE a (i INTEGER);
-# CREATE INDEX a_idx ON a(i);
-# .indexes a%
-# ''',  err="a_idx")
+test('''
+CREATE TABLE a (i INTEGER);
+CREATE INDEX a_idx ON a(i);
+.indexes a%
+''',  out="a_idx")
 
 # this does not seem to output anything
 test('.sha3sum')
 
 
 test('''
+.mode csv
 .separator XX
 SELECT 42,43;
-''', out="XX")
+''', out="42XX43")
 
 test('''
 .timer on
@@ -216,11 +222,12 @@ test('.trace %s\n; SELECT 42;' % tf(), err='sqlite3_trace_v2')
 
 outfile = tf()
 test('''
+.mode csv
 .output %s
 SELECT 42;
 ''' % outfile)
-outstr = open(outfile,'r').read()
-if '42' not in outstr:
+outstr = open(outfile,'rb').read()
+if b'42' not in outstr:
      raise Exception('.output test failed')
 
 
@@ -229,10 +236,9 @@ test('''
 .once %s
 SELECT 43;
 ''' % outfile)
-outstr = open(outfile,'r').read()
-if '43' not in outstr:
+outstr = open(outfile,'rb').read()
+if b'43' not in outstr:
      raise Exception('.once test failed')
-
 
 # This somehow does not log nor fail. works for me.
 test('''

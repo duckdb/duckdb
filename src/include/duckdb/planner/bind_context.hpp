@@ -48,8 +48,7 @@ public:
 	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, string relation_name = "");
 
 	//! Adds a base table with the given alias to the BindContext.
-	void AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
-	                  unordered_map<string, column_t> name_map, LogicalGet &get);
+	void AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types, LogicalGet &get);
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
 	                      LogicalGet &get);
@@ -74,6 +73,9 @@ public:
 	void SetCTEBindings(unordered_map<string, std::shared_ptr<Binding>> bindings) {
 		cte_bindings = bindings;
 	}
+
+	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases specified.
+	static vector<string> AliasColumnNames(string table_name, const vector<string> &names, const vector<string> &column_aliases);
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);

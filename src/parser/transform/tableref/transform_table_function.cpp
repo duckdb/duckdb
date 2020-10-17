@@ -32,12 +32,7 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(PGRangeFunction *root) 
 	// transform the function call
 	auto result = make_unique<TableFunctionRef>();
 	result->function = TransformFuncCall(func_call);
-	result->alias = TransformAlias(root->alias);
-	if (root->alias && root->alias->colnames) {
-		for (auto node = root->alias->colnames->head; node != nullptr; node = node->next) {
-			result->column_name_alias.push_back(reinterpret_cast<PGValue *>(node->data.ptr_value)->val.str);
-		}
-	}
+	result->alias = TransformAlias(root->alias, result->column_name_alias);
 	result->query_location = func_call->location;
 	return move(result);
 }

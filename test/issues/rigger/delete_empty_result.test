@@ -1,0 +1,18 @@
+# name: test/issues/rigger/delete_empty_result.test
+# description: SQLancer bug that detected an assertion in the query profiler when deleting with a static false condition
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profile_output='__TEST_DIR__/out.log';
+
+statement ok
+CREATE TABLE t0(c0 INTEGER);
+
+statement ok
+DELETE FROM t0 WHERE false;

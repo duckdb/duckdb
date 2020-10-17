@@ -8,7 +8,7 @@ using namespace duckdb_libpgquery;
 unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
 	auto result = make_unique<BaseTableRef>();
 
-	result->alias = TransformAlias(root->alias);
+	result->alias = TransformAlias(root->alias, result->column_name_alias);
 	if (root->relname) {
 		result->table_name = root->relname;
 	}

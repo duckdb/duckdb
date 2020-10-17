@@ -31,6 +31,7 @@ text = text.replace('''
 #define FLEXINT_H
 namespace duckdb_libpgquery {
 ''')
+text = text.replace('register ', '')
 
 text = text + "\n} /* duckdb_libpgquery */\n"
 

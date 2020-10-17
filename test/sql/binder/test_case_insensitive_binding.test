@@ -10,6 +10,9 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE test ("HeLlO" INTEGER)
 
+statement ok
+INSERT INTO test VALUES (1)
+
 # lowercase names are aliased
 statement ok
 SELECT HeLlO FROM test
@@ -27,6 +30,24 @@ SELECT "HELLO" FROM test
 statement error
 SELECT "HELLo" FROM test
 
+# verify that the column name of the original column is returned
+query I
+SELECT alias(HeLlO) FROM test
+----
+HeLlO
+
+query I
+SELECT alias(hello) FROM test
+----
+HeLlO
+
+# verify that an alias here still works
+query I
+SELECT alias(x) FROM (SELECT HeLlO as x FROM test) tbl;
+----
+x
+
+# verify that it also works when we specify the table-name explicitly
 statement ok
 SELECT test.HeLlO FROM test
 

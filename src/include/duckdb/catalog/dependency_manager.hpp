@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/dependency.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -31,7 +32,7 @@ private:
 	Catalog &catalog;
 	//! Map of objects that DEPEND on [object], i.e. [object] can only be deleted when all entries in the dependency map
 	//! are deleted.
-	unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> dependents_map;
+	unordered_map<CatalogEntry *, dependency_set_t> dependents_map;
 	//! Map of objects that the source object DEPENDS on, i.e. when any of the entries in the vector perform a CASCADE
 	//! drop then [object] is deleted as wel
 	unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> dependencies_map;

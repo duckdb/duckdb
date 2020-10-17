@@ -18,12 +18,14 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 			throw InternalException("Dependency has already been deleted?");
 		}
 	}
+	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
+	bool requires_cascade = object->type != CatalogType::INDEX_ENTRY;
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies) {
-		dependents_map[dependency].insert(object);
+		dependents_map[dependency].insert(Dependency(object, requires_cascade));
 	}
 	// create the dependents map for this object: it starts out empty
-	dependents_map[object] = unordered_set<CatalogEntry *>();
+	dependents_map[object] = dependency_set_t();
 	dependencies_map[object] = dependencies;
 }
 
@@ -35,16 +37,16 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 	auto &dependent_objects = dependents_map[object];
 	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
-		auto &catalog_set = *dep->set;
+		auto &catalog_set = *dep.entry->set;
 		idx_t entry_index;
 		CatalogEntry *dependency_entry;
 
-		if (!catalog_set.GetEntryInternal(context, dep->name, entry_index, dependency_entry)) {
+		if (!catalog_set.GetEntryInternal(context, dep.entry->name, entry_index, dependency_entry)) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}
 		// conflict: attempting to delete this object but the dependent object still exists
-		if (cascade) {
+		if (cascade || !dep.requires_cascade) {
 			// cascade: drop the dependent object
 			catalog_set.DropEntryInternal(context, entry_index, *dependency_entry, cascade, lock_set);
 		} else {
@@ -64,10 +66,10 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	auto &dependent_objects = dependents_map[old_obj];
 	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
-		auto &catalog_set = *dep->set;
+		auto &catalog_set = *dep.entry->set;
 		idx_t entry_index;
 		CatalogEntry *dependency_entry;
-		if (!catalog_set.GetEntryInternal(context, dep->name, entry_index, dependency_entry)) {
+		if (!catalog_set.GetEntryInternal(context, dep.entry->name, entry_index, dependency_entry)) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}
@@ -83,7 +85,7 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 		dependents_map[dependency].insert(new_obj);
 	}
 	// add the new object to the dependency manager
-	dependents_map[new_obj] = unordered_set<CatalogEntry *>();
+	dependents_map[new_obj] = dependency_set_t();
 	dependencies_map[new_obj] = old_dependencies;
 }
 

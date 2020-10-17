@@ -353,7 +353,8 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	bound_function.CastToFunctionArguments(children);
 
 	// now create the function
-	return make_unique<BoundFunctionExpression>(bound_function.return_type, move(bound_function), move(children),
+	auto return_type = bound_function.return_type;
+	return make_unique<BoundFunctionExpression>(move(return_type), move(bound_function), move(children),
 	                                            move(bind_info), is_operator);
 }
 

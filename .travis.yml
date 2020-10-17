@@ -482,7 +482,7 @@ matrix:
          # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
         - sudo mkdir /home/postgres && sudo chown postgres /home/postgres
         - sudo python3 -m pip install --prefix=/tmp tools/pythonpkg/wheelhouse/duckdb-*-cp36-cp36m-manylinux1_x86_64.whl
-        - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
+        - python3 $TRAVIS_BUILD_DIR/scripts/repeat_until_success.py "sudo -Hiu postgres psql -c \"CREATE EXTENSION plpython3u\""
         - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport sys\nsys.path.insert(0,'/tmp/lib/python3.6/site-packages/')\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
         - sudo -Hiu postgres psql -c "SELECT quack()"
 

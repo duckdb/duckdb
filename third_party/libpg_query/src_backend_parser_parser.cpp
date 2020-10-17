@@ -80,7 +80,12 @@ std::vector<PGSimplifiedToken> tokenize(const char *str) {
 	while(true) {
 		YYSTYPE type;
 		YYLTYPE loc;
-		int token = base_yylex(&type, &loc, yyscanner);
+		int token;
+		try {
+			token = base_yylex(&type, &loc, yyscanner);
+		} catch(...) {
+			token = 0;
+		}
 		if (token == 0) {
 			break;
 		}
