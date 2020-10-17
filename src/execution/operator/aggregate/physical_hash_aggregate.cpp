@@ -364,7 +364,7 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	// this actually does not do a lot but just pushes the local HTs into the global state so we can later combine them
 	// in parallel
 
-	if (!all_combinable) {
+	if (!all_combinable || any_distinct) {
 		assert(llstate.ht->radix_partitioned_hts.size() == 0 &&
 		       (!llstate.ht->unpartitioned_ht || llstate.ht->unpartitioned_ht->Size() == 0));
 		assert(gstate.finalized_hts.size() <= 1);
@@ -377,6 +377,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 
 	lock_guard<mutex> glock(gstate.lock);
 	assert(all_combinable);
+	assert(!any_distinct);
+
 	if (!llstate.is_empty) {
 		gstate.is_empty = false;
 	}
@@ -435,7 +437,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 
 	// special case if we have non-combinable aggregates
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
-	if (!all_combinable) {
+	if (!all_combinable || any_distinct) {
 		assert(gstate.finalized_hts.size() <= 1);
 		return;
 	}
@@ -513,6 +515,9 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
 			aggr.function.finalize(state_vector, chunk.data[i], 1);
+			if (aggr.function.destructor) {
+				aggr.function.destructor(state_vector, 1);
+			}
 		}
 		state.finished = true;
 		return;

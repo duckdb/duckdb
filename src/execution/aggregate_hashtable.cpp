@@ -134,6 +134,9 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 }
 
 template <class FUNC> void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
+	if (entries == 0) {
+		return;
+	}
 	idx_t apply_entries = entries;
 	idx_t page_nr = 0;
 	idx_t page_offset = 0;
@@ -171,9 +174,6 @@ void GroupedAggregateHashTable::CallDestructors(Vector &state_vector, idx_t coun
 }
 
 void GroupedAggregateHashTable::Destroy() {
-	if (!hashes_hdl) {
-		return;
-	}
 	// check if there is a destructor
 	bool has_destructor = false;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
@@ -845,7 +845,6 @@ void GroupedAggregateHashTable::Partition(unordered_map<hash_t, GroupedAggregate
 	assert(partition_hts.size() > 1);
 	vector<PartitionInfo> partition_info(partition_hts.size());
 
-	// FIXME something is borked here still
 	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
 		auto hash = Load<hash_t>(ptr);
 
@@ -859,7 +858,6 @@ void GroupedAggregateHashTable::Partition(unordered_map<hash_t, GroupedAggregate
 			info.addresses_ptr[info.group_count] = ptr + hash_width;
 			info.group_count++;
 			if (info.group_count == STANDARD_VECTOR_SIZE) {
-				// flush
 				assert(partition_entry.second);
 				partition_entry.second->FlushMove(info.addresses, info.hashes, info.group_count);
 				info.group_count = 0;
@@ -872,6 +870,8 @@ void GroupedAggregateHashTable::Partition(unordered_map<hash_t, GroupedAggregate
 	for (auto &partition_entry : partition_hts) {
 		auto &info = partition_info[info_idx++];
 		partition_entry.second->FlushMove(info.addresses, info.hashes, info.group_count);
+
+		partition_entry.second->string_heap.MergeHeap(string_heap);
 		partition_entry.second->Verify();
 		total_count += partition_entry.second->Size();
 	}
