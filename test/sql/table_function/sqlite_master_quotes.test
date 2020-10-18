@@ -22,3 +22,15 @@ query IIIII
 SELECT * FROM sqlite_master;
 ----
 table	inte"gers	inte"gers	0	CREATE TABLE "inte""gers"(i INTEGER);
+
+statement ok
+DROP TABLE "inte""gers"
+
+# multi-column primary key constraint
+statement ok
+CREATE TABLE integers("a b" INTEGER, "c d" INTEGER, PRIMARY KEY("a b", "c d"))
+
+query IIIII
+SELECT * FROM sqlite_master;
+----
+table	integers	integers	0	CREATE TABLE integers("a b" INTEGER, "c d" INTEGER, PRIMARY KEY("a b", "c d"));
