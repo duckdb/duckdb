@@ -81,7 +81,10 @@ vector<SimplifiedToken> Parser::Tokenize(string query) {
 		result.push_back(move(token));
 	}
 	return result;
+}
 
+bool Parser::IsKeyword(const string &text) {
+	return PostgresParser::IsKeyword(text);
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(string select_list) {

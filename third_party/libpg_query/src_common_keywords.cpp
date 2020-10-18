@@ -24,6 +24,7 @@
 #include "pg_functions.hpp"
 #include <string.h>
 #include <string>
+#include <memory>
 
 #include "parser/gramparse.hpp"
 
