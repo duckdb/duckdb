@@ -1,0 +1,22 @@
+# name: test/sql/catalog/table/long_identifier.test
+# description: Test long identifiers (>= 64 bytes)
+# group: [table]
+
+statement ok
+create table integers("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" integer);
+
+statement ok
+select "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" from integers
+
+statement ok
+create table integers2("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" integer);
+
+statement ok
+select "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" from integers2
+
+statement ok
+create table integers3("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec et laoreet lacus, sollicitudin cursus metus. Pellentesque quis magna magna. Ut viverra erat vulputate, euismod sapien id, mollis odio. Vestibulum accumsan orci ac diam accumsan efficitur. Sed vel maximus leo, vel tempus metus. Fusce urna dolor, lacinia ac scelerisque hendrerit, semper eu nisl. Vivamus pellentesque sapien id sapien finibus porttitor. Cras congue libero quis nunc pretium efficitur. Praesent vitae urna non elit luctus posuere mattis ac eros. Nunc tincidunt quam vel sem ullamcorper semper. Donec eget gravida justo. Duis vel mollis felis.
+Duis scelerisque risus in sem molestie, nec egestas odio vestibulum. Nunc in dui eu dui fringilla dignissim vitae id felis. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Phasellus a tempus sapien. Cras vehicula maximus laoreet. In hac habitasse platea dictumst. In fermentum orci id libero congue dignissim. Aenean tristique porta arcu a varius. Cras vitae leo gravida, eleifend dolor et, porttitor arcu.
+Pellentesque et fringilla tortor. Sed sodales nulla lacus, eget feugiat dolor mattis tincidunt. Morbi ut finibus odio. Mauris felis diam, ornare ac diam mattis, suscipit laoreet turpis. Duis vulputate mi in orci pretium, vitae varius turpis facilisis. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Maecenas gravida libero at ligula pretium, quis gravida libero tempus. Aenean eu condimentum libero. Duis sagittis augue mi. Cras vel ante a ipsum consequat interdum. Aliquam venenatis metus sed ligula consequat congue. Fusce ut rutrum urna. Integer auctor purus nulla, eget lacinia dolor sollicitudin et. Vestibulum lacinia lectus nec mauris iaculis, eget cursus mauris semper. Donec ut lacinia felis. Quisque vitae risus sit amet erat semper suscipit.
+Duis pulvinar ipsum purus, vitae placerat lectus commodo ut. Nullam viverra arcu vitae ipsum faucibus, at aliquet massa vehicula. Nunc eget felis sed quam sollicitudin tempus. Quisque lobortis id nisi id dictum. Phasellus id elementum purus. Duis diam purus, egestas ac quam et, porta fringilla velit. Nulla a turpis bibendum, eleifend eros eget, efficitur nibh. Pellentesque consectetur porttitor lacinia. Aliquam blandit eros eu metus ultrices, ut dignissim nunc lacinia. Mauris placerat volutpat odio, dictum dapibus dolor egestas sed. Nam consequat odio quis urna lobortis viverra. Phasellus facilisis elit nec neque rutrum laoreet. Etiam non maximus magna. Pellentesque pellentesque laoreet orci, vel sollicitudin urna sollicitudin a. Nunc id iaculis enim, quis pharetra mauris. Nullam sit amet diam eu massa dictum vehicula.
+Vestibulum sed congue urna. Praesent iaculis massa viverra ex congue, nec euismod leo scelerisque. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis aliquet ut augue non interdum. Quisque tempor blandit mi non dignissim. Integer hendrerit, elit id posuere facilisis, libero purus dignissim ipsum, nec tincidunt metus lectus elementum magna. Cras turpis dolor, gravida et ipsum non, vestibulum sagittis sapien. Maecenas varius lacus mi, at porta purus cursus eget. Nunc feugiat congue augue id mollis. Praesent sed erat non leo varius varius. Sed sodales justo sollicitudin ex faucibus euismod. Aenean gravida nec diam vel vestibulum. Donec feugiat risus velit, quis fringilla libero vulputate nec. Curabitur pulvinar, tellus in eleifend varius, orci ex hendrerit sem, at laoreet diam ante id nibh." integer);

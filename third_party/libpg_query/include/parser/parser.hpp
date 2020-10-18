@@ -29,6 +29,8 @@ typedef enum PGBackslashQuoteType {
 /* Primary entry point for the raw parsing functions */
 PGList *raw_parser(const char *str);
 
+bool is_keyword(const char *str);
+
 std::vector<PGSimplifiedToken> tokenize(const char *str);
 
 /* Utility functions exported by gram.y (perhaps these should be elsewhere) */

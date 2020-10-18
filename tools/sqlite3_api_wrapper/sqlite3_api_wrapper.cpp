@@ -1,7 +1,9 @@
 #include "sqlite3.h"
 
+#include "duckdb.hpp"
+#include "duckdb/parser/parser.hpp"
+
 #include <ctype.h>
-#include <duckdb.hpp>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1197,9 +1199,8 @@ SQLITE_API char *sqlite3_expanded_sql(sqlite3_stmt *pStmt) {
     return nullptr;
 }
 
-SQLITE_API int sqlite3_keyword_check(const char*,int) {
-    fprintf(stderr, "sqlite3_keyword_check: unsupported.\n");
-    return 0;
+SQLITE_API int sqlite3_keyword_check(const char* str,int len) {
+	return Parser::IsKeyword(std::string(str, len));
 }
 
 SQLITE_API int sqlite3_keyword_count(void) {

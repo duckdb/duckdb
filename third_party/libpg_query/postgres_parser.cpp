@@ -2,13 +2,13 @@
 
 #include "pg_functions.hpp"
 #include "parser/parser.hpp"
+#include "common/keywords.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
 PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_message(""), error_location(0) {}
-
 
 void PostgresParser::Parse(string query) {
 	duckdb_libpgquery::pg_parser_init();
@@ -33,6 +33,10 @@ vector<duckdb_libpgquery::PGSimplifiedToken> PostgresParser::Tokenize(std::strin
 
 PostgresParser::~PostgresParser()  {
     duckdb_libpgquery::pg_parser_cleanup();
+}
+
+bool PostgresParser::IsKeyword(const std::string &text) {
+	return duckdb_libpgquery::is_keyword(text.c_str());
 }
 
 }

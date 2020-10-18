@@ -17301,7 +17301,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       "SELECT name, type, sql FROM sqlite_schema "
       "WHERE (%s) AND type=='table'"
       "  AND sql NOT NULL"
-      " ORDER BY tbl_name='sqlite_sequence', rowid",
+      " ORDER BY tbl_name='sqlite_sequence'",
       zLike
     );
     run_schema_dump_query(p,zSql);
