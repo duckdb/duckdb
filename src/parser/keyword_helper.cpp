@@ -10,9 +10,13 @@ bool KeywordHelper::IsKeyword(const string &text) {
 
 bool KeywordHelper::RequiresQuotes(const string &text) {
 	for(size_t i = 0; i < text.size(); i++) {
-		if (text[i] < 'a' || text[i] > 'z') {
-			return true;
+		if (i > 0 && (text[i] >= '0' && text[i] <= '9')) {
+			continue;
 		}
+		if (text[i] >= 'a' && text[i] <= 'z') {
+			continue;
+		}
+		return true;
 	}
 	return IsKeyword(text);
 }
