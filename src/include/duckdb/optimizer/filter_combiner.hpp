@@ -42,6 +42,7 @@ public:
 private:
 	FilterResult AddFilter(Expression *expr);
 	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison);
+	unique_ptr<Expression> FindTransitiveFilter(Expression *expr);
 
 	Expression *GetNode(Expression *expr);
 	idx_t GetEquivalenceSet(Expression *expr);
