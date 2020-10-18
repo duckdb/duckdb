@@ -749,8 +749,6 @@ other			.
 					if (yyextra->literallen == 0)
 						yyerror("zero-length delimited identifier");
 					ident = litbufdup(yyscanner);
-					if (yyextra->literallen >= NAMEDATALEN)
-						truncate_identifier(ident, yyextra->literallen, true);
 					yylval->str = ident;
 					return IDENT;
 				}
@@ -776,8 +774,6 @@ other			.
 						yyerror("zero-length delimited identifier");
 					ident = litbuf_udeescape('\\', yyscanner);
 					identlen = strlen(ident);
-					if (identlen >= NAMEDATALEN)
-						truncate_identifier(ident, identlen, true);
 					yylval->str = ident;
 					return IDENT;
 				}
@@ -797,8 +793,6 @@ other			.
 					}
 					ident = litbuf_udeescape(yytext[yyleng - 2], yyscanner);
 					identlen = strlen(ident);
-					if (identlen >= NAMEDATALEN)
-						truncate_identifier(ident, identlen, true);
 					yylval->str = ident;
 					return IDENT;
 				}
@@ -977,10 +971,10 @@ other			.
 					 * Complain if operator is too long.  Unlike the case
 					 * for identifiers, we make this an error not a notice-
 					 * and-truncate, because the odds are we are looking at
-					 * a syntactic mistake anyway.
+					 * a syntactic mistake anyway. NAMEDDATALEN
 					 */
-					if (nchars >= NAMEDATALEN)
-						yyerror("operator too long");
+					if (nchars >= 64)
+						yyerror("operator too long: operators longer than 64 bytes are not supported");
 
 					yylval->str = pstrdup(yytext);
 					return Op;
