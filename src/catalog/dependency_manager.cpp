@@ -37,8 +37,8 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 	auto &dependent_objects = dependents_map[object];
 	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
-		auto &catalog_set = *dep->set;
-		auto mapping_value = catalog_set.GetMapping(context, dep->name, true /* get_latest */);
+		auto &catalog_set = *dep.entry->set;
+		auto mapping_value = catalog_set.GetMapping(context, dep.entry->name, true /* get_latest */);
 		if (mapping_value == nullptr) {
 			continue;
 		}
