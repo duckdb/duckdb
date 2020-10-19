@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE test(S VARCHAR);
 
 statement ok
-PRAGMA explain_output='optimized';
+PRAGMA explain_output = OPTIMIZED_ONLY;
 
 mode skip
 # no special symbols optimization: aaa -> S=a

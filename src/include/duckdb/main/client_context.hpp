@@ -17,6 +17,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/common/enums/output_type.hpp"
 
 #include <random>
 
@@ -62,11 +63,12 @@ public:
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
 	bool force_parallelism = false;
-	//! Output only the logical_opt explain output, used for optimization verification
-	bool explain_output_optimized_only = false;
+	//! Force index join independent of table cardinality, used for testing
+	bool force_index_join = false;
 	//! The writer used to log queries (if logging is enabled)
 	unique_ptr<BufferedFileWriter> log_query_writer;
-
+	//! The output type used when none is specified (default: ALL)
+	OutputType default_output_type = OutputType::ALL;
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
