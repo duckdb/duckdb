@@ -18,6 +18,10 @@ namespace duckdb {
 constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096 * 3;
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
+static idx_t AlignLength(idx_t len) {
+	return (len + 7) / 8 * 8;
+}
+
 UndoBuffer::UndoBuffer() {
 	head = make_unique<UndoChunk>(0);
 	tail = head.get();
@@ -38,6 +42,7 @@ UndoChunk::~UndoChunk() {
 }
 
 data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
+	len = AlignLength(len);
 	assert(sizeof(UndoFlags) + sizeof(len) == 8);
 	Store<UndoFlags>(type, data.get() + current_position);
 	current_position += sizeof(UndoFlags);
@@ -51,7 +56,7 @@ data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
 
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	assert(len <= NumericLimits<uint32_t>::Maximum());
-	idx_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
+	idx_t needed_space = AlignLength(len + UNDO_ENTRY_HEADER_SIZE);
 	if (head->current_position + needed_space >= head->maximum_size) {
 		auto new_chunk =
 		    make_unique<UndoChunk>(needed_space > DEFAULT_UNDO_CHUNK_SIZE ? needed_space : DEFAULT_UNDO_CHUNK_SIZE);
