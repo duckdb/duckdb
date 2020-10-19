@@ -905,8 +905,8 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 		columns[i]->Fetch(states[i], row_ids[0], result.data[i]);
 	}
 	result.Slice(sel, count);
-	for (idx_t i = 0; i < info->indexes.size(); i++) {
-		info->indexes[i]->Delete(result, row_identifiers);
+	for (auto &index : info->indexes) {
+		index->Delete(result, row_identifiers);
 	}
 }
 
