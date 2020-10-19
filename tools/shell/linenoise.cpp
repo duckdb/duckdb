@@ -676,6 +676,9 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 		auto &token = tokens[i];
 		size_t start = token.start > start_pos ? token.start : start_pos;
 		size_t end = next > end_pos ? end_pos : next;
+		if (end <= start) {
+			continue;
+		}
 		std::string text = std::string(buf + start, end - start);
 		switch(token.type) {
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:

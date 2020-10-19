@@ -355,7 +355,7 @@ CREATE TABLE a (I INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump
-''', 'COMMIT')
+''', 'CREATE TABLE a(i INTEGER)')
 
 # .dump a specific table
 test('''
@@ -363,7 +363,7 @@ CREATE TABLE a (I INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump a
-''', 'COMMIT')
+''', 'CREATE TABLE a(i INTEGER);')
 
 # .dump LIKE
 test('''
@@ -371,7 +371,7 @@ CREATE TABLE a (I INTEGER);
 .changes off
 INSERT INTO a VALUES (42);
 .dump a%
-''', 'COMMIT')
+''', 'CREATE TABLE a(i INTEGER);')
 
 # more types, tables and views
 test('''
@@ -381,7 +381,7 @@ CREATE TABLE b (c INTEGER);
 INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());
 INSERT INTO b SELECT * FROM range(0,10);
 .dump
-''', 'COMMIT')
+''', 'CREATE TABLE a(d DATE, k FLOAT, t TIMESTAMP);')
 
 # dump blobs: FIXME
 # test('''

@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string>
 
 typedef uintptr_t PGDatum;
 typedef uint64_t PGSize;
@@ -33,7 +34,6 @@ typedef uint32_t PGOid;
 #define HIGHBIT (0x80)
 #define IS_HIGHBIT_SET(ch) ((unsigned char)(ch)&HIGHBIT)
 
-#define NAMEDATALEN 64
 #define FUNC_MAX_ARGS 100
 #define FLEXIBLE_ARRAY_MEMBER
 
@@ -54,11 +54,6 @@ typedef uint32_t PGOid;
 //	int lbound1;
 //	int16_t values[];
 //} PGint2vector;
-
-typedef struct PGNameData {
-	char data[NAMEDATALEN];
-} PGNameData;
-typedef PGNameData *Name;
 
 struct pg_varlena {
 	char vl_len_[4];                    /* Do not touch this field directly! */

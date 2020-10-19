@@ -2,6 +2,7 @@
 
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 using namespace std;
 
@@ -13,7 +14,7 @@ string UniqueConstraint::ToString() const {
 		if (i > 0) {
 			base += ", ";
 		}
-		base += columns[i];
+		base += KeywordHelper::WriteOptionallyQuoted(columns[i]);
 	}
 	return base + ")";
 }

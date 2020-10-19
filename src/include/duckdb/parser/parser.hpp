@@ -37,6 +37,9 @@ public:
 	//! Tokenize a query, returning the raw tokens together with their locations
 	static vector<SimplifiedToken> Tokenize(string query);
 
+	//! Returns true if the given text matches a keyword of the parser
+	static bool IsKeyword(const string &text);
+
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(string select_list);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)

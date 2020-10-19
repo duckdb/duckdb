@@ -68,6 +68,10 @@ PGList *raw_parser(const char *str) {
 	return yyextra.parsetree;
 }
 
+bool is_keyword(const char *text) {
+	return ScanKeywordLookup(text, ScanKeywords, NumScanKeywords) != NULL;
+}
+
 std::vector<PGSimplifiedToken> tokenize(const char *str) {
 	core_yyscan_t yyscanner;
 	base_yy_extra_type yyextra;
