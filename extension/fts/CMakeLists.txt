@@ -6,4 +6,6 @@ include_directories(include)
 
 add_library(
   fts_extension STATIC
+  fts-extension.cpp
+  fts_stemmer.cpp
   )
