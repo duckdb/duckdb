@@ -318,6 +318,7 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 				entry->timestamp = 0;
 
 				PutMapping(context, name, entry_index);
+				mapping[name]->timestamp = 0;
 				entries[entry_index] = move(entry);
 				return catalog_entry;
 			}
@@ -327,7 +328,7 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	auto catalog_entry = entries[mapping_value->index].get();
 	// if it does, we have to check version numbers
 	CatalogEntry *current = GetEntryForTransaction(context, catalog_entry);
-	if (current->deleted || current->name != name) {
+	if (current->deleted || (current->name != name && !UseTimestamp(context, mapping_value->timestamp))) {
 		return nullptr;
 	}
 	return current;
