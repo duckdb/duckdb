@@ -211,27 +211,27 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	if (tableFilter.size() == 1) {
 		switch (tableFilter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			templated_select_operation<Equals>(sel, result, state.current->type, source_data, source_nullmask,
+			templated_select_operation<Equals>(sel, result, state.current->type.InternalType(), source_data, source_nullmask,
 			                                   tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
-			templated_select_operation<LessThan>(sel, result, state.current->type, source_data, source_nullmask,
+			templated_select_operation<LessThan>(sel, result, state.current->type.InternalType(), source_data, source_nullmask,
 			                                     tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			templated_select_operation<GreaterThan>(sel, result, state.current->type, source_data, source_nullmask,
+			templated_select_operation<GreaterThan>(sel, result, state.current->type.InternalType(), source_data, source_nullmask,
 			                                        tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			templated_select_operation<LessThanEquals>(sel, result, state.current->type, source_data, source_nullmask,
+			templated_select_operation<LessThanEquals>(sel, result, state.current->type.InternalType(), source_data, source_nullmask,
 			                                           tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			templated_select_operation<GreaterThanEquals>(sel, result, state.current->type, source_data,
+			templated_select_operation<GreaterThanEquals>(sel, result, state.current->type.InternalType(), source_data,
 			                                              source_nullmask, tableFilter[0].constant,
 			                                              approved_tuple_count);
 			break;
@@ -248,21 +248,21 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThan, LessThan>(
-				    sel, result, state.current->type, source_data, source_nullmask, tableFilter[0].constant,
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask, tableFilter[0].constant,
 				    tableFilter[1].constant, approved_tuple_count);
 			} else {
 				templated_select_operation_between<GreaterThan, LessThanEquals>(
-				    sel, result, state.current->type, source_data, source_nullmask, tableFilter[0].constant,
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask, tableFilter[0].constant,
 				    tableFilter[1].constant, approved_tuple_count);
 			}
 		} else {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThanEquals, LessThan>(
-				    sel, result, state.current->type, source_data, source_nullmask, tableFilter[0].constant,
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask, tableFilter[0].constant,
 				    tableFilter[1].constant, approved_tuple_count);
 			} else {
 				templated_select_operation_between<GreaterThanEquals, LessThanEquals>(
-				    sel, result, state.current->type, source_data, source_nullmask, tableFilter[0].constant,
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask, tableFilter[0].constant,
 				    tableFilter[1].constant, approved_tuple_count);
 			}
 		}

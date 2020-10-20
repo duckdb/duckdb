@@ -16,8 +16,10 @@ class StringStatistics : public BaseStatistics {
 public:
 	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
 public:
-	StringStatistics();
+	StringStatistics(bool is_blob);
 
+	//! Whether or not the statistics are for the blob or string type
+	bool is_blob;
 	//! The minimum value of the segment, potentially truncated
 	data_t min[MAX_STRING_MINMAX_SIZE];
 	//! The maximum value of the segment, potentially truncated

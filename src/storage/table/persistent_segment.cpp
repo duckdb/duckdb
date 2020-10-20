@@ -12,16 +12,16 @@
 namespace duckdb {
 using namespace std;
 
-PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, PhysicalType type,
+PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, LogicalType type,
                                      idx_t start, idx_t count, unique_ptr<BaseStatistics> statistics)
     : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), manager(manager),
       block_id(id), offset(offset) {
 	assert(offset == 0);
-	if (type == PhysicalType::VARCHAR) {
+	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(manager, start, id);
 		data->max_vector_count = count / STANDARD_VECTOR_SIZE + (count % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);
 	} else {
-		data = make_unique<NumericSegment>(manager, type, start, id);
+		data = make_unique<NumericSegment>(manager, type.InternalType(), start, id);
 	}
 	data->tuple_count = count;
 }

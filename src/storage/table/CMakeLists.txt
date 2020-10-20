@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_storage_table
   OBJECT
+  base_statistics.cpp
   chunk_info.cpp
   column_segment.cpp
   morsel_info.cpp

@@ -5,60 +5,11 @@
 
 namespace duckdb {
 
-unique_ptr<BaseStatistics> BaseStatistics::Copy() {
-	auto statistics = make_unique<BaseStatistics>();
-	statistics->has_null = has_null;
-	return statistics;
-}
-
-void BaseStatistics::Serialize(Serializer &serializer) {
-	serializer.Write<bool>(has_null);
-}
-
-unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, PhysicalType type) {
-	auto has_null = source.Read<bool>();
-	unique_ptr<BaseStatistics> result;
-	switch (type) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		result = NumericStatistics<int8_t>::Deserialize(source);
-		break;
-	case PhysicalType::INT16:
-		result = NumericStatistics<int16_t>::Deserialize(source);
-		break;
-	case PhysicalType::INT32:
-		result = NumericStatistics<int32_t>::Deserialize(source);
-		break;
-	case PhysicalType::INT64:
-		result = NumericStatistics<int64_t>::Deserialize(source);
-		break;
-	case PhysicalType::INT128:
-		result = NumericStatistics<hugeint_t>::Deserialize(source);
-		break;
-	case PhysicalType::FLOAT:
-		result = NumericStatistics<float>::Deserialize(source);
-		break;
-	case PhysicalType::DOUBLE:
-		result = NumericStatistics<double>::Deserialize(source);
-		break;
-	case PhysicalType::VARCHAR:
-		result = StringStatistics::Deserialize(source);
-		break;
-	case PhysicalType::INTERVAL:
-		result = make_unique<BaseStatistics>();
-		break;
-	default:
-		throw InternalException("Unimplemented type for SEGMENT statistics");
-	}
-	result->has_null = has_null;
-	return result;
-}
-
-SegmentStatistics::SegmentStatistics(PhysicalType type, idx_t type_size) : type(type), type_size(type_size) {
+SegmentStatistics::SegmentStatistics(LogicalType type, idx_t type_size) : type(type), type_size(type_size) {
 	Reset();
 }
 
-SegmentStatistics::SegmentStatistics(PhysicalType type, idx_t type_size, unique_ptr<BaseStatistics> stats)
+SegmentStatistics::SegmentStatistics(LogicalType type, idx_t type_size, unique_ptr<BaseStatistics> stats)
     : type(type), type_size(type_size), statistics(move(stats)) {
 }
 
@@ -73,7 +24,7 @@ void SegmentStatistics::UpdateStatistics<interval_t>(const interval_t &value) {
 }
 
 void SegmentStatistics::Reset() {
-	switch (type) {
+	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		statistics = make_unique<NumericStatistics<int8_t>>();
@@ -97,7 +48,7 @@ void SegmentStatistics::Reset() {
 		statistics = make_unique<NumericStatistics<double>>();
 		break;
 	case PhysicalType::VARCHAR:
-		statistics = make_unique<StringStatistics>();
+		statistics = make_unique<StringStatistics>(type.id() == LogicalTypeId::BLOB);
 		break;
 	case PhysicalType::INTERVAL:
 		statistics = make_unique<BaseStatistics>();
@@ -108,7 +59,7 @@ void SegmentStatistics::Reset() {
 }
 
 bool SegmentStatistics::CheckZonemap(TableFilter &filter) {
-	switch (type) {
+	switch (type.InternalType()) {
 	case PhysicalType::INT8: {
 		auto constant = filter.constant.value_.tinyint;
 		return ((NumericStatistics<int8_t> &) *statistics).CheckZonemap(filter.comparison_type, constant);

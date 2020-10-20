@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-StringStatistics::StringStatistics() {
+StringStatistics::StringStatistics(bool is_blob) : is_blob(is_blob) {
 	for(idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;
 		max[i] = 0;
@@ -15,7 +15,7 @@ StringStatistics::StringStatistics() {
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Copy() {
-	auto stats = make_unique<StringStatistics>();
+	auto stats = make_unique<StringStatistics>(is_blob);
 	memcpy(stats->min, min, MAX_STRING_MINMAX_SIZE);
 	memcpy(stats->max, max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = has_unicode;
@@ -27,6 +27,7 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() {
 
 void StringStatistics::Serialize(Serializer &serializer) {
 	BaseStatistics::Serialize(serializer);
+	serializer.Write<bool>(is_blob);
 	serializer.WriteData(min, MAX_STRING_MINMAX_SIZE);
 	serializer.WriteData(max, MAX_STRING_MINMAX_SIZE);
 	serializer.Write<bool>(has_unicode);
@@ -35,7 +36,8 @@ void StringStatistics::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source) {
-	auto stats = make_unique<StringStatistics>();
+	auto is_blob = source.Read<bool>();
+	auto stats = make_unique<StringStatistics>(is_blob);
 	source.ReadData(stats->min, MAX_STRING_MINMAX_SIZE);
 	source.ReadData(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = source.Read<bool>();
@@ -78,14 +80,14 @@ void StringStatistics::Update(const string_t &value) {
 	if (size > max_string_length) {
 		max_string_length = size;
 	}
-	// if (!has_unicode) {
-	// 	auto unicode = Utf8Proc::Analyze((const char*) data, size);
-	// 	if (unicode == UnicodeType::UNICODE) {
-	// 		has_unicode = true;
-	// 	} else if (unicode == UnicodeType::INVALID) {
-	// 		throw InternalException("Invalid unicode detected in segment statistics update!");
-	// 	}
-	// }
+	if (!is_blob && !has_unicode) {
+		auto unicode = Utf8Proc::Analyze((const char*) data, size);
+		if (unicode == UnicodeType::UNICODE) {
+			has_unicode = true;
+		} else if (unicode == UnicodeType::INVALID) {
+			throw InternalException("Invalid unicode detected in segment statistics update!");
+		}
+	}
 }
 
 bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string constant) {

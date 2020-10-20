@@ -192,7 +192,7 @@ void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(manager, type.InternalType(), start_row);
+	auto new_segment = make_unique<TransientSegment>(manager, type, start_row);
 	data.AppendSegment(move(new_segment));
 }
 

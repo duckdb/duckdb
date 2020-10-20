@@ -30,15 +30,15 @@ enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 class ColumnSegment : public SegmentBase {
 public:
 	//! Initialize an empty column segment of the specified type
-	ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count = 0);
+	ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count = 0);
 
-	ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
+	ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
 	              unique_ptr<BaseStatistics> statistics);
 
 	virtual ~ColumnSegment() = default;
 
 	//! The type stored in the column
-	PhysicalType type;
+	LogicalType type;
 	//! The size of the type
 	idx_t type_size;
 	//! The column segment type (transient or persistent)

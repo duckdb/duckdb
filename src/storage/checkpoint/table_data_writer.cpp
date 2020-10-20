@@ -51,7 +51,7 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 	data_pointers.resize(table.columns.size());
 	for (idx_t i = 0; i < table.columns.size(); i++) {
 		auto type_id = table.columns[i].type.InternalType();
-		stats.push_back(make_unique<SegmentStatistics>(type_id, GetTypeIdSize(type_id)));
+		stats.push_back(make_unique<SegmentStatistics>(table.columns[i].type, GetTypeIdSize(type_id)));
 		CreateSegment(i);
 	}
 

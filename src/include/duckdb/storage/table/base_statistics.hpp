@@ -27,7 +27,7 @@ public:
 public:
 	virtual unique_ptr<BaseStatistics> Copy();
 	virtual void Serialize(Serializer &serializer);
-	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, PhysicalType type);
+	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 };
 
 }

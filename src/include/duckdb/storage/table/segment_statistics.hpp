@@ -18,10 +18,10 @@ struct TableFilter;
 
 class SegmentStatistics {
 public:
-	SegmentStatistics(PhysicalType type, idx_t type_size);
-	SegmentStatistics(PhysicalType type, idx_t type_size, unique_ptr<BaseStatistics> statistics);
+	SegmentStatistics(LogicalType type, idx_t type_size);
+	SegmentStatistics(LogicalType type, idx_t type_size, unique_ptr<BaseStatistics> statistics);
 
-	PhysicalType type;
+	LogicalType type;
 	idx_t type_size;
 
 	//! Type-specific statistics of the segment
