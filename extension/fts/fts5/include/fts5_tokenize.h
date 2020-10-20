@@ -6,15 +6,11 @@
 extern "C" {
 #endif
 
-#define FTS5_PORTER_MAX_TOKEN
+/* Any tokens larger than this (in bytes) are passed through without
+** stemming. */
+#define FTS5_PORTER_MAX_TOKEN   64
 
-typedef struct PorterContext {
-  void *pCtx;
-  int (*xToken)(void*, int, const char*, int, int, int);
-  char *aBuf;
-} PorterContext;
-
-int fts5PorterCb(void *pCtx, int tflags, const char *pToken, int nToken, int iStart, int iEnd);
+int fts5PorterCb(char *aBuf, const char *pToken, int nToken);
 
 #ifdef __cplusplus
 };

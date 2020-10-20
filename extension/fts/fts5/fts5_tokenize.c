@@ -549,14 +549,6 @@ static int fts5UnicodeTokenize(
 ** Start of porter stemmer implementation.
 */
 
-#endif
-
-/* Any tokens larger than this (in bytes) are passed through without
-** stemming. */
-#define FTS5_PORTER_MAX_TOKEN 64
-
-#if 0 // exclude for DuckDB purposes
-
 typedef struct PorterTokenizer PorterTokenizer;
 struct PorterTokenizer {
   fts5_tokenizer tokenizer;       /* Parent tokenizer module */
@@ -1185,20 +1177,12 @@ static void fts5PorterStep1A(char *aBuf, int *pnBuf){
 }
 
 int fts5PorterCb(
-  void *pCtx, 
-  int tflags,
+  char *aBuf,
   const char *pToken, 
-  int nToken, 
-  int iStart, 
-  int iEnd
+  int nToken
 ){
-  PorterContext *p = (PorterContext*)pCtx;
-
-  char *aBuf = p->aBuf;
   int nBuf = nToken;
   memcpy(aBuf, pToken, nBuf);
-
-  if( nToken>FTS5_PORTER_MAX_TOKEN || nToken<3 ) goto pass_through;
 
   /* Step 1. */
   fts5PorterStep1A(aBuf, &nBuf);
@@ -1242,7 +1226,6 @@ int fts5PorterCb(
     nBuf--;
   }
 
- pass_through:
   return nBuf;
 }
 
