@@ -13,22 +13,10 @@ CREATE TABLE t2(i INTEGER);
 CREATE TABLE t3(i INTEGER PRIMARY KEY);
 CREATE INDEX i_index ON t1 using art(i);
 
-# insert elements
-loop i 0 100
-
 statement ok
-INSERT INTO t1 VALUES (${i} + 1);
-INSERT INTO t3 VALUES (${i} + 1);
-
-endloop
-
-# insert elements
-loop i 50 100
-
-statement ok
-INSERT INTO t2 VALUES (${i} + 1);
-
-endloop
+INSERT INTO t1 SELECT i+1 FROM range(0,100) tbl(i);
+INSERT INTO t2 SELECT i+1 FROM range(50,100) tbl(i);
+INSERT INTO t3 SELECT i+1 FROM range(0,100) tbl(i);
 
 # standalone limit
 query II

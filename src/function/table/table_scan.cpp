@@ -26,26 +26,24 @@ bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *
 struct TableScanOperatorData : public FunctionOperatorData {
 	//! The current position in the scan
 	TableScanState scan_state;
+	TableFilterSet *table_filters;
 	vector<column_t> column_ids;
-	unordered_map<idx_t, vector<TableFilter>> table_filters;
 };
 
 static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                        vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	result->column_ids = column_ids;
 	result->table_filters = table_filters;
-	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
-	                                         &result->table_filters);
+	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids, table_filters);
 	return move(result);
 }
 
-static unique_ptr<FunctionOperatorData>
-table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *state,
-                         vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+static unique_ptr<FunctionOperatorData> table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_,
+                                                                 ParallelState *state, vector<column_t> &column_ids,
+                                                                 TableFilterSet *table_filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
 	result->table_filters = table_filters;
@@ -60,7 +58,7 @@ static void table_scan_function(ClientContext &context, const FunctionData *bind
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
-	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids, state.table_filters);
+	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
 }
 
 struct ParallelTableFunctionScanState : public ParallelState {
@@ -87,8 +85,8 @@ bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *
 	auto &state = (TableScanOperatorData &)*operator_state;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
-	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state, state.column_ids,
-	                                                  &state.table_filters);
+	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state,
+	                                                  state.column_ids);
 }
 
 void table_scan_dependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_) {
@@ -113,8 +111,7 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                        vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	auto result = make_unique<IndexScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
@@ -123,7 +120,7 @@ static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, 
 	if (bind_data.result_ids.size() > 0) {
 		FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
 	}
-	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state);
+	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state, table_filters);
 
 	result->finished = false;
 	return move(result);

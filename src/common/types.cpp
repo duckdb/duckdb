@@ -213,8 +213,6 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return 16; // offset + len
-	case PhysicalType::VARBINARY:
-		return sizeof(blob_t);
 	default:
 		throw ConversionException("Invalid PhysicalType %d", type);
 	}

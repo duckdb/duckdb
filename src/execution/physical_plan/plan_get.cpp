@@ -13,7 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	assert(op.children.empty());
 
 	// create the table filter map
-	unordered_map<idx_t, vector<TableFilter>> table_filter_umap;
+	auto table_filters = make_unique<TableFilterSet>();
 	for (auto &tableFilter : op.tableFilters) {
 		// find the relative column index from the absolute column index into the table
 		idx_t column_index = INVALID_INDEX;
@@ -27,11 +27,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			throw InternalException("Could not find column index for table filter");
 		}
 		tableFilter.column_index = column_index;
-		auto filter = table_filter_umap.find(column_index);
-		if (filter != table_filter_umap.end()) {
+		auto filter = table_filters->filters.find(column_index);
+		if (filter != table_filters->filters.end()) {
 			filter->second.push_back(tableFilter);
 		} else {
-			table_filter_umap.insert(make_pair(column_index, vector<TableFilter>{tableFilter}));
+			table_filters->filters.insert(make_pair(column_index, vector<TableFilter>{tableFilter}));
 		}
 	}
 
@@ -42,7 +42,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
 		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data), op.column_ids,
-		                                           move(table_filter_umap));
+		                                           move(table_filters));
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -76,7 +76,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		return move(projection);
 	} else {
 		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids,
-		                                      move(table_filter_umap));
+		                                      move(table_filters));
 	}
 }
 

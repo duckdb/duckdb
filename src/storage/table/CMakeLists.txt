@@ -5,6 +5,8 @@ add_library_unity(
   column_segment.cpp
   morsel_info.cpp
   segment_tree.cpp
+  segment_statistics.cpp
+  string_statistics.cpp
   persistent_segment.cpp
   transient_segment.cpp)
 set(ALL_OBJECT_FILES

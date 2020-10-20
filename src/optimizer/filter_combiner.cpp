@@ -9,6 +9,8 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/table_filter.hpp"
+
 namespace duckdb {
 using namespace std;
 
@@ -353,12 +355,13 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			// check the existing constant comparisons to see if we can do any pruning
 			auto ret = AddConstantComparison(info_list, info);
 
-			auto non_scalar = left_is_scalar ? comparison.right.get(): comparison.left.get();
+			auto non_scalar = left_is_scalar ? comparison.right.get() : comparison.left.get();
 			auto transitive_filter = FindTransitiveFilter(non_scalar);
-			if(transitive_filter.get() != nullptr) {
-				//try to add transitive filters
-				if(AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter.get()) == FilterResult::UNSUPPORTED) {
-					//in case of unsuccessful re-add filter into remaining ones
+			if (transitive_filter.get() != nullptr) {
+				// try to add transitive filters
+				if (AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter.get()) ==
+				    FilterResult::UNSUPPORTED) {
+					// in case of unsuccessful re-add filter into remaining ones
 					remaining_filters.push_back(move(transitive_filter));
 				}
 			}
@@ -368,7 +371,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			// comparison between two non-scalars
 			// only handle comparisons for now
 			if (expr->type != ExpressionType::COMPARE_EQUAL) {
-				if(IsGreaterThan(expr->type) || IsLessThan(expr->type)) {
+				if (IsGreaterThan(expr->type) || IsLessThan(expr->type)) {
 					return AddTransitiveFilters(comparison);
 				}
 				return FilterResult::UNSUPPORTED;
@@ -417,9 +420,9 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 }
 
 /*
-* Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
-* It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
-*/
+ * Create and add new transitive filters from a two non-scalar filter such as j > i, j >= i, j < i, and j <= i
+ * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
+ */
 FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison) {
 	assert(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
 	// get the LHS and RHS nodes
@@ -443,36 +446,40 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	// read every constant filters already inserted for the right scalar variable
 	// and see if we can create new trasitive filters, e.g., there is already a filter i > 10,
 	// suppose that we have now the j >= i, then we can infer a new filter j > 10
-	for(auto right_constant: right_constants) {
+	for (auto right_constant : right_constants) {
 		ExpressionValueInformation info;
 		info.constant = right_constant.constant;
 		// there is already an equality filter, e.g., i = 10
-		if(right_constant.comparison_type == ExpressionType::COMPARE_EQUAL) {
+		if (right_constant.comparison_type == ExpressionType::COMPARE_EQUAL) {
 			// create filter j [>, >=, <, <=] 10
 			// suppose the new comparsion is j >= i and we have already a filter i = 10,
 			// then we create a new filter j >= 10
 			// and the filter j >= i can be pruned by not adding it into the remaining filters
 			info.comparison_type = comparison.type;
-		} else if( (comparison.type == ExpressionType::COMPARE_GREATERTHANOREQUALTO && IsGreaterThan(right_constant.comparison_type)) ||
-				   (comparison.type == ExpressionType::COMPARE_LESSTHANOREQUALTO && IsLessThan(right_constant.comparison_type)) ) {
+		} else if ((comparison.type == ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
+		            IsGreaterThan(right_constant.comparison_type)) ||
+		           (comparison.type == ExpressionType::COMPARE_LESSTHANOREQUALTO &&
+		            IsLessThan(right_constant.comparison_type))) {
 			// filters (j >= i AND i [>, >=] 10) OR (j <= i AND i [<, <=] 10)
 			// create filter j [>, >=] 10 and add the filter j [>=, <=] i into the remaining filters
 			info.comparison_type = right_constant.comparison_type; // create filter j [>, >=, <, <=] 10
-			if(!isInserted) {
-				//Add the filter j >= i in the remaing filters
+			if (!isInserted) {
+				// Add the filter j >= i in the remaing filters
 				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
 				                                                     comparison.right->Copy());
 				remaining_filters.push_back(move(filter));
 				isInserted = true;
 			}
-		} else if( (comparison.type == ExpressionType::COMPARE_GREATERTHAN && IsGreaterThan(right_constant.comparison_type)) ||
-				   (comparison.type == ExpressionType::COMPARE_LESSTHAN && IsLessThan(right_constant.comparison_type)) ) {
+		} else if ((comparison.type == ExpressionType::COMPARE_GREATERTHAN &&
+		            IsGreaterThan(right_constant.comparison_type)) ||
+		           (comparison.type == ExpressionType::COMPARE_LESSTHAN &&
+		            IsLessThan(right_constant.comparison_type))) {
 			// filters (j > i AND i [>, >=] 10) OR j < i AND i [<, <=] 10
 			// create filter j [>, <] 10 and add the filter j [>, <] i into the remaining filters
 			// the comparisons j > i and j < i are more restrictive
 			info.comparison_type = comparison.type;
-			if(!isInserted) {
-				//Add the filter j [>, <] i
+			if (!isInserted) {
+				// Add the filter j [>, <] i
 				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
 				                                                     comparison.right->Copy());
 				remaining_filters.push_back(move(filter));
@@ -483,18 +490,19 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			continue;
 		}
 		// Add the new filer into the left set
-		if(AddConstantComparison(left_constants, info) == FilterResult::UNSATISFIABLE) {
+		if (AddConstantComparison(left_constants, info) == FilterResult::UNSATISFIABLE) {
 			return FilterResult::UNSATISFIABLE;
 		}
 		isSuccessful = true;
 	}
-	if(isSuccessful) {
-		//now check for remaining trasitive filters from the left column
+	if (isSuccessful) {
+		// now check for remaining trasitive filters from the left column
 		auto transitive_filter = FindTransitiveFilter(comparison.left.get());
-		if(transitive_filter.get() != nullptr) {
-			//try to add transitive filters
-			if(AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter.get()) == FilterResult::UNSUPPORTED) {
-				//in case of unsuccessful re-add filter into remaining ones
+		if (transitive_filter.get() != nullptr) {
+			// try to add transitive filters
+			if (AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter.get()) ==
+			    FilterResult::UNSUPPORTED) {
+				// in case of unsuccessful re-add filter into remaining ones
 				remaining_filters.push_back(move(transitive_filter));
 			}
 		}
@@ -505,17 +513,17 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 }
 
 /*
-* Find a transitive filter already inserted into the remaining filters
-* Check for a match between the right column of bound comparisons and the expression,
-* then removes the bound comparison from the remaining filters and returns it
-*/
+ * Find a transitive filter already inserted into the remaining filters
+ * Check for a match between the right column of bound comparisons and the expression,
+ * then removes the bound comparison from the remaining filters and returns it
+ */
 unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression *expr) {
 	// We only check for bound column ref
-	if(expr->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		for (idx_t i = 0; i < remaining_filters.size(); i++) {
-			if(remaining_filters[i]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			if (remaining_filters[i]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 				auto comparison = (BoundComparisonExpression *)remaining_filters[i].get();
-				if(expr->Equals(comparison->right.get()) && comparison->type != ExpressionType::COMPARE_NOTEQUAL) {
+				if (expr->Equals(comparison->right.get()) && comparison->type != ExpressionType::COMPARE_NOTEQUAL) {
 					auto filter = move(remaining_filters[i]);
 					remaining_filters.erase(remaining_filters.begin() + i);
 					return filter;

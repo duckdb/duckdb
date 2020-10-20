@@ -17,11 +17,6 @@ namespace duckdb {
 class Serializer;
 class Deserializer;
 
-struct blob_t {
-	data_ptr_t data;
-	idx_t size;
-};
-
 struct interval_t {
 	int32_t months;
 	int32_t days;

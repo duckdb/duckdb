@@ -34,7 +34,7 @@ public:
 	idx_t active_scans = 0;
 
 public:
-	void InitializeScan(LocalScanState &state);
+	void InitializeScan(LocalScanState &state, TableFilterSet *table_filters = nullptr);
 
 	void Clear();
 };
@@ -51,10 +51,9 @@ public:
 	}
 
 	//! Initialize a scan of the local storage
-	void InitializeScan(DataTable *table, LocalScanState &state);
+	void InitializeScan(DataTable *table, LocalScanState &state, TableFilterSet *table_filters);
 	//! Scan
-	void Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-	          unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
+	void Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result);
 
 	//! Append a chunk to the local storage
 	void Append(DataTable *table, DataChunk &chunk);

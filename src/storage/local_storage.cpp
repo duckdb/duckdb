@@ -17,7 +17,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table) : table(table) {
 LocalTableStorage::~LocalTableStorage() {
 }
 
-void LocalTableStorage::InitializeScan(LocalScanState &state) {
+void LocalTableStorage::InitializeScan(LocalScanState &state, TableFilterSet *table_filters) {
 	if (collection.chunks.size() == 0) {
 		// nothing to scan
 		return;
@@ -27,6 +27,7 @@ void LocalTableStorage::InitializeScan(LocalScanState &state) {
 	state.chunk_index = 0;
 	state.max_index = collection.chunks.size() - 1;
 	state.last_chunk_count = collection.chunks.back()->size();
+	state.table_filters = table_filters;
 }
 
 LocalScanState::~LocalScanState() {
@@ -64,7 +65,7 @@ void LocalTableStorage::Clear() {
 	}
 }
 
-void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
+void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state, TableFilterSet *table_filters) {
 	auto entry = table_storage.find(table);
 	if (entry == table_storage.end()) {
 		// no local storage for table: set scan to nullptr
@@ -72,11 +73,10 @@ void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
 		return;
 	}
 	auto storage = entry->second.get();
-	storage->InitializeScan(state);
+	storage->InitializeScan(state, table_filters);
 }
 
-void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-                        unordered_map<idx_t, vector<TableFilter>> *table_filters) {
+void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
 	auto storage = state.GetStorage();
 	if (!storage || state.chunk_index > state.max_index) {
 		// nothing left to scan
@@ -102,7 +102,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		if (new_count == 0 && count > 0) {
 			// all entries in this chunk were deleted: continue to next chunk
 			state.chunk_index++;
-			Scan(state, column_ids, result, table_filters);
+			Scan(state, column_ids, result);
 			return;
 		}
 		count = new_count;
@@ -124,9 +124,9 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			result.data[i].Reference(chunk.data[id]);
 		}
 		idx_t approved_tuple_count = count;
-		if (table_filters) {
-			auto column_filters = table_filters->find(i);
-			if (column_filters != table_filters->end()) {
+		if (state.table_filters) {
+			auto column_filters = state.table_filters->filters.find(i);
+			if (column_filters != state.table_filters->filters.end()) {
 				//! We have filters to apply here
 				for (auto &column_filter : column_filters->second) {
 					nullmask_t nullmask = FlatVector::Nullmask(result.data[i]);
@@ -140,7 +140,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	if (count == 0) {
 		// all entries in this chunk were filtered:: Continue on next chunk
 		state.chunk_index++;
-		Scan(state, column_ids, result, table_filters);
+		Scan(state, column_ids, result);
 		return;
 	}
 	if (count == chunk_count) {

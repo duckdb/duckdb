@@ -453,35 +453,6 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 	return tuple_count - initial_count;
 }
 
-static void update_min_max_string_segment(string value, char *__restrict min, char *__restrict max) {
-	//! we can only fit 8 bytes, so we might need to trim our string
-	size_t value_size = value.size() > 7 ? 7 : value.size();
-	//! This marks the min/max was not initialized
-	char marker = '1';
-	if (min[0] == '\0' && min[1] == marker && max[0] == '\0' && max[1] == marker) {
-		size_t min_end = value.copy(min, value_size);
-		size_t max_end = value.copy(max, value_size);
-		for (size_t i = min_end; i < 8; i++) {
-			min[i] = '\0';
-		}
-		for (size_t i = max_end; i < 8; i++) {
-			max[i] = '\0';
-		}
-	}
-	if (strcmp(value.data(), min) < 0) {
-		size_t min_end = value.copy(min, value_size);
-		for (size_t i = min_end; i < 8; i++) {
-			min[i] = '\0';
-		}
-	}
-	if (strcmp(value.data(), max) > 0) {
-		size_t max_end = value.copy(max, value_size);
-		for (size_t i = max_end; i < 8; i++) {
-			max[i] = '\0';
-		}
-	}
-}
-
 idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
 	idx_t used_space = GetDictionaryOffset(handle) + max_vector_count * vector_size;
 	assert(Storage::BLOCK_SIZE >= used_space);
@@ -496,8 +467,6 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 	auto sdata = (string_t *)adata.data;
 	auto &result_nullmask = *((nullmask_t *)target);
 	auto result_data = (int32_t *)(target + sizeof(nullmask_t));
-	auto min = (char *)stats.minimum.get();
-	auto max = (char *)stats.maximum.get();
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
@@ -507,7 +476,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			// null value is stored as -1
 			result_data[target_idx] = 0;
 			result_nullmask[target_idx] = true;
-			stats.has_null = true;
+			stats.statistics->has_null = true;
 		} else {
 			auto dictionary_offset = GetDictionaryOffset(handle);
 			assert(dictionary_offset < Storage::BLOCK_SIZE);
@@ -515,9 +484,8 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			idx_t string_length = sdata[source_idx].GetSize();
 			idx_t total_length = string_length + 1 + sizeof(uint16_t);
 
-			if (string_length > stats.max_string_length) {
-				stats.max_string_length = string_length;
-			}
+			stats.UpdateStatistics<string_t>(sdata[source_idx]);
+
 			// determine whether or not the string needs to be stored in an overflow block
 			// we never place small strings in the overflow blocks: the pointer would take more space than the
 			// string itself we always place big strings (>= STRING_BLOCK_LIMIT) in the overflow blocks we also have
@@ -529,8 +497,6 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
 				int32_t offset;
-				//! Update min/max of column segment
-				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
 				// write the string into the current string block
 				WriteString(sdata[source_idx], block, offset);
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
@@ -538,16 +504,11 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 
 				// write a big string marker into the dictionary
 				WriteStringMarker(dict_pos, block, offset);
-
-				stats.has_overflow_strings = true;
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
 				assert(string_length < NumericLimits<uint16_t>::Maximum());
 				dictionary_offset += total_length;
-				auto dict_pos = end - dictionary_offset;
-				//! Update min/max of column segment
-				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
-				// first write the length as u16
+				auto dict_pos = end - dictionary_offset; // first write the length as u16
 				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
@@ -697,11 +658,10 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
 		if (!update_nullmask[i]) {
-			auto min = (char *)stats.minimum.get();
-			auto max = (char *)stats.maximum.get();
-			update_min_max_string_segment(strings[i].GetData(), min, max);
+			stats.UpdateStatistics<string_t>(strings[i]);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
+			stats.statistics->has_null = true;
 			info->block_ids[i] = INVALID_BLOCK;
 			info->offsets[i] = 0;
 		}
@@ -720,9 +680,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	//! Check if we need to update the segment's nullmask
 	for (idx_t i = 0; i < update_count; i++) {
 		if (!update_nullmask[i]) {
-			auto min = (char *)stats.minimum.get();
-			auto max = (char *)stats.maximum.get();
-			update_min_max_string_segment(strings[i].GetData(), min, max);
+			stats.UpdateStatistics<string_t>(strings[i]);
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
@@ -730,6 +688,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 		if (!update_nullmask[idx]) {
 			WriteString(strings[idx], info->block_ids[count], info->offsets[count]);
 		} else {
+			stats.statistics->has_null = true;
 			info->block_ids[count] = INVALID_BLOCK;
 			info->offsets[count] = 0;
 		}

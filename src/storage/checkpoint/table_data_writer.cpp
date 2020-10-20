@@ -71,8 +71,7 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
-		unordered_map<idx_t, vector<TableFilter>> mock;
-		table.storage->Scan(transaction, chunk, state, column_ids, mock);
+		table.storage->Scan(transaction, chunk, state, column_ids);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -132,7 +131,7 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 	// get a free block id to write to
 	auto block_id = manager.block_manager.GetFreeBlockId();
 
-	// construct the data pointer, FIXME: add statistics as well
+	// construct the data pointer
 	DataPointer data_pointer;
 	data_pointer.block_id = block_id;
 	data_pointer.offset = 0;
@@ -142,9 +141,7 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	idx_t type_size = stats[col_idx]->type == PhysicalType::VARCHAR ? 8 : stats[col_idx]->type_size;
-	memcpy(&data_pointer.min_stats, stats[col_idx]->minimum.get(), type_size);
-	memcpy(&data_pointer.max_stats, stats[col_idx]->maximum.get(), type_size);
+	data_pointer.statistics = stats[col_idx]->statistics->Copy();
 	data_pointers[col_idx].push_back(move(data_pointer));
 	// write the block to disk
 	manager.block_manager.Write(*handle->node, block_id);
@@ -185,14 +182,11 @@ void TableDataWriter::WriteDataPointers() {
 		// then write the data pointers themselves
 		for (idx_t k = 0; k < data_pointer_list.size(); k++) {
 			auto &data_pointer = data_pointer_list[k];
-			manager.tabledata_writer->Write<double>(data_pointer.min);
-			manager.tabledata_writer->Write<double>(data_pointer.max);
 			manager.tabledata_writer->Write<idx_t>(data_pointer.row_start);
 			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
 			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
-			manager.tabledata_writer->WriteData(data_pointer.min_stats, 16);
-			manager.tabledata_writer->WriteData(data_pointer.max_stats, 16);
+			data_pointer.statistics->Serialize(*manager.tabledata_writer);
 		}
 	}
 }

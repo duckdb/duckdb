@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/checkpoint_manager.hpp"
-#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 class UncompressedSegment;

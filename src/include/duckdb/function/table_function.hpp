@@ -16,29 +16,19 @@
 namespace duckdb {
 class LogicalGet;
 struct ParallelState;
-class TableFilter;
+struct TableFilterSet;
 
 struct FunctionOperatorData {
 	virtual ~FunctionOperatorData() {
 	}
 };
 
-//! TableFilter represents a filter pushed down into the table scan.
-class TableFilter {
-public:
-	TableFilter(Value constant, ExpressionType comparison_type, idx_t column_index)
-	    : constant(constant), comparison_type(comparison_type), column_index(column_index){};
-	Value constant;
-	ExpressionType comparison_type;
-	idx_t column_index;
-};
-
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> &inputs,
                                                           unordered_map<string, Value> &named_parameters,
                                                           vector<LogicalType> &return_types, vector<string> &names);
-typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(
-    ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters);
+typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext &context, const FunctionData *bind_data,
+                                                                  vector<column_t> &column_ids,
+                                                                  TableFilterSet *table_filters);
 typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data,
                                  FunctionOperatorData *operator_state, DataChunk &output);
 typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data,
@@ -46,9 +36,11 @@ typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionD
 typedef idx_t (*table_function_max_threads_t)(ClientContext &context, const FunctionData *bind_data);
 typedef unique_ptr<ParallelState> (*table_function_init_parallel_state_t)(ClientContext &context,
                                                                           const FunctionData *bind_data);
-typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(
-    ClientContext &context, const FunctionData *bind_data, ParallelState *state, vector<column_t> &column_ids,
-    unordered_map<idx_t, vector<TableFilter>> &table_filters);
+typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(ClientContext &context,
+                                                                           const FunctionData *bind_data,
+                                                                           ParallelState *state,
+                                                                           vector<column_t> &column_ids,
+                                                                           TableFilterSet *table_filters);
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);

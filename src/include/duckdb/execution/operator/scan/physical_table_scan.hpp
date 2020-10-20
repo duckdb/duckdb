@@ -11,6 +11,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -18,7 +19,7 @@ namespace duckdb {
 class PhysicalTableScan : public PhysicalOperator {
 public:
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
-	                  vector<column_t> column_ids, unordered_map<idx_t, vector<TableFilter>> table_filters);
+	                  vector<column_t> column_ids, unique_ptr<TableFilterSet> table_filters);
 
 	//! The table function
 	TableFunction function;
@@ -27,7 +28,7 @@ public:
 	//! The projected-out column ids
 	vector<column_t> column_ids;
 	//! The table filters
-	unordered_map<idx_t, vector<TableFilter>> table_filters;
+	unique_ptr<TableFilterSet> table_filters;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

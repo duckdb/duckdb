@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 #include "duckdb/storage/table/morsel_info.hpp"
 
@@ -193,7 +194,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 // Scan
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
-                               unordered_map<idx_t, vector<TableFilter>> *table_filters) {
+                               TableFilterSet *table_filters) {
 	// initialize a column scan state for each column
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -210,20 +211,20 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 	state.base_row = 0;
 	state.max_row = total_rows;
 	state.version_info = (MorselInfo *)versions->GetRootSegment();
-	if (table_filters && table_filters->size() > 0) {
-		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
+	state.table_filters = table_filters;
+	if (table_filters && table_filters->filters.size() > 0) {
+		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 }
 
 void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
-                               unordered_map<idx_t, vector<TableFilter>> *table_filters) {
+                               TableFilterSet *table_filters) {
 	InitializeScan(state, column_ids, table_filters);
-	transaction.storage.InitializeScan(this, state.local_state);
+	transaction.storage.InitializeScan(this, state.local_state, table_filters);
 }
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-                                         unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t start_row,
-                                         idx_t end_row) {
+                                         TableFilterSet *table_filters, idx_t start_row, idx_t end_row) {
 	assert(start_row % STANDARD_VECTOR_SIZE == 0);
 	assert(end_row > start_row);
 	idx_t vector_offset = start_row / STANDARD_VECTOR_SIZE;
@@ -244,8 +245,9 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	state.base_row = start_row;
 	state.max_row = end_row;
 	state.version_info = (MorselInfo *)versions->GetSegment(state.current_row);
-	if (table_filters && table_filters->size() > 0 && !state.adaptive_filter) {
-		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
+	state.table_filters = table_filters;
+	if (table_filters && table_filters->filters.size() > 0) {
+		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 }
 
@@ -265,8 +267,7 @@ void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
 }
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
-                                 const vector<column_t> &column_ids,
-                                 unordered_map<idx_t, vector<TableFilter>> *table_filters) {
+                                 const vector<column_t> &column_ids) {
 	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
 	if (context.force_parallelism) {
 		PARALLEL_SCAN_VECTOR_COUNT = 1;
@@ -277,7 +278,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		idx_t next = MinValue(state.current_row + PARALLEL_SCAN_TUPLE_COUNT, total_rows);
 
 		// scan a morsel from the persistent rows
-		InitializeScanWithOffset(scan_state, column_ids, table_filters, state.current_row, next);
+		InitializeScanWithOffset(scan_state, column_ids, scan_state.table_filters, state.current_row, next);
 
 		state.current_row = next;
 		return true;
@@ -287,7 +288,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		scan_state.current_row = 0;
 		scan_state.base_row = 0;
 		scan_state.max_row = 0;
-		transaction.storage.InitializeScan(this, scan_state.local_state);
+		transaction.storage.InitializeScan(this, scan_state.local_state, scan_state.table_filters);
 		state.transaction_local_data = true;
 		return true;
 	} else {
@@ -296,10 +297,9 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	}
 }
 
-void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
-                     unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids) {
 	// scan the persistent segments
-	while (ScanBaseTable(transaction, result, state, column_ids, state.current_row, state.max_row, table_filters)) {
+	while (ScanBaseTable(transaction, result, state, column_ids, state.current_row, state.max_row)) {
 		if (result.size() > 0) {
 			return;
 		}
@@ -307,50 +307,14 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	}
 
 	// scan the transaction-local segments
-	transaction.storage.Scan(state.local_state, column_ids, result, &table_filters);
+	transaction.storage.Scan(state.local_state, column_ids, result);
 }
 
-template <class T> bool checkZonemap(TableScanState &state, TableFilter &table_filter, T constant) {
-	T *min = (T *)state.column_scans[table_filter.column_index].current->stats.minimum.get();
-	T *max = (T *)state.column_scans[table_filter.column_index].current->stats.maximum.get();
-	switch (table_filter.comparison_type) {
-	case ExpressionType::COMPARE_EQUAL:
-		return constant >= *min && constant <= *max;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return constant <= *max;
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return constant < *max;
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return constant >= *min;
-	case ExpressionType::COMPARE_LESSTHAN:
-		return constant > *min;
-	default:
-		throw NotImplementedException("Operation not implemented");
+bool DataTable::CheckZonemap(TableScanState &state, TableFilterSet *table_filters, idx_t &current_row) {
+	if (!table_filters) {
+		return true;
 	}
-}
-
-bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const char *constant) {
-	char *min = (char *)state.column_scans[table_filter.column_index].current->stats.minimum.get();
-	char *max = (char *)state.column_scans[table_filter.column_index].current->stats.maximum.get();
-	int min_comp = strcmp(min, constant);
-	int max_comp = strcmp(max, constant);
-	switch (table_filter.comparison_type) {
-	case ExpressionType::COMPARE_EQUAL:
-		return min_comp <= 0 && max_comp >= 0;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return max_comp >= 0;
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return min_comp <= 0;
-	default:
-		throw NotImplementedException("Operation not implemented");
-	}
-}
-
-bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
-                             idx_t &current_row) {
-	for (auto &table_filter : table_filters) {
+	for (auto &table_filter : table_filters->filters) {
 		for (auto &predicate_constant : table_filter.second) {
 			bool readSegment = true;
 
@@ -359,57 +323,8 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 				if (!state.column_scans[predicate_constant.column_index].current) {
 					return true;
 				}
-				switch (state.column_scans[predicate_constant.column_index].current->type) {
-				case PhysicalType::INT8: {
-					int8_t constant = predicate_constant.constant.value_.tinyint;
-					readSegment = checkZonemap<int8_t>(state, predicate_constant, constant);
-					break;
-				}
-				case PhysicalType::INT16: {
-					int16_t constant = predicate_constant.constant.value_.smallint;
-					readSegment = checkZonemap<int16_t>(state, predicate_constant, constant);
-					break;
-				}
-				case PhysicalType::INT32: {
-					int32_t constant = predicate_constant.constant.value_.integer;
-					readSegment = checkZonemap<int32_t>(state, predicate_constant, constant);
-					break;
-				}
-				case PhysicalType::INT64: {
-					int64_t constant = predicate_constant.constant.value_.bigint;
-					readSegment = checkZonemap<int64_t>(state, predicate_constant, constant);
-					break;
-				}
-				case PhysicalType::INT128: {
-					auto constant = predicate_constant.constant.value_.hugeint;
-					readSegment = checkZonemap<hugeint_t>(state, predicate_constant, constant);
-					break;
-				}
-				case PhysicalType::FLOAT: {
-					float constant = predicate_constant.constant.value_.float_;
-					readSegment = checkZonemap<float>(state, predicate_constant, constant);
-					break;
-				}
-				case PhysicalType::DOUBLE: {
-					double constant = predicate_constant.constant.value_.double_;
-					readSegment = checkZonemap<double>(state, predicate_constant, constant);
-					break;
-				}
-				case PhysicalType::VARCHAR: {
-					//! we can only compare the first 7 bytes
-					size_t value_size = predicate_constant.constant.str_value.size() > 7
-					                        ? 7
-					                        : predicate_constant.constant.str_value.size();
-					string constant;
-					for (size_t i = 0; i < value_size; i++) {
-						constant += predicate_constant.constant.str_value[i];
-					}
-					readSegment = checkZonemapString(state, predicate_constant, constant.c_str());
-					break;
-				}
-				default:
-					throw NotImplementedException("Unimplemented type for zonemaps");
-				}
+				readSegment =
+				    state.column_scans[predicate_constant.column_index].current->stats.CheckZonemap(predicate_constant);
 			}
 			if (!readSegment) {
 				//! We can skip this partition
@@ -430,8 +345,7 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 }
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
-                              const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row,
-                              unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                              const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row) {
 	if (current_row >= max_row) {
 		// exceeded the amount of rows to scan
 		return false;
@@ -439,7 +353,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
 	//! first check the zonemap if we have to scan this partition
-	if (!CheckZonemap(state, table_filters, current_row)) {
+	if (!CheckZonemap(state, state.table_filters, current_row)) {
 		return true;
 	}
 	// second, scan the version chunk manager to figure out which tuples to load for this transaction
@@ -457,7 +371,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		return true;
 	}
 	idx_t approved_tuple_count = count;
-	if (count == max_count && table_filters.empty()) {
+	if (count == max_count && !state.table_filters) {
 		//! If we don't have any deleted tuples or filters we can just run a regular scan
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto column = column_ids[i];
@@ -480,18 +394,20 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		//! First, we scan the columns with filters, fetch their data and generate a selection vector.
 		//! get runtime statistics
 		auto start_time = high_resolution_clock::now();
-		for (idx_t i = 0; i < table_filters.size(); i++) {
-			auto tf_idx = state.adaptive_filter->permutation[i];
-			auto col_idx = column_ids[tf_idx];
-			columns[col_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
-			                         approved_tuple_count, table_filters[tf_idx]);
-		}
-		for (auto &table_filter : table_filters) {
-			result.data[table_filter.first].Slice(sel, approved_tuple_count);
+		if (state.table_filters) {
+			for (idx_t i = 0; i < state.table_filters->filters.size(); i++) {
+				auto tf_idx = state.adaptive_filter->permutation[i];
+				auto col_idx = column_ids[tf_idx];
+				columns[col_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
+										approved_tuple_count, state.table_filters->filters[tf_idx]);
+			}
+			for (auto &table_filter : state.table_filters->filters) {
+				result.data[table_filter.first].Slice(sel, approved_tuple_count);
+			}
 		}
 		//! Now we use the selection vector to fetch data for the other columns.
 		for (idx_t i = 0; i < column_ids.size(); i++) {
-			if (table_filters.find(i) == table_filters.end()) {
+			if (!state.table_filters || state.table_filters->filters.find(i) == state.table_filters->filters.end()) {
 				auto column = column_ids[i];
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
 					assert(result.data[i].type.InternalType() == PhysicalType::INT64);
@@ -507,7 +423,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			}
 		}
 		auto end_time = high_resolution_clock::now();
-		if (state.adaptive_filter && table_filters.size() > 1) {
+		if (state.adaptive_filter && state.table_filters->filters.size() > 1) {
 			state.adaptive_filter->AdaptRuntimeStatistics(
 			    duration_cast<duration<double>>(end_time - start_time).count());
 		}

@@ -77,22 +77,21 @@ public:
 
 public:
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
-	                    unordered_map<idx_t, vector<TableFilter>> *table_filter = nullptr);
+	                    TableFilterSet *table_filter = nullptr);
 	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
-	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
+	                    TableFilterSet *table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context);
 	void InitializeParallelScan(ParallelTableScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
-	                      const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters);
+	                      const vector<column_t> &column_ids);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
 	//! elements were returned.
 	//! Returns true if all pushed down filters were executed during data fetching
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
-	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids);
 
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
@@ -145,13 +144,10 @@ private:
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t start_row,
-	                              idx_t end_row);
-	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
-	                  idx_t &current_row);
+	                              TableFilterSet *table_filters, idx_t start_row, idx_t end_row);
+	bool CheckZonemap(TableScanState &state, TableFilterSet *table_filters, idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
-	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row,
-	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
+	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row);
 	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
 	                     idx_t &current_row, idx_t max_row);
 

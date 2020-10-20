@@ -1,4 +1,3 @@
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -7,7 +6,6 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_size.hpp"
 
 using namespace std;
@@ -372,6 +370,11 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 		                             approved_tuple_count);
 		break;
 	}
+	case PhysicalType::INTERVAL: {
+		templated_assignment<interval_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                             approved_tuple_count);
+		break;
+	}
 	default:
 		throw InvalidTypeException(type, "Invalid type for filter scan");
 	}
@@ -469,21 +472,10 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-template <class T> static void update_min_max_numeric_segment(T value, T *__restrict min, T *__restrict max) {
-	if (LessThan::Operation(value, *min)) {
-		*min = value;
-	}
-	if (GreaterThan::Operation(value, *max)) {
-		*max = value;
-	}
-}
-
 template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                         idx_t count) {
 	auto &nullmask = *((nullmask_t *)target);
-	auto min = (T *)stats.minimum.get();
-	auto max = (T *)stats.maximum.get();
 
 	VectorData adata;
 	source.Orrify(count, adata);
@@ -497,9 +489,9 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 			bool is_null = (*adata.nullmask)[source_idx];
 			if (is_null) {
 				nullmask[target_idx] = true;
-				stats.has_null = true;
+				stats.statistics->has_null = true;
 			} else {
-				update_min_max_numeric_segment(sdata[source_idx], min, max);
+				stats.UpdateStatistics<T>(sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			}
 		}
@@ -507,7 +499,7 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
-			update_min_max_numeric_segment(sdata[source_idx], min, max);
+			stats.UpdateStatistics<T>(sdata[source_idx]);
 			tdata[target_idx] = sdata[source_idx];
 		}
 	}
@@ -543,7 +535,7 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 template <class T>
 static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data,
                              nullmask_t &undo_nullmask, nullmask_t &base_nullmask, nullmask_t &new_nullmask,
-                             idx_t count, sel_t *__restrict base_sel, T *__restrict min, T *__restrict max) {
+                             idx_t count, sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
@@ -552,20 +544,20 @@ static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T
 		base_data[base_sel[i]] = new_data[i];
 		base_nullmask[base_sel[i]] = new_nullmask[i];
 		// update the min max with the new data
-		update_min_max_numeric_segment(new_data[i], min, max);
+		stats.UpdateStatistics<T>(new_data[i]);
 	}
 }
 
 template <class T>
 static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data, idx_t count,
-                                sel_t *__restrict base_sel, T *__restrict min, T *__restrict max) {
+                                sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
 		// now move the new data in-place into the base table
 		base_data[base_sel[i]] = new_data[i];
 		// update the min max with the new data
-		update_min_max_numeric_segment(new_data[i], min, max);
+		stats.UpdateStatistics<T>(new_data[i]);
 	}
 }
 
@@ -576,14 +568,12 @@ static void update_loop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t b
 	auto nullmask = (nullmask_t *)base;
 	auto base_data = (T *)(base + sizeof(nullmask_t));
 	auto undo_data = (T *)info->tuple_data;
-	auto min = (T *)stats.minimum.get();
-	auto max = (T *)stats.maximum.get();
 
 	if (update_nullmask.any() || nullmask->any()) {
 		update_loop_null(undo_data, base_data, update_data, info->nullmask, *nullmask, update_nullmask, info->N,
-		                 info->tuples, min, max);
+		                 info->tuples, stats);
 	} else {
-		update_loop_no_null(undo_data, base_data, update_data, info->N, info->tuples, min, max);
+		update_loop_no_null(undo_data, base_data, update_data, info->N, info->tuples, stats);
 	}
 }
 
@@ -622,10 +612,8 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 	auto info_data = (T *)node->tuple_data;
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
-	auto min = (T *)stats.minimum.get();
-	auto max = (T *)stats.maximum.get();
 	for (idx_t i = 0; i < count; i++) {
-		update_min_max_numeric_segment<T>(update_data[i], min, max);
+		stats.UpdateStatistics<T>(update_data[i]);
 	}
 
 	// first we copy the old update info into a temporary structure

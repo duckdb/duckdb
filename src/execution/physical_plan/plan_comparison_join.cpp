@@ -9,8 +9,27 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/transaction/transaction.hpp"
-namespace duckdb {
+
 using namespace std;
+
+namespace duckdb {
+
+static bool can_plan_index_join(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
+	if (!bind_data) {
+		// not a table scan
+		return false;
+	}
+	auto table = bind_data->table;
+	if (transaction.storage.Find(table->storage.get())) {
+		// transaction local appends: skip index join
+		return false;
+	}
+	if (scan.table_filters && scan.table_filters->filters.size() > 0) {
+		// table scan filters
+		return false;
+	}
+	return true;
+}
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
                         PhysicalOperator *left, PhysicalOperator *right) {
@@ -22,7 +41,7 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (left->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (tbl && !transaction.storage.Find(tbl->table->storage.get()) && tbl_scan.table_filters.empty()) {
+			if (can_plan_index_join(transaction, tbl, tbl_scan)) {
 				for (auto &index : tbl->table->storage->info->indexes) {
 					if (index->unbound_expressions[0]->alias == op.conditions[0].left->alias) {
 						*left_index = index.get();
@@ -34,7 +53,7 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (tbl && !transaction.storage.Find(tbl->table->storage.get()) && tbl_scan.table_filters.empty()) {
+			if (can_plan_index_join(transaction, tbl, tbl_scan)) {
 				for (auto &index : tbl->table->storage->info->indexes) {
 					if (index->unbound_expressions[0]->alias == op.conditions[0].right->alias) {
 						*right_index = index.get();

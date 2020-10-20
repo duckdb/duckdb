@@ -12,6 +12,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/table/base_statistics.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -24,16 +25,13 @@ class ViewCatalogEntry;
 class DataPointer {
 public:
 	DataPointer(){};
-	double min;
-	double max;
+
 	uint64_t row_start;
 	uint64_t tuple_count;
 	block_id_t block_id;
 	uint32_t offset;
-	//! The minimum value of the segment
-	data_t min_stats[16];
-	//! The maximum value of the segment
-	data_t max_stats[16];
+	//! Type-specific statistics of the segment
+	unique_ptr<BaseStatistics> statistics;
 };
 
 //! CheckpointManager is responsible for checkpointing the database

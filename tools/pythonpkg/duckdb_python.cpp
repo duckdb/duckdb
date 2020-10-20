@@ -171,7 +171,8 @@ enum class PandasType : uint8_t {
 };
 
 struct PandasScanFunctionData : public TableFunctionData {
-	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasType> pandas_types_, vector<LogicalType> sql_types_)
+	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasType> pandas_types_,
+	                       vector<LogicalType> sql_types_)
 	    : df(df), row_count(row_count), pandas_types(move(pandas_types_)), sql_types(move(sql_types_)) {
 	}
 	py::handle df;
@@ -274,7 +275,7 @@ struct PandasScanFunction : public TableFunction {
 
 	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
 	                                                         vector<column_t> &column_ids,
-	                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	                                                         TableFilterSet *table_filters) {
 		return make_unique<PandasScanState>();
 	}
 
@@ -283,7 +284,8 @@ struct PandasScanFunction : public TableFunction {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
 	}
 
-	template <class T> static void scan_pandas_numeric_object(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
+	template <class T>
+	static void scan_pandas_numeric_object(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
 		auto src_ptr = (PyObject **)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<T>(out);
 		auto &nullmask = FlatVector::Nullmask(out);
