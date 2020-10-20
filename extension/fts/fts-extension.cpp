@@ -32,6 +32,20 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
     });
 }
 
+static void pre_process() {
+    // strip accents
+    // lowercase
+    // replace non [a-z] with ' '
+    // string split \s+
+    // unnest
+    // remove empty strings
+    // stem
+
+    // function call to create index should be something like
+    // create_fts_index(tablename, docid_column, document_body_column1, document_body_column2, etc...)
+    // test_indexing.test has the first steps
+}
+
 void FTSExtension::Load(DuckDB &db) {
 	ScalarFunction stem_func("stem", {LogicalType::VARCHAR}, LogicalType::VARCHAR, stem_function);
 	CreateScalarFunctionInfo stem_info(stem_func);
