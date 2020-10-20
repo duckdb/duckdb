@@ -1194,12 +1194,10 @@ int fts5PorterCb(
 ){
   PorterContext *p = (PorterContext*)pCtx;
 
-  char *aBuf;
-  int nBuf;
-
-  aBuf = p->aBuf;
-  nBuf = nToken;
+  char *aBuf = p->aBuf;
+  int nBuf = nToken;
   memcpy(aBuf, pToken, nBuf);
+
   if( nToken>FTS5_PORTER_MAX_TOKEN || nToken<3 ) goto pass_through;
 
   /* Step 1. */
@@ -1244,10 +1242,8 @@ int fts5PorterCb(
     nBuf--;
   }
 
-  return nBuf; // p->xToken(p->pCtx, tflags, aBuf, nBuf, iStart, iEnd);
-
  pass_through:
-  return nBuf; // p->xToken(p->pCtx, tflags, pToken, nToken, iStart, iEnd);
+  return nBuf;
 }
 
 #if 0 // exclude for DuckDB purposes
