@@ -1,0 +1,60 @@
+# name: test/sql/fts/test_indexing.test
+# description: Full text search indexing
+# group: [fts]
+
+require fts
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE documents(id VARCHAR, body VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('doc1', '    QUÁCKING+QUÁCKING+QUÁCKING')
+
+# first steps towards writing an 'indexing query'
+statement ok
+CREATE TEMPORARY TABLE tokens AS (
+    SELECT
+        term,
+        name,
+        docid
+    FROM (
+        SELECT
+            stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(body)), '[^a-z]', ' ', 'g'), '\s+'))) AS term,
+            id AS name,
+            row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
+        FROM documents
+    ) AS subquery
+    WHERE
+        term != ''
+)
+
+query III
+SELECT * FROM tokens
+----
+quack	doc1	1
+quack	doc1	1
+quack	doc1	1
+
+statement ok
+CREATE TEMPORARY TABLE tokenids AS
+WITH distinct_terms AS (
+    SELECT
+        DISTINCT term
+    FROM
+        tokens
+)
+SELECT
+    row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
+    term
+FROM
+    distinct_terms
+
+query II
+SELECT * FROM tokenids
+----
+1	quack
+
+# TODO: create 'terms' table
