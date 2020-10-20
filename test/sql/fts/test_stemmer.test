@@ -38,9 +38,24 @@ SELECT stem('🦆')
 🦆
 
 query T
+SELECT stem('information information')
+----
+information inform
+
+query T
 SELECT stem(concat(repeat('i', 64), 'nformation'))
 ----
 iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiinformation
+
+query T
+select stem(UNNEST(string_split(repeat('information ', 5), ' ')))
+----
+inform
+inform
+inform
+inform
+inform
+(empty)
 
 query I
 SELECT stem(UNNEST(string_split(string_agg(range, 'information '), ' '))) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
