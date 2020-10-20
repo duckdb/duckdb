@@ -1,0 +1,25 @@
+# name: test/sql/fts/test_stemmer.test
+# description: Full text search stemmer
+# group: [fts]
+
+require fts
+
+statement ok
+PRAGMA enable_verification
+
+mode output_hash
+
+query I
+SELECT UNNEST(string_split(string_agg(range, 'information '), ' ')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
+----
+
+
+query T
+SELECT stem('connection')
+----
+connect
+
+query T
+SELECT stem('an')
+--
+an

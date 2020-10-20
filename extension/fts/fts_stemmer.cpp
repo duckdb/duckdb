@@ -17,7 +17,7 @@ string_t Stem(string_t input) {
     sCtx.pCtx = pCtx;
     sCtx.aBuf = aBuf;
     
-    int nBuf = fts5PorterCb((void*)&sCtx, flags, pText, nText, 0, nText - 1);
+    int nBuf = fts5PorterCb(&sCtx, flags, pText, nText, 0, nText - 1);
 
     return string_t(aBuf, nBuf);
 }
