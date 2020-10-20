@@ -7,12 +7,20 @@ require fts
 statement ok
 PRAGMA enable_verification
 
-mode output_hash
-
-query I
-SELECT UNNEST(string_split(string_agg(range, 'information '), ' ')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
+query T
+select stem('iiiiiiinformation')
 ----
+iiiiiiinform
 
+query T
+SELECT stem(NULL)
+----
+NULL
+
+query T
+SELECT stem('')
+----
+(empty)
 
 query T
 SELECT stem('connection')
@@ -23,3 +31,18 @@ query T
 SELECT stem('an')
 --
 an
+
+query T
+SELECT stem('🦆')
+----
+🦆
+
+query T
+SELECT stem(concat(repeat('i', 64), 'nformation'))
+----
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiinformation
+
+query I
+SELECT stem(UNNEST(string_split(string_agg(range, 'information '), ' '))) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
+----
+100000 values hashing to 030f4662a25fbc772e84af37e1cc8177

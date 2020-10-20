@@ -1,6 +1,6 @@
 #include "fts-extension.hpp"
+#include "fts5_tokenize.h"
 
-#include "fts_stemmer.hpp"
 #include "duckdb.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -12,9 +12,23 @@ namespace duckdb {
 
 static void stem_function(DataChunk &args, ExpressionState &state, Vector &result) {
     UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
-        string_t target = Stem(input);
-        target.Finalize();
-        return target;
+        auto input_data = input.GetData();
+        auto input_size = input.GetSize();
+
+        // size is at most the input size: alloc it
+        auto output_data = unique_ptr<char[]>{new char[input_size + 1]};
+        idx_t output_size;
+
+        if(input_size > FTS5_PORTER_MAX_TOKEN || input_size < 3) {
+            // we do not stem tokens longer than the limit, or smaller than 3
+            memcpy(output_data.get(), input_data, input_size);
+            output_size = input_size;
+        } else {
+            output_size = fts5PorterCb(output_data.get(), input_data, input_size);
+            output_data[output_size] = '\0';
+        }
+
+        return StringVector::AddString(result, output_data.get(), output_size);
     });
 }
 
