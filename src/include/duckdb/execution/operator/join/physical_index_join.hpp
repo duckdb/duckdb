@@ -50,9 +50,6 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
-	//! This is the value we use to decide if we do per chunk output or per match output
-	const size_t per_chunk_threshold = 100;
-
 	void GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_) const;
 	//! Fills result chunk
 	void Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);

@@ -1,0 +1,27 @@
+# name: test/sql/alter/rename_table/test_rename_table_with_insert_transaction.test
+# description: Test RENAME TABLE with insert transactions
+# group: [rename_table]
+
+statement ok con1
+CREATE TABLE t1 (i INTEGER)
+
+statement ok con1
+INSERT INTO t1 VALUES (1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+INSERT INTO t1 VALUES (2)
+
+statement ok con1
+ALTER TABLE t1 RENAME TO t2
+
+statement ok con1
+COMMIT
+
+query I
+SELECT * FROM t2
+----
+1
+2
