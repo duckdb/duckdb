@@ -9,7 +9,6 @@ add_subdirectory(fts5)
 add_library(
   fts_extension STATIC
   fts-extension.cpp
-  fts_stemmer.cpp
   )
 target_link_libraries(fts_extension fts5)
 
