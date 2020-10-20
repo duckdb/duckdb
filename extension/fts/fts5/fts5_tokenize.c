@@ -11,6 +11,9 @@
 ******************************************************************************
 */
 
+#include <string.h>
+#include <assert.h>
+
 #include "fts5_tokenize.h"
 
 #if 0 // exclude for DuckDB purposes
@@ -613,7 +616,7 @@ static int fts5PorterCreate(
   return rc;
 }
 
-#endif
+// #endif
 
 typedef struct PorterContext PorterContext;
 struct PorterContext {
@@ -631,7 +634,7 @@ struct PorterRule {
   int nOutput;
 };
 
-#if 0
+// #if 0
 static int fts5PorterApply(char *aBuf, int *pnBuf, PorterRule *aRule){
   int ret = -1;
   int nBuf = *pnBuf;
@@ -1181,7 +1184,7 @@ static void fts5PorterStep1A(char *aBuf, int *pnBuf){
   }
 }
 
-static int fts5PorterCb(
+int fts5PorterCb(
   void *pCtx, 
   int tflags,
   const char *pToken, 
@@ -1194,10 +1197,10 @@ static int fts5PorterCb(
   char *aBuf;
   int nBuf;
 
-  if( nToken>FTS5_PORTER_MAX_TOKEN || nToken<3 ) goto pass_through;
   aBuf = p->aBuf;
   nBuf = nToken;
   memcpy(aBuf, pToken, nBuf);
+  if( nToken>FTS5_PORTER_MAX_TOKEN || nToken<3 ) goto pass_through;
 
   /* Step 1. */
   fts5PorterStep1A(aBuf, &nBuf);
@@ -1241,10 +1244,10 @@ static int fts5PorterCb(
     nBuf--;
   }
 
-  return p->xToken(p->pCtx, tflags, aBuf, nBuf, iStart, iEnd);
+  return nBuf; // p->xToken(p->pCtx, tflags, aBuf, nBuf, iStart, iEnd);
 
  pass_through:
-  return p->xToken(p->pCtx, tflags, pToken, nToken, iStart, iEnd);
+  return nBuf; // p->xToken(p->pCtx, tflags, pToken, nToken, iStart, iEnd);
 }
 
 #if 0 // exclude for DuckDB purposes
