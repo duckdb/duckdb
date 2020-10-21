@@ -70,6 +70,7 @@ static void list_combine(Vector &state, Vector &combined, idx_t count) {
 			combined_ptr[i]->cc = new ChunkCollection();
 		}
 		combined_ptr[i]->cc->Append(*state->cc);
+		delete state->cc;
 	}
 }
 
