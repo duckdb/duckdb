@@ -12,10 +12,6 @@
 
 namespace duckdb {
 
-#ifndef CHAR_ENC
-#define CHAR_ENC "UTF_8"
-#endif
-
 typedef unsigned char sb_symbol;
 
 class FTSExtension : public Extension {
