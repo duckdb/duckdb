@@ -2,15 +2,14 @@
 
 namespace duckdb {
 
-PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, idx_t _radix_partitions,
-                                               vector<LogicalType> _group_types, vector<LogicalType> _payload_types,
-                                               vector<BoundAggregateExpression *> _bindings)
-    : buffer_manager(_buffer_manager), radix_partitions(_radix_partitions), group_types(_group_types),
-      payload_types(_payload_types), bindings(_bindings), radix_bits(0), radix_mask(0), is_partitioned(false) {
-
-	unpartitioned_ht = make_unique<GroupedAggregateHashTable>(buffer_manager, group_types, payload_types, bindings,
-	                                                          HtEntryType::HT_WIDTH_32);
-
+RadixPartitionInfo::RadixPartitionInfo(idx_t _n_partitions_upper_bound)
+    : radix_partitions(1), radix_bits(0), radix_mask(0) {
+	while (radix_partitions <= _n_partitions_upper_bound / 2) {
+		radix_partitions *= 2;
+		if (radix_partitions >= 256) {
+			break;
+		}
+	}
 	// finalize_threads needs to be a power of 2
 	assert(radix_partitions > 0);
 	assert(radix_partitions <= 256);
@@ -25,14 +24,23 @@ PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, i
 	assert(radix_bits <= 8);
 
 	// we use the fifth byte of the 64 bit hash as radix source
-	radix_mask = 0;
 	for (idx_t i = 0; i < radix_bits; i++) {
 		radix_mask = (radix_mask << 1) | 1;
 	}
 	radix_mask <<= RADIX_SHIFT;
+}
 
-	sel_vectors.resize(radix_partitions);
-	sel_vector_sizes.resize(radix_partitions);
+PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, RadixPartitionInfo &_partition_info,
+                                               vector<LogicalType> _group_types, vector<LogicalType> _payload_types,
+                                               vector<BoundAggregateExpression *> _bindings)
+    : buffer_manager(_buffer_manager), group_types(_group_types), payload_types(_payload_types), bindings(_bindings),
+      is_partitioned(false), partition_info(_partition_info) {
+
+	unpartitioned_ht = make_unique<GroupedAggregateHashTable>(buffer_manager, group_types, payload_types, bindings,
+	                                                          HtEntryType::HT_WIDTH_32);
+
+	sel_vectors.resize(partition_info.radix_partitions);
+	sel_vector_sizes.resize(partition_info.radix_partitions);
 	group_subset.Initialize(group_types);
 	if (payload_types.size() > 0) {
 		payload_subset.Initialize(payload_types);
@@ -40,7 +48,7 @@ PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, i
 	hashes.Initialize(LogicalType::HASH);
 	hashes_subset.Initialize(LogicalType::HASH);
 
-	for (hash_t r = 0; r < radix_partitions; r++) {
+	for (hash_t r = 0; r < partition_info.radix_partitions; r++) {
 		sel_vectors[r].Initialize();
 	}
 }
@@ -59,9 +67,9 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	}
 
 	// makes no sense to do this with 1 partition
-	assert(radix_partitions > 1);
+	assert(partition_info.radix_partitions > 1);
 
-	for (hash_t r = 0; r < radix_partitions; r++) {
+	for (hash_t r = 0; r < partition_info.radix_partitions; r++) {
 		sel_vector_sizes[r] = 0;
 	}
 
@@ -69,21 +77,21 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 
 	for (idx_t i = 0; i < groups.size(); i++) {
-		auto partition = (hashes_ptr[i] & radix_mask) >> RADIX_SHIFT;
-		assert(partition < radix_partitions);
+		auto partition = (hashes_ptr[i] & partition_info.radix_mask) >> partition_info.RADIX_SHIFT;
+		assert(partition < partition_info.radix_partitions);
 		sel_vectors[partition].set_index(sel_vector_sizes[partition]++, i);
 	}
 
 #ifdef DEBUG
 	// make sure we have lost no rows
 	idx_t total_count = 0;
-	for (idx_t r = 0; r < radix_partitions; r++) {
+	for (idx_t r = 0; r < partition_info.radix_partitions; r++) {
 		total_count += sel_vector_sizes[r];
 	}
 	assert(total_count == groups.size());
 #endif
 	idx_t group_count = 0;
-	for (hash_t r = 0; r < radix_partitions; r++) {
+	for (hash_t r = 0; r < partition_info.radix_partitions; r++) {
 		group_subset.Slice(groups, sel_vectors[r], sel_vector_sizes[r]);
 		payload_subset.Slice(payload, sel_vectors[r], sel_vector_sizes[r]);
 		hashes_subset.Slice(hashes, sel_vectors[r], sel_vector_sizes[r]);
@@ -104,13 +112,13 @@ void PartitionableHashTable::Partition() {
 
 	vector<GroupedAggregateHashTable *> partition_hts;
 	assert(radix_partitioned_hts.size() == 0);
-	for (idx_t r = 0; r < radix_partitions; r++) {
+	for (idx_t r = 0; r < partition_info.radix_partitions; r++) {
 		radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
 		    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
 		partition_hts.push_back(radix_partitioned_hts[r].back().get());
 	}
 
-	unpartitioned_ht->Partition(partition_hts, radix_mask, RADIX_SHIFT);
+	unpartitioned_ht->Partition(partition_hts, partition_info.radix_mask, partition_info.RADIX_SHIFT);
 	unpartitioned_ht.reset();
 	is_partitioned = true;
 }
@@ -121,7 +129,7 @@ bool PartitionableHashTable::IsPartitioned() {
 
 vector<unique_ptr<GroupedAggregateHashTable>> PartitionableHashTable::GetPartition(idx_t partition) {
 	assert(IsPartitioned());
-	assert(partition < radix_partitions);
+	assert(partition < partition_info.radix_partitions);
 	assert(radix_partitioned_hts.size() > partition);
 	return move(radix_partitioned_hts[partition]);
 }

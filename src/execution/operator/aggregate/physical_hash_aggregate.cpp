@@ -23,8 +23,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, PhysicalOperatorType type)
-    : PhysicalSink(type, types), groups(move(groups_p)), all_combinable(true), any_distinct(false),
-      buffer_manager(BufferManager::GetBufferManager(context)), radix_partitions(1) {
+    : PhysicalSink(type, types), groups(move(groups_p)), all_combinable(true), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (this->groups.size() == 0) {
@@ -65,14 +64,6 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 
 	// 10000 seems like a good compromise here
 	radix_limit = 10000;
-
-	auto _n_partitions = (idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads();
-	while (radix_partitions <= _n_partitions / 2) {
-		radix_partitions *= 2;
-		if (radix_partitions >= 256) {
-			break;
-		}
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -80,7 +71,9 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalOperatorState {
 public:
-	HashAggregateGlobalState(PhysicalHashAggregate &_op) : op(_op), is_empty(true), lossy_total_groups(0) {
+	HashAggregateGlobalState(PhysicalHashAggregate &_op, ClientContext &context)
+	    : op(_op), is_empty(true), lossy_total_groups(0),
+	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 	}
 
 	PhysicalHashAggregate &op;
@@ -91,15 +84,15 @@ public:
 	bool is_empty;
 	//! The lock for updating the global aggregate state
 	std::mutex lock;
-	//    HashTableList ht; ??
+	//! a counter to determine if we should switch over to p
 	idx_t lossy_total_groups;
+
+	RadixPartitionInfo partition_info;
 };
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(PhysicalHashAggregate &_op) : op(_op), group_executor(op.groups), is_empty(true) {
-		ht = make_unique<PartitionableHashTable>(op.buffer_manager, op.radix_partitions, op.group_types,
-		                                         op.payload_types, op.bindings);
 		for (auto &aggr : op.bindings) {
 			if (aggr->children.size()) {
 				for (idx_t i = 0; i < aggr->children.size(); ++i) {
@@ -132,7 +125,7 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalHashAggregate::GetGlobalState(ClientContext &context) {
-	return make_unique<HashAggregateGlobalState>(*this);
+	return make_unique<HashAggregateGlobalState>(*this, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionContext &context) {
@@ -175,8 +168,9 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		lock_guard<mutex> glock(gstate.lock);
 		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
 		if (gstate.finalized_hts.size() == 0) {
-			gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(
-			    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_64));
+			gstate.finalized_hts.push_back(
+			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client), group_types,
+			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64));
 		}
 		assert(gstate.finalized_hts.size() == 1);
 		gstate.lossy_total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_chunk);
@@ -188,6 +182,11 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 
 	if (group_chunk.size() > 0) {
 		llstate.is_empty = false;
+	}
+
+	if (!llstate.ht) {
+		llstate.ht = make_unique<PartitionableHashTable>(BufferManager::GetBufferManager(context.client),
+		                                                 gstate.partition_info, group_types, payload_types, bindings);
 	}
 
 	gstate.lossy_total_groups +=
@@ -229,7 +228,12 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 		return;
 	}
 
-	if (!llstate.ht->IsPartitioned() && radix_partitions > 1 && gstate.lossy_total_groups > radix_limit) {
+	if (!llstate.ht) {
+		return; // no data
+	}
+
+	if (!llstate.ht->IsPartitioned() && gstate.partition_info.radix_partitions > 1 &&
+	    gstate.lossy_total_groups > radix_limit) {
 		llstate.ht->Partition();
 	}
 
@@ -321,14 +325,15 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 		// schedule additional tasks to combine the partial HTs
 		if (!immediate) {
 			assert(pipeline);
-			pipeline->total_tasks += radix_partitions;
+			pipeline->total_tasks += gstate.partition_info.radix_partitions;
 		}
-		gstate.finalized_hts.resize(radix_partitions);
-		for (idx_t r = 0; r < radix_partitions; r++) {
+		gstate.finalized_hts.resize(gstate.partition_info.radix_partitions);
+		for (idx_t r = 0; r < gstate.partition_info.radix_partitions; r++) {
 			// TODO possible optimization, if total count < limit for 32 bit ht, use that one
 			// create this ht here so finalize needs no lock on gstate
-			gstate.finalized_hts[r] = make_unique<GroupedAggregateHashTable>(buffer_manager, group_types, payload_types,
-			                                                                 bindings, HtEntryType::HT_WIDTH_64);
+			gstate.finalized_hts[r] =
+			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), group_types,
+			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64);
 			if (immediate) {
 				PhysicalHashAggregateFinalizeTask::FinalizeHT(gstate, r);
 			} else {
@@ -339,7 +344,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 		}
 	} else { // in the non-partitioned case we immediately combine all the unpartitioned hts created by the threads.
 		gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(
-		    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_64));
+		    BufferManager::GetBufferManager(context), group_types, payload_types, bindings, HtEntryType::HT_WIDTH_64));
 		for (auto &pht : gstate.intermediate_hts) {
 			auto unpartitioned = pht->GetUnpartitioned();
 			assert(unpartitioned);

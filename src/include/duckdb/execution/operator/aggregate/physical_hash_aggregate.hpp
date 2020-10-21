@@ -48,10 +48,6 @@ public:
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
 
-	BufferManager &buffer_manager;
-
-	idx_t radix_partitions;
-
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
