@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class UncompressedSegment;
+class BaseStatistics;
 class SegmentStatistics;
 
 //! The table data writer is responsible for writing the data of a table to the block manager
@@ -37,6 +38,7 @@ private:
 
 	vector<unique_ptr<UncompressedSegment>> segments;
 	vector<unique_ptr<SegmentStatistics>> stats;
+	vector<unique_ptr<BaseStatistics>> column_stats;
 
 	vector<vector<DataPointer>> data_pointers;
 };

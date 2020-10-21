@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/storage/table/string_statistics.hpp"
 
 using namespace std;
 
@@ -459,6 +460,11 @@ idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
 	return Storage::BLOCK_SIZE - used_space;
 }
 
+static inline void update_string_stats(SegmentStatistics &stats, const string_t &new_value) {
+	auto &sstats = (StringStatistics &) *stats.statistics;
+	sstats.Update(new_value);
+}
+
 void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
                                idx_t target_offset, Vector &source, idx_t offset, idx_t count) {
 	VectorData adata;
@@ -484,7 +490,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			idx_t string_length = sdata[source_idx].GetSize();
 			idx_t total_length = string_length + 1 + sizeof(uint16_t);
 
-			stats.UpdateStatistics<string_t>(sdata[source_idx]);
+			update_string_stats(stats, sdata[source_idx]);
 
 			// determine whether or not the string needs to be stored in an overflow block
 			// we never place small strings in the overflow blocks: the pointer would take more space than the
@@ -658,7 +664,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
 		if (!update_nullmask[i]) {
-			stats.UpdateStatistics<string_t>(strings[i]);
+			update_string_stats(stats, strings[i]);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			stats.statistics->has_null = true;
@@ -680,7 +686,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	//! Check if we need to update the segment's nullmask
 	for (idx_t i = 0; i < update_count; i++) {
 		if (!update_nullmask[i]) {
-			stats.UpdateStatistics<string_t>(strings[i]);
+			update_string_stats(stats, strings[i]);
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {

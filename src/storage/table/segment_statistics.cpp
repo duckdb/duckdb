@@ -13,49 +13,8 @@ SegmentStatistics::SegmentStatistics(LogicalType type, idx_t type_size, unique_p
     : type(type), type_size(type_size), statistics(move(stats)) {
 }
 
-template<>
-void SegmentStatistics::UpdateStatistics<string_t>(const string_t &value) {
-	auto &stats = (StringStatistics &) *statistics;
-	stats.Update(value);
-}
-
-template<>
-void SegmentStatistics::UpdateStatistics<interval_t>(const interval_t &value) {
-}
-
 void SegmentStatistics::Reset() {
-	switch (type.InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		statistics = make_unique<NumericStatistics<int8_t>>();
-		break;
-	case PhysicalType::INT16:
-		statistics = make_unique<NumericStatistics<int16_t>>();
-		break;
-	case PhysicalType::INT32:
-		statistics = make_unique<NumericStatistics<int32_t>>();
-		break;
-	case PhysicalType::INT64:
-		statistics = make_unique<NumericStatistics<int64_t>>();
-		break;
-	case PhysicalType::INT128:
-		statistics = make_unique<NumericStatistics<hugeint_t>>();
-		break;
-	case PhysicalType::FLOAT:
-		statistics = make_unique<NumericStatistics<float>>();
-		break;
-	case PhysicalType::DOUBLE:
-		statistics = make_unique<NumericStatistics<double>>();
-		break;
-	case PhysicalType::VARCHAR:
-		statistics = make_unique<StringStatistics>(type.id() == LogicalTypeId::BLOB);
-		break;
-	case PhysicalType::INTERVAL:
-		statistics = make_unique<BaseStatistics>();
-		break;
-	default:
-		throw InternalException("Unimplemented type for SEGMENT statistics");
-	}
+	statistics = BaseStatistics::CreateEmpty(type);
 }
 
 bool SegmentStatistics::CheckZonemap(TableFilter &filter) {

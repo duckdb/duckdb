@@ -7,6 +7,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/storage/table/numeric_statistics.hpp"
 
 using namespace std;
 
@@ -472,6 +473,17 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+template<class T>
+static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value) {
+	auto &nstats = (NumericStatistics<T> &) *stats.statistics;
+	nstats.Update(new_value);
+}
+
+template<>
+void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
+}
+
+
 template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                         idx_t count) {
@@ -491,7 +503,7 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 				nullmask[target_idx] = true;
 				stats.statistics->has_null = true;
 			} else {
-				stats.UpdateStatistics<T>(sdata[source_idx]);
+				update_numeric_statistics<T>(stats, sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			}
 		}
@@ -499,7 +511,7 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
-			stats.UpdateStatistics<T>(sdata[source_idx]);
+			update_numeric_statistics<T>(stats, sdata[source_idx]);
 			tdata[target_idx] = sdata[source_idx];
 		}
 	}
@@ -544,7 +556,7 @@ static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T
 		base_data[base_sel[i]] = new_data[i];
 		base_nullmask[base_sel[i]] = new_nullmask[i];
 		// update the min max with the new data
-		stats.UpdateStatistics<T>(new_data[i]);
+		update_numeric_statistics<T>(stats, new_data[i]);
 	}
 }
 
@@ -557,7 +569,7 @@ static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data
 		// now move the new data in-place into the base table
 		base_data[base_sel[i]] = new_data[i];
 		// update the min max with the new data
-		stats.UpdateStatistics<T>(new_data[i]);
+		update_numeric_statistics<T>(stats, new_data[i]);
 	}
 }
 
@@ -613,7 +625,7 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
 	for (idx_t i = 0; i < count; i++) {
-		stats.UpdateStatistics<T>(update_data[i]);
+		update_numeric_statistics<T>(stats, update_data[i]);
 	}
 
 	// first we copy the old update info into a temporary structure

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/numeric_statistics.hpp
+// duckdb/storage/table/string_statistics.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -24,7 +24,7 @@ public:
 	data_t min[MAX_STRING_MINMAX_SIZE];
 	//! The maximum value of the segment, potentially truncated
 	data_t max[MAX_STRING_MINMAX_SIZE];
-	//! Whether or not the column is ASCII only
+	//! Whether or not the column can contain unicode characters
 	bool has_unicode;
 	//! The maximum string length in bytes
 	uint32_t max_string_length;
@@ -33,10 +33,14 @@ public:
 
 public:
 	void Update(const string_t &value);
+	void Merge(const BaseStatistics &other) override;
+
 	unique_ptr<BaseStatistics> Copy() override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source);
 	bool CheckZonemap(ExpressionType comparison_type, string value);
+
+	string ToString() override;
 };
 
 }

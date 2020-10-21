@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,12 @@ public:
 		if (GreaterThan::Operation(value, max)) {
 			max = value;
 		}
+	}
+	void Merge(const BaseStatistics &other_) override {
+		auto &other = (const NumericStatistics<T> &) other_;
+		has_null = has_null || other.has_null;
+		min = MinValue<T>(min, other.min);
+		max = MaxValue<T>(max, other.max);
 	}
 	bool CheckZonemap(ExpressionType comparison_type, T constant) {
 		switch (comparison_type) {
@@ -71,6 +78,18 @@ public:
 		auto max = source.Read<T>();
 		return make_unique_base<BaseStatistics, NumericStatistics<T>>(min, max);
 	}
+
+	string ToString() override {
+		return StringUtil::Format("Numeric Statistics<%s> [Has Null: %s, Min: %lld, Max: %lld]",
+		    TypeIdToString(GetTypeId<T>()), has_null ? "true" : "false", min, max);
+	}
 };
+
+template<>
+string NumericStatistics<hugeint_t>::ToString();
+template<>
+string NumericStatistics<float>::ToString();
+template<>
+string NumericStatistics<double>::ToString();
 
 }

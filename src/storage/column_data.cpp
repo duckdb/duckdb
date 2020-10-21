@@ -7,8 +7,9 @@
 namespace duckdb {
 using namespace std;
 
-ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info)
-    : table_info(table_info), manager(manager), persistent_rows(0) {
+ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
+    : table_info(table_info), type(move(type)), manager(manager), column_idx(column_idx), persistent_rows(0) {
+	statistics = BaseStatistics::CreateEmpty(type);
 }
 
 void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
@@ -128,6 +129,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vector, offset, count);
+		statistics->Merge(*state.current->stats.statistics);
 		if (copied_elements == count) {
 			// finished copying everything
 			break;
@@ -173,6 +175,7 @@ void ColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_i
 	auto segment = (ColumnSegment *)data.GetSegment(first_id);
 	// now perform the update within the segment
 	segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids), count);
+	statistics->Merge(*segment->stats.statistics);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
+#include "duckdb/storage/table/base_statistics.hpp"
 
 namespace duckdb {
 class PersistentSegment;
@@ -21,9 +22,7 @@ struct DataTableInfo;
 
 class ColumnData {
 public:
-	ColumnData(BufferManager &manager, DataTableInfo &table_info);
-	//! Set up the column data with the set of persistent segments, returns the amount of rows
-	void Initialize(vector<unique_ptr<PersistentSegment>> &segments);
+	ColumnData(BufferManager &manager, DataTableInfo &table_info, LogicalType type, idx_t column_idx);
 
 	DataTableInfo &table_info;
 	//! The type of the column
@@ -36,8 +35,12 @@ public:
 	SegmentTree data;
 	//! The amount of persistent rows
 	idx_t persistent_rows;
+	//! The statistics of the column
+	unique_ptr<BaseStatistics> statistics;
 
 public:
+	//! Set up the column data with the set of persistent segments
+	void Initialize(vector<unique_ptr<PersistentSegment>> &segments);
 	//! Initialize a scan of the column
 	void InitializeScan(ColumnScanState &state);
 	//! Initialize a scan starting at the specified offset

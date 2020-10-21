@@ -25,12 +25,11 @@ namespace duckdb {
 class ClientContext;
 class ColumnDefinition;
 class DataTable;
+class PersistentTableData;
 class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 class WriteAheadLog;
-
-typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
 
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
@@ -60,7 +59,7 @@ struct ParallelTableScanState {
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types, persistent_data_t data);
+	DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types, unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed

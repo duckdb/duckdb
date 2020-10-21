@@ -12,6 +12,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 #include "duckdb/storage/table/morsel_info.hpp"
 
@@ -20,22 +21,23 @@ using namespace std;
 using namespace chrono;
 
 DataTable::DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types_,
-                     unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
+                     unique_ptr<PersistentTableData> data)
     : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage),
       versions(make_shared<SegmentTree>()), total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
-		column_data->type = types[i];
-		column_data->column_idx = i;
+		auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, types[i], i);
 		columns.push_back(move(column_data));
 	}
 
 	// initialize the table with the existing data from disk, if any
-	if (data && data[0].size() > 0) {
+	if (data && data->table_data[0].size() > 0) {
+		for(idx_t i = 0; i < types.size(); i++) {
+			columns[i]->statistics = move(data->column_stats[i]);
+		}
 		// first append all the segments to the set of column segments
 		for (idx_t i = 0; i < types.size(); i++) {
-			columns[i]->Initialize(data[i]);
+			columns[i]->Initialize(data->table_data[i]);
 			if (columns[i]->persistent_rows != columns[0]->persistent_rows) {
 				throw Exception("Column length mismatch in table load!");
 			}
@@ -64,9 +66,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	idx_t new_column_idx = columns.size();
 
 	types.push_back(new_column_type);
-	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
-	column_data->type = new_column_type;
-	column_data->column_idx = new_column_idx;
+	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, new_column_type, new_column_idx);
 	columns.push_back(move(column_data));
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
@@ -144,9 +144,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	types[changed_idx] = target_type;
 
 	// construct a new column data for this type
-	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
-	column_data->type = target_type;
-	column_data->column_idx = changed_idx;
+	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, target_type, changed_idx);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);

@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/string_statistics.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -46,7 +47,7 @@ unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source) {
 	return move(stats);
 }
 
-static int string_value_comparison(const_data_ptr_t data, idx_t len, data_ptr_t comparison) {
+static int string_value_comparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {
 	assert(len <= StringStatistics::MAX_STRING_MINMAX_SIZE);
 	for(idx_t i = 0; i < len; i++) {
 		if (data[i] < comparison[i]) {
@@ -90,6 +91,20 @@ void StringStatistics::Update(const string_t &value) {
 	}
 }
 
+void StringStatistics::Merge(const BaseStatistics &other_) {
+	auto &other = (const StringStatistics&) other_;
+	if (string_value_comparison(other.min, MAX_STRING_MINMAX_SIZE, min) < 0) {
+		memcpy(min, other.min, MAX_STRING_MINMAX_SIZE);
+	}
+	if (string_value_comparison(other.max, MAX_STRING_MINMAX_SIZE, max) > 0) {
+		memcpy(max, other.max, MAX_STRING_MINMAX_SIZE);
+	}
+	has_null = has_null || other.has_null;
+	has_unicode = has_unicode || other.has_unicode;
+	max_string_length = MaxValue<uint32_t>(max_string_length, other.max_string_length);
+	has_overflow_strings = has_overflow_strings || other.has_overflow_strings;
+}
+
 bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string constant) {
 	auto data = (const_data_ptr_t) constant.c_str();
 	auto size = constant.size();
@@ -109,6 +124,23 @@ bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string const
 	default:
 		throw InternalException("Operation not implemented");
 	}
+}
+
+string StringStatistics::ToString() {
+	idx_t min_len, max_len;
+	for(min_len = 0; min_len < MAX_STRING_MINMAX_SIZE; min_len++) {
+		if (min[min_len] == '\0') {
+			break;
+		}
+	}
+	for(max_len = 0; max_len < MAX_STRING_MINMAX_SIZE; max_len++) {
+		if (max[max_len] == '\0') {
+			break;
+		}
+	}
+	return StringUtil::Format("String Statistics [Has Null: %s, Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
+	    has_null ? "true" : "false", string((const char*) min, min_len), string((const char*) max, max_len),
+		has_unicode ? "true" : "false", max_string_length);
 }
 
 }

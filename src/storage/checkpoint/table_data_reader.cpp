@@ -17,13 +17,18 @@ using namespace std;
 
 TableDataReader::TableDataReader(CheckpointManager &manager, MetaBlockReader &reader, BoundCreateTableInfo &info)
     : manager(manager), reader(reader), info(info) {
-	info.data = unique_ptr<vector<unique_ptr<PersistentSegment>>[]>(
-	    new vector<unique_ptr<PersistentSegment>>[info.Base().columns.size()]);
+	info.data = make_unique<PersistentTableData>(info.Base().columns.size());
 }
 
 void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
 	assert(columns.size() > 0);
+
+	// load the column statistics
+	for (idx_t col = 0; col < columns.size(); col++) {
+		auto &column = columns[col];
+		info.data->column_stats[col] = BaseStatistics::Deserialize(reader, column.type);
+	}
 
 	// load the data pointers for the table
 	idx_t table_count = 0;
@@ -45,7 +50,7 @@ void TableDataReader::ReadTableData() {
 			auto segment = make_unique<PersistentSegment>(
 			    manager.buffer_manager, data_pointer.block_id, data_pointer.offset, column.type,
 			    data_pointer.row_start, data_pointer.tuple_count, move(data_pointer.statistics));
-			info.data[col].push_back(move(segment));
+			info.data->table_data[col].push_back(move(segment));
 		}
 		if (col == 0) {
 			table_count = column_count;

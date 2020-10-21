@@ -49,9 +49,12 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 	// allocate segments to write the table to
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
+	stats.reserve(table.columns.size());
+	column_stats.reserve(table.columns.size());
 	for (idx_t i = 0; i < table.columns.size(); i++) {
 		auto type_id = table.columns[i].type.InternalType();
 		stats.push_back(make_unique<SegmentStatistics>(table.columns[i].type, GetTypeIdSize(type_id)));
+		column_stats.push_back(BaseStatistics::CreateEmpty(table.columns[i].type));
 		CreateSegment(i);
 	}
 
@@ -146,6 +149,8 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 	// write the block to disk
 	manager.block_manager.Write(*handle->node, block_id);
 
+	column_stats[col_idx]->Merge(*stats[col_idx]->statistics);
+	stats[col_idx] = make_unique<SegmentStatistics>(table.columns[col_idx].type, GetTypeIdSize(table.columns[col_idx].type.InternalType()));
 	handle.reset();
 	segments[col_idx] = nullptr;
 }
@@ -175,6 +180,10 @@ void TableDataWriter::VerifyDataPointers() {
 }
 
 void TableDataWriter::WriteDataPointers() {
+	for(auto &stats : column_stats) {
+		stats->Serialize(*manager.tabledata_writer);
+	}
+
 	for (idx_t i = 0; i < data_pointers.size(); i++) {
 		// get a reference to the data column
 		auto &data_pointer_list = data_pointers[i];
