@@ -130,8 +130,12 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	if (value->name != name) {
 		auto mapping_value = GetMapping(context, value->name);
 		if (mapping_value && !mapping_value->deleted) {
-			throw CatalogException("Could not rename \"%s\" to \"%s\": another entry with this name already exists!",
-			                       name, value->name);
+			auto entry = GetEntryForTransaction(context, entries[mapping_value->index].get());
+			if (!entry->deleted) {
+				string rename_err_msg =
+				    "Could not rename \"%s\" to \"%s\": another entry with this name already exists!";
+				throw CatalogException(rename_err_msg, name, value->name);
+			}
 		}
 		PutMapping(context, value->name, entry_index);
 		DeleteMapping(context, name);
@@ -181,7 +185,6 @@ void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, Ca
 	transaction.PushCatalogEntry(value->child.get());
 
 	entries[entry_index] = move(value);
-	DeleteMapping(context, entry.name);
 }
 
 bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool cascade) {
