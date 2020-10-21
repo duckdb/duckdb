@@ -15,6 +15,7 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
 	if (stmt->fromClause) {
 		result->from_table = TransformFrom(stmt->fromClause);
 	}
+
 	result->condition = TransformExpression(stmt->whereClause);
 
 	auto root = stmt->targetList;

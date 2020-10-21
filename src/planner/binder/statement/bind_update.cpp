@@ -13,7 +13,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-
+#include "duckdb/planner/tableref/bound_crossproductref.hpp"
 #include <algorithm>
 
 using namespace std;
@@ -90,6 +90,9 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	BoundStatement result;
+	unique_ptr<LogicalOperator> root;
+	LogicalGet *get;
+
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
@@ -98,9 +101,35 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto &table_binding = (BoundBaseTableRef &)*bound_table;
 	auto table = table_binding.table;
 
-	auto root = CreatePlan(*bound_table);
-	auto &get = (LogicalGet &)*root;
-	assert(root->type == LogicalOperatorType::GET);
+	if (stmt.from_table) {
+		auto bound_from = Bind(*stmt.from_table);
+		unique_ptr<BoundCrossProductRef> bound_crossproduct;
+		bool bound_left = false;
+		if (bound_from->type == TableReferenceType::CROSS_PRODUCT) {
+			bound_crossproduct = unique_ptr_cast<BoundTableRef, BoundCrossProductRef>(move(bound_from));
+			if (!bound_crossproduct->left) {
+				bound_crossproduct->left = move(bound_table);
+				bound_left = true;
+			} else if (!bound_crossproduct->right) {
+				bound_crossproduct->right = move(bound_table);
+			} else {
+				auto old_crossproduct = move(bound_crossproduct);
+				bound_crossproduct = make_unique<BoundCrossProductRef>();
+				bound_crossproduct->left = move(old_crossproduct);
+				bound_crossproduct->right = move(bound_table);
+			}
+		} else {
+			bound_crossproduct = make_unique<BoundCrossProductRef>();
+			bound_crossproduct->left = move(bound_from);
+			bound_crossproduct->right = move(bound_table);
+		}
+
+		root = CreatePlan(*bound_crossproduct);
+		get = (LogicalGet *)root->children[bound_left ? 0 : 1].get();
+	} else {
+		root = CreatePlan(*bound_table);
+		get = (LogicalGet *)root.get();
+	}
 
 	if (!table->temporary) {
 		// update of persistent table: not read only!
@@ -155,12 +184,12 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	proj->AddChild(move(root));
 
 	// bind any extra columns necessary for CHECK constraints or indexes
-	BindUpdateConstraints(*table, get, *proj, *update);
+	BindUpdateConstraints(*table, *get, *proj, *update);
 
 	// finally add the row id column to the projection list
-	proj->expressions.push_back(
-	    make_unique<BoundColumnRefExpression>(LOGICAL_ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
-	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	proj->expressions.push_back(make_unique<BoundColumnRefExpression>(
+	    LOGICAL_ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));
+	get->column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(move(proj));
