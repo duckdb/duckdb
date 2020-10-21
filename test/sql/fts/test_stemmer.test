@@ -8,47 +8,47 @@ statement ok
 PRAGMA enable_verification
 
 query T
-select stem('iiiiiiinformation')
+select stem('iiiiiiinformation', 'porter')
 ----
 iiiiiiinform
 
 query T
-SELECT stem(NULL)
+SELECT stem(NULL, 'porter')
 ----
 NULL
 
 query T
-SELECT stem('')
+SELECT stem('', 'porter')
 ----
 (empty)
 
 query T
-SELECT stem('connection')
+SELECT stem('connection', 'porter')
 ----
 connect
 
 query T
-SELECT stem('an')
+SELECT stem('an', 'porter')
 --
 an
 
 query T
-SELECT stem('🦆')
+SELECT stem('🦆', 'porter')
 ----
 🦆
 
 query T
-SELECT stem('information information')
+SELECT stem('information information', 'porter')
 ----
 information inform
 
 query T
-SELECT stem(concat(repeat('i', 64), 'nformation'))
+SELECT stem(concat(repeat('i', 64), 'nformation'), 'porter')
 ----
-iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiinformation
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiinform
 
 query T
-select stem(UNNEST(string_split(repeat('information ', 5), ' ')))
+select stem(UNNEST(string_split(repeat('information ', 5), ' ')), 'porter')
 ----
 inform
 inform
@@ -58,6 +58,6 @@ inform
 (empty)
 
 query I
-SELECT stem(UNNEST(string_split(string_agg(range, 'information '), ' '))) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
+SELECT stem(UNNEST(string_split(string_agg(range, 'information '), ' ')), 'porter') AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
 ----
 100000 values hashing to 030f4662a25fbc772e84af37e1cc8177
