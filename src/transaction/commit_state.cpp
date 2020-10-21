@@ -6,6 +6,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
@@ -155,8 +156,10 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
-		catalog_entry->parent->timestamp = commit_id;
-
+		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, commit_id);
+		if (catalog_entry->name != catalog_entry->parent->name) {
+			catalog_entry->set->UpdateTimestamp(catalog_entry, commit_id);
+		}
 		if (HAS_LOG) {
 			// push the catalog update to the WAL
 			WriteCatalogEntry(catalog_entry, data + sizeof(CatalogEntry *));
@@ -205,7 +208,10 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		assert(catalog_entry->parent);
-		catalog_entry->parent->timestamp = transaction_id;
+		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, transaction_id);
+		if (catalog_entry->name != catalog_entry->parent->name) {
+			catalog_entry->set->UpdateTimestamp(catalog_entry, transaction_id);
+		}
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
