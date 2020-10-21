@@ -11,19 +11,35 @@ statement ok
 CREATE TABLE documents(id VARCHAR, body VARCHAR)
 
 statement ok
-INSERT INTO documents VALUES ('doc1', '    QUÁCKING+QUÁCKING+QUÁCKING')
+INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING')
 
 # first steps towards writing an 'indexing query'
 statement ok
-CREATE TEMPORARY TABLE tokens AS (
+CREATE TABLE docs AS (
+    SELECT
+        row_number() OVER (PARTITION BY(SELECT NULL)) AS docid,
+        id AS name
+    FROM
+        documents
+)
+
+query II
+SELECT docid, name FROM docs
+----
+1	doc1
+2	doc2
+3	doc3
+
+# TODO: improve the regex whitelist to include emoji's
+statement ok
+CREATE TABLE terms AS (
     SELECT
         term,
-        name,
-        docid
+        docid,
+        row_number() OVER (PARTITION BY docid) AS pos
     FROM (
         SELECT
-            stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(body)), '[^a-z]', ' ', 'g'), '\s+'))) AS term,
-            id AS name,
+            stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(body)), '[^a-z]', ' ', 'g'), '\s+')), 'porter') AS term,
             row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
         FROM documents
     ) AS subquery
@@ -32,19 +48,45 @@ CREATE TEMPORARY TABLE tokens AS (
 )
 
 query III
-SELECT * FROM tokens
+SELECT term, docid, pos FROM terms
 ----
-quack	doc1	1
-quack	doc1	1
-quack	doc1	1
+quack	1	1
+quack	1	2
+quack	1	3
+bark	2	1
+bark	2	2
+bark	2	3
+bark	2	4
+meow	3	1
+meow	3	2
+meow	3	3
+meow	3	4
+meow	3	5
 
 statement ok
-CREATE TEMPORARY TABLE tokenids AS
+ALTER TABLE docs ADD len INT
+
+statement ok
+UPDATE docs
+SET len = (
+    SELECT count(term)
+    FROM terms
+    WHERE terms.docid = docs.docid
+)
+
+query III
+SELECT name, docid, len FROM docs
+----
+doc1	1	3
+doc2	2	4
+doc3	3	5
+
+statement ok
+CREATE TABLE dict AS
 WITH distinct_terms AS (
-    SELECT
-        DISTINCT term
-    FROM
-        tokens
+    SELECT DISTINCT term, docid
+    FROM terms
+    ORDER BY docid
 )
 SELECT
     row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
@@ -53,8 +95,73 @@ FROM
     distinct_terms
 
 query II
-SELECT * FROM tokenids
+SELECT termid, term FROM dict
 ----
 1	quack
+2	bark
+3	meow
 
-# TODO: create 'terms' table
+statement ok
+ALTER TABLE terms ADD COLUMN termid INT
+
+statement ok
+UPDATE terms
+SET termid = (
+    SELECT termid
+    FROM dict
+    WHERE terms.term = dict.term
+)
+
+query IIII
+SELECT term, termid, docid, pos FROM terms
+----
+quack	1	1	1
+quack	1	1	2
+quack	1	1	3
+bark	2	2	1
+bark	2	2	2
+bark	2	2	3
+bark	2	2	4
+meow	3	3	1
+meow	3	3	2
+meow	3	3	3
+meow	3	3	4
+meow	3	3	5
+
+statement ok
+ALTER TABLE terms DROP COLUMN term
+
+query III
+SELECT termid, docid, pos FROM terms
+----
+1	1	1
+1	1	2
+1	1	3
+2	2	1
+2	2	2
+2	2	3
+2	2	4
+3	3	1
+3	3	2
+3	3	3
+3	3	4
+3	3	5
+
+statement ok
+ALTER TABLE dict ADD COLUMN df INT
+
+statement ok
+UPDATE dict
+SET df = (
+    SELECT count(distinct docid)
+    FROM terms
+    WHERE dict.termid = terms.termid
+    GROUP BY termid
+)
+
+query III
+SELECT termid, term, df FROM dict
+----
+1	quack	1
+2	bark	1
+3	meow	1
