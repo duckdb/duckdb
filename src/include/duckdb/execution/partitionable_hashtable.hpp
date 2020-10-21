@@ -17,7 +17,7 @@ public:
 	PartitionableHashTable(BufferManager &_buffer_manager, idx_t _radix_partitions, vector<LogicalType> _group_types,
 	                       vector<LogicalType> _payload_types, vector<BoundAggregateExpression *> _bindings);
 
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition);
 	void Partition();
 	bool IsPartitioned();
 
@@ -35,7 +35,8 @@ private:
 	// some more radix config
 	idx_t radix_bits;
 	hash_t radix_mask;
-	idx_t radix_shift_offset;
+
+	constexpr static idx_t RADIX_SHIFT = 24;
 
 	bool is_partitioned;
 

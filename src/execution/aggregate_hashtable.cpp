@@ -229,8 +229,8 @@ idx_t GroupedAggregateHashTable::MaxCapacity() {
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
 	case HtEntryType::HT_WIDTH_64:
-		max_pages = NumericLimits<uint16_t>::Maximum();
-		max_tuples = NumericLimits<uint32_t>::Maximum();
+		max_pages = NumericLimits<uint32_t>::Maximum();
+		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
 	}
 
@@ -592,7 +592,7 @@ template <class T>
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes,
                                                             Vector &addresses_out, SelectionVector &new_groups_out) {
 	if (entries + groups.size() > MaxCapacity()) {
-		throw InternalException("Hash table cannot capacity reached");
+		throw InternalException("Hash table capacity reached");
 	}
 
 	// resize at 50% capacity, also need to fit the entire vector
@@ -667,8 +667,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 				assert(group_hashes_ptr[index] >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
 				assert(payload_page_offset < tuples_per_block);
-				assert(payload_hds.size() < NumericLimits<uint16_t>::Maximum());
-				assert(payload_page_offset + 1 < NumericLimits<uint32_t>::Maximum());
+				assert(payload_hds.size() < NumericLimits<uint32_t>::Maximum());
+				assert(payload_page_offset + 1 < NumericLimits<uint16_t>::Maximum());
 
 				ht_entry_ptr->salt = group_hashes_ptr[index] >> hash_prefix_shift;
 

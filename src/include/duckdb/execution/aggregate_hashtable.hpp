@@ -51,7 +51,9 @@ struct AggregateObject {
 // [SALT][PAGE_NR][PAGE_OFFSET]
 // [SALT] are the high bits of the hash value, e.g. 16 for 64 bit hashes
 // [PAGE_NR] is the buffer managed payload page index
-// [PAGE_OFFSET] is the logical entry offset into said payload payge
+// [PAGE_OFFSET] is the logical entry offset into said payload page
+
+// NOTE: PAGE_NR and PAGE_OFFSET are reversed for 64 bit HTs because struct packing
 
 // payload layout
 // [HASH][GROUPS][PADDING][PAYLOAD]
@@ -62,8 +64,8 @@ struct AggregateObject {
 
 struct aggr_ht_entry_64 {
 	uint16_t salt;
-	uint16_t page_nr;
-	uint32_t page_offset;
+	uint16_t page_offset;
+	uint32_t page_nr; // this has to come last because alignment
 };
 
 struct aggr_ht_entry_32 {

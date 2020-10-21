@@ -190,11 +190,8 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		llstate.is_empty = false;
 	}
 
-	if (radix_partitions > 1 && gstate.lossy_total_groups > radix_limit) {
-		llstate.ht->Partition();
-	}
-
-	gstate.lossy_total_groups += llstate.ht->AddChunk(group_chunk, payload_chunk);
+	gstate.lossy_total_groups +=
+	    llstate.ht->AddChunk(group_chunk, payload_chunk, gstate.lossy_total_groups > radix_limit);
 }
 
 //===--------------------------------------------------------------------===//
@@ -232,7 +229,7 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 		return;
 	}
 
-	if (radix_partitions > 1 && gstate.lossy_total_groups > radix_limit) {
+	if (!llstate.ht->IsPartitioned() && radix_partitions > 1 && gstate.lossy_total_groups > radix_limit) {
 		llstate.ht->Partition();
 	}
 
