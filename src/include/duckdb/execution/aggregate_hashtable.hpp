@@ -94,7 +94,7 @@ public:
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
 	//! Returns the amount of elements found.
-	idx_t Scan(idx_t &scan_position, DataChunk &group, DataChunk &result);
+	idx_t Scan(idx_t &scan_position, DataChunk &result);
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
@@ -164,6 +164,9 @@ private:
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
 	hash_t hash_prefix_get_bitmask;
+
+	//! Pointer vector for Scan()
+	Vector addresses;
 
 	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 

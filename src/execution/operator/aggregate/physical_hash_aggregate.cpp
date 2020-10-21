@@ -205,16 +205,16 @@ public:
 	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types,
 	                           vector<LogicalType> &aggregate_types, PhysicalOperator *child)
 	    : PhysicalOperatorState(op, child), ht_index(0), ht_scan_position(0) {
-		group_chunk.Initialize(group_types);
-		if (aggregate_types.size() > 0) {
-			aggregate_chunk.Initialize(aggregate_types);
+		auto scan_chunk_types = group_types;
+		for (auto &aggr_type : aggregate_types) {
+			scan_chunk_types.push_back(aggr_type);
 		}
+		scan_chunk.Initialize(scan_chunk_types);
 	}
 
-	//! Materialized GROUP BY expression
-	DataChunk group_chunk;
-	//! Materialized aggregates
-	DataChunk aggregate_chunk;
+	//! Materialized GROUP BY expressions & aggregates
+	DataChunk scan_chunk;
+
 	//! The current position to scan the HT for output tuples
 	idx_t ht_index;
 	idx_t ht_scan_position;
@@ -357,8 +357,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &state = (PhysicalHashAggregateState &)*state_;
 
-	state.group_chunk.Reset();
-	state.aggregate_chunk.Reset();
+	state.scan_chunk.Reset();
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
@@ -392,8 +391,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 			state.finished = true;
 			return;
 		}
-		elements_found = gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_position, state.group_chunk,
-		                                                            state.aggregate_chunk);
+		elements_found = gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_position, state.scan_chunk);
 
 		if (elements_found > 0) {
 			break;
@@ -405,16 +403,16 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 	// compute the final projection list
 	idx_t chunk_index = 0;
 	chunk.SetCardinality(elements_found);
-	if (state.group_chunk.column_count() + state.aggregate_chunk.column_count() == chunk.column_count()) {
-		for (idx_t col_idx = 0; col_idx < state.group_chunk.column_count(); col_idx++) {
-			chunk.data[chunk_index++].Reference(state.group_chunk.data[col_idx]);
+	if (group_types.size() + aggregates.size() == chunk.column_count()) {
+		for (idx_t col_idx = 0; col_idx < group_types.size(); col_idx++) {
+			chunk.data[chunk_index++].Reference(state.scan_chunk.data[col_idx]);
 		}
 	} else {
-		assert(state.aggregate_chunk.column_count() == chunk.column_count());
+		assert(aggregates.size() == chunk.column_count());
 	}
 
-	for (idx_t col_idx = 0; col_idx < state.aggregate_chunk.column_count(); col_idx++) {
-		chunk.data[chunk_index++].Reference(state.aggregate_chunk.data[col_idx]);
+	for (idx_t col_idx = 0; col_idx < aggregates.size(); col_idx++) {
+		chunk.data[chunk_index++].Reference(state.scan_chunk.data[group_types.size() + col_idx]);
 	}
 }
 

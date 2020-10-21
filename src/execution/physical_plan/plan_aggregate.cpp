@@ -43,6 +43,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 			    make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions));
 		}
 	} else {
+
 		// groups! create a GROUP BY aggregator
 		groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
 		                                                                    move(op.groups));

@@ -127,6 +127,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 			payload_idx += 1;
 		}
 	}
+	addresses.Initialize(LogicalType::POINTER);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
@@ -878,8 +879,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 	entries = 0;
 }
 
-idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
-	Vector addresses(LogicalType::POINTER);
+idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 	auto remaining = entries - scan_position;
@@ -902,21 +902,20 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &groups, D
 		}
 	}
 
-	groups.SetCardinality(this_n);
 	result.SetCardinality(this_n);
 	// fetch the group columns
-	for (idx_t i = 0; i < groups.column_count(); i++) {
-		auto &column = groups.data[i];
-		VectorOperations::Gather::Set(addresses, column, groups.size());
+	for (idx_t i = 0; i < group_types.size(); i++) {
+		auto &column = result.data[i];
+		VectorOperations::Gather::Set(addresses, column, result.size());
 	}
 
-	VectorOperations::AddInPlace(addresses, group_padding, groups.size());
+	VectorOperations::AddInPlace(addresses, group_padding, result.size());
 
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &target = result.data[i];
+		auto &target = result.data[group_types.size() + i];
 		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, target, groups.size());
-		VectorOperations::AddInPlace(addresses, aggr.payload_size, groups.size());
+		aggr.function.finalize(addresses, target, result.size());
+		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
 	}
 	scan_position += this_n;
 	return this_n;
