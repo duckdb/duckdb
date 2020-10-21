@@ -12,6 +12,9 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
 	auto result = make_unique<UpdateStatement>();
 
 	result->table = TransformRangeVar(stmt->relation);
+	if (stmt->fromClause) {
+		result->from_table = TransformFrom(stmt->fromClause);
+	}
 	result->condition = TransformExpression(stmt->whereClause);
 
 	auto root = stmt->targetList;
