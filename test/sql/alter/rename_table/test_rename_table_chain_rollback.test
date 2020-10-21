@@ -1,0 +1,68 @@
+# name: test/sql/alter/rename_table/test_rename_table_chain_rollback.test
+# description: test a chain of table creates and renames in a transaction, followed by a rollback
+# group: [rename_table]
+
+statement ok con1
+CREATE TABLE entry(i INTEGER);
+
+statement ok con1
+INSERT INTO entry VALUES (1)
+
+query I con2
+SELECT * FROM entry
+----
+1
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+ALTER TABLE entry RENAME TO entry2;
+
+statement ok con1
+CREATE TABLE entry(i INTEGER);
+
+statement ok con1
+ALTER TABLE entry2 RENAME TO entry3;
+
+statement ok con1
+ALTER TABLE entry RENAME TO entry2;
+
+statement ok con1
+CREATE TABLE entry(i INTEGER);
+
+statement ok con1
+ALTER TABLE entry3 RENAME TO entry4;
+
+statement ok con1
+ALTER TABLE entry2 RENAME TO entry3;
+
+statement ok con1
+ALTER TABLE entry RENAME TO entry2;
+
+query I con2
+SELECT * FROM entry
+----
+1
+
+statement error con2
+SELECT * FROM entry2
+
+statement error con2
+SELECT * FROM entry3
+
+statement error con2
+SELECT * FROM entry4
+
+statement ok con1
+ROLLBACK
+
+query I con2
+SELECT * FROM entry
+----
+1
+
+statement error con2
+SELECT * FROM entry4
+
+

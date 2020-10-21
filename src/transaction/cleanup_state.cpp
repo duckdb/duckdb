@@ -30,9 +30,6 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 				// delete the entry from the dependency manager, if it is not deleted yet
 				catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
 			}
-			if (catalog_entry->name != catalog_entry->parent->name) {
-				catalog_entry->set->ClearEntryName(catalog_entry->name);
-			}
 			catalog_entry->parent->child = move(catalog_entry->child);
 		}
 		break;
