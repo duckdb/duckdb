@@ -137,3 +137,159 @@ query II
 SELECT * FROM vals1 WHERE i<=0 AND j<i
 ----
 0	-1
+
+
+#################################################################################################
+# Non-scalar comparisons followed by simple constant comparisons
+# e.g., j >= i AND i>10
+
+### j >= i followed by constant comparison [=, >, >=, <, <=]  #########################
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i=5
+----
+5	5
+5	6
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i>9
+----
+10	10
+10	11
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i>=10
+----
+10	10
+10	11
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i<1
+----
+0	0
+0	1
+
+query II
+SELECT * FROM vals1 WHERE j>=i AND i<=0
+----
+0	0
+0	1
+
+### j <= i followed by constant comparison [=, >, >=, <, <=] #########################
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i=5
+----
+5	5
+5	4
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i>9
+----
+10	10
+10	9
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i>=10
+----
+10	10
+10	9
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i<1
+----
+0	0
+0	-1
+
+query II
+SELECT * FROM vals1 WHERE j<=i AND i<=0
+----
+0	0
+0	-1
+
+### j > i followed by constant comparison [=, >, >=, <, <=] #########################
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i=5
+----
+5	6
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i>9
+----
+10	11
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i>=10
+----
+10	11
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i<1
+----
+0	1
+
+query II
+SELECT * FROM vals1 WHERE j>i AND i<=0
+----
+0	1
+
+### j < i followed by constant comparison [=, >, >=, <, <=] #########################
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i=5
+----
+5	4
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i>9
+----
+10	9
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i>=10
+----
+10	9
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i<1
+----
+0	-1
+
+query II
+SELECT * FROM vals1 WHERE j<i AND i<=0
+----
+0	-1
+
+### Complex transitive filters #################################################
+statement ok
+CREATE TABLE vals2(k BIGINT, l BIGINT)
+
+statement ok
+INSERT INTO vals2 SELECT * FROM vals1
+
+query IIII
+SELECT * FROM vals1, vals2 WHERE i>9 AND j<=l AND k>=i AND l<11
+----
+10	10	10	10
+10	9	10	10
+10	9	10	9
+
+query IIII
+SELECT * FROM vals1, vals2 WHERE i>9 AND j>=i AND k>=j ORDER by l
+----
+10	10	10	9
+10	10	10	10
+10	10	10	11
+
+query IIII
+SELECT * FROM vals1, vals2 WHERE i>9 AND k>=j AND j>=i AND l>=k
+----
+10	10	10	10
+10	10	10	11
+
+query IIII
+SELECT * FROM vals1, vals2 WHERE i<1 AND k<=j AND j<=i AND l<=k
+----
+0	0	0	0
+0	0	0	-1

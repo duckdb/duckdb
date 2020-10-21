@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-
+#include "duckdb/common/enums/output_type.hpp"
 #include <cctype>
 
 namespace duckdb {
@@ -107,6 +107,10 @@ static void pragma_enable_force_parallelism(ClientContext &context, vector<Value
 	context.force_parallelism = true;
 }
 
+static void pragma_enable_force_index_join(ClientContext &context, vector<Value> parameters) {
+	context.force_index_join = true;
+}
+
 static void pragma_disable_force_parallelism(ClientContext &context, vector<Value> parameters) {
 	context.force_parallelism = false;
 }
@@ -122,13 +126,16 @@ static void pragma_log_query_path(ClientContext &context, vector<Value> paramete
 }
 
 static void pragma_explain_output(ClientContext &context, vector<Value> parameters) {
-	string val = parameters[0].ToString();
-	if (val == "optimized") {
-		context.explain_output_optimized_only = true;
-	} else if (val == "all") {
-		context.explain_output_optimized_only = true;
+	string val = StringUtil::Lower(parameters[0].ToString());
+	if (val == "all") {
+		context.default_output_type = OutputType::ALL;
+	} else if (val == "optimized_only") {
+		context.default_output_type = OutputType::OPTIMIZED_ONLY;
+	} else if (val == "physical_only") {
+		context.default_output_type = OutputType::PHYSICAL_ONLY;
 	} else {
-		throw ParserException("Expected PRAGMA explain_output={optimized, all}");
+		throw ParserException("Unrecognized output type '%s', expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY",
+		                      val);
 	}
 }
 
@@ -163,6 +170,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaAssignment("log_query_path", pragma_log_query_path, LogicalType::VARCHAR));
 	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", pragma_explain_output, LogicalType::VARCHAR));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", pragma_enable_force_index_join));
 }
 
 idx_t ParseMemoryLimit(string arg) {

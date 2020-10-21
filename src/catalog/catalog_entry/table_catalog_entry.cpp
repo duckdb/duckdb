@@ -21,6 +21,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -80,8 +81,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				for (auto &key : unique.keys) {
 					assert(key < columns.size());
 
-					unbound_expressions.push_back(
-					    make_unique<BoundColumnRefExpression>(columns[key].type, ColumnBinding(0, column_ids.size())));
+					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
+					    columns[key].name, columns[key].type, ColumnBinding(0, column_ids.size())));
+
 					bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
 					column_ids.push_back(key);
 				}
@@ -428,7 +430,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 
 string TableCatalogEntry::ToSQL() {
 	stringstream ss;
-	ss << "CREATE TABLE " << name << "(";
+	ss << "CREATE TABLE " << KeywordHelper::WriteOptionallyQuoted(name) << "(";
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	unordered_set<idx_t> not_null_columns;
@@ -470,7 +472,7 @@ string TableCatalogEntry::ToSQL() {
 			ss << ", ";
 		}
 		auto &column = columns[i];
-		ss << column.name << " " << column.type.ToString();
+		ss << KeywordHelper::WriteOptionallyQuoted(column.name) << " " << column.type.ToString();
 		bool not_null = not_null_columns.find(column.oid) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.oid) != pk_columns.end();
 		bool is_multi_key_pk = multi_key_pks.find(column.name) != multi_key_pks.end();
