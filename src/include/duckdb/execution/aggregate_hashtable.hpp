@@ -115,7 +115,7 @@ public:
 
 	idx_t MaxCapacity();
 
-	void Partition(unordered_map<hash_t, GroupedAggregateHashTable *> &partition_hts, hash_t hash_mask);
+	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, hash_t mask, idx_t shift);
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;

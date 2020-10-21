@@ -1,5 +1,8 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
+#include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/partitionable_hashtable.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -11,147 +14,6 @@
 
 namespace duckdb {
 using namespace std;
-
-struct PartitionableHashTable;
-
-struct HashTableList {
-
-	vector<unique_ptr<GroupedAggregateHashTable>> hts;
-
-	idx_t AddChunk(PartitionableHashTable &pht, DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
-		if (hts.empty() || hts.back()->Size() + groups.size() > hts.back()->MaxCapacity()) {
-			NewHT(pht);
-		}
-		return hts.back()->AddChunk(groups, group_hashes, payload);
-	}
-
-	void NewHT(PartitionableHashTable &pht);
-};
-
-struct PartitionableHashTable {
-	PartitionableHashTable(PhysicalHashAggregate &_pha)
-	    : pha(_pha), radix_bits(0), radix_mask(0), radix_shift_offset(24), is_partitioned(false) {
-
-		unpartitioned_ht = make_unique<GroupedAggregateHashTable>(
-		    pha.buffer_manager, pha.group_types, pha.payload_types, pha.bindings, HtEntryType::HT_WIDTH_32);
-
-		// finalize_threads needs to be a power of 2
-		assert(pha.radix_partitions > 0);
-		assert(pha.radix_partitions <= 256);
-		assert((pha.radix_partitions & (pha.radix_partitions - 1)) == 0);
-
-		auto radix_partitions_copy = pha.radix_partitions;
-		while (radix_partitions_copy - 1) {
-			radix_bits++;
-			radix_partitions_copy >>= 1;
-		}
-
-		assert(radix_bits <= 8);
-
-		// we use the fifth byte of the 64 bit hash as radix source
-		radix_mask = 0;
-		for (idx_t i = 0; i < radix_bits; i++) {
-			radix_mask = (radix_mask << 1) | 1;
-		}
-		radix_mask <<= radix_shift_offset;
-	}
-
-	PhysicalHashAggregate &pha;
-	HtEntryType entry_type;
-	unique_ptr<GroupedAggregateHashTable> unpartitioned_ht;
-
-	unordered_map<hash_t, HashTableList> radix_partitioned_hts;
-
-	//! how many bits are used for the radix partitions
-	idx_t radix_bits;
-	//! bit mask to get radix partition
-	hash_t radix_mask;
-
-	idx_t radix_shift_offset;
-
-	bool is_partitioned;
-
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload) {
-		Vector hashes(LogicalType::HASH);
-		groups.Hash(hashes);
-
-		if (!is_partitioned) {
-			return unpartitioned_ht->AddChunk(groups, hashes, payload);
-		}
-
-		// makes no sense to do this with 1 partition
-		assert(pha.radix_partitions > 1);
-
-		Vector radix_mask_vec(Value::HASH(radix_mask));
-		vector<SelectionVector> sel_vectors(pha.radix_partitions);
-		vector<idx_t> sel_vector_sizes(pha.radix_partitions);
-		for (hash_t r = 0; r < pha.radix_partitions; r++) {
-			sel_vectors[r].Initialize();
-			sel_vector_sizes[r] = 0;
-		}
-		assert(hashes.vector_type == VectorType::FLAT_VECTOR);
-		auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
-		for (idx_t i = 0; i < groups.size(); i++) {
-			auto partition = (hashes_ptr[i] & radix_mask) >> radix_shift_offset;
-			assert(partition < pha.radix_partitions);
-			sel_vectors[partition].set_index(sel_vector_sizes[partition]++, i);
-		}
-
-#ifdef DEBUG
-		// make sure we have lost no rows
-		idx_t total_count = 0;
-		for (idx_t r = 0; r < pha.radix_partitions; r++) {
-			total_count += sel_vector_sizes[r];
-		}
-		assert(total_count == groups.size());
-#endif
-
-		DataChunk group_subset, payload_subset;
-		auto group_types = groups.GetTypes();
-		auto payload_types = payload.GetTypes();
-		group_subset.Initialize(group_types);
-		payload_subset.Initialize(payload_types);
-
-		idx_t new_groups = 0;
-		for (hash_t r = 0; r < pha.radix_partitions; r++) {
-			Vector hashes_subset(LogicalType::HASH);
-
-			group_subset.Slice(groups, sel_vectors[r], sel_vector_sizes[r]);
-			payload_subset.Slice(payload, sel_vectors[r], sel_vector_sizes[r]);
-			hashes_subset.Slice(hashes, sel_vectors[r], sel_vector_sizes[r]);
-
-			new_groups += radix_partitioned_hts[r].AddChunk(*this, group_subset, hashes_subset, payload_subset);
-		}
-		return new_groups;
-	}
-
-	void Partition() {
-		if (pha.radix_partitions < 2) {
-			return;
-		}
-		if (is_partitioned) {
-			return;
-		}
-		unordered_map<hash_t, GroupedAggregateHashTable *> partition_hts;
-		assert(radix_partitioned_hts.size() == 0);
-		for (idx_t r = 0; r < pha.radix_partitions; r++) {
-			hash_t radix = r << radix_shift_offset;
-			radix_partitioned_hts[r].NewHT(*this);
-			partition_hts[radix] = radix_partitioned_hts[r].hts.back().get();
-			assert((radix & radix_mask) == radix);
-		}
-
-		unpartitioned_ht->Partition(partition_hts, ((hash_t)pha.radix_partitions - 1) << radix_shift_offset);
-		unpartitioned_ht.reset();
-		is_partitioned = true;
-	}
-};
-
-void HashTableList::NewHT(PartitionableHashTable &pht) {
-	hts.push_back(make_unique<GroupedAggregateHashTable>(pht.pha.buffer_manager, pht.pha.group_types,
-	                                                     pht.pha.payload_types, pht.pha.bindings,
-	                                                     HtEntryType::HT_WIDTH_32));
-}
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type)
@@ -201,8 +63,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		aggregates.push_back(move(expr));
 	}
 
-	// TODO, figure out some heuristic/constant for those
-	radix_limit = 1000;
+	// 10000 seems like a good compromise here
+	radix_limit = 10000;
 
 	auto _n_partitions = (idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads();
 	while (radix_partitions <= _n_partitions / 2) {
@@ -236,7 +98,8 @@ public:
 class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(PhysicalHashAggregate &_op) : op(_op), group_executor(op.groups), is_empty(true) {
-		ht = make_unique<PartitionableHashTable>(op);
+		ht = make_unique<PartitionableHashTable>(op.buffer_manager, op.radix_partitions, op.group_types,
+		                                         op.payload_types, op.bindings);
 		for (auto &aggr : op.bindings) {
 			if (aggr->children.size()) {
 				for (idx_t i = 0; i < aggr->children.size(); ++i) {
@@ -365,8 +228,6 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	// in parallel
 
 	if (!all_combinable || any_distinct) {
-		assert(llstate.ht->radix_partitioned_hts.size() == 0 &&
-		       (!llstate.ht->unpartitioned_ht || llstate.ht->unpartitioned_ht->Size() == 0));
 		assert(gstate.finalized_hts.size() <= 1);
 		return;
 	}
@@ -397,8 +258,7 @@ public:
 	static void FinalizeHT(HashAggregateGlobalState &gstate, idx_t radix) {
 		assert(gstate.finalized_hts[radix]);
 		for (auto &pht : gstate.intermediate_hts) {
-			assert(pht->radix_partitioned_hts.size() == gstate.op.radix_partitions);
-			for (auto &ht : pht->radix_partitioned_hts[radix].hts) {
+			for (auto &ht : pht->GetPartition(radix)) {
 				gstate.finalized_hts[radix]->Combine(*ht);
 				ht.reset();
 			}
@@ -447,7 +307,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 	// if we did, its the latter case.
 	bool any_partitioned = false;
 	for (auto &pht : gstate.intermediate_hts) {
-		if (pht->is_partitioned) {
+		if (pht->IsPartitioned()) {
 			any_partitioned = true;
 			break;
 		}
@@ -457,7 +317,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 		// if one is partitioned, all have to be
 		// this should mostly have already happened in Combine, but if not we do it here
 		for (auto &pht : gstate.intermediate_hts) {
-			if (!pht->is_partitioned) {
+			if (!pht->IsPartitioned()) {
 				pht->Partition();
 			}
 		}
@@ -484,11 +344,10 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 		gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(
 		    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_64));
 		for (auto &pht : gstate.intermediate_hts) {
-			assert(pht->radix_partitioned_hts.size() == 0);
-			assert(pht->unpartitioned_ht);
-			assert(!pht->is_partitioned);
-			gstate.finalized_hts[0]->Combine(*pht->unpartitioned_ht);
-			pht->unpartitioned_ht.reset();
+			auto unpartitioned = pht->GetUnpartitioned();
+			assert(unpartitioned);
+			gstate.finalized_hts[0]->Combine(*unpartitioned);
+			unpartitioned.reset();
 		}
 	}
 }

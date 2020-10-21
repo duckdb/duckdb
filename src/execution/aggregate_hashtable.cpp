@@ -840,28 +840,26 @@ struct PartitionInfo {
 	hash_t *hashes_ptr;
 };
 
-void GroupedAggregateHashTable::Partition(unordered_map<hash_t, GroupedAggregateHashTable *> &partition_hts,
-                                          hash_t hash_mask) {
+void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &partition_hts, hash_t mask,
+                                          idx_t shift) {
 	assert(partition_hts.size() > 1);
 	vector<PartitionInfo> partition_info(partition_hts.size());
 
 	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
 		auto hash = Load<hash_t>(ptr);
 
-		idx_t info_idx = 0;
-		for (auto &partition_entry : partition_hts) {
-			auto &info = partition_info[info_idx++];
-			if ((hash & hash_mask) != partition_entry.first) {
-				continue;
-			}
-			info.hashes_ptr[info.group_count] = hash;
-			info.addresses_ptr[info.group_count] = ptr + hash_width;
-			info.group_count++;
-			if (info.group_count == STANDARD_VECTOR_SIZE) {
-				assert(partition_entry.second);
-				partition_entry.second->FlushMove(info.addresses, info.hashes, info.group_count);
-				info.group_count = 0;
-			}
+		idx_t partition = (hash & mask) >> shift;
+		assert(partition < partition_hts.size());
+
+		auto &info = partition_info[partition];
+
+		info.hashes_ptr[info.group_count] = hash;
+		info.addresses_ptr[info.group_count] = ptr + hash_width;
+		info.group_count++;
+		if (info.group_count == STANDARD_VECTOR_SIZE) {
+			assert(partition_hts[partition]);
+			partition_hts[partition]->FlushMove(info.addresses, info.hashes, info.group_count);
+			info.group_count = 0;
 		}
 	});
 
@@ -869,11 +867,11 @@ void GroupedAggregateHashTable::Partition(unordered_map<hash_t, GroupedAggregate
 	idx_t total_count = 0;
 	for (auto &partition_entry : partition_hts) {
 		auto &info = partition_info[info_idx++];
-		partition_entry.second->FlushMove(info.addresses, info.hashes, info.group_count);
+		partition_entry->FlushMove(info.addresses, info.hashes, info.group_count);
 
-		partition_entry.second->string_heap.MergeHeap(string_heap);
-		partition_entry.second->Verify();
-		total_count += partition_entry.second->Size();
+		partition_entry->string_heap.MergeHeap(string_heap);
+		partition_entry->Verify();
+		total_count += partition_entry->Size();
 	}
 	assert(total_count == entries);
 	// mark the ht as empty so finalizers are not run
