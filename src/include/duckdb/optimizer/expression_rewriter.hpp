@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -21,11 +22,14 @@ public:
 	//! The set of rules as known by the Expression Rewriter
 	vector<unique_ptr<Rule>> rules;
 
+	ClientContext &context;
+
+public:
 	//! Apply the rules to a specific LogicalOperator
 	void Apply(LogicalOperator &root);
 
-	ClientContext &context;
-
+	// Generates either a constant_or_null(child) expression
+	static unique_ptr<Expression> ConstantOrNull(unique_ptr<Expression> child, Value value);
 private:
 	//! Apply a set of rules to a specific expression
 	static unique_ptr<Expression> ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,

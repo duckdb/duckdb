@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -50,6 +51,9 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		if (constant->value == 1) {
 			// multiply with 1, replace with non-constant child
 			return move(root->children[1 - constant_child]);
+		} else if (constant->value == 0) {
+			// multiply by zero: replace with constant or null
+			return ExpressionRewriter::ConstantOrNull(move(root->children[1 - constant_child]), Value::Numeric(root->return_type, 0));
 		}
 	} else {
 		assert(func_name == "/");

@@ -3,6 +3,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -35,6 +37,16 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 		return ExpressionRewriter::ApplyRules(op, rules, move(child), changes_made);
 	});
 	return expr;
+}
+
+unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression> child, Value value) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(move(child));
+	return make_unique<BoundFunctionExpression>(
+		value.type(),
+		ConstantOrNull::GetFunction(value.type()),
+		move(children),
+		ConstantOrNull::Bind(value));
 }
 
 void ExpressionRewriter::Apply(LogicalOperator &root) {

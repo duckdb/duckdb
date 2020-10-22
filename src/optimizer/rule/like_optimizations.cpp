@@ -45,17 +45,14 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 
 	if (duckdb_re2::RE2::FullMatch(patt_str, prefix_pattern)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
-
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str);
 
 	} else if (duckdb_re2::RE2::FullMatch(patt_str, suffix_pattern)) {
 		// Suffix LIKE pattern: [%]+[^%_]*, ignoring underscore
-
 		return ApplyRule(root, SuffixFun::GetFunction(), patt_str);
 
 	} else if (duckdb_re2::RE2::FullMatch(patt_str, contains_pattern)) {
 		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
-
 		return ApplyRule(root, ContainsFun::GetFunction(), patt_str);
 	}
 

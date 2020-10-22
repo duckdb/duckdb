@@ -21,4 +21,9 @@ struct GreatestFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ConstantOrNull {
+	static ScalarFunction GetFunction(LogicalType return_type);
+	static unique_ptr<FunctionData> Bind(Value value);
+};
+
 } // namespace duckdb
