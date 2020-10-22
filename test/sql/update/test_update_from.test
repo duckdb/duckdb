@@ -112,3 +112,43 @@ query I
 SELECT * FROM test
 ----
 7
+
+# test described in issue 1035
+
+statement ok
+CREATE TABLE terms(docid INTEGER, term INTEGER);
+
+statement ok
+CREATE TABLE docs(id INTEGER, len INTEGER);
+
+statement ok
+insert into docs values (1, 0), (2, 0);
+
+statement ok
+insert into terms values (1, 1);
+
+statement ok
+insert into terms values (2, 1);
+
+statement ok
+insert into terms values (2, 2);
+
+statement ok
+insert into terms values (2, 3);
+
+statement ok
+UPDATE docs 
+SET len = sq.len 
+FROM ( 
+    SELECT docid AS id, count(term) AS len 
+    FROM terms 
+    GROUP BY docid 
+    ORDER BY docid 
+) AS sq 
+WHERE docs.id = sq.id;
+
+query II
+select * from docs;
+----
+1	1
+2	3
