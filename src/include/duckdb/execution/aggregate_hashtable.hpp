@@ -119,6 +119,8 @@ public:
 
 	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, hash_t mask, idx_t shift);
 
+	void Finalize();
+
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
 
@@ -173,6 +175,8 @@ private:
 	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
+
+	bool is_finalized;
 
 private:
 	//! Resize the HT to the specified size. Must be larger than the current

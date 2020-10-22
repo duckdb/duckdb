@@ -35,6 +35,8 @@ public:
 	HashTableList GetPartition(idx_t partition);
 	HashTableList GetUnpartitioned();
 
+	void Finalize();
+
 private:
 	BufferManager &buffer_manager;
 	vector<LogicalType> group_types;

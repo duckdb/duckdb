@@ -51,7 +51,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<AggregateObject> aggregate_objects, HtEntryType entry_type)
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
       payload_types(payload_types), group_width(0), group_padding(0), payload_width(0), entry_type(entry_type),
-      capacity(0), entries(0), payload_page_offset(0) {
+      capacity(0), entries(0), payload_page_offset(0), is_finalized(false) {
 
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
@@ -253,6 +253,10 @@ void GroupedAggregateHashTable::Verify() {
 template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 
+	if (is_finalized) {
+		throw InternalException("HT was already finalized");
+	}
+
 	if (size <= capacity) {
 		throw InternalException("Cannot downsize a hash table!");
 	}
@@ -305,6 +309,11 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload)
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
+
+	if (is_finalized) {
+		throw InternalException("HT was already finalized");
+	}
+
 	assert(capacity - entries > groups.size());
 
 	if (groups.size() == 0) {
@@ -590,6 +599,11 @@ template <class T> data_ptr_t GroupedAggregateHashTable::GetPtr(T &ht_entry_val)
 template <class T>
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes,
                                                             Vector &addresses_out, SelectionVector &new_groups_out) {
+
+	if (is_finalized) {
+		throw InternalException("HT was already finalized");
+	}
+
 	if (entries + groups.size() > MaxCapacity()) {
 		throw InternalException("Hash table capacity reached");
 	}
@@ -794,6 +808,11 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 }
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
+
+	if (is_finalized) {
+		throw InternalException("HT was already finalized");
+	}
+
 	assert(other.payload_width == payload_width);
 	assert(other.group_width == group_width);
 	assert(other.tuple_size == tuple_size);
@@ -918,6 +937,15 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	scan_position += this_n;
 	return this_n;
+}
+
+void GroupedAggregateHashTable::Finalize() {
+	if (is_finalized) {
+		throw InternalException("HT was already finalized");
+	}
+	// early release hashes, not needed for partition/scan
+	hashes_hdl.reset();
+	is_finalized = true;
 }
 
 } // namespace duckdb

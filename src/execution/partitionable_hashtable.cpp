@@ -141,4 +141,20 @@ HashTableList PartitionableHashTable::GetUnpartitioned() {
 	return move(unpartitioned_hts);
 }
 
+void PartitionableHashTable::Finalize() {
+	if (IsPartitioned()) {
+		for (auto &ht_list : radix_partitioned_hts) {
+			for (auto &ht : ht_list.second) {
+				assert(ht);
+				ht->Finalize();
+			}
+		}
+	} else {
+		for (auto &ht : unpartitioned_hts) {
+			assert(ht);
+			ht->Finalize();
+		}
+	}
+}
+
 } // namespace duckdb

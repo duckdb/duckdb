@@ -193,9 +193,6 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	    llstate.ht->AddChunk(group_chunk, payload_chunk, gstate.lossy_total_groups > radix_limit);
 }
 
-//===--------------------------------------------------------------------===//
-// GetChunkInternal
-//===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
 	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types,
@@ -245,6 +242,9 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 		gstate.is_empty = false;
 	}
 
+	// we will never add new values to these HTs so we can drop the first part of the HT
+	llstate.ht->Finalize();
+
 	// at this point we just collect them the PhysicalHashAggregateFinalizeTask (below) will merge them in parallel
 	gstate.intermediate_hts.push_back(move(llstate.ht));
 }
@@ -264,6 +264,7 @@ public:
 				ht.reset();
 			}
 		}
+		gstate.finalized_hts[radix]->Finalize();
 	}
 
 	void Execute() {
@@ -355,6 +356,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 			}
 			unpartitioned.clear();
 		}
+		gstate.finalized_hts[0]->Finalize();
 	}
 }
 
@@ -402,6 +404,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 		if (elements_found > 0) {
 			break;
 		}
+		gstate.finalized_hts[state.ht_index].reset();
 		state.ht_index++;
 		state.ht_scan_position = 0;
 	}
