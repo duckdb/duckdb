@@ -102,30 +102,11 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto table = table_binding.table;
 
 	if (stmt.from_table) {
-		auto bound_from = Bind(*stmt.from_table);
-		unique_ptr<BoundCrossProductRef> bound_crossproduct;
-		bool bound_left = false;
-		if (bound_from->type == TableReferenceType::CROSS_PRODUCT) {
-			bound_crossproduct = unique_ptr_cast<BoundTableRef, BoundCrossProductRef>(move(bound_from));
-			if (!bound_crossproduct->left) {
-				bound_crossproduct->left = move(bound_table);
-				bound_left = true;
-			} else if (!bound_crossproduct->right) {
-				bound_crossproduct->right = move(bound_table);
-			} else {
-				auto old_crossproduct = move(bound_crossproduct);
-				bound_crossproduct = make_unique<BoundCrossProductRef>();
-				bound_crossproduct->left = move(old_crossproduct);
-				bound_crossproduct->right = move(bound_table);
-			}
-		} else {
-			bound_crossproduct = make_unique<BoundCrossProductRef>();
-			bound_crossproduct->left = move(bound_from);
-			bound_crossproduct->right = move(bound_table);
-		}
-
-		root = CreatePlan(*bound_crossproduct);
-		get = (LogicalGet *)root->children[bound_left ? 0 : 1].get();
+		BoundCrossProductRef bound_crossproduct;
+		bound_crossproduct.left = move(bound_table);
+		bound_crossproduct.right = Bind(*stmt.from_table);
+		root = CreatePlan(bound_crossproduct);
+		get = (LogicalGet *)root->children[0].get();
 	} else {
 		root = CreatePlan(*bound_table);
 		get = (LogicalGet *)root.get();
