@@ -88,7 +88,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 
 	assert(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 	tuples_per_block = Storage::BLOCK_ALLOC_SIZE / tuple_size;
-	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true);
 
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64: {
@@ -270,7 +270,7 @@ template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 
 	auto byte_size = size * sizeof(T);
 	if (byte_size > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
-		hashes_hdl = buffer_manager.Allocate(byte_size);
+		hashes_hdl = buffer_manager.Allocate(byte_size, true);
 	}
 	auto hashes = hashes_hdl->Ptr();
 	memset(hashes, 0, byte_size);
