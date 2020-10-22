@@ -329,8 +329,6 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 		}
 		gstate.finalized_hts.resize(gstate.partition_info.radix_partitions);
 		for (idx_t r = 0; r < gstate.partition_info.radix_partitions; r++) {
-			// TODO possible optimization, if total count < limit for 32 bit ht, use that one
-			// create this ht here so finalize needs no lock on gstate
 			gstate.finalized_hts[r] =
 			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), group_types,
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64);
@@ -343,13 +341,19 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 			}
 		}
 	} else { // in the non-partitioned case we immediately combine all the unpartitioned hts created by the threads.
+		     // TODO possible optimization, if total count < limit for 32 bit ht, use that one
+		     // create this ht here so finalize needs no lock on gstate
+
 		gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(
 		    BufferManager::GetBufferManager(context), group_types, payload_types, bindings, HtEntryType::HT_WIDTH_64));
 		for (auto &pht : gstate.intermediate_hts) {
 			auto unpartitioned = pht->GetUnpartitioned();
-			assert(unpartitioned);
-			gstate.finalized_hts[0]->Combine(*unpartitioned);
-			unpartitioned.reset();
+			for (auto &unpartitioned_ht : unpartitioned) {
+				assert(unpartitioned_ht);
+				gstate.finalized_hts[0]->Combine(*unpartitioned_ht);
+				unpartitioned_ht.reset();
+			}
+			unpartitioned.clear();
 		}
 	}
 }

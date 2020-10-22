@@ -36,9 +36,6 @@ PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, R
     : buffer_manager(_buffer_manager), group_types(_group_types), payload_types(_payload_types), bindings(_bindings),
       is_partitioned(false), partition_info(_partition_info) {
 
-	unpartitioned_ht = make_unique<GroupedAggregateHashTable>(buffer_manager, group_types, payload_types, bindings,
-	                                                          HtEntryType::HT_WIDTH_32);
-
 	sel_vectors.resize(partition_info.radix_partitions);
 	sel_vector_sizes.resize(partition_info.radix_partitions);
 	group_subset.Initialize(group_types);
@@ -57,17 +54,21 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	groups.Hash(hashes);
 
 	// we partition when we are asked to or when the unpartitioned ht runs out of space
-	if (!IsPartitioned() &&
-	    (do_partition || groups.size() + unpartitioned_ht->Size() > unpartitioned_ht->MaxCapacity())) {
+	if (!IsPartitioned() && do_partition) {
 		Partition();
 	}
 
 	if (!IsPartitioned()) {
-		return unpartitioned_ht->AddChunk(groups, hashes, payload);
+		if (unpartitioned_hts.empty() ||
+		    unpartitioned_hts.back()->Size() + groups.size() > unpartitioned_hts.back()->MaxCapacity()) {
+			unpartitioned_hts.push_back(make_unique<GroupedAggregateHashTable>(
+			    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
+		}
+		return unpartitioned_hts.back()->AddChunk(groups, hashes, payload);
 	}
 
 	// makes no sense to do this with 1 partition
-	assert(partition_info.radix_partitions > 1);
+	assert(partition_info.radix_partitions > 0);
 
 	for (hash_t r = 0; r < partition_info.radix_partitions; r++) {
 		sel_vector_sizes[r] = 0;
@@ -109,17 +110,19 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 
 void PartitionableHashTable::Partition() {
 	assert(!IsPartitioned());
-
-	vector<GroupedAggregateHashTable *> partition_hts;
 	assert(radix_partitioned_hts.size() == 0);
-	for (idx_t r = 0; r < partition_info.radix_partitions; r++) {
-		radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
-		    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
-		partition_hts.push_back(radix_partitioned_hts[r].back().get());
+	assert(!unpartitioned_hts.empty());
+	vector<GroupedAggregateHashTable *> partition_hts;
+	for (auto &unpartitioned_ht : unpartitioned_hts) {
+		for (idx_t r = 0; r < partition_info.radix_partitions; r++) {
+			radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
+			    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
+			partition_hts.push_back(radix_partitioned_hts[r].back().get());
+		}
+		unpartitioned_ht->Partition(partition_hts, partition_info.radix_mask, partition_info.RADIX_SHIFT);
+		unpartitioned_ht.reset();
 	}
-
-	unpartitioned_ht->Partition(partition_hts, partition_info.radix_mask, partition_info.RADIX_SHIFT);
-	unpartitioned_ht.reset();
+	unpartitioned_hts.clear();
 	is_partitioned = true;
 }
 
@@ -127,15 +130,15 @@ bool PartitionableHashTable::IsPartitioned() {
 	return is_partitioned;
 }
 
-vector<unique_ptr<GroupedAggregateHashTable>> PartitionableHashTable::GetPartition(idx_t partition) {
+HashTableList PartitionableHashTable::GetPartition(idx_t partition) {
 	assert(IsPartitioned());
 	assert(partition < partition_info.radix_partitions);
 	assert(radix_partitioned_hts.size() > partition);
 	return move(radix_partitioned_hts[partition]);
 }
-unique_ptr<GroupedAggregateHashTable> PartitionableHashTable::GetUnpartitioned() {
+HashTableList PartitionableHashTable::GetUnpartitioned() {
 	assert(!IsPartitioned());
-	return move(unpartitioned_ht);
+	return move(unpartitioned_hts);
 }
 
 } // namespace duckdb

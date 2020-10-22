@@ -20,6 +20,8 @@ struct RadixPartitionInfo {
 	constexpr static idx_t RADIX_SHIFT = 24;
 };
 
+typedef vector<unique_ptr<GroupedAggregateHashTable>> HashTableList;
+
 class PartitionableHashTable {
 public:
 	PartitionableHashTable(BufferManager &_buffer_manager, RadixPartitionInfo &_partition_info,
@@ -30,8 +32,8 @@ public:
 	void Partition();
 	bool IsPartitioned();
 
-	vector<unique_ptr<GroupedAggregateHashTable>> GetPartition(idx_t partition);
-	unique_ptr<GroupedAggregateHashTable> GetUnpartitioned();
+	HashTableList GetPartition(idx_t partition);
+	HashTableList GetUnpartitioned();
 
 private:
 	BufferManager &buffer_manager;
@@ -46,8 +48,8 @@ private:
 	DataChunk group_subset, payload_subset;
 	Vector hashes, hashes_subset;
 
-	unique_ptr<GroupedAggregateHashTable> unpartitioned_ht;
-	unordered_map<hash_t, vector<unique_ptr<GroupedAggregateHashTable>>> radix_partitioned_hts;
+	HashTableList unpartitioned_hts;
+	unordered_map<hash_t, HashTableList> radix_partitioned_hts;
 };
 
 } // namespace duckdb
