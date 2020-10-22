@@ -253,9 +253,7 @@ void GroupedAggregateHashTable::Verify() {
 template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 
-	if (is_finalized) {
-		throw InternalException("HT was already finalized");
-	}
+	assert(!is_finalized);
 
 	if (size <= capacity) {
 		throw InternalException("Cannot downsize a hash table!");
@@ -310,9 +308,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload)
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
 
-	if (is_finalized) {
-		throw InternalException("HT was already finalized");
-	}
+	assert(!is_finalized);
 
 	assert(capacity - entries > groups.size());
 
@@ -600,9 +596,7 @@ template <class T>
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes,
                                                             Vector &addresses_out, SelectionVector &new_groups_out) {
 
-	if (is_finalized) {
-		throw InternalException("HT was already finalized");
-	}
+	assert(!is_finalized);
 
 	if (entries + groups.size() > MaxCapacity()) {
 		throw InternalException("Hash table capacity reached");
@@ -809,9 +803,7 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 
-	if (is_finalized) {
-		throw InternalException("HT was already finalized");
-	}
+	assert(!is_finalized);
 
 	assert(other.payload_width == payload_width);
 	assert(other.group_width == group_width);
@@ -940,9 +932,8 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 }
 
 void GroupedAggregateHashTable::Finalize() {
-	if (is_finalized) {
-		throw InternalException("HT was already finalized");
-	}
+	assert(!is_finalized);
+
 	// early release hashes, not needed for partition/scan
 	hashes_hdl.reset();
 	is_finalized = true;

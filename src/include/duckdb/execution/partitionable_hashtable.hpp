@@ -52,6 +52,8 @@ private:
 
 	HashTableList unpartitioned_hts;
 	unordered_map<hash_t, HashTableList> radix_partitioned_hts;
-};
 
+private:
+	idx_t ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes, DataChunk &payload);
+};
 } // namespace duckdb

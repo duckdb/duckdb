@@ -50,6 +50,19 @@ PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, R
 	}
 }
 
+idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes,
+                                           DataChunk &payload) {
+	if (list.empty() || list.back()->Size() + groups.size() > list.back()->MaxCapacity()) {
+		if (!list.empty()) {
+			// early release first part of ht and prevent adding of more data
+			list.back()->Finalize();
+		}
+		list.push_back(make_unique<GroupedAggregateHashTable>(buffer_manager, group_types, payload_types, bindings,
+		                                                      HtEntryType::HT_WIDTH_32));
+	}
+	return list.back()->AddChunk(groups, group_hashes, payload);
+}
+
 idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition) {
 	groups.Hash(hashes);
 
@@ -59,12 +72,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	}
 
 	if (!IsPartitioned()) {
-		if (unpartitioned_hts.empty() ||
-		    unpartitioned_hts.back()->Size() + groups.size() > unpartitioned_hts.back()->MaxCapacity()) {
-			unpartitioned_hts.push_back(make_unique<GroupedAggregateHashTable>(
-			    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
-		}
-		return unpartitioned_hts.back()->AddChunk(groups, hashes, payload);
+		return ListAddChunk(unpartitioned_hts, groups, hashes, payload);
 	}
 
 	// makes no sense to do this with 1 partition
@@ -97,13 +105,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 		payload_subset.Slice(payload, sel_vectors[r], sel_vector_sizes[r]);
 		hashes_subset.Slice(hashes, sel_vectors[r], sel_vector_sizes[r]);
 
-		auto &ht_list = radix_partitioned_hts[r];
-
-		if (ht_list.empty() || ht_list.back()->Size() + groups.size() > ht_list.back()->MaxCapacity()) {
-			ht_list.push_back(make_unique<GroupedAggregateHashTable>(buffer_manager, group_types, payload_types,
-			                                                         bindings, HtEntryType::HT_WIDTH_32));
-		}
-		group_count += ht_list.back()->AddChunk(group_subset, hashes_subset, payload_subset);
+		group_count += ListAddChunk(radix_partitioned_hts[r], group_subset, hashes_subset, payload_subset);
 	}
 	return group_count;
 }
@@ -112,6 +114,8 @@ void PartitionableHashTable::Partition() {
 	assert(!IsPartitioned());
 	assert(radix_partitioned_hts.size() == 0);
 	assert(!unpartitioned_hts.empty());
+	assert(partition_info.radix_partitions > 1);
+
 	vector<GroupedAggregateHashTable *> partition_hts;
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
 		for (idx_t r = 0; r < partition_info.radix_partitions; r++) {

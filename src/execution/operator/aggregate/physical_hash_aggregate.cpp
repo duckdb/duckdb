@@ -190,7 +190,8 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	}
 
 	gstate.lossy_total_groups +=
-	    llstate.ht->AddChunk(group_chunk, payload_chunk, gstate.lossy_total_groups > radix_limit);
+	    llstate.ht->AddChunk(group_chunk, payload_chunk,
+	                         gstate.lossy_total_groups > radix_limit && gstate.partition_info.radix_partitions > 1);
 }
 
 class PhysicalHashAggregateState : public PhysicalOperatorState {
