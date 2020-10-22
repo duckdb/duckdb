@@ -1,4 +1,4 @@
-<img src="https://duckdb.org/images/DuckDB_Logo_dl.png" height="30">
+<img src="https://duckdb.org/images/DuckDB_Logo_dl.png" height="50">
 
 [![Travis](https://api.travis-ci.org/cwida/duckdb.svg?branch=master)](https://travis-ci.org/cwida/duckdb)
 [![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
