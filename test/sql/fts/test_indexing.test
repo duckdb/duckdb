@@ -102,14 +102,14 @@ SELECT termid, term FROM dict
 3	meow
 
 statement ok
-ALTER TABLE terms ADD COLUMN termid INT
+ALTER TABLE terms ADD termid INT
 
 statement ok
-UPDATE terms
+UPDATE terms t
 SET termid = (
     SELECT termid
-    FROM dict
-    WHERE terms.term = dict.term
+    FROM dict d
+    WHERE t.term = d.term
 )
 
 query IIII
@@ -129,7 +129,7 @@ meow	3	3	4
 meow	3	3	5
 
 statement ok
-ALTER TABLE terms DROP COLUMN term
+ALTER TABLE terms DROP term
 
 query III
 SELECT termid, docid, pos FROM terms
@@ -148,7 +148,7 @@ SELECT termid, docid, pos FROM terms
 3	3	5
 
 statement ok
-ALTER TABLE dict ADD COLUMN df INT
+ALTER TABLE dict ADD df INT
 
 statement ok
 UPDATE dict
