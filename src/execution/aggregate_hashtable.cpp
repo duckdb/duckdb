@@ -265,8 +265,7 @@ template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 	bitmask = size - 1;
 
 	auto byte_size = size * sizeof(T);
-
-	if (size * sizeof(data_ptr_t) > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
+	if (byte_size > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
 		hashes_hdl = buffer_manager.Allocate(byte_size);
 	}
 	auto hashes = hashes_hdl->Ptr();
