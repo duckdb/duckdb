@@ -11,7 +11,7 @@ namespace duckdb {
 using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
-    : context(context), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
+    : context(context), bind_context(*this), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
 	if (parent_ && inherit_ctes_) {
 		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
 		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());

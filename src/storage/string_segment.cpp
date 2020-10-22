@@ -5,7 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/storage/table/string_statistics.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 
 using namespace std;
 

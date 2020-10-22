@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+mode skip
+
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
@@ -28,32 +30,41 @@ SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;
 21	12.000000
 22	12.500000
 
-# FIXME: statistics propagation for overflows needs to be reintroduced
-# // cast to bigger type if it will overflow
-# result = con.Query("SELECT cast(200 AS TINYINT)");
-# REQUIRE(CHECK_COLUMN(result, 0, {200}));
+# cast overflows
+statement error
+SELECT cast(200 AS TINYINT)
 
-# // try to use the NULL value of a type
-# result = con.Query("SELECT cast(-127 AS TINYINT)");
-# REQUIRE(CHECK_COLUMN(result, 0, {-127}));
+statement error
+SELECT cast(-128 AS TINYINT)
 
-# // promote on addition overflow
-# result = con.Query("SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)");
-# REQUIRE(CHECK_COLUMN(result, 0, {200}));
+# addition overflow
+statement error
+SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)
 
-# // also with tables
-# result = con.Query("CREATE TABLE test2 (a INTEGER, b TINYINT);");
-# result = con.Query("INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)");
+mode unskip
 
-# // cast to bigger type if it will overflow
-# result = con.Query("SELECT cast(a AS TINYINT) FROM test2");
-# REQUIRE(CHECK_COLUMN(result, 0, {200, 12, 14}));
+# also with tables
+statement ok
+CREATE TABLE test2 (a INTEGER, b TINYINT);
 
-# // cast to bigger type if SUM overflows
-# result = con.Query("SELECT SUM(b) FROM test2");
-# REQUIRE(CHECK_COLUMN(result, 0, {180}));
+statement ok
+INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)
 
-# // promote overflows in more complicated expression chains
-# // FIXME: need to fix statistics propagation
-# result = con.Query("SELECT a + b FROM (SELECT cast(100 AS TINYINT) AS a, cast(100 AS TINYINT) AS b) tbl1");
-# REQUIRE(CHECK_COLUMN(result, 0, {200}));
+mode skip
+
+statement error
+SELECT cast(a AS TINYINT) FROM test2
+
+query I
+SELECT SUM(b) FROM test2
+----
+180
+
+mode unskip
+
+statement error
+SELECT 100::TINYINT + b::TINYINT FROM test2
+
+# more complex expressions
+statement error
+SELECT a + b FROM (SELECT cast(100 AS TINYINT) AS a, cast(100 AS TINYINT) AS b) tbl1

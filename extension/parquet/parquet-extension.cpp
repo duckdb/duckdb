@@ -49,7 +49,7 @@ class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
 	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_function, parquet_scan_bind,
-	                    parquet_scan_init, /* cleanup */ nullptr, /* dependency */ nullptr, parquet_cardinality,
+	                    parquet_scan_init, /* statistics */ nullptr, /* cleanup */ nullptr, /* dependency */ nullptr, parquet_cardinality,
 	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, parquet_max_threads,
 	                    parquet_init_parallel_state, parquet_scan_parallel_init, parquet_parallel_state_next) {
 		projection_pushdown = true;

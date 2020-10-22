@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/base_statistics.hpp
+// duckdb/storage/statistics/base_statistics.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -19,9 +19,11 @@ class Deserializer;
 
 class BaseStatistics {
 public:
-	BaseStatistics() : has_null(false) {}
+	BaseStatistics(LogicalType type) : type(type), has_null(false) {}
 	virtual ~BaseStatistics() {}
 
+	//! The type of the logical segment
+	LogicalType type;
 	//! Whether or not the segment can contain NULL values
 	bool has_null;
 public:

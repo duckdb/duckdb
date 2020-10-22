@@ -14,6 +14,7 @@
 #include <functional>
 
 namespace duckdb {
+class BaseStatistics;
 class LogicalGet;
 struct ParallelState;
 struct TableFilterSet;
@@ -29,6 +30,7 @@ typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext &context, const FunctionData *bind_data,
                                                                   vector<column_t> &column_ids,
                                                                   TableFilterSet *table_filters);
+typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data, column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data,
                                  FunctionOperatorData *operator_state, DataChunk &output);
 typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data,
@@ -54,7 +56,8 @@ class TableFunction : public SimpleFunction {
 public:
 	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_t init = nullptr,
-	              table_function_cleanup_t cleanup = nullptr, table_function_dependency_t dependency = nullptr,
+	              table_statistics_t statistics = nullptr,
+				  table_function_cleanup_t cleanup = nullptr, table_function_dependency_t dependency = nullptr,
 	              table_function_cardinality_t cardinality = nullptr,
 	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
 	              table_function_to_string_t to_string = nullptr, table_function_max_threads_t max_threads = nullptr,
@@ -62,14 +65,16 @@ public:
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
-	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), cleanup(cleanup),
+	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), statistics(statistics),
+	      cleanup(cleanup),
 	      dependency(dependency), cardinality(cardinality), pushdown_complex_filter(pushdown_complex_filter),
 	      to_string(to_string), max_threads(max_threads), init_parallel_state(init_parallel_state),
 	      parallel_init(parallel_init), parallel_state_next(parallel_state_next),
 	      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
 	TableFunction(vector<LogicalType> arguments, table_function_t function, table_function_bind_t bind = nullptr,
-	              table_function_init_t init = nullptr, table_function_cleanup_t cleanup = nullptr,
+	              table_function_init_t init = nullptr, table_statistics_t statistics = nullptr,
+				  table_function_cleanup_t cleanup = nullptr,
 	              table_function_dependency_t dependency = nullptr, table_function_cardinality_t cardinality = nullptr,
 	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
 	              table_function_to_string_t to_string = nullptr, table_function_max_threads_t max_threads = nullptr,
@@ -77,7 +82,7 @@ public:
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
-	    : TableFunction(string(), move(arguments), function, bind, init, cleanup, dependency, cardinality,
+	    : TableFunction(string(), move(arguments), function, bind, init, statistics, cleanup, dependency, cardinality,
 	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_init,
 	                    parallel_state_next, projection_pushdown, filter_pushdown) {
 	}
@@ -94,6 +99,9 @@ public:
 	table_function_init_t init;
 	//! The main function
 	table_function_t function;
+	//! (Optional) statistics function
+	//! Returns the statistics of a specified column
+	table_statistics_t statistics;
 	//! (Optional) cleanup function
 	//! The final cleanup function, called after all data is exhausted from the main function
 	table_function_cleanup_t cleanup;

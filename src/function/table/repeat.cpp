@@ -51,7 +51,7 @@ static idx_t repeat_cardinality(const FunctionData *bind_data_) {
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, repeat_function, repeat_bind, repeat_init,
-	                     nullptr, nullptr, repeat_cardinality);
+	                     nullptr, nullptr, nullptr, repeat_cardinality);
 	set.AddFunction(repeat);
 }
 

@@ -20,12 +20,16 @@
 #include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
+class Binder;
 class LogicalGet;
 class BoundQueryNode;
 
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
+public:
+	BindContext(Binder &binder) : binder(binder) {}
+
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
@@ -83,11 +87,12 @@ private:
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
 
+private:
+	Binder &binder;
 	//! The set of bindings
 	unordered_map<string, unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
-
 	//! The set of CTE bindings
 	unordered_map<string, std::shared_ptr<Binding>> cte_bindings;
 };

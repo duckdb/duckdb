@@ -13,7 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/table/segment_statistics.hpp"
+#include "duckdb/storage/statistics/segment_statistics.hpp"
 
 namespace duckdb {
 class BlockManager;

@@ -643,7 +643,7 @@ struct DataFrameScanState : public FunctionOperatorData {
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
 	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_function, dataframe_scan_bind,
-	                    dataframe_scan_init, nullptr, nullptr, dataframe_scan_cardinality){};
+	                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality){};
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,

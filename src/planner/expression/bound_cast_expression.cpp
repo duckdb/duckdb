@@ -1,12 +1,14 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/storage/statistics/statistics_operations.hpp"
 
 namespace duckdb {
 using namespace std;
 
-BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type)), child(move(child)) {
+BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p)
+    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type_p)), child(move(child_p)) {
+	stats = StatisticsOperations::Cast(child->stats.get(), return_type);
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, LogicalType target_type) {

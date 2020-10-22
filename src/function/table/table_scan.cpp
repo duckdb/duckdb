@@ -41,6 +41,11 @@ static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, 
 	return move(result);
 }
 
+static unique_ptr<BaseStatistics> table_scan_statistics(ClientContext &context, const FunctionData *bind_data_, column_t column_id) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_;
+	return bind_data.table->storage->GetStatistics(context, column_id);
+}
+
 static unique_ptr<FunctionOperatorData> table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_,
                                                                  ParallelState *state, vector<column_t> &column_ids,
                                                                  TableFilterSet *table_filters) {
@@ -304,6 +309,7 @@ string table_scan_to_string(const FunctionData *bind_data_) {
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, table_scan_function);
 	scan_function.init = table_scan_init;
+	scan_function.statistics = table_scan_statistics;
 	scan_function.dependency = table_scan_dependency;
 	scan_function.cardinality = table_scan_cardinality;
 	scan_function.pushdown_complex_filter = table_scan_pushdown_complex_filter;

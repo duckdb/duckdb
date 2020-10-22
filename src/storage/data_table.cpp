@@ -1048,4 +1048,12 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	info->indexes.push_back(move(index));
 }
 
+unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, column_t column_id) {
+	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+		return nullptr;
+	}
+	// FIXME: potentially merge with transaction local shtuff
+	return columns[column_id]->statistics->Copy();
+}
+
 } // namespace duckdb

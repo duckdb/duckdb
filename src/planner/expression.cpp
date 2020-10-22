@@ -7,8 +7,8 @@
 namespace duckdb {
 using namespace std;
 
-Expression::Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type)
-    : BaseExpression(type, expression_class), return_type(move(return_type)) {
+Expression::Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type, unique_ptr<BaseStatistics> stats)
+    : BaseExpression(type, expression_class), return_type(move(return_type)), stats(move(stats)) {
 }
 
 bool Expression::IsAggregate() const {

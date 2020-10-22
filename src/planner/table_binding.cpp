@@ -32,7 +32,7 @@ bool Binding::HasMatchingBinding(const string &column_name) {
 	return entry != name_map.end();
 }
 
-BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
+BindResult Binding::Bind(ClientContext &context, ColumnRefExpression &colref, idx_t depth) {
 	auto column_entry = name_map.find(colref.column_name);
 	if (column_entry == name_map.end()) {
 		return BindResult(StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias.c_str(),
@@ -68,7 +68,7 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vect
 	}
 }
 
-BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
+BindResult TableBinding::Bind(ClientContext &context, ColumnRefExpression &colref, idx_t depth) {
 	auto entry = name_map.find(colref.column_name);
 	if (entry == name_map.end()) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", colref.table_name,
@@ -104,7 +104,11 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		column_ids.push_back(col_index);
 	}
 	binding.table_index = index;
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
+	unique_ptr<BaseStatistics> stats;
+	if (get.function.statistics) {
+		stats = get.function.statistics(context, get.bind_data.get(), col_index);
+	}
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth, move(stats)));
 }
 
 } // namespace duckdb

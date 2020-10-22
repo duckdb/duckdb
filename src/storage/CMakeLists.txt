@@ -1,5 +1,6 @@
 add_subdirectory(buffer)
 add_subdirectory(checkpoint)
+add_subdirectory(statistics)
 add_subdirectory(table)
 
 add_library_unity(duckdb_storage

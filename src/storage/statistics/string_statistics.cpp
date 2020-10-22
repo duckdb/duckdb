@@ -1,11 +1,11 @@
-#include "duckdb/storage/table/string_statistics.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
-StringStatistics::StringStatistics(bool is_blob) : is_blob(is_blob) {
+StringStatistics::StringStatistics(LogicalType type) : BaseStatistics(type) {
 	for(idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;
 		max[i] = 0;
@@ -16,7 +16,7 @@ StringStatistics::StringStatistics(bool is_blob) : is_blob(is_blob) {
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Copy() {
-	auto stats = make_unique<StringStatistics>(is_blob);
+	auto stats = make_unique<StringStatistics>(type);
 	memcpy(stats->min, min, MAX_STRING_MINMAX_SIZE);
 	memcpy(stats->max, max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = has_unicode;
@@ -28,7 +28,6 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() {
 
 void StringStatistics::Serialize(Serializer &serializer) {
 	BaseStatistics::Serialize(serializer);
-	serializer.Write<bool>(is_blob);
 	serializer.WriteData(min, MAX_STRING_MINMAX_SIZE);
 	serializer.WriteData(max, MAX_STRING_MINMAX_SIZE);
 	serializer.Write<bool>(has_unicode);
@@ -36,9 +35,8 @@ void StringStatistics::Serialize(Serializer &serializer) {
 	serializer.Write<bool>(has_overflow_strings);
 }
 
-unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source) {
-	auto is_blob = source.Read<bool>();
-	auto stats = make_unique<StringStatistics>(is_blob);
+unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source, LogicalType type) {
+	auto stats = make_unique<StringStatistics>(type);
 	source.ReadData(stats->min, MAX_STRING_MINMAX_SIZE);
 	source.ReadData(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = source.Read<bool>();
@@ -81,7 +79,7 @@ void StringStatistics::Update(const string_t &value) {
 	if (size > max_string_length) {
 		max_string_length = size;
 	}
-	if (!is_blob && !has_unicode) {
+	if (type.id() == LogicalTypeId::VARCHAR && !has_unicode) {
 		auto unicode = Utf8Proc::Analyze((const char*) data, size);
 		if (unicode == UnicodeType::UNICODE) {
 			has_unicode = true;

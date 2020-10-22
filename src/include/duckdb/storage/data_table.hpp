@@ -136,6 +136,8 @@ public:
 		this->is_root = true;
 	}
 
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);

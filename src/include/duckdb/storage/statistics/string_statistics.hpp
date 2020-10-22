@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/string_statistics.hpp
+// duckdb/storage/statistics/string_statistics.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/storage/table/base_statistics.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -16,10 +16,8 @@ class StringStatistics : public BaseStatistics {
 public:
 	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
 public:
-	StringStatistics(bool is_blob);
+	StringStatistics(LogicalType type);
 
-	//! Whether or not the statistics are for the blob or string type
-	bool is_blob;
 	//! The minimum value of the segment, potentially truncated
 	data_t min[MAX_STRING_MINMAX_SIZE];
 	//! The maximum value of the segment, potentially truncated
@@ -37,7 +35,7 @@ public:
 
 	unique_ptr<BaseStatistics> Copy() override;
 	void Serialize(Serializer &serializer) override;
-	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source);
+	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 	bool CheckZonemap(ExpressionType comparison_type, string value);
 
 	string ToString() override;

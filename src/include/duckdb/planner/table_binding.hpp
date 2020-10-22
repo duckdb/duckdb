@@ -41,7 +41,7 @@ struct Binding {
 
 public:
 	bool HasMatchingBinding(const string &column_name);
-	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
+	virtual BindResult Bind(ClientContext &context, ColumnRefExpression &colref, idx_t depth);
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list);
 };
 
@@ -54,7 +54,7 @@ struct TableBinding : public Binding {
 	LogicalGet &get;
 
 public:
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+	BindResult Bind(ClientContext &context, ColumnRefExpression &colref, idx_t depth) override;
 };
 
 } // namespace duckdb

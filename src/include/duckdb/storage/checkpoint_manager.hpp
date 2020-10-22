@@ -12,7 +12,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
-#include "duckdb/storage/table/base_statistics.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 class ClientContext;

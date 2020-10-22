@@ -1,5 +1,5 @@
-#include "duckdb/storage/table/numeric_statistics.hpp"
-#include "duckdb/storage/table/string_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -7,7 +7,7 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> BaseStatistics::Copy() {
-	auto statistics = make_unique<BaseStatistics>();
+	auto statistics = make_unique<BaseStatistics>(type);
 	statistics->has_null = has_null;
 	return statistics;
 }
@@ -24,23 +24,17 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return make_unique<NumericStatistics<int8_t>>();
 	case PhysicalType::INT16:
-		return make_unique<NumericStatistics<int16_t>>();
 	case PhysicalType::INT32:
-		return make_unique<NumericStatistics<int32_t>>();
 	case PhysicalType::INT64:
-		return make_unique<NumericStatistics<int64_t>>();
 	case PhysicalType::INT128:
-		return make_unique<NumericStatistics<hugeint_t>>();
 	case PhysicalType::FLOAT:
-		return make_unique<NumericStatistics<float>>();
 	case PhysicalType::DOUBLE:
-		return make_unique<NumericStatistics<double>>();
+		return make_unique<NumericStatistics>(type);
 	case PhysicalType::VARCHAR:
-		return make_unique<StringStatistics>(type.id() == LogicalTypeId::BLOB);
+		return make_unique<StringStatistics>(type);
 	case PhysicalType::INTERVAL:
-		return make_unique<BaseStatistics>();
+		return make_unique<BaseStatistics>(type);
 	default:
 		throw InternalException("Unimplemented type for base statistics");
 	}
@@ -52,31 +46,19 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		result = NumericStatistics<int8_t>::Deserialize(source);
-		break;
 	case PhysicalType::INT16:
-		result = NumericStatistics<int16_t>::Deserialize(source);
-		break;
 	case PhysicalType::INT32:
-		result = NumericStatistics<int32_t>::Deserialize(source);
-		break;
 	case PhysicalType::INT64:
-		result = NumericStatistics<int64_t>::Deserialize(source);
-		break;
 	case PhysicalType::INT128:
-		result = NumericStatistics<hugeint_t>::Deserialize(source);
-		break;
 	case PhysicalType::FLOAT:
-		result = NumericStatistics<float>::Deserialize(source);
-		break;
 	case PhysicalType::DOUBLE:
-		result = NumericStatistics<double>::Deserialize(source);
+		result = NumericStatistics::Deserialize(source, type);
 		break;
 	case PhysicalType::VARCHAR:
-		result = StringStatistics::Deserialize(source);
+		result = StringStatistics::Deserialize(source, type);
 		break;
 	case PhysicalType::INTERVAL:
-		result = make_unique<BaseStatistics>();
+		result = make_unique<BaseStatistics>(type);
 		break;
 	default:
 		throw InternalException("Unimplemented type for SEGMENT statistics");

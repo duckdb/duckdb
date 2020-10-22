@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/segment_statistics.hpp
+// duckdb/storage/statistics/segment_statistics.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,7 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/storage/table/base_statistics.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 struct TableFilter;
