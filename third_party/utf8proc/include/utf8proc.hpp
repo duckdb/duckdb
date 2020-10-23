@@ -681,7 +681,7 @@ UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_totitle(utf8proc_int32_t c);
  * @note
  * If you want to check for particular types of non-printable characters,
  * (analogous to `isprint` or `iscntrl`), use @ref utf8proc_category. */
-UTF8PROC_DLLEXPORT int utf8proc_charwidth(utf8proc_int32_t codepoint);
+    UTF8PROC_DLLEXPORT int utf8proc_charwidth(utf8proc_int32_t codepoint);
 
 /**
  * Return the Unicode category for the codepoint (one of the

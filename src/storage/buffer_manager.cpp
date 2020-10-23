@@ -92,6 +92,8 @@ void BufferManager::Unpin(block_id_t block_id) {
 	assert(buffer_entry->ref_count > 0);
 	buffer_entry->ref_count--;
 	if (buffer_entry->ref_count == 0) {
+		// no references left: move block out of used list and into lru list
+		auto entry = used_list.Erase(buffer_entry);
 		if (buffer_entry->buffer->type == FileBufferType::MANAGED_BUFFER) {
 			auto managed = (ManagedBuffer *)buffer_entry->buffer.get();
 			if (managed->can_destroy) {
@@ -101,8 +103,6 @@ void BufferManager::Unpin(block_id_t block_id) {
 				return;
 			}
 		}
-		// no references left: move block out of used list and into lru list
-		auto entry = used_list.Erase(buffer_entry);
 		lru.Append(move(entry));
 	}
 }

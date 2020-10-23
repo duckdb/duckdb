@@ -8,19 +8,21 @@
 
 #pragma once
 
-#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
+class ClientContext;
+class BufferManager;
+
 //! PhysicalHashAggregate is an group-by and aggregate implementation that uses
 //! a hash table to perform the grouping
 class PhysicalHashAggregate : public PhysicalSink {
 public:
-	PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
-	PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
@@ -32,6 +34,9 @@ public:
 	bool is_implicit_aggr;
 	//! Whether or not all aggregates are combinable
 	bool all_combinable;
+
+	//! Whether or not any aggregation is DISTINCT
+	bool any_distinct;
 
 	//! The group types
 	vector<LogicalType> group_types;
@@ -45,12 +50,24 @@ public:
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
+	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+
+	void FinalizeImmediate(ClientContext &context, unique_ptr<GlobalOperatorState> gstate);
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
+private:
+	//! how many groups can we have in the operator before we switch to radix partitioning
+	idx_t radix_limit;
+
+private:
+	void FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
+	                      Pipeline *pipeline);
 };
 
 } // namespace duckdb
