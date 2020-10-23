@@ -385,6 +385,8 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 	return R_NilValue;
 }
 
+SEXP duckdb_execute_R_impl(MaterializedQueryResult *result);
+
 SEXP duckdb_execute_R(SEXP stmtsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_execute_R: Need external pointer parameter");
@@ -394,14 +396,26 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 		Rf_error("duckdb_execute_R: Invalid statement");
 	}
 
-	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
+	SEXP out;
 
-	if (!generic_result->success) {
-		Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
+	{
+		auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
+
+		if (!generic_result->success) {
+			Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
+		}
+		assert(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
+		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
+
+		// Protect during destruction of generic_result
+		out = PROTECT(duckdb_execute_R_impl(result));
 	}
-	assert(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
-	MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
 
+	UNPROTECT(1);
+	return out;
+}
+
+SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	// step 2: create result data frame and allocate columns
 	uint32_t ncols = result->types.size();
 	uint64_t nrows = result->collection.count;
