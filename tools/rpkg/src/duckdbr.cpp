@@ -407,9 +407,11 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 		assert(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
 		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
 
-		out = duckdb_execute_R_impl(result);
+		// Protect during destruction of generic_result
+		out = PROTECT(duckdb_execute_R_impl(result));
 	}
 
+	UNPROTECT(1);
 	return out;
 }
 
