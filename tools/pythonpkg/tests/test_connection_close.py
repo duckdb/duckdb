@@ -8,7 +8,7 @@ def check_exception(f):
     had_exception = False
     try:
         f()
-    except:
+    except BaseException:
         had_exception = True
     assert(had_exception)
 
