@@ -12629,6 +12629,33 @@ static void print_box_row_separator(
 }
 
 
+char *strdup_handle_newline(const char *z) {
+  if (!z) {
+    return 0;
+  }
+  int nNewline = 0;
+  for(const char *s = z; *s; s++) {
+    if (*s == '\n') {
+      nNewline++;
+    }
+  }
+  if (nNewline == 0) {
+    return strdup(z);
+  }
+  char *result = malloc(strlen(z) + nNewline + 1);
+  char *t = result;
+  for(const char *s = z; *s; s++, t++) {
+    if (*s == '\n') {
+      *t = '\\';
+      t++;
+      *t = 'n';
+    } else {
+      *t = *s;
+    }
+  }
+  *t = '\0';
+  return result;
+}
 
 /*
 ** Run a prepared statement and output the result in one of the
@@ -12662,7 +12689,7 @@ static void exec_prepared_stmt_columnar(
   azData = sqlite3_malloc64( nAlloc*sizeof(char*) );
   if( azData==0 ) shell_out_of_memory();
   for(i=0; i<nColumn; i++){
-    azData[i] = strdup(sqlite3_column_name(pStmt,i));
+    azData[i] = strdup_handle_newline(sqlite3_column_name(pStmt,i));
   }
   do{
     if( (nRow+2)*nColumn >= nAlloc ){
@@ -12673,7 +12700,7 @@ static void exec_prepared_stmt_columnar(
     nRow++;
     for(i=0; i<nColumn; i++){
       z = (const char*)sqlite3_column_text(pStmt,i);
-      azData[nRow*nColumn + i] = z ? strdup(z) : 0;
+      azData[nRow*nColumn + i] = strdup_handle_newline(z);
     }
   }while( (rc = sqlite3_step(pStmt))==SQLITE_ROW );
   if( nColumn>p->nWidth ){
