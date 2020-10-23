@@ -325,7 +325,7 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 	}
 	auto node = make_unique<QueryProfiler::TreeNode>();
 	node->name = PhysicalOperatorToString(root->type);
-	node->extra_info = root->ExtraRenderInformation();
+	node->extra_info = root->ParamsToString();
 	if (!node->extra_info.empty()) {
 		auto splits = StringUtil::Split(node->extra_info, '\n');
 		for (auto &split : splits) {

@@ -7,7 +7,7 @@ LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperato
 }
 
 string LogicalAnyJoin::ParamsToString() const {
-	return "[" + condition->ToString() + "]";
+	return condition->ToString();
 }
 
 } // namespace duckdb

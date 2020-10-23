@@ -5,27 +5,19 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-string PhysicalOperator::ToString(idx_t depth) const {
-	string extra_info = StringUtil::Replace(ExtraRenderInformation(), "\n", " ");
-	StringUtil::RTrim(extra_info);
-	if (!extra_info.empty()) {
-		extra_info = "[" + extra_info + "]";
-	}
-	string result = PhysicalOperatorToString(type) + extra_info;
-	if (children.size() > 0) {
-		for (idx_t i = 0; i < children.size(); i++) {
-			result += "\n" + string(depth * 4, ' ');
-			auto &child = children[i];
-			result += child->ToString(depth + 1);
-		}
-		result += "";
-	}
-	return result;
+string PhysicalOperator::GetName() const {
+	return PhysicalOperatorToString(type);
+}
+
+string PhysicalOperator::ToString() const {
+	TreeRenderer renderer(TreeRenderer::CreateTree(*this));
+	return renderer.ToString();
 }
 
 PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator &op, PhysicalOperator *child) : finished(false) {

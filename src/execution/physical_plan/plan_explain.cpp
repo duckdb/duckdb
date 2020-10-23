@@ -3,6 +3,9 @@
 #include "duckdb/planner/operator/logical_explain.hpp"
 #include "duckdb/main/client_context.hpp"
 
+#include "duckdb/common/tree_renderer.hpp"
+#include <iostream>
+
 namespace duckdb {
 using namespace std;
 
@@ -13,14 +16,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 
 	op.physical_plan = plan->ToString();
 
+
 	// the output of the explain
 	vector<string> keys, values;
-	switch (context.default_output_type) {
-	case OutputType::OPTIMIZED_ONLY:
+	switch (context.explain_output_type) {
+	case ExplainOutputType::OPTIMIZED_ONLY:
 		keys = {"logical_opt"};
 		values = {logical_plan_opt};
 		break;
-	case OutputType::PHYSICAL_ONLY:
+	case ExplainOutputType::PHYSICAL_ONLY:
 		keys = {"physical_plan"};
 		values = {op.physical_plan};
 		break;

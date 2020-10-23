@@ -22,6 +22,16 @@ public:
 
 	vector<BoundOrderByNode> orders;
 
+	string ParamsToString() const override {
+		string result;
+		for(idx_t i = 0; i < orders.size(); i++) {
+			if (i > 0) {
+				result += "\n";
+			}
+			result += orders[i].expression->GetName();
+		}
+		return result;
+	}
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return children[0]->GetColumnBindings();

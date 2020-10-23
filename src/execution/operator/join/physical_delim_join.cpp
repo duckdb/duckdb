@@ -106,8 +106,8 @@ unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState() {
 	return make_unique<PhysicalDelimJoinState>(*this, children[0].get());
 }
 
-string PhysicalDelimJoin::ExtraRenderInformation() const {
-	return join->ExtraRenderInformation();
+string PhysicalDelimJoin::ParamsToString() const {
+	return join->ParamsToString();
 }
 
 } // namespace duckdb

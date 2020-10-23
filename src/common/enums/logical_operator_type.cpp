@@ -30,7 +30,7 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	case LogicalOperatorType::FILTER:
 		return "FILTER";
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
-		return "AGGREGATE_AND_GROUP_BY";
+		return "AGGREGATE";
 	case LogicalOperatorType::WINDOW:
 		return "WINDOW";
 	case LogicalOperatorType::UNNEST:

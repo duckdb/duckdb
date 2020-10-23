@@ -73,6 +73,14 @@ test('.auth ON', err='sqlite3_set_authorizer')
 test('.auth OFF', err='sqlite3_set_authorizer')
 test('.backup %s' % tf(), err='sqlite3_backup_init')
 
+# test newline in value
+test('''select 'hello
+world' as a;''', out='hello\\nworld')
+
+# test newline in column name
+test('''select 42 as "hello
+world";''', out='hello\\nworld')
+
 test('''
 .bail on
 .bail off

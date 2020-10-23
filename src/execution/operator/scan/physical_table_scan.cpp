@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 #include "duckdb/parallel/task_context.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace std;
 
@@ -24,10 +25,11 @@ public:
 };
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_,
-                                     unique_ptr<FunctionData> bind_data_, vector<column_t> column_ids,
-                                     unordered_map<idx_t, vector<TableFilter>> table_filters)
+                                     unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
+									 vector<string> names_p,
+                                     unordered_map<idx_t, vector<TableFilter>> table_filters_p)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
-      bind_data(move(bind_data_)), column_ids(move(column_ids)), table_filters(move(table_filters)) {
+      bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)), table_filters(move(table_filters_p)) {
 }
 
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -87,11 +89,22 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 	}
 }
 
-string PhysicalTableScan::ToString(idx_t depth) const {
-	if (function.to_string) {
-		return string(depth * 4, ' ') + function.to_string(bind_data.get());
+string PhysicalTableScan::GetName() const {
+	return StringUtil::Upper(function.name);
+}
+
+string PhysicalTableScan::ParamsToString() const {
+	string result;
+	for(auto &f : table_filters) {
+		for(auto &filter : f.second) {
+			result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
+			result += "\n";
+		}
 	}
-	return PhysicalOperator::ToString(depth);
+	if (!function.to_string) {
+		return string();
+	}
+	return function.to_string(bind_data.get());
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {

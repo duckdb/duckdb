@@ -23,7 +23,7 @@ public:
 	vector<JoinCondition> conditions;
 
 public:
-	string ExtraRenderInformation() const override;
+	string ParamsToString() const override;
 
 	//! Construct the join result of a join with an empty RHS
 	static void ConstructEmptyJoinResult(JoinType type, bool has_null, DataChunk &input, DataChunk &result);

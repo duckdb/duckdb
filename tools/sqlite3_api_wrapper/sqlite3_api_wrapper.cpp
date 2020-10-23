@@ -1219,8 +1219,10 @@ SQLITE_API void sqlite3_progress_handler(sqlite3*, int, int(*)(void*), void*) {
 }
 
 SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
-    // lie its probably not
-    return 0;
+	if (!pStmt || !pStmt->prepared) {
+		return 0;
+	}
+	return pStmt->prepared->type == StatementType::EXPLAIN_STATEMENT;
 }
 
 SQLITE_API int sqlite3_vtab_config(sqlite3*, int op, ...) {

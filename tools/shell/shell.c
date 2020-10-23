@@ -11600,37 +11600,22 @@ static int shell_callback(
       break;
     }
     case MODE_Explain: {
-      static const int aExplainWidth[] = {4, 13, 4, 4, 4, 13, 2, 13};
-      if( nArg>ArraySize(aExplainWidth) ){
-        nArg = ArraySize(aExplainWidth);
+      if (nArg != 2) {
+        break;
       }
-      if( p->cnt++==0 ){
-        for(i=0; i<nArg; i++){
-          int w = aExplainWidth[i];
-          utf8_width_print(p->out, w, azCol[i]);
-          fputs(i==nArg-1 ? "\n" : "  ", p->out);
-        }
-        for(i=0; i<nArg; i++){
-          int w = aExplainWidth[i];
-          print_dashes(p->out, w);
-          fputs(i==nArg-1 ? "\n" : "  ", p->out);
-        }
+      fputs("\n┌─────────────────────────────┐\n", p->out);
+      fputs("│┌───────────────────────────┐│\n", p->out);
+      if (strcmp(azArg[0], "logical_plan") == 0) {
+      fputs("││ Unoptimized Logical Plan  ││\n", p->out);
+      } else if (strcmp(azArg[0], "logical_opt") == 0) {
+      fputs("││  Optimized Logical Plan   ││\n", p->out);
+      } else if (strcmp(azArg[0], "physical_plan") == 0) {
+      fputs("││       Physical Plan       ││\n", p->out);
+
       }
-      if( azArg==0 ) break;
-      for(i=0; i<nArg; i++){
-        int w = aExplainWidth[i];
-        if( azArg[i] && strlenChar(azArg[i])>w ){
-          w = strlenChar(azArg[i]);
-        }
-        if( i==1 && p->aiIndent && p->pStmt ){
-          if( p->iIndent<p->nIndent ){
-            utf8_printf(p->out, "%*.s", p->aiIndent[p->iIndent], "");
-          }
-          p->iIndent++;
-        }
-        utf8_width_print(p->out, w, azArg[i] ? azArg[i] : p->nullValue);
-        fputs(i==nArg-1 ? "\n" : "  ", p->out);
-      }
+      fputs("│└───────────────────────────┘│\n", p->out);
+      fputs("└─────────────────────────────┘\n", p->out);
+      fputs(azArg[1], p->out);
       break;
     }
     case MODE_Semi: {   /* .schema and .fullschema output */
@@ -12629,21 +12614,18 @@ static void print_box_row_separator(
 }
 
 
-char *strdup_handle_newline(const char *z) {
+char *strdup_handle_newline(ShellState *p, const char *z) {
   if (!z) {
     return 0;
   }
-  int nNewline = 0;
-  for(const char *s = z; *s; s++) {
-    if (*s == '\n') {
-      nNewline++;
-    }
-  }
-  if (nNewline == 0) {
+  if (p->cMode != MODE_Box) {
     return strdup(z);
   }
-  char *result = malloc(strlen(z) + nNewline + 1);
+  int max_size = 80;
+  char *result = malloc(max_size * 2 + 10);
   char *t = result;
+  int count = 0;
+  int interrupted = 0;
   for(const char *s = z; *s; s++, t++) {
     if (*s == '\n') {
       *t = '\\';
@@ -12652,6 +12634,16 @@ char *strdup_handle_newline(const char *z) {
     } else {
       *t = *s;
     }
+    count++;
+    if (count >= max_size && ((*s & 0xc0) != 0x80)) {
+      interrupted = 1;
+      break;
+    }
+  }
+  if (interrupted) {
+    *t++ = '.';
+    *t++ = '.';
+    *t++ = '.';
   }
   *t = '\0';
   return result;
@@ -12689,7 +12681,7 @@ static void exec_prepared_stmt_columnar(
   azData = sqlite3_malloc64( nAlloc*sizeof(char*) );
   if( azData==0 ) shell_out_of_memory();
   for(i=0; i<nColumn; i++){
-    azData[i] = strdup_handle_newline(sqlite3_column_name(pStmt,i));
+    azData[i] = strdup_handle_newline(p, sqlite3_column_name(pStmt,i));
   }
   do{
     if( (nRow+2)*nColumn >= nAlloc ){
@@ -12700,7 +12692,7 @@ static void exec_prepared_stmt_columnar(
     nRow++;
     for(i=0; i<nColumn; i++){
       z = (const char*)sqlite3_column_text(pStmt,i);
-      azData[nRow*nColumn + i] = strdup_handle_newline(z);
+      azData[nRow*nColumn + i] = strdup_handle_newline(p, z);
     }
   }while( (rc = sqlite3_step(pStmt))==SQLITE_ROW );
   if( nColumn>p->nWidth ){
@@ -13141,9 +13133,9 @@ static int shell_exec(
 
         /* If the shell is currently in ".explain" mode, gather the extra
         ** data required to add indents to the output.*/
-        if( pArg->cMode==MODE_Explain ){
-          explain_data_prepare(pArg, pStmt);
-        }
+        // if( pArg->cMode==MODE_Explain ){
+        //   explain_data_prepare(pArg, pStmt);
+        // }
       }
 
       bind_prepared_stmt(pArg, pStmt);
