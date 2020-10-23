@@ -477,6 +477,9 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 				case 'f':
 					specifier = StrTimeSpecifier::MICROSECOND_PADDED;
 					break;
+				case 'g':
+					specifier = StrTimeSpecifier::MILLISECOND_PADDED;
+					break;
 				case 'z':
 					specifier = StrTimeSpecifier::UTC_OFFSET;
 					break;
@@ -654,6 +657,7 @@ bool StrpTimeFormat::IsNumericSpecifier(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::SECOND_PADDED:
 	case StrTimeSpecifier::SECOND_DECIMAL:
 	case StrTimeSpecifier::MICROSECOND_PADDED:
+	case StrTimeSpecifier::MILLISECOND_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
@@ -838,8 +842,17 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					error_position = start_pos;
 					return false;
 				}
-				// microseconds
+				// milliseconds
 				result_data[6] = number * 1000;
+				break;
+			case StrTimeSpecifier::MILLISECOND_PADDED:
+				if (number >= 1000ULL) {
+					error_message = "Milliseconds out of range, expected a value between 0 and 999";
+					error_position = start_pos;
+					return false;
+				}
+				// milliseconds
+				result_data[6] = number;
 				break;
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
