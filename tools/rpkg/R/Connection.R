@@ -60,6 +60,7 @@ setMethod(
 
 #' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbSendQuery
+#' @inheritParams DBI::dbBind
 #' @export
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
