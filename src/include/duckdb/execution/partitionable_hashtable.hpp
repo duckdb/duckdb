@@ -17,7 +17,7 @@ struct RadixPartitionInfo {
 	idx_t radix_partitions;
 	idx_t radix_bits;
 	hash_t radix_mask;
-	constexpr static idx_t RADIX_SHIFT = 24;
+	constexpr static idx_t RADIX_SHIFT = 40;
 };
 
 typedef vector<unique_ptr<GroupedAggregateHashTable>> HashTableList;

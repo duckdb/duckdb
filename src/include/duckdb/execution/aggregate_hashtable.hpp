@@ -174,11 +174,18 @@ private:
 
 	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 
-	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
-
 	bool is_finalized;
 
+	// some stuff from FindOrCreateGroupsInternal() to avoid allocation there
+	Vector ht_offsets;
+	Vector group_pointers;
+	SelectionVector group_compare_vector;
+	SelectionVector no_match_vector;
+	SelectionVector empty_vector;
+
 private:
+	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
+
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
 	void Destroy();

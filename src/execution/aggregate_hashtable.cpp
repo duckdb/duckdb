@@ -51,7 +51,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<AggregateObject> aggregate_objects, HtEntryType entry_type)
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
       payload_types(payload_types), group_width(0), group_padding(0), payload_width(0), entry_type(entry_type),
-      capacity(0), entries(0), payload_page_offset(0), is_finalized(false) {
+      capacity(0), entries(0), payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
+      group_pointers(LogicalType::POINTER), group_compare_vector(STANDARD_VECTOR_SIZE),
+      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
@@ -615,30 +617,21 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	group_hashes.Normalify(groups.size());
 	auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
 
-	Vector ht_offsets(LogicalTypeId::BIGINT);
 	assert(ht_offsets.vector_type == VectorType::FLAT_VECTOR);
+	assert(ht_offsets.type == LogicalType::BIGINT);
 
 	// now compute the entry in the table based on the hash using a modulo
-	// multiply the position by the tuple size and add the base address
 	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
 		return (element & bitmask);
 	});
 
 	auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
-
-	Vector group_pointers(LogicalType::POINTER);
 	auto group_pointers_ptr = FlatVector::GetData<data_ptr_t>(group_pointers);
-
-	// set up the selection vectors
-	SelectionVector v1(STANDARD_VECTOR_SIZE);
-	SelectionVector v2(STANDARD_VECTOR_SIZE);
-	SelectionVector empty_vector(STANDARD_VECTOR_SIZE);
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
 	const SelectionVector *sel_vector = &FlatVector::IncrementalSelectionVector;
-	SelectionVector *group_compare_vector = &v1;
-	SelectionVector *no_match_vector = &v2;
+
 	idx_t remaining_entries = groups.size();
 
 	// orrify all the groups
@@ -696,9 +689,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				// only need to check if hash salt in ptr == prefix of hash in payload
 				if (((hash_t)ht_entry_ptr->salt << hash_prefix_shift) ==
 				    (group_hashes_ptr[index] & hash_prefix_get_bitmask)) {
-					group_compare_vector->set_index(need_compare_count++, index);
+					group_compare_vector.set_index(need_compare_count++, index);
 				} else {
-					no_match_vector->set_index(no_match_count++, index);
+					no_match_vector.set_index(no_match_count++, index);
 				}
 			}
 			// keep pointers to each group area so we can scatter or compare them below
@@ -712,19 +705,19 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
 		if (need_compare_count > 0) {
-			CompareGroups(groups, group_data, group_pointers, *group_compare_vector, need_compare_count,
-			              *no_match_vector, no_match_count);
+			CompareGroups(groups, group_data, group_pointers, group_compare_vector, need_compare_count, no_match_vector,
+			              no_match_count);
 		}
 
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
-			idx_t index = no_match_vector->get_index(i);
+			idx_t index = no_match_vector.get_index(i);
 			ht_offsets_ptr[index]++;
 			if (ht_offsets_ptr[index] >= capacity) {
 				ht_offsets_ptr[index] = 0;
 			}
 		}
-		sel_vector = no_match_vector;
+		sel_vector = &no_match_vector;
 		remaining_entries = no_match_count;
 	}
 
