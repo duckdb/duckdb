@@ -682,18 +682,22 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				new_groups_out.set_index(new_group_count++, index);
 				entries++;
 
+				addresses_ptr[index] = entry_payload_ptr + HASH_WIDTH;
+
 			} else {
 				// cell is occupied: add to check list
 				// only need to check if hash salt in ptr == prefix of hash in payload
 				if (ht_entry_ptr->salt == (group_hashes_ptr[index] >> hash_prefix_shift)) {
 					group_compare_vector.set_index(need_compare_count++, index);
+
+					auto page_ptr = payload_hds_ptrs[ht_entry_ptr->page_nr - 1];
+					auto page_offset = ht_entry_ptr->page_offset * tuple_size;
+					addresses_ptr[index] = page_ptr + page_offset + HASH_WIDTH;
+
 				} else {
 					no_match_vector.set_index(no_match_count++, index);
 				}
 			}
-			// keep pointers to each group area so we can scatter or compare them below
-			addresses_ptr[index] =
-			    payload_hds_ptrs[ht_entry_ptr->page_nr - 1] + ((ht_entry_ptr->page_offset) * tuple_size) + HASH_WIDTH;
 		}
 
 		if (new_entry_count > 0) {
@@ -718,7 +722,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		sel_vector = &no_match_vector;
 		remaining_entries = no_match_count;
 	}
-    // pointers in addresses now were moved behind the grousp by CompareGroups/ScatterGroups but we may have to add
+	// pointers in addresses now were moved behind the grousp by CompareGroups/ScatterGroups but we may have to add
 	// padding still to point at the payload.
 	VectorOperations::AddInPlace(addresses, group_padding, groups.size());
 	return new_group_count;
