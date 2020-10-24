@@ -3,19 +3,19 @@
 namespace duckdb {
 
 RadixPartitionInfo::RadixPartitionInfo(idx_t _n_partitions_upper_bound)
-    : radix_partitions(1), radix_bits(0), radix_mask(0) {
-	while (radix_partitions <= _n_partitions_upper_bound / 2) {
-		radix_partitions *= 2;
-		if (radix_partitions >= 256) {
+    : n_partitions(1), radix_bits(0), radix_mask(0) {
+	while (n_partitions <= _n_partitions_upper_bound / 2) {
+        n_partitions *= 2;
+		if (n_partitions >= 256) {
 			break;
 		}
 	}
 	// finalize_threads needs to be a power of 2
-	assert(radix_partitions > 0);
-	assert(radix_partitions <= 256);
-	assert((radix_partitions & (radix_partitions - 1)) == 0);
+	assert(n_partitions > 0);
+	assert(n_partitions <= 256);
+	assert((n_partitions & (n_partitions - 1)) == 0);
 
-	auto radix_partitions_copy = radix_partitions;
+	auto radix_partitions_copy = n_partitions;
 	while (radix_partitions_copy - 1) {
 		radix_bits++;
 		radix_partitions_copy >>= 1;
@@ -36,8 +36,8 @@ PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, R
     : buffer_manager(_buffer_manager), group_types(_group_types), payload_types(_payload_types), bindings(_bindings),
       is_partitioned(false), partition_info(_partition_info) {
 
-	sel_vectors.resize(partition_info.radix_partitions);
-	sel_vector_sizes.resize(partition_info.radix_partitions);
+	sel_vectors.resize(partition_info.n_partitions);
+	sel_vector_sizes.resize(partition_info.n_partitions);
 	group_subset.Initialize(group_types);
 	if (payload_types.size() > 0) {
 		payload_subset.Initialize(payload_types);
@@ -45,7 +45,7 @@ PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, R
 	hashes.Initialize(LogicalType::HASH);
 	hashes_subset.Initialize(LogicalType::HASH);
 
-	for (hash_t r = 0; r < partition_info.radix_partitions; r++) {
+	for (hash_t r = 0; r < partition_info.n_partitions; r++) {
 		sel_vectors[r].Initialize();
 	}
 }
@@ -76,9 +76,9 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	}
 
 	// makes no sense to do this with 1 partition
-	assert(partition_info.radix_partitions > 0);
+	assert(partition_info.n_partitions > 0);
 
-	for (hash_t r = 0; r < partition_info.radix_partitions; r++) {
+	for (hash_t r = 0; r < partition_info.n_partitions; r++) {
 		sel_vector_sizes[r] = 0;
 	}
 
@@ -87,20 +87,20 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 
 	for (idx_t i = 0; i < groups.size(); i++) {
 		auto partition = (hashes_ptr[i] & partition_info.radix_mask) >> partition_info.RADIX_SHIFT;
-		assert(partition < partition_info.radix_partitions);
+		assert(partition < partition_info.n_partitions);
 		sel_vectors[partition].set_index(sel_vector_sizes[partition]++, i);
 	}
 
 #ifdef DEBUG
 	// make sure we have lost no rows
 	idx_t total_count = 0;
-	for (idx_t r = 0; r < partition_info.radix_partitions; r++) {
+	for (idx_t r = 0; r < partition_info.n_partitions; r++) {
 		total_count += sel_vector_sizes[r];
 	}
 	assert(total_count == groups.size());
 #endif
 	idx_t group_count = 0;
-	for (hash_t r = 0; r < partition_info.radix_partitions; r++) {
+	for (hash_t r = 0; r < partition_info.n_partitions; r++) {
 		group_subset.Slice(groups, sel_vectors[r], sel_vector_sizes[r]);
 		payload_subset.Slice(payload, sel_vectors[r], sel_vector_sizes[r]);
 		hashes_subset.Slice(hashes, sel_vectors[r], sel_vector_sizes[r]);
@@ -114,11 +114,11 @@ void PartitionableHashTable::Partition() {
 	assert(!IsPartitioned());
 	assert(radix_partitioned_hts.size() == 0);
 	assert(!unpartitioned_hts.empty());
-	assert(partition_info.radix_partitions > 1);
+	assert(partition_info.n_partitions > 1);
 
 	vector<GroupedAggregateHashTable *> partition_hts;
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
-		for (idx_t r = 0; r < partition_info.radix_partitions; r++) {
+		for (idx_t r = 0; r < partition_info.n_partitions; r++) {
 			radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
 			    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
 			partition_hts.push_back(radix_partitioned_hts[r].back().get());
@@ -136,7 +136,7 @@ bool PartitionableHashTable::IsPartitioned() {
 
 HashTableList PartitionableHashTable::GetPartition(idx_t partition) {
 	assert(IsPartitioned());
-	assert(partition < partition_info.radix_partitions);
+	assert(partition < partition_info.n_partitions);
 	assert(radix_partitioned_hts.size() > partition);
 	return move(radix_partitioned_hts[partition]);
 }
