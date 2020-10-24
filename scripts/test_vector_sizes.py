@@ -1,4 +1,6 @@
 import os, sys, re
+from python_helpers import open_utf8
+
 vector_sizes = [2, 512]
 
 current_dir = os.getcwd()
@@ -12,10 +14,10 @@ def execute_system_command(cmd):
 		raise Exception
 
 def replace_in_file(fname, regex, replace):
-	with open(fname, 'r', encoding="utf8") as f:
+	with open_utf8(fname, 'r') as f:
 		contents = f.read()
 	contents = re.sub(regex, replace, contents)
-	with open(fname, 'w+', encoding="utf8") as f:
+	with open_utf8(fname, 'w+') as f:
 		f.write(contents)
 
 for vector_size in vector_sizes:

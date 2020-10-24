@@ -3,6 +3,7 @@
 
 import os
 import subprocess
+from python_helpers import open_utf8
 
 shell_proc = os.path.join('build', 'debug', 'duckdb')
 gen_storage_script = os.path.join('test', 'sql', 'storage_version', 'generate_storage_version.sql')
@@ -29,7 +30,7 @@ def run_command_in_shell(cmd):
 		print("----STDERR----")
 		print(stderr)
 
-with open(gen_storage_script, 'r', encoding="utf8") as f:
+with open_utf8(gen_storage_script, 'r') as f:
 	cmd = f.read()
 
 run_command_in_shell(cmd)

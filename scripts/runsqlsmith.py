@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import sqlite3
+from python_helpers import open_utf8
 
 sqlsmith_db = 'sqlsmith.db'
 sqlsmith_test_dir = 'test/sqlsmith/queries'
@@ -44,7 +45,7 @@ while True:
 	# run SQL smith
 	run_sqlsmith()
 	# get the breaking query
-	with open('sqlsmith.log', 'r', encoding="utf8") as f:
+	with open_utf8('sqlsmith.log', 'r') as f:
 		text = re.sub('[ \t\n]+', ' ', f.read())
 
 	c.execute('INSERT INTO sqlsmith_errors VALUES (?)', (text,))

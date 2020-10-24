@@ -4,6 +4,7 @@
 import os
 import subprocess
 import re
+from python_helpers import open_utf8
 
 bison_location     = "bison"
 base_dir           = 'third_party/libpg_query/grammar'
@@ -22,7 +23,7 @@ kwlist_header      = os.path.join(pg_dir, 'include/parser/kwlist.hpp')
 
 # parse the keyword lists
 def read_list_from_file(fname):
-    with open(fname, 'r', encoding="utf8") as f:
+    with open_utf8(fname, 'r') as f:
         return f.read().split('\n')
 
 kwdir = os.path.join(base_dir, 'keywords')
@@ -80,19 +81,19 @@ const int NumScanKeywords = lengthof(ScanKeywords);
 } // namespace duckdb_libpgquery
 """
 
-with open(kwlist_header, 'w+', encoding="utf8") as f:
+with open_utf8(kwlist_header, 'w+') as f:
     f.write(kwtext)
 
 
 # generate the final main.y.tmp file
 # first read the template file
-with open(template_file, 'r', encoding="utf8") as f:
+with open_utf8(template_file, 'r') as f:
     text = f.read()
 
 # now perform a series of replacements in the file to construct the final yacc file
 
 def get_file_contents(fpath, add_line_numbers=False):
-    with open(fpath, 'r', encoding="utf8") as f:
+    with open_utf8(fpath, 'r') as f:
         result = f.read()
         if add_line_numbers:
             return '#line 1 "%s"\n' % (fpath,) + result
@@ -148,7 +149,7 @@ grammar_rules = concat_dir(rule_dir, ".y", True)
 text = text.replace("{{{ GRAMMAR RULES }}}", grammar_rules)
 
 # finally write the yacc file into the target file
-with open(target_file, 'w+', encoding="utf8") as f:
+with open_utf8(target_file, 'w+') as f:
     f.write(text)
 
 # generate the bison
