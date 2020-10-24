@@ -156,8 +156,11 @@ private:
 	//! The data of the HT
 	//! unique_ptr to indicate the ownership
 	vector<unique_ptr<BufferHandle>> payload_hds; //! The data of the HT
+	vector<data_ptr_t> payload_hds_ptrs;          //! The data of the HT
+
 	//! unique_ptr to indicate the ownership
 	unique_ptr<BufferHandle> hashes_hdl;
+	data_ptr_t hashes_hdl_ptr;
 	data_ptr_t hashes_end_ptr; // of hashes
 
 	idx_t hash_prefix_shift;
