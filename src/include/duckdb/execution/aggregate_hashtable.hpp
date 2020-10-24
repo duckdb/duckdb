@@ -170,7 +170,6 @@ private:
 	unique_ptr<data_t[]> empty_payload_data;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
-	hash_t hash_prefix_get_bitmask;
 
 	//! Pointer vector for Scan()
 	Vector addresses;
