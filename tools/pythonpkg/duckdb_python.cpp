@@ -171,7 +171,8 @@ enum class PandasType : uint8_t {
 };
 
 struct PandasScanFunctionData : public TableFunctionData {
-	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasType> pandas_types_, vector<LogicalType> sql_types_)
+	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasType> pandas_types_,
+	                       vector<LogicalType> sql_types_)
 	    : df(df), row_count(row_count), pandas_types(move(pandas_types_)), sql_types(move(sql_types_)) {
 	}
 	py::handle df;
@@ -283,7 +284,8 @@ struct PandasScanFunction : public TableFunction {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
 	}
 
-	template <class T> static void scan_pandas_numeric_object(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
+	template <class T>
+	static void scan_pandas_numeric_object(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
 		auto src_ptr = (PyObject **)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<T>(out);
 		auto &nullmask = FlatVector::Nullmask(out);
@@ -967,13 +969,18 @@ struct DuckDBPyConnection {
 	void close() {
 		connection = nullptr;
 		database = nullptr;
+		for (auto &cur : cursors) {
+			cur->close();
+		}
+		cursors.clear();
 	}
 
 	// cursor() is stupid
-	unique_ptr<DuckDBPyConnection> cursor() {
-		auto res = make_unique<DuckDBPyConnection>();
+	shared_ptr<DuckDBPyConnection> cursor() {
+		auto res = make_shared<DuckDBPyConnection>();
 		res->database = database;
 		res->connection = make_unique<Connection>(*res->database);
+		cursors.push_back(res);
 		return res;
 	}
 
@@ -1011,8 +1018,8 @@ struct DuckDBPyConnection {
 		return result->fetch_arrow_table();
 	}
 
-	static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
-		auto res = make_unique<DuckDBPyConnection>();
+	static shared_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
+		auto res = make_shared<DuckDBPyConnection>();
 		DBConfig config;
 		if (read_only)
 			config.access_mode = AccessMode::READ_ONLY;
@@ -1035,6 +1042,7 @@ struct DuckDBPyConnection {
 	unique_ptr<Connection> connection;
 	unordered_map<string, py::object> registered_dfs;
 	unique_ptr<DuckDBPyResult> result;
+	vector<shared_ptr<DuckDBPyConnection>> cursors;
 
 	static vector<Value> transform_python_param_list(py::handle params) {
 		vector<Value> args;
@@ -1087,7 +1095,7 @@ struct DuckDBPyConnection {
 	}
 };
 
-static unique_ptr<DuckDBPyConnection> default_connection_ = nullptr;
+static shared_ptr<DuckDBPyConnection> default_connection_ = nullptr;
 
 static DuckDBPyConnection *default_connection() {
 	if (!default_connection_) {
@@ -1304,7 +1312,7 @@ PYBIND11_MODULE(duckdb, m) {
 	      py::arg("database") = ":memory:", py::arg("read_only") = false);
 
 	auto conn_class =
-	    py::class_<DuckDBPyConnection>(m, "DuckDBPyConnection")
+	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection")
 	        .def("cursor", &DuckDBPyConnection::cursor, "Create a duplicate of the current connection")
 	        .def("duplicate", &DuckDBPyConnection::cursor, "Create a duplicate of the current connection")
 	        .def("execute", &DuckDBPyConnection::execute,
