@@ -696,7 +696,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			}
 			// keep pointers to each group area so we can scatter or compare them below
 
-			auto payload_ptr = payload_hds_ptrs[ht_entry_ptr->page_nr - 1] + ((ht_entry_ptr->page_offset) * tuple_size);
+			auto payload_ptr = payload_hds_ptrs[ht_entry_ptr->page_nr - 1] + ((ht_entry_ptr->page_offset) * tuple_size) + HASH_WIDTH;
 			group_pointers_ptr[index] = payload_ptr;
 			addresses_out_ptr[index] = payload_ptr + group_width;
 		}
