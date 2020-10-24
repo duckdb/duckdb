@@ -22,7 +22,7 @@ public:
 
 	unique_ptr<ParsedExpression> condition;
 	unique_ptr<TableRef> table;
-
+	unique_ptr<TableRef> from_table;
 	vector<string> columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
 };

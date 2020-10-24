@@ -1,0 +1,154 @@
+# name: test/sql/update/test_update.test
+# description: Test updates that use a from clause
+# group: [update]
+
+# create a table
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test VALUES (3)
+
+statement ok
+CREATE  TABLE src (a INTEGER);
+
+statement ok
+INSERT INTO src VALUES (2)
+
+query I
+SELECT * FROM test
+----
+3
+
+query I
+SELECT * FROM src
+----
+2
+
+# test simple update
+statement ok
+UPDATE test SET a=test.a+s.a FROM src s
+
+query I
+SELECT * FROM test
+----
+5
+
+# test self join via alias
+statement ok
+UPDATE test SET a=test.a+t.a FROM test t
+
+query I
+SELECT * FROM test
+----
+10
+
+# test multiple tables
+statement ok
+UPDATE test SET a=t.a+s.a FROM test t, src s
+
+query I
+SELECT * FROM test
+----
+12
+
+# test subquery
+statement ok
+UPDATE test SET a=s.q FROM (SELECT a+1 as q FROM src) s
+
+query I
+SELECT * FROM test
+----
+3
+
+# test view
+statement ok
+CREATE VIEW vt AS (SELECT 17 as v)
+
+statement ok
+UPDATE test SET a=v FROM vt
+
+query I
+SELECT * FROM test
+----
+17
+
+# with a where clause on the from table
+statement ok
+UPDATE test SET a=s.a FROM src s WHERE s.a = 2
+
+query I
+SELECT * FROM test
+----
+2
+
+# with a where clause that involves both tables
+statement ok
+UPDATE test t SET a=1 FROM src s WHERE s.a = t.a
+
+query I
+SELECT * FROM test
+----
+1
+
+# with a where clause that evaluates to false
+statement ok
+UPDATE test t SET a=9 FROM src s WHERE s.a=t.a
+
+query I
+SELECT * FROM test
+----
+1
+
+# test with multiple updates per row (which is undefined),
+# but in this case the last value in the table will win
+statement ok
+INSERT INTO src VALUES (7)
+
+statement ok
+UPDATE test SET a=s.a FROM src s
+
+query I
+SELECT * FROM test
+----
+7
+
+# test described in issue 1035
+
+statement ok
+CREATE TABLE terms(docid INTEGER, term INTEGER);
+
+statement ok
+CREATE TABLE docs(id INTEGER, len INTEGER);
+
+statement ok
+insert into docs values (1, 0), (2, 0);
+
+statement ok
+insert into terms values (1, 1);
+
+statement ok
+insert into terms values (2, 1);
+
+statement ok
+insert into terms values (2, 2);
+
+statement ok
+insert into terms values (2, 3);
+
+statement ok
+UPDATE docs 
+SET len = sq.len 
+FROM ( 
+    SELECT docid AS id, count(term) AS len 
+    FROM terms 
+    GROUP BY docid 
+    ORDER BY docid 
+) AS sq 
+WHERE docs.id = sq.id;
+
+query II
+select * from docs;
+----
+1	1
+2	3
