@@ -334,7 +334,7 @@ PRAGMA enable_profiling
 test('''
 PRAGMA enable_profiling;
 SELECT 42;
-''', out="42", err="<<Query Profiling Information>>")
+''', out="42", err="Query Profiling Information")
 
 test('.system echo 42', out="42")
 test('.shell echo 42', out="42")
