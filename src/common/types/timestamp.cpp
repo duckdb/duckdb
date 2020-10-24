@@ -89,15 +89,10 @@ void Timestamp::Convert(timestamp_t date, date_t &out_date, dtime_t &out_time) {
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
-	auto in_time_t = std::time(nullptr);
-	auto utc = std::gmtime(&in_time_t);
-
-	// tm_year[0...] considers the amount of years since 1900 and tm_mon considers the amount of months since january
-	// tm_mon[0-11]
-	auto date = Date::FromDate(utc->tm_year + TM_START_YEAR, utc->tm_mon + 1, utc->tm_mday);
-	auto time = Time::FromTime(utc->tm_hour, utc->tm_min, utc->tm_sec);
-
-	return Timestamp::FromDatetime(date, time);
+	using std::chrono::system_clock;
+	auto now = std::chrono::system_clock::now();
+	auto epoch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+	return Timestamp::FromEpochMs(epoch_ms);
 }
 
 timestamp_t Timestamp::FromEpochMs(int64_t ms) {

@@ -41,6 +41,8 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 		return 2;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		return 6;
+	case StrTimeSpecifier::MILLISECOND_PADDED:
+		return 3;
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 		return 3;
 	default:
@@ -307,6 +309,9 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		break;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		target = WritePadded(target, data[6] * 1000, 6);
+		break;
+	case StrTimeSpecifier::MILLISECOND_PADDED:
+		target = WritePadded3(target, data[6]);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET:
 	case StrTimeSpecifier::TZ_NAME:
