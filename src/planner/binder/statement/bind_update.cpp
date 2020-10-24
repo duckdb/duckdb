@@ -13,7 +13,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-
+#include "duckdb/planner/tableref/bound_crossproductref.hpp"
 #include <algorithm>
 
 using namespace std;
@@ -90,6 +90,9 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	BoundStatement result;
+	unique_ptr<LogicalOperator> root;
+	LogicalGet *get;
+
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
@@ -98,9 +101,16 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto &table_binding = (BoundBaseTableRef &)*bound_table;
 	auto table = table_binding.table;
 
-	auto root = CreatePlan(*bound_table);
-	auto &get = (LogicalGet &)*root;
-	assert(root->type == LogicalOperatorType::GET);
+	if (stmt.from_table) {
+		BoundCrossProductRef bound_crossproduct;
+		bound_crossproduct.left = move(bound_table);
+		bound_crossproduct.right = Bind(*stmt.from_table);
+		root = CreatePlan(bound_crossproduct);
+		get = (LogicalGet *)root->children[0].get();
+	} else {
+		root = CreatePlan(*bound_table);
+		get = (LogicalGet *)root.get();
+	}
 
 	if (!table->temporary) {
 		// update of persistent table: not read only!
@@ -155,12 +165,12 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	proj->AddChild(move(root));
 
 	// bind any extra columns necessary for CHECK constraints or indexes
-	BindUpdateConstraints(*table, get, *proj, *update);
+	BindUpdateConstraints(*table, *get, *proj, *update);
 
 	// finally add the row id column to the projection list
-	proj->expressions.push_back(
-	    make_unique<BoundColumnRefExpression>(LOGICAL_ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
-	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	proj->expressions.push_back(make_unique<BoundColumnRefExpression>(
+	    LOGICAL_ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));
+	get->column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(move(proj));

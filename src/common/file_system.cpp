@@ -9,6 +9,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include <cstdio>
+#include <cstdint>
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -335,7 +336,7 @@ void FileSystem::SetWorkingDirectory(string path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
-	idx_t max_memory = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
+	idx_t max_memory = MinValue<idx_t>(sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 	if (errno != 0) {
 		throw IOException("Could not fetch available system memory!");
 	}
@@ -609,7 +610,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
 		throw IOException("Could not fetch available system memory!");
 	}
-	return available_memory_kb * 1024;
+	return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
 }
 
 string FileSystem::GetWorkingDirectory() {

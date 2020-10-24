@@ -31,8 +31,8 @@ public:
 	}
 };
 
-Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0),
+Pipeline::Pipeline(Executor &executor_, ProducerToken &token_)
+    : executor(executor_), token(token_), finished_tasks(0), total_tasks(0), finished_dependencies(0), finished(false),
       recursive_cte(nullptr) {
 }
 
@@ -76,13 +76,15 @@ void Pipeline::FinishTask() {
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
 		try {
-			sink->Finalize(executor.context, move(sink_state));
+			sink->Finalize(*this, executor.context, move(sink_state));
 		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {
 			executor.PushError("Unknown exception in Finalize!");
 		}
-		Finish();
+		if (current_finished == total_tasks) {
+			Finish();
+		}
 	}
 }
 
@@ -143,7 +145,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 void Pipeline::Reset(ClientContext &context) {
 	sink_state = sink->GetGlobalState(context);
 	finished_tasks = 0;
-	total_tasks = 1;
+	total_tasks = 0;
 	finished = false;
 }
 
