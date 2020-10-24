@@ -126,6 +126,7 @@ public:
 
 	//! The hash table load factor, when a resize is triggered
 	constexpr static float LOAD_FACTOR = 1.5;
+	constexpr static uint8_t HASH_WIDTH = sizeof(hash_t);
 
 private:
 	BufferManager &buffer_manager;
@@ -144,7 +145,6 @@ private:
 
 	HtEntryType entry_type;
 
-	idx_t hash_width;
 	//! The total tuple size
 	idx_t tuple_size;
 	idx_t tuples_per_block;
@@ -202,7 +202,6 @@ private:
 	void NewBlock();
 
 	template <class T> void VerifyInternal();
-	template <class T> data_ptr_t GetPtr(T &ht_entry_val);
 	template <class T> void Resize(idx_t size);
 	template <class T>
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
