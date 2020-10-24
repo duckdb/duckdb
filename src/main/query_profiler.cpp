@@ -19,10 +19,6 @@ using namespace std;
 
 namespace duckdb {
 
-constexpr idx_t TREE_RENDER_WIDTH = 20;
-constexpr idx_t REMAINING_RENDER_WIDTH = TREE_RENDER_WIDTH - 2;
-constexpr idx_t MAX_EXTRA_LINES = 10;
-
 void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 	if (!enabled) {
 		return;

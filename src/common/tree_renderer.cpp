@@ -399,7 +399,7 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
 	auto result = TreeRenderer::CreateRenderNode(op.name, op.extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";
-	result->extra_text += "\n" + to_string(op.info.elements);
+	result->extra_text += "\n" + std::to_string(op.info.elements);
 	string timing = StringUtil::Format("%.2f", op.info.time);
 	result->extra_text += "\n(" + timing + "s)";
 	return result;
