@@ -12626,7 +12626,8 @@ char *strdup_handle_newline(ShellState *p, const char *z) {
   char *t = result;
   int count = 0;
   int interrupted = 0;
-  for(const char *s = z; *s; s++, t++) {
+  const char *s;
+  for(s = z; *s; s++, t++) {
     if (*s == '\n') {
       *t = '\\';
       t++;
