@@ -126,6 +126,7 @@ public:
 
 	//! The hash table load factor, when a resize is triggered
 	constexpr static float LOAD_FACTOR = 1.5;
+	constexpr static uint8_t HASH_WIDTH = sizeof(hash_t);
 
 private:
 	BufferManager &buffer_manager;
@@ -144,7 +145,6 @@ private:
 
 	HtEntryType entry_type;
 
-	idx_t hash_width;
 	//! The total tuple size
 	idx_t tuple_size;
 	idx_t tuples_per_block;
@@ -156,8 +156,11 @@ private:
 	//! The data of the HT
 	//! unique_ptr to indicate the ownership
 	vector<unique_ptr<BufferHandle>> payload_hds; //! The data of the HT
+	vector<data_ptr_t> payload_hds_ptrs;          //! The data of the HT
+
 	//! unique_ptr to indicate the ownership
 	unique_ptr<BufferHandle> hashes_hdl;
+	data_ptr_t hashes_hdl_ptr;
 	data_ptr_t hashes_end_ptr; // of hashes
 
 	idx_t hash_prefix_shift;
@@ -167,7 +170,6 @@ private:
 	unique_ptr<data_t[]> empty_payload_data;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
-	hash_t hash_prefix_get_bitmask;
 
 	//! Pointer vector for Scan()
 	Vector addresses;
@@ -178,7 +180,7 @@ private:
 
 	// some stuff from FindOrCreateGroupsInternal() to avoid allocation there
 	Vector ht_offsets;
-	Vector group_pointers;
+	Vector hash_salts;
 	SelectionVector group_compare_vector;
 	SelectionVector no_match_vector;
 	SelectionVector empty_vector;
@@ -199,7 +201,6 @@ private:
 	void NewBlock();
 
 	template <class T> void VerifyInternal();
-	template <class T> data_ptr_t GetPtr(T &ht_entry_val);
 	template <class T> void Resize(idx_t size);
 	template <class T>
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,

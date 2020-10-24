@@ -164,7 +164,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 
 	// if we have non-combinable aggregates (e.g. string_agg) or any distinct aggregates we cannot keep parallel hash
 	// tables
-	if (!all_combinable || any_distinct) {
+	if (ForceSingleHT(state)) {
 		lock_guard<mutex> glock(gstate.lock);
 		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
 		if (gstate.finalized_hts.size() == 0) {
@@ -191,7 +191,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 
 	gstate.lossy_total_groups +=
 	    llstate.ht->AddChunk(group_chunk, payload_chunk,
-	                         gstate.lossy_total_groups > radix_limit && gstate.partition_info.radix_partitions > 1);
+	                         gstate.lossy_total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
 }
 
 class PhysicalHashAggregateState : public PhysicalOperatorState {
@@ -221,7 +221,7 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	// this actually does not do a lot but just pushes the local HTs into the global state so we can later combine them
 	// in parallel
 
-	if (!all_combinable || any_distinct) {
+	if (ForceSingleHT(state)) {
 		assert(gstate.finalized_hts.size() <= 1);
 		return;
 	}
@@ -230,7 +230,7 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 		return; // no data
 	}
 
-	if (!llstate.ht->IsPartitioned() && gstate.partition_info.radix_partitions > 1 &&
+	if (!llstate.ht->IsPartitioned() && gstate.partition_info.n_partitions > 1 &&
 	    gstate.lossy_total_groups > radix_limit) {
 		llstate.ht->Partition();
 	}
@@ -300,7 +300,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 
 	// special case if we have non-combinable aggregates
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
-	if (!all_combinable || any_distinct) {
+	if (ForceSingleHT(gstate)) {
 		assert(gstate.finalized_hts.size() <= 1);
 		return;
 	}
@@ -327,10 +327,10 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 		// schedule additional tasks to combine the partial HTs
 		if (!immediate) {
 			assert(pipeline);
-			pipeline->total_tasks += gstate.partition_info.radix_partitions;
+			pipeline->total_tasks += gstate.partition_info.n_partitions;
 		}
-		gstate.finalized_hts.resize(gstate.partition_info.radix_partitions);
-		for (idx_t r = 0; r < gstate.partition_info.radix_partitions; r++) {
+		gstate.finalized_hts.resize(gstate.partition_info.n_partitions);
+		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
 			gstate.finalized_hts[r] =
 			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), group_types,
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64);
@@ -430,5 +430,12 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	return make_unique<PhysicalHashAggregateState>(*this, group_types, aggregate_types,
 	                                               children.size() == 0 ? nullptr : children[0].get());
 }
+
+bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState& state) {
+auto &gstate = (HashAggregateGlobalState &) state;
+
+return !all_combinable || any_distinct || gstate.partition_info.n_partitions < 2;
+}
+
 
 } // namespace duckdb

@@ -68,6 +68,7 @@ private:
 private:
 	void FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
 	                      Pipeline *pipeline);
+	bool ForceSingleHT(GlobalOperatorState& state);
 };
 
 } // namespace duckdb
