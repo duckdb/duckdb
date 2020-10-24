@@ -180,6 +180,7 @@ private:
 
 	// some stuff from FindOrCreateGroupsInternal() to avoid allocation there
 	Vector ht_offsets;
+	Vector hash_salts;
 	SelectionVector group_compare_vector;
 	SelectionVector no_match_vector;
 	SelectionVector empty_vector;

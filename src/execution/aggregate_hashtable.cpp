@@ -52,8 +52,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
       payload_types(payload_types), group_width(0), group_padding(0), payload_width(0), entry_type(entry_type),
       capacity(0), entries(0), payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
-      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
-      empty_vector(STANDARD_VECTOR_SIZE) {
+      hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
+      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
@@ -609,23 +609,27 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	assert(group_hashes.type == LogicalType::HASH);
 
 	group_hashes.Normalify(groups.size());
-	auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
+	const auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
 
 	assert(ht_offsets.vector_type == VectorType::FLAT_VECTOR);
 	assert(ht_offsets.type == LogicalType::BIGINT);
 
 	assert(addresses.type == LogicalType::POINTER);
 	addresses.Normalify(groups.size());
+	const auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// now compute the entry in the table based on the hash using a modulo
 	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
 		return (element & bitmask);
 	});
-
 	const auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
-	// const auto group_pointers_ptr = FlatVector::GetData<data_ptr_t>(group_pointers);
-	const auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
+
+	// precompute the hash salts for faster comparison below
+	assert(hash_salts.type == LogicalType::SMALLINT);
+	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
+	                                         [&](hash_t element) { return (element >> hash_prefix_shift); });
+	const auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
 	const SelectionVector *sel_vector = &FlatVector::IncrementalSelectionVector;
@@ -687,7 +691,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			} else {
 				// cell is occupied: add to check list
 				// only need to check if hash salt in ptr == prefix of hash in payload
-				if (ht_entry_ptr->salt == (group_hashes_ptr[index] >> hash_prefix_shift)) {
+				if (ht_entry_ptr->salt == hash_salts_ptr[index]) {
 					group_compare_vector.set_index(need_compare_count++, index);
 
 					auto page_ptr = payload_hds_ptrs[ht_entry_ptr->page_nr - 1];
