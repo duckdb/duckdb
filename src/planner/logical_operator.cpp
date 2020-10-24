@@ -69,8 +69,8 @@ vector<ColumnBinding> LogicalOperator::MapBindings(vector<ColumnBinding> binding
 }
 
 string LogicalOperator::ToString(idx_t depth) const {
-	TreeRenderer renderer(TreeRenderer::CreateTree(*this));
-	return renderer.ToString();
+	TreeRenderer renderer;
+	return renderer.ToString(*this);
 }
 
 void LogicalOperator::Print() {

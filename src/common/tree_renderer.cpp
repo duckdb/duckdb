@@ -35,52 +35,53 @@ void RenderTree::SetNode(idx_t x, idx_t y, unique_ptr<RenderTreeNode> node) {
 	nodes[GetPosition(x, y)] = move(node);
 }
 
-TreeRenderer::TreeRenderer(unique_ptr<RenderTree> tree) :
-	root(move(tree)) {
-
-}
-
-static void RenderTopLayer(RenderTree &root, std::stringstream &ss, idx_t y) {
-	for(idx_t x = 0; x <= root.width; x++) {
+void TreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y) {
+	for(idx_t x = 0; x < root.width; x++) {
+		if (x * config.NODE_RENDER_WIDTH >= config.MAXIMUM_RENDER_WIDTH) {
+			break;
+		}
 		if (root.HasNode(x, y)) {
-			ss << TreeRenderer::LTCORNER;
-			ss << StringUtil::Repeat(TreeRenderer::HORIZONTAL, TreeRenderer::TREE_RENDER_WIDTH / 2 - 1);
+			ss << config.LTCORNER;
+			ss << StringUtil::Repeat(config.HORIZONTAL, config.NODE_RENDER_WIDTH / 2 - 1);
 			if (y == 0) {
 				// top level node: no node above this one
-				ss << TreeRenderer::HORIZONTAL;
+				ss << config.HORIZONTAL;
 			} else {
 				// render connection to node above this one
-				ss << TreeRenderer::DMIDDLE;
+				ss << config.DMIDDLE;
 			}
-			ss << StringUtil::Repeat(TreeRenderer::HORIZONTAL, TreeRenderer::TREE_RENDER_WIDTH / 2 - 1);
-			ss << TreeRenderer::RTCORNER;
+			ss << StringUtil::Repeat(config.HORIZONTAL, config.NODE_RENDER_WIDTH / 2 - 1);
+			ss << config.RTCORNER;
 		} else {
-			ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH);
+			ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH);
 		}
 	}
 	ss << std::endl;
 }
 
-static void RenderBottomLayer(RenderTree &root, std::stringstream &ss, idx_t y) {
+void TreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y) {
 	for(idx_t x = 0; x <= root.width; x++) {
+		if (x * config.NODE_RENDER_WIDTH >= config.MAXIMUM_RENDER_WIDTH) {
+			break;
+		}
 		if (root.HasNode(x, y)) {
-			ss << TreeRenderer::LDCORNER;
-			ss << StringUtil::Repeat(TreeRenderer::HORIZONTAL, TreeRenderer::TREE_RENDER_WIDTH / 2 - 1);
+			ss << config.LDCORNER;
+			ss << StringUtil::Repeat(config.HORIZONTAL, config.NODE_RENDER_WIDTH / 2 - 1);
 			if (root.HasNode(x, y + 1)) {
 				// node below this one: connect to that one
-				ss << TreeRenderer::TMIDDLE;
+				ss << config.TMIDDLE;
 			} else {
 				// no node below this one: end the box
-				ss << TreeRenderer::HORIZONTAL;
+				ss << config.HORIZONTAL;
 			}
-			ss << StringUtil::Repeat(TreeRenderer::HORIZONTAL, TreeRenderer::TREE_RENDER_WIDTH / 2 - 1);
-			ss << TreeRenderer::RDCORNER;
+			ss << StringUtil::Repeat(config.HORIZONTAL, config.NODE_RENDER_WIDTH / 2 - 1);
+			ss << config.RDCORNER;
 		} else if (root.HasNode(x, y + 1)) {
-			ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH / 2);
-			ss << TreeRenderer::VERTICAL;
-			ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH / 2);
+			ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH / 2);
+			ss << config.VERTICAL;
+			ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH / 2);
 		} else {
-			ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH);
+			ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH);
 		}
 	}
 	ss << std::endl;
@@ -124,76 +125,82 @@ static bool NodeHasMultipleChildren(RenderTree &root, idx_t x, idx_t y) {
 	return false;
 }
 
-static void RenderBoxContent(RenderTree &root, std::stringstream &ss, idx_t y) {
+void TreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y) {
 	// we first need to figure out how high our boxes are going to be
+	vector<vector<string>> extra_info;
 	idx_t extra_height = 0;
+	extra_info.resize(root.width);
 	for(idx_t x = 0; x < root.width; x++) {
 		auto node = root.GetNode(x, y);
 		if (node) {
-			if (node->extra_text.size() > extra_height) {
-				extra_height = node->extra_text.size();
+			SplitUpExtraInfo(node->extra_text, extra_info[x]);
+			if (extra_info[x].size() > extra_height) {
+				extra_height = extra_info[x].size();
 			}
 		}
 	}
-	extra_height = MinValue<idx_t>(extra_height, TreeRenderer::MAX_EXTRA_LINES);
+	extra_height = MinValue<idx_t>(extra_height, config.MAX_EXTRA_LINES);
 	idx_t halfway_point = (extra_height + 1) / 2;
 	// now we render the actual node
 	for(idx_t render_y = 0; render_y <= extra_height; render_y++) {
 		for(idx_t x = 0; x < root.width; x++) {
+			if (x * config.NODE_RENDER_WIDTH >= config.MAXIMUM_RENDER_WIDTH) {
+				break;
+			}
 			auto node = root.GetNode(x, y);
 			if (!node) {
 				if (render_y == halfway_point) {
 					bool has_child_to_the_right = NodeHasMultipleChildren(root, x, y);
 					if (root.HasNode(x, y + 1)) {
 						// node right below this one
-						ss << StringUtil::Repeat(TreeRenderer::HORIZONTAL, TreeRenderer::TREE_RENDER_WIDTH / 2);
-						ss << TreeRenderer::RTCORNER;
+						ss << StringUtil::Repeat(config.HORIZONTAL, config.NODE_RENDER_WIDTH / 2);
+						ss << config.RTCORNER;
 						if (has_child_to_the_right) {
 							// but we have another child to the right! keep rendering the line
-							ss << StringUtil::Repeat(TreeRenderer::HORIZONTAL, TreeRenderer::TREE_RENDER_WIDTH / 2);
+							ss << StringUtil::Repeat(config.HORIZONTAL, config.NODE_RENDER_WIDTH / 2);
 						} else {
 							// only a child below this one: fill the rest with spaces
-							ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH / 2);
+							ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH / 2);
 						}
 					} else if (has_child_to_the_right) {
 						// child to the right, but no child right below this one: render a full line
-						ss << StringUtil::Repeat(TreeRenderer::HORIZONTAL, TreeRenderer::TREE_RENDER_WIDTH);
+						ss << StringUtil::Repeat(config.HORIZONTAL, config.NODE_RENDER_WIDTH);
 					} else {
 						// empty spot: render spaces
-						ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH);
+						ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH);
 					}
 				} else if (render_y >= halfway_point) {
 					if (root.HasNode(x, y + 1)) {
 						// we have a node below this empty spot: render a vertical line
-						ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH / 2);
-						ss << TreeRenderer::VERTICAL;
-						ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH / 2);
+						ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH / 2);
+						ss << config.VERTICAL;
+						ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH / 2);
 					} else {
 						// empty spot: render spaces
-						ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH);
+						ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH);
 					}
 				} else {
 					// empty spot: render spaces
-					ss << StringUtil::Repeat(" ", TreeRenderer::TREE_RENDER_WIDTH);
+					ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH);
 				}
 			} else {
-				ss << TreeRenderer::VERTICAL;
+				ss << config.VERTICAL;
 				// figure out what to render
 				string render_text;
 				if (render_y == 0) {
 					render_text = node->name;
 				} else {
-					if (render_y <= node->extra_text.size()) {
-						render_text = node->extra_text[render_y - 1];
+					if (render_y <= extra_info[x].size()) {
+						render_text = extra_info[x][render_y - 1];
 					}
 				}
-				render_text = AdjustTextForRendering(render_text, TreeRenderer::TREE_RENDER_WIDTH - 2);
+				render_text = AdjustTextForRendering(render_text, config.NODE_RENDER_WIDTH - 2);
 				ss << render_text;
 
 				if (render_y == halfway_point && NodeHasMultipleChildren(root, x, y)) {
-					ss << TreeRenderer::LMIDDLE;
+					ss << config.LMIDDLE;
 				} else {
-					ss << TreeRenderer::VERTICAL;
+					ss << config.VERTICAL;
 				}
 			}
 		}
@@ -201,28 +208,66 @@ static void RenderBoxContent(RenderTree &root, std::stringstream &ss, idx_t y) {
 	}
 }
 
-string TreeRenderer::ToString() {
+string TreeRenderer::ToString(const LogicalOperator &op) {
 	std::stringstream ss;
-	for(idx_t y = 0; y < root->height; y++) {
-		// start by rendering the top layer
-		RenderTopLayer(*root, ss, y);
-		// now we render the content of the boxes
-		RenderBoxContent(*root, ss, y);
-		// render the bottom layer of each of the boxes
-		RenderBottomLayer(*root, ss, y);
-	}
+	Render(op, ss);
 	return ss.str();
 }
 
-static bool CanSplitOnThisChar(char l) {
-	return l < '0' || (l > '9' && l < 'A') || (l > 'Z' && l < 'a');
+string TreeRenderer::ToString(const PhysicalOperator &op) {
+	std::stringstream ss;
+	Render(op, ss);
+	return ss.str();
 }
 
-static bool IsPadding(char l) {
-	return l == ' ' || l == '\t';
+string TreeRenderer::ToString(const QueryProfiler::TreeNode &op) {
+	std::stringstream ss;
+	Render(op, ss);
+	return ss.str();
 }
 
-static string RemovePadding(string l) {
+void TreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
+	auto tree = CreateTree(op);
+	ToStream(*tree, ss);
+}
+
+void TreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
+	auto tree = CreateTree(op);
+	ToStream(*tree, ss);
+}
+
+void TreeRenderer::Render(const QueryProfiler::TreeNode &op, std::ostream &ss) {
+	auto tree = CreateTree(op);
+	ToStream(*tree, ss);
+}
+
+void TreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+	while(root.width * config.NODE_RENDER_WIDTH > config.MAXIMUM_RENDER_WIDTH) {
+		if (config.NODE_RENDER_WIDTH - 2 < config.MINIMUM_RENDER_WIDTH) {
+			break;
+		}
+		config.NODE_RENDER_WIDTH -= 2;
+	}
+
+	for(idx_t y = 0; y < root.height; y++) {
+		// start by rendering the top layer
+		RenderTopLayer(root, ss, y);
+		// now we render the content of the boxes
+		RenderBoxContent(root, ss, y);
+		// render the bottom layer of each of the boxes
+		RenderBottomLayer(root, ss, y);
+	}
+}
+
+bool TreeRenderer::CanSplitOnThisChar(char l) {
+	return (l < '0' || (l > '9' && l < 'A') || (l > 'Z' && l < 'a')) && l != '_';
+}
+
+bool TreeRenderer::IsPadding(char l) {
+	return l == ' ' || l == '\t' || l == '\n' || l == '\r';
+}
+
+string TreeRenderer::RemovePadding(string l) {
 	idx_t start = 0, end = l.size();
 	while (start < l.size() && IsPadding(l[start])) {
 		start++;
@@ -233,8 +278,8 @@ static string RemovePadding(string l) {
 	return l.substr(start, end - start);
 }
 
-void SplitStringBuffer(const string &source, vector<string> &result) {
-	constexpr idx_t MAX_LINE_RENDER_SIZE = TreeRenderer::TREE_RENDER_WIDTH - 2;
+void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &result) {
+	idx_t MAX_LINE_RENDER_SIZE = config.NODE_RENDER_WIDTH - 2;
 	// utf8 in prompt, get render width
 	idx_t cpos = 0;
 	idx_t start_pos = 0;
@@ -248,12 +293,12 @@ void SplitStringBuffer(const string &source, vector<string> &result) {
 		size_t char_render_width = utf8proc_render_width(source.c_str(), source.size(), cpos);
 		idx_t next_cpos = utf8proc_next_grapheme_cluster(source.c_str(), source.size(), cpos);
 		if (render_width + char_render_width > MAX_LINE_RENDER_SIZE) {
-			if (last_possible_split <= start_pos - 8) {
+			if (last_possible_split <= start_pos + 8) {
 				last_possible_split = cpos;
 			}
 			result.push_back(source.substr(start_pos, last_possible_split - start_pos));
-			start_pos = cpos;
-			last_possible_split = cpos;
+			start_pos = last_possible_split;
+			cpos = last_possible_split;
 			render_width = 0;
 		}
 		cpos = next_cpos;
@@ -264,30 +309,36 @@ void SplitStringBuffer(const string &source, vector<string> &result) {
 	}
 }
 
-template<class T>
-unique_ptr<RenderTreeNode> CreateRenderNode(const T &op) {
-	auto result = make_unique<RenderTreeNode>();
-	result->name = op.GetName();
-	auto extra_info = op.ParamsToString();
+void TreeRenderer::SplitUpExtraInfo(string extra_info, vector<string> &result) {
 	if (extra_info.empty()) {
-		return result;
+		return;
 	}
-	result->extra_text.push_back(StringUtil::Repeat(string(TreeRenderer::HORIZONTAL) + " ", (TreeRenderer::TREE_RENDER_WIDTH - 7) / 2));
 	auto splits = StringUtil::Split(extra_info, "\n");
-	for(auto &split : splits) {
-		string str = RemovePadding(split);
-		SplitStringBuffer(str, result->extra_text);
+	if (splits.size() > 0 && splits[0] != "[INFOSEPARATOR]") {
+		result.push_back(ExtraInfoSeparator());
 	}
+	for(auto &split : splits) {
+		if (split == "[INFOSEPARATOR]") {
+			result.push_back(ExtraInfoSeparator());
+			continue;
+		}
+		string str = RemovePadding(split);
+		if (str.size() == 0) {
+			continue;
+		}
+		SplitStringBuffer(str, result);
+	}
+}
+
+string TreeRenderer::ExtraInfoSeparator() {
+	return StringUtil::Repeat(string(config.HORIZONTAL) + " ", (config.NODE_RENDER_WIDTH - 7) / 2);
+}
+
+unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string extra_info) {
+	auto result = make_unique<RenderTreeNode>();
+	result->name = move(name);
+	result->extra_text = extra_info;
 	return result;
-}
-
-
-unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const LogicalOperator &op) {
-	return CreateRenderNode<LogicalOperator>(op);
-}
-
-unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) {
-	return CreateRenderNode<PhysicalOperator>(op);
 }
 
 template<class T>
@@ -310,7 +361,7 @@ static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
 }
 
 template<class T>
-static idx_t CreateRenderTree(RenderTree &result, const T &op, idx_t x, idx_t y) {
+idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
 	auto node = TreeRenderer::CreateNode(op);
 	result.SetNode(x, y, move(node));
 
@@ -320,31 +371,51 @@ static idx_t CreateRenderTree(RenderTree &result, const T &op, idx_t x, idx_t y)
 	idx_t width = 0;
 	// render the children of this node
 	for(auto &child : op.children) {
-		width += CreateRenderTree<T>(result, *child, x + width, y + 1);
+		width += CreateRenderTreeRecursive<T>(result, *child, x + width, y + 1);
 	}
 	return width;
 }
 
-unique_ptr<RenderTree> TreeRenderer::CreateTree(const LogicalOperator &op) {
+template<class T>
+unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
 	idx_t width, height;
-	GetTreeWidthHeight<LogicalOperator>(op, width, height);
+	GetTreeWidthHeight<T>(op, width, height);
 
 	auto result = make_unique<RenderTree>(width, height);
 
 	// now fill in the tree
-	CreateRenderTree<LogicalOperator>(*result, op, 0, 0);
+	CreateRenderTreeRecursive<T>(*result, op, 0, 0);
 	return result;
 }
 
-unique_ptr<RenderTree> TreeRenderer::CreateTree(const PhysicalOperator &op) {
-	idx_t width, height;
-	GetTreeWidthHeight<PhysicalOperator>(op, width, height);
+unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const LogicalOperator &op) {
+	return CreateRenderNode(op.GetName(), op.ParamsToString());
+}
 
-	auto result = make_unique<RenderTree>(width, height);
+unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) {
+	return CreateRenderNode(op.GetName(), op.ParamsToString());
+}
 
-	// now fill in the tree
-	CreateRenderTree<PhysicalOperator>(*result, op, 0, 0);
+unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
+	auto result = TreeRenderer::CreateRenderNode(op.name, op.extra_info);
+	result->extra_text += "\n[INFOSEPARATOR]";
+	result->extra_text += "\n" + to_string(op.info.elements);
+	string timing = StringUtil::Format("%.2f", op.info.time);
+	result->extra_text += "\n(" + timing + "s)";
 	return result;
+}
+
+unique_ptr<RenderTree> TreeRenderer::CreateTree(const LogicalOperator &op) {
+	return CreateRenderTree<LogicalOperator>(op);
+}
+
+unique_ptr<RenderTree> TreeRenderer::CreateTree(const PhysicalOperator &op) {
+	return CreateRenderTree<PhysicalOperator>(op);
+}
+
+unique_ptr<RenderTree> TreeRenderer::CreateTree(const QueryProfiler::TreeNode &op) {
+	return CreateRenderTree<QueryProfiler::TreeNode>(op);
+
 }
 
 }

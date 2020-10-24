@@ -16,8 +16,8 @@ string PhysicalOperator::GetName() const {
 }
 
 string PhysicalOperator::ToString() const {
-	TreeRenderer renderer(TreeRenderer::CreateTree(*this));
-	return renderer.ToString();
+	TreeRenderer renderer;
+	return renderer.ToString(*this);
 }
 
 PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator &op, PhysicalOperator *child) : finished(false) {
