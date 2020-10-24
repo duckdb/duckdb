@@ -52,8 +52,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(group_types),
       payload_types(payload_types), group_width(0), group_padding(0), payload_width(0), entry_type(entry_type),
       capacity(0), entries(0), payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
-      group_pointers(LogicalType::POINTER), group_compare_vector(STANDARD_VECTOR_SIZE),
-      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
+      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
+      empty_vector(STANDARD_VECTOR_SIZE) {
 
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
@@ -589,8 +589,8 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 }
 
 template <class T>
-idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes,
-                                                            Vector &addresses_out, SelectionVector &new_groups_out) {
+idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
+                                                            SelectionVector &new_groups_out) {
 
 	assert(!is_finalized);
 
@@ -614,8 +614,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	assert(ht_offsets.vector_type == VectorType::FLAT_VECTOR);
 	assert(ht_offsets.type == LogicalType::BIGINT);
 
-	assert(addresses_out.type == LogicalType::POINTER);
-	addresses_out.Normalify(groups.size());
+	assert(addresses.type == LogicalType::POINTER);
+	addresses.Normalify(groups.size());
 
 	// now compute the entry in the table based on the hash using a modulo
 	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
@@ -624,8 +624,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	});
 
 	const auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
-	const auto group_pointers_ptr = FlatVector::GetData<data_ptr_t>(group_pointers);
-	const auto addresses_out_ptr = FlatVector::GetData<data_ptr_t>(addresses_out);
+	// const auto group_pointers_ptr = FlatVector::GetData<data_ptr_t>(group_pointers);
+	const auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
 	const SelectionVector *sel_vector = &FlatVector::IncrementalSelectionVector;
@@ -692,21 +692,18 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				}
 			}
 			// keep pointers to each group area so we can scatter or compare them below
-
-			auto payload_ptr =
+			addresses_ptr[index] =
 			    payload_hds_ptrs[ht_entry_ptr->page_nr - 1] + ((ht_entry_ptr->page_offset) * tuple_size) + HASH_WIDTH;
-			group_pointers_ptr[index] = payload_ptr;
-			addresses_out_ptr[index] = payload_ptr + group_width;
 		}
 
 		if (new_entry_count > 0) {
 			// for each of the locations that are empty, serialize the group columns to the locations
-			ScatterGroups(groups, group_data, group_pointers, empty_vector, new_entry_count);
+			ScatterGroups(groups, group_data, addresses, empty_vector, new_entry_count);
 		}
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
 		if (need_compare_count > 0) {
-			CompareGroups(groups, group_data, group_pointers, group_compare_vector, need_compare_count, no_match_vector,
+			CompareGroups(groups, group_data, addresses, group_compare_vector, need_compare_count, no_match_vector,
 			              no_match_count);
 		}
 
@@ -721,7 +718,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		sel_vector = &no_match_vector;
 		remaining_entries = no_match_count;
 	}
-
+    // pointers in addresses now were moved behind the grousp by CompareGroups/ScatterGroups but we may have to add
+	// padding still to point at the payload.
+	VectorOperations::AddInPlace(addresses, group_padding, groups.size());
 	return new_group_count;
 }
 
