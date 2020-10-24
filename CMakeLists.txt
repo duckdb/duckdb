@@ -134,7 +134,9 @@ option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 
-if(BUILD_PYTHON OR BUILD_R OR JDBC_DRIVER)
+if(BUILD_PYTHON
+   OR BUILD_R
+   OR JDBC_DRIVER)
   set(BUILD_ICU_EXTENSION TRUE)
   set(BUILD_PARQUET_EXTENSION TRUE)
 endif()

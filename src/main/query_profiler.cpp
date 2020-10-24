@@ -240,7 +240,7 @@ static string DrawPadded(string str, idx_t width) {
 static string RenderTitleCase(string str) {
 	str = StringUtil::Lower(str);
 	str[0] = toupper(str[0]);
-	for(idx_t i = 0; i < str.size(); i++) {
+	for (idx_t i = 0; i < str.size(); i++) {
 		if (str[i] == '_') {
 			str[i] = ' ';
 			if (i + 1 < str.size()) {
@@ -259,10 +259,8 @@ static string RenderTiming(double timing) {
 		timing_s = StringUtil::Format("%.3f", timing);
 	} else {
 		timing_s = StringUtil::Format("%.4f", timing);
-
 	}
 	return timing_s + "s";
-
 }
 
 string QueryProfiler::ToString() const {
@@ -274,14 +272,14 @@ string QueryProfiler::ToString() const {
 void QueryProfiler::ToStream(std::ostream &ss) const {
 	if (!enabled) {
 		ss << "Query profiling is disabled. Call "
-		       "Connection::EnableProfiling() to enable profiling!";
+		      "Connection::EnableProfiling() to enable profiling!";
 		return;
 	}
 	ss << "┌─────────────────────────────────────┐\n";
-    ss << "│┌───────────────────────────────────┐│\n";
+	ss << "│┌───────────────────────────────────┐│\n";
 	ss << "││    Query Profiling Information    ││\n";
-    ss << "│└───────────────────────────────────┘│\n";
-    ss << "└─────────────────────────────────────┘\n";
+	ss << "│└───────────────────────────────────┘│\n";
+	ss << "└─────────────────────────────────────┘\n";
 	ss << StringUtil::Replace(query, "\n", " ") + "\n";
 	if (query.empty()) {
 		return;
@@ -289,11 +287,11 @@ void QueryProfiler::ToStream(std::ostream &ss) const {
 
 	idx_t TOTAL_BOX_WIDTH = 39;
 	ss << "┌─────────────────────────────────────┐\n";
-    ss << "│┌───────────────────────────────────┐│\n";
+	ss << "│┌───────────────────────────────────┐│\n";
 	string total_time = "Total Time: " + RenderTiming(main_query.Elapsed());
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
-    ss << "│└───────────────────────────────────┘│\n";
-    ss << "└─────────────────────────────────────┘\n";
+	ss << "│└───────────────────────────────────┘│\n";
+	ss << "└─────────────────────────────────────┘\n";
 	// print phase timings
 	bool has_previous_phase = false;
 	for (const auto &entry : GetOrderedPhaseTimings()) {
@@ -304,12 +302,17 @@ void QueryProfiler::ToStream(std::ostream &ss) const {
 				ss << "└─────────────────────────────────────┘\n";
 			}
 			ss << "┌─────────────────────────────────────┐\n";
-			ss << "│" + DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second), TOTAL_BOX_WIDTH - 2) + "│\n";
+			ss << "│" +
+			          DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
+			                     TOTAL_BOX_WIDTH - 2) +
+			          "│\n";
 			ss << "│┌───────────────────────────────────┐│\n";
 			has_previous_phase = true;
 		} else {
 			string entry_name = StringUtil::Split(entry.first, " > ")[1];
-			ss << "││" + DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second), TOTAL_BOX_WIDTH - 4) + "││\n";
+			ss << "││" +
+			          DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second), TOTAL_BOX_WIDTH - 4) +
+			          "││\n";
 		}
 	}
 	if (has_previous_phase) {
@@ -332,7 +335,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	if (node.children.size() == 0) {
 		ss << "]\n";
 	} else {
-		for(idx_t i = 0; i < node.children.size(); i++) {
+		for (idx_t i = 0; i < node.children.size(); i++) {
 			if (i > 0) {
 				ss << ",";
 			}
@@ -361,7 +364,7 @@ string QueryProfiler::ToJSON() const {
 	// print the phase timings
 	ss << "   \"timings\": {\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
-	for(idx_t i = 0; i < ordered_phase_timings.size(); i++) {
+	for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
 		if (i > 0) {
 			ss << ",\n";
 		}

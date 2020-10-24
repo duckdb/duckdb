@@ -24,7 +24,7 @@ public:
 
 	string ParamsToString() const override {
 		string result;
-		for(idx_t i = 0; i < orders.size(); i++) {
+		for (idx_t i = 0; i < orders.size(); i++) {
 			if (i > 0) {
 				result += "\n";
 			}
@@ -32,6 +32,7 @@ public:
 		}
 		return result;
 	}
+
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return children[0]->GetColumnBindings();

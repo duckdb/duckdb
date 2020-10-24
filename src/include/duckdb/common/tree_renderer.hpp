@@ -27,6 +27,7 @@ struct RenderTree {
 	unique_ptr<unique_ptr<RenderTreeNode>[]> nodes;
 	idx_t width;
 	idx_t height;
+
 public:
 	RenderTreeNode *GetNode(idx_t x, idx_t y);
 	void SetNode(idx_t x, idx_t y, unique_ptr<RenderTreeNode> node);
@@ -41,19 +42,19 @@ struct TreeRendererConfig {
 	idx_t MINIMUM_RENDER_WIDTH = 15;
 	idx_t MAX_EXTRA_LINES = 10;
 
-	const char* LTCORNER = "┌";
-	const char* RTCORNER = "┐";
-	const char* LDCORNER = "└";
-	const char* RDCORNER = "┘";
+	const char *LTCORNER = "┌";
+	const char *RTCORNER = "┐";
+	const char *LDCORNER = "└";
+	const char *RDCORNER = "┘";
 
-	const char* MIDDLE = "┼";
-	const char* TMIDDLE = "┬";
-	const char* LMIDDLE = "├";
-	const char* RMIDDLE = "┤";
-	const char* DMIDDLE = "┴";
+	const char *MIDDLE = "┼";
+	const char *TMIDDLE = "┬";
+	const char *LMIDDLE = "├";
+	const char *RMIDDLE = "┤";
+	const char *DMIDDLE = "┴";
 
-	const char* VERTICAL = "│";
-	const char* HORIZONTAL = "─";
+	const char *VERTICAL = "│";
+	const char *HORIZONTAL = "─";
 
 	// ASCII version?
 	// static constexpr const char* LTCORNER = "<";
@@ -73,7 +74,8 @@ struct TreeRendererConfig {
 
 class TreeRenderer {
 public:
-	TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(move(config_p)) {}
+	TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(move(config_p)) {
+	}
 
 	string ToString(const LogicalOperator &op);
 	string ToString(const PhysicalOperator &op);
@@ -84,6 +86,7 @@ public:
 	void Render(const QueryProfiler::TreeNode &op, std::ostream &ss);
 
 	void ToStream(RenderTree &root, std::ostream &ss);
+
 private:
 	unique_ptr<RenderTree> CreateTree(const LogicalOperator &op);
 	unique_ptr<RenderTree> CreateTree(const PhysicalOperator &op);
@@ -110,12 +113,9 @@ private:
 	void SplitUpExtraInfo(string extra_info, vector<string> &result);
 	void SplitStringBuffer(const string &source, vector<string> &result);
 
+	template <class T> idx_t CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y);
 
-	template<class T>
-	idx_t CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y);
-
-	template<class T>
-	unique_ptr<RenderTree> CreateRenderTree(const T &op);
+	template <class T> unique_ptr<RenderTree> CreateRenderTree(const T &op);
 };
 
 } // namespace duckdb

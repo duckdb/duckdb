@@ -11,9 +11,10 @@ LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperator
 
 string LogicalComparisonJoin::ParamsToString() const {
 	string result = JoinTypeToString(join_type);
-	for(auto &condition : conditions) {
+	for (auto &condition : conditions) {
 		result += "\n";
-		auto expr = make_unique<BoundComparisonExpression>(condition.comparison, condition.left->Copy(), condition.right->Copy());
+		auto expr = make_unique<BoundComparisonExpression>(condition.comparison, condition.left->Copy(),
+		                                                   condition.right->Copy());
 		result += expr->ToString();
 	}
 

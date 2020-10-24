@@ -13,7 +13,7 @@ string LogicalOperator::GetName() const {
 
 string LogicalOperator::ParamsToString() const {
 	string result;
-	for(idx_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (i > 0) {
 			result += "\n";
 		}

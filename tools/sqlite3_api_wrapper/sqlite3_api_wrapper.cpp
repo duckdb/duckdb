@@ -131,7 +131,6 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	if (pzTail) {
 		*pzTail = zSql + query.size();
 	}
-    // printf("%s\n", zSql);
 	try {
 		// extract the statements from the SQL query
 		auto statements = db->con->ExtractStatements(query);
@@ -520,9 +519,9 @@ int sqlite3_bind_null(sqlite3_stmt *stmt, int idx) {
 	return sqlite3_internal_bind_value(stmt, idx, Value());
 }
 
-SQLITE_API int sqlite3_bind_value(sqlite3_stmt*, int, const sqlite3_value*) {
-    fprintf(stderr, "sqlite3_bind_value: unsupported.\n");
-    return SQLITE_ERROR;
+SQLITE_API int sqlite3_bind_value(sqlite3_stmt *, int, const sqlite3_value *) {
+	fprintf(stderr, "sqlite3_bind_value: unsupported.\n");
+	return SQLITE_ERROR;
 }
 
 int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, void (*free_func)(void *)) {
@@ -1155,67 +1154,52 @@ SQLITE_API int sqlite3_value_nochange(sqlite3_value *) {
 	return 0;
 }
 
+SQLITE_API void *sqlite3_aggregate_context(sqlite3_context *, int nBytes) {
+	fprintf(stderr, "sqlite3_aggregate_context: unsupported.\n");
 
-SQLITE_API void *sqlite3_aggregate_context(sqlite3_context*, int nBytes) {
-    fprintf(stderr, "sqlite3_aggregate_context: unsupported.\n");
-
-    return nullptr;
+	return nullptr;
 }
 
+SQLITE_API int sqlite3_create_collation(sqlite3 *, const char *zName, int eTextRep, void *pArg,
+                                        int (*xCompare)(void *, int, const void *, int, const void *)) {
 
-SQLITE_API int sqlite3_create_collation(
-    sqlite3*,
-    const char *zName,
-    int eTextRep,
-    void *pArg,
-    int(*xCompare)(void*,int,const void*,int,const void*)
-) {
-
-    return SQLITE_ERROR;
+	return SQLITE_ERROR;
 }
 
-SQLITE_API int sqlite3_create_window_function(
-    sqlite3 *db,
-    const char *zFunctionName,
-    int nArg,
-    int eTextRep,
-    void *pApp,
-    void (*xStep)(sqlite3_context*,int,sqlite3_value**),
-    void (*xFinal)(sqlite3_context*),
-    void (*xValue)(sqlite3_context*),
-    void (*xInverse)(sqlite3_context*,int,sqlite3_value**),
-    void(*xDestroy)(void*)
-) {
-    fprintf(stderr, "sqlite3_create_window_function: unsupported.\n");
-    return SQLITE_ERROR;
+SQLITE_API int sqlite3_create_window_function(sqlite3 *db, const char *zFunctionName, int nArg, int eTextRep,
+                                              void *pApp, void (*xStep)(sqlite3_context *, int, sqlite3_value **),
+                                              void (*xFinal)(sqlite3_context *), void (*xValue)(sqlite3_context *),
+                                              void (*xInverse)(sqlite3_context *, int, sqlite3_value **),
+                                              void (*xDestroy)(void *)) {
+	fprintf(stderr, "sqlite3_create_window_function: unsupported.\n");
+	return SQLITE_ERROR;
 }
 
-SQLITE_API sqlite3 *sqlite3_db_handle(sqlite3_stmt* s) {
-    return s->db;
+SQLITE_API sqlite3 *sqlite3_db_handle(sqlite3_stmt *s) {
+	return s->db;
 }
 
 SQLITE_API char *sqlite3_expanded_sql(sqlite3_stmt *pStmt) {
-    fprintf(stderr, "sqlite3_expanded_sql: unsupported.\n");
-    return nullptr;
+	fprintf(stderr, "sqlite3_expanded_sql: unsupported.\n");
+	return nullptr;
 }
 
-SQLITE_API int sqlite3_keyword_check(const char* str,int len) {
+SQLITE_API int sqlite3_keyword_check(const char *str, int len) {
 	return Parser::IsKeyword(std::string(str, len));
 }
 
 SQLITE_API int sqlite3_keyword_count(void) {
-    fprintf(stderr, "sqlite3_keyword_count: unsupported.\n");
-    return 0;
+	fprintf(stderr, "sqlite3_keyword_count: unsupported.\n");
+	return 0;
 }
 
-SQLITE_API int sqlite3_keyword_name(int,const char**,int*) {
-    fprintf(stderr, "sqlite3_keyword_name: unsupported.\n");
-    return 0;
+SQLITE_API int sqlite3_keyword_name(int, const char **, int *) {
+	fprintf(stderr, "sqlite3_keyword_name: unsupported.\n");
+	return 0;
 }
 
-
-SQLITE_API void sqlite3_progress_handler(sqlite3*, int, int(*)(void*), void*) {
-    fprintf(stderr, "sqlite3_progress_handler: unsupported.\n");
+SQLITE_API void sqlite3_progress_handler(sqlite3 *, int, int (*)(void *), void *) {
+	fprintf(stderr, "sqlite3_progress_handler: unsupported.\n");
 }
 
 SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
@@ -1225,7 +1209,7 @@ SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
 	return pStmt->prepared->type == StatementType::EXPLAIN_STATEMENT;
 }
 
-SQLITE_API int sqlite3_vtab_config(sqlite3*, int op, ...) {
-    fprintf(stderr, "sqlite3_vtab_config: unsupported.\n");
-    return SQLITE_ERROR;
+SQLITE_API int sqlite3_vtab_config(sqlite3 *, int op, ...) {
+	fprintf(stderr, "sqlite3_vtab_config: unsupported.\n");
+	return SQLITE_ERROR;
 }

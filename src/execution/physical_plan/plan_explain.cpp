@@ -16,7 +16,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 
 	op.physical_plan = plan->ToString();
 
-
 	// the output of the explain
 	vector<string> keys, values;
 	switch (context.explain_output_type) {

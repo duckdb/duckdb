@@ -26,10 +26,10 @@ public:
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_,
                                      unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
-									 vector<string> names_p,
-                                     unordered_map<idx_t, vector<TableFilter>> table_filters_p)
+                                     vector<string> names_p, unordered_map<idx_t, vector<TableFilter>> table_filters_p)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
-      bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)), table_filters(move(table_filters_p)) {
+      bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
+      table_filters(move(table_filters_p)) {
 }
 
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -95,9 +95,10 @@ string PhysicalTableScan::GetName() const {
 
 string PhysicalTableScan::ParamsToString() const {
 	string result;
-	for(auto &f : table_filters) {
-		for(auto &filter : f.second) {
-			result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
+	for (auto &f : table_filters) {
+		for (auto &filter : f.second) {
+			result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
+			          filter.constant.ToString();
 			result += "\n";
 		}
 	}

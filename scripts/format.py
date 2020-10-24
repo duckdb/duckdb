@@ -14,7 +14,7 @@ cmake_format_command = 'cmake-format -i "${FILE}"'
 extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql', '.txt', '.test', '.test_slow']
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
-                 'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h']
+                 'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c', 'termcolor.hpp']
 confirm = True
 format_all = False
 
@@ -205,11 +205,11 @@ def format_file(f, full_path, directory, ext, sort_includes):
     print(cmd)
     os.system(cmd)
     # remove empty lines at beginning and end of file
-    with open(full_path, 'r', encoding="utf8") as f:
-        text = f.read()
+    with open(full_path, 'r', encoding="utf8") as fp:
+        text = fp.read()
         text = text.strip() + "\n"
-    with open(full_path, 'w+', encoding="utf8") as f:
-        f.write(text)
+    with open(full_path, 'w+', encoding="utf8") as fp:
+        fp.write(text)
 
 
 def format_directory(directory, sort_includes=False):

@@ -26,9 +26,8 @@
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
-extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory (PULONGLONG );
+extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
-
 
 #undef CreateDirectory
 #undef MoveFile
@@ -53,7 +52,6 @@ static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine CREATE and CREATE_NEW flags
 	assert(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 }
-
 
 #ifndef _WIN32
 // somehow sometimes this is missing

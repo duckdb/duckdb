@@ -32,13 +32,13 @@ vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 
 string LogicalAggregate::ParamsToString() const {
 	string result;
-	for(idx_t i = 0; i < groups.size(); i++) {
+	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {
 			result += "\n";
 		}
 		result += groups[i]->GetName();
 	}
-	for(idx_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (i > 0 || groups.size() > 0) {
 			result += "\n";
 		}
