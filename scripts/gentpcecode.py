@@ -14,8 +14,8 @@ tables = {}
 print(GENERATED_HEADER)
 print(GENERATED_SOURCE)
 
-header = open(GENERATED_HEADER, 'w+')
-source = open(GENERATED_SOURCE, 'w+')
+header = open(GENERATED_HEADER, 'w+', encoding="utf8")
+source = open(GENERATED_SOURCE, 'w+', encoding="utf8")
 
 for fp in [header, source]:
 	fp.write("""

@@ -29,7 +29,7 @@ def run_command_in_shell(cmd):
 		print("----STDERR----")
 		print(stderr)
 
-with open(gen_storage_script, 'r') as f:
+with open(gen_storage_script, 'r', encoding="utf8") as f:
 	cmd = f.read()
 
 run_command_in_shell(cmd)

@@ -17,9 +17,9 @@ def generate_amalgamation(source_file, header_file):
     def copy_if_different(src, dest):
         if os.path.isfile(dest):
             # dest exists, check if the files are different
-            with open(src, 'r') as f:
+            with open(src, 'r', encoding="utf8") as f:
                 source_text = f.read()
-            with open(dest, 'r') as f:
+            with open(dest, 'r', encoding="utf8") as f:
                 dest_text = f.read()
             if source_text == dest_text:
                 print("Skipping copy of " + src + ", identical copy already exists at " + dest)
@@ -33,7 +33,7 @@ def generate_amalgamation(source_file, header_file):
 
     # now concat all the source/header files while removing known files
 
-    out = open(temp_source, "w")
+    out = open(temp_source, "w", encoding="utf8")
     out.write("// Parquet reader amalgamation\n\n#include \"%s\"\n" % os.path.basename(header_file))
     out.close()
 
@@ -48,8 +48,8 @@ def generate_amalgamation(source_file, header_file):
 
     def rewrite(file_in, file_out):
         # print(file_in)
-        a_file = open(file_in, "r")
-        out = open(file_out, "a")
+        a_file = open(file_in, "r", encoding="utf8")
+        out = open(file_out, "a", encoding="utf8")
 
         for line in a_file:
             if '#pragma once' in line:

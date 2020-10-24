@@ -3,7 +3,7 @@ import os
 
 
 def format_tpch_queries(target_dir, tpch_in, comment):
-	with open(tpch_in, 'r') as f:
+	with open(tpch_in, 'r', encoding="utf8") as f:
 		text = f.read()
 
 	for i in range(1, 23):
@@ -16,7 +16,7 @@ def format_tpch_queries(target_dir, tpch_in, comment):
 template %s
 QUERY_NUMBER=%d
 QUERY_NUMBER_PADDED=%02d''' % (target_file, i, comment, tpch_in, i, i)
-		with open(target_file, 'w+') as f:
+		with open(target_file, 'w+', encoding="utf8") as f:
 			f.write(new_text)
 
 # generate the TPC-H benchmark files

@@ -116,7 +116,7 @@ def build_package(target_dir, linenumbers = False):
     githash = proc.stdout.read().strip().decode('utf8')
     # open the file and read the current contents
     fpath = os.path.join(target_dir, 'src', 'function', 'table', 'version', 'pragma_version.cpp')
-    with open(fpath, 'r') as f:
+    with open(fpath, 'r', encoding="utf8") as f:
         text = f.read()
     # now add the DUCKDB_SOURCE_ID define, if it is not there already
     found = False
@@ -130,7 +130,7 @@ def build_package(target_dir, linenumbers = False):
         text = '#ifndef DUCKDB_SOURCE_ID\n#define DUCKDB_SOURCE_ID "{}"\n#endif\n'.format(githash) + text
     else:
         text = '\n'.join(text)
-    with open(fpath, 'w+') as f:
+    with open(fpath, 'w+', encoding="utf8") as f:
         f.write(text)
 
     def file_is_excluded(fname):
@@ -141,7 +141,7 @@ def build_package(target_dir, linenumbers = False):
 
     def generate_unity_build(entries, idx, linenumbers):
         ub_file = os.path.join(target_dir, 'amalgamation-{}.cpp'.format(str(idx)))
-        with open(ub_file, 'w+') as f:
+        with open(ub_file, 'w+', encoding="utf8") as f:
             for entry in entries:
                 if linenumbers:
                     f.write('#line 0 "{}"\n'.format(convert_backslashes(entry)))

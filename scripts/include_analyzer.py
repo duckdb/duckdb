@@ -15,7 +15,7 @@ def analyze_include_file(fpath, already_included_files, prev_include = ""):
         return
     if fpath not in cached_includes:
         # print(fpath)
-        with open(fpath, 'r') as f:
+        with open(fpath, 'r', encoding="utf8") as f:
             text = f.read()
         (statements, includes) = amalgamation.get_includes(fpath, text)
         cached_includes[fpath] = includes

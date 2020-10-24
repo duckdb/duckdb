@@ -13,7 +13,7 @@ if 'DUCKDB_R_BINDIR' in os.environ and 'DUCKDB_R_CFLAGS' in os.environ and 'DUCK
     libraries = [x for x in os.environ['DUCKDB_R_LIBS'].split(' ') if len(x) > 0]
 
     # use existing installation: set up Makevars
-    with open(os.path.join('src', 'Makevars.in'), 'r') as f:
+    with open(os.path.join('src', 'Makevars.in'), 'r', encoding="utf8") as f:
         text = f.read()
 
     compile_flags += package_build.include_flags()
@@ -35,7 +35,7 @@ if 'DUCKDB_R_BINDIR' in os.environ and 'DUCKDB_R_CFLAGS' in os.environ and 'DUCK
     text = text.replace('{{ LINK_FLAGS }}', link_flags.strip())
 
     # now write it to the output Makevars
-    with open(os.path.join('src', 'Makevars'), 'w+') as f:
+    with open(os.path.join('src', 'Makevars'), 'w+', encoding="utf8") as f:
         f.write(text)
     exit(0)
 
@@ -59,7 +59,7 @@ include_list = ' '.join(['-I' + 'duckdb/' + x for x in include_list])
 include_list += ' -Iduckdb'
 
 # read Makevars.in and replace the {{ SOURCES }} and {{ INCLUDES }} macros
-with open(os.path.join('src', 'Makevars.in'), 'r') as f:
+with open(os.path.join('src', 'Makevars.in'), 'r', encoding="utf8") as f:
     text = f.read()
 
 text = text.replace('{{ SOURCES }}', object_list)
@@ -67,5 +67,5 @@ text = text.replace('{{ INCLUDES }}', include_list)
 text = text.replace('PKG_LIBS={{ LINK_FLAGS }}', '')
 
 # now write it to the output Makevars
-with open(os.path.join('src', 'Makevars'), 'w+') as f:
+with open(os.path.join('src', 'Makevars'), 'w+', encoding="utf8") as f:
     f.write(text)

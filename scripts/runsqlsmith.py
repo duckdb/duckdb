@@ -44,7 +44,7 @@ while True:
 	# run SQL smith
 	run_sqlsmith()
 	# get the breaking query
-	with open('sqlsmith.log', 'r') as f:
+	with open('sqlsmith.log', 'r', encoding="utf8") as f:
 		text = re.sub('[ \t\n]+', ' ', f.read())
 
 	c.execute('INSERT INTO sqlsmith_errors VALUES (?)', (text,))

@@ -91,11 +91,11 @@ if len(existing_duckdb_dir) == 0:
         header_files = amalgamation.list_includes_files(duckdb_includes)
 
         # write the source list, include list and git hash to separate files
-        with open('sources.list', 'w+') as f:
+        with open('sources.list', 'w+', encoding="utf8") as f:
             for source_file in duckdb_sources:
                 f.write(source_file + "\n")
 
-        with open('includes.list', 'w+') as f:
+        with open('includes.list', 'w+', encoding="utf8") as f:
             for include_file in duckdb_includes:
                 f.write(include_file + '\n')
 
@@ -103,10 +103,10 @@ if len(existing_duckdb_dir) == 0:
     else:
         # if amalgamation does not exist, we are in a package distribution
         # read the include files, source list and include files from the supplied lists
-        with open('sources.list', 'r') as f:
+        with open('sources.list', 'r', encoding="utf8") as f:
             duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
 
-        with open('includes.list', 'r') as f:
+        with open('includes.list', 'r', encoding="utf8") as f:
             duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
 
     source_files += duckdb_sources

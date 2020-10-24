@@ -136,16 +136,16 @@ def format_file(f, full_path, directory, ext, sort_includes):
             directory) for f in filenames if os.path.splitext(f)[1] == '.hpp' and not f.endswith("list.hpp")]
         list = [x.replace('src/include/', '') for x in list]
         list.sort()
-        with open(full_path, "w") as file:
+        with open(full_path, "w", encoding="utf8") as file:
             for x in list:
                 file.write('#include "%s"\n' % (x))
     elif ext == ".hpp" and directory.startswith("src/include"):
         # format header in files
         header_middle = "// " + os.path.relpath(full_path, base_dir) + "\n"
-        file = open(full_path, "r")
+        file = open(full_path, "r", encoding="utf8")
         lines = file.readlines()
         file.close()
-        file = open(full_path, "w")
+        file = open(full_path, "w", encoding="utf8")
         file.write(header_top + header_middle + header_bottom)
         is_old_header = True
         for line in lines:
@@ -158,7 +158,7 @@ def format_file(f, full_path, directory, ext, sort_includes):
         return
     elif ext == '.test' or ext == '.test_slow':
         try:
-            with open(full_path, "r") as file_:
+            with open(full_path, "r", encoding="utf8") as file_:
                 lines = file_.readlines()
         except:
             return
@@ -196,7 +196,7 @@ def format_file(f, full_path, directory, ext, sort_includes):
             print(full_path)
             print(new_path_line)
             print(new_group_line)
-            with open(full_path, "w+") as file_:
+            with open(full_path, "w+", encoding="utf8") as file_:
                 file_.write(''.join(lines))
         return
     format_command = format_commands[ext]
@@ -205,10 +205,10 @@ def format_file(f, full_path, directory, ext, sort_includes):
     print(cmd)
     os.system(cmd)
     # remove empty lines at beginning and end of file
-    with open(full_path, 'r') as f:
+    with open(full_path, 'r', encoding="utf8") as f:
         text = f.read()
         text = text.strip() + "\n"
-    with open(full_path, 'w+') as f:
+    with open(full_path, 'w+', encoding="utf8") as f:
         f.write(text)
 
 

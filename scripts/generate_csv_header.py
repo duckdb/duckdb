@@ -48,7 +48,7 @@ const int TPCH_QUERIES_COUNT = 22;
 	result += write_dir(tpch_answers_sf01, "TPCH_ANSWERS_SF0_1")
 	result += write_dir(tpch_answers_sf1, "TPCH_ANSWERS_SF1")
 
-	with open(tpch_header, 'w+') as f:
+	with open(tpch_header, 'w+', encoding="utf8") as f:
 		f.write(result)
 
 print(tpch_header)

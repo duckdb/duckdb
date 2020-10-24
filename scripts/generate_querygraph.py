@@ -66,7 +66,7 @@ with open(os.path.join(javascript_base, 'treant.js'), 'r') as f:
 text = text.replace('<script src="../../raphael.js"></script>', '<script>' + raphael + '</script>')
 text = text.replace('<script src="../../treant.js"></script>', '<script>' + treant + '</script>')
 
-with open(output, 'w+') as f:
+with open(output, 'w+', encoding="utf8") as f:
 	f.write(text)
 
 if open_output:

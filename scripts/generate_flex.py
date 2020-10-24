@@ -19,7 +19,7 @@ if proc.returncode != None or len(stderr) > 0:
 	print("stderr: ", stderr)
 	exit(1)
 
-with open(target_file, 'r') as f:
+with open(target_file, 'r', encoding="utf8") as f:
 	text = f.read()
 
 # add the libpg_query namespace
@@ -35,5 +35,5 @@ text = text.replace('register ', '')
 
 text = text + "\n} /* duckdb_libpgquery */\n"
 
-with open(target_file, 'w+') as f:
+with open(target_file, 'w+', encoding="utf8") as f:
 	f.write(text)

@@ -12,10 +12,10 @@ def execute_system_command(cmd):
 		raise Exception
 
 def replace_in_file(fname, regex, replace):
-	with open(fname, 'r') as f:
+	with open(fname, 'r', encoding="utf8") as f:
 		contents = f.read()
 	contents = re.sub(regex, replace, contents)
-	with open(fname, 'w+') as f:
+	with open(fname, 'w+', encoding="utf8") as f:
 		f.write(contents)
 
 for vector_size in vector_sizes:

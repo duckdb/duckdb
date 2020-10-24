@@ -369,7 +369,7 @@ def generate_ipython(json_input):
 
 
 def generate(input_file, output_file):
-	with open(input_file) as f:
+	with open(input_file, 'r', encoding="utf8") as f:
 		text = f.read()
 		# we only render the first tree, extract it
 		text = '{ "result"' + text.split('{ "result"')[1]
@@ -379,7 +379,7 @@ def generate(input_file, output_file):
 	html_output = generate_html(parsed_json)
 
 	# finally create and write the html
-	with open(output_file, "w+") as f:
+	with open(output_file, "w+", encoding="utf8") as f:
 		f.write("""
 	<!DOCTYPE html>
 	<html>
