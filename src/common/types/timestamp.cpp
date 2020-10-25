@@ -12,8 +12,6 @@ using namespace std;
 
 namespace duckdb {
 
-constexpr const int32_t TM_START_YEAR = 1900;
-
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
