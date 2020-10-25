@@ -25,7 +25,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			SubqueryRef subquery(cte->query->Copy());
 			subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			subquery.column_name_alias = cte->aliases;
-			for(idx_t i = 0; i < ref.column_name_alias.size(); i++) {
+			for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
 				if (i < subquery.column_name_alias.size()) {
 					subquery.column_name_alias[i] = ref.column_name_alias[i];
 				} else {
@@ -86,12 +86,10 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// for the view and for the current query
 		bool inherit_ctes = false;
 		Binder view_binder(context, this, inherit_ctes);
-		for (auto &cte_it : view_catalog_entry->query->cte_map) {
-			view_binder.AddCTE(cte_it.first, cte_it.second.get());
-		}
-		SubqueryRef subquery(view_catalog_entry->query->node->Copy());
+		SubqueryRef subquery(view_catalog_entry->query->Copy());
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
-		subquery.column_name_alias = BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);
+		subquery.column_name_alias =
+		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);
 		// bind the child subquery
 		auto bound_child = view_binder.Bind(subquery);
 		assert(bound_child->type == TableReferenceType::SUBQUERY);
