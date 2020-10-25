@@ -89,6 +89,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case PhysicalType::INT32:
 		TemplatedCopy<int32_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
+	case PhysicalType::HASH:
 	case PhysicalType::INT64:
 		TemplatedCopy<int64_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
@@ -172,7 +173,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for copy!");
+		throw NotImplementedException("Unimplemented type '%s' for copy!", TypeIdToString(source.type.InternalType()));
 	}
 }
 
