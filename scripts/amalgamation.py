@@ -4,6 +4,8 @@ import re
 import sys
 import shutil
 import subprocess
+from python_helpers import open_utf8
+
 amal_dir = os.path.join('src', 'amalgamation')
 header_file = os.path.join(amal_dir, "duckdb.hpp")
 source_file = os.path.join(amal_dir, "duckdb.cpp")
@@ -128,11 +130,8 @@ def write_file(current_file, ignore_excluded = False):
         return ""
     written_files[current_file] = True
 
-
-
-
     # first read this file
-    with open(current_file, 'r') as f:
+    with open_utf8(current_file, 'r') as f:
         text = f.read()
 
     if current_file.startswith("third_party") and not current_file.endswith("LICENSE"):
@@ -177,9 +176,9 @@ def write_dir(dir):
 def copy_if_different(src, dest):
     if os.path.isfile(dest):
         # dest exists, check if the files are different
-        with open(src, 'r') as f:
+        with open_utf8(src, 'r') as f:
             source_text = f.read()
-        with open(dest, 'r') as f:
+        with open_utf8(dest, 'r') as f:
             dest_text = f.read()
         if source_text == dest_text:
             # print("Skipping copy of " + src + ", identical copy already exists at " + dest)
@@ -195,7 +194,7 @@ def generate_duckdb_hpp(header_file):
     print("-----------------------")
     print("-- Writing " + header_file + " --")
     print("-----------------------")
-    with open(temp_header, 'w+') as hfile:
+    with open_utf8(temp_header, 'w+') as hfile:
         hfile.write("/*\n")
         hfile.write(write_file("LICENSE"))
         hfile.write("*/\n\n")
@@ -216,7 +215,7 @@ def generate_amalgamation(source_file, header_file):
     print("------------------------")
 
     # scan all the .cpp files
-    with open(temp_source, 'w+') as sfile:
+    with open_utf8(temp_source, 'w+') as sfile:
         header_file_name = header_file.split(os.sep)[-1]
         sfile.write('#include "' + header_file_name + '"\n\n')
         sfile.write("#ifndef DUCKDB_AMALGAMATION\n#error header mismatch\n#endif\n\n")
@@ -291,7 +290,7 @@ def gather_file(current_file, source_files, header_files):
     written_files[current_file] = True
 
     # first read this file
-    with open(current_file, 'r') as f:
+    with open_utf8(current_file, 'r') as f:
         text = f.read()
 
     (statements, includes) = get_includes(current_file, text)
@@ -360,7 +359,7 @@ def generate_amalgamation_splits(source_file, header_file, nsplits):
 
     temp_internal_header = internal_header_file + '.tmp'
 
-    with open(temp_internal_header, 'w+') as f:
+    with open_utf8(temp_internal_header, 'w+') as f:
         write_license(f)
         for hfile in header_files:
             f.write(hfile)
@@ -407,7 +406,7 @@ def generate_amalgamation_splits(source_file, header_file, nsplits):
         partition_name = source_file.replace('.cpp', '-%s.cpp' % (partition_names[current_partition],))
         temp_partition_name = partition_name + '.tmp'
         partition_fnames.append([partition_name, temp_partition_name])
-        with open(temp_partition_name, 'w+') as f:
+        with open_utf8(temp_partition_name, 'w+') as f:
             write_license(f)
             f.write('#include "%s"\n#include "%s"' % (header_file_name, internal_header_file_name))
             f.write('''
