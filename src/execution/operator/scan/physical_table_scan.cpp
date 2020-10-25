@@ -95,7 +95,7 @@ string PhysicalTableScan::GetName() const {
 
 string PhysicalTableScan::ParamsToString() const {
 	string result;
-	for (auto &f : table_filters) {
+	for (auto &f : table_filters->filters) {
 		for (auto &filter : f.second) {
 			result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
 			          filter.constant.ToString();
