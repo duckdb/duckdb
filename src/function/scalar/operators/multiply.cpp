@@ -66,64 +66,50 @@ template <> int32_t MultiplyOperatorOverflowCheck::Operation(int32_t left, int32
 }
 
 static bool int64_try_multiply(int64_t left, int64_t right, int64_t *result) {
-// #if defined(__GNUC__) || defined(__clang__)
-// 	int64_t result;
-// 	if (__builtin_mul_overflow(left, right, &result)) {
-// 		return false;
-// 	}
-// 	// FIXME: this check can be removed if we get rid of NullValue<T>
-// 	if (result == std::numeric_limits<int64_t>::min()) {
-// 		return false;
-// 	}
-// 	return result;
-// #else
-
-	bool lhs_negative = left < 0;
-	bool rhs_negative = right < 0;
-	if (lhs_negative) {
-		left = -left;
+#if defined(__GNUC__) || defined(__clang__)
+	if (__builtin_mul_overflow(left, right, result)) {
+		return false;
 	}
-	if (rhs_negative) {
-		right = -right;
-	}
+#else
+	uint64_t left_non_negative = uint64_t(abs(left));
+	uint64_t right_non_negative = uint64_t(abs(right));
 	// split values into 2 32-bit parts
-	uint64_t top[2] = {uint64_t(left) >> 32, uint64_t(left) & 0xffffffff };
-	uint64_t bottom[2] = {uint64_t(right) >> 32, uint64_t(right) & 0xffffffff };
-	uint64_t products[2][2];
+	uint64_t top[2] = {left_non_negative >> 32, left_non_negative & 0xffffffff };
+	uint64_t bottom[2] = {right_non_negative >> 32, right_non_negative & 0xffffffff };
 
-	// multiply each component of the values
-	for (auto x = 0; x < 2; x++) {
-		for (auto y = 0; y < 2; y++) {
-			products[x][y] = top[x] * bottom[y];
+	// check the high bits of both
+	// the high bits define the overflow
+	if (top[0] == 0) {
+		if (bottom[0] != 0) {
+			// only the right has high bits set
+			// multiply the high bits of right with the low bits of left and check if there is an overflow
+			auto low_high = top[1] * bottom[0];
+			if (low_high & 0xffffff80000000) {
+				// there is! abort
+				return false;
+			}
 		}
-	}
-
-	// products[0][0] is the two high parts multiplied by each other
-	// if that product is non-zero we have an overflow
-	if (products[0][0]) {
+	} else if (bottom[0] == 0) {
+		// only the left has high bits set
+		// multiply the high bits of left with the low bits of right and check if there is an overflow
+		auto high_low = top[0] * bottom[1];
+		if (high_low & 0xffffff80000000) {
+			// there is! abort
+			return false;
+		}
+	} else {
+		// both left and right have high bits set: guaranteed overflow
+		// abort!
 		return false;
 	}
-	// products[0][1] and products[1][0] are the high part of one multiplied by the low part of another
-	// note that only ONE of these can be non-zero
-	// for both to be non-zero, both sides would need to have high bits set
-	// which means products[1][1] would be non-zero
-	// if the high bits are set in either of these, we have an overflow
-	if ((products[0][1] & 0xffffff80000000) ||
-	    (products[1][0] & 0xffffff80000000)) {
+	// now we know that there is no overflow, we can just perform the multiplication
+	*result = left * right;
+#endif
+	// FIXME: this check can be removed if we get rid of NullValue<T>
+	if (*result == std::numeric_limits<int64_t>::min()) {
 		return false;
-	}
-	// the total high bits we get are adding these two together
-	// note again that one of these is necessarily zero, so this is essentially an assignment of the non-zero one
-	uint32_t high_bits = products[1][0] + products[0][1];
-	assert(!(high_bits & 0xffffff80000000));
-
-	// now we create the final result
-	*result = (uint64_t(high_bits) << 32) + products[1][1];
-	if (lhs_negative ^ rhs_negative) {
-		*result = -*result;
 	}
 	return true;
-// #endif
 }
 
 template <> int64_t MultiplyOperatorOverflowCheck::Operation(int64_t left, int64_t right) {

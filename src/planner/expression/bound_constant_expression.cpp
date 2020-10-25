@@ -2,14 +2,12 @@
 
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
-#include "duckdb/storage/statistics/statistics_operations.hpp"
 
 namespace duckdb {
 using namespace std;
 
 BoundConstantExpression::BoundConstantExpression(Value value_p)
     : Expression(ExpressionType::VALUE_CONSTANT, ExpressionClass::BOUND_CONSTANT, value_p.type()), value(move(value_p)) {
-	stats = StatisticsOperations::FromValue(value);
 }
 
 string BoundConstantExpression::ToString() const {

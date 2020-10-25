@@ -104,11 +104,7 @@ BindResult TableBinding::Bind(ClientContext &context, ColumnRefExpression &colre
 		column_ids.push_back(col_index);
 	}
 	binding.table_index = index;
-	unique_ptr<BaseStatistics> stats;
-	if (get.function.statistics) {
-		stats = get.function.statistics(context, get.bind_data.get(), col_index);
-	}
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth, move(stats)));
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
 } // namespace duckdb
