@@ -55,6 +55,14 @@ double NumericLimits<double>::Maximum() {
 	return numeric_limits<double>::max();
 }
 
+uint8_t NumericLimits<uint8_t>::Minimum() {
+	return numeric_limits<uint8_t>::lowest();
+}
+
+uint8_t NumericLimits<uint8_t>::Maximum() {
+	return numeric_limits<uint8_t>::max();
+}
+
 uint16_t NumericLimits<uint16_t>::Minimum() {
 	return numeric_limits<uint16_t>::lowest();
 }

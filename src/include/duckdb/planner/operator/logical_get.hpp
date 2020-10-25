@@ -35,6 +35,7 @@ public:
 	//! Filters pushed down for table scan
 	vector<TableFilter> tableFilters;
 
+	string GetName() const override;
 	string ParamsToString() const override;
 
 public:

@@ -29,8 +29,6 @@ public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
-	void FinalizePipelines();
-
 private:
 	//! Probe Hash Table and eliminate duplicate rows
 	idx_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);

@@ -186,7 +186,7 @@ AggregateFunction GetSumAggregate(LogicalType type) {
 unique_ptr<FunctionData> bind_decimal_sum(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	switch(decimal_type.InternalType()) {
+	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
 		function = GetSumAggregate(LogicalType::SMALLINT);
 		break;
@@ -200,6 +200,7 @@ unique_ptr<FunctionData> bind_decimal_sum(ClientContext &context, AggregateFunct
 		function = GetSumAggregate(LogicalType::HUGEINT);
 		break;
 	}
+	function.name = "sum";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType(LogicalTypeId::DECIMAL, Decimal::MAX_WIDTH_DECIMAL, decimal_type.scale());
 	return nullptr;

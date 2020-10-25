@@ -57,7 +57,7 @@ unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
 	return make_unique<PhysicalFilterState>(*this, children[0].get(), *expression);
 }
 
-string PhysicalFilter::ExtraRenderInformation() const {
+string PhysicalFilter::ParamsToString() const {
 	return expression->GetName();
 }
 

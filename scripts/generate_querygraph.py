@@ -4,6 +4,8 @@
 
 import os
 import sys
+from python_helpers import open_utf8
+
 sys.path.insert(0, 'benchmark')
 
 import duckdb_query_graph
@@ -66,7 +68,7 @@ with open(os.path.join(javascript_base, 'treant.js'), 'r') as f:
 text = text.replace('<script src="../../raphael.js"></script>', '<script>' + raphael + '</script>')
 text = text.replace('<script src="../../treant.js"></script>', '<script>' + treant + '</script>')
 
-with open(output, 'w+') as f:
+with open_utf8(output, 'w+') as f:
 	f.write(text)
 
 if open_output:
