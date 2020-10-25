@@ -7,6 +7,8 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
+#include <limits>
+
 using namespace std;
 
 namespace duckdb {
