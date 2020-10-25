@@ -35,8 +35,14 @@ with cte1 as (with b as (Select i as j from a) select j from b), cte2 as (with c
 statement error
 with cte1 as (select 42), cte1 as (select 42) select * FROM cte1;
 
-# refer to CTE in subquery
+# refer to CTE in subquery tableref
 query I
 with cte1 as (Select i as j from a) select * from (with cte2 as (select max(j) as j from cte1) select * from cte2) f
+----
+42
+
+# refer to CTE in subquery expression
+query I
+with cte1 as (Select i as j from a) select * from cte1 where j = (with cte2 as (select max(j) as j from cte1) select j from cte2);
 ----
 42

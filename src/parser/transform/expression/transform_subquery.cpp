@@ -11,11 +11,11 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 		return nullptr;
 	}
 	auto subquery_expr = make_unique<SubqueryExpression>();
-	subquery_expr->subquery = TransformSelectNode((PGSelectStmt *)root->subselect);
+	subquery_expr->subquery = TransformSelect(root->subselect);
 	if (!subquery_expr->subquery) {
 		return nullptr;
 	}
-	assert(subquery_expr->subquery->GetSelectList().size() > 0);
+	assert(subquery_expr->subquery->node->GetSelectList().size() > 0);
 
 	switch (root->subLinkType) {
 	case PG_EXISTS_SUBLINK: {
