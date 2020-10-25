@@ -5,8 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-mode skip
-
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
@@ -41,16 +39,12 @@ SELECT cast(-128 AS TINYINT)
 statement error
 SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)
 
-mode unskip
-
 # also with tables
 statement ok
 CREATE TABLE test2 (a INTEGER, b TINYINT);
 
 statement ok
 INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)
-
-mode skip
 
 statement error
 SELECT cast(a AS TINYINT) FROM test2
@@ -60,10 +54,22 @@ SELECT SUM(b) FROM test2
 ----
 180
 
-mode unskip
+# subtraction
+statement error
+SELECT 100::TINYINT - -50::TINYINT
 
 statement error
+SELECT 100::TINYINT * 2::TINYINT
+
+# tables
+statement error
 SELECT 100::TINYINT + b::TINYINT FROM test2
+
+statement error
+SELECT 100::TINYINT - -b::TINYINT FROM test2
+
+statement error
+SELECT 100::TINYINT * b::TINYINT FROM test2
 
 # more complex expressions
 statement error

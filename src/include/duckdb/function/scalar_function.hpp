@@ -135,6 +135,37 @@ public:
 		return function;
 	}
 
+	template <class OP> static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
+		scalar_function_t function;
+		switch (type) {
+		case PhysicalType::INT8:
+			function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+			break;
+		case PhysicalType::INT16:
+			function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+			break;
+		case PhysicalType::INT32:
+			function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+			break;
+		case PhysicalType::INT64:
+			function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+			break;
+		case PhysicalType::INT128:
+			function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP, true>;
+			break;
+		case PhysicalType::FLOAT:
+			function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
+			break;
+		case PhysicalType::DOUBLE:
+			function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
+		}
+		return function;
+	}
+
+
 	template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
 		scalar_function_t function;
 		switch (type.id()) {

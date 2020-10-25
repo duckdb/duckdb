@@ -3,6 +3,9 @@
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 using namespace std;

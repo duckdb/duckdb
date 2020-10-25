@@ -147,9 +147,6 @@ string Hugeint::ToString(hugeint_t input) {
 // Multiply
 //===--------------------------------------------------------------------===//
 bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
-	// Multiply code adapted from:
-	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
-
 	bool lhs_negative = lhs.upper < 0;
 	bool rhs_negative = rhs.upper < 0;
 	if (lhs_negative) {
@@ -158,6 +155,23 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 	if (rhs_negative) {
 		NegateInPlace(rhs);
 	}
+#if (defined(__GNUC__) || defined(__clang__)) && defined(__SIZEOF_INT128__)
+	__uint128_t left = __uint128_t(lhs.lower) + (__uint128_t(lhs.upper) << 64);
+	__uint128_t right = __uint128_t(rhs.lower) + (__uint128_t(rhs.upper) << 64);
+	__uint128_t result_i128;
+	if (__builtin_mul_overflow(left, right, &result_i128)) {
+		return false;
+	}
+	uint64_t upper = uint64_t(result_i128 >> 64);;
+	if (upper & 0x8000000000000000) {
+		return false;
+	}
+	result.upper = int64_t(upper);
+	result.lower = uint64_t(result_i128 & 0xffffffffffffffff);
+#else
+	// Multiply code adapted from:
+	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
+
 	// split values into 4 32-bit parts
 	uint64_t top[4] = {uint64_t(lhs.upper) >> 32, uint64_t(lhs.upper) & 0xffffffff, lhs.lower >> 32,
 	                   lhs.lower & 0xffffffff};
@@ -166,36 +180,56 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 	uint64_t products[4][4];
 
 	// multiply each component of the values
-	for (int y = 3; y > -1; y--) {
-		for (int x = 3; x > -1; x--) {
-			products[3 - x][y] = top[x] * bottom[y];
+	for(auto x = 0; x < 4; x++) {
+		for(auto y = 0; y < 4; y++) {
+			products[x][y] = top[x] * bottom[y];
 		}
 	}
 
+	// if any of these products are set to a non-zero value, there is always an overflow
+	if (products[0][0] ||
+	    products[0][1] ||
+	    products[0][2] ||
+		products[1][0] ||
+		products[2][0] ||
+		products[1][1]) {
+		return false;
+	}
+	// if the high bits of any of these are set, there is always an overflow
+	if ((products[0][3] & 0xffffffff80000000) ||
+	    (products[1][2] & 0xffffffff80000000) ||
+	    (products[2][1] & 0xffffffff80000000) ||
+	    (products[3][0] & 0xffffffff80000000)) {
+		return false;
+	}
+
+	// otherwise we merge the result of the different products together in-order
+
 	// first row
-	uint64_t fourth32 = (products[0][3] & 0xffffffff);
-	uint64_t third32 = (products[0][2] & 0xffffffff) + (products[0][3] >> 32);
-	uint64_t second32 = (products[0][1] & 0xffffffff) + (products[0][2] >> 32);
-	uint64_t first32 = (products[0][0] & 0xffffffff) + (products[0][1] >> 32);
+	uint64_t fourth32 = (products[3][3] & 0xffffffff);
+	uint64_t third32 = (products[3][2] & 0xffffffff) + (products[3][3] >> 32);
+	uint64_t second32 = (products[3][1] & 0xffffffff) + (products[3][2] >> 32);
+	uint64_t first32 = (products[3][0] & 0xffffffff) + (products[3][1] >> 32);
 
 	// second row
-	third32 += (products[1][3] & 0xffffffff);
-	second32 += (products[1][2] & 0xffffffff) + (products[1][3] >> 32);
-	first32 += (products[1][1] & 0xffffffff) + (products[1][2] >> 32);
+	third32 += (products[2][3] & 0xffffffff);
+	second32 += (products[2][2] & 0xffffffff) + (products[2][3] >> 32);
+	first32 += (products[2][1] & 0xffffffff) + (products[2][2] >> 32);
 
 	// third row
-	second32 += (products[2][3] & 0xffffffff);
-	first32 += (products[2][2] & 0xffffffff) + (products[2][3] >> 32);
+	second32 += (products[1][3] & 0xffffffff);
+	first32 += (products[1][2] & 0xffffffff) + (products[1][3] >> 32);
 
 	// fourth row
-	first32 += (products[3][3] & 0xffffffff);
+	first32 += (products[0][3] & 0xffffffff);
 
 	// move carry to next digit
 	third32 += fourth32 >> 32;
 	second32 += third32 >> 32;
 	first32 += second32 >> 32;
 
-	if (products[3][3] & 0xffffff80000000 || first32 & 0xffffff80000000) {
+	// check if the combination of the different products resulted in an overflow
+	if (first32 & 0xffffff80000000) {
 		return false;
 	}
 
@@ -208,6 +242,7 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 	// combine components
 	result.lower = (third32 << 32) | fourth32;
 	result.upper = (first32 << 32) | second32;
+#endif
 	if (lhs_negative ^ rhs_negative) {
 		NegateInPlace(result);
 	}

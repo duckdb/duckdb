@@ -1,6 +1,9 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "duckdb/common/types/date.hpp"
@@ -14,124 +17,9 @@ using namespace std;
 
 namespace duckdb {
 
-template <class OP> static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
-	scalar_function_t function;
-	switch (type) {
-	case PhysicalType::INT8:
-		function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
-		break;
-	case PhysicalType::INT16:
-		function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
-		break;
-	case PhysicalType::INT32:
-		function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
-		break;
-	case PhysicalType::INT64:
-		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
-		break;
-	case PhysicalType::INT128:
-		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP, true>;
-		break;
-	case PhysicalType::FLOAT:
-		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
-		break;
-	case PhysicalType::DOUBLE:
-		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
-	}
-	return function;
-}
-
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
-template <> float AddOperator::Operation(float left, float right) {
-	auto result = left + right;
-	if (!Value::FloatIsValid(result)) {
-		throw OutOfRangeException("Overflow in addition of float!");
-	}
-	return result;
-}
-
-template <> double AddOperator::Operation(double left, double right) {
-	auto result = left + right;
-	if (!Value::DoubleIsValid(result)) {
-		throw OutOfRangeException("Overflow in addition of double!");
-	}
-	return result;
-}
-
-template <> interval_t AddOperator::Operation(interval_t left, interval_t right) {
-	interval_t result;
-	result.months = left.months + right.months;
-	result.days = left.days + right.days;
-	result.msecs = left.msecs + right.msecs;
-	return result;
-}
-
-template <> date_t AddOperator::Operation(date_t left, interval_t right) {
-	date_t result;
-	if (right.months != 0) {
-		int32_t year, month, day;
-		Date::Convert(left, year, month, day);
-		int32_t year_diff = right.months / Interval::MONTHS_PER_YEAR;
-		year += year_diff;
-		month += right.months - year_diff * Interval::MONTHS_PER_YEAR;
-		if (month > Interval::MONTHS_PER_YEAR) {
-			year++;
-			month -= Interval::MONTHS_PER_YEAR;
-		} else if (month <= 0) {
-			year--;
-			month += Interval::MONTHS_PER_YEAR;
-		}
-		result = Date::FromDate(year, month, day);
-	} else {
-		result = left;
-	}
-	if (right.days != 0) {
-		result += right.days;
-	}
-	if (right.msecs != 0) {
-		result += right.msecs / Interval::MSECS_PER_DAY;
-	}
-	return result;
-}
-
-template <> date_t AddOperator::Operation(interval_t left, date_t right) {
-	return AddOperator::Operation<date_t, interval_t, date_t>(right, left);
-}
-
-struct AddTimeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		int64_t diff = right.msecs - ((right.msecs / Interval::MSECS_PER_DAY) * Interval::MSECS_PER_DAY);
-		left += diff;
-		if (left >= Interval::MSECS_PER_DAY) {
-			left -= Interval::MSECS_PER_DAY;
-		} else if (left < 0) {
-			left += Interval::MSECS_PER_DAY;
-		}
-		return left;
-	}
-};
-
-template <> dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right) {
-	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(right, left);
-}
-
-template <> timestamp_t AddOperator::Operation(timestamp_t left, interval_t right) {
-	auto date = Timestamp::GetDate(left);
-	auto time = Timestamp::GetTime(left);
-	auto new_date = AddOperator::Operation<date_t, interval_t, date_t>(date, right);
-	auto new_time = AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(time, right);
-	return Timestamp::FromDatetime(new_date, new_time);
-}
-
-template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t right) {
-	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(right, left);
-}
-
 template <class OP>
 unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
@@ -170,7 +58,7 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	}
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
-	bound_function.function = GetScalarBinaryFunction<OP>(result_type.InternalType());
+	bound_function.function = ScalarFunction::GetScalarBinaryFunction<OP>(result_type.InternalType());
 	return nullptr;
 }
 
@@ -188,16 +76,19 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(
 			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<AddOperator>));
+		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperatorOverflowCheck>(type.InternalType())));
 		} else {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type.InternalType())));
+			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperator>(type.InternalType())));
 		}
 	}
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
+	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
 	functions.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::DATE}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
+	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
 	// we can add intervals together
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
@@ -235,55 +126,6 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
-template <> float SubtractOperator::Operation(float left, float right) {
-	auto result = left - right;
-	if (!Value::FloatIsValid(result)) {
-		throw OutOfRangeException("Overflow in subtraction of float!");
-	}
-	return result;
-}
-
-template <> double SubtractOperator::Operation(double left, double right) {
-	auto result = left - right;
-	if (!Value::DoubleIsValid(result)) {
-		throw OutOfRangeException("Overflow in subtraction of double!");
-	}
-	return result;
-}
-
-template <> interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
-	interval_t result;
-	result.months = left.months - right.months;
-	result.days = left.days - right.days;
-	result.msecs = left.msecs - right.msecs;
-	return result;
-}
-
-template <> date_t SubtractOperator::Operation(date_t left, interval_t right) {
-	right.months = -right.months;
-	right.days = -right.days;
-	right.msecs = -right.msecs;
-	return AddOperator::Operation<date_t, interval_t, date_t>(left, right);
-}
-
-struct SubtractTimeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		right.msecs = -right.msecs;
-		return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
-	}
-};
-
-template <> timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right) {
-	right.months = -right.months;
-	right.days = -right.days;
-	right.msecs = -right.msecs;
-	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, right);
-}
-
-template <> interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t right) {
-	return Interval::GetDifference(left, right);
-}
-
 unique_ptr<FunctionData> decimal_negate_bind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
@@ -309,16 +151,19 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(
 			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<SubtractOperator>));
+		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperatorOverflowCheck>(type.InternalType())));
 		} else {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type.InternalType())));
+			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(type.InternalType())));
 		}
 	}
 	// we can subtract dates from each other
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::DATE}, LogicalType::INTEGER,
-	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
+	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
+	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
 	// we can subtract timestamps from each other
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL,
@@ -332,7 +177,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	                                     ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SubtractOperator>));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::TIME, LogicalType::INTERVAL}, LogicalType::TIME,
-	                   ScalarFunction::BinaryFunction<time_t, interval_t, time_t, SubtractTimeOperator>));
+	                   ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::INTERVAL}, LogicalType::TIMESTAMP,
 	                   ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>));
@@ -352,33 +197,6 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // * [multiply]
 //===--------------------------------------------------------------------===//
-template <> float MultiplyOperator::Operation(float left, float right) {
-	auto result = left * right;
-	if (!Value::FloatIsValid(result)) {
-		throw OutOfRangeException("Overflow in multiplication of float!");
-	}
-	return result;
-}
-
-template <> double MultiplyOperator::Operation(double left, double right) {
-	auto result = left * right;
-	if (!Value::DoubleIsValid(result)) {
-		throw OutOfRangeException("Overflow in multiplication of double!");
-	}
-	return result;
-}
-
-template <> interval_t MultiplyOperator::Operation(interval_t left, int64_t right) {
-	left.months *= right;
-	left.days *= right;
-	left.msecs *= right;
-	return left;
-}
-
-template <> interval_t MultiplyOperator::Operation(int64_t left, interval_t right) {
-	return MultiplyOperator::Operation<interval_t, int64_t, interval_t>(right, left);
-}
-
 unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	int result_width = 0, result_scale = 0;
@@ -414,7 +232,7 @@ unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFun
 	}
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
-	bound_function.function = GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType());
+	bound_function.function = ScalarFunction::GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType());
 	return nullptr;
 }
 
@@ -423,9 +241,12 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, false, bind_decimal_multiply));
+		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<MultiplyOperatorOverflowCheck>(type.InternalType())));
 		} else {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
+			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
 	functions.AddFunction(

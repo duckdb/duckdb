@@ -1,0 +1,28 @@
+# name: test/sql/overflow/bigint_overflow.test
+# description: Test handling of overflow bigint; this is tested extra because the multiply overflow detection code is tricky
+# group: [overflow]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 251658240::BIGINT * 251658240::BIGINT
+----
+63331869759897600
+
+statement error
+SELECT 251658240::BIGINT * 1080863910568919040::BIGINT
+
+statement error
+SELECT 1080863910568919040::BIGINT * 251658240::BIGINT
+
+statement error
+SELECT 1080863910568919040::BIGINT * 1080863910568919040::BIGINT
+
+query I
+SELECT -1::BIGINT * 9223372036854775807::BIGINT
+----
+-9223372036854775807
+
+statement error
+SELECT -2::BIGINT * 4611686018427387904::BIGINT

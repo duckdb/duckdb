@@ -4,7 +4,6 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
-#include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/planner/expression.hpp"
 
 using namespace std;
