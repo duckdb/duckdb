@@ -37,6 +37,6 @@ with cte1 as (select 42), cte1 as (select 42) select * FROM cte1;
 
 # refer to CTE in subquery
 query I
-with cte1 as (Select i as j from a) select * from cte1 where j = (with cte2 as (select max(j) as j from cte1) select j from cte2);
+with cte1 as (Select i as j from a) select * from (with cte2 as (select max(j) as j from cte1) select * from cte2) f
 ----
 42

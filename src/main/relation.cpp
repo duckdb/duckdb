@@ -181,7 +181,9 @@ string Relation::GetAlias() {
 }
 
 unique_ptr<TableRef> Relation::GetTableRef() {
-	return make_unique<SubqueryRef>(GetQueryNode(), GetAlias());
+	auto select = make_unique<SelectStatement>();
+	select->node = GetQueryNode();
+	return make_unique<SubqueryRef>(move(select), GetAlias());
 }
 
 unique_ptr<QueryResult> Relation::Execute() {
