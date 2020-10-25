@@ -17,7 +17,7 @@ WITH persons_of_country_w_friends AS (
        AND ci.pl_containerplaceid = co.pl_placeid
        AND p.p_personid = k.k_person1id
         -- filter
-       AND co.pl_name = 'United_States'
+       AND co.pl_name = 'Belarus'
 )
 SELECT count(*)
   FROM persons_of_country_w_friends p1

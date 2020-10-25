@@ -34,6 +34,11 @@ create table comment (
     m_c_parentcommentid bigint
 );
 
+create view message as select m_creationdate, m_messageid, m_ps_imagefile, m_locationip, m_browserused, m_content, 
+  m_length, m_creatorid, m_ps_forumid, m_locationid, null as m_c_replyof from post 
+  union all select m_creationdate, m_messageid, null as m_ps_imagefile, m_locationip, m_browserused, m_content, 
+  m_length, m_creatorid, null as m_ps_forumid, m_locationid, coalesce(m_c_parentpostid, m_c_parentcommentid) m_c_replyof from comment;
+
 create table forum (
    f_creationdate timestamp without time zone not null,
 --   f_deletiondate timestamp without time zone not null,
