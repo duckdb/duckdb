@@ -21,6 +21,7 @@ add_library_unity(
   serializer.cpp
   string_util.cpp
   symbols.cpp
+  tree_renderer.cpp
   types.cpp
   fstream_util.cpp)
 set(ALL_OBJECT_FILES

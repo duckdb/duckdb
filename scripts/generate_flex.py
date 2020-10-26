@@ -4,6 +4,7 @@
 import os
 import subprocess
 import re
+from python_helpers import open_utf8
 
 pg_path = os.path.join('third_party', 'libpg_query')
 flex_bin = 'flex'
@@ -19,7 +20,7 @@ if proc.returncode != None or len(stderr) > 0:
 	print("stderr: ", stderr)
 	exit(1)
 
-with open(target_file, 'r') as f:
+with open_utf8(target_file, 'r') as f:
 	text = f.read()
 
 # add the libpg_query namespace
@@ -35,5 +36,5 @@ text = text.replace('register ', '')
 
 text = text + "\n} /* duckdb_libpgquery */\n"
 
-with open(target_file, 'w+') as f:
+with open_utf8(target_file, 'w+') as f:
 	f.write(text)
