@@ -12,4 +12,8 @@ BufferHandle::~BufferHandle() {
 	manager.Unpin(block_id);
 }
 
+data_ptr_t BufferHandle::Ptr() {
+	return node->buffer;
+}
+
 } // namespace duckdb

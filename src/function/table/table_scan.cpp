@@ -300,7 +300,7 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 
 string table_scan_to_string(const FunctionData *bind_data_) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
-	string result = "SEQ_SCAN(" + bind_data.table->name + ")";
+	string result = bind_data.table->name;
 	return result;
 }
 

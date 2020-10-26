@@ -65,7 +65,11 @@ public:
 	vector<LogicalType> types;
 
 public:
-	virtual string ToString(idx_t depth = 0) const;
+	virtual string GetName() const;
+	virtual string ParamsToString() const {
+		return "";
+	}
+	virtual string ToString() const;
 	void Print();
 
 	//! Return a vector of the types that will be returned by this operator
@@ -92,10 +96,6 @@ public:
 	//! Create a new empty instance of the operator state
 	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {
 		return make_unique<PhysicalOperatorState>(*this, children.size() == 0 ? nullptr : children[0].get());
-	}
-
-	virtual string ExtraRenderInformation() const {
-		return "";
 	}
 
 	virtual bool IsSink() const {

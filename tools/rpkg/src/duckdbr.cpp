@@ -385,6 +385,8 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 	return R_NilValue;
 }
 
+SEXP duckdb_execute_R_impl(MaterializedQueryResult *result);
+
 SEXP duckdb_execute_R(SEXP stmtsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_execute_R: Need external pointer parameter");
@@ -394,14 +396,26 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 		Rf_error("duckdb_execute_R: Invalid statement");
 	}
 
-	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
+	SEXP out;
 
-	if (!generic_result->success) {
-		Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
+	{
+		auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
+
+		if (!generic_result->success) {
+			Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
+		}
+		assert(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
+		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
+
+		// Protect during destruction of generic_result
+		out = PROTECT(duckdb_execute_R_impl(result));
 	}
-	assert(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
-	MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
 
+	UNPROTECT(1);
+	return out;
+}
+
+SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	// step 2: create result data frame and allocate columns
 	uint32_t ncols = result->types.size();
 	uint64_t nrows = result->collection.count;
@@ -828,22 +842,22 @@ static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
 SEXP duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_append_R: Need external pointer parameter for connection");
+		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
 	}
 
 	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
 	if (!conn) {
-		Rf_error("duckdb_append_R: Invalid connection");
+		Rf_error("duckdb_register_R: Invalid connection");
 	}
 
 	if (TYPEOF(namesexp) != STRSXP || LENGTH(namesexp) != 1) {
-		Rf_error("duckdb_append_R: Need single string parameter for name");
+		Rf_error("duckdb_register_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 
 	if (TYPEOF(valuesexp) != VECSXP || LENGTH(valuesexp) < 1 ||
 	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
-		Rf_error("duckdb_append_R: Need at least one-column data frame parameter for value");
+		Rf_error("duckdb_register_R: Need at least one-column data frame parameter for value");
 	}
 
 	auto key = install(("_registered_df_" + name).c_str());
@@ -866,16 +880,16 @@ SEXP duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
 
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_append_R: Need external pointer parameter for connection");
+		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
 
 	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
 	if (!conn) {
-		Rf_error("duckdb_append_R: Invalid connection");
+		Rf_error("duckdb_unregister_R: Invalid connection");
 	}
 
 	if (TYPEOF(namesexp) != STRSXP || LENGTH(namesexp) != 1) {
-		Rf_error("duckdb_append_R: Need single string parameter for name");
+		Rf_error("duckdb_unregister_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 

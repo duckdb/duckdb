@@ -1,4 +1,5 @@
 import os
+from python_helpers import open_utf8
 
 GENERATED_HEADER = 'include/tpce_generated.hpp'
 GENERATED_SOURCE = 'tpce_generated.cpp'
@@ -14,8 +15,8 @@ tables = {}
 print(GENERATED_HEADER)
 print(GENERATED_SOURCE)
 
-header = open(GENERATED_HEADER, 'w+')
-source = open(GENERATED_SOURCE, 'w+')
+header = open_utf8(GENERATED_HEADER, 'w+')
+source = open_utf8(GENERATED_SOURCE, 'w+')
 
 for fp in [header, source]:
 	fp.write("""

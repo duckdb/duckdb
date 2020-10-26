@@ -6,6 +6,12 @@ MAX_NODES = 1000
 raphael_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'raphael.js')
 treant_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'treant.js')
 
+def open_utf8(fpath, flags):
+    import sys
+    if sys.version_info[0] < 3:
+        return open(fpath, flags)
+    else:
+        return open(fpath, flags, encoding="utf8")
 
 def generate_html(parsed_json):
 	global current_tone, execution_time, total_nodes
@@ -369,7 +375,7 @@ def generate_ipython(json_input):
 
 
 def generate(input_file, output_file):
-	with open(input_file) as f:
+	with open_utf8(input_file, 'r') as f:
 		text = f.read()
 		# we only render the first tree, extract it
 		text = '{ "result"' + text.split('{ "result"')[1]
@@ -379,7 +385,7 @@ def generate(input_file, output_file):
 	html_output = generate_html(parsed_json)
 
 	# finally create and write the html
-	with open(output_file, "w+") as f:
+	with open_utf8(output_file, "w+") as f:
 		f.write("""
 	<!DOCTYPE html>
 	<html>

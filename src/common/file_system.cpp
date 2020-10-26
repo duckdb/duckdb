@@ -9,6 +9,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include <cstdio>
+#include <cstdint>
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -26,9 +27,8 @@
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
-extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory (PULONGLONG );
+extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
-
 
 #undef CreateDirectory
 #undef MoveFile
@@ -53,7 +53,6 @@ static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine CREATE and CREATE_NEW flags
 	assert(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 }
-
 
 #ifndef _WIN32
 // somehow sometimes this is missing
@@ -337,7 +336,7 @@ void FileSystem::SetWorkingDirectory(string path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
-	idx_t max_memory = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
+	idx_t max_memory = MinValue<idx_t>(sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 	if (errno != 0) {
 		throw IOException("Could not fetch available system memory!");
 	}
@@ -611,7 +610,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
 		throw IOException("Could not fetch available system memory!");
 	}
-	return available_memory_kb * 1024;
+	return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
 }
 
 string FileSystem::GetWorkingDirectory() {

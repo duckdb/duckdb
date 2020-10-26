@@ -171,6 +171,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		((int32_t *)data)[index] = val.value_.integer;
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::HASH:
 	case LogicalTypeId::BIGINT:
 		((int64_t *)data)[index] = val.value_.bigint;
 		break;

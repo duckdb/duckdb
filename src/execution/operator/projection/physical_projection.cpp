@@ -32,7 +32,7 @@ unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
 	return make_unique<PhysicalProjectionState>(*this, children[0].get(), select_list);
 }
 
-string PhysicalProjection::ExtraRenderInformation() const {
+string PhysicalProjection::ParamsToString() const {
 	string extra_info;
 	for (auto &expr : select_list) {
 		extra_info += expr->GetName() + "\n";

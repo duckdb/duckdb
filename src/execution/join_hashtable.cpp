@@ -421,6 +421,7 @@ void JoinHashTable::Finalize() {
 		}
 		pinned_handles.push_back(move(handle));
 	}
+
 	finalized = true;
 }
 
