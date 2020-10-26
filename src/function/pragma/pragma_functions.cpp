@@ -24,8 +24,10 @@ static void pragma_enable_profiling_assignment(ClientContext &context, vector<Va
 		context.profiler.automatic_print_format = ProfilerPrintFormat::JSON;
 	} else if (assignment == "query_tree") {
 		context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
+	} else if (assignment == "query_tree_optimizer") {
+		context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
 	} else {
-		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]", assignment);
+		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", assignment);
 	}
 	context.profiler.Enable();
 }
@@ -139,6 +141,14 @@ static void pragma_explain_output(ClientContext &context, vector<Value> paramete
 	}
 }
 
+static void pragma_enable_optimizer(ClientContext &context, vector<Value> parameters) {
+	context.enable_optimizer = true;
+}
+
+static void pragma_disable_optimizer(ClientContext &context, vector<Value> parameters) {
+	context.enable_optimizer = false;
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	register_enable_profiling(set);
 
@@ -167,6 +177,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_parallelism", pragma_enable_force_parallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_parallelism", pragma_disable_force_parallelism));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", pragma_enable_optimizer));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", pragma_disable_optimizer));
 
 	set.AddFunction(PragmaFunction::PragmaAssignment("log_query_path", pragma_log_query_path, LogicalType::VARCHAR));
 	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", pragma_explain_output, LogicalType::VARCHAR));

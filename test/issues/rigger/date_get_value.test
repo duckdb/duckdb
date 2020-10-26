@@ -1,0 +1,12 @@
+# name: test/issues/rigger/date_get_value.test
+# description: SQLancer bug that detected an error with "GetValue" not being supported for the Date type
+# group: [rigger]
+
+statement ok
+CREATE TABLE t0(c0 BOOLEAN, c1 TINYINT, PRIMARY KEY(c1, c0));
+
+statement ok
+INSERT INTO t0 VALUES (false, 1);
+
+statement error
+SELECT t0.c0, t0.c1 FROM t0 WHERE REVERSE((CASE 0.020672069925445347 WHEN (((DATE '1970-01-18')+(t0.c1)) NOT BETWEEN t0.c0 AND DATE '1970-01-10') THEN t0.c1 ELSE t0.c1 END )) GROUP BY t0.c0, t0.c1 UNION SELECT t0.c0, t0.c1 FROM t0 WHERE (NOT REVERSE((CASE 0.020672069925445347 WHEN (((DATE '1970-01-18')+(t0.c1)) NOT BETWEEN t0.c0 AND DATE '1970-01-10') THEN t0.c1 ELSE t0.c1 END ))) GROUP BY t0.c0, t0.c1 UNION SELECT t0.c0, t0.c1 FROM t0 WHERE ((REVERSE((CASE 0.020672069925445347 WHEN (((DATE '1970-01-18')+(t0.c1)) NOT BETWEEN t0.c0 AND DATE '1970-01-10') THEN t0.c1 ELSE t0.c1 END ))) IS NULL) GROUP BY t0.c0, t0.c1;
