@@ -142,7 +142,7 @@ setMethod(
       "DOUBLE"
     } else if (inherits(obj, "POSIXt")) {
       "TIMESTAMP"
-    } else if (is.list(obj) && all(vapply(obj, typeof, FUN.VALUE = "character") == "raw" || is.na(obj))) {
+    } else if (is.list(obj)) {
       "BLOB"
     } else {
       "STRING"
