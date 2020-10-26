@@ -9,7 +9,7 @@ DBItest::test_all(c(
   "send_query_stale_warning", # wontfix
   "send_statement_stale_warning", # wontfix
 
-  "roundtrip_timestamp", # broken test
+  if (packageVersion("DBItest") < "1.7.0.9004") "roundtrip_timestamp", # broken test
 
   "data_logical", # casting NULL issue
 

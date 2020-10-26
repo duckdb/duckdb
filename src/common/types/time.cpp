@@ -23,7 +23,7 @@ using namespace std;
 
 static dtime_t time_to_number(int hour, int min, int sec, int msec) {
 	if (!DD_TIME(hour, min, sec, msec)) {
-		throw Exception("Invalid time");
+		throw ParserException("Invalid time hour=%d, min=%d, sec=%d, msec=%d", hour, min, sec, msec);
 	}
 	return (dtime_t)(((((hour * 60) + min) * 60) + sec) * 1000 + msec);
 }
