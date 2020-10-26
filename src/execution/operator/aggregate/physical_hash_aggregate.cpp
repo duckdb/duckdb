@@ -432,10 +432,26 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 }
 
 bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState& state) {
-auto &gstate = (HashAggregateGlobalState &) state;
+	auto &gstate = (HashAggregateGlobalState &) state;
 
-return !all_combinable || any_distinct || gstate.partition_info.n_partitions < 2;
+	return !all_combinable || any_distinct || gstate.partition_info.n_partitions < 2;
 }
 
+string PhysicalHashAggregate::ParamsToString() const {
+	string result;
+	for (idx_t i = 0; i < groups.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += groups[i]->GetName();
+	}
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		if (i > 0 || groups.size() > 0) {
+			result += "\n";
+		}
+		result += aggregates[i]->GetName();
+	}
+	return result;
+}
 
 } // namespace duckdb

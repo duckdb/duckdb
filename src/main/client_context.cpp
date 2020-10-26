@@ -176,17 +176,13 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	result->types = planner.types;
 	result->value_map = move(planner.value_map);
 
-#ifdef DEBUG
 	if (enable_optimizer) {
-#endif
 		profiler.StartPhase("optimizer");
 		Optimizer optimizer(planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
 		assert(plan);
 		profiler.EndPhase();
-#ifdef DEBUG
 	}
-#endif
 
 	profiler.StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan

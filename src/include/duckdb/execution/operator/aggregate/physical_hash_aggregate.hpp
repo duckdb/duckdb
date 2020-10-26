@@ -61,6 +61,7 @@ public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
+	string ParamsToString() const override;
 private:
 	//! how many groups can we have in the operator before we switch to radix partitioning
 	idx_t radix_limit;

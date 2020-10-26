@@ -139,6 +139,14 @@ static void pragma_explain_output(ClientContext &context, vector<Value> paramete
 	}
 }
 
+static void pragma_enable_optimizer(ClientContext &context, vector<Value> parameters) {
+	context.enable_optimizer = true;
+}
+
+static void pragma_disable_optimizer(ClientContext &context, vector<Value> parameters) {
+	context.enable_optimizer = false;
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	register_enable_profiling(set);
 
@@ -167,6 +175,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_parallelism", pragma_enable_force_parallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_parallelism", pragma_disable_force_parallelism));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", pragma_enable_optimizer));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", pragma_disable_optimizer));
 
 	set.AddFunction(PragmaFunction::PragmaAssignment("log_query_path", pragma_log_query_path, LogicalType::VARCHAR));
 	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", pragma_explain_output, LogicalType::VARCHAR));

@@ -95,17 +95,30 @@ string PhysicalTableScan::GetName() const {
 
 string PhysicalTableScan::ParamsToString() const {
 	string result;
-	for (auto &f : table_filters) {
-		for (auto &filter : f.second) {
-			result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
-			          filter.constant.ToString();
-			result += "\n";
+	if (function.to_string) {
+		result = function.to_string(bind_data.get());
+		result += "\n[INFOSEPARATOR]\n";
+	}
+	for(idx_t i = 0; i < column_ids.size(); i++) {
+		if (column_ids[i] < names.size()) {
+			if (i > 0) {
+				result += "\n";
+			}
+			result += names[column_ids[i]];
 		}
 	}
-	if (!function.to_string) {
-		return string();
+	if (table_filters.size() > 0) {
+		result += "\n[INFOSEPARATOR]\n";
+		result += "Filters: ";
+		for (auto &f : table_filters) {
+			for (auto &filter : f.second) {
+				result += "\n";
+				result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
+						filter.constant.ToString();
+			}
+		}
 	}
-	return function.to_string(bind_data.get());
+	return result;
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {

@@ -140,7 +140,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		std::swap(left, right);
 	}
 
-	if (ref.type == JoinType::INNER) {
+	if (ref.type == JoinType::INNER && ref.condition->HasSubquery()) {
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
 		auto cross_product = make_unique<LogicalCrossProduct>();
