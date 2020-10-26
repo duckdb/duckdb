@@ -90,7 +90,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.EndPhase();
 
 	// apply simple expression heuristics to get an initial reordering
-	context.profiler.StartPhase("reorder_filter_expressions");
+	context.profiler.StartPhase("reorder_filter");
 	ExpressionHeuristics expression_heuristics(*this);
 	plan = expression_heuristics.Rewrite(move(plan));
 	context.profiler.EndPhase();

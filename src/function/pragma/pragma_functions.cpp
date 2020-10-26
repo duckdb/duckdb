@@ -128,11 +128,11 @@ static void pragma_log_query_path(ClientContext &context, vector<Value> paramete
 static void pragma_explain_output(ClientContext &context, vector<Value> parameters) {
 	string val = StringUtil::Lower(parameters[0].ToString());
 	if (val == "all") {
-		context.default_output_type = OutputType::ALL;
+		context.explain_output_type = ExplainOutputType::ALL;
 	} else if (val == "optimized_only") {
-		context.default_output_type = OutputType::OPTIMIZED_ONLY;
+		context.explain_output_type = ExplainOutputType::OPTIMIZED_ONLY;
 	} else if (val == "physical_only") {
-		context.default_output_type = OutputType::PHYSICAL_ONLY;
+		context.explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	} else {
 		throw ParserException("Unrecognized output type '%s', expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY",
 		                      val);

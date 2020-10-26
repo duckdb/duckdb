@@ -60,19 +60,15 @@ public:
 	struct TreeNode {
 		string name;
 		string extra_info;
-		vector<string> split_extra_info;
 		OperatorTimingInformation info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
 	};
 
 private:
-	static idx_t GetDepth(QueryProfiler::TreeNode &node);
 	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, idx_t depth = 0);
 
-	static idx_t RenderTreeRecursive(TreeNode &node, vector<string> &render, vector<idx_t> &render_heights,
-	                                 idx_t base_render_x = 0, idx_t start_depth = 0, idx_t depth = 0);
-	static string RenderTree(TreeNode &node);
+	static void Render(TreeNode &node, std::ostream &str);
 
 public:
 	QueryProfiler() : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), running(false) {
@@ -102,6 +98,7 @@ public:
 	void Initialize(PhysicalOperator *root);
 
 	string ToString() const;
+	void ToStream(std::ostream &str) const;
 	void Print();
 
 	string ToJSON() const;

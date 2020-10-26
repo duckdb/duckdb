@@ -67,8 +67,8 @@ public:
 	bool force_index_join = false;
 	//! The writer used to log queries (if logging is enabled)
 	unique_ptr<BufferedFileWriter> log_query_writer;
-	//! The output type used when none is specified (default: ALL)
-	OutputType default_output_type = OutputType::ALL;
+	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
+	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
