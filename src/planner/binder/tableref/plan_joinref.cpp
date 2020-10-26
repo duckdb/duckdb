@@ -146,7 +146,6 @@ static bool HasCorrelatedColumns(Expression &expression) {
 		}
 	});
 	return has_correlated_columns;
-
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
@@ -157,9 +156,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		std::swap(left, right);
 	}
 
-	if (ref.type == JoinType::INNER &&
-		(ref.condition->HasSubquery() ||
-		 HasCorrelatedColumns(*ref.condition))) {
+	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition))) {
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
 		auto cross_product = make_unique<LogicalCrossProduct>();

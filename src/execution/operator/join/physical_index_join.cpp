@@ -91,7 +91,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 		}
 	}
 	//! Now we fetch the RHS data
-	if (!fetch_types.empty() ) {
+	if (!fetch_types.empty()) {
 		if (fetch_rows.size() == 0) {
 			return;
 		}

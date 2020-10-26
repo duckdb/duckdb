@@ -104,7 +104,7 @@ unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 
 string PhysicalOrder::ParamsToString() const {
 	string result;
-	for(idx_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < orders.size(); i++) {
 		if (i > 0) {
 			result += "\n";
 		}

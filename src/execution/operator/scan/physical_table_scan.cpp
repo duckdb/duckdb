@@ -99,7 +99,7 @@ string PhysicalTableScan::ParamsToString() const {
 		result = function.to_string(bind_data.get());
 		result += "\n[INFOSEPARATOR]\n";
 	}
-	for(idx_t i = 0; i < column_ids.size(); i++) {
+	for (idx_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i] < names.size()) {
 			if (i > 0) {
 				result += "\n";
@@ -114,7 +114,7 @@ string PhysicalTableScan::ParamsToString() const {
 			for (auto &filter : f.second) {
 				result += "\n";
 				result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
-						filter.constant.ToString();
+				          filter.constant.ToString();
 			}
 		}
 	}

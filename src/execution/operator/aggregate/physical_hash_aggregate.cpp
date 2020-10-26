@@ -189,9 +189,8 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		                                                 gstate.partition_info, group_types, payload_types, bindings);
 	}
 
-	gstate.lossy_total_groups +=
-	    llstate.ht->AddChunk(group_chunk, payload_chunk,
-	                         gstate.lossy_total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
+	gstate.lossy_total_groups += llstate.ht->AddChunk(
+	    group_chunk, payload_chunk, gstate.lossy_total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
 }
 
 class PhysicalHashAggregateState : public PhysicalOperatorState {
@@ -431,8 +430,8 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	                                               children.size() == 0 ? nullptr : children[0].get());
 }
 
-bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState& state) {
-	auto &gstate = (HashAggregateGlobalState &) state;
+bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState &state) {
+	auto &gstate = (HashAggregateGlobalState &)state;
 
 	return !all_combinable || any_distinct || gstate.partition_info.n_partitions < 2;
 }

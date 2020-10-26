@@ -152,7 +152,7 @@ string PhysicalTopN::ParamsToString() const {
 		result += "Offset " + std::to_string(offset);
 	}
 	result += "\n[INFOSEPARATOR]";
-	for(idx_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < orders.size(); i++) {
 		result += "\n";
 		result += orders[i].expression->ToString() + " ";
 		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
