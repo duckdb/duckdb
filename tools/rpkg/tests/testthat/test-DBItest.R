@@ -14,18 +14,15 @@ DBItest::test_all(c(
   "data_logical", # casting NULL issue
 
   "roundtrip_time",
-  "roundtrip_mixed",
   "roundtrip_field_types", # strange
   "data_64_bit_numeric_warning", # not now
   "data_64_bit_lossless", # not now,
   "roundtrip_64_bit_character",
 
   # new tests skipped after DBI upgrade
-  "connect_format",
   "connect_bigint_integer",
   "connect_bigint_character",
   "connect_bigint_integer64",
-  "create_table_overwrite",
   "append_roundtrip_keywords",
   "append_roundtrip_quotes",
   "append_roundtrip_integer",
