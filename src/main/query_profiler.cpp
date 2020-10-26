@@ -84,6 +84,8 @@ void QueryProfiler::EndQuery() {
 			query_info = ToJSON();
 		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE) {
 			query_info = ToString();
+		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER) {
+			query_info = ToString(true);
 		}
 
 		if (save_location.empty()) {
@@ -263,13 +265,13 @@ static string RenderTiming(double timing) {
 	return timing_s + "s";
 }
 
-string QueryProfiler::ToString() const {
+string QueryProfiler::ToString(bool print_optimizer_output) const {
 	std::stringstream str;
-	ToStream(str);
+	ToStream(str, print_optimizer_output);
 	return str.str();
 }
 
-void QueryProfiler::ToStream(std::ostream &ss) const {
+void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) const {
 	if (!enabled) {
 		ss << "Query profiling is disabled. Call "
 		      "Connection::EnableProfiling() to enable profiling!";
@@ -293,31 +295,33 @@ void QueryProfiler::ToStream(std::ostream &ss) const {
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
 	// print phase timings
-	bool has_previous_phase = false;
-	for (const auto &entry : GetOrderedPhaseTimings()) {
-		if (!StringUtil::Contains(entry.first, " > ")) {
-			// primary phase!
-			if (has_previous_phase) {
-				ss << "│└───────────────────────────────────┘│\n";
-				ss << "└─────────────────────────────────────┘\n";
+	if (print_optimizer_output) {
+		bool has_previous_phase = false;
+		for (const auto &entry : GetOrderedPhaseTimings()) {
+			if (!StringUtil::Contains(entry.first, " > ")) {
+				// primary phase!
+				if (has_previous_phase) {
+					ss << "│└───────────────────────────────────┘│\n";
+					ss << "└─────────────────────────────────────┘\n";
+				}
+				ss << "┌─────────────────────────────────────┐\n";
+				ss << "│" +
+						DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
+									TOTAL_BOX_WIDTH - 2) +
+						"│\n";
+				ss << "│┌───────────────────────────────────┐│\n";
+				has_previous_phase = true;
+			} else {
+				string entry_name = StringUtil::Split(entry.first, " > ")[1];
+				ss << "││" +
+						DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second), TOTAL_BOX_WIDTH - 4) +
+						"││\n";
 			}
-			ss << "┌─────────────────────────────────────┐\n";
-			ss << "│" +
-			          DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
-			                     TOTAL_BOX_WIDTH - 2) +
-			          "│\n";
-			ss << "│┌───────────────────────────────────┐│\n";
-			has_previous_phase = true;
-		} else {
-			string entry_name = StringUtil::Split(entry.first, " > ")[1];
-			ss << "││" +
-			          DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second), TOTAL_BOX_WIDTH - 4) +
-			          "││\n";
 		}
-	}
-	if (has_previous_phase) {
-		ss << "│└───────────────────────────────────┘│\n";
-		ss << "└─────────────────────────────────────┘\n";
+		if (has_previous_phase) {
+			ss << "│└───────────────────────────────────┘│\n";
+			ss << "└─────────────────────────────────────┘\n";
+		}
 	}
 	// render the main operator tree
 	if (root) {

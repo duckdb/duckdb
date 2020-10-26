@@ -24,8 +24,10 @@ static void pragma_enable_profiling_assignment(ClientContext &context, vector<Va
 		context.profiler.automatic_print_format = ProfilerPrintFormat::JSON;
 	} else if (assignment == "query_tree") {
 		context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
+	} else if (assignment == "query_tree_optimizer") {
+		context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
 	} else {
-		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]", assignment);
+		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", assignment);
 	}
 	context.profiler.Enable();
 }
