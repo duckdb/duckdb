@@ -486,9 +486,9 @@ struct BinaryZeroIsNullHugeintWrapper {
 	}
 };
 
-template <class TA, class TB, class TC, class OP>
+template <class TA, class TB, class TC, class OP, class ZWRAPPER=BinaryZeroIsNullWrapper>
 static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<TA, TB, TC, OP, true, BinaryZeroIsNullWrapper>(input.data[0], input.data[1], result,
+	BinaryExecutor::Execute<TA, TB, TC, OP, true, ZWRAPPER>(input.data[0], input.data[1], result,
 	                                                                       input.size());
 }
 
@@ -503,7 +503,7 @@ template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(Logical
 	case LogicalTypeId::BIGINT:
 		return BinaryScalarFunctionIgnoreZero<int64_t, int64_t, int64_t, OP>;
 	case LogicalTypeId::HUGEINT:
-		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP>;
+		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP, BinaryZeroIsNullHugeintWrapper>;
 	case LogicalTypeId::FLOAT:
 		return BinaryScalarFunctionIgnoreZero<float, float, float, OP>;
 	case LogicalTypeId::DOUBLE:

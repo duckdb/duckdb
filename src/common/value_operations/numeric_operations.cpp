@@ -52,7 +52,7 @@ Value ValueOperations::Multiply(const Value &left, const Value &right) {
 
 Value ValueOperations::Modulo(const Value &left, const Value &right) {
 	if (right == 0) {
-		return templated_binary_operation<duckdb::ModuloOperator>(left, Value(right.type()));
+		return Value(right.type());
 	} else {
 		return templated_binary_operation<duckdb::ModuloOperator>(left, right);
 	}
@@ -60,7 +60,7 @@ Value ValueOperations::Modulo(const Value &left, const Value &right) {
 
 Value ValueOperations::Divide(const Value &left, const Value &right) {
 	if (right == 0) {
-		return templated_binary_operation<duckdb::DivideOperator>(left, Value(right.type()));
+		return Value(right.type());
 	} else {
 		return templated_binary_operation<duckdb::DivideOperator>(left, right);
 	}
