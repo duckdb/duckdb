@@ -100,9 +100,11 @@ public:
 				}
 			}
 		}
-		group_chunk.Initialize(op.group_types);
+		group_chunk_template.Initialize(op.group_types);
+		group_chunk.InitializeEmpty(op.group_types);
 		if (op.payload_types.size() > 0) {
-			payload_chunk.Initialize(op.payload_types);
+			payload_chunk_template.Initialize(op.payload_types);
+			payload_chunk.InitializeEmpty(op.payload_types);
 		}
 	}
 
@@ -113,12 +115,20 @@ public:
 	//! Expression state for the payload
 	ExpressionExecutor payload_executor;
 	//! Materialized GROUP BY expression
-	DataChunk group_chunk;
+	DataChunk group_chunk_template;
 	//! The payload chunk
-	DataChunk payload_chunk;
+	DataChunk payload_chunk_template;
 	//! The aggregate HT
+	DataChunk group_chunk;
+
+	DataChunk payload_chunk;
 
 	unique_ptr<PartitionableHashTable> ht;
+
+	void Reset() {
+		group_chunk.Reference(group_chunk_template);
+		payload_chunk.Reference(payload_chunk_template);
+	}
 
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
@@ -137,6 +147,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	auto &llstate = (HashAggregateLocalState &)lstate;
 	auto &gstate = (HashAggregateGlobalState &)state;
 
+	llstate.Reset();
 	DataChunk &group_chunk = llstate.group_chunk;
 	DataChunk &payload_chunk = llstate.payload_chunk;
 	llstate.group_executor.Execute(input, group_chunk);

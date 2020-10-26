@@ -1,0 +1,16 @@
+# name: test/issues/rigger/collate_union.test
+# description: SQLancer bug that detected an error in collations combined with union
+# group: [rigger]
+
+statement ok
+CREATE TABLE t0(c0 BIGINT, c1 SMALLINT, c2 VARCHAR COLLATE NOACCENT);
+
+statement ok
+insert into t0 values (0, 1, NULL), (0, 0, '0.5652217975848206'), (0, 3, 'false');
+
+query II
+SELECT t0.c0, t0.c2 FROM t0 WHERE t0.c1 UNION SELECT t0.c0, t0.c2 FROM t0 WHERE (NOT t0.c1) UNION SELECT t0.c0, t0.c2 FROM t0 WHERE ((t0.c1) IS NULL) ORDER BY 1, 2;
+----
+0	NULL
+0	0.5652217975848206
+0	false
