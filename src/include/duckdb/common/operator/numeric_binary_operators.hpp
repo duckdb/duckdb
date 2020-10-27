@@ -79,10 +79,12 @@ template <> interval_t MultiplyOperator::Operation(int64_t left, interval_t righ
 
 template <> float DivideOperator::Operation(float left, float right);
 template <> double DivideOperator::Operation(double left, double right);
+template <> hugeint_t DivideOperator::Operation(hugeint_t left, hugeint_t right);
 template <> interval_t DivideOperator::Operation(interval_t left, int64_t right);
 
 template <> float ModuloOperator::Operation(float left, float right);
 template <> double ModuloOperator::Operation(double left, double right);
+template <> hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right);
 
 
 } // namespace duckdb
