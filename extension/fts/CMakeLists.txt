@@ -7,6 +7,7 @@ include_directories(include ../../third_party/snowball/libstemmer)
 add_library(
   fts_extension STATIC
   fts-extension.cpp
+  fts_indexing.cpp
   ../../third_party/snowball/libstemmer/libstemmer.c
   ../../third_party/snowball/runtime/utilities.c
   ../../third_party/snowball/runtime/api.c

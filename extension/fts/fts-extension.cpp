@@ -6,8 +6,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -47,14 +47,17 @@ void FTSExtension::Load(DuckDB &db) {
 	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, stem_function);
 	CreateScalarFunctionInfo stem_info(stem_func);
 
-	// TableFunction create_fts_index_func("create_fts_index", {}, create_fts_index_function, nullptr);
-	TableFunction kekw();
+	auto create_fts_index_func = PragmaFunction::PragmaCall("create_fts_index", pragma_create_fts_index_query, {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR});
+	CreatePragmaFunctionInfo create_fts_index_info(create_fts_index_func);
+
+	auto drop_fts_index_func = PragmaFunction::PragmaCall("drop_fts_index", pragma_drop_fts_index_query, {LogicalType::VARCHAR, LogicalType::VARCHAR});
+	CreatePragmaFunctionInfo drop_fts_index_info(drop_fts_index_func);
 
 	Connection conn(db);
 	conn.context->transaction.BeginTransaction();
-
 	db.catalog->CreateFunction(*conn.context, &stem_info);
-
+	db.catalog->CreatePragmaFunction(*conn.context, &create_fts_index_info);
+	db.catalog->CreatePragmaFunction(*conn.context, &drop_fts_index_info);
 	conn.context->transaction.Commit();
 }
 

@@ -12,6 +12,7 @@
 
 namespace duckdb {
 
-static void create_fts_index_function(ClientContext &context);
+string pragma_drop_fts_index_query(ClientContext &context, vector<Value> parameters);
+string pragma_create_fts_index_query(ClientContext &context, vector<Value> parameters);
 
 } // namespace duckdb

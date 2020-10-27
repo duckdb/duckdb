@@ -7,132 +7,26 @@ require fts
 statement ok
 PRAGMA enable_verification
 
+statement error
+PRAGMA drop_fts_index('main', 'test')
+
+statement ok
+CREATE SCHEMA fts_main_test;
+
+statement ok
+PRAGMA drop_fts_index('main', 'test')
+
 statement ok
 CREATE TABLE documents(id VARCHAR, body VARCHAR)
 
 statement ok
 INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING')
 
-# first steps towards writing an 'indexing query'
 statement ok
-CREATE TABLE docs AS (
-    SELECT
-        row_number() OVER (PARTITION BY(SELECT NULL)) AS docid,
-        id AS name
-    FROM
-        documents
-)
-
-query II
-SELECT docid, name FROM docs
-----
-1	doc1
-2	doc2
-3	doc3
-
-# TODO: improve the regex whitelist to include emoji's
-statement ok
-CREATE TABLE terms AS (
-    SELECT
-        term,
-        docid,
-        row_number() OVER (PARTITION BY docid) AS pos
-    FROM (
-        SELECT
-            stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(body)), '[^a-z]', ' ', 'g'), '\s+')), 'porter') AS term,
-            row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
-        FROM documents
-    ) AS subquery
-    WHERE
-        term != ''
-)
+PRAGMA create_fts_index('main', 'documents', 'id', 'body', 'porter')
 
 query III
-SELECT term, docid, pos FROM terms
-----
-quack	1	1
-quack	1	2
-quack	1	3
-bark	2	1
-bark	2	2
-bark	2	3
-bark	2	4
-meow	3	1
-meow	3	2
-meow	3	3
-meow	3	4
-meow	3	5
-
-statement ok
-ALTER TABLE docs ADD len INT
-
-statement ok
-UPDATE docs
-SET len = (
-    SELECT count(term)
-    FROM terms
-    WHERE terms.docid = docs.docid
-)
-
-query III
-SELECT name, docid, len FROM docs
-----
-doc1	1	3
-doc2	2	4
-doc3	3	5
-
-statement ok
-CREATE TABLE dict AS
-WITH distinct_terms AS (
-    SELECT DISTINCT term, docid
-    FROM terms
-    ORDER BY docid
-)
-SELECT
-    row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
-    term
-FROM
-    distinct_terms
-
-query II
-SELECT termid, term FROM dict
-----
-1	quack
-2	bark
-3	meow
-
-statement ok
-ALTER TABLE terms ADD termid INT
-
-statement ok
-UPDATE terms t
-SET termid = (
-    SELECT termid
-    FROM dict d
-    WHERE t.term = d.term
-)
-
-query IIII
-SELECT term, termid, docid, pos FROM terms
-----
-quack	1	1	1
-quack	1	1	2
-quack	1	1	3
-bark	2	2	1
-bark	2	2	2
-bark	2	2	3
-bark	2	2	4
-meow	3	3	1
-meow	3	3	2
-meow	3	3	3
-meow	3	3	4
-meow	3	3	5
-
-statement ok
-ALTER TABLE terms DROP term
-
-query III
-SELECT termid, docid, pos FROM terms
+SELECT termid, docid, pos FROM fts_main_documents.terms
 ----
 1	1	1
 1	1	2
@@ -147,21 +41,62 @@ SELECT termid, docid, pos FROM terms
 3	3	4
 3	3	5
 
-statement ok
-ALTER TABLE dict ADD df INT
-
-statement ok
-UPDATE dict
-SET df = (
-    SELECT count(distinct docid)
-    FROM terms
-    WHERE dict.termid = terms.termid
-    GROUP BY termid
-)
+query III
+SELECT name, docid, len FROM fts_main_documents.docs
+----
+doc1	1	3
+doc2	2	4
+doc3	3	5
 
 query III
-SELECT termid, term, df FROM dict
+SELECT termid, term, df FROM fts_main_documents.dict
 ----
 1	quack	1
 2	bark	1
 3	meow	1
+
+query T
+WITH ppterms AS (SELECT stem(unnest(string_split_regex(regexp_replace(lower(strip_accents('QUÁCKED BÁRKED')), '[^a-z]', ' ', 'g'), '\s+')), 'porter') AS term),
+qtermids AS (SELECT termid FROM fts_main_documents.dict AS dict, ppterms WHERE dict.term = ppterms.term)
+SELECT * FROM qtermids
+----
+1
+2
+
+query II
+WITH ppterms AS (SELECT stem(unnest(string_split_regex(regexp_replace(lower(strip_accents('QUÁCKED BÁRKED')), '[^a-z]', ' ', 'g'), '\s+')), 'porter') AS term),
+qtermids AS (SELECT termid FROM fts_main_documents.dict AS dict, ppterms WHERE dict.term = ppterms.term),
+qterms AS (SELECT termid, docid FROM fts_main_documents.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids))
+SELECT * FROM qterms
+----
+1	1
+1	1
+1	1
+2	2
+2	2
+2	2
+2	2
+
+# log((3 - df + 0.5) / (df + 0.5)) -- number of documents = 3
+# (len / 4) -- average document length is 4
+# HAVING COUNT(DISTINCT termid) = 3 -- commented this out because there is no document with all terms present
+query II
+WITH ppterms AS (SELECT stem(unnest(string_split_regex(regexp_replace(lower(strip_accents('QUÁCKED BÁRKED')), '[^a-z]', ' ', 'g'), '\s+')), 'porter') AS term),
+qtermids AS (SELECT termid FROM fts_main_documents.dict AS dict, ppterms WHERE dict.term = ppterms.term),
+qterms AS (SELECT termid, docid FROM fts_main_documents.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
+subscores AS (
+SELECT docs.docid, len, term_tf.termid,
+        tf, df, (log((3 - df + 0.5) / (df + 0.5))* ((tf * (1.2 + 1)/(tf + 1.2 * (1 - 0.75 + 0.75 * (len / 4)))))) AS subscore
+FROM (SELECT termid, docid, COUNT(*) AS tf FROM qterms
+    GROUP BY docid, termid) AS term_tf
+    JOIN (SELECT docid FROM qterms
+        GROUP BY docid) -- HAVING COUNT(DISTINCT termid) = 3)
+        AS cdocs ON term_tf.docid = cdocs.docid
+    JOIN fts_main_documents.docs AS docs ON term_tf.docid = docs.docid
+    JOIN fts_main_documents.dict AS dict ON term_tf.termid = dict.termid)
+SELECT name, score FROM (SELECT docid, sum(subscore) AS score
+    FROM subscores GROUP BY docid) AS scores JOIN fts_main_documents.docs AS docs ON
+    scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
+----
+doc1	0.443697	
+doc2	0.375436
