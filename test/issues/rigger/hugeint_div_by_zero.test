@@ -1,0 +1,87 @@
+# name: test/issues/rigger/hugeint_div_by_zero.test
+# description: Division by zero bug found by sqlancer
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 BOOLEAN UNIQUE, c1 TIMESTAMP, c2 VARCHAR, PRIMARY KEY(c1, c2, c0));;
+
+statement ok
+INSERT INTO t0 VALUES(true,'1970-01-01 00:00:00','1970-01-15 02:36:34');
+
+statement ok
+INSERT INTO t0 VALUES(false,'1969-12-08 00:00:00','');
+
+statement ok
+CREATE TABLE t1(c0 INTEGER UNIQUE DEFAULT(802216568), c1 TINYINT DEFAULT(1144250857), PRIMARY KEY(c0));;
+
+statement ok
+INSERT INTO t1 VALUES(802216568,0);
+
+statement ok
+INSERT INTO t1 VALUES(0,0);
+
+statement ok
+INSERT INTO t1 VALUES(1144250857,0);
+
+statement ok
+INSERT INTO t1 VALUES(783586315,0);
+
+statement ok
+INSERT INTO t1 VALUES(-449051989,0);
+
+statement ok
+INSERT INTO t1 VALUES(-428785526,0);
+
+statement ok
+INSERT INTO t1 VALUES(-1699690429,0);
+
+statement ok
+INSERT INTO t1 VALUES(-790542135,0);
+
+statement ok
+INSERT INTO t1 VALUES(3,0);
+
+statement ok
+INSERT INTO t1 VALUES(2135670965,0);
+
+statement ok
+INSERT INTO t1 VALUES(-1577416079,1);
+
+statement ok
+INSERT INTO t1 VALUES(-2059225173,0);
+
+statement ok
+INSERT INTO t1 VALUES(-2120629165,0);
+
+statement ok
+INSERT INTO t1 VALUES(1617540830,1);
+
+statement ok
+INSERT INTO t1 VALUES(1,0);
+
+statement ok
+INSERT INTO t1 VALUES(-1412788640,1);
+
+statement ok
+INSERT INTO t1 VALUES(-7730557,0);
+
+statement ok
+INSERT INTO t1 VALUES(715464291,1);
+
+statement ok
+INSERT INTO t1 VALUES(15908661,1);
+
+statement ok
+INSERT INTO t1 VALUES(-613341533,0);
+
+statement ok
+INSERT INTO t1 VALUES(-1665756361,0);
+
+statement ok
+INSERT INTO t1 VALUES(2139975183,0);
+
+statement ok
+SELECT t1.c0, t1.c1, t0.c2, t0.c0, t0.c1 FROM t1, t0 WHERE (((CASE ((t1.c0)*(0.5377781223535408)) WHEN 0.09857124523209415 THEN (0.915585828038032 IN (t0.c2)) ELSE t1.c0 END )) IS NOT NULL) GROUP BY t1.c0, t1.c1, t0.c2, t0.c0, t0.c1 UNION SELECT t1.c0, t1.c1, t0.c2, t0.c0, t0.c1 FROM t1, t0 WHERE (NOT (((CASE ((t1.c0)*(0.5377781223535408)) WHEN 0.09857124523209415 THEN (0.915585828038032 IN (t0.c2)) ELSE t1.c0 END )) IS NOT NULL)) GROUP BY t1.c0, t1.c1, t0.c2, t0.c0, t0.c1 UNION SELECT t1.c0, t1.c1, t0.c2, t0.c0, t0.c1 FROM t1, t0 WHERE (((((CASE ((t1.c0)*(0.5377781223535408)) WHEN 0.09857124523209415 THEN (0.915585828038032 IN (t0.c2)) ELSE t1.c0 END )) IS NOT NULL)) IS NULL) GROUP BY t1.c0, t1.c1, t0.c2, t0.c0, t0.c1;
