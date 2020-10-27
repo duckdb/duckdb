@@ -112,9 +112,11 @@ string PhysicalTableScan::ParamsToString() const {
 		result += "Filters: ";
 		for (auto &f : table_filters) {
 			for (auto &filter : f.second) {
-				result += "\n";
-				result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
-				          filter.constant.ToString();
+				if (filter.column_index < names.size()) {
+					result += "\n";
+					result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
+							filter.constant.ToString();
+				}
 			}
 		}
 	}
