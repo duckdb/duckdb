@@ -302,7 +302,7 @@ struct LogicalType {
 	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
-	bool GetDecimalProperties(int &width, int &scale) const;
+	bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
 
 	void Verify() const;
 

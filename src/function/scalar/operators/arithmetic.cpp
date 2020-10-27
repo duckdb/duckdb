@@ -20,30 +20,36 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
-template <class OP>
+template <class OP, class OPOVERFLOWCHECK>
 unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	// get the max width and scale of the input arguments
-	int max_width = 0, max_scale = 0, max_width_over_scale = 0;
+	uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		int width, scale;
+		uint8_t width, scale;
 		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
 		if (!can_convert) {
 			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());
 		}
-		max_width = MaxValue<int>(width, max_width);
-		max_scale = MaxValue<int>(scale, max_scale);
-		max_width_over_scale = MaxValue<int>(width - scale, max_width_over_scale);
+		max_width = MaxValue<uint8_t>(width, max_width);
+		max_scale = MaxValue<uint8_t>(scale, max_scale);
+		max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 	}
 	// for addition/subtraction, we add 1 to the width to ensure we don't overflow
-	// FIXME: use statistics to determine this
-	max_width = MaxValue(max_scale + max_width_over_scale, max_width) + 1;
-	if (max_width > Decimal::MAX_WIDTH_DECIMAL) {
-		// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
-		max_width = Decimal::MAX_WIDTH_DECIMAL;
+	bool check_overflow = false;
+	auto required_width = max_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width) + 1;
+	if (required_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
+		// we don't automatically promote past the hugeint boundary to avoid the large hugeint performance penalty
+		check_overflow = true;
+		required_width = Decimal::MAX_WIDTH_INT64;
+	}
+	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
+		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
+		required_width = Decimal::MAX_WIDTH_DECIMAL;
+		check_overflow = true;
 	}
 	// arithmetic between two decimal arguments: check the types of the input arguments
-	LogicalType result_type = LogicalType(LogicalTypeId::DECIMAL, max_width, max_scale);
+	LogicalType result_type = LogicalType(LogicalTypeId::DECIMAL, required_width, max_scale);
 	// we cast all input types to the specified type
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		// first check if the cast is necessary
@@ -58,7 +64,11 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	}
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
-	bound_function.function = ScalarFunction::GetScalarBinaryFunction<OP>(result_type.InternalType());
+	if (check_overflow) {
+		bound_function.function = ScalarFunction::GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType());
+	} else {
+		bound_function.function = ScalarFunction::GetScalarBinaryFunction<OP>(result_type.InternalType());
+	}
 	return nullptr;
 }
 
@@ -75,7 +85,7 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<AddOperator>));
+			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<AddOperator, AddOperatorOverflowCheck>));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
 			functions.AddFunction(
 			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperatorOverflowCheck>(type.InternalType())));
@@ -150,7 +160,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<SubtractOperator>));
+			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<SubtractOperator, SubtractOperatorOverflowCheck>));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
 			functions.AddFunction(
 			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperatorOverflowCheck>(type.InternalType())));
@@ -199,9 +209,9 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	int result_width = 0, result_scale = 0;
+	uint8_t result_width = 0, result_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		int width, scale;
+		uint8_t width, scale;
 		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
 		if (!can_convert) {
 			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());

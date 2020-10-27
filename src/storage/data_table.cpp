@@ -210,7 +210,8 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 	state.max_row = total_rows;
 	state.version_info = (MorselInfo *)versions->GetRootSegment();
 	state.table_filters = table_filters;
-	if (table_filters && table_filters->filters.size() > 0) {
+	if (table_filters) {
+		assert(table_filters->filters.size() > 0);
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 }

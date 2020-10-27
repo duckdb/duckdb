@@ -421,7 +421,7 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-bool LogicalType::GetDecimalProperties(int &width, int &scale) const {
+bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
 		width = 0;

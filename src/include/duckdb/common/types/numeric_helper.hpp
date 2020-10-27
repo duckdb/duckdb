@@ -36,7 +36,7 @@ public:
 		while (value >= 100) {
 			// Integer division is slow so do it for a group of two digits instead
 			// of for every digit. The idea comes from the talk by Alexandrescu
-			// "Three Optimization Tips for C++". See speed-test for a comparison.
+			// "Three Optimization Tips for C++".
 			auto index = static_cast<unsigned>((value % 100) * 2);
 			value /= 100;
 			*--ptr = duckdb_fmt::internal::data::digits[index + 1];
