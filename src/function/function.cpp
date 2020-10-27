@@ -125,7 +125,13 @@ string Function::CallToString(string name, vector<LogicalType> arguments) {
 	return result + ")";
 }
 
-string TableFunction::ToString() {
+string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
+	string result = CallToString(name, arguments);
+	result += " -> " + return_type.ToString();
+	return result;
+}
+
+string Function::CallToString(string name, vector<LogicalType> arguments, unordered_map<string, LogicalType> named_parameters) {
 	vector<string> input_arguments;
 	for (auto &arg : arguments) {
 		input_arguments.push_back(arg.ToString());
@@ -134,12 +140,6 @@ string TableFunction::ToString() {
 		input_arguments.push_back(StringUtil::Format("%s : %s", kv.first, kv.second.ToString()));
 	}
 	return StringUtil::Format("%s(%s)", name, StringUtil::Join(input_arguments, ", "));
-}
-
-string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
-	string result = CallToString(name, arguments);
-	result += " -> " + return_type.ToString();
-	return result;
 }
 
 static int64_t BindVarArgsFunctionCost(SimpleFunction &func, vector<LogicalType> &arguments) {

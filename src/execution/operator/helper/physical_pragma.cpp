@@ -6,7 +6,7 @@ namespace duckdb {
 
 void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &client = context.client;
-	function.function(client, info.parameters);
+	function.function(client, info.parameters, info.named_parameters);
 }
 
 } // namespace duckdb

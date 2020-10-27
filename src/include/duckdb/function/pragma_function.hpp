@@ -10,14 +10,15 @@
 
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 class ClientContext;
 
 //! Return a substitute query to execute instead of this pragma statement
-typedef string (*pragma_query_t)(ClientContext &context, vector<Value> parameters);
+typedef string (*pragma_query_t)(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters);
 //! Execute the main pragma function
-typedef void (*pragma_function_t)(ClientContext &context, vector<Value> parameters);
+typedef void (*pragma_function_t)(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters);
 
 //! Pragma functions are invoked by calling PRAGMA x
 //! Pragma functions come in three types:
@@ -30,7 +31,7 @@ typedef void (*pragma_function_t)(ClientContext &context, vector<Value> paramete
 //!   -> assignments can also be called through SET memory_limit='8GB'
 //! Pragma functions can either return a new query to execute (pragma_query_t)
 //! or they can
-class PragmaFunction : public SimpleFunction {
+class PragmaFunction : public SimpleNamedParameterFunction {
 public:
 	// Call
 	static PragmaFunction PragmaCall(string name, pragma_query_t query, vector<LogicalType> arguments,
@@ -51,6 +52,7 @@ public:
 
 	pragma_query_t query;
 	pragma_function_t function;
+	unordered_map<string, LogicalType> named_parameters;
 
 private:
 	PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
@@ -64,6 +65,8 @@ public:
 	static string CallToString(string name, vector<LogicalType> arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	static string CallToString(string name, vector<LogicalType> arguments, LogicalType return_type);
+	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
+	static string CallToString(string name, vector<LogicalType> arguments, unordered_map<string, LogicalType> named_parameters);
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns INVALID_INDEX and sets error if none could be found
@@ -104,6 +107,27 @@ public:
 
 	bool HasVarArgs() {
 		return varargs.id() != LogicalTypeId::INVALID;
+	}
+};
+
+class SimpleNamedParameterFunction : public SimpleFunction {
+public:
+	SimpleNamedParameterFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID)
+	    : SimpleFunction(name, move(arguments), varargs) {
+	}
+	virtual ~SimpleNamedParameterFunction() {
+	}
+
+	//! The named parameters of the function
+	unordered_map<string, LogicalType> named_parameters;
+
+public:
+	virtual string ToString() {
+		return Function::CallToString(name, arguments, named_parameters);
+	}
+
+	bool HasNamedParameters() {
+		return named_parameters.size() != 0;
 	}
 };
 

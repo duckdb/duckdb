@@ -12,12 +12,12 @@
 
 namespace duckdb {
 
-static void pragma_enable_profiling_statement(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_profiling_statement(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 	context.profiler.Enable();
 }
 
-static void pragma_enable_profiling_assignment(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_profiling_assignment(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	// this is either enable_profiling = json, or enable_profiling = query_tree
 	string assignment = parameters[0].ToString();
 	if (assignment == "json") {
@@ -42,24 +42,24 @@ void register_enable_profiling(BuiltinFunctions &set) {
 	set.AddFunction("enable_profiling", functions);
 }
 
-static void pragma_disable_profiling(ClientContext &context, vector<Value> parameters) {
+static void pragma_disable_profiling(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.profiler.Disable();
 	context.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
 }
 
-static void pragma_profile_output(ClientContext &context, vector<Value> parameters) {
+static void pragma_profile_output(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.profiler.save_location = parameters[0].ToString();
 }
 
 static idx_t ParseMemoryLimit(string arg);
 
-static void pragma_memory_limit(ClientContext &context, vector<Value> parameters) {
+static void pragma_memory_limit(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	idx_t new_limit = ParseMemoryLimit(parameters[0].ToString());
 	// set the new limit in the buffer manager
 	context.db.storage->buffer_manager->SetLimit(new_limit);
 }
 
-static void pragma_collation(ClientContext &context, vector<Value> parameters) {
+static void pragma_collation(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	auto collation_param = StringUtil::Lower(parameters[0].ToString());
 	// bind the collation to verify that it exists
 	ExpressionBinder::TestCollation(context, collation_param);
@@ -67,7 +67,7 @@ static void pragma_collation(ClientContext &context, vector<Value> parameters) {
 	config.collation = collation_param;
 }
 
-static void pragma_null_order(ClientContext &context, vector<Value> parameters) {
+static void pragma_null_order(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	auto &config = DBConfig::GetConfig(context);
 	string new_null_order = StringUtil::Lower(parameters[0].ToString());
 	if (new_null_order == "nulls first" || new_null_order == "null first" || new_null_order == "first") {
@@ -80,7 +80,7 @@ static void pragma_null_order(ClientContext &context, vector<Value> parameters) 
 	}
 }
 
-static void pragma_default_order(ClientContext &context, vector<Value> parameters) {
+static void pragma_default_order(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	auto &config = DBConfig::GetConfig(context);
 	string new_order = StringUtil::Lower(parameters[0].ToString());
 	if (new_order == "ascending" || new_order == "asc") {
@@ -92,32 +92,32 @@ static void pragma_default_order(ClientContext &context, vector<Value> parameter
 	}
 }
 
-static void pragma_set_threads(ClientContext &context, vector<Value> parameters) {
+static void pragma_set_threads(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	auto nr_threads = parameters[0].GetValue<int64_t>();
 	TaskScheduler::GetScheduler(context).SetThreads(nr_threads);
 }
 
-static void pragma_enable_verification(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_verification(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.query_verification_enabled = true;
 }
 
-static void pragma_disable_verification(ClientContext &context, vector<Value> parameters) {
+static void pragma_disable_verification(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.query_verification_enabled = false;
 }
 
-static void pragma_enable_force_parallelism(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_force_parallelism(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.force_parallelism = true;
 }
 
-static void pragma_enable_force_index_join(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_force_index_join(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.force_index_join = true;
 }
 
-static void pragma_disable_force_parallelism(ClientContext &context, vector<Value> parameters) {
+static void pragma_disable_force_parallelism(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.force_parallelism = false;
 }
 
-static void pragma_log_query_path(ClientContext &context, vector<Value> parameters) {
+static void pragma_log_query_path(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	auto str_val = parameters[0].ToString();
 	if (str_val.empty()) {
 		// empty path: clean up query writer
@@ -127,7 +127,7 @@ static void pragma_log_query_path(ClientContext &context, vector<Value> paramete
 	}
 }
 
-static void pragma_explain_output(ClientContext &context, vector<Value> parameters) {
+static void pragma_explain_output(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	string val = StringUtil::Lower(parameters[0].ToString());
 	if (val == "all") {
 		context.explain_output_type = ExplainOutputType::ALL;
@@ -141,11 +141,11 @@ static void pragma_explain_output(ClientContext &context, vector<Value> paramete
 	}
 }
 
-static void pragma_enable_optimizer(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_optimizer(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.enable_optimizer = true;
 }
 
-static void pragma_disable_optimizer(ClientContext &context, vector<Value> parameters) {
+static void pragma_disable_optimizer(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
 	context.enable_optimizer = false;
 }
 
