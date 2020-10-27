@@ -1,0 +1,3 @@
+load the data like so
+
+sed "s|PATHVAR|`pwd`/sf0.1|" snb-load.sql | duckdb ldbc.duckdb        

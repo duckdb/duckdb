@@ -61,6 +61,8 @@ public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
+	string ParamsToString() const override;
+
 private:
 	//! how many groups can we have in the operator before we switch to radix partitioning
 	idx_t radix_limit;
@@ -68,7 +70,7 @@ private:
 private:
 	void FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
 	                      Pipeline *pipeline);
-	bool ForceSingleHT(GlobalOperatorState& state);
+	bool ForceSingleHT(GlobalOperatorState &state);
 };
 
 } // namespace duckdb

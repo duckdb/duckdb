@@ -7,7 +7,6 @@ import subprocess
 import shutil
 import platform
 
-
 from setuptools import setup, Extension
 from setuptools.command.sdist import sdist
 import distutils.spawn

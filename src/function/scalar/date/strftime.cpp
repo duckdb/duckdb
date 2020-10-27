@@ -41,6 +41,8 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 		return 2;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		return 6;
+	case StrTimeSpecifier::MILLISECOND_PADDED:
+		return 3;
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 		return 3;
 	default:
@@ -308,6 +310,9 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		target = WritePadded(target, data[6] * 1000, 6);
 		break;
+	case StrTimeSpecifier::MILLISECOND_PADDED:
+		target = WritePadded3(target, data[6]);
+		break;
 	case StrTimeSpecifier::UTC_OFFSET:
 	case StrTimeSpecifier::TZ_NAME:
 		// always empty for now, FIXME when we have timestamp with tz
@@ -476,6 +481,9 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 					break;
 				case 'f':
 					specifier = StrTimeSpecifier::MICROSECOND_PADDED;
+					break;
+				case 'g':
+					specifier = StrTimeSpecifier::MILLISECOND_PADDED;
 					break;
 				case 'z':
 					specifier = StrTimeSpecifier::UTC_OFFSET;
@@ -654,6 +662,7 @@ bool StrpTimeFormat::IsNumericSpecifier(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::SECOND_PADDED:
 	case StrTimeSpecifier::SECOND_DECIMAL:
 	case StrTimeSpecifier::MICROSECOND_PADDED:
+	case StrTimeSpecifier::MILLISECOND_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
@@ -838,8 +847,17 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					error_position = start_pos;
 					return false;
 				}
-				// microseconds
+				// milliseconds
 				result_data[6] = number * 1000;
+				break;
+			case StrTimeSpecifier::MILLISECOND_PADDED:
+				if (number >= 1000ULL) {
+					error_message = "Milliseconds out of range, expected a value between 0 and 999";
+					error_position = start_pos;
+					return false;
+				}
+				// milliseconds
+				result_data[6] = number;
 				break;
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
