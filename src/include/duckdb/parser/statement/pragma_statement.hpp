@@ -18,6 +18,8 @@ public:
 	PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_unique<PragmaInfo>()){};
 
 	unique_ptr<PragmaInfo> info;
+	//! List of arguments to the function
+	vector<unique_ptr<ParsedExpression>> children;
 };
 
 } // namespace duckdb
