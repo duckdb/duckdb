@@ -46,8 +46,14 @@ Value Value::MinimumValue(LogicalType type) {
 		return Value::SMALLINT(NumericLimits<int16_t>::Minimum());
 	case LogicalTypeId::INTEGER:
 		return Value::INTEGER(NumericLimits<int32_t>::Minimum());
+	case LogicalTypeId::DATE:
+		return Value::DATE(NumericLimits<int32_t>::Minimum());
+	case LogicalTypeId::TIME:
+		return Value::TIME(NumericLimits<int32_t>::Minimum());
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::FLOAT:
@@ -90,8 +96,14 @@ Value Value::MaximumValue(LogicalType type) {
 		return Value::SMALLINT(NumericLimits<int16_t>::Maximum());
 	case LogicalTypeId::INTEGER:
 		return Value::INTEGER(NumericLimits<int32_t>::Maximum());
+	case LogicalTypeId::DATE:
+		return Value::DATE(NumericLimits<int32_t>::Maximum());
+	case LogicalTypeId::TIME:
+		return Value::TIME(NumericLimits<int32_t>::Maximum());
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::FLOAT:

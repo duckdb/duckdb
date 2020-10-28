@@ -46,7 +46,6 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
 		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
 		required_width = Decimal::MAX_WIDTH_DECIMAL;
-		check_overflow = true;
 	}
 	// arithmetic between two decimal arguments: check the types of the input arguments
 	LogicalType result_type = LogicalType(LogicalTypeId::DECIMAL, required_width, max_scale);
