@@ -102,4 +102,16 @@ unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
 }
 
+string PhysicalOrder::ParamsToString() const {
+	string result;
+	for (idx_t i = 0; i < orders.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += orders[i].expression->ToString() + " ";
+		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
+	}
+	return result;
+}
+
 } // namespace duckdb

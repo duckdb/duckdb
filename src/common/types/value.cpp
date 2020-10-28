@@ -36,47 +36,89 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	str_value = val;
 }
 
-Value Value::MinimumValue(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::BOOL:
+Value Value::MinimumValue(LogicalType type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(false);
-	case PhysicalType::INT8:
+	case LogicalTypeId::TINYINT:
 		return Value::TINYINT(NumericLimits<int8_t>::Minimum());
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(NumericLimits<int16_t>::Minimum());
-	case PhysicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		return Value::INTEGER(NumericLimits<int32_t>::Minimum());
-	case PhysicalType::INT64:
+	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
-	case PhysicalType::INT128:
+	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return Value::DOUBLE(NumericLimits<double>::Minimum());
+	case LogicalTypeId::DECIMAL: {
+		Value result;
+		switch(type.InternalType()) {
+		case PhysicalType::INT16:
+			result = Value::MinimumValue(LogicalType::SMALLINT);
+			break;
+		case PhysicalType::INT32:
+			result = Value::MinimumValue(LogicalType::INTEGER);
+			break;
+		case PhysicalType::INT64:
+			result = Value::MinimumValue(LogicalType::BIGINT);
+			break;
+		case PhysicalType::INT128:
+			result = Value::MinimumValue(LogicalType::HUGEINT);
+			break;
+		default:
+			throw InternalException("Unknown decimal type");
+		}
+		result.type_ = type;
+		return result;
+	}
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
 }
 
-Value Value::MaximumValue(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::BOOL:
-		return Value::BOOLEAN(true);
-	case PhysicalType::INT8:
+Value Value::MaximumValue(LogicalType type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return Value::BOOLEAN(false);
+	case LogicalTypeId::TINYINT:
 		return Value::TINYINT(NumericLimits<int8_t>::Maximum());
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(NumericLimits<int16_t>::Maximum());
-	case PhysicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		return Value::INTEGER(NumericLimits<int32_t>::Maximum());
-	case PhysicalType::INT64:
+	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
-	case PhysicalType::INT128:
+	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return Value::DOUBLE(NumericLimits<double>::Maximum());
+	case LogicalTypeId::DECIMAL: {
+		Value result;
+		switch(type.InternalType()) {
+		case PhysicalType::INT16:
+			result = Value::MaximumValue(LogicalType::SMALLINT);
+			break;
+		case PhysicalType::INT32:
+			result = Value::MaximumValue(LogicalType::INTEGER);
+			break;
+		case PhysicalType::INT64:
+			result = Value::MaximumValue(LogicalType::BIGINT);
+			break;
+		case PhysicalType::INT128:
+			result = Value::MaximumValue(LogicalType::HUGEINT);
+			break;
+		default:
+			throw InternalException("Unknown decimal type");
+		}
+		result.type_ = type;
+		return result;
+	}
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}

@@ -3,8 +3,8 @@
 namespace duckdb {
 
 NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
-	min = Value::MaximumValue(type.InternalType());
-	max = Value::MinimumValue(type.InternalType());
+	min = Value::MaximumValue(type);
+	max = Value::MinimumValue(type);
 }
 
 NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p) :

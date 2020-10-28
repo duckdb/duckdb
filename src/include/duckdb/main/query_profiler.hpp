@@ -97,8 +97,8 @@ public:
 
 	void Initialize(PhysicalOperator *root);
 
-	string ToString() const;
-	void ToStream(std::ostream &str) const;
+	string ToString(bool print_optimizer_output = false) const;
+	void ToStream(std::ostream &str, bool print_optimizer_output = false) const;
 	void Print();
 
 	string ToJSON() const;

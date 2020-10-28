@@ -86,3 +86,16 @@ SELECT strftime(DATE '1992-01-01', '%');
 # unrecognized code
 statement error
 SELECT strftime(DATE '1992-01-01', '%R');
+
+# millisecond specifier %g
+query IIII
+select strftime(strptime('023', '%g'), '%g'), strftime(strptime('0', '%g'), '%g'), strftime(strptime('000', '%g'), '%g'), strftime(strptime('999', '%g'), '%g');
+----
+023
+000
+000
+999
+
+statement error
+SELECT strptime('-1', '%g');
+SELECT strptime('1000', '%g');

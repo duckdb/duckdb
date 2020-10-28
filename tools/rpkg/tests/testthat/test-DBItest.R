@@ -14,7 +14,7 @@ DBItest::test_all(c(
   "send_statement_immediate", # ???
   "execute_immediate", # ???
 
-  "roundtrip_timestamp", # broken test
+  if (packageVersion("DBItest") < "1.7.0.9004") "roundtrip_timestamp", # broken test
 
   "data_logical", # casting NULL issue
 

@@ -12,26 +12,29 @@ using namespace std;
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	assert(op.children.empty());
 
-	// create the table filter map
-	auto table_filters = make_unique<TableFilterSet>();
-	for (auto &tableFilter : op.tableFilters) {
-		// find the relative column index from the absolute column index into the table
-		idx_t column_index = INVALID_INDEX;
-		for (idx_t i = 0; i < op.column_ids.size(); i++) {
-			if (tableFilter.column_index == op.column_ids[i]) {
-				column_index = i;
-				break;
+	unique_ptr<TableFilterSet> table_filters;
+	if (op.tableFilters.size() > 0) {
+		// create the table filter map
+		table_filters = make_unique<TableFilterSet>();
+		for (auto &tableFilter : op.tableFilters) {
+			// find the relative column index from the absolute column index into the table
+			idx_t column_index = INVALID_INDEX;
+			for (idx_t i = 0; i < op.column_ids.size(); i++) {
+				if (tableFilter.column_index == op.column_ids[i]) {
+					column_index = i;
+					break;
+				}
 			}
-		}
-		if (column_index == INVALID_INDEX) {
-			throw InternalException("Could not find column index for table filter");
-		}
-		tableFilter.column_index = column_index;
-		auto filter = table_filters->filters.find(column_index);
-		if (filter != table_filters->filters.end()) {
-			filter->second.push_back(tableFilter);
-		} else {
-			table_filters->filters.insert(make_pair(column_index, vector<TableFilter>{tableFilter}));
+			if (column_index == INVALID_INDEX) {
+				throw InternalException("Could not find column index for table filter");
+			}
+			tableFilter.column_index = column_index;
+			auto filter = table_filters->filters.find(column_index);
+			if (filter != table_filters->filters.end()) {
+				filter->second.push_back(tableFilter);
+			} else {
+				table_filters->filters.insert(make_pair(column_index, vector<TableFilter>{tableFilter}));
+			}
 		}
 	}
 

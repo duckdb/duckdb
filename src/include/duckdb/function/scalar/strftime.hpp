@@ -36,25 +36,27 @@ enum class StrTimeSpecifier : uint8_t {
 	SECOND_PADDED = 19,              // %S - Second as a zero-padded decimal number. (00, 01, ..., 59)
 	SECOND_DECIMAL = 20,             // %-S - Second as a decimal number. (0, 1, ..., 59)
 	MICROSECOND_PADDED = 21,         // %f - Microsecond as a decimal number, zero-padded on the left. (000000 - 999999)
-	UTC_OFFSET = 22,                 // %z - UTC offset in the form +HHMM or -HHMM. ( )
-	TZ_NAME = 23,                    // %Z - Time zone name. ( )
-	DAY_OF_YEAR_PADDED = 24,         // %j - Day of the year as a zero-padded decimal number. (001, 002, ..., 366)
-	DAY_OF_YEAR_DECIMAL = 25,        // %-j - Day of the year as a decimal number. (1, 2, ..., 366)
+	MILLISECOND_PADDED = 22,         // %g - Millisecond as a decimal number, zero-padded on the left. (000000 - 999999)
+	UTC_OFFSET = 23,                 // %z - UTC offset in the form +HHMM or -HHMM. ( )
+	TZ_NAME = 24,                    // %Z - Time zone name. ( )
+	DAY_OF_YEAR_PADDED = 25,         // %j - Day of the year as a zero-padded decimal number. (001, 002, ..., 366)
+	DAY_OF_YEAR_DECIMAL = 26,        // %-j - Day of the year as a decimal number. (1, 2, ..., 366)
 	WEEK_NUMBER_PADDED_SUN_FIRST =
-	    26, // %U - Week number of the year (Sunday as the first day of the week). All days in a new year preceding the
+	    27, // %U - Week number of the year (Sunday as the first day of the week). All days in a new year preceding the
 	        // first Sunday are considered to be in week 0. (00, 01, ..., 53)
 	WEEK_NUMBER_PADDED_MON_FIRST =
-	    27, // %W - Week number of the year (Monday as the first day of the week). All days in a new year preceding the
+	    28, // %W - Week number of the year (Monday as the first day of the week). All days in a new year preceding the
 	        // first Monday are considered to be in week 0. (00, 01, ..., 53)
 	LOCALE_APPROPRIATE_DATE_AND_TIME =
-	    28, // %c - Locale’s appropriate date and time representation. (Mon Sep 30 07:06:05 2013)
-	LOCALE_APPROPRIATE_DATE = 29, // %x - Locale’s appropriate date representation. (09/30/13)
-	LOCALE_APPROPRIATE_TIME = 30  // %X - Locale’s appropriate time representation. (07:06:05)
+	    29, // %c - Locale’s appropriate date and time representation. (Mon Sep 30 07:06:05 2013)
+	LOCALE_APPROPRIATE_DATE = 30, // %x - Locale’s appropriate date representation. (09/30/13)
+	LOCALE_APPROPRIATE_TIME = 31  // %X - Locale’s appropriate time representation. (07:06:05)
 };
 
 struct StrTimeFormat {
 public:
-	virtual ~StrTimeFormat(){}
+	virtual ~StrTimeFormat() {
+	}
 
 	static string ParseFormatSpecifier(string format_string, StrTimeFormat &format);
 

@@ -54,9 +54,9 @@ public:
 	}
 
 	//! Create the lowest possible value of a given type (numeric only)
-	static Value MinimumValue(PhysicalType type);
+	static Value MinimumValue(LogicalType type);
 	//! Create the highest possible value of a given type (numeric only)
-	static Value MaximumValue(PhysicalType type);
+	static Value MaximumValue(LogicalType type);
 	//! Create a Numeric value of the specified type with the specified value
 	static Value Numeric(LogicalType type, int64_t value);
 	static Value Numeric(LogicalType type, hugeint_t value);
