@@ -15,7 +15,7 @@ static void nfc_normalize_function(DataChunk &args, ExpressionState &state, Vect
 		if (StripAccentsFun::IsAscii(input_data, input_length)) {
 			return input;
 		}
-		string result_str = Utf8Proc::Normalize(input.GetString());
+		string result_str = Utf8Proc::Normalize(input_data, input_length);
 		return StringVector::AddString(result, result_str);
 	});
 	StringVector::AddHeapReference(result, args.data[0]);

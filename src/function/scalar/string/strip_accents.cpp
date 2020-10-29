@@ -24,10 +24,8 @@ static void strip_accents_function(DataChunk &args, ExpressionState &state, Vect
 			return input;
 		}
 
-		auto c_str = input.GetTerminatedData();
 		// non-ascii, perform collation
-		// TODO patch utf8proc_remove_accents to require length
-		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)c_str.get());
+		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input.GetDataUnsafe(), input.GetSize());
 		auto result_str = StringVector::AddString(result, (const char *)stripped);
 		free(stripped);
 		return result_str;

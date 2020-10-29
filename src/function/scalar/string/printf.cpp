@@ -133,9 +133,9 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 			}
 			case LogicalTypeId::VARCHAR: {
 				auto arg_data = FlatVector::GetData<string_t>(col);
-				// TODO find a zero-copy way to call fmt?
-				string_args.push_back(arg_data[arg_idx].GetTerminatedData());
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>((const char *)string_args.back().get()));
+				auto string_view =
+				    duckdb_fmt::basic_string_view<char>(arg_data[arg_idx].GetDataUnsafe(), arg_data[arg_idx].GetSize());
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(string_view));
 				break;
 			}
 			default:

@@ -6,6 +6,7 @@ using namespace std;
 
 namespace duckdb {
 
+// TODO turn this into a length-aware function
 template <char PERCENTAGE, char UNDERSCORE>
 bool templated_like_operator(const char *s, const char *pattern, const char *escape) {
 	const char *t, *p;
@@ -63,9 +64,11 @@ struct LikeEscapeOperator {
 		if (escape.GetSize() > 1) {
 			throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
 		}
-		//return like_operator(str.GetDataUnsafe(), pattern.GetDataUnsafe(), escape.GetDataUnsafe());
-		// FIXME
-		throw NotImplementedException("like");
+		auto str_term = str.GetString();
+		auto pattern_term = pattern.GetString();
+		auto escape_term = escape.GetString();
+
+		return like_operator(str_term.c_str(), pattern_term.c_str(), escape_term.c_str());
 	}
 };
 
@@ -77,24 +80,25 @@ struct NotLikeEscapeOperator {
 
 struct LikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-        throw NotImplementedException("like");
-
-        //return like_operator(str.GetData(), pattern.GetData(), nullptr);
+		auto str_term = str.GetString();
+		auto pattern_term = pattern.GetString();
+		return like_operator(str_term.c_str(), pattern_term.c_str(), nullptr);
 	}
 };
 
 struct NotLikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-        throw NotImplementedException("like");
-
-        //return !like_operator(str.GetData(), pattern.GetData(), nullptr);
+		auto str_term = str.GetString();
+		auto pattern_term = pattern.GetString();
+		return !like_operator(str_term.c_str(), pattern_term.c_str(), nullptr);
 	}
 };
 
 struct GlobOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-        throw NotImplementedException("like");
-        //return LikeFun::Glob(str.GetData(), pattern.GetData(), nullptr);
+		auto str_term = str.GetString();
+		auto pattern_term = pattern.GetString();
+		return LikeFun::Glob(str_term.c_str(), pattern_term.c_str(), nullptr);
 	}
 };
 

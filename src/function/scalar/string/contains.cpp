@@ -22,9 +22,7 @@ struct ContainsOperator {
 };
 
 static bool contains_strstr(string_t &str, string_t &pattern) {
-	auto str_data = str.GetTerminatedData();
-	auto patt_data = pattern.GetTerminatedData();
-	return (strstr((const char *)str_data.get(), (const char *)patt_data.get()) != nullptr);
+	return str.GetString().find(pattern.GetString()) != std::string::npos;
 }
 
 ScalarFunction ContainsFun::GetFunction() {

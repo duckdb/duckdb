@@ -29,7 +29,7 @@ Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
-	auto utf_type = Utf8Proc::Analyze(val);
+	auto utf_type = Utf8Proc::Analyze(val.c_str(), val.size());
 	if (utf_type == UnicodeType::INVALID) {
 		throw Exception("String value is not valid UTF8");
 	}

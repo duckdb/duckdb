@@ -194,16 +194,16 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
-		while (len < pos && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+		while (pos < len && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
 			pos++;
 		}
 		// check position. if end was not reached, non-space chars remaining
-		if (pos < strlen(buf)) {
+		if (pos < len) {
 			return false;
 		}
 	} else {
 		// in non-strict mode, check for any direct trailing digits
-		if (len < pos && std::isdigit((unsigned char)buf[pos])) {
+		if (pos < len && std::isdigit((unsigned char)buf[pos])) {
 			return false;
 		}
 	}

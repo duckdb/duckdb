@@ -67,14 +67,6 @@ public:
 		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
 	}
 
-	// use this to call C string APIs
-	unique_ptr<data_t[]> GetTerminatedData() {
-		auto bytes = unique_ptr<data_t[]>(new data_t[GetSize() + 1]);
-		memcpy(bytes.get(), GetDataUnsafe(), GetSize());
-		bytes[GetSize()] = '\0';
-		return bytes;
-	}
-
 	const char *GetPrefix() const {
 		return value.pointer.prefix;
 	}

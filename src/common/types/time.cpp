@@ -4,9 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
 
-#include <iomanip>
 #include <cstring>
-#include <iostream>
 #include <sstream>
 #include <cctype>
 
