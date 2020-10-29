@@ -70,7 +70,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		pos++;
 	}
 
-	if (pos >= len - 1) {
+	if (pos >= len) {
 		return false;
 	}
 
@@ -85,7 +85,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		return false;
 	}
 
-	if (pos >= len - 1) {
+	if (pos >= len) {
 		return false;
 	}
 
@@ -103,7 +103,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		return false;
 	}
 
-	if (pos >= len - 1) {
+	if (pos >= len) {
 		return false;
 	}
 

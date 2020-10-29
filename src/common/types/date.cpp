@@ -135,7 +135,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		pos++;
 	}
 
-	if (pos >= len - 1) {
+	if (pos >= len) {
 		return false;
 	}
 
@@ -151,7 +151,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		}
 	}
 
-	if (pos >= len - 1) {
+	if (pos >= len) {
 		return false;
 	}
 
@@ -167,7 +167,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		return false;
 	}
 
-	if (pos >= len - 1) {
+	if (pos >= len) {
 		return false;
 	}
 
@@ -175,7 +175,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		return false;
 	}
 
-	if (pos >= len - 1) {
+	if (pos >= len) {
 		return false;
 	}
 

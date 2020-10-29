@@ -623,7 +623,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			auto strings = (string_t *)vdata.data;
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
-				auto source = (*vdata.nullmask)[idx] ? NullValue<string_t>() : strings[idx].GetString();
+				auto source = (*vdata.nullmask)[idx] ? NullValue<string_t>() : strings[idx];
 				serializer.WriteStringLen((const_data_ptr_t)source.GetDataUnsafe(), source.GetSize());
 			}
 			break;
