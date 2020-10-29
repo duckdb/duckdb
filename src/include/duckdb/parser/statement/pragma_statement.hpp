@@ -10,16 +10,15 @@
 
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
 class PragmaStatement : public SQLStatement {
 public:
-	PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_unique<PragmaInfo>()){};
+	PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_unique<PragmaInfo>()) {};
 
 	unique_ptr<PragmaInfo> info;
-	//! List of arguments to the function
-	vector<unique_ptr<ParsedExpression>> children;
 };
 
 } // namespace duckdb

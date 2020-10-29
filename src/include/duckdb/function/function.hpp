@@ -88,7 +88,7 @@ public:
 	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments,
 	                          string &error);
 	//! Bind a pragma function from the set of functions and input arguments
-	static idx_t BindFunction(string name, vector<PragmaFunction> &functions, vector<LogicalType> &arguments, string &error);
+	static idx_t BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error);
 };
 
 class SimpleFunction : public Function {

@@ -17,8 +17,7 @@ add_library_unity(
   bind_context.cpp
   planner.cpp
   pragma_handler.cpp
-  logical_operator_visitor.cpp
-  named_parameter_binder.cpp)
+  logical_operator_visitor.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner>
     PARENT_SCOPE)

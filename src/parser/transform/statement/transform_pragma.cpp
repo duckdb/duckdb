@@ -2,6 +2,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -18,19 +19,33 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 	if (stmt->args) {
 		for (auto cell = stmt->args->head; cell != nullptr; cell = cell->next) {
 			auto node = reinterpret_cast<PGNode *>(cell->data.ptr_value);
-			auto expr = TransformExpression(node);
-			result->children.push_back(move(expr));
+            auto expr = TransformExpression(node);
+			if (stmt->kind == PG_PRAGMA_TYPE_CALL) {
+				if (expr->type == ExpressionType::COMPARE_EQUAL) {
+                    auto &comp = (ComparisonExpression &)*expr;
+                    info.named_parameters[comp.left->ToString()] = Value(comp.right->ToString());
+				} else {
+					if (info.named_parameters.size() > 0)
+                        throw BinderException("Unnamed parameters cannot come after named parameters");
+					info.parameters.push_back(Value(expr->ToString()));
+				}
+            } else if (node->type == T_PGAConst) {
+                auto constant = TransformConstant((PGAConst *)node);
+                info.parameters.push_back(((ConstantExpression &)*constant).value);
+			} else {
+                info.parameters.push_back(Value(expr->ToString()));
+			}
 		}
 	}
 	// now parse the pragma type
 	switch (stmt->kind) {
 	case PG_PRAGMA_TYPE_NOTHING:
-		if (result->children.size() > 0) {
+		if (info.parameters.size() > 0) {
 			throw ParserException("PRAGMA statement that is not a call or assignment cannot contain parameters");
 		}
 		break;
 	case PG_PRAGMA_TYPE_ASSIGNMENT:
-		if (result->children.size() != 1) {
+		if (info.parameters.size() != 1) {
 			throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 		}
 		break;

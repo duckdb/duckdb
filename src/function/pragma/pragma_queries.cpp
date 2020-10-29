@@ -57,7 +57,7 @@ string pragma_echo(ClientContext &context, vector<Value> parameters, unordered_m
 			r = kv.second.GetValue<int32_t>();
 		}
 	}
-	return StringUtil::Format("SELECT repeat('%s;, %i)", s, r);
+	return StringUtil::Format("SELECT repeat('%s', %i)", s, r);
 }
 
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {

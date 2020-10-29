@@ -259,8 +259,23 @@ idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vect
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t Function::BindFunction(string name, vector<PragmaFunction> &functions, vector<LogicalType> &arguments, string &error) {
-	return BindFunctionFromArguments(name, functions, arguments, error);
+idx_t Function::BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error) {
+    vector<LogicalType> types;
+    for (auto &value : info.parameters) {
+        types.push_back(value.type());
+    }
+    idx_t entry = BindFunctionFromArguments(name, functions, types, error);
+    if (entry == INVALID_INDEX) {
+        throw BinderException(error);
+    }
+    auto &candidate_function = functions[entry];
+    // cast the input parameters
+    for (idx_t i = 0; i < info.parameters.size(); i++) {
+        auto target_type =
+                i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
+        info.parameters[i] = info.parameters[i].CastAs(target_type);
+    }
+    return entry;
 }
 
 vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
