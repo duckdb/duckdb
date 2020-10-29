@@ -24,38 +24,38 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	vector<LogicalType> arguments;
 	vector<Value> parameters;
 	unordered_map<string, Value> named_parameters;
-	 for (auto &child : fexpr->children) {
-	 	string parameter_name;
+	for (auto &child : fexpr->children) {
+		string parameter_name;
 
-	 	ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
-	 	if (child->type == ExpressionType::COMPARE_EQUAL) {
-	 		// comparison, check if the LHS is a columnref
-	 		auto &comp = (ComparisonExpression &)*child;
-	 		if (comp.left->type == ExpressionType::COLUMN_REF) {
-	 			auto &colref = (ColumnRefExpression &)*comp.left;
-	 			if (colref.table_name.empty()) {
-	 				parameter_name = colref.column_name;
-	 				child = move(comp.right);
-	 			}
-	 		}
-	 	}
-	 	LogicalType sql_type;
-	 	auto expr = binder.Bind(child, &sql_type);
-	 	if (!expr->IsFoldable()) {
-	 		throw BinderException(FormatError(ref, "Table function requires a constant parameter"));
-	 	}
-	 	auto constant = ExpressionExecutor::EvaluateScalar(*expr);
-	 	if (parameter_name.empty()) {
-	 		// unnamed parameter
-	 		if (named_parameters.size() > 0) {
-	 			throw BinderException(FormatError(ref, "Unnamed parameters cannot come after named parameters"));
-	 		}
-	 		arguments.push_back(sql_type);
-	 		parameters.push_back(move(constant));
-	 	} else {
-	 		named_parameters[parameter_name] = move(constant);
-	 	}
-	 }
+		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
+		if (child->type == ExpressionType::COMPARE_EQUAL) {
+			// comparison, check if the LHS is a columnref
+			auto &comp = (ComparisonExpression &)*child;
+			if (comp.left->type == ExpressionType::COLUMN_REF) {
+				auto &colref = (ColumnRefExpression &)*comp.left;
+				if (colref.table_name.empty()) {
+					parameter_name = colref.column_name;
+					child = move(comp.right);
+				}
+			}
+		}
+		LogicalType sql_type;
+		auto expr = binder.Bind(child, &sql_type);
+		if (!expr->IsFoldable()) {
+			throw BinderException(FormatError(ref, "Table function requires a constant parameter"));
+		}
+		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
+		if (parameter_name.empty()) {
+			// unnamed parameter
+			if (named_parameters.size() > 0) {
+				throw BinderException(FormatError(ref, "Unnamed parameters cannot come after named parameters"));
+			}
+			arguments.push_back(sql_type);
+			parameters.push_back(move(constant));
+		} else {
+			named_parameters[parameter_name] = move(constant);
+		}
+	}
 
 	// fetch the function from the catalog
 	auto &catalog = Catalog::GetCatalog(context);
@@ -71,24 +71,24 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto &table_function = function->functions[best_function_idx];
 
 	// now check the named parameters
-	 for (auto &kv : named_parameters) {
-	 	auto entry = table_function.named_parameters.find(kv.first);
-	 	if (entry == table_function.named_parameters.end()) {
-	 		// create a list of named parameters for the error
-	 		string named_params;
-	 		for(auto &kv : table_function.named_parameters) {
-	 			named_params += "    " + kv.first + " " + kv.second.ToString() + "\n";
-	 		}
-	 		if (named_params.empty()) {
-	 			named_params = "Function does not accept any named parameters.";
-	 		} else {
-	 			named_params = "Candidates: " + named_params;
-	 		}
-	 		throw BinderException(error_context.FormatError("Invalid named parameter \"%s\" for function %s\n%s", kv.first,
-	 table_function.name, named_params));
-	 	}
-	 	kv.second = kv.second.CastAs(entry->second);
-	 }
+	for (auto &kv : named_parameters) {
+		auto entry = table_function.named_parameters.find(kv.first);
+		if (entry == table_function.named_parameters.end()) {
+			// create a list of named parameters for the error
+			string named_params;
+			for (auto &kv : table_function.named_parameters) {
+				named_params += "    " + kv.first + " " + kv.second.ToString() + "\n";
+			}
+			if (named_params.empty()) {
+				named_params = "Function does not accept any named parameters.";
+			} else {
+				named_params = "Candidates: " + named_params;
+			}
+			throw BinderException(error_context.FormatError("Invalid named parameter \"%s\" for function %s\n%s",
+			                                                kv.first, table_function.name, named_params));
+		}
+		kv.second = kv.second.CastAs(entry->second);
+	}
 
 	// cast the parameters to the type of the function
 	for (idx_t i = 0; i < arguments.size(); i++) {

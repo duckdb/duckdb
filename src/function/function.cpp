@@ -131,7 +131,8 @@ string Function::CallToString(string name, vector<LogicalType> arguments, Logica
 	return result;
 }
 
-string Function::CallToString(string name, vector<LogicalType> arguments, unordered_map<string, LogicalType> named_parameters) {
+string Function::CallToString(string name, vector<LogicalType> arguments,
+                              unordered_map<string, LogicalType> named_parameters) {
 	vector<string> input_arguments;
 	for (auto &arg : arguments) {
 		input_arguments.push_back(arg.ToString());
@@ -194,7 +195,8 @@ static int64_t BindFunctionCost(SimpleFunction &func, vector<LogicalType> &argum
 }
 
 template <class T>
-static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector<LogicalType> &arguments, string &error) {
+static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector<LogicalType> &arguments,
+                                       string &error) {
 	idx_t best_function = INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> conflicting_functions;
@@ -227,9 +229,10 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 			auto &f = functions[conf];
 			candidate_str += "\t" + f.ToString() + "\n";
 		}
-		error = StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
-		                      "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
-		                      call_str, candidate_str);
+		error =
+		    StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
+		                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
+		                       call_str, candidate_str);
 		return INVALID_INDEX;
 	}
 	if (best_function == INVALID_INDEX) {
@@ -240,42 +243,45 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 			candidate_str += "\t" + f.ToString() + "\n";
 		}
 		error = StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
-		                      "explicit type casts.\n\tCandidate functions:\n%s",
-		                      call_str, candidate_str);
+		                           "explicit type casts.\n\tCandidate functions:\n%s",
+		                           call_str, candidate_str);
 		return INVALID_INDEX;
 	}
 	return best_function;
 }
 
-idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
+                             string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
+                             string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
+                             string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t Function::BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error) {
-    vector<LogicalType> types;
-    for (auto &value : info.parameters) {
-        types.push_back(value.type());
-    }
-    idx_t entry = BindFunctionFromArguments(name, functions, types, error);
-    if (entry == INVALID_INDEX) {
-        throw BinderException(error);
-    }
-    auto &candidate_function = functions[entry];
-    // cast the input parameters
-    for (idx_t i = 0; i < info.parameters.size(); i++) {
-        auto target_type =
-                i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
-        info.parameters[i] = info.parameters[i].CastAs(target_type);
-    }
-    return entry;
+	vector<LogicalType> types;
+	for (auto &value : info.parameters) {
+		types.push_back(value.type());
+	}
+	idx_t entry = BindFunctionFromArguments(name, functions, types, error);
+	if (entry == INVALID_INDEX) {
+		throw BinderException(error);
+	}
+	auto &candidate_function = functions[entry];
+	// cast the input parameters
+	for (idx_t i = 0; i < info.parameters.size(); i++) {
+		auto target_type =
+		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
+		info.parameters[i] = info.parameters[i].CastAs(target_type);
+	}
+	return entry;
 }
 
 vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
@@ -286,8 +292,8 @@ vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>
 	return types;
 }
 
-idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions,
-                             vector<unique_ptr<Expression>> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments,
+                             string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types, error);
 }
@@ -298,7 +304,8 @@ idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions,
 	return Function::BindFunction(name, functions, types, error);
 }
 
-idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments,
+                             string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types, error);
 }
@@ -317,20 +324,18 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, string schema,
                                                                        string name,
                                                                        vector<unique_ptr<Expression>> children,
-																	   string &error,
-                                                                       bool is_operator) {
+                                                                       string &error, bool is_operator) {
 	// bind the function
 	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
 	assert(function && function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, move(children),
-	                                          error, is_operator);
+	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, move(children), error,
+	                                          is_operator);
 }
 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
                                                                        ScalarFunctionCatalogEntry &func,
                                                                        vector<unique_ptr<Expression>> children,
-																	   string &error,
-                                                                       bool is_operator) {
+                                                                       string &error, bool is_operator) {
 	// bind the function
 	idx_t best_function = Function::BindFunction(func.name, func.functions, children, error);
 	if (best_function == INVALID_INDEX) {
