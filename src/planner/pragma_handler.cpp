@@ -70,7 +70,8 @@ string PragmaHandler::HandlePragma(PragmaInfo &info) {
 	}
 	auto &bound_function = entry->functions[bound_idx];
 	if (bound_function.query) {
-		return bound_function.query(context, info.parameters, info.named_parameters);
+		FunctionParameters parameters{info.parameters, info.named_parameters};
+		return bound_function.query(context, parameters);
 	}
 	return string();
 }

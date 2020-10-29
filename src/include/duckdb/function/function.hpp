@@ -49,6 +49,11 @@ struct TableFunctionData : public FunctionData {
 	vector<idx_t> column_ids;
 };
 
+struct FunctionParameters {
+	vector<Value> values;
+	unordered_map<string, Value> named_parameters;
+};
+
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:

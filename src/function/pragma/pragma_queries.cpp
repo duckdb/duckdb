@@ -4,46 +4,41 @@
 
 namespace duckdb {
 
-string pragma_table_info(ClientContext &context, vector<Value> parameters,
-                         unordered_map<string, Value> named_parameters) {
-	return StringUtil::Format("SELECT * FROM pragma_table_info('%s')", parameters[0].ToString());
+string pragma_table_info(ClientContext &context, FunctionParameters parameters) {
+	return StringUtil::Format("SELECT * FROM pragma_table_info('%s')", parameters.values[0].ToString());
 }
 
-string pragma_show_tables(ClientContext &context, vector<Value> parameters,
-                          unordered_map<string, Value> named_parameters) {
+string pragma_show_tables(ClientContext &context, FunctionParameters parameters) {
 	return "SELECT name FROM sqlite_master() ORDER BY name";
 }
 
-string pragma_database_list(ClientContext &context, vector<Value> parameters,
-                            unordered_map<string, Value> named_parameters) {
+string pragma_database_list(ClientContext &context, FunctionParameters parameters) {
 	return "SELECT * FROM pragma_database_list() ORDER BY 1";
 }
 
-string pragma_collations(ClientContext &context, vector<Value> parameters,
-                         unordered_map<string, Value> named_parameters) {
+string pragma_collations(ClientContext &context, FunctionParameters parameters) {
 	return "SELECT * FROM pragma_collations() ORDER BY 1";
 }
 
-string pragma_show(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
+string pragma_show(ClientContext &context, FunctionParameters parameters) {
 	// PRAGMA table_info but with some aliases
 	return StringUtil::Format(
 	    "SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
 	    "NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info('%s')",
-	    parameters[0].ToString());
+	    parameters.values[0].ToString());
 }
 
-string pragma_version(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters) {
+string pragma_version(ClientContext &context, FunctionParameters parameters) {
 	return "SELECT * FROM pragma_version()";
 }
 
-string pragma_import_database(ClientContext &context, vector<Value> parameters,
-                              unordered_map<string, Value> named_parameters) {
+string pragma_import_database(ClientContext &context, FunctionParameters parameters) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	string query;
 	// read the "shema.sql" and "load.sql" files
 	vector<string> files = {"schema.sql", "load.sql"};
 	for (auto &file : files) {
-		auto file_path = fs.JoinPath(parameters[0].ToString(), file);
+		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
 		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
 		auto fsize = fs.GetFileSize(*handle);
 		auto buffer = unique_ptr<char[]>(new char[fsize]);

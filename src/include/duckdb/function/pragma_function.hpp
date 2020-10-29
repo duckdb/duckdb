@@ -16,9 +16,9 @@ namespace duckdb {
 class ClientContext;
 
 //! Return a substitute query to execute instead of this pragma statement
-typedef string (*pragma_query_t)(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters);
+typedef string (*pragma_query_t)(ClientContext &context, FunctionParameters parameters);
 //! Execute the main pragma function
-typedef void (*pragma_function_t)(ClientContext &context, vector<Value> parameters, unordered_map<string, Value> named_parameters);
+typedef void (*pragma_function_t)(ClientContext &context, FunctionParameters parameters);
 
 //! Pragma functions are invoked by calling PRAGMA x
 //! Pragma functions come in three types:
