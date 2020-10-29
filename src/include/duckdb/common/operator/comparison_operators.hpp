@@ -12,6 +12,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <cstring>
 
@@ -90,17 +91,29 @@ template <> inline bool Equals::Operation(string_t left, string_t right) {
 template <> inline bool NotEquals::Operation(string_t left, string_t right) {
 	return StringComparisonOperators::EqualsOrNot<true>(left, right);
 }
+
+// FIXME create more efficient impl again
 template <> inline bool GreaterThan::Operation(string_t left, string_t right) {
-	return strcmp(left.GetData(), right.GetData()) > 0;
+	//    auto res =  memcmp(left.GetData(), right.GetData(), MinValue<idx_t>(left.GetSize(), right.GetSize())) > 0;
+	//	assert(res == );
+	return left.GetString() > right.GetString();
 }
 template <> inline bool GreaterThanEquals::Operation(string_t left, string_t right) {
-	return strcmp(left.GetData(), right.GetData()) >= 0;
+	//    auto res =  memcmp(left.GetData(), right.GetData(), MinValue<idx_t>(left.GetSize(), right.GetSize())) >= 0;
+	//    assert(res == );
+	return left.GetString() >= right.GetString();
 }
+
 template <> inline bool LessThan::Operation(string_t left, string_t right) {
-	return strcmp(left.GetData(), right.GetData()) < 0;
+	//    auto res =  memcmp(left.GetData(), right.GetData(), MinValue<idx_t>(left.GetSize(), right.GetSize())) < 0;
+	//    assert(res == );
+	return left.GetString() < right.GetString();
 }
 template <> inline bool LessThanEquals::Operation(string_t left, string_t right) {
-	return strcmp(left.GetData(), right.GetData()) <= 0;
+	//    auto res =  memcmp(left.GetData(), right.GetData(), MinValue<idx_t>(left.GetSize(), right.GetSize())) <= 0;
+	//    assert(res == );
+
+	return left.GetString() <= right.GetString();
 }
 //===--------------------------------------------------------------------===//
 // Specialized Interval Comparison Operators

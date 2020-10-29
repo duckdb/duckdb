@@ -84,7 +84,7 @@ public:
 		return heap.AddString(data);
 	}
 	string_t AddBlob(string_t data) {
-		return heap.AddBlob(data.GetData(), data.GetSize());
+		return heap.AddBlob(data.GetDataUnsafe(), data.GetSize());
 	}
 	string_t EmptyString(idx_t len) {
 		return heap.EmptyString(len);

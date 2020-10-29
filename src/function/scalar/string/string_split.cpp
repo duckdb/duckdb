@@ -184,9 +184,9 @@ void string_split(const char *input, StringSplitIterator &iter, ChunkCollection 
 }
 
 unique_ptr<ChunkCollection> string_split(string_t input, string_t delim, const bool regex) {
-	const char *input_data = input.GetData();
+	const char *input_data = input.GetDataUnsafe();
 	size_t input_size = input.GetSize();
-	const char *delim_data = delim.GetData();
+	const char *delim_data = delim.GetDataUnsafe();
 	size_t delim_size = delim.GetSize();
 
 	bool ascii_only = Utf8Proc::Analyze(input_data, input_size) == UnicodeType::ASCII;
@@ -280,8 +280,9 @@ void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 	child_types.push_back(std::make_pair("string", LogicalType::VARCHAR));
 	auto varchar_list_type = LogicalType(LogicalTypeId::LIST, child_types);
 
-	set.AddFunction({"string_split", "str_split", "string_to_array"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                                              varchar_list_type, string_split_function));
+	set.AddFunction(
+	    {"string_split", "str_split", "string_to_array"},
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, string_split_function));
 	set.AddFunction(
 	    {"string_split_regex", "str_split_regex"},
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, string_split_regex_function));

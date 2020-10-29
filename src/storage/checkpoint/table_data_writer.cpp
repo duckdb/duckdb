@@ -223,8 +223,8 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	Store<uint32_t>(string_length, handle->node->buffer + offset);
 	offset += sizeof(uint32_t);
 	// now write the remainder of the string
-	auto strptr = string.GetData();
-	uint32_t remaining = string_length + 1;
+	auto strptr = string.GetDataUnsafe();
+	uint32_t remaining = string_length;
 	while (remaining > 0) {
 		uint32_t to_write = MinValue<uint32_t>(remaining, STRING_SPACE - offset);
 		if (to_write > 0) {

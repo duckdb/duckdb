@@ -20,13 +20,14 @@ static void strip_accents_function(DataChunk &args, ExpressionState &state, Vect
 	assert(args.column_count() == 1);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
-		auto input_data = input.GetData();
-		auto input_length = input.GetSize();
-		if (StripAccentsFun::IsAscii(input_data, input_length)) {
+		if (StripAccentsFun::IsAscii(input.GetDataUnsafe(), input.GetSize())) {
 			return input;
 		}
+
+		auto c_str = input.GetTerminatedData();
 		// non-ascii, perform collation
-		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input_data);
+		// TODO patch utf8proc_remove_accents to require length
+		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)c_str.get());
 		auto result_str = StringVector::AddString(result, (const char *)stripped);
 		free(stripped);
 		return result_str;

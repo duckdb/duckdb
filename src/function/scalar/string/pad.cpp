@@ -27,7 +27,7 @@ static pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const i
 
 static bool insert_padding(const idx_t len, const string_t &pad, vector<char> &result) {
 	//  Copy the padding until the output is long enough
-	const auto data = pad.GetData();
+	const auto data = pad.GetDataUnsafe();
 	const auto size = pad.GetSize();
 
 	//  Check whether we need data that we don't have
@@ -63,7 +63,7 @@ static string_t lpad(const string_t &str, const int32_t len, const string_t &pad
 	result.clear();
 
 	// Get information about the base string
-	const auto data_str = str.GetData();
+	const auto data_str = str.GetDataUnsafe();
 	const auto size_str = str.GetSize();
 
 	//  Count how much of str will fit in the output
@@ -92,7 +92,7 @@ static string_t rpad(const string_t &str, const int32_t len, const string_t &pad
 	result.clear();
 
 	// Get information about the base string
-	const auto data_str = str.GetData();
+	const auto data_str = str.GetDataUnsafe();
 	const auto size_str = str.GetSize();
 
 	//  Count how much of str will fit in the output

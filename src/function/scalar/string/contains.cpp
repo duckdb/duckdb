@@ -13,7 +13,7 @@ using namespace std;
 
 namespace duckdb {
 
-static bool contains_strstr(const string_t &str, const string_t &pattern);
+static bool contains_strstr(string_t &str, string_t &pattern);
 
 struct ContainsOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
@@ -21,10 +21,10 @@ struct ContainsOperator {
 	}
 };
 
-static bool contains_strstr(const string_t &str, const string_t &pattern) {
-	auto str_data = str.GetData();
-	auto patt_data = pattern.GetData();
-	return (strstr(str_data, patt_data) != nullptr);
+static bool contains_strstr(string_t &str, string_t &pattern) {
+	auto str_data = str.GetTerminatedData();
+	auto patt_data = pattern.GetTerminatedData();
+	return (strstr((const char *)str_data.get(), (const char *)patt_data.get()) != nullptr);
 }
 
 ScalarFunction ContainsFun::GetFunction() {

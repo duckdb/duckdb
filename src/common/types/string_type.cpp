@@ -6,7 +6,7 @@
 namespace duckdb {
 
 void string_t::Verify() {
-	auto dataptr = GetData();
+	auto dataptr = GetDataUnsafe();
 	(void)dataptr;
 	assert(dataptr);
 
@@ -15,8 +15,6 @@ void string_t::Verify() {
 	assert(utf_type != UnicodeType::INVALID);
 #endif
 
-	// verify that the string is null-terminated and that the length is correct
-	assert(strlen(dataptr) == GetSize());
 	// verify that the prefix contains the first four characters of the string
 	for (idx_t i = 0; i < MinValue<uint32_t>(PREFIX_LENGTH, GetSize()); i++) {
 		assert(GetPrefix()[i] == dataptr[i]);

@@ -159,7 +159,11 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
-						target[row] = strdup(source[k].GetData());
+						target[row] = (char *)malloc(source[k].GetSize() + 1);
+						assert(target[row]);
+						memcpy((void *)target[row], source[k].GetDataUnsafe(), source[k].GetSize());
+						auto write_arr = (char *)target[row];
+						write_arr[source[k].GetSize()] = '\0';
 					}
 					row++;
 				}

@@ -43,7 +43,6 @@ public:
 			 follows it with 8 more chars to use for the string value.
 			 */
 			memcpy(value.inlined.inlined, data, GetSize());
-			value.inlined.inlined[GetSize()] = '\0';
 		} else {
 			// large string: store pointer
 			memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
@@ -56,15 +55,24 @@ public:
 	}
 
 	bool IsInlined() const {
-		return GetSize() < INLINE_LENGTH;
+		return GetSize() <= INLINE_LENGTH;
 	}
 
-	char *GetData() {
+	//! this is unsafe since the string will not be terminated at the end
+	const char *GetDataUnsafe() const {
+		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
+	}
+
+	char *GetDataWriteable() const {
 		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
 	}
 
-	const char *GetData() const {
-		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
+	// use this to call C string APIs
+	unique_ptr<data_t[]> GetTerminatedData() {
+		auto bytes = unique_ptr<data_t[]>(new data_t[GetSize() + 1]);
+		memcpy(bytes.get(), GetDataUnsafe(), GetSize());
+		bytes[GetSize()] = '\0';
+		return bytes;
 	}
 
 	const char *GetPrefix() const {
@@ -76,14 +84,13 @@ public:
 	}
 
 	string GetString() const {
-		return string(GetData(), GetSize());
+		return string(GetDataUnsafe(), GetSize());
 	}
 
 	void Finalize() {
 		// set trailing NULL byte
-		auto dataptr = (char *)GetData();
-		dataptr[GetSize()] = '\0';
-		if (GetSize() < INLINE_LENGTH) {
+		auto dataptr = (char *)GetDataUnsafe();
+		if (GetSize() <= INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
 			for (idx_t i = GetSize(); i < PREFIX_LENGTH; i++) {
 				value.inlined.inlined[i] = '\0';

@@ -76,7 +76,7 @@ template <> inline bool IsNullValue(const char *value) {
 }
 
 template <> inline bool IsNullValue(string_t value) {
-	return value.GetData()[0] == str_nil[0];
+	return value.GetDataUnsafe()[0] == str_nil[0];
 }
 
 template <> inline bool IsNullValue(interval_t value) {

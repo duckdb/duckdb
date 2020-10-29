@@ -107,10 +107,10 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 	return n;
 }
 
-static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
-	if (std::isdigit((unsigned char)buf[pos])) {
+static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result) {
+	if (pos < len && std::isdigit((unsigned char)buf[pos])) {
 		result = buf[pos++] - '0';
-		if (std::isdigit((unsigned char)buf[pos])) {
+		if (pos < len && std::isdigit((unsigned char)buf[pos])) {
 			result = (buf[pos++] - '0') + result * 10;
 		}
 		return true;
@@ -118,15 +118,25 @@ static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool strict) {
+// FIXME actually interpret length here
+bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool strict) {
+
+	pos = 0;
+	if (len == 0) {
+		return false;
+	}
+
 	int32_t day = 0, month = -1;
 	int32_t year = 0, yearneg = (buf[0] == '-');
-	pos = 0;
 	int sep;
 
 	// skip leading spaces
-	while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+	while (pos < len && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
 		pos++;
+	}
+
+	if (pos >= len - 1) {
+		return false;
 	}
 
 	if (yearneg == 0 && !std::isdigit((unsigned char)buf[pos])) {
@@ -134,11 +144,15 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	}
 
 	// first parse the year
-	for (pos = pos + yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
+	for (pos = pos + yearneg; pos < len && std::isdigit((unsigned char)buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
 		if (year > YEAR_MAX) {
 			break;
 		}
+	}
+
+	if (pos >= len - 1) {
+		return false;
 	}
 
 	// fetch the separator
@@ -149,7 +163,11 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	}
 
 	// parse the month
-	if (!ParseDoubleDigit(buf, pos, month)) {
+	if (!ParseDoubleDigit(buf, len, pos, month)) {
+		return false;
+	}
+
+	if (pos >= len - 1) {
 		return false;
 	}
 
@@ -157,14 +175,18 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 		return false;
 	}
 
+	if (pos >= len - 1) {
+		return false;
+	}
+
 	// now parse the day
-	if (!ParseDoubleDigit(buf, pos, day)) {
+	if (!ParseDoubleDigit(buf, len, pos, day)) {
 		return false;
 	}
 
 	// check for an optional trailing " (BC)""
-	if (StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' && buf[pos + 3] == 'C' &&
-	    buf[pos + 4] == ')') {
+	if (len - pos > 5 && StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' &&
+	    buf[pos + 3] == 'C' && buf[pos + 4] == ')') {
 		year = -year;
 		pos += 5;
 	}
@@ -172,7 +194,7 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
-		while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+		while (len < pos && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
 			pos++;
 		}
 		// check position. if end was not reached, non-space chars remaining
@@ -181,7 +203,7 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 		}
 	} else {
 		// in non-strict mode, check for any direct trailing digits
-		if (std::isdigit((unsigned char)buf[pos])) {
+		if (len < pos && std::isdigit((unsigned char)buf[pos])) {
 			return false;
 		}
 	}
@@ -190,19 +212,19 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	return true;
 }
 
-date_t Date::FromCString(const char *buf, bool strict) {
+date_t Date::FromCString(const char *buf, idx_t len, bool strict) {
 	date_t result;
 	idx_t pos;
-	if (!TryConvertDate(buf, pos, result, strict)) {
+	if (!TryConvertDate(buf, len, pos, result, strict)) {
 		throw ConversionException("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
-		                          buf);
+		                          string(buf, len));
 	}
 	return result;
 }
 
 date_t Date::FromString(string str, bool strict) {
-	return Date::FromCString(str.c_str(), strict);
+	return Date::FromCString(str.c_str(), str.size(), strict);
 }
 
 string Date::ToString(int32_t date) {

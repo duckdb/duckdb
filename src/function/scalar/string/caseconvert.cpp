@@ -32,7 +32,7 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 		}
 	}
 	auto result_str = StringVector::EmptyString(result, output_length);
-	auto result_data = result_str.GetData();
+	auto result_data = result_str.GetDataWriteable();
 
 	for (idx_t i = 0; i < input_length;) {
 		if (input_data[i] & 0x80) {
@@ -60,7 +60,7 @@ template <bool IS_UPPER> static void caseconvert_function(Vector &input, Vector 
 	assert(input.type.id() == LogicalTypeId::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(input, result, count, [&](string_t input) {
-		auto input_data = input.GetData();
+		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		return strcase_unicode<IS_UPPER>(result, input_data, input_length);
 	});

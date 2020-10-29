@@ -63,7 +63,9 @@ struct LikeEscapeOperator {
 		if (escape.GetSize() > 1) {
 			throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
 		}
-		return like_operator(str.GetData(), pattern.GetData(), escape.GetData());
+		//return like_operator(str.GetDataUnsafe(), pattern.GetDataUnsafe(), escape.GetDataUnsafe());
+		// FIXME
+		throw NotImplementedException("like");
 	}
 };
 
@@ -75,19 +77,24 @@ struct NotLikeEscapeOperator {
 
 struct LikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		return like_operator(str.GetData(), pattern.GetData(), nullptr);
+        throw NotImplementedException("like");
+
+        //return like_operator(str.GetData(), pattern.GetData(), nullptr);
 	}
 };
 
 struct NotLikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		return !like_operator(str.GetData(), pattern.GetData(), nullptr);
+        throw NotImplementedException("like");
+
+        //return !like_operator(str.GetData(), pattern.GetData(), nullptr);
 	}
 };
 
 struct GlobOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		return LikeFun::Glob(str.GetData(), pattern.GetData(), nullptr);
+        throw NotImplementedException("like");
+        //return LikeFun::Glob(str.GetData(), pattern.GetData(), nullptr);
 	}
 };
 

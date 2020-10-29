@@ -47,7 +47,7 @@ struct ConcatWSFun {
 struct LengthFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 	template <class TA, class TR> static inline TR Length(TA input) {
-		auto input_data = input.GetData();
+		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		for (idx_t i = 0; i < input_length; i++) {
 			if (input_data[i] & 0x80) {

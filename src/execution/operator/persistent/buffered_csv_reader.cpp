@@ -44,7 +44,7 @@ static bool is_digit(char c) {
 }
 
 static bool StartsWithNumericDate(string &separator, const string_t &value) {
-	auto begin = value.GetData();
+	auto begin = value.GetDataUnsafe();
 	auto end = begin + value.GetSize();
 
 	//	StrpTimeFormat::Parse will skip whitespace, so we can too
@@ -512,7 +512,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
 	    LogicalType::DATE,    LogicalType::TIME,
 	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN, LogicalType::SQLNULL};
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
+	    LogicalType::SQLNULL};
 
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
@@ -719,7 +720,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 
 		// set sql types
-		for (auto & best_sql_types_candidate : best_sql_types_candidates) {
+		for (auto &best_sql_types_candidate : best_sql_types_candidates) {
 			LogicalType d_type = best_sql_types_candidate.back();
 			if (best_sql_types_candidate.size() == type_candidates.size()) {
 				d_type = LogicalType::VARCHAR;
@@ -1348,7 +1349,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			for (idx_t i = 0; i < parse_chunk.size(); i++) {
 				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
 					auto s = parse_data[i];
-					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
+					auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
 					if (utf_type == UnicodeType::INVALID) {
 						throw InvalidInputException(
 						    "Error in file \"%s\" between line %d and %d: file is not valid UTF8. (%s)",

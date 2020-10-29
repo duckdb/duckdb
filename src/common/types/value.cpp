@@ -25,7 +25,7 @@
 namespace duckdb {
 using namespace std;
 
-Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
+Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
@@ -278,7 +278,7 @@ Value Value::BLOB(string data, bool must_cast) {
 		unique_ptr<char[]> hex_data(new char[hex_size + 1]);
 		string_t hex_str(hex_data.get(), hex_size);
 		CastFromBlob::FromHexToBytes(string_t(data), hex_str);
-		result.str_value = string(hex_str.GetData());
+		result.str_value = hex_str.GetString();
 	} else {
 		// raw string
 		result.str_value = data;
@@ -514,8 +514,7 @@ string Value::ToString() const {
 		unique_ptr<char[]> hex_data(new char[str_value.size() * 2 + 2 + 1]);
 		string_t hex_str(hex_data.get(), str_value.size() * 2 + 2);
 		CastFromBlob::ToHexString(string_t(str_value), hex_str);
-		string result(hex_str.GetData());
-		return result;
+		return hex_str.GetString();
 	}
 	case LogicalTypeId::POINTER:
 		return to_string(value_.pointer);
