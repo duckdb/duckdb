@@ -729,7 +729,7 @@ void Value::Serialize(Serializer &serializer) {
 			serializer.Write<hugeint_t>(value_.hugeint);
 			break;
 		case PhysicalType::FLOAT:
-			serializer.Write<double>(value_.float_);
+			serializer.Write<float>(value_.float_);
 			break;
 		case PhysicalType::DOUBLE:
 			serializer.Write<double>(value_.double_);

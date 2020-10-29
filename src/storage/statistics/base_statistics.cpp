@@ -12,10 +12,6 @@ unique_ptr<BaseStatistics> BaseStatistics::Copy() {
 	return statistics;
 }
 
-void BaseStatistics::Serialize(Serializer &serializer) {
-	serializer.Write<bool>(has_null);
-}
-
 void BaseStatistics::Merge(const BaseStatistics &other) {
 	has_null = has_null || other.has_null;
 }
@@ -38,6 +34,10 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	default:
 		throw InternalException("Unimplemented type for base statistics");
 	}
+}
+
+void BaseStatistics::Serialize(Serializer &serializer) {
+	serializer.Write<bool>(has_null);
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
