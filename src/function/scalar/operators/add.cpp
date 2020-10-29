@@ -6,6 +6,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
 #include <limits>
 
@@ -113,18 +114,42 @@ template <> int64_t AddOperatorOverflowCheck::Operation(int64_t left, int64_t ri
 #if defined(__GNUC__) || defined(__clang__)
 	int64_t result;
 	if (__builtin_add_overflow(left, right, &result)) {
-		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d);", left, right);
+		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d).", left, right);
 	}
 #else
 	// https://blog.regehr.org/archives/1139
 	int64_t result = int64_t((uint64_t)left + (uint64_t)right);
 	if ((left < 0 && right < 0 && result >= 0) || (left >= 0 && right >= 0 && result < 0)) {
-		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d);", left, right);
+		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d).", left, right);
 	}
 #endif
 	// FIXME: this check can be removed if we get rid of NullValue<T>
 	if (result == std::numeric_limits<int64_t>::min()) {
-		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d);", left, right);
+		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d).", left, right);
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// add decimal with overflow check
+//===--------------------------------------------------------------------===//
+template <> int64_t DecimalAddOperatorOverflowCheck::Operation(int64_t left, int64_t right) {
+	if (right < 0) {
+		if (-999999999999999999 - right > left) {
+			throw OutOfRangeException("Overflow in addition of DECIMAL(18) (%d + %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+		}
+	} else {
+		if (999999999999999999 - right < left) {
+			throw OutOfRangeException("Overflow in addition of DECIMAL(18) (%d + %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+		}
+	}
+	return left + right;
+}
+
+template <> hugeint_t DecimalAddOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
+	hugeint_t result = left + right;
+	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
+		throw OutOfRangeException("Overflow in addition of DECIMAL(38) (%s + %s);", left.ToString(), right.ToString());
 	}
 	return result;
 }

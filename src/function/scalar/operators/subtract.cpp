@@ -5,6 +5,7 @@
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
 #include <limits>
 
@@ -87,25 +88,49 @@ template <> int64_t SubtractOperatorOverflowCheck::Operation(int64_t left, int64
 #if defined(__GNUC__) || defined(__clang__)
 	int64_t result;
 	if (__builtin_sub_overflow(left, right, &result)) {
-		throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d);", left, right);
+		throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d).", left, right);
 	}
 	// FIXME: this check can be removed if we get rid of NullValue<T>
 	if (result == std::numeric_limits<int64_t>::min()) {
-		throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d);", left, right);
+		throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d).", left, right);
 	}
 	return result;
 #else
 	if (right < 0) {
 		if (NumericLimits<int64_t>::Maximum() + right < left) {
-			throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d);", left, right);
+			throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d).", left, right);
 		}
 	} else {
 		if (NumericLimits<int64_t>::Minimum() + right > left) {
-			throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d);", left, right);
+			throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d).", left, right);
 		}
 	}
 	return left - right;
 #endif
+}
+
+//===--------------------------------------------------------------------===//
+// subtract decimal with overflow check
+//===--------------------------------------------------------------------===//
+template <> int64_t DecimalSubtractOperatorOverflowCheck::Operation(int64_t left, int64_t right) {
+	if (right < 0) {
+		if (999999999999999999 + right < left) {
+			throw OutOfRangeException("Overflow in subtraction of DECIMAL(18) (%d - %d).  You might want to add an explicit cast to a bigger decimal.", left, right);
+		}
+	} else {
+		if (-999999999999999999 + right > left) {
+			throw OutOfRangeException("Overflow in subtraction of DECIMAL(18) (%d - %d).  You might want to add an explicit cast to a bigger decimal.", left, right);
+		}
+	}
+	return left - right;
+}
+
+template <> hugeint_t DecimalSubtractOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
+	hugeint_t result = left - right;
+	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
+		throw OutOfRangeException("Overflow in subtraction of DECIMAL(38) (%s - %s).", left.ToString(), right.ToString());
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

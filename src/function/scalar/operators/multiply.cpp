@@ -120,4 +120,24 @@ template <> int64_t MultiplyOperatorOverflowCheck::Operation(int64_t left, int64
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// multiply  decimal with overflow check
+//===--------------------------------------------------------------------===//
+template <> int64_t DecimalMultiplyOperatorOverflowCheck::Operation(int64_t left, int64_t right) {
+	int64_t result;
+	if (!int64_try_multiply(left, right, &result) || result <= -1000000000000000000 || result >= 1000000000000000000) {
+		throw OutOfRangeException("Overflow in multiplication of DECIMAL(18) (%d * %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+	}
+	return result;
+}
+
+template <> hugeint_t DecimalMultiplyOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
+	hugeint_t result = left * right;
+	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
+		throw OutOfRangeException("Overflow in subtraction of DECIMAL(38) (%s - %s).", left.ToString(), right.ToString());
+	}
+	return result;
+}
+
+
 }

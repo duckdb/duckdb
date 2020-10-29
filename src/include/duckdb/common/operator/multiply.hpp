@@ -35,4 +35,13 @@ template <> int16_t MultiplyOperatorOverflowCheck::Operation(int16_t left, int16
 template <> int32_t MultiplyOperatorOverflowCheck::Operation(int32_t left, int32_t right);
 template <> int64_t MultiplyOperatorOverflowCheck::Operation(int64_t left, int64_t right);
 
+struct DecimalMultiplyOperatorOverflowCheck {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+		throw InternalException("Unimplemented type for DecimalMultiplyOperatorOverflowCheck");
+	}
+};
+
+template <> int64_t DecimalMultiplyOperatorOverflowCheck::Operation(int64_t left, int64_t right);
+template <> hugeint_t DecimalMultiplyOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right);
+
 }

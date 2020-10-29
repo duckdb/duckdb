@@ -32,6 +32,15 @@ struct SubtractOperatorOverflowCheck {
 	}
 };
 
+struct DecimalSubtractOperatorOverflowCheck {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+		throw InternalException("Unimplemented type for DecimalSubtractOperatorOverflowCheck");
+	}
+};
+
+template <> int64_t DecimalSubtractOperatorOverflowCheck::Operation(int64_t left, int64_t right);
+template <> hugeint_t DecimalSubtractOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right);
+
 template <> int8_t SubtractOperatorOverflowCheck::Operation(int8_t left, int8_t right);
 template <> int16_t SubtractOperatorOverflowCheck::Operation(int16_t left, int16_t right);
 template <> int32_t SubtractOperatorOverflowCheck::Operation(int32_t left, int32_t right);

@@ -38,6 +38,15 @@ template <> int16_t AddOperatorOverflowCheck::Operation(int16_t left, int16_t ri
 template <> int32_t AddOperatorOverflowCheck::Operation(int32_t left, int32_t right);
 template <> int64_t AddOperatorOverflowCheck::Operation(int64_t left, int64_t right);
 
+struct DecimalAddOperatorOverflowCheck {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+		throw InternalException("Unimplemented type for DecimalAddOperatorOverflowCheck");
+	}
+};
+
+template <> int64_t DecimalAddOperatorOverflowCheck::Operation(int64_t left, int64_t right);
+template <> hugeint_t DecimalAddOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right);
+
 struct AddTimeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right);
 };
