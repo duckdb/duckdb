@@ -603,7 +603,9 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 						if (nullmask[row_idx]) {
 							SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 						} else {
-							SET_STRING_ELT(dest, dest_offset + row_idx, mkCharCE(src_ptr[row_idx].GetData(), CE_UTF8));
+							SET_STRING_ELT(
+							    dest, dest_offset + row_idx,
+							    mkCharLenCE(src_ptr[row_idx].GetDataUnsafe(), src_ptr[row_idx].GetSize(), CE_UTF8));
 						}
 					}
 					break;

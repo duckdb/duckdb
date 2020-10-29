@@ -42,16 +42,16 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		// create a sort key from the string
 		int32_t string_size =
-		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
+		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
 		                        (uint8_t *)buffer.get(), buffer_size);
 		if (string_size > buffer_size) {
 			// have to resize the buffer
 			buffer_size = string_size + 1;
 			buffer = unique_ptr<char[]>(new char[buffer_size]);
 
-			string_size =
-			    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
-			                        (uint8_t *)buffer.get(), buffer_size);
+			string_size = collator.getSortKey(
+			    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
+			    (uint8_t *)buffer.get(), buffer_size);
 		}
 		return StringVector::AddStringOrBlob(result, string_t(buffer.get(), buffer_size));
 	});
