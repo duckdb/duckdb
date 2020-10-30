@@ -1667,7 +1667,7 @@ typedef struct PGCreateFunctionStmt {
 	char *name;
 	PGList *args;
 	PGNode *function;
-};
+} PGCreateFunctionStmt;
 
 /* ----------------------
  *		Drop Table|Sequence|View|Index|Type|Domain|Conversion|Schema Statement
