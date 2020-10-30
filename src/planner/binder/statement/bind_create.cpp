@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_sql_function_info.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -55,6 +56,12 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		base.aliases.push_back(query_node.names[i]);
 	}
 	base.types = query_node.types;
+}
+
+unique_ptr<CreateScalarFunctionInfo> Binder::BindCreateFunctionInfo(CreateFunctionInfo &info) {
+    auto &base = (CreateSQLFunctionInfo &) info;
+    // TODO: make a scalar_function_t, a ScalarFunction, and a CreateScalarFunctionInfo here
+//	auto func_info = make_unique<CreateScalarFunctionInfo>(nullptr);
 }
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
@@ -126,6 +133,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		result.plan = move(create_table);
 		return result;
+	}
+	case CatalogType::SCALAR_FUNCTION_ENTRY: {
+		// TODO: implement
+//		auto bound_info = BindCreateFunctionInfo(move(stmt.info));
 	}
 	default:
 		throw Exception("Unrecognized type!");
