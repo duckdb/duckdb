@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_p, string alias_p)
+SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, string alias_p)
     : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_p)) {
 	this->alias = alias_p;
 }
@@ -33,7 +33,7 @@ void SubqueryRef::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
-	auto subquery = QueryNode::Deserialize(source);
+	auto subquery = SelectStatement::Deserialize(source);
 	if (!subquery) {
 		return nullptr;
 	}
