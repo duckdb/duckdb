@@ -26,6 +26,7 @@ extern "C" {
 #include <mach/mach.h>
 #elif defined(__unix__)
 #include <semaphore.h>
+#include <chrono>
 #endif
 
 namespace moodycamel
@@ -160,8 +161,6 @@ public:
 	}
 };
 #elif defined(__unix__)
-#include <chrono>
-
 //---------------------------------------------------------
 // Semaphore (POSIX, Linux)
 //---------------------------------------------------------

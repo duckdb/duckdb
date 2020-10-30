@@ -3,6 +3,9 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 
@@ -62,6 +65,33 @@ unique_ptr<FunctionOperatorData> pragma_table_info_init(ClientContext &context, 
 	return make_unique<PragmaTableOperatorData>();
 }
 
+static void check_constraints(TableCatalogEntry *table, idx_t oid, bool &out_not_null, bool &out_pk) {
+	out_not_null = false;
+	out_pk = false;
+	// check all constraints
+	// FIXME: this is pretty inefficient, it probably doesn't matter
+	for(auto &constraint : table->bound_constraints) {
+		switch(constraint->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null = (BoundNotNullConstraint &) *constraint;
+			if (not_null.index == oid) {
+				out_not_null = true;
+			}
+			break;
+		}
+		case ConstraintType::UNIQUE: {
+			auto &unique = (BoundUniqueConstraint &) *constraint;
+			if (unique.is_primary_key && unique.keys.find(oid) != unique.keys.end()) {
+				out_pk = true;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+}
+
 static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
 	if (data.offset >= table->columns.size()) {
 		// finished returning values
@@ -73,26 +103,26 @@ static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogE
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
+		bool not_null, pk;
 		auto index = i - data.offset;
 		auto &column = table->columns[i];
+		assert(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
+		check_constraints(table, column.oid, not_null, pk);
+
 		// return values:
 		// "cid", PhysicalType::INT32
-		assert(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
-
 		output.SetValue(0, index, Value::INTEGER((int32_t)column.oid));
 		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(column.name));
 		// "type", PhysicalType::VARCHAR
 		output.SetValue(2, index, Value(column.type.ToString()));
 		// "notnull", PhysicalType::BOOL
-		// FIXME: look at constraints
-		output.SetValue(3, index, Value::BOOLEAN(false));
+		output.SetValue(3, index, Value::BOOLEAN(not_null));
 		// "dflt_value", PhysicalType::VARCHAR
 		Value def_value = column.default_value ? Value(column.default_value->ToString()) : Value();
 		output.SetValue(4, index, def_value);
 		// "pk", PhysicalType::BOOL
-		// FIXME: look at constraints
-		output.SetValue(5, index, Value::BOOLEAN(false));
+		output.SetValue(5, index, Value::BOOLEAN(pk));
 	}
 	data.offset = next;
 }

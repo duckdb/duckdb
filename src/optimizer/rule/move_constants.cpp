@@ -34,6 +34,9 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 	auto outer_constant = (BoundConstantExpression *)bindings[1];
 	auto arithmetic = (BoundFunctionExpression *)bindings[2];
 	auto inner_constant = (BoundConstantExpression *)bindings[3];
+	if (!arithmetic->return_type.IsNumeric()) {
+		return nullptr;
+	}
 
 	int arithmetic_child_index = arithmetic->children[0].get() == inner_constant ? 1 : 0;
 	auto &op_type = arithmetic->function.name;

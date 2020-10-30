@@ -456,6 +456,13 @@ template <> double DivideOperator::Operation(double left, double right) {
 	return result;
 }
 
+template <> hugeint_t DivideOperator::Operation(hugeint_t left, hugeint_t right) {
+	if (right.lower == 0 && right.upper == 0) {
+		throw InternalException("Hugeint division by zero!");
+	}
+	return left / right;
+}
+
 template <> interval_t DivideOperator::Operation(interval_t left, int64_t right) {
 	left.days /= right;
 	left.months /= right;
@@ -486,9 +493,9 @@ struct BinaryZeroIsNullHugeintWrapper {
 	}
 };
 
-template <class TA, class TB, class TC, class OP>
+template <class TA, class TB, class TC, class OP, class ZWRAPPER=BinaryZeroIsNullWrapper>
 static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<TA, TB, TC, OP, true, BinaryZeroIsNullWrapper>(input.data[0], input.data[1], result,
+	BinaryExecutor::Execute<TA, TB, TC, OP, true, ZWRAPPER>(input.data[0], input.data[1], result,
 	                                                                       input.size());
 }
 
@@ -503,7 +510,7 @@ template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(Logical
 	case LogicalTypeId::BIGINT:
 		return BinaryScalarFunctionIgnoreZero<int64_t, int64_t, int64_t, OP>;
 	case LogicalTypeId::HUGEINT:
-		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP>;
+		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP, BinaryZeroIsNullHugeintWrapper>;
 	case LogicalTypeId::FLOAT:
 		return BinaryScalarFunctionIgnoreZero<float, float, float, OP>;
 	case LogicalTypeId::DOUBLE:
@@ -541,6 +548,13 @@ template <> float ModuloOperator::Operation(float left, float right) {
 template <> double ModuloOperator::Operation(double left, double right) {
 	assert(right != 0);
 	return fmod(left, right);
+}
+
+template <> hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
+	if (right.lower == 0 && right.upper == 0) {
+		throw InternalException("Hugeint division by zero!");
+	}
+	return left % right;
 }
 
 void ModFun::RegisterFunction(BuiltinFunctions &set) {

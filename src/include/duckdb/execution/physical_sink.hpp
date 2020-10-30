@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class Pipeline;
+
 class GlobalOperatorState {
 public:
 	virtual ~GlobalOperatorState() {
@@ -43,7 +45,7 @@ public:
 	}
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
-	virtual void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) {
+	virtual void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) {
 		this->sink_state = move(gstate);
 	}
 

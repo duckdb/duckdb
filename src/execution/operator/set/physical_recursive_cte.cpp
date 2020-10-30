@@ -5,6 +5,8 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 using namespace std;
 
@@ -16,7 +18,7 @@ public:
 	}
 	unique_ptr<PhysicalOperatorState> top_state;
 	unique_ptr<PhysicalOperatorState> bottom_state;
-	unique_ptr<SuperLargeHashTable> ht;
+	unique_ptr<GroupedAggregateHashTable> ht;
 
 	bool top_done = false;
 
@@ -38,6 +40,11 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                             PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
+
+	if (!state->ht) {
+		state->ht = make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client), types,
+		                                                   vector<LogicalType>(), vector<BoundAggregateExpression *>());
+	}
 
 	if (!state->recursing) {
 		do {
@@ -103,28 +110,35 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 }
 
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) {
+	if (pipelines.size() == 0) {
+		return;
+	}
+
 	for (auto &pipeline : pipelines) {
 		pipeline->Reset(context.client);
-		pipeline->Execute(context.task);
-		pipeline->FinishTask();
+		pipeline->Schedule();
 	}
-}
 
-void PhysicalRecursiveCTE::FinalizePipelines() {
-	// re-order the pipelines such that they are executed in the correct order of dependencies
-	for (idx_t i = 0; i < pipelines.size(); i++) {
-		auto &deps = pipelines[i]->GetDependencies();
-		for (idx_t j = i + 1; j < pipelines.size(); j++) {
-			if (deps.find(pipelines[j].get()) != deps.end()) {
-				// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before pipeline "j"
-				std::swap(pipelines[i], pipelines[j]);
-				i--;
-				continue;
+	// now execute tasks until all pipelines are completed again
+	auto &scheduler = TaskScheduler::GetScheduler(context.client);
+	auto &token = pipelines[0]->token;
+	while (true) {
+		unique_ptr<Task> task;
+		while (scheduler.GetTaskFromProducer(token, task)) {
+			task->Execute();
+			task.reset();
+		}
+		bool finished = true;
+		for (auto &pipeline : pipelines) {
+			if (!pipeline->IsFinished()) {
+				finished = false;
+				break;
 			}
 		}
-	}
-	for (idx_t i = 0; i < pipelines.size(); i++) {
-		pipelines[i]->ClearParents();
+		if (finished) {
+			// all pipelines finished: done!
+			break;
+		}
 	}
 }
 
@@ -147,8 +161,6 @@ unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
 	auto state = make_unique<PhysicalRecursiveCTEState>(*this);
 	state->top_state = children[0]->GetOperatorState();
 	state->bottom_state = children[1]->GetOperatorState();
-	state->ht =
-	    make_unique<SuperLargeHashTable>(1024, types, vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	return (move(state));
 }
 

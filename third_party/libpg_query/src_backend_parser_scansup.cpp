@@ -91,38 +91,7 @@ char *downcase_identifier(const char *ident, int len, bool warn, bool truncate) 
 	}
 	result[i] = '\0';
 
-	if (i >= NAMEDATALEN && truncate)
-		truncate_identifier(result, i, warn);
-
 	return result;
-}
-
-/*
- * truncate_identifier() --- truncate an identifier to NAMEDATALEN-1 bytes.
- *
- * The given string is modified in-place, if necessary.  A warning is
- * issued if requested.
- *
- * We require the caller to pass in the string length since this saves a
- * strlen() call in some common usages.
- */
-void truncate_identifier(char *ident, int len, bool warn) {
-	if (len >= NAMEDATALEN) {
-		len = pg_mbcliplen(ident, len, NAMEDATALEN - 1);
-		if (warn) {
-			/*
-			 * We avoid using %.*s here because it can misbehave if the data
-			 * is not valid in what libc thinks is the prevailing encoding.
-			 */
-			char buf[NAMEDATALEN];
-
-			memcpy(buf, ident, len);
-			buf[len] = '\0';
-			ereport(PGNOTICE, (errcode(ERRCODE_NAME_TOO_LONG),
-			                   errmsg("identifier \"%s\" will be truncated to \"%s\"", ident, buf)));
-		}
-		ident[len] = '\0';
-	}
 }
 
 /*

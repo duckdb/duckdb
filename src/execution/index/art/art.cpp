@@ -439,6 +439,16 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 	return true;
 }
 
+void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
+	//! We need to look for a leaf
+	auto key = CreateKey(*this, types[0], equal_value);
+	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
+	if (!leaf) {
+		return;
+	}
+	result_size = leaf->num_elements;
+}
+
 Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 	auto node_val = node.get();
 
@@ -779,7 +789,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	if (!success) {
 		return false;
 	}
-	if (row_ids.size() == 0) {
+	if (row_ids.empty()) {
 		return true;
 	}
 	// sort the row ids

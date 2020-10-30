@@ -52,9 +52,11 @@ SELECT * FROM vw2
 statement error
 SELECT * FROM vw
 
-query I
-SELECT * FROM vw2
-----
-999
-100
+statement ok
+CREATE VIEW vw AS SELECT i+1 AS i FROM tbl
 
+query I
+SELECT * FROM vw
+----
+1000
+101

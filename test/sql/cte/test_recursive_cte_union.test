@@ -6,15 +6,30 @@ statement ok
 PRAGMA enable_verification
 
 # simple recursive CTE
-# query I
-# with recursive t as (select 1 as x union select x+1 from t where x < 3) select * from t order by x
-# ----
-# 1
-# 2
-# 3
+query I
+with recursive t as (select 1 as x union select x+1 from t where x < 3) select * from t order by x
+----
+1
+2
+3
 
 query I
 with recursive t(x) as (select 1 union select x+1 from t where x < 3) select * from t order by x
+----
+1
+2
+3
+
+# test some aliases
+query I
+with recursive t(x) as (select 1 union select x+1 from t where x < 3) select zz from t t1(zz) order by zz
+----
+1
+2
+3
+
+query I
+with recursive t(x) as (select 1 union select zzz+1 from t t1(zzz) where zzz < 3) select zz from t t1(zz) order by zz
 ----
 1
 2
@@ -101,3 +116,13 @@ with recursive t as (select 1 as x union select sum(x+1) from t where x < 3 OFFS
 statement error
 with recursive t as (select 1 as x union select sum(x+1) from t where x < 3 LIMIT 1 OFFSET 1) select * from t
 
+# create a view from a recursive cte
+statement ok
+create view vr as (with recursive t(x) as (select 1 union select x+1 from t where x < 3) select * from t order by x)
+
+query I
+select * from vr
+----
+1
+2
+3

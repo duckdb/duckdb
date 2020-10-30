@@ -7,6 +7,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/storage/table/chunk_info.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -28,9 +29,6 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 			if (!catalog_entry->deleted) {
 				// delete the entry from the dependency manager, if it is not deleted yet
 				catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
-			}
-			if (catalog_entry->name != catalog_entry->parent->name) {
-				catalog_entry->set->ClearEntryName(catalog_entry->name);
 			}
 			catalog_entry->parent->child = move(catalog_entry->child);
 		}

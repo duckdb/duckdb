@@ -1,11 +1,13 @@
 include_directories(include)
+add_subdirectory(sqlite3)
 
 add_extension_definitions()
+add_definitions(-DSQLITE_SHELL_IS_UTF8)
 
-add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp printf.c)
+add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp ${ALL_OBJECT_FILES})
 target_link_libraries(sqlite3_api_wrapper duckdb Threads::Threads)
 
-add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp printf.c)
+add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp ${ALL_OBJECT_FILES})
 target_link_libraries(sqlite3_api_wrapper_static duckdb_static Threads::Threads)
 
 link_extension_libraries(sqlite3_api_wrapper)

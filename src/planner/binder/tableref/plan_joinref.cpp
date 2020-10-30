@@ -132,6 +132,22 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 	}
 }
 
+static bool HasCorrelatedColumns(Expression &expression) {
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)expression;
+		if (colref.depth > 0) {
+			return true;
+		}
+	}
+	bool has_correlated_columns = false;
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
+		if (HasCorrelatedColumns(child)) {
+			has_correlated_columns = true;
+		}
+	});
+	return has_correlated_columns;
+}
+
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
@@ -140,7 +156,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		std::swap(left, right);
 	}
 
-	if (ref.type == JoinType::INNER) {
+	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition))) {
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
 		auto cross_product = make_unique<LogicalCrossProduct>();

@@ -8,10 +8,36 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
+#include <cstdio>
+#include <cstdint>
+
+#ifndef _WIN32
+#include <dirent.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#else
+#include <string>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#ifdef __MINGW32__
+// need to manually define this for mingw
+extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
+#endif
+
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+#undef FILE_CREATE // woo mingw
+#endif
+
 namespace duckdb {
 using namespace std;
-
-#include <cstdio>
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 	return *context.db.config.file_system;
@@ -29,13 +55,6 @@ static void AssertValidFileFlags(uint8_t flags) {
 }
 
 #ifndef _WIN32
-#include <dirent.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 // somehow sometimes this is missing
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
@@ -315,6 +334,15 @@ void FileSystem::SetWorkingDirectory(string path) {
 	}
 }
 
+idx_t FileSystem::GetAvailableMemory() {
+	errno = 0;
+	idx_t max_memory = MinValue<idx_t>(sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE), UINTPTR_MAX);
+	if (errno != 0) {
+		throw IOException("Could not fetch available system memory!");
+	}
+	return max_memory;
+}
+
 string FileSystem::GetWorkingDirectory() {
 	auto buffer = unique_ptr<char[]>(new char[PATH_MAX]);
 	char *ret = getcwd(buffer.get(), PATH_MAX);
@@ -324,17 +352,6 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get());
 }
 #else
-
-#include <string>
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
-#undef CreateDirectory
-#undef MoveFile
-#undef RemoveDirectory
-#undef FILE_CREATE // woo mingw
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string GetLastErrorAsString() {
@@ -586,6 +603,14 @@ void FileSystem::SetWorkingDirectory(string path) {
 	if (!SetCurrentDirectory(path.c_str())) {
 		throw IOException("Could not change working directory!");
 	}
+}
+
+idx_t FileSystem::GetAvailableMemory() {
+	ULONGLONG available_memory_kb;
+	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
+		throw IOException("Could not fetch available system memory!");
+	}
+	return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
 }
 
 string FileSystem::GetWorkingDirectory() {

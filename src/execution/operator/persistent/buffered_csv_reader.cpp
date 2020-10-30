@@ -512,7 +512,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
 	    LogicalType::DATE,    LogicalType::TIME,
 	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN};
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN, LogicalType::SQLNULL};
 
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
@@ -522,7 +522,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	      "%y-%m-%d %H:%M:%S"}},
 	};
 
-	// check which info candiate leads to minimum amount of non-varchar columns...
+	// check which info candidate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
 	vector<vector<LogicalType>> best_sql_types_candidates;
@@ -550,7 +550,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		ParseCSV(ParserMode::SNIFFING_DATATYPES);
 		for (idx_t row = 0; row < parse_chunk.size(); row++) {
 			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-				vector<LogicalType> &col_type_candidates = info_sql_types_candidates[col];
+				auto &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
@@ -628,10 +628,11 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			}
 		}
 
-		// check number of varchar columns
 		idx_t varchar_cols = 0;
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-			const auto &col_type = info_sql_types_candidates[col].back();
+			auto &col_type_candidates = info_sql_types_candidates[col];
+			// check number of varchar columns
+			const auto &col_type = col_type_candidates.back();
 			if (col_type == LogicalType::VARCHAR) {
 				varchar_cols++;
 			}
@@ -718,8 +719,11 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 
 		// set sql types
-		for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
-			LogicalType d_type = best_sql_types_candidates[col].back();
+		for (auto & best_sql_types_candidate : best_sql_types_candidates) {
+			LogicalType d_type = best_sql_types_candidate.back();
+			if (best_sql_types_candidate.size() == type_candidates.size()) {
+				d_type = LogicalType::VARCHAR;
+			}
 			detected_types.push_back(d_type);
 		}
 	}

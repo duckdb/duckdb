@@ -17,9 +17,11 @@
 
 namespace duckdb {
 
+class SelectStatement;
+
 struct CommonTableExpressionInfo {
 	vector<string> aliases;
-	unique_ptr<QueryNode> query;
+	unique_ptr<SelectStatement> query;
 };
 
 //! SelectStatement is a typical SELECT clause

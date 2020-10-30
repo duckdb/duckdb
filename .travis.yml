@@ -59,7 +59,7 @@ matrix:
       script:
         - mkdir -p build/release
         - python3 scripts/amalgamation.py
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DDISABLE_UNITY=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DDISABLE_UNITY=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
 
         - build/release/test/unittest "*"
         - python3.7 tools/shell/shell-test.py build/release/duckdb
@@ -187,7 +187,7 @@ matrix:
         - mkdir -p build/coverage
         - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
         - build/coverage/test/unittest
-        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
+        - coveralls -b build/coverage --exclude-pattern '.*CMake.*' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
 
 
     - os: linux
@@ -220,6 +220,19 @@ matrix:
       script:
         - python3 scripts/test_vector_sizes.py
 
+    - os: linux
+      dist: bionic
+      name: SQLogicTests
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
+
+      python: 3.7
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+      script:
+        - make sqlite
 
 # old compiler
     - os: linux
@@ -237,6 +250,7 @@ matrix:
         - CXX=g++-4.9
       script:
         make allunit
+
 
 # weird platforms: 32 bit linux & windows, arm, solaris, openbsd
 
@@ -491,7 +505,7 @@ matrix:
          # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
         - sudo mkdir /home/postgres && sudo chown postgres /home/postgres
         - sudo python3 -m pip install --prefix=/tmp tools/pythonpkg/wheelhouse/duckdb-*-cp36-cp36m-manylinux1_x86_64.whl
-        - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
+        - python3 $TRAVIS_BUILD_DIR/scripts/repeat_until_success.py "sudo -Hiu postgres psql -c \"CREATE EXTENSION plpython3u\""
         - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport sys\nsys.path.insert(0,'/tmp/lib/python3.6/site-packages/')\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
         - sudo -Hiu postgres psql -c "SELECT quack()"
 
@@ -647,23 +661,23 @@ matrix:
         - R CMD check --as-cran -o /tmp duckdb_*.tar.gz
         - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
 
+    # disabled for now bcause of constant timeouts during setup (i.e. we can't use travis_wait there)
+    # - os: osx
+    #   osx_image: xcode11.5
+    #   name: R Package
+    #   if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-    - os: osx
-      osx_image: xcode11.5
-      name: R Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+    #   language: r
 
-      language: r
+    #   before_install:
+    #     - cd tools/rpkg
 
-      before_install:
-        - cd tools/rpkg
-
-      script:
-        - ./configure
-        - R CMD build .
-        - R CMD INSTALL --build duckdb_*.tar.gz
-        - (cd tests && R -f testthat.R)
-        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
+    #   script:
+    #     - ./configure
+    #     - R CMD build .
+    #     - R CMD INSTALL --build duckdb_*.tar.gz
+    #     - (cd tests && R -f testthat.R)
+    #     - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
 
 
     - os: windows

@@ -1,0 +1,37 @@
+# name: test/sql/function/string/md5.test
+# description: Test the md5 function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+select md5('hello'), md5(NULL)
+----
+5d41402abc4b2a76b9719d911017c592
+NULL
+
+statement ok
+CREATE TABLE strings AS SELECT s::VARCHAR s FROM generate_series(0,10,1) t(s)
+
+query II
+select md5(s), md5('1') from strings ORDER BY s
+----
+cfcd208495d565ef66e7dff9f98764da	c4ca4238a0b923820dcc509a6f75849b
+c4ca4238a0b923820dcc509a6f75849b	c4ca4238a0b923820dcc509a6f75849b
+d3d9446802a44259755d38e6d163e820	c4ca4238a0b923820dcc509a6f75849b
+c81e728d9d4c2f636f067f89cc14862c	c4ca4238a0b923820dcc509a6f75849b
+eccbc87e4b5ce2fe28308fd9f2a7baf3	c4ca4238a0b923820dcc509a6f75849b
+a87ff679a2f3e71d9181a67b7542122c	c4ca4238a0b923820dcc509a6f75849b
+e4da3b7fbbce2345d7772b0674a318d5	c4ca4238a0b923820dcc509a6f75849b
+1679091c5a880faf6fb5e6087eb1b2dc	c4ca4238a0b923820dcc509a6f75849b
+8f14e45fceea167a5a36dedd4bea2543	c4ca4238a0b923820dcc509a6f75849b
+c9f0f895fb98ab9159f51fd0297e236d	c4ca4238a0b923820dcc509a6f75849b
+45c48cce2e2d7fbdea1afc51c7c6ad26	c4ca4238a0b923820dcc509a6f75849b
+
+query II
+select md5(s), md5('1') from strings where s::INTEGER BETWEEN 1 AND 3 ORDER BY s
+----
+c4ca4238a0b923820dcc509a6f75849b	c4ca4238a0b923820dcc509a6f75849b
+c81e728d9d4c2f636f067f89cc14862c	c4ca4238a0b923820dcc509a6f75849b
+eccbc87e4b5ce2fe28308fd9f2a7baf3	c4ca4238a0b923820dcc509a6f75849b

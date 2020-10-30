@@ -47,7 +47,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	// finalize: perform the actual sorting
 	auto &sink = (OrderByGlobalOperatorState &)*state;
 	ChunkCollection &big_data = sink.sorted_data;
@@ -80,7 +80,7 @@ void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSt
 	sink.sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.count]);
 	sort_collection.Sort(order_types, null_order_types, sink.sorted_vector.get());
 
-	PhysicalSink::Finalize(context, move(state));
+	PhysicalSink::Finalize(pipeline, context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -100,6 +100,18 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 
 unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
+}
+
+string PhysicalOrder::ParamsToString() const {
+	string result;
+	for (idx_t i = 0; i < orders.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += orders[i].expression->ToString() + " ";
+		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
+	}
+	return result;
 }
 
 } // namespace duckdb

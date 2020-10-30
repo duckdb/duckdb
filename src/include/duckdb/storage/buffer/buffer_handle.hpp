@@ -24,6 +24,7 @@ public:
 	block_id_t block_id;
 	//! The managed buffer node
 	FileBuffer *node;
+	data_ptr_t Ptr();
 };
 
 } // namespace duckdb

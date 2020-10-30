@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
-	auto len = env->GetArrayLength(ba_j);
+	idx_t len = env->GetArrayLength(ba_j);
 	string ret;
 	ret.resize(len);
 
@@ -122,7 +122,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	auto res_ref = new ResultHolder();
 	vector<Value> duckdb_params;
 
-	auto param_len = env->GetArrayLength(params);
+	idx_t param_len = env->GetArrayLength(params);
 	if (param_len != stmt_ref->stmt->n_param) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Parameter count mismatch");
 	}

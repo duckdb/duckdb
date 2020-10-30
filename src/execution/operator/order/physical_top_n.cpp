@@ -107,12 +107,12 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (TopNGlobalState &)*state;
 	// global finalize: compute the final top N
 	gstate.heap = ComputeTopN(gstate.big_data, gstate.heap_size);
 
-	PhysicalSink::Finalize(context, move(state));
+	PhysicalSink::Finalize(pipeline, context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -142,6 +142,22 @@ void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 
 unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
 	return make_unique<PhysicalTopNOperatorState>(*this, children[0].get());
+}
+
+string PhysicalTopN::ParamsToString() const {
+	string result;
+	result += "Top " + std::to_string(limit);
+	if (offset > 0) {
+		result += "\n";
+		result += "Offset " + std::to_string(offset);
+	}
+	result += "\n[INFOSEPARATOR]";
+	for (idx_t i = 0; i < orders.size(); i++) {
+		result += "\n";
+		result += orders[i].expression->ToString() + " ";
+		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
+	}
+	return result;
 }
 
 } // namespace duckdb

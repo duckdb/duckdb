@@ -16,6 +16,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<LikeEscapeFun>();
 	Register<LpadFun>();
 	Register<LeftFun>();
+	Register<MD5Fun>();
 	Register<RightFun>();
 	Register<PrintfFun>();
 	Register<RegexpFun>();
@@ -29,6 +30,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<TrimFun>();
 	Register<UnicodeFun>();
 	Register<NFCNormalizeFun>();
+	Register<StringSplitFun>();
 }
 
 } // namespace duckdb

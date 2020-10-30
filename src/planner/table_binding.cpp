@@ -13,9 +13,6 @@
 namespace duckdb {
 using namespace std;
 
-Binding::Binding(const string &alias, idx_t index) : alias(alias), index(index) {
-}
-
 Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, idx_t index)
     : alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {
 	assert(types.size() == names.size());
@@ -45,6 +42,9 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = column_entry->second;
 	LogicalType sql_type = types[column_entry->second];
+	if (colref.alias.empty()) {
+		colref.alias = names[column_entry->second];
+	}
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
@@ -59,14 +59,13 @@ void Binding::GenerateAllColumnExpressions(BindContext &context, vector<unique_p
 }
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vector<string> names_, LogicalGet &get,
-                           idx_t index)
+                           idx_t index, bool add_row_id)
     : Binding(alias, move(types_), move(names_), index), get(get) {
-}
-
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
-                           unordered_map<string, column_t> name_map, LogicalGet &get, idx_t index)
-    : TableBinding(alias, move(types), move(names), get, index) {
-	this->name_map = move(name_map);
+	if (add_row_id) {
+		if (name_map.find("rowid") == name_map.end()) {
+			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
+		}
+	}
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
@@ -84,6 +83,9 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[col_index];
+		if (colref.alias.empty()) {
+			colref.alias = names[entry->second];
+		}
 	}
 
 	auto &column_ids = get.column_ids;
