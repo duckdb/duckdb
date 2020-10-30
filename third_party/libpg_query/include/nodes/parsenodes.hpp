@@ -1658,6 +1658,18 @@ typedef struct PGAlterSeqStmt {
 } PGAlterSeqStmt;
 
 /* ----------------------
+ *		CREATE FUNCTION Statement
+ * ----------------------
+ */
+
+typedef struct PGCreateFunctionStmt {
+	PGNodeTag type;
+	char *name;
+	PGList *args;
+	PGNode *function;
+};
+
+/* ----------------------
  *		Drop Table|Sequence|View|Index|Type|Domain|Conversion|Schema Statement
  * ----------------------
  */
