@@ -42,7 +42,7 @@ void SubqueryExpression::Serialize(Serializer &serializer) {
 
 unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto subquery_type = source.Read<SubqueryType>();
-	auto subquery = QueryNode::Deserialize(source);
+	auto subquery = SelectStatement::Deserialize(source);
 
 	auto expression = make_unique<SubqueryExpression>();
 	expression->subquery_type = subquery_type;
