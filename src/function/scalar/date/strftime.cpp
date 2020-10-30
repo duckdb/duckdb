@@ -932,7 +932,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 		}
 	}
 	// skip trailing spaces
-	while (StringUtil::CharacterIsSpace(data[pos])) {
+	while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
 		pos++;
 	}
 	if (pos != size) {
