@@ -92,28 +92,25 @@ template <> inline bool NotEquals::Operation(string_t left, string_t right) {
 	return StringComparisonOperators::EqualsOrNot<true>(left, right);
 }
 
-// FIXME create more efficient impl again
+// compare up to shared length. if still the same, compare lengths
+template <class OP> static bool templated_string_compare_op(string_t left, string_t right) {
+	auto memcmp_res =
+	    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), MinValue<idx_t>(left.GetSize(), right.GetSize()));
+	return memcmp_res == 0 ? OP::Operation(left.GetSize(), right.GetSize()) : OP::Operation(memcmp_res, 0);
+}
+
 template <> inline bool GreaterThan::Operation(string_t left, string_t right) {
-	//    auto res =  memcmp(left.GetData(), right.GetData(), MinValue<idx_t>(left.GetSize(), right.GetSize())) > 0;
-	//	assert(res == );
-	return left.GetString() > right.GetString();
+	return templated_string_compare_op<GreaterThan>(left, right);
 }
 template <> inline bool GreaterThanEquals::Operation(string_t left, string_t right) {
-	//    auto res =  memcmp(left.GetData(), right.GetData(), MinValue<idx_t>(left.GetSize(), right.GetSize())) >= 0;
-	//    assert(res == );
-	return left.GetString() >= right.GetString();
+	return templated_string_compare_op<GreaterThanEquals>(left, right);
 }
 
 template <> inline bool LessThan::Operation(string_t left, string_t right) {
-	//    auto res =  memcmp(left.GetData(), right.GetData(), MinValue<idx_t>(left.GetSize(), right.GetSize())) < 0;
-	//    assert(res == );
-	return left.GetString() < right.GetString();
+	return templated_string_compare_op<LessThan>(left, right);
 }
 template <> inline bool LessThanEquals::Operation(string_t left, string_t right) {
-	//    auto res =  memcmp(left.GetData(), right.GetData(), MinValue<idx_t>(left.GetSize(), right.GetSize())) <= 0;
-	//    assert(res == );
-
-	return left.GetString() <= right.GetString();
+	return templated_string_compare_op<LessThanEquals>(left, right);
 }
 //===--------------------------------------------------------------------===//
 // Specialized Interval Comparison Operators

@@ -46,14 +46,14 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 		                        (uint8_t *)buffer.get(), buffer_size);
 		if (string_size > buffer_size) {
 			// have to resize the buffer
-			buffer_size = string_size + 1;
+			buffer_size = string_size;
 			buffer = unique_ptr<char[]>(new char[buffer_size]);
 
 			string_size = collator.getSortKey(
 			    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
 			    (uint8_t *)buffer.get(), buffer_size);
 		}
-		return StringVector::AddStringOrBlob(result, string_t(buffer.get(), buffer_size));
+		return StringVector::AddStringOrBlob(result, string_t(buffer.get(), string_size));
 	});
 }
 
