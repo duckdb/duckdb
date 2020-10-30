@@ -33,8 +33,6 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		assert(depth == 0);
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = make_unique<Binder>(context, &binder);
-		// the subquery may refer to CTEs from the parent query
-		subquery_binder->CTE_bindings = binder.CTE_bindings;
 		for (auto &cte_it : expr.subquery->cte_map) {
 			subquery_binder->AddCTE(cte_it.first, cte_it.second.get());
 		}

@@ -16,7 +16,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
-	auto cte = FindCTE(ref.table_name);
+	auto cte = FindCTE(ref.table_name, ref.table_name == alias);
 	if (cte) {
 		// Check if there is a CTE binding in the BindContext
 		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);

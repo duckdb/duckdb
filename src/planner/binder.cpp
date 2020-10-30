@@ -17,7 +17,6 @@ Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
 		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
 		bind_context.cte_references = parent_->bind_context.cte_references;
 		parameters = parent_->parameters;
-		CTE_bindings = parent_->CTE_bindings;
 	}
 }
 
@@ -158,15 +157,17 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
 	CTE_bindings[name] = info;
 }
 
-CommonTableExpressionInfo *Binder::FindCTE(const string &name) {
+CommonTableExpressionInfo *Binder::FindCTE(const string &name, bool skip) {
 	auto entry = CTE_bindings.find(name);
-	if (entry == CTE_bindings.end()) {
-		if (parent && inherit_ctes) {
-			return parent->FindCTE(name);
+	if (entry != CTE_bindings.end()) {
+		if (!skip || entry->second->query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
+			return entry->second;
 		}
-		return nullptr;
 	}
-	return entry->second;
+	if (parent && inherit_ctes) {
+		return parent->FindCTE(name, name == alias);
+	}
+	return nullptr;
 }
 
 idx_t Binder::GenerateTableIndex() {

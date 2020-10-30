@@ -7,6 +7,7 @@ using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
 	auto binder = make_unique<Binder>(context, this);
+	binder->alias = ref.alias;
 	for (auto &cte_it : ref.subquery->cte_map) {
 		binder->AddCTE(cte_it.first, cte_it.second.get());
 	}
