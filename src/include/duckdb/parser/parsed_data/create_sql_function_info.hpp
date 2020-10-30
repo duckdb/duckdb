@@ -13,11 +13,11 @@
 namespace duckdb {
 
 struct CreateSQLFunctionInfo : public CreateFunctionInfo {
-    CreateSQLFunctionInfo() : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY) {
-    }
+	CreateSQLFunctionInfo() : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY) {
+	}
 
-    vector<unique_ptr<ParsedExpression>> arguments;
-    unique_ptr<ParsedExpression> function;
+	vector<unique_ptr<ParsedExpression>> arguments;
+	unique_ptr<ParsedExpression> function;
 };
 
 } // namespace duckdb
