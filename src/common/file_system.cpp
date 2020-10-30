@@ -683,7 +683,7 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 		if (is_directory != match_directory) {
 			return;
 		}
-		if (LikeFun::Glob(fname.c_str(), glob.c_str(), nullptr)) {
+		if (LikeFun::Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
 			if (join_path) {
 				result.push_back(fs.JoinPath(path, fname));
 			} else {
