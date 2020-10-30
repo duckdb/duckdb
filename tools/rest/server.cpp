@@ -88,7 +88,7 @@ static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json 
 	auto &nullmask = FlatVector::Nullmask(*result_vector);
 	for (idx_t i = 0; i < count; i++) {
 		if (!nullmask[i]) {
-			j["data"][col_idx] += data_ptr[i].GetData();
+			j["data"][col_idx] += data_ptr[i].GetString();
 
 		} else {
 			j["data"][col_idx] += nullptr;
