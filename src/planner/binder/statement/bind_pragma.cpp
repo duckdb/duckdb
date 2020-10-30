@@ -20,26 +20,10 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 		throw BinderException("PRAGMA function does not have a function specified");
 	}
 
-	QueryErrorContext error_context(root_statement, stmt.stmt_location);
 	// bind and check named params
-	for (auto &kv : stmt.info->named_parameters) {
-		auto entry = bound_function.named_parameters.find(kv.first);
-		if (entry == bound_function.named_parameters.end()) {
-			// create a list of named parameters for the error
-			string named_params;
-			for (auto &kv : bound_function.named_parameters) {
-				named_params += "    " + kv.first + " " + kv.second.ToString() + "\n";
-			}
-			if (named_params.empty()) {
-				named_params = "Function does not accept any named parameters.";
-			} else {
-				named_params = "Candidates: " + named_params;
-			}
-			throw BinderException(error_context.FormatError("Invalid named parameter \"%s\" for function %s\n%s",
-			                                                kv.first, bound_function.name, named_params));
-		}
-		kv.second = kv.second.CastAs(entry->second);
-	}
+	QueryErrorContext error_context(root_statement, stmt.stmt_location);
+	BindNamedParameters(bound_function.named_parameters, stmt.info->named_parameters, error_context,
+	                    bound_function.name);
 
 	BoundStatement result;
 	result.names = {"Success"};

@@ -71,24 +71,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto &table_function = function->functions[best_function_idx];
 
 	// now check the named parameters
-	for (auto &kv : named_parameters) {
-		auto entry = table_function.named_parameters.find(kv.first);
-		if (entry == table_function.named_parameters.end()) {
-			// create a list of named parameters for the error
-			string named_params;
-			for (auto &kv : table_function.named_parameters) {
-				named_params += "    " + kv.first + " " + kv.second.ToString() + "\n";
-			}
-			if (named_params.empty()) {
-				named_params = "Function does not accept any named parameters.";
-			} else {
-				named_params = "Candidates: " + named_params;
-			}
-			throw BinderException(error_context.FormatError("Invalid named parameter \"%s\" for function %s\n%s",
-			                                                kv.first, table_function.name, named_params));
-		}
-		kv.second = kv.second.CastAs(entry->second);
-	}
+	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
 
 	// cast the parameters to the type of the function
 	for (idx_t i = 0; i < arguments.size(); i++) {
