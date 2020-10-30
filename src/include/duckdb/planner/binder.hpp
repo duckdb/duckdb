@@ -16,7 +16,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/bound_statement.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -29,6 +28,7 @@ class ViewCatalogEntry;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
+struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 
 struct CorrelatedColumnInfo {
@@ -81,7 +81,7 @@ public:
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	void BindCreateViewInfo(CreateViewInfo &base);
-    unique_ptr<CreateScalarFunctionInfo> BindCreateFunctionInfo(CreateFunctionInfo &info);
+	unique_ptr<BoundCreateFunctionInfo> BindCreateFunctionInfo(CreateFunctionInfo &info);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);

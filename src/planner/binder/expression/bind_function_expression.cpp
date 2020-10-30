@@ -22,12 +22,15 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindUnnest(function, depth);
 	}
 	auto &catalog = Catalog::GetCatalog(context);
-	auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema,
-	                             function.function_name, false, error_context);
-	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
+	auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema, function.function_name,
+	                             false, error_context);
+	switch (func->type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
-	} else {
+	case CatalogType::SCALAR_MACRO_ENTRY:
+		// TODO: implement
+	default:
 		// aggregate function
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
 	}

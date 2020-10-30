@@ -17,7 +17,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateSQLFunctionInfo>();
 
-	info->name = stmt->name;
+	auto qname = TransformQualifiedName(stmt->name);
+	info->schema = qname.schema;
+	info->name = qname.name;
 	if (stmt->args) {
 		vector<unique_ptr<ParsedExpression>> arg_list;
 		auto res = TransformExpressionList(stmt->args, arg_list);

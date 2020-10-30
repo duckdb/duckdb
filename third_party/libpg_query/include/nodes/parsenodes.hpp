@@ -1664,7 +1664,7 @@ typedef struct PGAlterSeqStmt {
 
 typedef struct PGCreateFunctionStmt {
 	PGNodeTag type;
-	char *name;
+	PGRangeVar *name;
 	PGList *args;
 	PGNode *function;
 } PGCreateFunctionStmt;
