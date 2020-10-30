@@ -73,6 +73,8 @@ public:
 	bool read_only;
 	//! Whether or not the statement requires a valid transaction to run
 	bool requires_valid_transaction = true;
+	//! The alias for the currently processing subquery, if it exists
+	string alias;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);
@@ -91,7 +93,7 @@ public:
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo *cte);
 	//! Find a common table expression by name; returns nullptr if none exists
-	CommonTableExpressionInfo *FindCTE(const string &name);
+	CommonTableExpressionInfo *FindCTE(const string &name, bool skip = false);
 
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();

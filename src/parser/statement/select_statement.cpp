@@ -39,7 +39,7 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 		auto name = source.Read<string>();
 		auto info = make_unique<CommonTableExpressionInfo>();
 		source.ReadStringVector(info->aliases);
-		info->query = QueryNode::Deserialize(source);
+		info->query = SelectStatement::Deserialize(source);
 		result->cte_map[name] = move(info);
 	}
 	result->node = QueryNode::Deserialize(source);

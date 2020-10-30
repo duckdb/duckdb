@@ -45,7 +45,7 @@ void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &se
 		if (cte->cterecursive || de_with_clause->recursive) {
 			info->query = TransformRecursiveCTE(cte, *info);
 		} else {
-			info->query = TransformSelectNode((PGSelectStmt *)cte->ctequery);
+			info->query = TransformSelect(cte->ctequery);
 		}
 
 		if (!info->query) {
@@ -62,16 +62,18 @@ void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &se
 	}
 }
 
-unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte, CommonTableExpressionInfo &info) {
+unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte,
+                                                               CommonTableExpressionInfo &info) {
 	auto stmt = (PGSelectStmt *)cte->ctequery;
 
-	unique_ptr<QueryNode> node;
+	unique_ptr<SelectStatement> select;
 	switch (stmt->op) {
 	case PG_SETOP_UNION:
 	case PG_SETOP_EXCEPT:
 	case PG_SETOP_INTERSECT: {
-		node = make_unique<RecursiveCTENode>();
-		auto result = (RecursiveCTENode *)node.get();
+		select = make_unique<SelectStatement>();
+		select->node = make_unique_base<QueryNode, RecursiveCTENode>();
+		auto result = (RecursiveCTENode *)select->node.get();
 		result->ctename = string(cte->ctename);
 		result->union_all = stmt->all;
 		result->left = TransformSelectNode(stmt->larg);
@@ -100,7 +102,7 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte,
 	}
 	default:
 		// This CTE is not recursive. Fallback to regular query transformation.
-		return TransformSelectNode((PGSelectStmt *)cte->ctequery);
+		return TransformSelect(cte->ctequery);
 	}
 
 	if (stmt->limitCount || stmt->limitOffset) {
@@ -109,7 +111,7 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte,
 	if (stmt->sortClause) {
 		throw ParserException("ORDER BY in a recursive query is not allowed");
 	}
-	return node;
+	return select;
 }
 
 } // namespace duckdb
