@@ -21,8 +21,6 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 			auto node = reinterpret_cast<PGNode *>(cell->data.ptr_value);
 			auto expr = TransformExpression(node);
 
-			string name;
-			Value val;
 			if (expr->type == ExpressionType::COMPARE_EQUAL) {
                 auto &comp = (ComparisonExpression &)*expr;
 				info.named_parameters[comp.left->ToString()] = comp.right->ToString();
