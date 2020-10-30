@@ -1,13 +1,9 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/strnstrn.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
-
-#include <ctype.h>
-#include <cstring>
 
 using namespace std;
 
@@ -22,7 +18,7 @@ struct ContainsOperator {
 };
 
 static bool contains_strstr(string_t &str, string_t &pattern) {
-	return str.GetString().find(pattern.GetString()) != std::string::npos;
+	return strnstrn(str.GetDataUnsafe(), pattern.GetDataUnsafe(), str.GetSize(), pattern.GetSize());
 }
 
 ScalarFunction ContainsFun::GetFunction() {
