@@ -1,14 +1,14 @@
-/* A Bison parser, made by GNU Bison 2.3.  */
+/* A Bison parser, made by GNU Bison 3.6.4.  */
 
-/* Skeleton interface for Bison's Yacc-like parsers in C
+/* Bison interface for Yacc-like parsers in C
 
-   Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
-   Free Software Foundation, Inc.
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2020 Free Software Foundation,
+   Inc.
 
-   This program is free software; you can redistribute it and/or modify
+   This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2, or (at your option)
-   any later version.
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -33,933 +31,494 @@
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
-/* Tokens.  */
+/* DO NOT RELY ON FEATURES THAT ARE NOT DOCUMENTED in the manual,
+   especially those whose name start with YY_ or yy_.  They are
+   private implementation details that can be changed or removed.  */
+
+#ifndef YY_BASE_YY_THIRD_PARTY_LIBPG_QUERY_GRAMMAR_GRAMMAR_OUT_HPP_INCLUDED
+# define YY_BASE_YY_THIRD_PARTY_LIBPG_QUERY_GRAMMAR_GRAMMAR_OUT_HPP_INCLUDED
+/* Debug traces.  */
+#ifndef YYDEBUG
+# define YYDEBUG 0
+#endif
+#if YYDEBUG
+extern int base_yydebug;
+#endif
+
+/* Token kinds.  */
 #ifndef YYTOKENTYPE
 # define YYTOKENTYPE
-   /* Put the tokens into the symbol table, so that GDB and other debuggers
-      know about them.  */
-   enum yytokentype {
-     IDENT = 258,
-     FCONST = 259,
-     SCONST = 260,
-     BCONST = 261,
-     XCONST = 262,
-     Op = 263,
-     ICONST = 264,
-     PARAM = 265,
-     TYPECAST = 266,
-     DOT_DOT = 267,
-     COLON_EQUALS = 268,
-     EQUALS_GREATER = 269,
-     LESS_EQUALS = 270,
-     GREATER_EQUALS = 271,
-     NOT_EQUALS = 272,
-     ABORT_P = 273,
-     ABSOLUTE_P = 274,
-     ACCESS = 275,
-     ACTION = 276,
-     ADD_P = 277,
-     ADMIN = 278,
-     AFTER = 279,
-     AGGREGATE = 280,
-     ALL = 281,
-     ALSO = 282,
-     ALTER = 283,
-     ALWAYS = 284,
-     ANALYSE = 285,
-     ANALYZE = 286,
-     AND = 287,
-     ANY = 288,
-     ARRAY = 289,
-     AS = 290,
-     ASC_P = 291,
-     ASSERTION = 292,
-     ASSIGNMENT = 293,
-     ASYMMETRIC = 294,
-     AT = 295,
-     ATTACH = 296,
-     ATTRIBUTE = 297,
-     AUTHORIZATION = 298,
-     BACKWARD = 299,
-     BEFORE = 300,
-     BEGIN_P = 301,
-     BETWEEN = 302,
-     BIGINT = 303,
-     BINARY = 304,
-     BIT = 305,
-     BOOLEAN_P = 306,
-     BOTH = 307,
-     BY = 308,
-     CACHE = 309,
-     CALL_P = 310,
-     CALLED = 311,
-     CASCADE = 312,
-     CASCADED = 313,
-     CASE = 314,
-     CAST = 315,
-     CATALOG_P = 316,
-     CHAIN = 317,
-     CHAR_P = 318,
-     CHARACTER = 319,
-     CHARACTERISTICS = 320,
-     CHECK_P = 321,
-     CHECKPOINT = 322,
-     CLASS = 323,
-     CLOSE = 324,
-     CLUSTER = 325,
-     COALESCE = 326,
-     COLLATE = 327,
-     COLLATION = 328,
-     COLUMN = 329,
-     COLUMNS = 330,
-     COMMENT = 331,
-     COMMENTS = 332,
-     COMMIT = 333,
-     COMMITTED = 334,
-     CONCURRENTLY = 335,
-     CONFIGURATION = 336,
-     CONFLICT = 337,
-     CONNECTION = 338,
-     CONSTRAINT = 339,
-     CONSTRAINTS = 340,
-     CONTENT_P = 341,
-     CONTINUE_P = 342,
-     CONVERSION_P = 343,
-     COPY = 344,
-     COST = 345,
-     CREATE_P = 346,
-     CROSS = 347,
-     CSV = 348,
-     CUBE = 349,
-     CURRENT_P = 350,
-     CURRENT_CATALOG = 351,
-     CURRENT_DATE = 352,
-     CURRENT_ROLE = 353,
-     CURRENT_SCHEMA = 354,
-     CURRENT_TIME = 355,
-     CURRENT_TIMESTAMP = 356,
-     CURRENT_USER = 357,
-     CURSOR = 358,
-     CYCLE = 359,
-     DATA_P = 360,
-     DATABASE = 361,
-     DAY_P = 362,
-     DEALLOCATE = 363,
-     DEC = 364,
-     DECIMAL_P = 365,
-     DECLARE = 366,
-     DEFAULT = 367,
-     DEFAULTS = 368,
-     DEFERRABLE = 369,
-     DEFERRED = 370,
-     DEFINER = 371,
-     DELETE_P = 372,
-     DELIMITER = 373,
-     DELIMITERS = 374,
-     DEPENDS = 375,
-     DESC_P = 376,
-     DESCRIBE = 377,
-     DETACH = 378,
-     DICTIONARY = 379,
-     DISABLE_P = 380,
-     DISCARD = 381,
-     DISTINCT = 382,
-     DO = 383,
-     DOCUMENT_P = 384,
-     DOMAIN_P = 385,
-     DOUBLE_P = 386,
-     DROP = 387,
-     EACH = 388,
-     ELSE = 389,
-     ENABLE_P = 390,
-     ENCODING = 391,
-     ENCRYPTED = 392,
-     END_P = 393,
-     ENUM_P = 394,
-     ESCAPE = 395,
-     EVENT = 396,
-     EXCEPT = 397,
-     EXCLUDE = 398,
-     EXCLUDING = 399,
-     EXCLUSIVE = 400,
-     EXECUTE = 401,
-     EXISTS = 402,
-     EXPLAIN = 403,
-     EXPORT_P = 404,
-     EXTENSION = 405,
-     EXTERNAL = 406,
-     EXTRACT = 407,
-     FALSE_P = 408,
-     FAMILY = 409,
-     FETCH = 410,
-     FILTER = 411,
-     FIRST_P = 412,
-     FLOAT_P = 413,
-     FOLLOWING = 414,
-     FOR = 415,
-     FORCE = 416,
-     FOREIGN = 417,
-     FORWARD = 418,
-     FREEZE = 419,
-     FROM = 420,
-     FULL = 421,
-     FUNCTION = 422,
-     FUNCTIONS = 423,
-     GENERATED = 424,
-     GLOB = 425,
-     GLOBAL = 426,
-     GRANT = 427,
-     GRANTED = 428,
-     GROUP_P = 429,
-     GROUPING = 430,
-     HANDLER = 431,
-     HAVING = 432,
-     HEADER_P = 433,
-     HOLD = 434,
-     HOUR_P = 435,
-     IDENTITY_P = 436,
-     IF_P = 437,
-     ILIKE = 438,
-     IMMEDIATE = 439,
-     IMMUTABLE = 440,
-     IMPLICIT_P = 441,
-     IMPORT_P = 442,
-     IN_P = 443,
-     INCLUDING = 444,
-     INCREMENT = 445,
-     INDEX = 446,
-     INDEXES = 447,
-     INHERIT = 448,
-     INHERITS = 449,
-     INITIALLY = 450,
-     INLINE_P = 451,
-     INNER_P = 452,
-     INOUT = 453,
-     INPUT_P = 454,
-     INSENSITIVE = 455,
-     INSERT = 456,
-     INSTEAD = 457,
-     INT_P = 458,
-     INTEGER = 459,
-     INTERSECT = 460,
-     INTERVAL = 461,
-     INTO = 462,
-     INVOKER = 463,
-     IS = 464,
-     ISNULL = 465,
-     ISOLATION = 466,
-     JOIN = 467,
-     KEY = 468,
-     LABEL = 469,
-     LANGUAGE = 470,
-     LARGE_P = 471,
-     LAST_P = 472,
-     LATERAL_P = 473,
-     LEADING = 474,
-     LEAKPROOF = 475,
-     LEFT = 476,
-     LEVEL = 477,
-     LIKE = 478,
-     LIMIT = 479,
-     LISTEN = 480,
-     LOAD = 481,
-     LOCAL = 482,
-     LOCALTIME = 483,
-     LOCALTIMESTAMP = 484,
-     LOCATION = 485,
-     LOCK_P = 486,
-     LOCKED = 487,
-     LOGGED = 488,
-     MAPPING = 489,
-     MATCH = 490,
-     MATERIALIZED = 491,
-     MAXVALUE = 492,
-     METHOD = 493,
-     MINUTE_P = 494,
-     MINVALUE = 495,
-     MODE = 496,
-     MONTH_P = 497,
-     MOVE = 498,
-     NAME_P = 499,
-     NAMES = 500,
-     NATIONAL = 501,
-     NATURAL = 502,
-     NCHAR = 503,
-     NEW = 504,
-     NEXT = 505,
-     NO = 506,
-     NONE = 507,
-     NOT = 508,
-     NOTHING = 509,
-     NOTIFY = 510,
-     NOTNULL = 511,
-     NOWAIT = 512,
-     NULL_P = 513,
-     NULLIF = 514,
-     NULLS_P = 515,
-     NUMERIC = 516,
-     OBJECT_P = 517,
-     OF = 518,
-     OFF = 519,
-     OFFSET = 520,
-     OIDS = 521,
-     OLD = 522,
-     ON = 523,
-     ONLY = 524,
-     OPERATOR = 525,
-     OPTION = 526,
-     OPTIONS = 527,
-     OR = 528,
-     ORDER = 529,
-     ORDINALITY = 530,
-     OUT_P = 531,
-     OUTER_P = 532,
-     OVER = 533,
-     OVERLAPS = 534,
-     OVERLAY = 535,
-     OVERRIDING = 536,
-     OWNED = 537,
-     OWNER = 538,
-     PARALLEL = 539,
-     PARSER = 540,
-     PARTIAL = 541,
-     PARTITION = 542,
-     PASSING = 543,
-     PASSWORD = 544,
-     PLACING = 545,
-     PLANS = 546,
-     POLICY = 547,
-     POSITION = 548,
-     PRAGMA_P = 549,
-     PRECEDING = 550,
-     PRECISION = 551,
-     PREPARE = 552,
-     PREPARED = 553,
-     PRESERVE = 554,
-     PRIMARY = 555,
-     PRIOR = 556,
-     PRIVILEGES = 557,
-     PROCEDURAL = 558,
-     PROCEDURE = 559,
-     PROGRAM = 560,
-     PUBLICATION = 561,
-     QUOTE = 562,
-     RANGE = 563,
-     READ_P = 564,
-     REAL = 565,
-     REASSIGN = 566,
-     RECHECK = 567,
-     RECURSIVE = 568,
-     REF = 569,
-     REFERENCES = 570,
-     REFERENCING = 571,
-     REFRESH = 572,
-     REINDEX = 573,
-     RELATIVE_P = 574,
-     RELEASE = 575,
-     RENAME = 576,
-     REPEATABLE = 577,
-     REPLACE = 578,
-     REPLICA = 579,
-     RESET = 580,
-     RESTART = 581,
-     RESTRICT = 582,
-     RETURNING = 583,
-     RETURNS = 584,
-     REVOKE = 585,
-     RIGHT = 586,
-     ROLE = 587,
-     ROLLBACK = 588,
-     ROLLUP = 589,
-     ROW = 590,
-     ROWS = 591,
-     RULE = 592,
-     SAVEPOINT = 593,
-     SCHEMA = 594,
-     SCHEMAS = 595,
-     SCROLL = 596,
-     SEARCH = 597,
-     SECOND_P = 598,
-     SECURITY = 599,
-     SELECT = 600,
-     SEQUENCE = 601,
-     SEQUENCES = 602,
-     SERIALIZABLE = 603,
-     SERVER = 604,
-     SESSION = 605,
-     SESSION_USER = 606,
-     SET = 607,
-     SETOF = 608,
-     SETS = 609,
-     SHARE = 610,
-     SHOW = 611,
-     SIMILAR = 612,
-     SIMPLE = 613,
-     SKIP = 614,
-     SMALLINT = 615,
-     SNAPSHOT = 616,
-     SOME = 617,
-     SQL_P = 618,
-     STABLE = 619,
-     STANDALONE_P = 620,
-     START = 621,
-     STATEMENT = 622,
-     STATISTICS = 623,
-     STDIN = 624,
-     STDOUT = 625,
-     STORAGE = 626,
-     STRICT_P = 627,
-     STRIP_P = 628,
-     SUBSCRIPTION = 629,
-     SUBSTRING = 630,
-     SYMMETRIC = 631,
-     SYSID = 632,
-     SYSTEM_P = 633,
-     TABLE = 634,
-     TABLES = 635,
-     TABLESAMPLE = 636,
-     TABLESPACE = 637,
-     TEMP = 638,
-     TEMPLATE = 639,
-     TEMPORARY = 640,
-     TEXT_P = 641,
-     THEN = 642,
-     TIME = 643,
-     TIMESTAMP = 644,
-     TO = 645,
-     TRAILING = 646,
-     TRANSACTION = 647,
-     TRANSFORM = 648,
-     TREAT = 649,
-     TRIGGER = 650,
-     TRIM = 651,
-     TRUE_P = 652,
-     TRUNCATE = 653,
-     TRUSTED = 654,
-     TYPE_P = 655,
-     TYPES_P = 656,
-     UNBOUNDED = 657,
-     UNCOMMITTED = 658,
-     UNENCRYPTED = 659,
-     UNION = 660,
-     UNIQUE = 661,
-     UNKNOWN = 662,
-     UNLISTEN = 663,
-     UNLOGGED = 664,
-     UNTIL = 665,
-     UPDATE = 666,
-     USER = 667,
-     USING = 668,
-     VACUUM = 669,
-     VALID = 670,
-     VALIDATE = 671,
-     VALIDATOR = 672,
-     VALUE_P = 673,
-     VALUES = 674,
-     VARCHAR = 675,
-     VARIADIC = 676,
-     VARYING = 677,
-     VERBOSE = 678,
-     VERSION_P = 679,
-     VIEW = 680,
-     VIEWS = 681,
-     VOLATILE = 682,
-     WHEN = 683,
-     WHERE = 684,
-     WHITESPACE_P = 685,
-     WINDOW = 686,
-     WITH = 687,
-     WITHIN = 688,
-     WITHOUT = 689,
-     WORK = 690,
-     WRAPPER = 691,
-     WRITE_P = 692,
-     XML_P = 693,
-     XMLATTRIBUTES = 694,
-     XMLCONCAT = 695,
-     XMLELEMENT = 696,
-     XMLEXISTS = 697,
-     XMLFOREST = 698,
-     XMLNAMESPACES = 699,
-     XMLPARSE = 700,
-     XMLPI = 701,
-     XMLROOT = 702,
-     XMLSERIALIZE = 703,
-     XMLTABLE = 704,
-     YEAR_P = 705,
-     YES_P = 706,
-     ZONE = 707,
-     NOT_LA = 708,
-     NULLS_LA = 709,
-     WITH_LA = 710,
-     POSTFIXOP = 711,
-     UMINUS = 712
-   };
+  enum yytokentype
+  {
+    YYEMPTY = -2,
+    YYEOF = 0,                     /* "end of file"  */
+    YYerror = 256,                 /* error  */
+    YYUNDEF = 257,                 /* "invalid token"  */
+    IDENT = 258,                   /* IDENT  */
+    FCONST = 259,                  /* FCONST  */
+    SCONST = 260,                  /* SCONST  */
+    BCONST = 261,                  /* BCONST  */
+    XCONST = 262,                  /* XCONST  */
+    Op = 263,                      /* Op  */
+    ICONST = 264,                  /* ICONST  */
+    PARAM = 265,                   /* PARAM  */
+    TYPECAST = 266,                /* TYPECAST  */
+    DOT_DOT = 267,                 /* DOT_DOT  */
+    COLON_EQUALS = 268,            /* COLON_EQUALS  */
+    EQUALS_GREATER = 269,          /* EQUALS_GREATER  */
+    LESS_EQUALS = 270,             /* LESS_EQUALS  */
+    GREATER_EQUALS = 271,          /* GREATER_EQUALS  */
+    NOT_EQUALS = 272,              /* NOT_EQUALS  */
+    ABORT_P = 273,                 /* ABORT_P  */
+    ABSOLUTE_P = 274,              /* ABSOLUTE_P  */
+    ACCESS = 275,                  /* ACCESS  */
+    ACTION = 276,                  /* ACTION  */
+    ADD_P = 277,                   /* ADD_P  */
+    ADMIN = 278,                   /* ADMIN  */
+    AFTER = 279,                   /* AFTER  */
+    AGGREGATE = 280,               /* AGGREGATE  */
+    ALL = 281,                     /* ALL  */
+    ALSO = 282,                    /* ALSO  */
+    ALTER = 283,                   /* ALTER  */
+    ALWAYS = 284,                  /* ALWAYS  */
+    ANALYSE = 285,                 /* ANALYSE  */
+    ANALYZE = 286,                 /* ANALYZE  */
+    AND = 287,                     /* AND  */
+    ANY = 288,                     /* ANY  */
+    ARRAY = 289,                   /* ARRAY  */
+    AS = 290,                      /* AS  */
+    ASC_P = 291,                   /* ASC_P  */
+    ASSERTION = 292,               /* ASSERTION  */
+    ASSIGNMENT = 293,              /* ASSIGNMENT  */
+    ASYMMETRIC = 294,              /* ASYMMETRIC  */
+    AT = 295,                      /* AT  */
+    ATTACH = 296,                  /* ATTACH  */
+    ATTRIBUTE = 297,               /* ATTRIBUTE  */
+    AUTHORIZATION = 298,           /* AUTHORIZATION  */
+    BACKWARD = 299,                /* BACKWARD  */
+    BEFORE = 300,                  /* BEFORE  */
+    BEGIN_P = 301,                 /* BEGIN_P  */
+    BETWEEN = 302,                 /* BETWEEN  */
+    BIGINT = 303,                  /* BIGINT  */
+    BINARY = 304,                  /* BINARY  */
+    BIT = 305,                     /* BIT  */
+    BOOLEAN_P = 306,               /* BOOLEAN_P  */
+    BOTH = 307,                    /* BOTH  */
+    BY = 308,                      /* BY  */
+    CACHE = 309,                   /* CACHE  */
+    CALL_P = 310,                  /* CALL_P  */
+    CALLED = 311,                  /* CALLED  */
+    CASCADE = 312,                 /* CASCADE  */
+    CASCADED = 313,                /* CASCADED  */
+    CASE = 314,                    /* CASE  */
+    CAST = 315,                    /* CAST  */
+    CATALOG_P = 316,               /* CATALOG_P  */
+    CHAIN = 317,                   /* CHAIN  */
+    CHAR_P = 318,                  /* CHAR_P  */
+    CHARACTER = 319,               /* CHARACTER  */
+    CHARACTERISTICS = 320,         /* CHARACTERISTICS  */
+    CHECK_P = 321,                 /* CHECK_P  */
+    CHECKPOINT = 322,              /* CHECKPOINT  */
+    CLASS = 323,                   /* CLASS  */
+    CLOSE = 324,                   /* CLOSE  */
+    CLUSTER = 325,                 /* CLUSTER  */
+    COALESCE = 326,                /* COALESCE  */
+    COLLATE = 327,                 /* COLLATE  */
+    COLLATION = 328,               /* COLLATION  */
+    COLUMN = 329,                  /* COLUMN  */
+    COLUMNS = 330,                 /* COLUMNS  */
+    COMMENT = 331,                 /* COMMENT  */
+    COMMENTS = 332,                /* COMMENTS  */
+    COMMIT = 333,                  /* COMMIT  */
+    COMMITTED = 334,               /* COMMITTED  */
+    CONCURRENTLY = 335,            /* CONCURRENTLY  */
+    CONFIGURATION = 336,           /* CONFIGURATION  */
+    CONFLICT = 337,                /* CONFLICT  */
+    CONNECTION = 338,              /* CONNECTION  */
+    CONSTRAINT = 339,              /* CONSTRAINT  */
+    CONSTRAINTS = 340,             /* CONSTRAINTS  */
+    CONTENT_P = 341,               /* CONTENT_P  */
+    CONTINUE_P = 342,              /* CONTINUE_P  */
+    CONVERSION_P = 343,            /* CONVERSION_P  */
+    COPY = 344,                    /* COPY  */
+    COST = 345,                    /* COST  */
+    CREATE_P = 346,                /* CREATE_P  */
+    CROSS = 347,                   /* CROSS  */
+    CSV = 348,                     /* CSV  */
+    CUBE = 349,                    /* CUBE  */
+    CURRENT_P = 350,               /* CURRENT_P  */
+    CURRENT_CATALOG = 351,         /* CURRENT_CATALOG  */
+    CURRENT_DATE = 352,            /* CURRENT_DATE  */
+    CURRENT_ROLE = 353,            /* CURRENT_ROLE  */
+    CURRENT_SCHEMA = 354,          /* CURRENT_SCHEMA  */
+    CURRENT_TIME = 355,            /* CURRENT_TIME  */
+    CURRENT_TIMESTAMP = 356,       /* CURRENT_TIMESTAMP  */
+    CURRENT_USER = 357,            /* CURRENT_USER  */
+    CURSOR = 358,                  /* CURSOR  */
+    CYCLE = 359,                   /* CYCLE  */
+    DATA_P = 360,                  /* DATA_P  */
+    DATABASE = 361,                /* DATABASE  */
+    DAY_P = 362,                   /* DAY_P  */
+    DEALLOCATE = 363,              /* DEALLOCATE  */
+    DEC = 364,                     /* DEC  */
+    DECIMAL_P = 365,               /* DECIMAL_P  */
+    DECLARE = 366,                 /* DECLARE  */
+    DEFAULT = 367,                 /* DEFAULT  */
+    DEFAULTS = 368,                /* DEFAULTS  */
+    DEFERRABLE = 369,              /* DEFERRABLE  */
+    DEFERRED = 370,                /* DEFERRED  */
+    DEFINER = 371,                 /* DEFINER  */
+    DELETE_P = 372,                /* DELETE_P  */
+    DELIMITER = 373,               /* DELIMITER  */
+    DELIMITERS = 374,              /* DELIMITERS  */
+    DEPENDS = 375,                 /* DEPENDS  */
+    DESC_P = 376,                  /* DESC_P  */
+    DESCRIBE = 377,                /* DESCRIBE  */
+    DETACH = 378,                  /* DETACH  */
+    DICTIONARY = 379,              /* DICTIONARY  */
+    DISABLE_P = 380,               /* DISABLE_P  */
+    DISCARD = 381,                 /* DISCARD  */
+    DISTINCT = 382,                /* DISTINCT  */
+    DO = 383,                      /* DO  */
+    DOCUMENT_P = 384,              /* DOCUMENT_P  */
+    DOMAIN_P = 385,                /* DOMAIN_P  */
+    DOUBLE_P = 386,                /* DOUBLE_P  */
+    DROP = 387,                    /* DROP  */
+    EACH = 388,                    /* EACH  */
+    ELSE = 389,                    /* ELSE  */
+    ENABLE_P = 390,                /* ENABLE_P  */
+    ENCODING = 391,                /* ENCODING  */
+    ENCRYPTED = 392,               /* ENCRYPTED  */
+    END_P = 393,                   /* END_P  */
+    ENUM_P = 394,                  /* ENUM_P  */
+    ESCAPE = 395,                  /* ESCAPE  */
+    EVENT = 396,                   /* EVENT  */
+    EXCEPT = 397,                  /* EXCEPT  */
+    EXCLUDE = 398,                 /* EXCLUDE  */
+    EXCLUDING = 399,               /* EXCLUDING  */
+    EXCLUSIVE = 400,               /* EXCLUSIVE  */
+    EXECUTE = 401,                 /* EXECUTE  */
+    EXISTS = 402,                  /* EXISTS  */
+    EXPLAIN = 403,                 /* EXPLAIN  */
+    EXPORT_P = 404,                /* EXPORT_P  */
+    EXTENSION = 405,               /* EXTENSION  */
+    EXTERNAL = 406,                /* EXTERNAL  */
+    EXTRACT = 407,                 /* EXTRACT  */
+    FALSE_P = 408,                 /* FALSE_P  */
+    FAMILY = 409,                  /* FAMILY  */
+    FETCH = 410,                   /* FETCH  */
+    FILTER = 411,                  /* FILTER  */
+    FIRST_P = 412,                 /* FIRST_P  */
+    FLOAT_P = 413,                 /* FLOAT_P  */
+    FOLLOWING = 414,               /* FOLLOWING  */
+    FOR = 415,                     /* FOR  */
+    FORCE = 416,                   /* FORCE  */
+    FOREIGN = 417,                 /* FOREIGN  */
+    FORWARD = 418,                 /* FORWARD  */
+    FREEZE = 419,                  /* FREEZE  */
+    FROM = 420,                    /* FROM  */
+    FULL = 421,                    /* FULL  */
+    FUNCTION = 422,                /* FUNCTION  */
+    FUNCTIONS = 423,               /* FUNCTIONS  */
+    GENERATED = 424,               /* GENERATED  */
+    GLOB = 425,                    /* GLOB  */
+    GLOBAL = 426,                  /* GLOBAL  */
+    GRANT = 427,                   /* GRANT  */
+    GRANTED = 428,                 /* GRANTED  */
+    GROUP_P = 429,                 /* GROUP_P  */
+    GROUPING = 430,                /* GROUPING  */
+    HANDLER = 431,                 /* HANDLER  */
+    HAVING = 432,                  /* HAVING  */
+    HEADER_P = 433,                /* HEADER_P  */
+    HOLD = 434,                    /* HOLD  */
+    HOUR_P = 435,                  /* HOUR_P  */
+    IDENTITY_P = 436,              /* IDENTITY_P  */
+    IF_P = 437,                    /* IF_P  */
+    ILIKE = 438,                   /* ILIKE  */
+    IMMEDIATE = 439,               /* IMMEDIATE  */
+    IMMUTABLE = 440,               /* IMMUTABLE  */
+    IMPLICIT_P = 441,              /* IMPLICIT_P  */
+    IMPORT_P = 442,                /* IMPORT_P  */
+    IN_P = 443,                    /* IN_P  */
+    INCLUDING = 444,               /* INCLUDING  */
+    INCREMENT = 445,               /* INCREMENT  */
+    INDEX = 446,                   /* INDEX  */
+    INDEXES = 447,                 /* INDEXES  */
+    INHERIT = 448,                 /* INHERIT  */
+    INHERITS = 449,                /* INHERITS  */
+    INITIALLY = 450,               /* INITIALLY  */
+    INLINE_P = 451,                /* INLINE_P  */
+    INNER_P = 452,                 /* INNER_P  */
+    INOUT = 453,                   /* INOUT  */
+    INPUT_P = 454,                 /* INPUT_P  */
+    INSENSITIVE = 455,             /* INSENSITIVE  */
+    INSERT = 456,                  /* INSERT  */
+    INSTEAD = 457,                 /* INSTEAD  */
+    INT_P = 458,                   /* INT_P  */
+    INTEGER = 459,                 /* INTEGER  */
+    INTERSECT = 460,               /* INTERSECT  */
+    INTERVAL = 461,                /* INTERVAL  */
+    INTO = 462,                    /* INTO  */
+    INVOKER = 463,                 /* INVOKER  */
+    IS = 464,                      /* IS  */
+    ISNULL = 465,                  /* ISNULL  */
+    ISOLATION = 466,               /* ISOLATION  */
+    JOIN = 467,                    /* JOIN  */
+    KEY = 468,                     /* KEY  */
+    LABEL = 469,                   /* LABEL  */
+    LANGUAGE = 470,                /* LANGUAGE  */
+    LARGE_P = 471,                 /* LARGE_P  */
+    LAST_P = 472,                  /* LAST_P  */
+    LATERAL_P = 473,               /* LATERAL_P  */
+    LEADING = 474,                 /* LEADING  */
+    LEAKPROOF = 475,               /* LEAKPROOF  */
+    LEFT = 476,                    /* LEFT  */
+    LEVEL = 477,                   /* LEVEL  */
+    LIKE = 478,                    /* LIKE  */
+    LIMIT = 479,                   /* LIMIT  */
+    LISTEN = 480,                  /* LISTEN  */
+    LOAD = 481,                    /* LOAD  */
+    LOCAL = 482,                   /* LOCAL  */
+    LOCALTIME = 483,               /* LOCALTIME  */
+    LOCALTIMESTAMP = 484,          /* LOCALTIMESTAMP  */
+    LOCATION = 485,                /* LOCATION  */
+    LOCK_P = 486,                  /* LOCK_P  */
+    LOCKED = 487,                  /* LOCKED  */
+    LOGGED = 488,                  /* LOGGED  */
+    MAPPING = 489,                 /* MAPPING  */
+    MATCH = 490,                   /* MATCH  */
+    MATERIALIZED = 491,            /* MATERIALIZED  */
+    MAXVALUE = 492,                /* MAXVALUE  */
+    METHOD = 493,                  /* METHOD  */
+    MINUTE_P = 494,                /* MINUTE_P  */
+    MINVALUE = 495,                /* MINVALUE  */
+    MODE = 496,                    /* MODE  */
+    MONTH_P = 497,                 /* MONTH_P  */
+    MOVE = 498,                    /* MOVE  */
+    NAME_P = 499,                  /* NAME_P  */
+    NAMES = 500,                   /* NAMES  */
+    NATIONAL = 501,                /* NATIONAL  */
+    NATURAL = 502,                 /* NATURAL  */
+    NCHAR = 503,                   /* NCHAR  */
+    NEW = 504,                     /* NEW  */
+    NEXT = 505,                    /* NEXT  */
+    NO = 506,                      /* NO  */
+    NONE = 507,                    /* NONE  */
+    NOT = 508,                     /* NOT  */
+    NOTHING = 509,                 /* NOTHING  */
+    NOTIFY = 510,                  /* NOTIFY  */
+    NOTNULL = 511,                 /* NOTNULL  */
+    NOWAIT = 512,                  /* NOWAIT  */
+    NULL_P = 513,                  /* NULL_P  */
+    NULLIF = 514,                  /* NULLIF  */
+    NULLS_P = 515,                 /* NULLS_P  */
+    NUMERIC = 516,                 /* NUMERIC  */
+    OBJECT_P = 517,                /* OBJECT_P  */
+    OF = 518,                      /* OF  */
+    OFF = 519,                     /* OFF  */
+    OFFSET = 520,                  /* OFFSET  */
+    OIDS = 521,                    /* OIDS  */
+    OLD = 522,                     /* OLD  */
+    ON = 523,                      /* ON  */
+    ONLY = 524,                    /* ONLY  */
+    OPERATOR = 525,                /* OPERATOR  */
+    OPTION = 526,                  /* OPTION  */
+    OPTIONS = 527,                 /* OPTIONS  */
+    OR = 528,                      /* OR  */
+    ORDER = 529,                   /* ORDER  */
+    ORDINALITY = 530,              /* ORDINALITY  */
+    OUT_P = 531,                   /* OUT_P  */
+    OUTER_P = 532,                 /* OUTER_P  */
+    OVER = 533,                    /* OVER  */
+    OVERLAPS = 534,                /* OVERLAPS  */
+    OVERLAY = 535,                 /* OVERLAY  */
+    OVERRIDING = 536,              /* OVERRIDING  */
+    OWNED = 537,                   /* OWNED  */
+    OWNER = 538,                   /* OWNER  */
+    PARALLEL = 539,                /* PARALLEL  */
+    PARSER = 540,                  /* PARSER  */
+    PARTIAL = 541,                 /* PARTIAL  */
+    PARTITION = 542,               /* PARTITION  */
+    PASSING = 543,                 /* PASSING  */
+    PASSWORD = 544,                /* PASSWORD  */
+    PLACING = 545,                 /* PLACING  */
+    PLANS = 546,                   /* PLANS  */
+    POLICY = 547,                  /* POLICY  */
+    POSITION = 548,                /* POSITION  */
+    PRAGMA_P = 549,                /* PRAGMA_P  */
+    PRECEDING = 550,               /* PRECEDING  */
+    PRECISION = 551,               /* PRECISION  */
+    PREPARE = 552,                 /* PREPARE  */
+    PREPARED = 553,                /* PREPARED  */
+    PRESERVE = 554,                /* PRESERVE  */
+    PRIMARY = 555,                 /* PRIMARY  */
+    PRIOR = 556,                   /* PRIOR  */
+    PRIVILEGES = 557,              /* PRIVILEGES  */
+    PROCEDURAL = 558,              /* PROCEDURAL  */
+    PROCEDURE = 559,               /* PROCEDURE  */
+    PROGRAM = 560,                 /* PROGRAM  */
+    PUBLICATION = 561,             /* PUBLICATION  */
+    QUOTE = 562,                   /* QUOTE  */
+    RANGE = 563,                   /* RANGE  */
+    READ_P = 564,                  /* READ_P  */
+    REAL = 565,                    /* REAL  */
+    REASSIGN = 566,                /* REASSIGN  */
+    RECHECK = 567,                 /* RECHECK  */
+    RECURSIVE = 568,               /* RECURSIVE  */
+    REF = 569,                     /* REF  */
+    REFERENCES = 570,              /* REFERENCES  */
+    REFERENCING = 571,             /* REFERENCING  */
+    REFRESH = 572,                 /* REFRESH  */
+    REINDEX = 573,                 /* REINDEX  */
+    RELATIVE_P = 574,              /* RELATIVE_P  */
+    RELEASE = 575,                 /* RELEASE  */
+    RENAME = 576,                  /* RENAME  */
+    REPEATABLE = 577,              /* REPEATABLE  */
+    REPLACE = 578,                 /* REPLACE  */
+    REPLICA = 579,                 /* REPLICA  */
+    RESET = 580,                   /* RESET  */
+    RESTART = 581,                 /* RESTART  */
+    RESTRICT = 582,                /* RESTRICT  */
+    RETURNING = 583,               /* RETURNING  */
+    RETURNS = 584,                 /* RETURNS  */
+    REVOKE = 585,                  /* REVOKE  */
+    RIGHT = 586,                   /* RIGHT  */
+    ROLE = 587,                    /* ROLE  */
+    ROLLBACK = 588,                /* ROLLBACK  */
+    ROLLUP = 589,                  /* ROLLUP  */
+    ROW = 590,                     /* ROW  */
+    ROWS = 591,                    /* ROWS  */
+    RULE = 592,                    /* RULE  */
+    SAVEPOINT = 593,               /* SAVEPOINT  */
+    SCHEMA = 594,                  /* SCHEMA  */
+    SCHEMAS = 595,                 /* SCHEMAS  */
+    SCROLL = 596,                  /* SCROLL  */
+    SEARCH = 597,                  /* SEARCH  */
+    SECOND_P = 598,                /* SECOND_P  */
+    SECURITY = 599,                /* SECURITY  */
+    SELECT = 600,                  /* SELECT  */
+    SEQUENCE = 601,                /* SEQUENCE  */
+    SEQUENCES = 602,               /* SEQUENCES  */
+    SERIALIZABLE = 603,            /* SERIALIZABLE  */
+    SERVER = 604,                  /* SERVER  */
+    SESSION = 605,                 /* SESSION  */
+    SESSION_USER = 606,            /* SESSION_USER  */
+    SET = 607,                     /* SET  */
+    SETOF = 608,                   /* SETOF  */
+    SETS = 609,                    /* SETS  */
+    SHARE = 610,                   /* SHARE  */
+    SHOW = 611,                    /* SHOW  */
+    SIMILAR = 612,                 /* SIMILAR  */
+    SIMPLE = 613,                  /* SIMPLE  */
+    SKIP = 614,                    /* SKIP  */
+    SMALLINT = 615,                /* SMALLINT  */
+    SNAPSHOT = 616,                /* SNAPSHOT  */
+    SOME = 617,                    /* SOME  */
+    SQL_P = 618,                   /* SQL_P  */
+    STABLE = 619,                  /* STABLE  */
+    STANDALONE_P = 620,            /* STANDALONE_P  */
+    START = 621,                   /* START  */
+    STATEMENT = 622,               /* STATEMENT  */
+    STATISTICS = 623,              /* STATISTICS  */
+    STDIN = 624,                   /* STDIN  */
+    STDOUT = 625,                  /* STDOUT  */
+    STORAGE = 626,                 /* STORAGE  */
+    STRICT_P = 627,                /* STRICT_P  */
+    STRIP_P = 628,                 /* STRIP_P  */
+    SUBSCRIPTION = 629,            /* SUBSCRIPTION  */
+    SUBSTRING = 630,               /* SUBSTRING  */
+    SYMMETRIC = 631,               /* SYMMETRIC  */
+    SYSID = 632,                   /* SYSID  */
+    SYSTEM_P = 633,                /* SYSTEM_P  */
+    TABLE = 634,                   /* TABLE  */
+    TABLES = 635,                  /* TABLES  */
+    TABLESAMPLE = 636,             /* TABLESAMPLE  */
+    TABLESPACE = 637,              /* TABLESPACE  */
+    TEMP = 638,                    /* TEMP  */
+    TEMPLATE = 639,                /* TEMPLATE  */
+    TEMPORARY = 640,               /* TEMPORARY  */
+    TEXT_P = 641,                  /* TEXT_P  */
+    THEN = 642,                    /* THEN  */
+    TIME = 643,                    /* TIME  */
+    TIMESTAMP = 644,               /* TIMESTAMP  */
+    TO = 645,                      /* TO  */
+    TRAILING = 646,                /* TRAILING  */
+    TRANSACTION = 647,             /* TRANSACTION  */
+    TRANSFORM = 648,               /* TRANSFORM  */
+    TREAT = 649,                   /* TREAT  */
+    TRIGGER = 650,                 /* TRIGGER  */
+    TRIM = 651,                    /* TRIM  */
+    TRUE_P = 652,                  /* TRUE_P  */
+    TRUNCATE = 653,                /* TRUNCATE  */
+    TRUSTED = 654,                 /* TRUSTED  */
+    TYPE_P = 655,                  /* TYPE_P  */
+    TYPES_P = 656,                 /* TYPES_P  */
+    UNBOUNDED = 657,               /* UNBOUNDED  */
+    UNCOMMITTED = 658,             /* UNCOMMITTED  */
+    UNENCRYPTED = 659,             /* UNENCRYPTED  */
+    UNION = 660,                   /* UNION  */
+    UNIQUE = 661,                  /* UNIQUE  */
+    UNKNOWN = 662,                 /* UNKNOWN  */
+    UNLISTEN = 663,                /* UNLISTEN  */
+    UNLOGGED = 664,                /* UNLOGGED  */
+    UNTIL = 665,                   /* UNTIL  */
+    UPDATE = 666,                  /* UPDATE  */
+    USER = 667,                    /* USER  */
+    USING = 668,                   /* USING  */
+    VACUUM = 669,                  /* VACUUM  */
+    VALID = 670,                   /* VALID  */
+    VALIDATE = 671,                /* VALIDATE  */
+    VALIDATOR = 672,               /* VALIDATOR  */
+    VALUE_P = 673,                 /* VALUE_P  */
+    VALUES = 674,                  /* VALUES  */
+    VARCHAR = 675,                 /* VARCHAR  */
+    VARIADIC = 676,                /* VARIADIC  */
+    VARYING = 677,                 /* VARYING  */
+    VERBOSE = 678,                 /* VERBOSE  */
+    VERSION_P = 679,               /* VERSION_P  */
+    VIEW = 680,                    /* VIEW  */
+    VIEWS = 681,                   /* VIEWS  */
+    VOLATILE = 682,                /* VOLATILE  */
+    WHEN = 683,                    /* WHEN  */
+    WHERE = 684,                   /* WHERE  */
+    WHITESPACE_P = 685,            /* WHITESPACE_P  */
+    WINDOW = 686,                  /* WINDOW  */
+    WITH = 687,                    /* WITH  */
+    WITHIN = 688,                  /* WITHIN  */
+    WITHOUT = 689,                 /* WITHOUT  */
+    WORK = 690,                    /* WORK  */
+    WRAPPER = 691,                 /* WRAPPER  */
+    WRITE_P = 692,                 /* WRITE_P  */
+    XML_P = 693,                   /* XML_P  */
+    XMLATTRIBUTES = 694,           /* XMLATTRIBUTES  */
+    XMLCONCAT = 695,               /* XMLCONCAT  */
+    XMLELEMENT = 696,              /* XMLELEMENT  */
+    XMLEXISTS = 697,               /* XMLEXISTS  */
+    XMLFOREST = 698,               /* XMLFOREST  */
+    XMLNAMESPACES = 699,           /* XMLNAMESPACES  */
+    XMLPARSE = 700,                /* XMLPARSE  */
+    XMLPI = 701,                   /* XMLPI  */
+    XMLROOT = 702,                 /* XMLROOT  */
+    XMLSERIALIZE = 703,            /* XMLSERIALIZE  */
+    XMLTABLE = 704,                /* XMLTABLE  */
+    YEAR_P = 705,                  /* YEAR_P  */
+    YES_P = 706,                   /* YES_P  */
+    ZONE = 707,                    /* ZONE  */
+    NOT_LA = 708,                  /* NOT_LA  */
+    NULLS_LA = 709,                /* NULLS_LA  */
+    WITH_LA = 710,                 /* WITH_LA  */
+    POSTFIXOP = 711,               /* POSTFIXOP  */
+    UMINUS = 712                   /* UMINUS  */
+  };
+  typedef enum yytokentype yytoken_kind_t;
 #endif
-/* Tokens.  */
-#define IDENT 258
-#define FCONST 259
-#define SCONST 260
-#define BCONST 261
-#define XCONST 262
-#define Op 263
-#define ICONST 264
-#define PARAM 265
-#define TYPECAST 266
-#define DOT_DOT 267
-#define COLON_EQUALS 268
-#define EQUALS_GREATER 269
-#define LESS_EQUALS 270
-#define GREATER_EQUALS 271
-#define NOT_EQUALS 272
-#define ABORT_P 273
-#define ABSOLUTE_P 274
-#define ACCESS 275
-#define ACTION 276
-#define ADD_P 277
-#define ADMIN 278
-#define AFTER 279
-#define AGGREGATE 280
-#define ALL 281
-#define ALSO 282
-#define ALTER 283
-#define ALWAYS 284
-#define ANALYSE 285
-#define ANALYZE 286
-#define AND 287
-#define ANY 288
-#define ARRAY 289
-#define AS 290
-#define ASC_P 291
-#define ASSERTION 292
-#define ASSIGNMENT 293
-#define ASYMMETRIC 294
-#define AT 295
-#define ATTACH 296
-#define ATTRIBUTE 297
-#define AUTHORIZATION 298
-#define BACKWARD 299
-#define BEFORE 300
-#define BEGIN_P 301
-#define BETWEEN 302
-#define BIGINT 303
-#define BINARY 304
-#define BIT 305
-#define BOOLEAN_P 306
-#define BOTH 307
-#define BY 308
-#define CACHE 309
-#define CALL_P 310
-#define CALLED 311
-#define CASCADE 312
-#define CASCADED 313
-#define CASE 314
-#define CAST 315
-#define CATALOG_P 316
-#define CHAIN 317
-#define CHAR_P 318
-#define CHARACTER 319
-#define CHARACTERISTICS 320
-#define CHECK_P 321
-#define CHECKPOINT 322
-#define CLASS 323
-#define CLOSE 324
-#define CLUSTER 325
-#define COALESCE 326
-#define COLLATE 327
-#define COLLATION 328
-#define COLUMN 329
-#define COLUMNS 330
-#define COMMENT 331
-#define COMMENTS 332
-#define COMMIT 333
-#define COMMITTED 334
-#define CONCURRENTLY 335
-#define CONFIGURATION 336
-#define CONFLICT 337
-#define CONNECTION 338
-#define CONSTRAINT 339
-#define CONSTRAINTS 340
-#define CONTENT_P 341
-#define CONTINUE_P 342
-#define CONVERSION_P 343
-#define COPY 344
-#define COST 345
-#define CREATE_P 346
-#define CROSS 347
-#define CSV 348
-#define CUBE 349
-#define CURRENT_P 350
-#define CURRENT_CATALOG 351
-#define CURRENT_DATE 352
-#define CURRENT_ROLE 353
-#define CURRENT_SCHEMA 354
-#define CURRENT_TIME 355
-#define CURRENT_TIMESTAMP 356
-#define CURRENT_USER 357
-#define CURSOR 358
-#define CYCLE 359
-#define DATA_P 360
-#define DATABASE 361
-#define DAY_P 362
-#define DEALLOCATE 363
-#define DEC 364
-#define DECIMAL_P 365
-#define DECLARE 366
-#define DEFAULT 367
-#define DEFAULTS 368
-#define DEFERRABLE 369
-#define DEFERRED 370
-#define DEFINER 371
-#define DELETE_P 372
-#define DELIMITER 373
-#define DELIMITERS 374
-#define DEPENDS 375
-#define DESC_P 376
-#define DESCRIBE 377
-#define DETACH 378
-#define DICTIONARY 379
-#define DISABLE_P 380
-#define DISCARD 381
-#define DISTINCT 382
-#define DO 383
-#define DOCUMENT_P 384
-#define DOMAIN_P 385
-#define DOUBLE_P 386
-#define DROP 387
-#define EACH 388
-#define ELSE 389
-#define ENABLE_P 390
-#define ENCODING 391
-#define ENCRYPTED 392
-#define END_P 393
-#define ENUM_P 394
-#define ESCAPE 395
-#define EVENT 396
-#define EXCEPT 397
-#define EXCLUDE 398
-#define EXCLUDING 399
-#define EXCLUSIVE 400
-#define EXECUTE 401
-#define EXISTS 402
-#define EXPLAIN 403
-#define EXPORT_P 404
-#define EXTENSION 405
-#define EXTERNAL 406
-#define EXTRACT 407
-#define FALSE_P 408
-#define FAMILY 409
-#define FETCH 410
-#define FILTER 411
-#define FIRST_P 412
-#define FLOAT_P 413
-#define FOLLOWING 414
-#define FOR 415
-#define FORCE 416
-#define FOREIGN 417
-#define FORWARD 418
-#define FREEZE 419
-#define FROM 420
-#define FULL 421
-#define FUNCTION 422
-#define FUNCTIONS 423
-#define GENERATED 424
-#define GLOB 425
-#define GLOBAL 426
-#define GRANT 427
-#define GRANTED 428
-#define GROUP_P 429
-#define GROUPING 430
-#define HANDLER 431
-#define HAVING 432
-#define HEADER_P 433
-#define HOLD 434
-#define HOUR_P 435
-#define IDENTITY_P 436
-#define IF_P 437
-#define ILIKE 438
-#define IMMEDIATE 439
-#define IMMUTABLE 440
-#define IMPLICIT_P 441
-#define IMPORT_P 442
-#define IN_P 443
-#define INCLUDING 444
-#define INCREMENT 445
-#define INDEX 446
-#define INDEXES 447
-#define INHERIT 448
-#define INHERITS 449
-#define INITIALLY 450
-#define INLINE_P 451
-#define INNER_P 452
-#define INOUT 453
-#define INPUT_P 454
-#define INSENSITIVE 455
-#define INSERT 456
-#define INSTEAD 457
-#define INT_P 458
-#define INTEGER 459
-#define INTERSECT 460
-#define INTERVAL 461
-#define INTO 462
-#define INVOKER 463
-#define IS 464
-#define ISNULL 465
-#define ISOLATION 466
-#define JOIN 467
-#define KEY 468
-#define LABEL 469
-#define LANGUAGE 470
-#define LARGE_P 471
-#define LAST_P 472
-#define LATERAL_P 473
-#define LEADING 474
-#define LEAKPROOF 475
-#define LEFT 476
-#define LEVEL 477
-#define LIKE 478
-#define LIMIT 479
-#define LISTEN 480
-#define LOAD 481
-#define LOCAL 482
-#define LOCALTIME 483
-#define LOCALTIMESTAMP 484
-#define LOCATION 485
-#define LOCK_P 486
-#define LOCKED 487
-#define LOGGED 488
-#define MAPPING 489
-#define MATCH 490
-#define MATERIALIZED 491
-#define MAXVALUE 492
-#define METHOD 493
-#define MINUTE_P 494
-#define MINVALUE 495
-#define MODE 496
-#define MONTH_P 497
-#define MOVE 498
-#define NAME_P 499
-#define NAMES 500
-#define NATIONAL 501
-#define NATURAL 502
-#define NCHAR 503
-#define NEW 504
-#define NEXT 505
-#define NO 506
-#define NONE 507
-#define NOT 508
-#define NOTHING 509
-#define NOTIFY 510
-#define NOTNULL 511
-#define NOWAIT 512
-#define NULL_P 513
-#define NULLIF 514
-#define NULLS_P 515
-#define NUMERIC 516
-#define OBJECT_P 517
-#define OF 518
-#define OFF 519
-#define OFFSET 520
-#define OIDS 521
-#define OLD 522
-#define ON 523
-#define ONLY 524
-#define OPERATOR 525
-#define OPTION 526
-#define OPTIONS 527
-#define OR 528
-#define ORDER 529
-#define ORDINALITY 530
-#define OUT_P 531
-#define OUTER_P 532
-#define OVER 533
-#define OVERLAPS 534
-#define OVERLAY 535
-#define OVERRIDING 536
-#define OWNED 537
-#define OWNER 538
-#define PARALLEL 539
-#define PARSER 540
-#define PARTIAL 541
-#define PARTITION 542
-#define PASSING 543
-#define PASSWORD 544
-#define PLACING 545
-#define PLANS 546
-#define POLICY 547
-#define POSITION 548
-#define PRAGMA_P 549
-#define PRECEDING 550
-#define PRECISION 551
-#define PREPARE 552
-#define PREPARED 553
-#define PRESERVE 554
-#define PRIMARY 555
-#define PRIOR 556
-#define PRIVILEGES 557
-#define PROCEDURAL 558
-#define PROCEDURE 559
-#define PROGRAM 560
-#define PUBLICATION 561
-#define QUOTE 562
-#define RANGE 563
-#define READ_P 564
-#define REAL 565
-#define REASSIGN 566
-#define RECHECK 567
-#define RECURSIVE 568
-#define REF 569
-#define REFERENCES 570
-#define REFERENCING 571
-#define REFRESH 572
-#define REINDEX 573
-#define RELATIVE_P 574
-#define RELEASE 575
-#define RENAME 576
-#define REPEATABLE 577
-#define REPLACE 578
-#define REPLICA 579
-#define RESET 580
-#define RESTART 581
-#define RESTRICT 582
-#define RETURNING 583
-#define RETURNS 584
-#define REVOKE 585
-#define RIGHT 586
-#define ROLE 587
-#define ROLLBACK 588
-#define ROLLUP 589
-#define ROW 590
-#define ROWS 591
-#define RULE 592
-#define SAVEPOINT 593
-#define SCHEMA 594
-#define SCHEMAS 595
-#define SCROLL 596
-#define SEARCH 597
-#define SECOND_P 598
-#define SECURITY 599
-#define SELECT 600
-#define SEQUENCE 601
-#define SEQUENCES 602
-#define SERIALIZABLE 603
-#define SERVER 604
-#define SESSION 605
-#define SESSION_USER 606
-#define SET 607
-#define SETOF 608
-#define SETS 609
-#define SHARE 610
-#define SHOW 611
-#define SIMILAR 612
-#define SIMPLE 613
-#define SKIP 614
-#define SMALLINT 615
-#define SNAPSHOT 616
-#define SOME 617
-#define SQL_P 618
-#define STABLE 619
-#define STANDALONE_P 620
-#define START 621
-#define STATEMENT 622
-#define STATISTICS 623
-#define STDIN 624
-#define STDOUT 625
-#define STORAGE 626
-#define STRICT_P 627
-#define STRIP_P 628
-#define SUBSCRIPTION 629
-#define SUBSTRING 630
-#define SYMMETRIC 631
-#define SYSID 632
-#define SYSTEM_P 633
-#define TABLE 634
-#define TABLES 635
-#define TABLESAMPLE 636
-#define TABLESPACE 637
-#define TEMP 638
-#define TEMPLATE 639
-#define TEMPORARY 640
-#define TEXT_P 641
-#define THEN 642
-#define TIME 643
-#define TIMESTAMP 644
-#define TO 645
-#define TRAILING 646
-#define TRANSACTION 647
-#define TRANSFORM 648
-#define TREAT 649
-#define TRIGGER 650
-#define TRIM 651
-#define TRUE_P 652
-#define TRUNCATE 653
-#define TRUSTED 654
-#define TYPE_P 655
-#define TYPES_P 656
-#define UNBOUNDED 657
-#define UNCOMMITTED 658
-#define UNENCRYPTED 659
-#define UNION 660
-#define UNIQUE 661
-#define UNKNOWN 662
-#define UNLISTEN 663
-#define UNLOGGED 664
-#define UNTIL 665
-#define UPDATE 666
-#define USER 667
-#define USING 668
-#define VACUUM 669
-#define VALID 670
-#define VALIDATE 671
-#define VALIDATOR 672
-#define VALUE_P 673
-#define VALUES 674
-#define VARCHAR 675
-#define VARIADIC 676
-#define VARYING 677
-#define VERBOSE 678
-#define VERSION_P 679
-#define VIEW 680
-#define VIEWS 681
-#define VOLATILE 682
-#define WHEN 683
-#define WHERE 684
-#define WHITESPACE_P 685
-#define WINDOW 686
-#define WITH 687
-#define WITHIN 688
-#define WITHOUT 689
-#define WORK 690
-#define WRAPPER 691
-#define WRITE_P 692
-#define XML_P 693
-#define XMLATTRIBUTES 694
-#define XMLCONCAT 695
-#define XMLELEMENT 696
-#define XMLEXISTS 697
-#define XMLFOREST 698
-#define XMLNAMESPACES 699
-#define XMLPARSE 700
-#define XMLPI 701
-#define XMLROOT 702
-#define XMLSERIALIZE 703
-#define XMLTABLE 704
-#define YEAR_P 705
-#define YES_P 706
-#define ZONE 707
-#define NOT_LA 708
-#define NULLS_LA 709
-#define WITH_LA 710
-#define POSTFIXOP 711
-#define UMINUS 712
 
-
-
-
+/* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-typedef union YYSTYPE
-#line 14 "third_party/libpg_query/grammar/grammar.y"
+union YYSTYPE
 {
+#line 14 "third_party/libpg_query/grammar/grammar.y"
+
 	core_YYSTYPE		core_yystype;
 	/* these fields must match core_YYSTYPE: */
 	int					ival;
@@ -1000,28 +559,31 @@ typedef union YYSTYPE
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
-}
-/* Line 1529 of yacc.c.  */
-#line 1006 "third_party/libpg_query/grammar/grammar_out.hpp"
-	YYSTYPE;
-# define yystype YYSTYPE /* obsolescent; will be withdrawn */
-# define YYSTYPE_IS_DECLARED 1
+
+#line 564 "third_party/libpg_query/grammar/grammar_out.hpp"
+
+};
+typedef union YYSTYPE YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
+# define YYSTYPE_IS_DECLARED 1
 #endif
 
-
-
+/* Location type.  */
 #if ! defined YYLTYPE && ! defined YYLTYPE_IS_DECLARED
-typedef struct YYLTYPE
+typedef struct YYLTYPE YYLTYPE;
+struct YYLTYPE
 {
   int first_line;
   int first_column;
   int last_line;
   int last_column;
-} YYLTYPE;
-# define yyltype YYLTYPE /* obsolescent; will be withdrawn */
+};
 # define YYLTYPE_IS_DECLARED 1
 # define YYLTYPE_IS_TRIVIAL 1
 #endif
 
 
+
+int base_yyparse (core_yyscan_t yyscanner);
+
+#endif /* !YY_BASE_YY_THIRD_PARTY_LIBPG_QUERY_GRAMMAR_GRAMMAR_OUT_HPP_INCLUDED  */
