@@ -588,7 +588,7 @@ matrix:
       install:
         - choco install python --version 3.8.6
         - export PATH="/c/Python38:/c/Python38/Scripts:$PATH"
-        - python -m pip install "cibuildwheel==1.5.5" "twine"
+        - python -m pip install cibuildwheel twine
 
       script:
         - cd tools/pythonpkg
