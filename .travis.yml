@@ -586,7 +586,7 @@ matrix:
         - CIBW_BUILD='cp36-* cp37-* cp38-*'
 
       install:
-        - choco install python --version 3.8.0
+        - choco install python --version 3.8.6
         - export PATH="/c/Python38:/c/Python38/Scripts:$PATH"
         - python -m pip install "cibuildwheel==1.5.5" "twine"
 
