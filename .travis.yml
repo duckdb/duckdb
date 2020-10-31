@@ -461,13 +461,10 @@ matrix:
       python: 3.7 # this does not apply to the python for root, there we still run 3.6
       filter_secrets: false
 
-      services:
-        - postgresql
-
       addons:
         apt:
           packages:
-            - postgresql-plpython3-10 python3-pip python3-wheel python3-numpy python3-wheel
+            - python3-pip python3-wheel python3-numpy python3-wheel
 
       install:
         - pip install cibuildwheel==0.10.2 twine
@@ -478,13 +475,6 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
-
-         # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
-        - sudo mkdir /home/postgres && sudo chown postgres /home/postgres
-        - sudo python3 -m pip install --prefix=/tmp tools/pythonpkg/wheelhouse/duckdb-*-cp36-cp36m-manylinux1_x86_64.whl
-        - python3 $TRAVIS_BUILD_DIR/scripts/repeat_until_success.py "sudo -Hiu postgres psql -c \"CREATE EXTENSION plpython3u\""
-        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport sys\nsys.path.insert(0,'/tmp/lib/python3.6/site-packages/')\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
-        - sudo -Hiu postgres psql -c "SELECT quack()"
 
         - |
           if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
