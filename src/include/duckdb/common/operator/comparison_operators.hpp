@@ -96,12 +96,15 @@ template <> inline bool NotEquals::Operation(string_t left, string_t right) {
 template <class OP> static bool templated_string_compare_op(string_t left, string_t right) {
 	auto memcmp_res =
 	    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), MinValue<idx_t>(left.GetSize(), right.GetSize()));
-	return memcmp_res == 0 ? OP::Operation(left.GetSize(), right.GetSize()) : OP::Operation(memcmp_res, 0);
+	auto final_res = memcmp_res == 0 ? OP::Operation(left.GetSize(), right.GetSize()) : OP::Operation(memcmp_res, 0);
+	assert(final_res == OP::Operation(strcmp(left.GetString().c_str(), right.GetString().c_str()), 0));
+	return final_res;
 }
 
 template <> inline bool GreaterThan::Operation(string_t left, string_t right) {
 	return templated_string_compare_op<GreaterThan>(left, right);
 }
+
 template <> inline bool GreaterThanEquals::Operation(string_t left, string_t right) {
 	return templated_string_compare_op<GreaterThanEquals>(left, right);
 }
@@ -109,6 +112,7 @@ template <> inline bool GreaterThanEquals::Operation(string_t left, string_t rig
 template <> inline bool LessThan::Operation(string_t left, string_t right) {
 	return templated_string_compare_op<LessThan>(left, right);
 }
+
 template <> inline bool LessThanEquals::Operation(string_t left, string_t right) {
 	return templated_string_compare_op<LessThanEquals>(left, right);
 }
