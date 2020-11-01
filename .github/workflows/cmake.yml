@@ -1,19 +1,44 @@
-name: GCC10 Debug
-
 on: [push]
 
 jobs:
-  build:
-    # The CMake configure and build commands are platform agnostic and should work equally
-    # well on Windows or Mac.  You can convert this to a matrix build if you need
-    # cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+  - gcc-release:
+    name: GCC10 Release
+    runs-on: ubuntu-latest
+    
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU_EXTENSION: 1
+      BUILD_TPCH_EXTENSION: 1
+      BUILD_REST: 1
+      JDBC_DRIVER: 1
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Install
+      shell: bash
+      run: sudo install ninja-build
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Test
+      shell: bash
+      run: make allunit
+      
+      
+  - gcc-debug:
+    name: GCC10 Debug
     runs-on: ubuntu-latest
     
     env:
       CC: gcc-10
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
+      DISABLE_UNITY: 1
       GEN: ninja
 
     steps:
@@ -21,7 +46,7 @@ jobs:
     
     - name: Install
       shell: bash
-      run: sudo add-apt-repository ppa:ubuntu-toolchain-r/test && sudo apt-get update && sudo apt-get install g++-10 ninja-build
+      run: sudo install ninja-build
 
     - name: Build
       shell: bash
