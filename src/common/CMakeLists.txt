@@ -20,7 +20,6 @@ add_library_unity(
   printer.cpp
   serializer.cpp
   string_util.cpp
-  strnstrn.cpp
   symbols.cpp
   tree_renderer.cpp
   types.cpp

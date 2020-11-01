@@ -1,7 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/strnstrn.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "utf8proc.hpp"
 
@@ -13,11 +12,10 @@ static int64_t instr(string_t haystack, string_t needle) {
 	int64_t string_position = 0;
 
 	// Getting information about the needle and the haystack
-	auto location_data =
-	    strnstrn(haystack.GetDataUnsafe(), needle.GetDataUnsafe(), haystack.GetSize(), needle.GetSize());
-	if (location_data) {
+	auto location = ContainsFun::Find(haystack, needle);
+	if (location != INVALID_INDEX) {
+		auto len = (utf8proc_ssize_t) location;
 		auto str = reinterpret_cast<const utf8proc_uint8_t *>(haystack.GetDataUnsafe());
-		utf8proc_ssize_t len = location_data - haystack.GetDataUnsafe();
 		assert(len <= (utf8proc_ssize_t)haystack.GetSize());
 		for (++string_position; len > 0; ++string_position) {
 			utf8proc_int32_t codepoint;
