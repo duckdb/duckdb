@@ -53,7 +53,8 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 			    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
 			    (uint8_t *)buffer.get(), buffer_size);
 		}
-		return StringVector::AddStringOrBlob(result, string_t(buffer.get(), string_size));
+		// '\0' is in the sort key size
+		return StringVector::AddStringOrBlob(result, string_t(buffer.get(), string_size - 1));
 	});
 }
 

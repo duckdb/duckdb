@@ -94,6 +94,7 @@ public:
 	}
 
 	void Verify();
+	void VerifyNull();
 
 private:
 	union {

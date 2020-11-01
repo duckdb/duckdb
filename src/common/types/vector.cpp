@@ -744,6 +744,23 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			break;
 		}
 	}
+	if (type.id() == LogicalTypeId::VARCHAR) {
+		// verify that there are no '\0' bytes in string values
+		switch (vector_type) {
+		case VectorType::FLAT_VECTOR: {
+			auto strings = FlatVector::GetData<string_t>(*this);
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel.get_index(i);
+				if (!nullmask[oidx]) {
+					strings[oidx].VerifyNull();
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
 
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {
