@@ -655,3 +655,4 @@ matrix:
         - (cd tests && R -f testthat.R)
         - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
 
+# trigger build
