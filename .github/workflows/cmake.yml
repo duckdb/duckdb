@@ -20,7 +20,7 @@ jobs:
     
     - name: Install
       shell: bash
-      run: sudo add-apt-repository ppa:ubuntu-toolchain-r/test && sudo apt-get update && apt install g++-10
+      run: sudo add-apt-repository ppa:ubuntu-toolchain-r/test && sudo apt-get update && sudo apt-get install g++-10
 
     - name: Build
       shell: bash
