@@ -8,19 +8,13 @@ using namespace std;
 
 namespace duckdb {
 
-idx_t ContainsChar(const unsigned char *haystack, idx_t haystack_size, unsigned char needle) {
-	// contains for a single byte: simply scan the haystack and return true if the char is found
-	for(idx_t i = 0; i < haystack_size; i++) {
-		if (haystack[i] == needle) {
-			return i;
-		}
-	}
-	return INVALID_INDEX;
-}
-
 template<class UNSIGNED, int NEEDLE_SIZE>
-static idx_t ContainsSmall(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle) {
-	// contains for a small needle (2-8 bytes)
+static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t base_offset) {
+	if (NEEDLE_SIZE > haystack_size) {
+		// needle is bigger than haystack: haystack cannot contain needle
+		return INVALID_INDEX;
+	}
+	// contains for a small unaligned needle (3/5/6/7 bytes)
 	// we perform unsigned integer comparisons to check for equality of the entire needle in a single comparison
 	// this implementation is inspired by the memmem implementation of freebsd
 
@@ -37,7 +31,7 @@ static idx_t ContainsSmall(const unsigned char *haystack, idx_t haystack_size, c
 	for(idx_t offset = NEEDLE_SIZE; offset < haystack_size; offset++) {
 		// for this position we first compare the haystack with the needle
 		if (haystack_entry == needle_entry) {
-			return offset - NEEDLE_SIZE;
+			return base_offset + offset - NEEDLE_SIZE;
 		}
 		// now we adjust the haystack entry by
 		// (1) removing the left-most character (shift by 8)
@@ -47,12 +41,36 @@ static idx_t ContainsSmall(const unsigned char *haystack, idx_t haystack_size, c
 		haystack_entry = (haystack_entry << 8) | ((UNSIGNED(haystack[offset])) << shift);
 	}
 	if (haystack_entry == needle_entry) {
-		return haystack_size - NEEDLE_SIZE;
+		return base_offset + haystack_size - NEEDLE_SIZE;
 	}
 	return INVALID_INDEX;
 }
 
-idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size) {
+
+template<class UNSIGNED>
+static idx_t ContainsAligned(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t base_offset) {
+	if (sizeof(UNSIGNED) > haystack_size) {
+		// needle is bigger than haystack: haystack cannot contain needle
+		return INVALID_INDEX;
+	}
+	// contains for a small needle aligned with unsigned integer (2/4/8)
+	// similar to ContainsUnaligned, but simpler because we only need to do a reinterpret cast
+	auto needle_entry = Load<UNSIGNED>(needle);
+	for(idx_t offset = 0; offset <= haystack_size - sizeof(UNSIGNED); offset++) {
+		// for this position we first compare the haystack with the needle
+		auto haystack_entry = Load<UNSIGNED>(haystack + offset);
+		if (needle_entry == haystack_entry) {
+			return base_offset + offset;
+		}
+	}
+	return INVALID_INDEX;
+}
+
+idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size, idx_t base_offset) {
+	if (needle_size > haystack_size) {
+		// needle is bigger than haystack: haystack cannot contain needle
+		return INVALID_INDEX;
+	}
 	// this implementation is inspired by Raphael Javaux's faststrstr (https://github.com/RaphaelJ/fast_strstr)
 	// generic contains; note that we can't use strstr because we don't have null-terminated strings anymore
 	// we keep track of a shifting window sum of all characters with window size equal to needle_size
@@ -68,7 +86,7 @@ idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const 
 	while(true) {
 		if (sums_diff == 0 && haystack[offset] == needle[0]) {
 			if (memcmp(haystack + offset, needle, needle_size) == 0) {
-				return offset;
+				return base_offset + offset;
 			}
 		}
 		if (offset > haystack_size - needle_size) {
@@ -85,33 +103,38 @@ idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
 	auto haystack_size = haystack_s.GetSize();
 	auto needle        = (const unsigned char*) needle_s.GetDataUnsafe();
 	auto needle_size   = needle_s.GetSize();
-	if (needle_size > haystack_size) {
-		// needle is bigger than haystack: haystack cannot contain needle
-		return INVALID_INDEX;
-	}
-	// switch algorithm depending on needle size
-	switch(needle_size) {
-	case 0:
+	if (needle_size == 0) {
 		// empty needle: always true
 		return 0;
+	}
+	// start off by performing a memchr to find the first character of the
+	auto location = memchr(haystack, needle[0], haystack_size);
+	if (location == nullptr) {
+		return INVALID_INDEX;
+	}
+	idx_t base_offset = (const unsigned char *) location - haystack;
+	haystack_size -= base_offset;
+	haystack = (const unsigned char *) location;
+	// switch algorithm depending on needle size
+	switch(needle_size) {
 	case 1:
-		return ContainsChar(haystack, haystack_size, *needle);
+		return base_offset;
 	case 2:
-		return ContainsSmall<uint16_t, 2>(haystack, haystack_size, needle);
+		return ContainsAligned<uint16_t>(haystack, haystack_size, needle, base_offset);
 	case 3:
-		return ContainsSmall<uint32_t, 3>(haystack, haystack_size, needle);
+		return ContainsUnaligned<uint32_t, 3>(haystack, haystack_size, needle, base_offset);
 	case 4:
-		return ContainsSmall<uint32_t, 4>(haystack, haystack_size, needle);
+		return ContainsAligned<uint32_t>(haystack, haystack_size, needle, base_offset);
 	case 5:
-		return ContainsSmall<uint64_t, 5>(haystack, haystack_size, needle);
+		return ContainsUnaligned<uint64_t, 5>(haystack, haystack_size, needle, base_offset);
 	case 6:
-		return ContainsSmall<uint64_t, 6>(haystack, haystack_size, needle);
+		return ContainsUnaligned<uint64_t, 6>(haystack, haystack_size, needle, base_offset);
 	case 7:
-		return ContainsSmall<uint64_t, 7>(haystack, haystack_size, needle);
+		return ContainsUnaligned<uint64_t, 7>(haystack, haystack_size, needle, base_offset);
 	case 8:
-		return ContainsSmall<uint64_t, 8>(haystack, haystack_size, needle);
+		return ContainsAligned<uint64_t>(haystack, haystack_size, needle, base_offset);
 	default:
-		return ContainsGeneric(haystack, haystack_size, needle, needle_size);
+		return ContainsGeneric(haystack, haystack_size, needle, needle_size, base_offset);
 	}
 }
 
