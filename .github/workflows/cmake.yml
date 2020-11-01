@@ -2,20 +2,18 @@ on: [push]
 
 jobs:
   win-release:
-    name: Windows Release
+    name: Windows Debug
     runs-on: windows-latest
     
     steps:
     - uses: actions/checkout@v2
       
-    - name: Install
-      run: choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-
     - name: Build
       shell: bash
-      run: C:/Python37-x64/python.exe scripts/amalgamation.py && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 && cmake --build . --target duckdb --config Release
+      run: cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64 && cmake --build . --target unittest --config Debug
 
     - name: Test
+      shell: bash
       run: test/Release/unittest.exe
 
      
