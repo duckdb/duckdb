@@ -12,7 +12,7 @@ jobs:
     
     env:
       CC: gcc-10
-      CX: g++-10
+      CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
 
     steps:
