@@ -1,4 +1,4 @@
-name: Debug test
+name: GCC10 Debug
 
 on: [push]
 
@@ -9,9 +9,18 @@ jobs:
     # cross-platform coverage.
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
     runs-on: ubuntu-latest
+    
+    env:
+      CC: gcc-10
+      CX: g++-10
+      TREAT_WARNINGS_AS_ERRORS: 1
 
     steps:
     - uses: actions/checkout@v2
+    
+    - name: Install
+      shell: bash
+      run: sudo add-apt-repository ppa:ubuntu-toolchain-r/test && sudo apt-get update && apt install g++-10
 
     - name: Build
       shell: bash
