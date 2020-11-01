@@ -19,7 +19,7 @@ jobs:
     
     - name: Install
       shell: bash
-      run: sudo install ninja-build
+      run: sudo apt-get install ninja-build
 
     - name: Build
       shell: bash
@@ -46,7 +46,7 @@ jobs:
     
     - name: Install
       shell: bash
-      run: sudo install ninja-build
+      run: sudo apt-get install ninja-build
 
     - name: Build
       shell: bash
