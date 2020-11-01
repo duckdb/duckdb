@@ -1,7 +1,7 @@
 on: [push]
 
 jobs:
-  - gcc-release:
+  gcc-release:
     name: GCC10 Release
     runs-on: ubuntu-latest
     
@@ -30,7 +30,7 @@ jobs:
       run: make allunit
       
       
-  - gcc-debug:
+  gcc-debug:
     name: GCC10 Debug
     runs-on: ubuntu-latest
     
