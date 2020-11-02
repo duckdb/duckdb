@@ -7,7 +7,7 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<DeleteStatement> Transformer::TransformDelete(PGNode *node) {
 	auto stmt = reinterpret_cast<PGDeleteStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	auto result = make_unique<DeleteStatement>();
 
 	result->condition = TransformExpression(stmt->whereClause);

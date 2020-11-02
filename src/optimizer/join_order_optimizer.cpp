@@ -25,10 +25,10 @@ template <class T> static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b
 bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
-		assert(colref.depth == 0);
-		assert(colref.binding.table_index != INVALID_INDEX);
+		D_ASSERT(colref.depth == 0);
+		D_ASSERT(colref.binding.table_index != INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
-		assert(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
+		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
@@ -36,7 +36,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 		bindings.clear();
 		return false;
 	}
-	assert(expression.type != ExpressionType::SUBQUERY);
+	D_ASSERT(expression.type != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
 		if (!ExtractBindings(expr, bindings)) {
@@ -57,7 +57,7 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 		node = move(filter);
 	}
 	// push the filter into the LogicalFilter
-	assert(node->type == LogicalOperatorType::FILTER);
+	D_ASSERT(node->type == LogicalOperatorType::FILTER);
 	auto filter = (LogicalFilter *)node.get();
 	filter->expressions.push_back(move(expr));
 	return node;
@@ -396,14 +396,14 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 					}
 				}
 			}
-			assert(smallest_plans[0] && smallest_plans[1]);
-			assert(smallest_index[0] != smallest_index[1]);
+			D_ASSERT(smallest_plans[0] && smallest_plans[1]);
+			D_ASSERT(smallest_index[0] != smallest_index[1]);
 			auto left = smallest_plans[0]->set, right = smallest_plans[1]->set;
 			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
 			query_graph.CreateEdge(left, right, nullptr);
 			// now emit the pair and continue with the algorithm
 			auto connection = query_graph.GetConnection(left, right);
-			assert(connection);
+			D_ASSERT(connection);
 
 			best_connection = EmitPair(left, right, connection);
 			best_left = smallest_index[0];
@@ -418,7 +418,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 
 		// important to erase the biggest element first
 		// if we erase the smallest element first the index of the biggest element changes
-		assert(best_right > best_left);
+		D_ASSERT(best_right > best_left);
 		T.erase(T.begin() + best_right);
 		T.erase(T.begin() + best_left);
 		T.push_back(best_connection->set);
@@ -485,15 +485,15 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 			// set the join conditions from the join node
 			for (auto &f : node->info->filters) {
 				// extract the filter from the operator it originally belonged to
-				assert(filters[f->filter_index]);
+				D_ASSERT(filters[f->filter_index]);
 				auto condition = move(filters[f->filter_index]);
 				// now create the actual join condition
-				assert((JoinRelationSet::IsSubset(left.first, f->left_set) &&
+				D_ASSERT((JoinRelationSet::IsSubset(left.first, f->left_set) &&
 				        JoinRelationSet::IsSubset(right.first, f->right_set)) ||
 				       (JoinRelationSet::IsSubset(left.first, f->right_set) &&
 				        JoinRelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
-				assert(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+				D_ASSERT(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = (BoundComparisonExpression &)*condition;
 				// we need to figure out which side is which by looking at the relations available to us
 				bool invert = JoinRelationSet::IsSubset(left.first, f->left_set) ? false : true;
@@ -506,7 +506,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				}
 				join->conditions.push_back(move(cond));
 			}
-			assert(join->conditions.size() > 0);
+			D_ASSERT(join->conditions.size() > 0);
 			result_operator = move(join);
 		}
 		left_node = left.first;
@@ -514,8 +514,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		result_relation = set_manager.Union(left_node, right_node);
 	} else {
 		// base node, get the entry from the list of extracted relations
-		assert(node->set->count == 1);
-		assert(extracted_relations[node->set->relations[0]]);
+		D_ASSERT(node->set->count == 1);
+		D_ASSERT(extracted_relations[node->set->relations[0]]);
 		result_relation = node->set;
 		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
@@ -557,7 +557,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				}
 				// create the join condition
 				JoinCondition cond;
-				assert(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+				D_ASSERT(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = (BoundComparisonExpression &)*filter;
 				// we need to figure out which side is which by looking at the relations available to us
 				cond.left = !invert ? move(comparison.left) : move(comparison.right);
@@ -581,11 +581,11 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 					if (node == result_operator.get()) {
 						result_operator = move(comp_join);
 					} else {
-						assert(result_operator->type == LogicalOperatorType::FILTER);
+						D_ASSERT(result_operator->type == LogicalOperatorType::FILTER);
 						result_operator->children[0] = move(comp_join);
 					}
 				} else {
-					assert(node->type == LogicalOperatorType::COMPARISON_JOIN);
+					D_ASSERT(node->type == LogicalOperatorType::COMPARISON_JOIN);
 					auto &comp_join = (LogicalComparisonJoin &)*node;
 					comp_join.conditions.push_back(move(cond));
 				}
@@ -620,12 +620,12 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 		// first node is the join, return it immediately
 		return move(join_tree.second);
 	}
-	assert(plan->children.size() == 1);
+	D_ASSERT(plan->children.size() == 1);
 	// have to move up through the relations
 	auto op = plan.get();
 	auto parent = plan.get();
 	while (op->type != LogicalOperatorType::CROSS_PRODUCT && op->type != LogicalOperatorType::COMPARISON_JOIN) {
-		assert(op->children.size() == 1);
+		D_ASSERT(op->children.size() == 1);
 		parent = op;
 		op = op->children[0].get();
 	}
@@ -639,7 +639,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 // FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	assert(filters.size() == 0 && relations.size() == 0); // assert that the JoinOrderOptimizer has not been used before
+	D_ASSERT(filters.size() == 0 && relations.size() == 0); // assert that the JoinOrderOptimizer has not been used before
 	LogicalOperator *op = plan.get();
 	// now we optimize the current plan
 	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
@@ -661,8 +661,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (auto &op : filter_operators) {
 		if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
 			auto &join = (LogicalComparisonJoin &)*op;
-			assert(join.join_type == JoinType::INNER);
-			assert(join.expressions.size() == 0);
+			D_ASSERT(join.join_type == JoinType::INNER);
+			D_ASSERT(join.expressions.size() == 0);
 			for (auto &cond : join.conditions) {
 				auto comparison =
 				    make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
@@ -758,7 +758,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		SolveJoinOrder();
 		// now we can obtain the final plan!
 		final_plan = plans.find(total_relation);
-		assert(final_plan != plans.end());
+		D_ASSERT(final_plan != plans.end());
 	}
 	// now perform the actual reordering
 	return RewritePlan(move(plan), final_plan->second.get());

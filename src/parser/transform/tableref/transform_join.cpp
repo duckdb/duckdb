@@ -46,7 +46,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 		// usingClause is a list of strings
 		for (auto node = root->usingClause->head; node != nullptr; node = node->next) {
 			auto target = reinterpret_cast<PGNode *>(node->data.ptr_value);
-			assert(target->type == T_PGString);
+			D_ASSERT(target->type == T_PGString);
 			auto column_name = string(reinterpret_cast<PGValue *>(target)->val.str);
 			result->using_columns.push_back(column_name);
 		}

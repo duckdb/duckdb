@@ -48,7 +48,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			string right_binding;
 			for (auto &binding : all_bindings) {
 				if (lhs_tables.find(binding) == lhs_tables.end()) {
-					assert(right_binding.empty());
+					D_ASSERT(right_binding.empty());
 					right_binding = binding;
 				} else {
 					left_binding = binding;
@@ -57,7 +57,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			if (right_binding.empty()) {
 				continue;
 			}
-			assert(!left_binding.empty());
+			D_ASSERT(!left_binding.empty());
 			// there is a match! create the join condition
 			AddCondition(ref, left_binding, right_binding, column_name);
 			bind_context.hidden_columns.insert(right_binding + "." + column_name);
@@ -84,7 +84,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		}
 	} else if (ref.using_columns.size() > 0) {
 		// USING columns
-		assert(!result->condition);
+		D_ASSERT(!result->condition);
 		vector<string> left_join_bindings;
 		vector<unordered_set<string>> matching_left_bindings;
 
@@ -124,14 +124,14 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			string right_binding;
 			for (auto &binding : all_bindings) {
 				if (left_bindings.find(binding) == left_bindings.end()) {
-					assert(right_binding.empty());
+					D_ASSERT(right_binding.empty());
 					right_binding = binding;
 				}
 			}
 			if (right_binding.empty()) {
 				throw BinderException("Column \"%s\" does not exist on right side of join!", using_column);
 			}
-			assert(!left_binding.empty());
+			D_ASSERT(!left_binding.empty());
 			AddCondition(ref, left_binding, right_binding, using_column);
 			bind_context.hidden_columns.insert(right_binding + "." + using_column);
 		}

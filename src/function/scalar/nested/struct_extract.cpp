@@ -25,7 +25,7 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
 	// this should be guaranteed by the binder
-	assert(args.column_count() == 1);
+	D_ASSERT(args.column_count() == 1);
 	auto &vec = args.data[0];
 
 	vec.Verify(args.size());
@@ -69,7 +69,7 @@ static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, Scal
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
-	assert(key_val.type().id() == LogicalTypeId::VARCHAR);
+	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	if (key_val.is_null || key_val.str_value.length() < 1) {
 		throw Exception("Key name for struct_extract needs to be neither NULL nor empty");
 	}

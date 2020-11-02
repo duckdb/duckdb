@@ -100,7 +100,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding) {
 	for (auto &column_name : binding->names) {
-		assert(!column_name.empty());
+		D_ASSERT(!column_name.empty());
 		if (BindingIsHidden(binding->alias, column_name)) {
 			continue;
 		}

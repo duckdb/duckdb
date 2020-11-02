@@ -92,7 +92,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);
 		// bind the child subquery
 		auto bound_child = view_binder.Bind(subquery);
-		assert(bound_child->type == TableReferenceType::SUBQUERY);
+		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = (BoundSubqueryRef &)*bound_child;
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {

@@ -15,10 +15,10 @@ using namespace std;
 
 Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, idx_t index)
     : alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {
-	assert(types.size() == names.size());
+	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
-		assert(!name.empty());
+		D_ASSERT(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}

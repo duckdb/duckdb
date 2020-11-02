@@ -7,12 +7,12 @@ using namespace std;
 using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
-	assert(node);
-	assert(node->type == T_PGViewStmt);
+	D_ASSERT(node);
+	D_ASSERT(node->type == T_PGViewStmt);
 
 	auto stmt = reinterpret_cast<PGViewStmt *>(node);
-	assert(stmt);
-	assert(stmt->view);
+	D_ASSERT(stmt);
+	D_ASSERT(stmt->view);
 
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateViewInfo>();

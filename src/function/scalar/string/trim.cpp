@@ -25,7 +25,7 @@ static void unary_trim_function(DataChunk &args, ExpressionState &state, Vector 
 		if (LTRIM) {
 			while (begin < size) {
 				const auto bytes = utf8proc_iterate(str + begin, size - begin, &codepoint);
-				assert(bytes > 0);
+				D_ASSERT(bytes > 0);
 				if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 					break;
 				}
@@ -39,7 +39,7 @@ static void unary_trim_function(DataChunk &args, ExpressionState &state, Vector 
 			end = begin;
 			for (auto next = begin; next < size;) {
 				const auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
-				assert(bytes > 0);
+				D_ASSERT(bytes > 0);
 				next += bytes;
 				if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 					end = next;
@@ -101,7 +101,7 @@ static void binary_trim_function(DataChunk &input, ExpressionState &state, Vecto
 			    end = begin;
 			    for (auto next = begin; next < size;) {
 				    const auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
-				    assert(bytes > 0);
+				    D_ASSERT(bytes > 0);
 				    next += bytes;
 				    if (ignored_codepoints.find(codepoint) == ignored_codepoints.end()) {
 					    end = next;

@@ -52,7 +52,7 @@ struct UnaryDoubleWrapper {
 
 template <class T, class OP>
 static void UnaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
-	assert(input.column_count() >= 1);
+	D_ASSERT(input.column_count() >= 1);
 	errno = 0;
 	UnaryExecutor::Execute<T, T, OP, true, UnaryDoubleWrapper>(input.data[0], result, input.size());
 }
@@ -72,7 +72,7 @@ struct BinaryDoubleWrapper {
 
 template <class T, class OP>
 static void BinaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
-	assert(input.column_count() >= 2);
+	D_ASSERT(input.column_count() >= 2);
 	errno = 0;
 	BinaryExecutor::Execute<T, T, T, OP, true, BinaryDoubleWrapper>(input.data[0], input.data[1], result, input.size());
 }
@@ -624,7 +624,7 @@ void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
 // pi
 //===--------------------------------------------------------------------===//
 static void pi_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 0);
+	D_ASSERT(args.column_count() == 0);
 	Value pi_value = Value::DOUBLE(PI);
 	result.Reference(pi_value);
 }

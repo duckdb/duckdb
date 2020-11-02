@@ -8,7 +8,7 @@ using namespace std;
 
 static LogicalType ResolveNotType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// NOT expression, cast child to BOOLEAN
-	assert(children.size() == 1);
+	D_ASSERT(children.size() == 1);
 	children[0]->expr = BoundCastExpression::AddCastToType(move(children[0]->expr), LogicalType::BOOLEAN);
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
@@ -37,7 +37,7 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 	case ExpressionType::COMPARE_NOT_IN:
 		return ResolveInType(op, children);
 	default:
-		assert(op.type == ExpressionType::OPERATOR_NOT);
+		D_ASSERT(op.type == ExpressionType::OPERATOR_NOT);
 		return ResolveNotType(op, children);
 	}
 }
@@ -54,7 +54,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// all children bound successfully, extract them
 	vector<BoundExpression *> children;
 	for (idx_t i = 0; i < op.children.size(); i++) {
-		assert(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
 		children.push_back((BoundExpression *)op.children[i].get());
 	}
 	// now resolve the types

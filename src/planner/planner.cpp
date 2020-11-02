@@ -58,7 +58,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 }
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
-	assert(statement);
+	D_ASSERT(statement);
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::INSERT_STATEMENT:
@@ -146,12 +146,12 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 // 				auto inner_hash = copies[j]->Hash();
 // 				if (outer_hash != inner_hash) {
 // 					// if hashes are not equivalent the expressions should not be equivalent
-// 					assert(!Expression::Equals(copies[i].get(), copies[j].get()));
+// 					D_ASSERT(!Expression::Equals(copies[i].get(), copies[j].get()));
 // 				}
 // 			}
 // 		}
 // 	} else {
-// 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+// 		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
 // 		auto &setop_node = (BoundSetOperationNode &)node;
 // 		VerifyNode(*setop_node.left);
 // 		VerifyNode(*setop_node.right);
@@ -166,8 +166,8 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 // 	// verify that the copy of expressions works
 // 	auto copy = expr.Copy();
 // 	// copy should have identical hash and identical equality function
-// 	assert(copy->Hash() == expr.Hash());
-// 	assert(Expression::Equals(copy.get(), &expr));
+// 	D_ASSERT(copy->Hash() == expr.Hash());
+// 	D_ASSERT(Expression::Equals(copy.get(), &expr));
 // 	copies.push_back(move(copy));
 // }
 

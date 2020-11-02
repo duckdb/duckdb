@@ -45,14 +45,14 @@ struct MultiplyOperator {
 
 struct DivideOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		assert(right != 0); // this should be checked before!
+		D_ASSERT(right != 0); // this should be checked before!
 		return left / right;
 	}
 };
 
 struct ModuloOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		assert(right != 0);
+		D_ASSERT(right != 0);
 		return left % right;
 	}
 };

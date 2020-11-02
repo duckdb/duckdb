@@ -12,7 +12,7 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
                          vector<string> names)
     : type(type), statement_type(statement_type), types(move(types)), names(move(names)), success(true) {
-	assert(types.size() == names.size());
+	D_ASSERT(types.size() == names.size());
 }
 
 QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(error) {
@@ -45,7 +45,7 @@ bool QueryResult::Equals(QueryResult &other) {
 		if (lchunk->size() != rchunk->size()) {
 			return false;
 		}
-		assert(lchunk->column_count() == rchunk->column_count());
+		D_ASSERT(lchunk->column_count() == rchunk->column_count());
 		for (idx_t col = 0; col < rchunk->column_count(); col++) {
 			for (idx_t row = 0; row < rchunk->size(); row++) {
 				auto lvalue = lchunk->GetValue(col, row);
@@ -92,7 +92,7 @@ static void release_duckdb_arrow_schema(ArrowSchema *schema) {
 }
 
 void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
-	assert(out_schema);
+	D_ASSERT(out_schema);
 
 	auto root_holder = new DuckDBArrowSchemaHolder();
 

@@ -16,19 +16,19 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 
 void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
-	assert(input.type.InternalType() == PhysicalType::POINTER);
+	D_ASSERT(input.type.InternalType() == PhysicalType::POINTER);
 	if (right == 0) {
 		return;
 	}
 	switch (input.vector_type) {
 	case VectorType::CONSTANT_VECTOR: {
-		assert(!ConstantVector::IsNull(input));
+		D_ASSERT(!ConstantVector::IsNull(input));
 		auto data = ConstantVector::GetData<uintptr_t>(input);
 		*data += right;
 		break;
 	}
 	default: {
-		assert(input.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(input.vector_type == VectorType::FLAT_VECTOR);
 		auto data = FlatVector::GetData<uintptr_t>(input);
 		for (idx_t i = 0; i < count; i++) {
 			data[i] += right;

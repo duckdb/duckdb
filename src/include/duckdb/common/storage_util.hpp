@@ -18,7 +18,7 @@ class StorageUtil {
 	//! Checksum using longitudinal redundancy check algorithm adepted from
 	//! https://en.wikipedia.org/wiki/Longitudinal_redundancy_check
 	static uint8_t CalculateCheckSum(duckdb::data_ptr buffer, size_t buffer_size) {
-		assert(buffer != nullptr && buffer_size > 0);
+		D_ASSERT(buffer != nullptr && buffer_size > 0);
 		uint8_t lrc = 0;
 		for (size_t i = 0; i != buffer_size; ++i) {
 			lrc = ((lrc + buffer[i]) & FULL_MASK);

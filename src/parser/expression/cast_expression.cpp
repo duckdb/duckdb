@@ -7,7 +7,7 @@ using namespace std;
 
 CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> child)
     : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(target) {
-	assert(child);
+	D_ASSERT(child);
 	this->child = move(child);
 }
 

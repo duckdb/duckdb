@@ -7,7 +7,7 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<CallStatement> Transformer::TransformCall(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCallStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 
 	auto result = make_unique<CallStatement>();
 	result->function = TransformFuncCall((PGFuncCall *)stmt->func);

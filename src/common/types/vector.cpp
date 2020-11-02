@@ -67,7 +67,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		Reference(other);
 		return;
 	}
-	assert(other.vector_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(other.vector_type == VectorType::FLAT_VECTOR);
 
 	// create a reference to the other vector
 	Reference(other);
@@ -179,7 +179,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
 	case LogicalTypeId::DECIMAL:
-		assert(type.width() == val.type().width() && type.scale() == val.type().scale());
+		D_ASSERT(type.width() == val.type().width() && type.scale() == val.type().scale());
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
 			((int16_t *)data)[index] = val.value_.smallint;
@@ -224,13 +224,13 @@ void Vector::SetValue(idx_t index, Value val) {
 		}
 
 		auto &children = StructVector::GetEntries(*this);
-		assert(children.size() == val.struct_value.size());
+		D_ASSERT(children.size() == val.struct_value.size());
 
 		for (size_t i = 0; i < val.struct_value.size(); i++) {
 			auto &struct_child = val.struct_value[i];
-			assert(vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR);
+			D_ASSERT(vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR);
 			auto &vec_child = children[i];
-			assert(vec_child.first == struct_child.first);
+			D_ASSERT(vec_child.first == struct_child.first);
 			vec_child.second->SetValue(index, struct_child.second);
 		}
 	} break;
@@ -517,7 +517,7 @@ void Vector::Normalify(idx_t count) {
 		}
 		case PhysicalType::STRUCT: {
 			for (auto &child : StructVector::GetEntries(*this)) {
-				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
+				D_ASSERT(child.second->vector_type == VectorType::CONSTANT_VECTOR);
 				child.second->Normalify(count);
 			}
 		} break;
@@ -703,12 +703,12 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(*this);
-		assert(child.vector_type != VectorType::DICTIONARY_VECTOR);
+		D_ASSERT(child.vector_type != VectorType::DICTIONARY_VECTOR);
 		auto &dict_sel = DictionaryVector::SelVector(*this);
 		for (idx_t i = 0; i < count; i++) {
 			auto oidx = sel.get_index(i);
 			auto idx = dict_sel.get_index(oidx);
-			assert(idx < STANDARD_VECTOR_SIZE);
+			D_ASSERT(idx < STANDARD_VECTOR_SIZE);
 		}
 		// merge the selection vectors and verify the child
 		auto new_buffer = dict_sel.Slice(sel, count);
@@ -718,7 +718,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 	if (TypeIsConstantSize(type.InternalType()) &&
 	    (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR)) {
-		assert(!auxiliary);
+		D_ASSERT(!auxiliary);
 	}
 	if (type.InternalType() == PhysicalType::DOUBLE) {
 		// verify that there are no INF or NAN values
@@ -726,7 +726,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		case VectorType::CONSTANT_VECTOR: {
 			auto dbl = ConstantVector::GetData<double>(*this);
 			if (!ConstantVector::IsNull(*this)) {
-				assert(Value::DoubleIsValid(*dbl));
+				D_ASSERT(Value::DoubleIsValid(*dbl));
 			}
 			break;
 		}
@@ -735,7 +735,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel.get_index(i);
 				if (!nullmask[oidx]) {
-					assert(Value::DoubleIsValid(doubles[oidx]));
+					D_ASSERT(Value::DoubleIsValid(doubles[oidx]));
 				}
 			}
 			break;
@@ -748,7 +748,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {
 			auto &children = StructVector::GetEntries(*this);
-			assert(children.size() > 0);
+			D_ASSERT(children.size() > 0);
 			for (auto &child : children) {
 				child.second->Verify(sel, count);
 			}
@@ -760,7 +760,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify();
 				auto le = ConstantVector::GetData<list_entry_t>(*this);
-				assert(le->offset + le->length <= ListVector::GetEntry(*this).count);
+				D_ASSERT(le->offset + le->length <= ListVector::GetEntry(*this).count);
 			}
 		} else if (vector_type == VectorType::FLAT_VECTOR) {
 			if (ListVector::HasEntry(*this)) {
@@ -771,7 +771,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
 				if (!nullmask[idx]) {
-					assert(le.offset + le.length <= ListVector::GetEntry(*this).count);
+					D_ASSERT(le.offset + le.length <= ListVector::GetEntry(*this).count);
 				}
 			}
 		}
@@ -797,7 +797,7 @@ string_t StringVector::AddString(Vector &vector, const string &data) {
 }
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
-	assert(vector.type.id() == LogicalTypeId::VARCHAR);
+	D_ASSERT(vector.type.id() == LogicalTypeId::VARCHAR);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
@@ -805,13 +805,13 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	D_ASSERT(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.AddString(data);
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
-	assert(vector.type.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
@@ -819,27 +819,27 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	D_ASSERT(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.AddBlob(data);
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
-	assert(vector.type.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
 	if (len < string_t::INLINE_LENGTH) {
 		return string_t(len);
 	}
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	D_ASSERT(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.EmptyString(len);
 }
 
 void StringVector::AddHeapReference(Vector &vector, Vector &other) {
-	assert(vector.type.InternalType() == PhysicalType::VARCHAR);
-	assert(other.type.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(other.type.InternalType() == PhysicalType::VARCHAR);
 
 	if (other.vector_type == VectorType::DICTIONARY_VECTOR) {
 		StringVector::AddHeapReference(vector, DictionaryVector::Child(other));
@@ -851,69 +851,69 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
-	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	D_ASSERT(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	D_ASSERT(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
 bool StructVector::HasEntries(const Vector &vector) {
-	assert(vector.type.id() == LogicalTypeId::STRUCT);
-	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
-	assert(vector.auxiliary == nullptr || vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	D_ASSERT(vector.type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector.auxiliary == nullptr || vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
 	return vector.auxiliary != nullptr;
 }
 
 child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
-	assert(vector.type.id() == LogicalTypeId::STRUCT);
-	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
-	assert(vector.auxiliary);
-	assert(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	D_ASSERT(vector.type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector.auxiliary);
+	D_ASSERT(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
 	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
 }
 
 void StructVector::AddEntry(Vector &vector, string name, unique_ptr<Vector> entry) {
 	// TODO asser that an entry with this name does not already exist
-	assert(vector.type.id() == LogicalTypeId::STRUCT);
-	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector.type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStructBuffer>();
 	}
-	assert(vector.auxiliary);
-	assert(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	D_ASSERT(vector.auxiliary);
+	D_ASSERT(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
 	((VectorStructBuffer *)vector.auxiliary.get())->AddChild(name, move(entry));
 }
 
 bool ListVector::HasEntry(const Vector &vector) {
-	assert(vector.type.id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.type.id() == LogicalTypeId::LIST);
 	if (vector.vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
 		return ListVector::HasEntry(child);
 	}
-	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	return vector.auxiliary != nullptr;
 }
 
 ChunkCollection &ListVector::GetEntry(const Vector &vector) {
-	assert(vector.type.id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.type.id() == LogicalTypeId::LIST);
 	if (vector.vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
 		return ListVector::GetEntry(child);
 	}
-	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
-	assert(vector.auxiliary);
-	assert(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
+	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector.auxiliary);
+	D_ASSERT(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
 	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
 }
 
 void ListVector::SetEntry(Vector &vector, unique_ptr<ChunkCollection> cc) {
-	assert(vector.type.id() == LogicalTypeId::LIST);
-	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector.type.id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorListBuffer>();
 	}
-	assert(vector.auxiliary);
-	assert(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
+	D_ASSERT(vector.auxiliary);
+	D_ASSERT(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
 	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));
 }
 

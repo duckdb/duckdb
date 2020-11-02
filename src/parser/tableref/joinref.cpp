@@ -46,7 +46,7 @@ void JoinRef::Serialize(Serializer &serializer) {
 	serializer.WriteOptional(condition);
 	serializer.Write<JoinType>(type);
 	serializer.Write<bool>(is_natural);
-	assert(using_columns.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(using_columns.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)using_columns.size());
 	for (auto &using_column : using_columns) {
 		serializer.WriteString(using_column);

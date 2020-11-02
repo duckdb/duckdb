@@ -7,7 +7,7 @@ namespace duckdb {
 
 CollateExpression::CollateExpression(string collation, unique_ptr<ParsedExpression> child)
     : ParsedExpression(ExpressionType::COLLATE, ExpressionClass::COLLATE), collation(collation) {
-	assert(child);
+	D_ASSERT(child);
 	this->child = move(child);
 }
 

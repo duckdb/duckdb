@@ -17,7 +17,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
 	auto bind_index = GenerateTableIndex();
 
-	assert(ref.function->type == ExpressionType::FUNCTION);
+	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
 
 	// evaluate the input parameters to the function
@@ -87,8 +87,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	if (table_function.bind) {
 		bind_data = table_function.bind(context, parameters, named_parameters, return_types, return_names);
 	}
-	assert(return_types.size() == return_names.size());
-	assert(return_types.size() > 0);
+	D_ASSERT(return_types.size() == return_names.size());
+	D_ASSERT(return_types.size() > 0);
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < ref.column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = ref.column_name_alias[i];

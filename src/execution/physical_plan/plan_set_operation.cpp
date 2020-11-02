@@ -8,7 +8,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
-	assert(op.children.size() == 2);
+	D_ASSERT(op.children.size() == 2);
 
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
@@ -23,7 +23,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		return make_unique<PhysicalUnion>(op.types, move(left), move(right));
 	default: {
 		// EXCEPT/INTERSECT
-		assert(op.type == LogicalOperatorType::EXCEPT || op.type == LogicalOperatorType::INTERSECT);
+		D_ASSERT(op.type == LogicalOperatorType::EXCEPT || op.type == LogicalOperatorType::INTERSECT);
 		auto &types = left->GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns

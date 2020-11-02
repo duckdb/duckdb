@@ -8,7 +8,7 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::CROSS_PRODUCT);
+	D_ASSERT(op->type == LogicalOperatorType::CROSS_PRODUCT);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	vector<unique_ptr<Expression>> join_conditions;
 	unordered_set<idx_t> left_bindings, right_bindings;
@@ -27,7 +27,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 				// bindings match right side: push into right
 				right_pushdown.filters.push_back(move(f));
 			} else {
-				assert(side == JoinSide::BOTH);
+				D_ASSERT(side == JoinSide::BOTH);
 				// bindings match both: turn into join condition
 				join_conditions.push_back(move(f->filter));
 			}
