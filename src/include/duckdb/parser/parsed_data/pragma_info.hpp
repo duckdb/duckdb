@@ -10,6 +10,8 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -20,6 +22,8 @@ struct PragmaInfo : public ParseInfo {
 	string name;
 	//! Parameter list (if any)
 	vector<Value> parameters;
+	//! Named parameter list (if any)
+	unordered_map<string, Value> named_parameters;
 };
 
 } // namespace duckdb
