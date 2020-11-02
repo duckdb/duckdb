@@ -59,16 +59,6 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
-unique_ptr<BoundCreateFunctionInfo> Binder::BindCreateFunctionInfo(unique_ptr<CreateInfo> info) {
-	auto &base = (CreateMacroFunctionInfo &)*info;
-
-	auto result = make_unique<BoundCreateFunctionInfo>(move(info));
-	result->schema = BindSchema(*result->base);
-	// TODO: check whether an unknown parameter is used in base.function
-//    printf(base.function->expression_class);
-	return result;
-}
-
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
