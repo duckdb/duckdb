@@ -39,6 +39,8 @@ unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 	// Check the type of left arg and right arg before transform
 	result->left = TransformTableRefNode(root->larg);
 	result->right = TransformTableRefNode(root->rarg);
+	result->is_natural = root->isNatural;
+	result->query_location = root->location;
 
 	if (root->usingClause && root->usingClause->length > 0) {
 		// usingClause is a list of strings
@@ -51,13 +53,12 @@ unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 		return move(result);
 	}
 
-	if (!root->quals && result->using_columns.size() == 0) { // CROSS PRODUCT
+	if (!root->quals && result->using_columns.size() == 0 && !result->is_natural) { // CROSS PRODUCT
 		auto cross = make_unique<CrossProductRef>();
 		cross->left = move(result->left);
 		cross->right = move(result->right);
 		return move(cross);
 	}
-
 	result->condition = TransformExpression(root->quals);
 	return move(result);
 }

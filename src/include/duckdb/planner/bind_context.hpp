@@ -46,6 +46,9 @@ public:
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
 	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, string relation_name = "");
+	const vector<std::pair<string, Binding *>>& GetBindingsList() {
+		return bindings_list;
+	}
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types, LogicalGet &get);
@@ -82,6 +85,7 @@ private:
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
+	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding);
 
 	//! The set of bindings
 	unordered_map<string, unique_ptr<Binding>> bindings;

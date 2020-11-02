@@ -98,6 +98,16 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	return binding->Bind(colref, depth);
 }
 
+void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding) {
+	for (auto &column_name : binding->names) {
+		assert(!column_name.empty());
+		if (BindingIsHidden(binding->alias, column_name)) {
+			continue;
+		}
+		new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+	}
+}
+
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
                                                string relation_name) {
 	if (bindings_list.size() == 0) {
@@ -107,7 +117,7 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 		// we have to bind the tables and subqueries in order of table_index
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
-			binding->GenerateAllColumnExpressions(*this, new_select_list);
+			GenerateAllColumnExpressions(new_select_list, binding);
 		}
 	} else { // SELECT tbl.* case
 		string error;
@@ -115,7 +125,7 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 		if (!binding) {
 			throw BinderException(error);
 		}
-		binding->GenerateAllColumnExpressions(*this, new_select_list);
+		GenerateAllColumnExpressions(new_select_list, binding);
 	}
 }
 

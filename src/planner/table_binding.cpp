@@ -48,16 +48,6 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
-void Binding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
-	for (auto &column_name : names) {
-		assert(!column_name.empty());
-		if (context.BindingIsHidden(alias, column_name)) {
-			continue;
-		}
-		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
-	}
-}
-
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vector<string> names_, LogicalGet &get,
                            idx_t index, bool add_row_id)
     : Binding(alias, move(types_), move(names_), index), get(get) {

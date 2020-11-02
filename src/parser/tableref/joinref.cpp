@@ -32,6 +32,7 @@ unique_ptr<TableRef> JoinRef::Copy() {
 		copy->condition = condition->Copy();
 	}
 	copy->type = type;
+	copy->is_natural = is_natural;
 	copy->alias = alias;
 	copy->using_columns = using_columns;
 	return move(copy);
@@ -44,6 +45,7 @@ void JoinRef::Serialize(Serializer &serializer) {
 	right->Serialize(serializer);
 	serializer.WriteOptional(condition);
 	serializer.Write<JoinType>(type);
+	serializer.Write<bool>(is_natural);
 	assert(using_columns.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)using_columns.size());
 	for (auto &using_column : using_columns) {
@@ -58,6 +60,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 	result->right = TableRef::Deserialize(source);
 	result->condition = source.ReadOptional<ParsedExpression>();
 	result->type = source.Read<JoinType>();
+	result->is_natural = source.Read<bool>();
 	auto count = source.Read<uint32_t>();
 	for (idx_t i = 0; i < count; i++) {
 		result->using_columns.push_back(source.Read<string>());
