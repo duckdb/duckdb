@@ -23,14 +23,14 @@ TEST_CASE("Test SHOW/DESCRIBE tables", "[pragma]") {
 	result = con.Query("PRAGMA show_tables");
 	REQUIRE(CHECK_COLUMN(result, 0, {"integers", "v1"})); */
 
-	result = con.Query("SHOW integers");
+	/*result = con.Query("SHOW integers");
 	// Field | Type | Null | Key | Default | Extra
 	REQUIRE(CHECK_COLUMN(result, 0, {"i", "j"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"INTEGER", "INTEGER"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"YES", "YES"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value()}));
-	REQUIRE(CHECK_COLUMN(result, 5, {Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value(), Value()}));*/
 	// equivalent to PRAGMA SHOW('integers')
 /*	result = con.Query("PRAGMA SHOW('integers')");
 	// Field | Type | Null | Key | Default | Extra

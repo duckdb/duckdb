@@ -2,9 +2,9 @@
 #include "duckdb/parser/parsed_data/show_select_info.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/exception.hpp"
+//#include "duckdb/common/exception.hpp"
 
-#include <algorithm>
+//#include <algorithm>
 
 using namespace std;
 
@@ -17,6 +17,29 @@ struct ShowSelectFunctionData : public TableFunctionData {
 	//CatalogEntry *entry;
 	idx_t offset;
 };
+
+static unique_ptr<FunctionData> show_select_info_bind(ClientContext &context, vector<Value> inputs,
+                                                       vector<SQLType> &return_types, vector<string> &names) {
+	names.push_back("cid");
+	return_types.push_back(SQLType::INTEGER);
+
+	names.push_back("name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("type");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("notnull");
+	return_types.push_back(SQLType::BOOLEAN);
+
+	names.push_back("dflt_value");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("pk");
+	return_types.push_back(SQLType::BOOLEAN);
+
+	return make_unique<ShowSelectFunctionData>();
+}
 
 static void show_select_info_schema(ShowSelectFunctionData &data, ShowSelectInfo *info, DataChunk &output) {
 	if (data.offset >= info->types.size()) {
@@ -49,3 +72,36 @@ static void show_select_info_schema(ShowSelectFunctionData &data, ShowSelectInfo
 	}
 	data.offset = next;
 }
+
+static void show_select_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
+	auto &data = *((ShowSelectFunctionData *)dataptr);
+	if (!data.entry) {
+		// first call: load the entry from the catalog
+		assert(input.size() == 1);
+
+		string schema, table_name;
+		auto range_var = input[0].GetValue<string>();
+		Catalog::ParseRangeVar(range_var, schema, table_name);
+
+		// look up the table name in the catalog
+		auto &catalog = Catalog::GetCatalog(context);
+		data.entry = catalog.GetEntry(context, CatalogType::TABLE, schema, table_name);
+	}
+	switch (data.entry->type) {
+	case CatalogType::TABLE:
+		pragma_table_info_table(data, (TableCatalogEntry *)data.entry, output);
+		break;
+	case CatalogType::VIEW:
+		pragma_table_info_view(data, (ViewCatalogEntry *)data.entry, output);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");
+	}
+}
+
+void ShowSelectTableInfo::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(
+	    TableFunction("show_select_info", {SQLType::VARCHAR}, show_select_info_bind, show_select_info, nullptr));
+}
+
+} // namespace duckdb

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/create_info.hpp"
+//#include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
