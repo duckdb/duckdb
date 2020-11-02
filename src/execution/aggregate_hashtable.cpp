@@ -311,7 +311,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 	D_ASSERT(!is_finalized);
 
-	D_ASSERT(capacity - entries > groups.size());
+	D_ASSERT(capacity - entries >= groups.size());
 
 	if (groups.size() == 0) {
 		return 0;
