@@ -82,8 +82,8 @@ public:
 	BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
+	unique_ptr<BoundCreateFunctionInfo> BindCreateFunctionInfo(unique_ptr<CreateInfo> info);
 	void BindCreateViewInfo(CreateViewInfo &base);
-	unique_ptr<BoundCreateFunctionInfo> BindCreateFunctionInfo(CreateFunctionInfo &info);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);

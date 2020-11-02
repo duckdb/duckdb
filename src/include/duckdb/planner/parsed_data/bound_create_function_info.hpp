@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/create_sql_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
 //#include "duckdb/planner/bound_constraint.hpp"
 //#include "duckdb/planner/expression.hpp"
 //#include "duckdb/storage/table/persistent_segment.hpp"
@@ -18,11 +18,17 @@ namespace duckdb {
 class CatalogEntry;
 
 struct BoundCreateFunctionInfo {
-	BoundCreateFunctionInfo(unique_ptr<CreateSQLFunctionInfo> base) : base(move(base)) {
+	BoundCreateFunctionInfo(unique_ptr<CreateInfo> base) : base(move(base)) {
 	}
 
+	//! The schema to create the table in
+	SchemaCatalogEntry *schema;
 	//! The base CreateInfo object
-	unique_ptr<CreateSQLFunctionInfo> base;
+	unique_ptr<CreateInfo> base;
+
+	BoundCreateFunctionInfo &Base() {
+		return (BoundCreateFunctionInfo &)*base;
+	}
 };
 
 } // namespace duckdb

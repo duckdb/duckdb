@@ -28,7 +28,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
-	case CatalogType::SCALAR_MACRO_ENTRY:
+	case CatalogType::MACRO_FUNCTION_ENTRY:
 		// TODO: implement
 	default:
 		// aggregate function

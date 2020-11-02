@@ -1,19 +1,20 @@
-#include "duckdb/parser/statement/create_statement.hpp"
-#include "duckdb/planner/operator/logical_create.hpp"
-#include "duckdb/planner/operator/logical_create_table.hpp"
-#include "duckdb/planner/operator/logical_create_index.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_sql_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/index_binder.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/planner/operator/logical_create.hpp"
+#include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/operator/logical_create_table.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -58,12 +59,14 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
-unique_ptr<BoundCreateFunctionInfo> Binder::BindCreateFunctionInfo(CreateFunctionInfo &info) {
-	auto &base = (CreateSQLFunctionInfo &)info;
+unique_ptr<BoundCreateFunctionInfo> Binder::BindCreateFunctionInfo(unique_ptr<CreateInfo> info) {
+	auto &base = (CreateMacroFunctionInfo &)*info;
 
-	//	ScalarFunction func
-	// TODO: make a scalar_function_t, a ScalarFunction, and a CreateScalarFunctionInfo here
-	//	auto func_info = make_unique<CreateScalarFunctionInfo>(nullptr);
+	auto result = make_unique<BoundCreateFunctionInfo>(move(info));
+	result->schema = BindSchema(*result->base);
+	// TODO: check whether an unknown parameter is used in base.function
+//    printf(base.function->expression_class);
+	return result;
 }
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
@@ -136,9 +139,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = move(create_table);
 		return result;
 	}
-	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		// TODO: implement
-		//		auto bound_info = BindCreateFunctionInfo(move(stmt.info));
+	case CatalogType::MACRO_FUNCTION_ENTRY: {
+		auto bound_info = BindCreateFunctionInfo(move(stmt.info));
+		// TODO: create logical operator and move it to result.plan
+
+		break;
 	}
 	default:
 		throw Exception("Unrecognized type!");

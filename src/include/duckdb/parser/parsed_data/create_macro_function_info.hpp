@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/create_sql_function_info.hpp
+// duckdb/parser/parsed_data/create_macro_function_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,8 +12,8 @@
 
 namespace duckdb {
 
-struct CreateSQLFunctionInfo : public CreateFunctionInfo {
-	CreateSQLFunctionInfo() : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY) {
+struct CreateMacroFunctionInfo : public CreateFunctionInfo {
+	CreateMacroFunctionInfo() : CreateFunctionInfo(CatalogType::MACRO_FUNCTION_ENTRY) {
 	}
 
 	vector<unique_ptr<ParsedExpression>> arguments;
