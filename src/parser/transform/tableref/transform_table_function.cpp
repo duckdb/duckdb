@@ -20,11 +20,11 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(PGRangeFunction *root) 
 		throw NotImplementedException("Need exactly one function");
 	}
 	auto function_sublist = (PGList *)root->functions->head->data.ptr_value;
-	assert(function_sublist->length == 2);
+	D_ASSERT(function_sublist->length == 2);
 	auto call_tree = (PGNode *)function_sublist->head->data.ptr_value;
 	auto coldef = function_sublist->head->next->data.ptr_value;
 
-	assert(call_tree->type == T_PGFuncCall);
+	D_ASSERT(call_tree->type == T_PGFuncCall);
 	if (coldef) {
 		throw NotImplementedException("Explicit column definition not supported yet");
 	}

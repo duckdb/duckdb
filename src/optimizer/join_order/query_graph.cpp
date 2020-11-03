@@ -32,7 +32,7 @@ string QueryGraph::ToString() const {
 }
 
 QueryEdge *QueryGraph::GetQueryEdge(JoinRelationSet *left) {
-	assert(left && left->count > 0);
+	D_ASSERT(left && left->count > 0);
 	// find the EdgeInfo corresponding to the left set
 	QueryEdge *info = &root;
 	for (idx_t i = 0; i < left->count; i++) {
@@ -49,7 +49,7 @@ QueryEdge *QueryGraph::GetQueryEdge(JoinRelationSet *left) {
 }
 
 void QueryGraph::CreateEdge(JoinRelationSet *left, JoinRelationSet *right, FilterInfo *filter_info) {
-	assert(left && right && left->count > 0 && right->count > 0);
+	D_ASSERT(left && right && left->count > 0 && right->count > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist

@@ -10,9 +10,9 @@ using namespace std;
 static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)*expr;
-		assert(colref.binding.table_index == proj.table_index);
-		assert(colref.binding.column_index < proj.expressions.size());
-		assert(colref.depth == 0);
+		D_ASSERT(colref.binding.table_index == proj.table_index);
+		D_ASSERT(colref.binding.column_index < proj.expressions.size());
+		D_ASSERT(colref.depth == 0);
 		// replace the binding with a copy to the expression at the referenced index
 		return proj.expressions[colref.binding.column_index]->Copy();
 	}
@@ -23,7 +23,7 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::PROJECTION);
+	D_ASSERT(op->type == LogicalOperatorType::PROJECTION);
 	auto &proj = (LogicalProjection &)*op;
 	// push filter through logical projection
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalProjection
@@ -31,7 +31,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	FilterPushdown child_pushdown(optimizer);
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
-		assert(f.bindings.size() <= 1);
+		D_ASSERT(f.bindings.size() <= 1);
 		// rewrite the bindings within this subquery
 		f.filter = ReplaceProjectionBindings(proj, move(f.filter));
 		// add the filter to the child pushdown

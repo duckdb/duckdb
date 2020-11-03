@@ -111,6 +111,12 @@ reldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
+relassert:
+	mkdir -p build/relassert && \
+	cd build/relassert && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake --build .
+
 amaldebug:
 	mkdir -p build/amaldebug && \
 	python scripts/amalgamation.py && \

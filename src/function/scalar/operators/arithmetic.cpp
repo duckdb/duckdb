@@ -294,7 +294,7 @@ unique_ptr<FunctionData> decimal_negate_bind(ClientContext &context, ScalarFunct
 	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::BIGINT);
 	} else {
-		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
+		D_ASSERT(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT);
 	}
 	bound_function.arguments[0] = decimal_type;
@@ -541,12 +541,12 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 // % [modulo]
 //===--------------------------------------------------------------------===//
 template <> float ModuloOperator::Operation(float left, float right) {
-	assert(right != 0);
+	D_ASSERT(right != 0);
 	return fmod(left, right);
 }
 
 template <> double ModuloOperator::Operation(double left, double right) {
-	assert(right != 0);
+	D_ASSERT(right != 0);
 	return fmod(left, right);
 }
 

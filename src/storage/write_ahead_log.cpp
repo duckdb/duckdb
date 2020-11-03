@@ -108,7 +108,7 @@ void WriteAheadLog::WriteSetTable(string &schema, string &table) {
 }
 
 void WriteAheadLog::WriteInsert(DataChunk &chunk) {
-	assert(chunk.size() > 0);
+	D_ASSERT(chunk.size() > 0);
 	chunk.Verify();
 
 	writer->Write<WALType>(WALType::INSERT_TUPLE);
@@ -116,8 +116,8 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
-	assert(chunk.size() > 0);
-	assert(chunk.column_count() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
+	D_ASSERT(chunk.size() > 0);
+	D_ASSERT(chunk.column_count() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
 	chunk.Verify();
 
 	writer->Write<WALType>(WALType::DELETE_TUPLE);
@@ -125,7 +125,7 @@ void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 }
 
 void WriteAheadLog::WriteUpdate(DataChunk &chunk, column_t col_idx) {
-	assert(chunk.size() > 0);
+	D_ASSERT(chunk.size() > 0);
 	chunk.Verify();
 
 	writer->Write<WALType>(WALType::UPDATE_TUPLE);

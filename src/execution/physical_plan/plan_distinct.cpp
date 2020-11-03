@@ -12,8 +12,8 @@ using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<PhysicalOperator> child,
                                                                      vector<unique_ptr<Expression>> distinct_targets) {
-	assert(child);
-	assert(distinct_targets.size() > 0);
+	D_ASSERT(child);
+	D_ASSERT(distinct_targets.size() > 0);
 
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, aggregates, projections;
@@ -78,7 +78,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
-	assert(op.children.size() == 1);
+	D_ASSERT(op.children.size() == 1);
 	auto plan = CreatePlan(*op.children[0]);
 	return CreateDistinctOn(move(plan), move(op.distinct_targets));
 }

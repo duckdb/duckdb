@@ -71,7 +71,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
                                                            unique_ptr<Expression> *expr_ptr) {
-	assert(expr.depth == 0);
+	D_ASSERT(expr.depth == 0);
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {

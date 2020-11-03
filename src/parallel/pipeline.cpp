@@ -72,7 +72,7 @@ void Pipeline::Execute(TaskContext &task) {
 }
 
 void Pipeline::FinishTask() {
-	assert(finished_tasks < total_tasks);
+	D_ASSERT(finished_tasks < total_tasks);
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
 		try {
@@ -111,8 +111,8 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 			// table function cannot be parallelized
 			return false;
 		}
-		assert(get.function.init_parallel_state);
-		assert(get.function.parallel_state_next);
+		D_ASSERT(get.function.init_parallel_state);
+		D_ASSERT(get.function.parallel_state_next);
 		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
 		if (max_threads > executor.context.db.NumberOfThreads()) {
 			max_threads = executor.context.db.NumberOfThreads();
@@ -150,9 +150,9 @@ void Pipeline::Reset(ClientContext &context) {
 }
 
 void Pipeline::Schedule() {
-	assert(finished_tasks == 0);
-	assert(total_tasks == 0);
-	assert(finished_dependencies == dependencies.size());
+	D_ASSERT(finished_tasks == 0);
+	D_ASSERT(total_tasks == 0);
+	D_ASSERT(finished_dependencies == dependencies.size());
 	// check if we can parallelize this task based on the sink
 	switch (sink->type) {
 	case PhysicalOperatorType::SIMPLE_AGGREGATE: {
@@ -209,7 +209,7 @@ void Pipeline::CompleteDependency() {
 }
 
 void Pipeline::Finish() {
-	assert(!finished);
+	D_ASSERT(!finished);
 	finished = true;
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
 	for (auto &parent : parents) {

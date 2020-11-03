@@ -106,7 +106,7 @@ static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogE
 		bool not_null, pk;
 		auto index = i - data.offset;
 		auto &column = table->columns[i];
-		assert(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
+		D_ASSERT(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
 		check_constraints(table, column.oid, not_null, pk);
 
 		// return values:

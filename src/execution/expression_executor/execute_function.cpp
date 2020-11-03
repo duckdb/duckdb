@@ -21,7 +21,7 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		arguments.InitializeEmpty(state->types);
 		arguments.Reference(state->intermediate_chunk);
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			assert(state->types[i] == expr.children[i]->return_type);
+			D_ASSERT(state->types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 #ifdef DEBUG
 			if (expr.children[i]->return_type.id() == LogicalTypeId::VARCHAR) {

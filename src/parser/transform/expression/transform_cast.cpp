@@ -27,7 +27,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 		// handle post-fix notation of INTERVAL
 		if (root->typeName->typmods && root->typeName->typmods->length > 0) {
 			PGAConst *c = reinterpret_cast<PGAConst *>(root->arg);
-			assert(c->val.type == T_PGString);
+			D_ASSERT(c->val.type == T_PGString);
 
 			int64_t amount;
 			if (!TryCast::Operation<string_t, int64_t>(c->val.val.str, amount)) {

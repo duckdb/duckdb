@@ -209,7 +209,7 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP> static void Combine(Vector &source, Vector &target, idx_t count) {
-		assert(source.type.id() == LogicalTypeId::POINTER && target.type.id() == LogicalTypeId::POINTER);
+		D_ASSERT(source.type.id() == LogicalTypeId::POINTER && target.type.id() == LogicalTypeId::POINTER);
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
@@ -227,7 +227,7 @@ public:
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, *sdata, rdata, ConstantVector::Nullmask(result), 0);
 		} else {
-			assert(states.vector_type == VectorType::FLAT_VECTOR);
+			D_ASSERT(states.vector_type == VectorType::FLAT_VECTOR);
 			result.vector_type = VectorType::FLAT_VECTOR;
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);

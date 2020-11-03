@@ -10,7 +10,7 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
-	assert(!combiner.HasFilters());
+	D_ASSERT(!combiner.HasFilters());
 	switch (op->type) {
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		return PushdownAggregate(move(op));
@@ -42,7 +42,7 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN ||
+	D_ASSERT(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN ||
 	       op->type == LogicalOperatorType::DELIM_JOIN);
 	auto &join = (LogicalJoin &)*op;
 	unordered_set<idx_t> left_bindings, right_bindings;
@@ -66,7 +66,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 void FilterPushdown::PushFilters() {
 	for (auto &f : filters) {
 		auto result = combiner.AddFilter(move(f->filter));
-		assert(result == FilterResult::SUCCESS);
+		D_ASSERT(result == FilterResult::SUCCESS);
 		(void)result;
 	}
 	filters.clear();
@@ -88,7 +88,7 @@ FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 
 void FilterPushdown::GenerateFilters() {
 	if (filters.size() > 0) {
-		assert(!combiner.HasFilters());
+		D_ASSERT(!combiner.HasFilters());
 		return;
 	}
 	combiner.GenerateFilters([&](unique_ptr<Expression> filter) {

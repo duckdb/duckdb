@@ -62,8 +62,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<idx_t> &left_bindings,
                                                              unordered_set<idx_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
-	assert(join.join_type == JoinType::LEFT);
-	assert(op->type != LogicalOperatorType::DELIM_JOIN);
+	D_ASSERT(join.join_type == JoinType::LEFT);
+	D_ASSERT(op->type != LogicalOperatorType::DELIM_JOIN);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join

@@ -141,7 +141,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 		result = VisitReplace((BoundUnnestExpression &)expr, expression);
 		break;
 	default:
-		assert(0);
+		D_ASSERT(0);
 	}
 	if (result) {
 		*expression = move(result);

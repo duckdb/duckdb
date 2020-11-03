@@ -7,7 +7,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
-	assert(op.children.size() == 0);
+	D_ASSERT(op.children.size() == 0);
 	dependencies.insert(&op.table);
 	return make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info),
 	                                        move(op.unbound_expressions));

@@ -35,7 +35,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	}
 	// fetch the schema in which we want to create the object
 	auto schema_obj = Catalog::GetCatalog(context).GetSchema(context, info.schema);
-	assert(schema_obj->type == CatalogType::SCHEMA_ENTRY);
+	D_ASSERT(schema_obj->type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj->name;
 	return schema_obj;
 }

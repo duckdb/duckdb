@@ -32,7 +32,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
 		// root not defined in rule
-		assert(rule->root);
+		D_ASSERT(rule->root);
 	}
 #endif
 }

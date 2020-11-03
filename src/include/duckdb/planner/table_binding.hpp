@@ -42,7 +42,6 @@ struct Binding {
 public:
 	bool HasMatchingBinding(const string &column_name);
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
-	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list);
 };
 
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet

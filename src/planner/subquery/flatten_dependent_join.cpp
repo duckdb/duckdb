@@ -24,7 +24,7 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<Correl
 }
 
 bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op) {
-	assert(op);
+	D_ASSERT(op);
 	// check if this entry has correlated expressions
 	HasCorrelatedExpressions visitor(correlated_columns);
 	visitor.VisitOperator(*op);
@@ -56,7 +56,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan) {
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(plan.get());
-	assert(entry != has_correlated_expressions.end());
+	D_ASSERT(entry != has_correlated_expressions.end());
 	if (!entry->second) {
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
@@ -134,7 +134,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// for any COUNT aggregate we replace references to the column with: CASE WHEN COUNT(*) IS NULL THEN 0
 			// ELSE COUNT(*) END
 			for (idx_t i = 0; i < aggr.expressions.size(); i++) {
-				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+				D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto bound = (BoundAggregateExpression *)&*aggr.expressions[i];
 				vector<LogicalType> arguments;
 				if (bound->function == CountFun::GetFunction() || bound->function == CountStarFun::GetFunction()) {
@@ -194,7 +194,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::COMPARISON_JOIN: {
 		auto &join = (LogicalComparisonJoin &)*plan;
-		assert(plan->children.size() == 2);
+		D_ASSERT(plan->children.size() == 2);
 		// check the correlated expressions in the children of the join
 		bool left_has_correlation = has_correlated_expressions.find(plan->children[0].get())->second;
 		bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get())->second;
@@ -280,7 +280,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 		// add the correlated columns to the PARTITION BY clauses in the Window
 		for (auto &expr : window.expressions) {
-			assert(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+			D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto &w = (BoundWindowExpression &)*expr;
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				w.partitions.push_back(make_unique<BoundColumnRefExpression>(

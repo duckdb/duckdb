@@ -58,7 +58,7 @@ void Transformer::TransformCopyOptions(CopyInfo &info, PGList *options) {
 
 unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCopyStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	auto result = make_unique<CopyStatement>();
 	auto &info = *result->info;
 

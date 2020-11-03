@@ -16,8 +16,8 @@ static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter
                                  LogicalSetOperation &setop) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expr;
-		assert(colref.binding.table_index == setop.table_index);
-		assert(colref.depth == 0);
+		D_ASSERT(colref.binding.table_index == setop.table_index);
+		D_ASSERT(colref.depth == 0);
 
 		// rewrite the binding by looking into the bound_tables list of the subquery
 		colref.binding = bindings[colref.binding.column_index];
@@ -29,11 +29,11 @@ static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::UNION || op->type == LogicalOperatorType::EXCEPT ||
+	D_ASSERT(op->type == LogicalOperatorType::UNION || op->type == LogicalOperatorType::EXCEPT ||
 	       op->type == LogicalOperatorType::INTERSECT);
 	auto &setop = (LogicalSetOperation &)*op;
 
-	assert(op->children.size() == 2);
+	D_ASSERT(op->children.size() == 2);
 	auto left_bindings = op->children[0]->GetColumnBindings();
 	auto right_bindings = op->children[1]->GetColumnBindings();
 

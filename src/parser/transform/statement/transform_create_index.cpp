@@ -23,7 +23,7 @@ static IndexType StringToIndexType(const string &str) {
 
 unique_ptr<CreateStatement> Transformer::TransformCreateIndex(PGNode *node) {
 	auto stmt = reinterpret_cast<PGIndexStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateIndexInfo>();
 
@@ -44,7 +44,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(PGNode *node) {
 			info->expressions.push_back(make_unique<ColumnRefExpression>(index_element->name, stmt->relation->relname));
 		} else {
 			// parse the index expression
-			assert(index_element->expr);
+			D_ASSERT(index_element->expr);
 			info->expressions.push_back(TransformExpression(index_element->expr));
 		}
 	}
