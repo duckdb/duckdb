@@ -432,6 +432,7 @@ jobs:
 
     - name: Install
       run: |
+        sudo apt-get install -y ccache
         mkdir -p $HOME/.R
         echo -e 'CC=ccache gcc\nCXX=ccache g++\nCXX11=ccache g++\n' > $HOME/.R/Makevars
         R -f tools/rpkg/dependencies.R
