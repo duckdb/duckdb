@@ -440,6 +440,7 @@ jobs:
     - name: Build
       run: |
         cd tools/rpkg
+        ./configure
         R CMD build .
         R CMD INSTALL duckdb_*.tar.gz
         (cd tests && R -f testthat.R)
