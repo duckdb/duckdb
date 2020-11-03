@@ -308,10 +308,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload)
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
-
 	D_ASSERT(!is_finalized);
-
-	D_ASSERT(capacity - entries >= groups.size());
 
 	if (groups.size() == 0) {
 		return 0;
@@ -603,6 +600,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		Resize<T>(capacity * 2);
 	}
 
+	D_ASSERT(capacity - entries >= groups.size());
 	D_ASSERT(groups.column_count() == group_types.size());
 	// we need to be able to fit at least one vector of data
 	D_ASSERT(capacity - entries >= groups.size());
