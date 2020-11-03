@@ -426,8 +426,7 @@ jobs:
   rstats:
     name: R Package
     runs-on: ubuntu-latest
-
-    # FIXME needs: linux-debug
+    needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
