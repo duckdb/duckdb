@@ -32,7 +32,24 @@ struct IcuBindData : public FunctionData {
 	}
 };
 
+static int32_t icu_get_sort_key(icu::Collator &collator, string_t input, unique_ptr<char[]> &buffer, int32_t &buffer_size) {
+	int32_t string_size =
+		collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
+							(uint8_t *)buffer.get(), buffer_size);
+	if (string_size > buffer_size) {
+		// have to resize the buffer
+		buffer_size = string_size;
+		buffer = unique_ptr<char[]>(new char[buffer_size]);
+
+		string_size = collator.getSortKey(
+			icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
+			(uint8_t *)buffer.get(), buffer_size);
+	}
+	return string_size;
+}
+
 static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	const char hexa_table[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (IcuBindData &)*func_expr.bind_info;
 	auto &collator = *info.collator;
@@ -41,20 +58,18 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 	int32_t buffer_size = 0;
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		// create a sort key from the string
-		int32_t string_size =
-		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
-		                        (uint8_t *)buffer.get(), buffer_size);
-		if (string_size > buffer_size) {
-			// have to resize the buffer
-			buffer_size = string_size;
-			buffer = unique_ptr<char[]>(new char[buffer_size]);
-
-			string_size = collator.getSortKey(
-			    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
-			    (uint8_t *)buffer.get(), buffer_size);
+		int32_t string_size = icu_get_sort_key(collator, input, buffer, buffer_size);
+		// convert the sort key to hexadecimal
+		auto str_result = StringVector::EmptyString(result, (string_size - 1) * 2);
+		auto str_data = str_result.GetDataWriteable();
+		for(idx_t i = 0; i < string_size - 1; i++) {
+			uint8_t byte = uint8_t(buffer[i]);
+			assert(byte != 0);
+			str_data[i * 2] = hexa_table[byte / 16];
+			str_data[i * 2 + 1] = hexa_table[byte % 16];
 		}
-		// '\0' is in the sort key size
-		return StringVector::AddStringOrBlob(result, string_t(buffer.get(), string_size - 1));
+		// printf("%s: %s\n", input.GetString().c_str(), str_result.GetString().c_str());
+		return str_result;
 	});
 }
 
@@ -71,7 +86,7 @@ static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarF
 }
 
 static ScalarFunction get_icu_function(string collation) {
-	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::BLOB, icu_collate_function, false,
+	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, icu_collate_function, false,
 	                      icu_collate_bind);
 }
 
