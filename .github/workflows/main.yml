@@ -85,7 +85,6 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py build/release/duckdb
-        python tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
@@ -157,6 +156,7 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py build/release/duckdb
+        pip install requests
         python tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
