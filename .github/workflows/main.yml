@@ -432,7 +432,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install -y texlive-base
+        sudo apt-get install -y texlive-latex-base
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
