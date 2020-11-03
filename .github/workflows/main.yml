@@ -380,7 +380,7 @@ jobs:
 
 
   python-36:
-    name: Python Package
+    name: Python 3.6 Package
     runs-on: ubuntu-latest
     # FIXME needs: linux-debug
 
@@ -395,7 +395,7 @@ jobs:
         python-version: '3.7'
     
     - name: Install
-      run: pip install cibuildwheel==0.10.2 twine
+      run: pip install cibuildwheel==1.3.0 twine
 
     - name: Build
       run: |
