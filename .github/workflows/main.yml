@@ -189,6 +189,7 @@ jobs:
   valgrind:
     name: Valgrind
     runs-on: ubuntu-latest
+    needs: linux-debug
     
     env:
       CC: gcc-10
@@ -209,10 +210,59 @@ jobs:
       run: valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
 
 
+  ubsan:
+    name: UBSAN
+    runs-on: ubuntu-latest
+    needs: linux-debug
+    
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Install
+      run: sudo apt-get install ninja-build
+
+    - name: Test
+      run: make ubsandebug
+
+
+  codecov:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    needs: linux-debug
+    
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+    
+    - name: Install
+      run: pip install --user cpp-coveralls
+
+
+    - name: Coverage
+      run: |
+        mkdir -p build/coverage
+        (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+        build/coverage/test/unittest
+        coveralls -b build/coverage --exclude-pattern '.*CMake.*' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
+
 
   vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-latest
+    needs: linux-debug
     
     env:
       CC: gcc-10
@@ -232,6 +282,7 @@ jobs:
   sqllogic:
     name: Sqllogic tests
     runs-on: ubuntu-latest
+    needs: linux-debug
     
     env:
       CC: gcc-10
