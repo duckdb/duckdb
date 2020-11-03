@@ -1,7 +1,7 @@
 on: [push]
 
 jobs:
-  win-release:
+  win-debug:
     name: Windows Debug
     runs-on: windows-latest
     
@@ -10,7 +10,22 @@ jobs:
       
     - name: Build
       shell: bash
-      run: cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64 && cmake --build . --target unittest --config Debug
+      run: cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64 -DISABLE_UNITY=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 && cmake --build . --target unittest --config Debug
+
+    - name: Test
+      shell: bash
+      run: test/Debug/unittest.exe
+
+  win-release:
+    name: Windows Release
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+      
+    - name: Build
+      shell: bash
+      run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 && cmake --build . --target unittest --config Release
 
     - name: Test
       shell: bash
@@ -34,9 +49,13 @@ jobs:
       shell: bash
       run: make
 
-    - name: Test
+    - name: Unit Test
       shell: bash
       run: make allunit
+
+    - name: Tools Tests
+      shell: bash
+      run: python3 tools/shell/shell-test.py build/release/duckdb && python3 tools/rest/test_the_rest.py build/release/tools/rest && java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
       
   xcode-debug:
     name: OSX Debug
@@ -84,6 +103,11 @@ jobs:
     - name: Test
       shell: bash
       run: make allunit
+
+    - name: Tools Tests
+      shell: bash
+      run: python3 tools/shell/shell-test.py build/release/duckdb && python3 tools/rest/test_the_rest.py build/release/tools/rest && java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+      
       
       
   gcc-debug:
