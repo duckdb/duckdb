@@ -4,6 +4,14 @@ defaults:
   run:
     shell: bash
 
+  env:
+      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+      CIBW_TEST_REQUIRES: 'pytest'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+      TWINE_USERNAME: 'hfmuehleisen'
+
 jobs:
 
   linux-debug:
@@ -379,52 +387,14 @@ jobs:
       run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
 
-  python-36:
-    name: Python 3.6 Package
-    runs-on: ubuntu-latest
-    # FIXME needs: linux-debug
-
-    env:
-      CIBW_BUILD: 'cp36-*'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-    
-    - name: Install
-      run: pip install cibuildwheel==1.3.0 twine
-
-    - name: Build
-      run: |
-        cd tools/pythonpkg
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cibuildwheel --output-dir wheelhouse duckdb_tarball
-        cd ../..
-
-
   python:
     name: Python Package
     runs-on: ubuntu-latest
     # FIXME needs: linux-debug
 
     env:
-      CIBW_BUILD: 'cp37-* cp38-*'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
+      CIBW_BUILD: 'cp36-* cp37-* cp38-*'
+
 
     steps:
     - uses: actions/checkout@v2
