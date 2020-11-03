@@ -24,10 +24,12 @@ static void AddCondition(JoinRef &ref, string left_alias, string right_alias, st
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
-	Binder left_binder(context, this);
-	Binder right_binder(context, this);
-
 	auto result = make_unique<BoundJoinRef>();
+	result->left_binder = make_unique<Binder>(context, this);
+	result->right_binder = make_unique<Binder>(context, this);
+	auto &left_binder = *result->left_binder;
+	auto &right_binder = *result->right_binder;
+
 	result->type = ref.type;
 	result->left = left_binder.Bind(*ref.left);
 	result->right = right_binder.Bind(*ref.right);
