@@ -9,6 +9,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
@@ -85,6 +87,25 @@ static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarF
 	}
 }
 
+static unique_ptr<FunctionData> icu_sort_key_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
+	if (!arguments[1]->IsFoldable()) {
+		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
+	}
+	Value val = ExpressionExecutor::EvaluateScalar(*arguments[1]).CastAs(LogicalType::VARCHAR);
+	if (val.is_null) {
+		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) expected a non-null collation");
+	}
+	auto splits = StringUtil::Split(val.str_value, "_");
+	if (splits.size() == 1) {
+		return make_unique<IcuBindData>(splits[0], "");
+	} else if (splits.size() == 2) {
+		return make_unique<IcuBindData>(splits[0], splits[1]);
+	} else {
+		throw InternalException("Expected one or two splits");
+	}
+}
+
 static ScalarFunction get_icu_function(string collation) {
 	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, icu_collate_function, false,
 	                      icu_collate_bind);
@@ -113,6 +134,11 @@ void ICUExtension::Load(DuckDB &db) {
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		db.catalog->CreateCollation(*con.context, &info);
 	}
+	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                        icu_collate_function, false, icu_sort_key_bind);
+
+	CreateScalarFunctionInfo sort_key_info(move(sort_key));
+	db.catalog->CreateFunction(*con.context, &sort_key_info);
 
 	con.Commit();
 }
