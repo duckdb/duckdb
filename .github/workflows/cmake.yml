@@ -10,7 +10,7 @@ jobs:
       
     - name: Build
       shell: bash
-      run: cmake -G "Visual Studio 15 2017" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64 && cmake --build . --target unittest --config Debug
+      run: cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64 && cmake --build . --target unittest --config Debug
 
     - name: Test
       shell: bash

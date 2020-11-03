@@ -26,7 +26,7 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY);
+	assert(op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
 	auto &aggr = (LogicalAggregate &)*op;
 
 	// pushdown into AGGREGATE and GROUP BY
