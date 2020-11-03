@@ -4,7 +4,6 @@ add_library_unity(
   bind_call.cpp
   bind_copy.cpp
   bind_create.cpp
-  bind_create_function.cpp
   bind_create_table.cpp
   bind_delete.cpp
   bind_drop.cpp

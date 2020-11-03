@@ -9,10 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
-//#include "duckdb/planner/bound_constraint.hpp"
-//#include "duckdb/planner/expression.hpp"
-//#include "duckdb/storage/table/persistent_segment.hpp"
-//#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -26,8 +22,8 @@ struct BoundCreateFunctionInfo {
 	//! The base CreateInfo object
 	unique_ptr<CreateInfo> base;
 
-	BoundCreateFunctionInfo &Base() {
-		return (BoundCreateFunctionInfo &)*base;
+	CreateMacroFunctionInfo &Base() {
+		return (CreateMacroFunctionInfo &)*base;
 	}
 };
 

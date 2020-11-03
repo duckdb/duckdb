@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -129,6 +130,24 @@ CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(ClientContext &context, C
 
 CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
 	unique_ptr<StandardEntry> function;
+	switch (info->type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
+		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,
+		                                                                       (CreateScalarFunctionInfo *)info);
+		break;
+	case CatalogType::MACRO_FUNCTION_ENTRY:
+		// create a macro function
+		function =
+		    make_unique_base<StandardEntry, MacroFunctionCatalogEntry>(catalog, this, (CreateMacroFunctionInfo *)info);
+		break;
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+		// create an aggregate function
+		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
+		                                                                          (CreateAggregateFunctionInfo *)info);
+		break;
+	default:
+		throw CatalogException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
+	}
 	if (info->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
 		// create a scalar function
 		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,

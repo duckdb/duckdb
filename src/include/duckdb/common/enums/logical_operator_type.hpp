@@ -70,9 +70,10 @@ enum class LogicalOperatorType : uint8_t {
 	CREATE_SEQUENCE = 128,
 	CREATE_VIEW = 129,
 	CREATE_SCHEMA = 130,
-	DROP = 131,
-	PRAGMA = 132,
-	TRANSACTION = 133,
+	CREATE_FUNCTION = 131,
+	DROP = 132,
+	PRAGMA = 133,
+	TRANSACTION = 134,
 
 	// -----------------------------
 	// Explain

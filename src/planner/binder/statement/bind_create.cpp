@@ -59,6 +59,29 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
+SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
+	auto &base = (CreateMacroFunctionInfo &)info;
+
+	// arguments become dummy column names
+	vector<string> dummy_column_names;
+	vector<LogicalType> dummy_column_types;
+	for (auto &arg : base.arguments) {
+		string arg_str = arg->ToString();
+		if (arg->expression_class != ExpressionClass::COLUMN_REF)
+			throw BinderException("Invalid parameter \"%s\"", arg_str);
+		dummy_column_names.push_back(arg_str);
+		dummy_column_types.push_back(LogicalType::SQLNULL);
+	}
+
+	// check whether an unknown parameter is used in the function
+	ExpressionBinder binder(*this, context);
+	bind_context.AddGenericBinding(-1, "0_macro_arguments", dummy_column_names, dummy_column_types);
+	binder.Bind(base.function, 0, true);
+
+	return BindSchema(info);
+	;
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -81,6 +104,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SEQUENCE, move(stmt.info), schema);
+		break;
+	}
+	case CatalogType::MACRO_FUNCTION_ENTRY: {
+		auto schema = BindCreateFunctionInfo(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_FUNCTION, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -128,12 +156,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		result.plan = move(create_table);
 		return result;
-	}
-	case CatalogType::MACRO_FUNCTION_ENTRY: {
-		auto bound_info = BindCreateFunctionInfo(move(stmt.info));
-		// TODO: create logical operator and move it to result.plan
-
-		break;
 	}
 	default:
 		throw Exception("Unrecognized type!");
