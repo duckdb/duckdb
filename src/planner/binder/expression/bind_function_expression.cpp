@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -26,17 +27,16 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	                             false, error_context);
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
-		// scalar function
-		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
-	case CatalogType::MACRO_FUNCTION_ENTRY:
-		// TODO: implement
+    case CatalogType::MACRO_FUNCTION_ENTRY:
+		// scalar (macro) function
+		return BindFunction(function, func, depth);
 	default:
 		// aggregate function
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
 	}
 }
 
-BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, idx_t depth) {
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogEntry *func, idx_t depth) {
 	// bind the children of the function expression
 	string error;
 	for (idx_t i = 0; i < function.children.size(); i++) {
@@ -69,7 +69,14 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		string type = children[0]->return_type.ToString();
 		return BindResult(make_unique<BoundConstantExpression>(Value(type)));
 	}
-	auto result = ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
+	unique_ptr<BoundFunctionExpression> result;
+	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
+		result = ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)func, move(children), error, function.is_operator);
+	} else {
+        auto &macro_func = (MacroFunctionCatalogEntry &)*func;
+		// macro function TODO
+//		result =
+	}
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}

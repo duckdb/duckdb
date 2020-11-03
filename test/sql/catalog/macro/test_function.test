@@ -8,5 +8,21 @@ PRAGMA enable_verification
 statement error
 CREATE FUNCTION add(a) AS a+b
 
+statement error
+CREATE FUNCTION string_split(a,b) AS a+b
+
 statement ok
 CREATE FUNCTION IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
+
+statement error
+CREATE FUNCTION IFELSE(a,b) AS a+b
+
+#query T
+#SELECT IFELSE(1,'true','false')
+#----
+#true
+
+#query T
+#SELECT IFELSE(1,'true','false')
+#----
+#false

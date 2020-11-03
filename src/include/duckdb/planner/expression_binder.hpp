@@ -21,6 +21,7 @@ class ClientContext;
 class SelectNode;
 
 class AggregateFunctionCatalogEntry;
+class MacroFunctionCatalogEntry;
 class ScalarFunctionCatalogEntry;
 class SimpleFunction;
 
@@ -86,7 +87,7 @@ protected:
 protected:
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
-	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
+	virtual BindResult BindFunction(FunctionExpression &expr, CatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
 
