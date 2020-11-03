@@ -10,11 +10,14 @@ jobs:
       
     - name: Build
       shell: bash
-      run: cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64 -DISABLE_UNITY=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 && cmake --build . --target unittest --config Debug
+      run: |
+        cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64 -DISABLE_UNITY=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1
+        cmake --build . --target unittest --config Debug
 
     - name: Test
       shell: bash
       run: test/Debug/unittest.exe
+
 
   win-release:
     name: Windows Release
@@ -25,11 +28,19 @@ jobs:
       
     - name: Build
       shell: bash
-      run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 && cmake --build . --target unittest --config Release
+      run: |
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1
+        cmake --build . --target unittest --config Release
 
     - name: Test
       shell: bash
       run: test/Release/unittest.exe
+
+    - name: Tools Test
+      shell: bash
+      run: |
+        python3 tools/shell/shell-test.py Release/duckdb.exe
+        java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
      
   xcode-release:
@@ -55,8 +66,19 @@ jobs:
 
     - name: Tools Tests
       shell: bash
-      run: python3 tools/shell/shell-test.py build/release/duckdb && python3 tools/rest/test_the_rest.py build/release/tools/rest && java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+      run: |
+        python3 tools/shell/shell-test.py build/release/duckdb
+        python3 tools/rest/test_the_rest.py build/release/tools/rest
+        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
       
+    - name: Examples
+      shell: bash
+      run: |
+        (cd examples/embedded-c; make)
+        (cd examples/embedded-c++; make)
+        (cd examples/jdbc; make; make maven)
+      
+
   xcode-debug:
     name: OSX Debug
     runs-on: macos-latest
@@ -76,6 +98,7 @@ jobs:
       shell: bash
       run: make unit
       
+
   gcc-release:
     name: GCC10 Release
     runs-on: ubuntu-latest
@@ -106,8 +129,17 @@ jobs:
 
     - name: Tools Tests
       shell: bash
-      run: python3 tools/shell/shell-test.py build/release/duckdb && python3 tools/rest/test_the_rest.py build/release/tools/rest && java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+      run: |
+        python3 tools/shell/shell-test.py build/release/duckdb
+        python3 tools/rest/test_the_rest.py build/release/tools/rest
+        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
       
+    - name: Examples
+      shell: bash
+      run: |
+        (cd examples/embedded-c; make)
+        (cd examples/embedded-c++; make)
+        (cd examples/jdbc; make; make maven)
       
       
   gcc-debug:
@@ -135,3 +167,64 @@ jobs:
     - name: Test
       shell: bash
       run: make unit
+
+
+
+  valgrind:
+    name: Valgrind
+    runs-on: ubuntu-latest
+    
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      DISABLE_SANITIZER: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Install
+      shell: bash
+      run: sudo apt-get install ninja-build valgrind
+
+    - name: Build
+      shell: bash
+      run: |
+        make debug
+        valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
+
+
+  vector-sizes:
+    name: Vector Sizes
+    runs-on: ubuntu-latest
+    
+    env:
+      CC: gcc-10
+      CXX: g++-10
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Test
+      shell: bash
+      run: python3 scripts/test_vector_sizes.py
+
+
+  sqllogic:
+    name: Sqllogic tests
+    runs-on: ubuntu-latest
+    
+    env:
+      CC: gcc-10
+      CXX: g++-10
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Test
+      shell: bash
+      run: make sqlite
+
+
+
+
