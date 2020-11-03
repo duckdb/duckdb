@@ -77,6 +77,7 @@ jobs:
 
     - name: Deploy
       run: |
+        python scripts/amalgamation.py
         choco install zip -y --force
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
@@ -123,6 +124,7 @@ jobs:
 
     - name: Deploy
       run: |
+        python scripts/amalgamation.py
         zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
@@ -192,6 +194,7 @@ jobs:
 
     - name: Deploy
       run: |
+        python scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
@@ -454,5 +457,5 @@ jobs:
         if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
     - name: Deploy
-      run: python ../../scripts/asset-upload-gha.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
+      run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 

@@ -3446,7 +3446,7 @@ static int yy_init_globals (yyscan_t yyscanner)
     yyg->yy_start_stack_ptr = 0;
     yyg->yy_start_stack_depth = 0;
     yyg->yy_start_stack =  NULL;
-	
+
     yyin = (FILE *) 0;
     yyout = (FILE *) 0;
 
