@@ -52,6 +52,7 @@ jobs:
     - name: Packaging and Upload
       shell: bash
       run: |
+        choco install zip -y --force
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
 
@@ -120,8 +121,8 @@ jobs:
       run: make unit
       
 
-  gcc-release:
-    name: GCC10 Release
+  linux-release:
+    name: Linux Release
     runs-on: ubuntu-latest
     
     env:
@@ -132,6 +133,7 @@ jobs:
       BUILD_TPCH_EXTENSION: 1
       BUILD_REST: 1
       JDBC_DRIVER: 1
+      BUILD_TPCH_EXTENSION: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -175,8 +177,8 @@ jobs:
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
 
       
-  gcc-debug:
-    name: GCC10 Debug
+  linux-debug:
+    name: Linux Debug
     runs-on: ubuntu-latest
     
     env:
