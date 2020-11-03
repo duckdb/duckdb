@@ -428,7 +428,7 @@ jobs:
 
     - uses: r-lib/actions/setup-r@v1
       with:
-      r-version: 'devel'
+        r-version: 'devel'
 
     - name: Install
       run: |
