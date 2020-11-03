@@ -3,8 +3,7 @@ on: [push, pull_request]
 defaults:
   run:
     shell: bash
-
-  env:
+    env:
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
