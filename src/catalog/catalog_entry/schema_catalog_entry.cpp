@@ -148,16 +148,6 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 	default:
 		throw CatalogException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
 	}
-	if (info->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-		// create a scalar function
-		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,
-		                                                                       (CreateScalarFunctionInfo *)info);
-	} else {
-		assert(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
-		// create an aggregate function
-		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
-		                                                                          (CreateAggregateFunctionInfo *)info);
-	}
 	return AddEntry(context, move(function), info->on_conflict);
 }
 
@@ -241,6 +231,7 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 		return pragma_functions;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
+	case CatalogType::MACRO_FUNCTION_ENTRY:
 		return functions;
 	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;
