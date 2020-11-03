@@ -45,9 +45,13 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	return StringUtil::TopNStrings(scores);
 }
 
+void BindContext::HideBinding(const string &binding_name, const string &column_name) {
+	hidden_columns.insert(QualifiedColumnName(binding_name, column_name));
+}
+
 bool BindContext::BindingIsHidden(const string &binding_name, const string &column_name) {
-	string total_binding = binding_name + "." + column_name;
-	return hidden_columns.find(total_binding) != hidden_columns.end();
+	QualifiedColumnName qcolumn(binding_name, column_name);
+	return hidden_columns.find(qcolumn) != hidden_columns.end();
 }
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
@@ -181,6 +185,21 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string>
 	}
 	cte_bindings[alias] = move(binding);
 	cte_references[alias] = std::make_shared<idx_t>(0);
+}
+
+void BindContext::AddContext(BindContext other) {
+	for(auto &binding : other.bindings) {
+		if (bindings.find(binding.first) != bindings.end()) {
+			throw BinderException("Duplicate alias \"%s\" in query!", binding.first);
+		}
+		bindings[binding.first] = move(binding.second);
+	}
+	for(auto &binding : other.bindings_list) {
+		bindings_list.push_back(move(binding));
+	}
+	for(auto &hidden_column : other.hidden_columns) {
+		hidden_columns.insert(hidden_column);
+	}
 }
 
 } // namespace duckdb

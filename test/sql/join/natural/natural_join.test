@@ -1,6 +1,6 @@
-# name: test/sql/join/inner/test_using_join.test
-# description: Test USING joins
-# group: [inner]
+# name: test/sql/join/natural/natural_join.test
+# description: Test natural joins
+# group: [natural]
 
 statement ok
 PRAGMA enable_verification
@@ -83,3 +83,32 @@ select (select * from (select 42) tbl(a) natural join (select 42) tbl2(a))
 # error: duplicate table alias on both sides
 statement error
 select (select * from (select 42) tbl(a) natural join (select 42) tbl(a))
+
+statement ok
+DROP TABLE t1
+
+statement ok
+CREATE TABLE t0(c0 DATE, c1 DATE DEFAULT('0.5868720116119102'), c2 INT1, PRIMARY KEY(c1, c2, c0));
+
+statement ok
+CREATE TABLE t1(c0 DATETIME, c1 DATE DEFAULT(TIMESTAMP '1970-01-11 02:37:59'), PRIMARY KEY(c0));
+
+statement ok
+CREATE VIEW v0(c0) AS SELECT false FROM t1, t0 HAVING 1689380428;
+
+statement ok
+SELECT COUNT(t1.rowid) FROM t1, v0 NATURAL RIGHT JOIN t0;
+
+statement ok
+SELECT COUNT(t1.rowid) FROM t1, v0 RIGHT JOIN t0 ON v0.c0=t0.c0;
+
+statement error
+SELECT COUNT(t1.rowid) FROM t1, v0 RIGHT JOIN t0 ON t1.c1=t0.c1 AND v0.c0=t0.c0;
+
+# column name appears more than once on left side of the natural join
+statement error
+select * from (values (1)) t1(i) join (values (1)) t2(i) on (t1.i=t2.i) natural join (values (1)) t3(i);
+
+# column name appears more than once on right side of the natural join
+statement error
+select * from (values (1)) t1(i) natural join ((values (1)) t2(i)  join (values (1)) t3(i) on (t2.i=t3.i))

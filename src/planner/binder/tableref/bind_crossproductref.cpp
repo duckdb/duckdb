@@ -7,8 +7,14 @@ using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 	auto result = make_unique<BoundCrossProductRef>();
-	result->left = Bind(*ref.left);
-	result->right = Bind(*ref.right);
+	Binder left_binder(context, this);
+	Binder right_binder(context, this);
+
+	result->left = left_binder.Bind(*ref.left);
+	result->right = right_binder.Bind(*ref.right);
+
+	bind_context.AddContext(move(left_binder.bind_context));
+	bind_context.AddContext(move(right_binder.bind_context));
 	return move(result);
 }
 
