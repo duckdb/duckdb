@@ -412,3 +412,34 @@ jobs:
         cd ../..
         python scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
 
+
+  rstats:
+    name: R Package
+    runs-on: ubuntu-latest
+
+    # FIXME needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+      r-version: 'devel'
+
+    - name: Install
+      run: |
+        mkdir -p $HOME/.R
+        echo -e 'CC=ccache gcc\nCXX=ccache g++\nCXX11=ccache g++\n' > $HOME/.R/Makevars
+        R -f tools/rpkg/dependencies.R
+
+    - name: Build
+      run: |
+        cd tools/rpkg
+        R CMD build .
+        R CMD INSTALL duckdb_*.tar.gz
+        (cd tests && R -f testthat.R)
+        R CMD check --as-cran -o /tmp duckdb_*.tar.gz
