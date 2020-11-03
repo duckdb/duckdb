@@ -113,7 +113,6 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 void PartitionableHashTable::Partition() {
 	D_ASSERT(!IsPartitioned());
 	D_ASSERT(radix_partitioned_hts.size() == 0);
-	D_ASSERT(!unpartitioned_hts.empty());
 	D_ASSERT(partition_info.n_partitions > 1);
 
 	vector<GroupedAggregateHashTable *> partition_hts;
