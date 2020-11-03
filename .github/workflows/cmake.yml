@@ -25,6 +25,10 @@ jobs:
     
     steps:
     - uses: actions/checkout@v2
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
       
     - name: Build
       shell: bash
@@ -39,7 +43,7 @@ jobs:
     - name: Tools Test
       shell: bash
       run: |
-        python3 tools/shell/shell-test.py Release/duckdb.exe
+        python tools/shell/shell-test.py Release/duckdb.exe
         java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
      
@@ -56,6 +60,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
     - name: Build
       shell: bash
       run: make
@@ -67,8 +75,8 @@ jobs:
     - name: Tools Tests
       shell: bash
       run: |
-        python3 tools/shell/shell-test.py build/release/duckdb
-        python3 tools/rest/test_the_rest.py build/release/tools/rest
+        python tools/shell/shell-test.py build/release/duckdb
+        python tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
       
     - name: Examples
@@ -114,6 +122,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
     
     - name: Install
       shell: bash
@@ -130,8 +142,8 @@ jobs:
     - name: Tools Tests
       shell: bash
       run: |
-        python3 tools/shell/shell-test.py build/release/duckdb
-        python3 tools/rest/test_the_rest.py build/release/tools/rest
+        python tools/shell/shell-test.py build/release/duckdb
+        python tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
       
     - name: Examples
@@ -205,9 +217,13 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
     - name: Test
       shell: bash
-      run: python3 scripts/test_vector_sizes.py
+      run: python scripts/test_vector_sizes.py
 
 
   sqllogic:
