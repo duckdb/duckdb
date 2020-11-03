@@ -65,7 +65,7 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_REST: 1
-      JDBC_DRIVER: 1
+      BUILD_JDBC: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -132,7 +132,7 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_REST: 1
-      JDBC_DRIVER: 1
+      BUILD_JDBC: 1
 
     steps:
     - uses: actions/checkout@v2
