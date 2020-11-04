@@ -598,7 +598,7 @@ jobs:
   win-python3:
     name: Python 3 Windows
     runs-on: windows-latest
-    # needs: linux-debug
+    needs: linux-debug
 
     env:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
