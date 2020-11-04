@@ -744,7 +744,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 			// numeric specifier: parse a number
 			uint64_t number = 0;
 			size_t start_pos = pos;
-			while (pos < size && std::isdigit(data[pos])) {
+			while (pos < size && StringUtil::CharacterIsDigit(data[pos])) {
 				if (number > 1000000ULL) {
 					// no number bigger than this is required anywhere
 					error_message = "Number is out of range of format specifier";

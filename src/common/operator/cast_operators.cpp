@@ -222,7 +222,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
 	idx_t pos = start_pos;
 	while (pos < len) {
-		if (!std::isdigit((unsigned char)buf[pos])) {
+		if (!StringUtil::CharacterIsDigit(buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
 				if (strict) {
@@ -235,7 +235,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				pos++;
 				idx_t start_digit = pos;
 				while (pos < len) {
-					if (!std::isdigit((unsigned char)buf[pos])) {
+					if (!StringUtil::CharacterIsDigit(buf[pos])) {
 						return false;
 					}
 					if (!OP::template HandleDecimal<T, NEGATIVE>(result, buf[pos] - '0')) {
@@ -383,7 +383,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 	idx_t decimal = 0;
 	idx_t decimal_factor = 0;
 	while (pos < len) {
-		if (!std::isdigit((unsigned char)buf[pos])) {
+		if (!StringUtil::CharacterIsDigit(buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
 				// decimal point

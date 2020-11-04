@@ -108,9 +108,9 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 }
 
 static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result) {
-	if (pos < len && std::isdigit((unsigned char)buf[pos])) {
+	if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 		result = buf[pos++] - '0';
-		if (pos < len && std::isdigit((unsigned char)buf[pos])) {
+		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 			result = (buf[pos++] - '0') + result * 10;
 		}
 		return true;
@@ -131,7 +131,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	int sep;
 
 	// skip leading spaces
-	while (pos < len && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
 	}
 
@@ -139,12 +139,12 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		return false;
 	}
 
-	if (yearneg == 0 && !std::isdigit((unsigned char)buf[pos])) {
+	if (yearneg == 0 && !StringUtil::CharacterIsDigit(buf[pos])) {
 		return false;
 	}
 
 	// first parse the year
-	for (pos = pos + yearneg; pos < len && std::isdigit((unsigned char)buf[pos]); pos++) {
+	for (pos = pos + yearneg; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
 		if (year > YEAR_MAX) {
 			break;
@@ -203,7 +203,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		}
 	} else {
 		// in non-strict mode, check for any direct trailing digits
-		if (pos < len && std::isdigit((unsigned char)buf[pos])) {
+		if (pos < len && StringUtil::CharacterIsDigit((unsigned char)buf[pos])) {
 			return false;
 		}
 	}

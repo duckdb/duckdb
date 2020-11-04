@@ -27,6 +27,9 @@ public:
 	static bool CharacterIsNewline(char c) {
 		return c == '\n' || c == '\r';
 	}
+	static bool CharacterIsDigit(char c) {
+		return c >= '0' && c <= '9';
+	}
 
 	//! Returns true if the needle string exists in the haystack
 	static bool Contains(const string &haystack, const string &needle);

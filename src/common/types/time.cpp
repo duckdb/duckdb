@@ -45,9 +45,9 @@ static void number_to_time(dtime_t n, int32_t &hour, int32_t &min, int32_t &sec,
 
 // TODO this is duplicated in date.cpp
 static bool ParseDoubleDigit2(const char *buf, idx_t len, idx_t &pos, int32_t &result) {
-	if (pos < len && std::isdigit((unsigned char)buf[pos])) {
+	if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 		result = buf[pos++] - '0';
-		if (pos < len && std::isdigit((unsigned char)buf[pos])) {
+		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 			result = (buf[pos++] - '0') + result * 10;
 		}
 		return true;
@@ -66,7 +66,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	int sep;
 
 	// skip leading spaces
-	while (pos < len && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
 	}
 
@@ -74,7 +74,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		return false;
 	}
 
-	if (!std::isdigit((unsigned char)buf[pos])) {
+	if (!StringUtil::CharacterIsDigit(buf[pos])) {
 		return false;
 	}
 
@@ -121,7 +121,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	msec = 0;
 	if (pos < len && buf[pos++] == '.') { // we expect some milliseconds
 		uint8_t mult = 100;
-		for (; pos < len && std::isdigit((unsigned char)buf[pos]); pos++, mult /= 10) {
+		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
 			if (mult > 0) {
 				msec += (buf[pos] - '0') * mult;
 			}
@@ -131,7 +131,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
-		while (pos < len && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}
 		// check position. if end was not reached, non-space chars remaining

@@ -39,10 +39,6 @@ static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	return std::to_string(linenr + 1) + estimated;
 }
 
-static bool is_digit(char c) {
-	return std::isdigit(c);
-}
-
 static bool StartsWithNumericDate(string &separator, const string_t &value) {
 	auto begin = value.GetDataUnsafe();
 	auto end = begin + value.GetSize();
@@ -54,26 +50,26 @@ static bool StartsWithNumericDate(string &separator, const string_t &value) {
 	}
 
 	//	first numeric field must start immediately
-	if (!std::isdigit(*field1)) {
+	if (!StringUtil::CharacterIsDigit(*field1)) {
 		return false;
 	}
-	auto literal1 = std::find_if_not(field1, end, is_digit);
+	auto literal1 = std::find_if_not(field1, end, StringUtil::CharacterIsDigit);
 	if (literal1 == end) {
 		return false;
 	}
 
 	//	second numeric field must exist
-	auto field2 = std::find_if(literal1, end, is_digit);
+	auto field2 = std::find_if(literal1, end, StringUtil::CharacterIsDigit);
 	if (field2 == end) {
 		return false;
 	}
-	auto literal2 = std::find_if_not(field2, end, is_digit);
+	auto literal2 = std::find_if_not(field2, end, StringUtil::CharacterIsDigit);
 	if (literal2 == end) {
 		return false;
 	}
 
 	//	third numeric field must exist
-	auto field3 = std::find_if(literal2, end, is_digit);
+	auto field3 = std::find_if(literal2, end, StringUtil::CharacterIsDigit);
 	if (field3 == end) {
 		return false;
 	}
