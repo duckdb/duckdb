@@ -55,7 +55,6 @@ jobs:
     - name: Tools Test
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
-        java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Deploy
       run: |
@@ -550,7 +549,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: pip install cibuildwheel==0.10.2 twine
+      run: pip install cibuildwheel twine
 
     - name: Build
       run: |
