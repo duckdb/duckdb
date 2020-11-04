@@ -97,7 +97,7 @@ template <class OP> static bool templated_string_compare_op(string_t left, strin
 	auto memcmp_res =
 	    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), MinValue<idx_t>(left.GetSize(), right.GetSize()));
 	auto final_res = memcmp_res == 0 ? OP::Operation(left.GetSize(), right.GetSize()) : OP::Operation(memcmp_res, 0);
-	assert(final_res == OP::Operation(strcmp(left.GetString().c_str(), right.GetString().c_str()), 0));
+	D_ASSERT(final_res == OP::Operation(strcmp(left.GetString().c_str(), right.GetString().c_str()), 0));
 	return final_res;
 }
 
