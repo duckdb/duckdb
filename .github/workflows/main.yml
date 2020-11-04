@@ -528,7 +528,7 @@ jobs:
         fi
 
 
-linux-python2:
+  linux-python2:
     name: Python 2 Linux
     runs-on: ubuntu-latest
     needs: linux-debug
@@ -560,7 +560,7 @@ linux-python2:
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
 
-osx-python3:
+  osx-python3:
     name: Python 3 OSX
     runs-on: macos-latest
     needs: linux-debug
