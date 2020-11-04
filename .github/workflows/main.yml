@@ -55,6 +55,7 @@ jobs:
     - name: Tools Test
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
+        java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Deploy
       run: |
@@ -91,7 +92,6 @@ jobs:
     - name: Tools Test
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
-        java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Deploy
       run: |
