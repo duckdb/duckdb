@@ -36,7 +36,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 		pos++;
 	}
 	idx_t time_pos = 0;
-	if (!Time::TryConvertTime(str + pos, len, time_pos, time)) {
+	if (!Time::TryConvertTime(str + pos, len - pos, time_pos, time)) {
 		throw ConversionException("timestamp field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
 		                          string(str, len));
