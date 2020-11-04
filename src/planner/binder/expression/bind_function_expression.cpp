@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_macro_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 
@@ -27,7 +28,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	                             false, error_context);
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
-    case CatalogType::MACRO_FUNCTION_ENTRY:
+	case CatalogType::MACRO_FUNCTION_ENTRY:
 		// scalar (macro) function
 		return BindFunction(function, func, depth);
 	default:
@@ -69,13 +70,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 		string type = children[0]->return_type.ToString();
 		return BindResult(make_unique<BoundConstantExpression>(Value(type)));
 	}
-	unique_ptr<BoundFunctionExpression> result;
+	unique_ptr<Expression> result;
 	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-		result = ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)func, move(children), error, function.is_operator);
+		result = ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*func, move(children), error,
+		                                            function.is_operator);
 	} else {
-        auto &macro_func = (MacroFunctionCatalogEntry &)*func;
-		// macro function TODO
-//		result =
+		result = MacroFunction::BindMacroFunction(context, (MacroFunctionCatalogEntry &)*func, move(children), error);
+		// TODO: the result may have CTE that need to be added to the bind_context
 	}
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));

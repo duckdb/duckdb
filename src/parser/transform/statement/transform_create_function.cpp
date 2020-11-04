@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/function/macro_function.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -19,6 +20,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
 	auto qname = TransformQualifiedName(stmt->name);
 	info->schema = qname.schema;
 	info->name = qname.name;
+
+	auto function = TransformExpression(stmt->function);
+	assert(function);
+	auto macro_func = make_unique<MacroFunction>(move(function));
+
 	if (stmt->args) {
 		vector<unique_ptr<ParsedExpression>> arg_list;
 		auto res = TransformExpressionList(stmt->args, arg_list);
@@ -26,13 +32,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
 			throw Exception("Failed to transform function arguments");
 		}
 		for (auto &arg : arg_list) {
-			info->arguments.push_back(move(arg));
+			macro_func->arguments.push_back(move(arg));
 		}
 	}
-	auto function = TransformExpression(stmt->function);
-	assert(function);
-	info->function = move(function);
 
+	info->function = move(macro_func);
 	result->info = move(info);
 	return result;
 }

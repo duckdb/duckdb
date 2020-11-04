@@ -22,7 +22,7 @@ class SelectNode;
 
 class AggregateFunctionCatalogEntry;
 class MacroFunctionCatalogEntry;
-class ScalarFunctionCatalogEntry;
+class CatalogEntry;
 class SimpleFunction;
 
 struct BindResult {

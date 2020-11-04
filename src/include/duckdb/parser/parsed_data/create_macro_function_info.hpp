@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
+#include "duckdb/function/macro_function.hpp"
 
 namespace duckdb {
 
@@ -16,8 +17,7 @@ struct CreateMacroFunctionInfo : public CreateFunctionInfo {
 	CreateMacroFunctionInfo() : CreateFunctionInfo(CatalogType::MACRO_FUNCTION_ENTRY) {
 	}
 
-	vector<unique_ptr<ParsedExpression>> arguments;
-	unique_ptr<ParsedExpression> function;
+	unique_ptr<MacroFunction> function;
 };
 
 } // namespace duckdb
