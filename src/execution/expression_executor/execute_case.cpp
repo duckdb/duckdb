@@ -88,7 +88,7 @@ void case_loop(Vector &res_true, Vector &res_false, Vector &result, SelectionVec
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount) {
-	assert(res_true.type == res_false.type && res_true.type == result.type);
+	D_ASSERT(res_true.type == res_false.type && res_true.type == result.type);
 
 	switch (result.type.InternalType()) {
 	case PhysicalType::BOOL:
@@ -126,13 +126,13 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		idx_t offset = 0;
 		if (ListVector::HasEntry(res_true)) {
 			auto &true_child = ListVector::GetEntry(res_true);
-			assert(true_child.types.size() == 1);
+			D_ASSERT(true_child.types.size() == 1);
 			offset += true_child.count;
 			result_child.Append(true_child);
 		}
 		if (ListVector::HasEntry(res_false)) {
 			auto &false_child = ListVector::GetEntry(res_false);
-			assert(false_child.types.size() == 1);
+			D_ASSERT(false_child.types.size() == 1);
 			result_child.Append(false_child);
 		}
 

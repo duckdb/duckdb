@@ -97,7 +97,7 @@ static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json 
 }
 
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
-	assert(res);
+	D_ASSERT(res);
 	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 		Vector &v = chunk->data[col_idx];
 		switch (v.type.id()) {
@@ -193,8 +193,8 @@ void sleep_thread(Connection *conn, bool *is_active, int timeout_duration) {
 	// timeout is given in seconds
 	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
 	// iterations
-	assert(conn);
-	assert(is_active);
+	D_ASSERT(conn);
+	D_ASSERT(is_active);
 
 	if (timeout_duration < 0) {
 		return;

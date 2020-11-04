@@ -29,11 +29,11 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
                                                   bool &changes_made) {
 	auto root = bindings[0];
 	// the root is a scalar expression that we have to fold
-	assert(root->IsFoldable() && root->type != ExpressionType::VALUE_CONSTANT);
+	D_ASSERT(root->IsFoldable() && root->type != ExpressionType::VALUE_CONSTANT);
 
 	// use an ExpressionExecutor to execute the expression
 	auto result_value = ExpressionExecutor::EvaluateScalar(*root);
-	assert(result_value.type() == root->return_type);
+	D_ASSERT(result_value.type() == root->return_type);
 	// now get the value from the result vector and insert it back into the plan as a constant expression
 	return make_unique<BoundConstantExpression>(result_value);
 }

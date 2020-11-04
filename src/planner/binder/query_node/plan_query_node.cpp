@@ -8,7 +8,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root) {
-	assert(root);
+	D_ASSERT(root);
 	for (auto &mod : node.modifiers) {
 		switch (mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {

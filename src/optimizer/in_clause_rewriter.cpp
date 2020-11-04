@@ -27,14 +27,14 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	if (expr.type != ExpressionType::COMPARE_IN && expr.type != ExpressionType::COMPARE_NOT_IN) {
 		return nullptr;
 	}
-	assert(root);
+	D_ASSERT(root);
 	auto in_type = expr.children[0]->return_type;
 	bool is_regular_in = expr.type == ExpressionType::COMPARE_IN;
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
 	for (idx_t i = 1; i < expr.children.size(); i++) {
-		assert(expr.children[i]->return_type == in_type);
+		D_ASSERT(expr.children[i]->return_type == in_type);
 		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
 			all_scalar = false;

@@ -9,7 +9,7 @@ class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalCrossProductOperatorState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right)
 	    : PhysicalOperatorState(op, left), left_position(0) {
-		assert(left && right);
+		D_ASSERT(left && right);
 	}
 
 	idx_t left_position;

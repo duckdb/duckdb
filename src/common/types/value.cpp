@@ -133,7 +133,7 @@ bool Value::DoubleIsValid(double value) {
 }
 
 Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
-	assert(width <= Decimal::MAX_WIDTH_INT16);
+	D_ASSERT(width <= Decimal::MAX_WIDTH_INT16);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
 	result.value_.smallint = value;
 	result.is_null = false;
@@ -141,7 +141,7 @@ Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
-	assert(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
+	D_ASSERT(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
 	result.value_.integer = value;
 	result.is_null = false;
@@ -171,7 +171,7 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
-	assert(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
+	D_ASSERT(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
 	result.value_.hugeint = value;
 	result.is_null = false;
@@ -416,19 +416,19 @@ template <> double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
 template <> uintptr_t Value::GetValue() const {
-	assert(type() == LogicalType::POINTER);
+	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
 }
 Value Value::Numeric(LogicalType type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		assert(value <= NumericLimits<int8_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
 	case LogicalTypeId::SMALLINT:
-		assert(value <= NumericLimits<int16_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int16_t>::Maximum());
 		return Value::SMALLINT((int16_t)value);
 	case LogicalTypeId::INTEGER:
-		assert(value <= NumericLimits<int32_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
 		return Value::INTEGER((int32_t)value);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(value);
@@ -445,10 +445,10 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(value);
 	case LogicalTypeId::DATE:
-		assert(value <= NumericLimits<int32_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
 		return Value::DATE(value);
 	case LogicalTypeId::TIME:
-		assert(value <= NumericLimits<int32_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
 		return Value::TIME(value);
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(value);
@@ -496,7 +496,7 @@ string Value::ToString() const {
 		} else if (internal_type == PhysicalType::INT64) {
 			return Decimal::ToString(value_.bigint, type_.scale());
 		} else {
-			assert(internal_type == PhysicalType::INT128);
+			D_ASSERT(internal_type == PhysicalType::INT128);
 			return Decimal::ToString(value_.hugeint, type_.scale());
 		}
 	}

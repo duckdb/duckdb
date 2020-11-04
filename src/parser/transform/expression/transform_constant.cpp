@@ -11,7 +11,7 @@ using namespace duckdb_libpgquery;
 unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 	switch (val.type) {
 	case T_PGInteger:
-		assert(val.val.ival <= NumericLimits<int32_t>::Maximum());
+		D_ASSERT(val.val.ival <= NumericLimits<int32_t>::Maximum());
 		return make_unique<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
 	case T_PGBitString: // FIXME: this should actually convert to BLOB
 	case T_PGString:

@@ -176,7 +176,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t co
 }
 
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
-	assert(result.type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result.type == QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (MaterializedQueryResult &)result;
 	if (!materialized.success) {
 		fprintf(stderr, "Query failed with message: %s\n", materialized.error.c_str());
@@ -258,7 +258,7 @@ bool compare_chunk(DataChunk &left, DataChunk &right) {
 //! Returns true if they are equal, and stores an error_message otherwise
 bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType> sql_types, bool has_header,
                     string &error_message) {
-	assert(collection.count == 0 || collection.types.size() == sql_types.size());
+	D_ASSERT(collection.count == 0 || collection.types.size() == sql_types.size());
 
 	// set up the CSV reader
 	BufferedCSVReaderOptions options;

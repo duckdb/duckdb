@@ -13,8 +13,11 @@ using namespace std;
 namespace duckdb {
 
 void SubstringDetection(string &str_1, string &str_2, string name_str_1, string name_str_2) {
+	if (str_1.size() == 0 || str_2.size() == 0) {
+		return;
+	}
 	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
-		throw BinderException("COPY " + name_str_1 + " must not appear in the " + name_str_2 +
+		throw BinderException(name_str_1 + " must not appear in the " + name_str_2 +
 		                      " specification and vice versa");
 	}
 }
@@ -70,15 +73,9 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 	} else if (loption == "quote") {
 		options.quote = ParseString(set);
 		options.has_quote = true;
-		if (options.quote.length() == 0) {
-			throw BinderException("QUOTE must not be empty");
-		}
 	} else if (loption == "escape") {
 		options.escape = ParseString(set);
 		options.has_escape = true;
-		if (options.escape.length() == 0) {
-			throw BinderException("ESCAPE must not be empty");
-		}
 	} else if (loption == "header") {
 		options.header = ParseBoolean(set);
 		options.has_header = true;

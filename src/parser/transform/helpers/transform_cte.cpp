@@ -10,9 +10,9 @@ using namespace duckdb_libpgquery;
 
 void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &select) {
 	// TODO: might need to update in case of future lawsuit
-	assert(de_with_clause);
+	D_ASSERT(de_with_clause);
 
-	assert(de_with_clause->ctes);
+	D_ASSERT(de_with_clause->ctes);
 	for (auto cte_ele = de_with_clause->ctes->head; cte_ele != NULL; cte_ele = cte_ele->next) {
 		auto info = make_unique<CommonTableExpressionInfo>();
 

@@ -7,7 +7,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
-	assert(op.children.size() == 1);
+	D_ASSERT(op.children.size() == 1);
 
 	// generate physical plan
 	auto plan = CreatePlan(*op.children[0]);

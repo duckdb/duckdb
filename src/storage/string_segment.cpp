@@ -99,8 +99,8 @@ void StringSegment::read_string(string_t *result_data, buffer_handle_set_t &hand
 void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
                            vector<TableFilter> &tableFilter) {
 	auto vector_index = state.vector_index;
-	assert(vector_index < max_vector_count);
-	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+	D_ASSERT(vector_index < max_vector_count);
+	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	auto handle = state.primary_handle.get();
 	state.handles.clear();
@@ -325,7 +325,7 @@ string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t
 
 string_t StringSegment::FetchStringFromDict(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t dict_offset) {
 	// fetch base data
-	assert(dict_offset <= Storage::BLOCK_SIZE);
+	D_ASSERT(dict_offset <= Storage::BLOCK_SIZE);
 	string_location_t location = FetchStringLocation(baseptr, dict_offset);
 	return FetchString(handles, baseptr, location);
 }
@@ -354,7 +354,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 
 	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
 	idx_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
-	assert(vector_index < max_vector_count);
+	D_ASSERT(vector_index < max_vector_count);
 
 	data_ptr_t baseptr;
 
@@ -422,7 +422,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 // Append
 //===--------------------------------------------------------------------===//
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	assert(data.type.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(data.type.InternalType() == PhysicalType::VARCHAR);
 	auto handle = manager.Pin(block_id);
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
@@ -484,7 +484,7 @@ static void update_min_max_string_segment(string value, char *__restrict min, ch
 
 idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
 	idx_t used_space = GetDictionaryOffset(handle) + max_vector_count * vector_size;
-	assert(Storage::BLOCK_SIZE >= used_space);
+	D_ASSERT(Storage::BLOCK_SIZE >= used_space);
 	return Storage::BLOCK_SIZE - used_space;
 }
 
@@ -510,7 +510,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			stats.has_null = true;
 		} else {
 			auto dictionary_offset = GetDictionaryOffset(handle);
-			assert(dictionary_offset < Storage::BLOCK_SIZE);
+			D_ASSERT(dictionary_offset < Storage::BLOCK_SIZE);
 			// non-null value, check if we can fit it within the block
 			idx_t string_length = sdata[source_idx].GetSize();
 			idx_t total_length = string_length + sizeof(uint16_t);
@@ -525,7 +525,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			if (total_length > BIG_STRING_MARKER_BASE_SIZE &&
 			    (total_length >= STRING_BLOCK_LIMIT ||
 			     total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace(handle))) {
-				assert(RemainingSpace(handle) >= BIG_STRING_MARKER_SIZE);
+				D_ASSERT(RemainingSpace(handle) >= BIG_STRING_MARKER_SIZE);
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
 				int32_t offset;
@@ -542,7 +542,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 				stats.has_overflow_strings = true;
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
-				assert(string_length < NumericLimits<uint16_t>::Maximum());
+				D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
 				dictionary_offset += total_length;
 				auto dict_pos = end - dictionary_offset;
 				//! Update min/max of column segment
@@ -552,9 +552,9 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetDataUnsafe(), string_length);
 			}
-			assert(RemainingSpace(handle) <= Storage::BLOCK_SIZE);
+			D_ASSERT(RemainingSpace(handle) <= Storage::BLOCK_SIZE);
 			// place the dictionary offset into the set of vectors
-			assert(dictionary_offset <= Storage::BLOCK_SIZE);
+			D_ASSERT(dictionary_offset <= Storage::BLOCK_SIZE);
 			result_data[target_idx] = dictionary_offset;
 			SetDictionaryOffset(handle, dictionary_offset);
 		}
@@ -605,7 +605,7 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 }
 
 string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset) {
-	assert(offset < Storage::BLOCK_SIZE);
+	D_ASSERT(offset < Storage::BLOCK_SIZE);
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
 	}
@@ -766,13 +766,13 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_c
 	// now we perform a merge of the new ids with the old ids
 	auto merge = [&](idx_t id, idx_t aidx, idx_t bidx, idx_t count) {
 		// new_id and old_id are the same, insert the old data in the UpdateInfo
-		assert(old_data[bidx].IsValid());
+		D_ASSERT(old_data[bidx].IsValid());
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
 		// new_id comes before the old id, insert the base table data into the update info
-		assert(base_data[aidx].IsValid());
+		D_ASSERT(base_data[aidx].IsValid());
 		info_data[count] = base_data[aidx];
 		node->nullmask[id] = base_nullmask[aidx];
 
@@ -780,7 +780,7 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_c
 	};
 	auto pick_old = [&](idx_t id, idx_t bidx, idx_t count) {
 		// old_id comes before new_id, insert the old data
-		assert(old_data[bidx].IsValid());
+		D_ASSERT(old_data[bidx].IsValid());
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
@@ -862,7 +862,7 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	idx_t old_idx = 0;
 	for (idx_t i = 0; i < update_info.count; i++) {
 		if (old_idx >= info->N || update_info.ids[i] != info->tuples[old_idx]) {
-			assert(old_idx >= info->N || update_info.ids[i] < info->tuples[old_idx]);
+			D_ASSERT(old_idx >= info->N || update_info.ids[i] < info->tuples[old_idx]);
 			// this entry is not rolled back: insert entry directly
 			update_info.ids[new_count] = update_info.ids[i];
 			update_info.block_ids[new_count] = update_info.block_ids[i];

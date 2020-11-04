@@ -200,7 +200,7 @@ void Appender::Invalidate(string msg, bool close) {
 	if (close) {
 		con.context->RemoveAppender(this);
 	}
-	assert(!msg.empty());
+	D_ASSERT(!msg.empty());
 	invalidated_msg = msg;
 }
 } // namespace duckdb

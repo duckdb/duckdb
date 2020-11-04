@@ -13,8 +13,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
                                                               unordered_set<idx_t> &left_bindings,
                                                               unordered_set<idx_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
-	assert(join.join_type == JoinType::INNER);
-	assert(op->type != LogicalOperatorType::DELIM_JOIN);
+	D_ASSERT(join.join_type == JoinType::INNER);
+	D_ASSERT(op->type != LogicalOperatorType::DELIM_JOIN);
 	// inner join: gather all the conditions of the inner join and add to the filter list
 	if (op->type == LogicalOperatorType::ANY_JOIN) {
 		auto &any_join = (LogicalAnyJoin &)join;
@@ -25,7 +25,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		}
 	} else {
 		// comparison join
-		assert(op->type == LogicalOperatorType::COMPARISON_JOIN);
+		D_ASSERT(op->type == LogicalOperatorType::COMPARISON_JOIN);
 		auto &comp_join = (LogicalComparisonJoin &)join;
 		// turn the conditions into filters
 		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {

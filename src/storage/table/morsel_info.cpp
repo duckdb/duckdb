@@ -29,7 +29,7 @@ idx_t MorselInfo::GetSelVector(Transaction &transaction, idx_t vector_idx, Selec
 }
 
 bool MorselInfo::Fetch(Transaction &transaction, idx_t row) {
-	assert(row < MorselInfo::MORSEL_SIZE);
+	D_ASSERT(row < MorselInfo::MORSEL_SIZE);
 	lock_guard<mutex> lock(morsel_lock);
 
 	idx_t vector_index = row / STANDARD_VECTOR_SIZE;
@@ -69,7 +69,7 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 				info = insert_info.get();
 				root->info[vector_idx] = move(insert_info);
 			} else {
-				assert(root->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
+				D_ASSERT(root->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 				// use existing vector
 				info = (ChunkVectorInfo *)root->info[vector_idx].get();
 			}
@@ -79,7 +79,7 @@ void MorselInfo::Append(Transaction &transaction, idx_t morsel_start, idx_t coun
 }
 
 void MorselInfo::CommitAppend(transaction_t commit_id, idx_t morsel_start, idx_t count) {
-	assert(root.get());
+	D_ASSERT(root.get());
 	idx_t morsel_end = morsel_start + count;
 	lock_guard<mutex> lock(morsel_lock);
 
@@ -163,7 +163,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			new_info->insert_id = constant.insert_id;
 			info.root->info[vector_idx] = move(new_info);
 		}
-		assert(info.root->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
+		D_ASSERT(info.root->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 		current_info = (ChunkVectorInfo *)info.root->info[vector_idx].get();
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;

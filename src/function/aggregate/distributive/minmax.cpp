@@ -50,7 +50,7 @@ struct MinMaxBase {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
-		assert(!nullmask[0]);
+		D_ASSERT(!nullmask[0]);
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
 			state->isset = true;

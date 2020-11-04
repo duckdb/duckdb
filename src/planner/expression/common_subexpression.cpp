@@ -10,14 +10,14 @@ CommonSubExpression::CommonSubExpression(unique_ptr<Expression> child, string al
 	this->child = child.get();
 	this->owned_child = move(child);
 	this->alias = alias;
-	assert(this->child);
+	D_ASSERT(this->child);
 }
 
 CommonSubExpression::CommonSubExpression(Expression *child, string alias)
     : Expression(ExpressionType::COMMON_SUBEXPRESSION, ExpressionClass::COMMON_SUBEXPRESSION, child->return_type),
       child(child) {
 	this->alias = alias;
-	assert(child);
+	D_ASSERT(child);
 }
 
 string CommonSubExpression::ToString() const {

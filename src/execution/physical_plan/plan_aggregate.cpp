@@ -10,7 +10,7 @@ using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	unique_ptr<PhysicalOperator> groupby;
-	assert(op.children.size() == 1);
+	D_ASSERT(op.children.size() == 1);
 
 	bool all_combinable = true;
 	for (idx_t i = 0; i < op.expressions.size(); i++) {

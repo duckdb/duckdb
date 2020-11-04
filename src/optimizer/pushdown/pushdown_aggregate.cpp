@@ -13,9 +13,9 @@ using Filter = FilterPushdown::Filter;
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)*expr;
-		assert(colref.binding.table_index == proj.group_index);
-		assert(colref.binding.column_index < proj.groups.size());
-		assert(colref.depth == 0);
+		D_ASSERT(colref.binding.table_index == proj.group_index);
+		D_ASSERT(colref.binding.column_index < proj.groups.size());
+		D_ASSERT(colref.depth == 0);
 		// replace the binding with a copy to the expression at the referenced index
 		return proj.groups[colref.binding.column_index]->Copy();
 	}
@@ -26,7 +26,7 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY);
+	D_ASSERT(op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY);
 	auto &aggr = (LogicalAggregate &)*op;
 
 	// pushdown into AGGREGATE and GROUP BY

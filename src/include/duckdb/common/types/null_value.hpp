@@ -28,7 +28,7 @@ template <class T> inline T NullValue() {
 constexpr const char str_nil[2] = {'\200', '\0'};
 
 template <> inline const char *NullValue() {
-	assert(str_nil[0] == '\200' && str_nil[1] == '\0');
+	D_ASSERT(str_nil[0] == '\200' && str_nil[1] == '\0');
 	return str_nil;
 }
 

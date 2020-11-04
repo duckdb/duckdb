@@ -18,7 +18,7 @@ static pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const i
 	for (; nchars < len && nbytes < size; ++nchars) {
 		utf8proc_int32_t codepoint;
 		const auto bytes = utf8proc_iterate(str + nbytes, size - nbytes, &codepoint);
-		assert(bytes > 0);
+		D_ASSERT(bytes > 0);
 		nbytes += bytes;
 	}
 
@@ -48,7 +48,7 @@ static bool insert_padding(const idx_t len, const string_t &pad, vector<char> &r
 		//  Write the next character
 		utf8proc_int32_t codepoint;
 		const auto bytes = utf8proc_iterate(str + nbytes, size - nbytes, &codepoint);
-		assert(bytes > 0);
+		D_ASSERT(bytes > 0);
 		nbytes += bytes;
 	}
 

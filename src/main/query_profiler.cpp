@@ -125,7 +125,7 @@ void QueryProfiler::EndPhase() {
 	if (!enabled || !running) {
 		return;
 	}
-	assert(phase_stack.size() > 0);
+	D_ASSERT(phase_stack.size() > 0);
 
 	// end the timer
 	phase_profiler.End();
@@ -189,7 +189,7 @@ void OperatorProfiler::EndOperator(DataChunk *chunk) {
 
 	AddTiming(execution_stack.top(), op.Elapsed(), chunk ? chunk->size() : 0);
 
-	assert(!execution_stack.empty());
+	D_ASSERT(!execution_stack.empty());
 	execution_stack.pop();
 
 	// start timing again for the previous element, if any
@@ -221,7 +221,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 
 	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
-		assert(entry != tree_map.end());
+		D_ASSERT(entry != tree_map.end());
 
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
@@ -444,7 +444,7 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	std::sort(phases.begin(), phases.end());
 	for (const auto &phase : phases) {
 		auto entry = phase_timings.find(phase);
-		assert(entry != phase_timings.end());
+		D_ASSERT(entry != phase_timings.end());
 		result.emplace_back(entry->first, entry->second);
 	}
 	return result;

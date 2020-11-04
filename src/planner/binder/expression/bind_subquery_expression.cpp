@@ -30,7 +30,7 @@ public:
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
 	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
-		assert(depth == 0);
+		D_ASSERT(depth == 0);
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = make_unique<Binder>(context, &binder);
 		for (auto &cte_it : expr.subquery->cte_map) {
@@ -64,7 +64,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		}
 	}
 	// both binding the child and binding the subquery was successful
-	assert(expr.subquery->node->type == QueryNodeType::BOUND_SUBQUERY_NODE);
+	D_ASSERT(expr.subquery->node->type == QueryNodeType::BOUND_SUBQUERY_NODE);
 	auto bound_subquery = (BoundSubqueryNode *)expr.subquery->node.get();
 	auto child = (BoundExpression *)expr.child.get();
 	auto subquery_binder = move(bound_subquery->subquery_binder);
@@ -79,7 +79,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	if (expr.subquery_type == SubqueryType::ANY) {
 		// ANY comparison
 		// cast child and subquery child to equivalent types
-		assert(bound_node->types.size() == 1);
+		D_ASSERT(bound_node->types.size() == 1);
 		auto compare_type = LogicalType::MaxLogicalType(child->expr->return_type, bound_node->types[0]);
 		child->expr = BoundCastExpression::AddCastToType(move(child->expr), compare_type);
 		result->child_type = bound_node->types[0];

@@ -10,6 +10,7 @@
 #include <time.h>
 #include <string>
 #include <chrono>
+#include <cassert>
 
 #include "extension_helper.hpp"
 

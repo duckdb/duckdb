@@ -28,8 +28,8 @@ template <class T> static void templated_gather_loop(Vector &source, Vector &des
 }
 
 void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
-	assert(source.vector_type == VectorType::FLAT_VECTOR);
-	assert(source.type.id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
+	D_ASSERT(source.vector_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(source.type.id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
 
 	dest.vector_type = VectorType::FLAT_VECTOR;
 	switch (dest.type.InternalType()) {

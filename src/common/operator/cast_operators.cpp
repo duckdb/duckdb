@@ -819,7 +819,7 @@ template <> string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 void CastFromBlob::ToHexString(string_t input, string_t &output) {
 	const char hexa_table[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 	idx_t input_size = input.GetSize();
-	assert(output.GetSize() == (input_size * 2 + 2));
+	D_ASSERT(output.GetSize() == (input_size * 2 + 2));
 	auto input_data = input.GetDataUnsafe();
 	auto hexa_data = output.GetDataWriteable();
 	// hex identifier
@@ -846,7 +846,7 @@ void CastFromBlob::FromHexToBytes(string_t input, string_t &output) {
 	in_size -= 2;
 
 	auto out_data = output.GetDataWriteable();
-	assert(output.GetSize() == (in_size / 2));
+	D_ASSERT(output.GetSize() == (in_size / 2));
 	idx_t out_idx = 0;
 
 	idx_t num_hex_per_byte = 2;

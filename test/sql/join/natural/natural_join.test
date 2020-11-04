@@ -1,0 +1,114 @@
+# name: test/sql/join/natural/natural_join.test
+# description: Test natural joins
+# group: [natural]
+
+statement ok
+PRAGMA enable_verification
+
+# create tables
+statement ok
+CREATE TABLE t1 (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (1, 2)
+
+statement ok
+CREATE TABLE t2 (a INTEGER, c INTEGER)
+
+statement ok
+INSERT INTO t2 VALUES (1, 3), (2, 4)
+
+# NATURAL join with one column
+query III
+SELECT * FROM t1 NATURAL JOIN t2
+----
+1	2	3
+
+query III
+SELECT t1.a, t1.b, t2.c FROM t1 NATURAL JOIN t2
+----
+1	2	3
+
+query III
+SELECT t1.a, t1.b, t2.c FROM t1 NATURAL JOIN t2 ORDER BY t2.a
+----
+1	2	3
+
+# natural join with multiple matching columns
+statement ok
+CREATE TABLE t3 (a INTEGER, b INTEGER, c INTEGER)
+
+statement ok
+INSERT INTO t3 VALUES (1, 2, 3)
+
+query III
+SELECT * FROM t1 NATURAL JOIN t3
+----
+1	2	3
+
+query III
+SELECT * FROM t3 NATURAL JOIN t2
+----
+1	2	3
+
+# natural join chain
+query III
+SELECT * FROM t1 NATURAL JOIN t2 NATURAL JOIN t3
+----
+1	2	3
+
+# no matching columns
+statement error
+select * from (values (1)) tbl(a) natural join (values (1), (2)) tbl2(b) order by 1, 2
+
+# long join chain
+query I
+select * from (values (1)) tbl(a) natural join (values (1)) tbl2(a) natural join (values (1)) tbl3(a)
+              natural join (values (1)) tbl4(a) natural join (values (1)) tbl5(a)
+----
+1
+
+# natural join with subqueries
+query I
+select * from (select 42) tbl(a) natural join (select 42) tbl2(a)
+----
+42
+
+# uncorrelated scalar subquery
+query I
+select (select * from (select 42) tbl(a) natural join (select 42) tbl2(a))
+----
+42
+
+# error: duplicate table alias on both sides
+statement error
+select (select * from (select 42) tbl(a) natural join (select 42) tbl(a))
+
+statement ok
+DROP TABLE t1
+
+statement ok
+CREATE TABLE t0(c0 DATE, c1 DATE DEFAULT('0.5868720116119102'), c2 INT1, PRIMARY KEY(c1, c2, c0));
+
+statement ok
+CREATE TABLE t1(c0 DATETIME, c1 DATE DEFAULT(TIMESTAMP '1970-01-11 02:37:59'), PRIMARY KEY(c0));
+
+statement ok
+CREATE VIEW v0(c0) AS SELECT false FROM t1, t0 HAVING 1689380428;
+
+statement ok
+SELECT COUNT(t1.rowid) FROM t1, v0 NATURAL RIGHT JOIN t0;
+
+statement ok
+SELECT COUNT(t1.rowid) FROM t1, v0 RIGHT JOIN t0 ON v0.c0=t0.c0;
+
+statement error
+SELECT COUNT(t1.rowid) FROM t1, v0 RIGHT JOIN t0 ON t1.c1=t0.c1 AND v0.c0=t0.c0;
+
+# column name appears more than once on left side of the natural join
+statement error
+select * from (values (1)) t1(i) join (values (1)) t2(i) on (t1.i=t2.i) natural join (values (1)) t3(i);
+
+# column name appears more than once on right side of the natural join
+statement error
+select * from (values (1)) t1(i) natural join ((values (1)) t2(i)  join (values (1)) t3(i) on (t2.i=t3.i))

@@ -8,20 +8,20 @@ namespace duckdb {
 void string_t::Verify() {
 	auto dataptr = GetDataUnsafe();
 	(void)dataptr;
-	assert(dataptr);
+	D_ASSERT(dataptr);
 
 #ifdef DEBUG
 	auto utf_type = Utf8Proc::Analyze(dataptr, GetSize());
-	assert(utf_type != UnicodeType::INVALID);
+	D_ASSERT(utf_type != UnicodeType::INVALID);
 #endif
 
 	// verify that the prefix contains the first four characters of the string
 	for (idx_t i = 0; i < MinValue<uint32_t>(PREFIX_LENGTH, GetSize()); i++) {
-		assert(GetPrefix()[i] == dataptr[i]);
+		D_ASSERT(GetPrefix()[i] == dataptr[i]);
 	}
 	// verify that for strings with length < PREFIX_LENGTH, the rest of the prefix is zero
 	for (idx_t i = GetSize(); i < PREFIX_LENGTH; i++) {
-		assert(GetPrefix()[i] == '\0');
+		D_ASSERT(GetPrefix()[i] == '\0');
 	}
 }
 

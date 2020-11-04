@@ -260,7 +260,7 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 		list_child->Append(*split_input);
 	}
 
-	assert(list_child->count == total_len);
+	D_ASSERT(list_child->count == total_len);
 	if (args.data[0].vector_type == VectorType::CONSTANT_VECTOR &&
 	    args.data[1].vector_type == VectorType::CONSTANT_VECTOR)
 		result.vector_type = VectorType::CONSTANT_VECTOR;

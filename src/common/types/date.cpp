@@ -265,7 +265,7 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 }
 
 date_t Date::EpochDaysToDate(int32_t epoch) {
-	assert(epoch + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
+	D_ASSERT(epoch + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
 	return (date_t)(epoch + EPOCH_DATE);
 }
 
@@ -274,7 +274,7 @@ int32_t Date::EpochDays(date_t date) {
 }
 
 date_t Date::EpochToDate(int64_t epoch) {
-	assert((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
+	D_ASSERT((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
 	return (date_t)((epoch / SECONDS_PER_DAY) + EPOCH_DATE);
 }
 

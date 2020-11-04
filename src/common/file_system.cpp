@@ -45,13 +45,13 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
 	// cannot combine Read and CREATE/Append flags
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 	// cannot combine CREATE and CREATE_NEW flags
-	assert(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 }
 
 #ifndef _WIN32
@@ -93,7 +93,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags = O_RDONLY;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::FILE_FLAGS_WRITE);
+		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
 		open_flags = O_RDWR | O_CLOEXEC;
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			open_flags |= O_CREAT;
@@ -402,7 +402,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		share_mode = FILE_SHARE_READ;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::FILE_FLAGS_WRITE);
+		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {

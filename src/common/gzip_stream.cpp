@@ -80,7 +80,7 @@ void GzipStreamBuf::initialize() {
 	if (is_initialized) {
 		return;
 	}
-	assert(BUFFER_SIZE >= 3); // found to work fine with 3
+	D_ASSERT(BUFFER_SIZE >= 3); // found to work fine with 3
 	uint8_t gzip_hdr[10];
 	data_start = GZIP_HEADER_MINSIZE;
 
@@ -139,8 +139,8 @@ streambuf::int_type GzipStreamBuf::underflow() {
 		// pointers for free region in output buffer
 		auto out_buff_free_start = out_buff;
 		do {
-			assert(in_buff_start <= in_buff_end);
-			assert(in_buff_end <= in_buff_start + BUFFER_SIZE);
+			D_ASSERT(in_buff_start <= in_buff_end);
+			D_ASSERT(in_buff_end <= in_buff_start + BUFFER_SIZE);
 
 			// read more input if none available
 			if (in_buff_start == in_buff_end) {
@@ -154,12 +154,12 @@ streambuf::int_type GzipStreamBuf::underflow() {
 			}
 
 			// actually decompress
-			assert(zstrm_p);
+			D_ASSERT(zstrm_p);
 			zstrm_p->next_in = (data_ptr_t)in_buff_start;
-			assert(in_buff_end - in_buff_start < NumericLimits<int32_t>::Maximum());
+			D_ASSERT(in_buff_end - in_buff_start < NumericLimits<int32_t>::Maximum());
 			zstrm_p->avail_in = (uint32_t)(in_buff_end - in_buff_start);
 			zstrm_p->next_out = (data_ptr_t)out_buff_free_start;
-			assert((out_buff + BUFFER_SIZE) - out_buff_free_start < NumericLimits<int32_t>::Maximum());
+			D_ASSERT((out_buff + BUFFER_SIZE) - out_buff_free_start < NumericLimits<int32_t>::Maximum());
 			zstrm_p->avail_out = (uint32_t)((out_buff + BUFFER_SIZE) - out_buff_free_start);
 			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
 			if (ret != MZ_OK && ret != MZ_STREAM_END) {
@@ -169,7 +169,7 @@ streambuf::int_type GzipStreamBuf::underflow() {
 			in_buff_start = (data_ptr_t)zstrm_p->next_in;
 			in_buff_end = in_buff_start + zstrm_p->avail_in;
 			out_buff_free_start = (data_ptr_t)zstrm_p->next_out;
-			assert(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFFER_SIZE);
+			D_ASSERT(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFFER_SIZE);
 			// if stream ended, deallocate inflator
 			if (ret == MZ_STREAM_END) {
 				mz_inflateEnd(zstrm_p);
@@ -186,14 +186,14 @@ streambuf::int_type GzipStreamBuf::underflow() {
 	}
 
 	// ensure all those pointers point at something sane
-	assert(out_buff);
-	assert(gptr() <= egptr());
-	assert(eback() == (char *)out_buff);
-	assert(gptr() >= (char *)out_buff);
-	assert(gptr() <= (char *)out_buff + BUFFER_SIZE);
-	assert(egptr() >= (char *)out_buff);
-	assert(egptr() <= (char *)out_buff + BUFFER_SIZE);
-	assert(gptr() <= egptr());
+	D_ASSERT(out_buff);
+	D_ASSERT(gptr() <= egptr());
+	D_ASSERT(eback() == (char *)out_buff);
+	D_ASSERT(gptr() >= (char *)out_buff);
+	D_ASSERT(gptr() <= (char *)out_buff + BUFFER_SIZE);
+	D_ASSERT(egptr() >= (char *)out_buff);
+	D_ASSERT(egptr() <= (char *)out_buff + BUFFER_SIZE);
+	D_ASSERT(gptr() <= egptr());
 
 	return this->gptr() == this->egptr() ? traits_type::eof() : traits_type::to_int_type(*this->gptr());
 }

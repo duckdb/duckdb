@@ -27,7 +27,7 @@ bool ChunkConstantInfo::Fetch(Transaction &transaction, row_t row) {
 }
 
 void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t end) {
-	assert(start == 0 && end == STANDARD_VECTOR_SIZE);
+	D_ASSERT(start == 0 && end == STANDARD_VECTOR_SIZE);
 	insert_id = commit_id;
 }
 

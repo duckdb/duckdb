@@ -7,7 +7,7 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<VacuumStatement> Transformer::TransformVacuum(PGNode *node) {
 	auto stmt = reinterpret_cast<PGVacuumStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	(void)stmt;
 	auto result = make_unique<VacuumStatement>();
 	return result;

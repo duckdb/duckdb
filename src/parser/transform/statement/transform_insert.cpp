@@ -28,7 +28,7 @@ unique_ptr<TableRef> Transformer::TransformValuesList(PGList *list) {
 
 unique_ptr<InsertStatement> Transformer::TransformInsert(PGNode *node) {
 	auto stmt = reinterpret_cast<PGInsertStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 
 	auto result = make_unique<InsertStatement>();
 

@@ -26,7 +26,7 @@ inline void assert_restrict_function(void *left_start, void *left_end, void *rig
 #ifdef DEBUG
 	if (!(left_end <= right_start || right_end <= left_start)) {
 		printf("ASSERT RESTRICT FAILED: %s:%d\n", fname, linenr);
-		assert(0);
+		D_ASSERT(0);
 	}
 #endif
 }

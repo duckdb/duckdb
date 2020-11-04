@@ -5,6 +5,7 @@
 #include "tpcds_constants.hpp"
 #include "append_info.hpp"
 #include "dsdgen_helpers.hpp"
+#include <cassert>
 
 using namespace duckdb;
 using namespace std;

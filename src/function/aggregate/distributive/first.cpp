@@ -105,7 +105,7 @@ template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalTy
 }
 
 AggregateFunction GetDecimalFirstFunction(LogicalType type) {
-	assert(type.id() == LogicalTypeId::DECIMAL);
+	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	switch (type.InternalType()) {
 	case PhysicalType::INT16:
 		return FirstFun::GetFunction(LogicalType::SMALLINT);

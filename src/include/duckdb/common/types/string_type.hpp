@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/assert.hpp"
 #include <cstring>
-#include <cassert>
 
 namespace duckdb {
 
@@ -29,7 +29,7 @@ public:
 	}
 	string_t(const char *data, uint32_t len) {
 		value.inlined.length = len;
-		assert(data || GetSize() == 0);
+		D_ASSERT(data || GetSize() == 0);
 		if (IsInlined()) {
 			// zero initialize the prefix first
 			// this makes sure that strings with length smaller than 4 still have an equal prefix

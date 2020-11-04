@@ -16,7 +16,7 @@ StringHeap::StringHeap() : tail(nullptr) {
 }
 
 string_t StringHeap::AddString(const char *data, idx_t len) {
-	assert(Utf8Proc::Analyze(data, len) != UnicodeType::INVALID);
+	D_ASSERT(Utf8Proc::Analyze(data, len) != UnicodeType::INVALID);
 	return AddBlob(data, len);
 }
 
@@ -41,7 +41,7 @@ string_t StringHeap::AddBlob(const char *data, idx_t len) {
 }
 
 string_t StringHeap::EmptyString(idx_t len) {
-	assert(len >= string_t::INLINE_LENGTH);
+	D_ASSERT(len >= string_t::INLINE_LENGTH);
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
 		// have to make a new entry
 		auto new_chunk = make_unique<StringChunk>(MaxValue<idx_t>(len, MINIMUM_HEAP_SIZE));
