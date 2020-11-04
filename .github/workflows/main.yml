@@ -3,6 +3,10 @@ on: [push, pull_request]
 defaults:
   run:
     shell: bash
+    
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
 
 jobs:
 
