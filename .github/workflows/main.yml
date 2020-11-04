@@ -258,7 +258,6 @@ jobs:
     env:
       CC: gcc-4.8
       CXX: g++-4.8
-      GEN: ninja
 
     steps:
     - uses: actions/checkout@v2
@@ -268,7 +267,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install ninja-build g++-4.8 binutils
+      run: sudo apt-get install g++-4.8 binutils
 
     - name: Build
       run: make release
