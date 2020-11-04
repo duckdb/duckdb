@@ -70,7 +70,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return move(cross_product);
 	}
 	switch (plan->type) {
-	case LogicalOperatorType::FILTER: {
+	case LogicalOperatorType::LOGICAL_FILTER: {
 		// filter
 		// first we flatten the dependent join in the child of the filter
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
@@ -79,7 +79,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		rewriter.VisitOperator(*plan);
 		return plan;
 	}
-	case LogicalOperatorType::PROJECTION: {
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// projection
 		// first we flatten the dependent join in the child of the projection
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
@@ -99,7 +99,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		this->data_offset = 0;
 		return plan;
 	}
-	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = (LogicalAggregate &)*plan;
 		// aggregate and group by
 		// first we flatten the dependent join in the child of the projection
@@ -156,7 +156,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			return plan;
 		}
 	}
-	case LogicalOperatorType::CROSS_PRODUCT: {
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// cross product
 		// push into both sides of the plan
 		bool left_has_correlation = has_correlated_expressions.find(plan->children[0].get())->second;
@@ -192,7 +192,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		join->children.push_back(move(plan->children[1]));
 		return move(join);
 	}
-	case LogicalOperatorType::COMPARISON_JOIN: {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = (LogicalComparisonJoin &)*plan;
 		D_ASSERT(plan->children.size() == 2);
 		// check the correlated expressions in the children of the join
@@ -260,7 +260,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		rewriter.VisitOperator(*plan);
 		return plan;
 	}
-	case LogicalOperatorType::LIMIT: {
+	case LogicalOperatorType::LOGICAL_LIMIT: {
 		auto &limit = (LogicalLimit &)*plan;
 		if (limit.offset > 0) {
 			throw ParserException("OFFSET not supported in correlated subquery");
@@ -274,7 +274,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			return move(plan->children[0]);
 		}
 	}
-	case LogicalOperatorType::WINDOW: {
+	case LogicalOperatorType::LOGICAL_WINDOW: {
 		auto &window = (LogicalWindow &)*plan;
 		// push into children
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
@@ -290,9 +290,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		return plan;
 	}
-	case LogicalOperatorType::EXCEPT:
-	case LogicalOperatorType::INTERSECT:
-	case LogicalOperatorType::UNION: {
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = (LogicalSetOperation &)*plan;
 		// set operator, push into both children
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
@@ -303,10 +303,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		setop.column_count += correlated_columns.size();
 		return plan;
 	}
-	case LogicalOperatorType::DISTINCT:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		return plan;
-	case LogicalOperatorType::ORDER_BY:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		throw ParserException("ORDER BY not supported in correlated subquery");
 	default:
 		throw NotImplementedException("Logical operator type \"%s\" for dependent join",

@@ -17,7 +17,7 @@ public:
 	LogicalRecursiveCTE(idx_t table_index, idx_t column_count, bool union_all, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type)
 	    : LogicalOperator(type), union_all(union_all), table_index(table_index), column_count(column_count) {
-		D_ASSERT(type == LogicalOperatorType::RECURSIVE_CTE);
+		D_ASSERT(type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
 		children.push_back(move(top));
 		children.push_back(move(bottom));
 	}

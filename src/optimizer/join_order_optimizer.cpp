@@ -50,14 +50,14 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
 	// push an expression into a filter
 	// first check if we have any filter to push it into
-	if (node->type != LogicalOperatorType::FILTER) {
+	if (node->type != LogicalOperatorType::LOGICAL_FILTER) {
 		// we don't, we need to create one
 		auto filter = make_unique<LogicalFilter>();
 		filter->children.push_back(move(node));
 		node = move(filter);
 	}
 	// push the filter into the LogicalFilter
-	D_ASSERT(node->type == LogicalOperatorType::FILTER);
+	D_ASSERT(node->type == LogicalOperatorType::LOGICAL_FILTER);
 	auto filter = (LogicalFilter *)node.get();
 	filter->expressions.push_back(move(expr));
 	return node;
@@ -67,12 +67,12 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
 	while (op->children.size() == 1 &&
-	       (op->type != LogicalOperatorType::PROJECTION && op->type != LogicalOperatorType::EXPRESSION_GET)) {
-		if (op->type == LogicalOperatorType::FILTER) {
+	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION && op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET)) {
+		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
 		}
-		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY || op->type == LogicalOperatorType::WINDOW) {
+		if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY || op->type == LogicalOperatorType::LOGICAL_WINDOW) {
 			// don't push filters through projection or aggregate and group by
 			JoinOrderOptimizer optimizer;
 			op->children[0] = optimizer.Optimize(move(op->children[0]));
@@ -81,14 +81,14 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		op = op->children[0].get();
 	}
 	bool non_reorderable_operation = false;
-	if (op->type == LogicalOperatorType::UNION || op->type == LogicalOperatorType::EXCEPT ||
-	    op->type == LogicalOperatorType::INTERSECT || op->type == LogicalOperatorType::DELIM_JOIN ||
-	    op->type == LogicalOperatorType::ANY_JOIN) {
+	if (op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
+	    op->type == LogicalOperatorType::LOGICAL_INTERSECT || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	    op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		// set operation, optimize separately in children
 		non_reorderable_operation = true;
 	}
 
-	if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		LogicalJoin *join = (LogicalJoin *)op;
 		if (join->join_type == JoinType::INNER) {
 			// extract join conditions from inner join
@@ -124,33 +124,33 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relations.push_back(move(relation));
 		return true;
 	}
-	if (op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::CROSS_PRODUCT) {
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		// inner join or cross product
 		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
-	} else if (op->type == LogicalOperatorType::GET) {
+	} else if (op->type == LogicalOperatorType::LOGICAL_GET) {
 		// base table scan, add to set of relations
 		auto get = (LogicalGet *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
-	} else if (op->type == LogicalOperatorType::EXPRESSION_GET) {
+	} else if (op->type == LogicalOperatorType::LOGICAL_EXPRESSION_GET) {
 		// base table scan, add to set of relations
 		auto get = (LogicalExpressionGet *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
-	} else if (op->type == LogicalOperatorType::DUMMY_SCAN) {
+	} else if (op->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
 		// table function call, add to set of relations
 		auto dummy_scan = (LogicalDummyScan *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[dummy_scan->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
-	} else if (op->type == LogicalOperatorType::PROJECTION) {
+	} else if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		auto proj = (LogicalProjection *)op;
 		// we run the join order optimizer witin the subquery as well
 		JoinOrderOptimizer optimizer;
@@ -569,10 +569,10 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				}
 				// now find the join to push it into
 				auto node = result_operator.get();
-				if (node->type == LogicalOperatorType::FILTER) {
+				if (node->type == LogicalOperatorType::LOGICAL_FILTER) {
 					node = node->children[0].get();
 				}
-				if (node->type == LogicalOperatorType::CROSS_PRODUCT) {
+				if (node->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 					// turn into comparison join
 					auto comp_join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
 					comp_join->children.push_back(move(node->children[0]));
@@ -581,11 +581,11 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 					if (node == result_operator.get()) {
 						result_operator = move(comp_join);
 					} else {
-						D_ASSERT(result_operator->type == LogicalOperatorType::FILTER);
+						D_ASSERT(result_operator->type == LogicalOperatorType::LOGICAL_FILTER);
 						result_operator->children[0] = move(comp_join);
 					}
 				} else {
-					D_ASSERT(node->type == LogicalOperatorType::COMPARISON_JOIN);
+					D_ASSERT(node->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 					auto &comp_join = (LogicalComparisonJoin &)*node;
 					comp_join.conditions.push_back(move(cond));
 				}
@@ -624,7 +624,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	// have to move up through the relations
 	auto op = plan.get();
 	auto parent = plan.get();
-	while (op->type != LogicalOperatorType::CROSS_PRODUCT && op->type != LogicalOperatorType::COMPARISON_JOIN) {
+	while (op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT && op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		D_ASSERT(op->children.size() == 1);
 		parent = op;
 		op = op->children[0].get();
@@ -659,7 +659,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// filters in the process
 	expression_set_t filter_set;
 	for (auto &op : filter_operators) {
-		if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
+		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			auto &join = (LogicalComparisonJoin &)*op;
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.size() == 0);

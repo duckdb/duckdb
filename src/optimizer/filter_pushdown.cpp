@@ -12,29 +12,29 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(!combiner.HasFilters());
 	switch (op->type) {
-	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		return PushdownAggregate(move(op));
-	case LogicalOperatorType::FILTER:
+	case LogicalOperatorType::LOGICAL_FILTER:
 		return PushdownFilter(move(op));
-	case LogicalOperatorType::CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		return PushdownCrossProduct(move(op));
-	case LogicalOperatorType::COMPARISON_JOIN:
-	case LogicalOperatorType::ANY_JOIN:
-	case LogicalOperatorType::DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		return PushdownJoin(move(op));
-	case LogicalOperatorType::PROJECTION:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
 		return PushdownProjection(move(op));
-	case LogicalOperatorType::INTERSECT:
-	case LogicalOperatorType::EXCEPT:
-	case LogicalOperatorType::UNION:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_UNION:
 		return PushdownSetOperation(move(op));
-	case LogicalOperatorType::DISTINCT:
-	case LogicalOperatorType::ORDER_BY: {
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		// we can just push directly through these operations without any rewriting
 		op->children[0] = Rewrite(move(op->children[0]));
 		return op;
 	}
-	case LogicalOperatorType::GET:
+	case LogicalOperatorType::LOGICAL_GET:
 		return PushdownGet(move(op));
 	default:
 		return FinishPushdown(move(op));
@@ -42,8 +42,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN ||
-	       op->type == LogicalOperatorType::DELIM_JOIN);
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
+	       op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &join = (LogicalJoin &)*op;
 	unordered_set<idx_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);

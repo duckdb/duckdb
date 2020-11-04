@@ -23,7 +23,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// we can only alter temporary tables/views in read-only mode
 		this->read_only = false;
 	}
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::ALTER, move(stmt.info));
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, move(stmt.info));
 	return result;
 }
 
@@ -34,7 +34,7 @@ BoundStatement Binder::Bind(TransactionStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::TRANSACTION, move(stmt.info));
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_TRANSACTION, move(stmt.info));
 	return result;
 }
 

@@ -23,7 +23,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	auto root = CreatePlan(*bound_table);
 	auto &get = (LogicalGet &)*root;
-	D_ASSERT(root->type == LogicalOperatorType::GET);
+	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_GET);
 
 	if (!table->temporary) {
 		// delete from persistent table: not read only!

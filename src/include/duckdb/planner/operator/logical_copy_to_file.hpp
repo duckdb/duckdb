@@ -16,7 +16,7 @@ namespace duckdb {
 class LogicalCopyToFile : public LogicalOperator {
 public:
 	LogicalCopyToFile(CopyFunction function, unique_ptr<FunctionData> bind_data)
-	    : LogicalOperator(LogicalOperatorType::COPY_TO_FILE), function(function), bind_data(move(bind_data)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_TO_FILE), function(function), bind_data(move(bind_data)) {
 	}
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;

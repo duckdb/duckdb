@@ -67,7 +67,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// bind the insert statement to the base table
 	auto insert_statement = Bind(insert);
-	D_ASSERT(insert_statement.plan->type == LogicalOperatorType::INSERT);
+	D_ASSERT(insert_statement.plan->type == LogicalOperatorType::LOGICAL_INSERT);
 
 	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
 

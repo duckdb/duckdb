@@ -3,7 +3,7 @@
 namespace duckdb {
 using namespace std;
 
-LogicalCrossProduct::LogicalCrossProduct() : LogicalOperator(LogicalOperatorType::CROSS_PRODUCT) {
+LogicalCrossProduct::LogicalCrossProduct() : LogicalOperator(LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 }
 
 vector<ColumnBinding> LogicalCrossProduct::GetColumnBindings() {
