@@ -736,17 +736,29 @@ vector<string> FileSystem::Glob(string path) {
 	}
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
+		bool has_glob = HasGlob(splits[i]);
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern
 		vector<string> result;
-		if (previous_directories.empty()) {
-			// no previous directories: list in the current path
-			GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+		if (!has_glob) {
+			// no glob, just append as-is
+			if (previous_directories.empty()) {
+				previous_directories.push_back(splits[i]);
+			} else {
+				for (auto &prev_directory : previous_directories) {
+					result.push_back(JoinPath(prev_directory, splits[i]));
+				}
+			}
 		} else {
-			// previous directories
-			// we iterate over each of the previous directories, and apply the glob of the current directory
-			for (auto &prev_directory : previous_directories) {
-				GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+			if (previous_directories.empty()) {
+				// no previous directories: list in the current path
+				GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+			} else {
+				// previous directories
+				// we iterate over each of the previous directories, and apply the glob of the current directory
+				for (auto &prev_directory : previous_directories) {
+					GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+				}
 			}
 		}
 		if (is_last_chunk || result.size() == 0) {
