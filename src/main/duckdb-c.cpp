@@ -6,6 +6,7 @@
 #include "duckdb.hpp"
 
 #include <cstring>
+#include <cassert>
 
 #ifdef _WIN32
 #define strdup _strdup
