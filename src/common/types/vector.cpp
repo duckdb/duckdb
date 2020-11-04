@@ -623,8 +623,8 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			auto strings = (string_t *)vdata.data;
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
-				auto source = (*vdata.nullmask)[idx] ? NullValue<const char *>() : strings[idx].GetData();
-				serializer.WriteString(source);
+				auto source = (*vdata.nullmask)[idx] ? NullValue<string_t>() : strings[idx];
+				serializer.WriteStringLen((const_data_ptr_t)source.GetDataUnsafe(), source.GetSize());
 			}
 			break;
 		}
@@ -736,6 +736,23 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				auto oidx = sel.get_index(i);
 				if (!nullmask[oidx]) {
 					D_ASSERT(Value::DoubleIsValid(doubles[oidx]));
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	if (type.id() == LogicalTypeId::VARCHAR) {
+		// verify that there are no '\0' bytes in string values
+		switch (vector_type) {
+		case VectorType::FLAT_VECTOR: {
+			auto strings = FlatVector::GetData<string_t>(*this);
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel.get_index(i);
+				if (!nullmask[oidx]) {
+					strings[oidx].VerifyNull();
 				}
 			}
 			break;

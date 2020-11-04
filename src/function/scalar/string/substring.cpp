@@ -12,7 +12,7 @@ namespace duckdb {
 
 string_t SubstringFun::substring_ascii_only(Vector &result, const char *input_data, int offset, int length) {
 	auto result_string = StringVector::EmptyString(result, length);
-	auto result_data = result_string.GetData();
+	auto result_data = result_string.GetDataWriteable();
 	memcpy(result_data, input_data + offset, length);
 	result_string.Finalize();
 	return result_string;
@@ -37,7 +37,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 	} else if (offset == 0) {
 		--length;
 	}
-	auto input_data = input.GetData();
+	auto input_data = input.GetDataUnsafe();
 	auto input_size = input.GetSize();
 
 	// check if there is any non-ascii

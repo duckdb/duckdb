@@ -2,10 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "utf8proc.hpp"
-
-#include <cstring>
 
 using namespace std;
 
@@ -15,12 +12,11 @@ static int64_t instr(string_t haystack, string_t needle) {
 	int64_t string_position = 0;
 
 	// Getting information about the needle and the haystack
-	auto haystack_data = haystack.GetData();
-	auto needle_data = needle.GetData();
-	auto location_data = strstr(haystack_data, needle_data);
-	if (location_data) {
-		auto str = reinterpret_cast<const utf8proc_uint8_t *>(haystack_data);
-		utf8proc_ssize_t len = location_data - haystack_data;
+	auto location = ContainsFun::Find(haystack, needle);
+	if (location != INVALID_INDEX) {
+		auto len = (utf8proc_ssize_t) location;
+		auto str = reinterpret_cast<const utf8proc_uint8_t *>(haystack.GetDataUnsafe());
+		D_ASSERT(len <= (utf8proc_ssize_t)haystack.GetSize());
 		for (++string_position; len > 0; ++string_position) {
 			utf8proc_int32_t codepoint;
 			const auto bytes = utf8proc_iterate(str, len, &codepoint);

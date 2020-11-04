@@ -10,13 +10,16 @@ static void nfc_normalize_function(DataChunk &args, ExpressionState &state, Vect
 	D_ASSERT(args.column_count() == 1);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
-		auto input_data = input.GetData();
+		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		if (StripAccentsFun::IsAscii(input_data, input_length)) {
 			return input;
 		}
-		string result_str = Utf8Proc::Normalize(string(input.GetData(), input.GetSize()));
-		return StringVector::AddString(result, result_str);
+		auto normalized_str = Utf8Proc::Normalize(input_data, input_length);
+		D_ASSERT(normalized_str);
+		auto result_str = StringVector::AddString(result, normalized_str);
+		free(normalized_str);
+		return result_str;
 	});
 	StringVector::AddHeapReference(result, args.data[0]);
 }

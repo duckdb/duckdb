@@ -37,7 +37,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr->return_type);
-	string patt_str = string(((string_t)constant_value.str_value).GetData());
+	auto patt_str = constant_value.str_value;
 
 	duckdb_re2::RE2 prefix_pattern("[^%_]*[%]+");
 	duckdb_re2::RE2 suffix_pattern("[%]+[^%_]*");
@@ -45,17 +45,12 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 
 	if (duckdb_re2::RE2::FullMatch(patt_str, prefix_pattern)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
-
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str);
-
 	} else if (duckdb_re2::RE2::FullMatch(patt_str, suffix_pattern)) {
 		// Suffix LIKE pattern: [%]+[^%_]*, ignoring underscore
-
 		return ApplyRule(root, SuffixFun::GetFunction(), patt_str);
-
 	} else if (duckdb_re2::RE2::FullMatch(patt_str, contains_pattern)) {
 		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
-
 		return ApplyRule(root, ContainsFun::GetFunction(), patt_str);
 	}
 

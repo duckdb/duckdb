@@ -513,7 +513,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			D_ASSERT(dictionary_offset < Storage::BLOCK_SIZE);
 			// non-null value, check if we can fit it within the block
 			idx_t string_length = sdata[source_idx].GetSize();
-			idx_t total_length = string_length + 1 + sizeof(uint16_t);
+			idx_t total_length = string_length + sizeof(uint16_t);
 
 			if (string_length > stats.max_string_length) {
 				stats.max_string_length = string_length;
@@ -530,7 +530,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 				block_id_t block;
 				int32_t offset;
 				//! Update min/max of column segment
-				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
+				update_min_max_string_segment(sdata[source_idx].GetString(), min, max);
 				// write the string into the current string block
 				WriteString(sdata[source_idx], block, offset);
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
@@ -546,11 +546,11 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 				dictionary_offset += total_length;
 				auto dict_pos = end - dictionary_offset;
 				//! Update min/max of column segment
-				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
+				update_min_max_string_segment(sdata[source_idx].GetString(), min, max);
 				// first write the length as u16
 				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary
-				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
+				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetDataUnsafe(), string_length);
 			}
 			D_ASSERT(RemainingSpace(handle) <= Storage::BLOCK_SIZE);
 			// place the dictionary offset into the set of vectors
@@ -563,7 +563,6 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 }
 
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
-	D_ASSERT(strlen(string.GetData()) == string.GetSize());
 	if (overflow_writer) {
 		// overflow writer is set: write string there
 		overflow_writer->WriteString(string, result_block, result_offset);
@@ -574,7 +573,7 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 }
 
 void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block, int32_t &result_offset) {
-	uint32_t total_length = string.GetSize() + 1 + sizeof(uint32_t);
+	uint32_t total_length = string.GetSize() + sizeof(uint32_t);
 	unique_ptr<BufferHandle> handle;
 	// check if the string fits in the current block
 	if (!head || head->offset + total_length >= head->size) {
@@ -601,7 +600,7 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 	auto ptr = handle->node->buffer + head->offset;
 	Store<uint32_t>(string.GetSize(), ptr);
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.GetData(), string.GetSize() + 1);
+	memcpy(ptr, string.GetDataUnsafe(), string.GetSize());
 	head->offset += total_length;
 }
 
@@ -615,11 +614,11 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 		// pin the initial handle and read the length
 		auto handle = manager.Pin(block);
 		uint32_t length = Load<uint32_t>(handle->node->buffer + offset);
-		uint32_t remaining = length + 1;
+		uint32_t remaining = length;
 		offset += sizeof(uint32_t);
 
 		// allocate a buffer to store the string
-		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + 1 + sizeof(uint32_t));
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + sizeof(uint32_t));
 		auto target_handle = manager.Allocate(alloc_size, true);
 		auto target_ptr = target_handle->node->buffer;
 		// write the length in this block as well
@@ -699,7 +698,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			update_min_max_string_segment(strings[i].GetData(), min, max);
+			update_min_max_string_segment(strings[i].GetString(), min, max);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
@@ -722,7 +721,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			update_min_max_string_segment(strings[i].GetData(), min, max);
+			update_min_max_string_segment(strings[i].GetString(), min, max);
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {

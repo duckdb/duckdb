@@ -51,7 +51,7 @@ struct TimeConvert {
 
 struct StringConvert {
 	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
-		return py::str(val.GetData());
+		return py::str(val.GetString());
 	}
 };
 

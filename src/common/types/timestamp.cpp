@@ -22,10 +22,10 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	idx_t pos;
 	date_t date;
 	dtime_t time;
-	if (!Date::TryConvertDate(str, pos, date)) {
+	if (!Date::TryConvertDate(str, len, pos, date)) {
 		throw ConversionException("timestamp field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-		                          str);
+		                          string(str, len));
 	}
 	if (pos == len) {
 		// no time: only a date
@@ -36,10 +36,10 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 		pos++;
 	}
 	idx_t time_pos = 0;
-	if (!Time::TryConvertTime(str + pos, time_pos, time)) {
+	if (!Time::TryConvertTime(str + pos, len - pos, time_pos, time)) {
 		throw ConversionException("timestamp field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-		                          str);
+		                          string(str, len));
 	}
 	pos += time_pos;
 	if (pos < len) {
@@ -54,7 +54,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 		if (pos < len) {
 			throw ConversionException("timestamp field value out of range: \"%s\", "
 			                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-			                          str);
+			                          string(str, len));
 		}
 	}
 	// use uint here because otherwise the shift is undefined

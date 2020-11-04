@@ -7,54 +7,59 @@ using namespace std;
 namespace duckdb {
 
 template <char PERCENTAGE, char UNDERSCORE>
-bool templated_like_operator(const char *s, const char *pattern, const char *escape) {
-	const char *t, *p;
-
-	t = s;
-	for (p = pattern; *p && *t; p++) {
-		if (escape && *p == *escape) {
-			p++;
-			if (*p != *t) {
+bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, idx_t plen, char escape) {
+	idx_t pidx = 0;
+	idx_t sidx = 0;
+	for(; pidx < plen && sidx < slen; pidx++) {
+		char pchar = pdata[pidx];
+		char schar = sdata[sidx];
+		if (pchar == escape) {
+			pidx++;
+			if (pidx == plen) {
+				throw SyntaxException("Like pattern must not end with escape character!");
+			}
+			if (pdata[pidx] != schar) {
 				return false;
 			}
-			t++;
-		} else if (*p == UNDERSCORE) {
-			t++;
-		} else if (*p == PERCENTAGE) {
-			p++;
-			while (*p == PERCENTAGE) {
-				p++;
+			sidx++;
+		} else if (pchar == UNDERSCORE) {
+			sidx++;
+		} else if (pchar == PERCENTAGE) {
+			pidx++;
+			while (pidx < plen && pdata[pidx] == PERCENTAGE) {
+				pidx++;
 			}
-			if (*p == 0) {
+			if (pidx == plen) {
 				return true; /* tail is acceptable */
 			}
-			for (; *p && *t; t++) {
-				if (templated_like_operator<PERCENTAGE, UNDERSCORE>(t, p, escape)) {
+			for (; sidx < slen; sidx++) {
+				if (templated_like_operator<PERCENTAGE, UNDERSCORE>(sdata + sidx, slen - sidx, pdata + pidx, plen - pidx, escape)) {
 					return true;
 				}
 			}
-			if (*p == 0 && *t == 0) {
-				return true;
-			}
 			return false;
-		} else if (*p == *t) {
-			t++;
+		} else if (pchar == schar) {
+			sidx++;
 		} else {
 			return false;
 		}
 	}
-	if (*p == PERCENTAGE && *(p + 1) == 0) {
-		return true;
+	while(pidx < plen && pdata[pidx] == PERCENTAGE) {
+		pidx++;
 	}
-	return *t == 0 && *p == 0;
+	return pidx == plen && sidx == slen;
 }
 
-bool like_operator(const char *s, const char *pattern, const char *escape) {
-	return templated_like_operator<'%', '_'>(s, pattern, escape);
+bool like_operator(const char *s, idx_t slen, const char *pattern, idx_t plen, char escape) {
+	return templated_like_operator<'%', '_'>(s, slen, pattern, plen, escape);
 }
 
-bool LikeFun::Glob(const char *s, const char *pattern, const char *escape) {
-	return templated_like_operator<'*', '?'>(s, pattern, escape);
+bool like_operator(string_t &s, string_t &pat, char escape = '\0') {
+	return like_operator(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize(), escape);
+}
+
+bool LikeFun::Glob(const char *s, idx_t slen, const char *pattern, idx_t plen, char escape) {
+	return templated_like_operator<'*', '?'>(s, slen, pattern, plen, escape);
 }
 
 struct LikeEscapeOperator {
@@ -63,7 +68,8 @@ struct LikeEscapeOperator {
 		if (escape.GetSize() > 1) {
 			throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
 		}
-		return like_operator(str.GetData(), pattern.GetData(), escape.GetData());
+		char escape_char = escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
+		return like_operator(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(), escape_char);
 	}
 };
 
@@ -75,19 +81,19 @@ struct NotLikeEscapeOperator {
 
 struct LikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		return like_operator(str.GetData(), pattern.GetData(), nullptr);
+		return like_operator(str, pattern);
 	}
 };
 
 struct NotLikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		return !like_operator(str.GetData(), pattern.GetData(), nullptr);
+		return !like_operator(str, pattern);
 	}
 };
 
 struct GlobOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		return LikeFun::Glob(str.GetData(), pattern.GetData(), nullptr);
+		return LikeFun::Glob(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize());
 	}
 };
 
