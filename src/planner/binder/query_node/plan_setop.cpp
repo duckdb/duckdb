@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 	}
 	// otherwise add casts
 	auto node = op.get();
-	if (node->type == LogicalOperatorType::PROJECTION) {
+	if (node->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		// "node" is a projection; we can just do the casts in there
 		D_ASSERT(node->expressions.size() == source_types.size());
 		// add the casts to the selection list
@@ -77,14 +77,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	LogicalOperatorType logical_type;
 	switch (node.setop_type) {
 	case SetOperationType::UNION:
-		logical_type = LogicalOperatorType::UNION;
+		logical_type = LogicalOperatorType::LOGICAL_UNION;
 		break;
 	case SetOperationType::EXCEPT:
-		logical_type = LogicalOperatorType::EXCEPT;
+		logical_type = LogicalOperatorType::LOGICAL_EXCEPT;
 		break;
 	default:
 		D_ASSERT(node.setop_type == SetOperationType::INTERSECT);
-		logical_type = LogicalOperatorType::INTERSECT;
+		logical_type = LogicalOperatorType::LOGICAL_INTERSECT;
 		break;
 	}
 	auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node), move(right_node),

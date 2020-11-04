@@ -23,7 +23,7 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(op->type == LogicalOperatorType::PROJECTION);
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto &proj = (LogicalProjection &)*op;
 	// push filter through logical projection
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalProjection
@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	child_pushdown.GenerateFilters();
 	// now push into children
 	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
-	if (op->children[0]->type == LogicalOperatorType::EMPTY_RESULT) {
+	if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		// child returns an empty result: generate an empty result here too
 		return make_unique<LogicalEmptyResult>(move(op));
 	}

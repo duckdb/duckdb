@@ -17,7 +17,7 @@ namespace duckdb {
 class LogicalCTERef : public LogicalOperator {
 public:
 	LogicalCTERef(idx_t table_index, idx_t cte_index, vector<LogicalType> types, vector<string> colnames)
-	    : LogicalOperator(LogicalOperatorType::CTE_REF), table_index(table_index), cte_index(cte_index) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE_REF), table_index(table_index), cte_index(cte_index) {
 		D_ASSERT(types.size() > 0);
 		chunk_types = types;
 		bound_columns = colnames;

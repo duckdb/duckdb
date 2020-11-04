@@ -29,8 +29,8 @@ static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(op->type == LogicalOperatorType::UNION || op->type == LogicalOperatorType::EXCEPT ||
-	       op->type == LogicalOperatorType::INTERSECT);
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
+	       op->type == LogicalOperatorType::LOGICAL_INTERSECT);
 	auto &setop = (LogicalSetOperation &)*op;
 
 	D_ASSERT(op->children.size() == 2);
@@ -61,8 +61,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
 
-	bool left_empty = op->children[0]->type == LogicalOperatorType::EMPTY_RESULT;
-	bool right_empty = op->children[1]->type == LogicalOperatorType::EMPTY_RESULT;
+	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
+	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	if (left_empty && right_empty) {
 		// both empty: return empty result
 		return make_unique<LogicalEmptyResult>(move(op));
@@ -70,17 +70,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	if (left_empty) {
 		// left child is empty result
 		switch (op->type) {
-		case LogicalOperatorType::UNION:
-			if (op->children[1]->type == LogicalOperatorType::PROJECTION) {
+		case LogicalOperatorType::LOGICAL_UNION:
+			if (op->children[1]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 				// union with empty left side: return right child
 				auto &projection = (LogicalProjection &)*op->children[1];
 				projection.table_index = setop.table_index;
 				return move(op->children[1]);
 			}
 			break;
-		case LogicalOperatorType::EXCEPT:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
 			// except: if left child is empty, return empty result
-		case LogicalOperatorType::INTERSECT:
+		case LogicalOperatorType::LOGICAL_INTERSECT:
 			// intersect: if any child is empty, return empty result itself
 			return make_unique<LogicalEmptyResult>(move(op));
 		default:
@@ -89,16 +89,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	} else if (right_empty) {
 		// right child is empty result
 		switch (op->type) {
-		case LogicalOperatorType::UNION:
-		case LogicalOperatorType::EXCEPT:
-			if (op->children[0]->type == LogicalOperatorType::PROJECTION) {
+		case LogicalOperatorType::LOGICAL_UNION:
+		case LogicalOperatorType::LOGICAL_EXCEPT:
+			if (op->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 				// union or except with empty right child: return left child
 				auto &projection = (LogicalProjection &)*op->children[0];
 				projection.table_index = setop.table_index;
 				return move(op->children[0]);
 			}
 			break;
-		case LogicalOperatorType::INTERSECT:
+		case LogicalOperatorType::LOGICAL_INTERSECT:
 			// intersect: if any child is empty, return empty result itself
 			return make_unique<LogicalEmptyResult>(move(op));
 		default:

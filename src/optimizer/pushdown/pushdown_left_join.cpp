@@ -63,12 +63,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<idx_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	D_ASSERT(join.join_type == JoinType::LEFT);
-	D_ASSERT(op->type != LogicalOperatorType::DELIM_JOIN);
+	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
 	FilterCombiner filter_combiner;
-	if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		// add all comparison conditions
 		auto &comparison_join = (LogicalComparisonJoin &)*op;
 		for (auto &cond : comparison_join.conditions) {
@@ -82,7 +82,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		if (side == JoinSide::LEFT) {
 			// bindings match left side
 			// we can push the filter into the left side
-			if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
+			if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 				// we MIGHT be able to push it down the RHS as well, but only if it is a comparison that matches the
 				// join predicates we use the FilterCombiner to figure this out add the expression to the FilterCombiner
 				filter_combiner.AddFilter(filters[i]->filter->Copy());

@@ -17,7 +17,7 @@ class LogicalExpressionGet : public LogicalOperator {
 public:
 	LogicalExpressionGet(idx_t table_index, vector<LogicalType> types,
 	                     vector<vector<unique_ptr<Expression>>> expressions)
-	    : LogicalOperator(LogicalOperatorType::EXPRESSION_GET), table_index(table_index), expr_types(types),
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPRESSION_GET), table_index(table_index), expr_types(types),
 	      expressions(move(expressions)) {
 	}
 
