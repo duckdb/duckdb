@@ -253,7 +253,7 @@ jobs:
   old-gcc:
     name: GCC 4.8
     runs-on: ubuntu-latest
-    #needs: linux-debug
+    needs: linux-debug
 
     env:
       CC: gcc-4.8
@@ -598,7 +598,16 @@ jobs:
   win-python3:
     name: Python 3 Windows
     runs-on: windows-latest
-    needs: linux-debug
+    # needs: linux-debug
+
+    env:
+      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+      CIBW_TEST_REQUIRES: 'pytest'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+      TWINE_USERNAME: 'hfmuehleisen'
 
     steps:
     - uses: actions/checkout@v2
