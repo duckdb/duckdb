@@ -13,6 +13,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
+#include <cassert>
+
 namespace duckdb {
 
 struct IcuBindData : public FunctionData {
