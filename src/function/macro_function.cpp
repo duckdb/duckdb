@@ -16,14 +16,16 @@ unique_ptr<BoundMacroExpression> MacroFunction::BindMacroFunction(ClientContext 
 	auto &macro_func = function.function;
 
 	auto bound_expression = macro_func->expression->Copy();
-	ParsedExpressionIterator::EnumerateChildren(*bound_expression, [&](const ParsedExpression &child) {
-		for (idx_t i = 0; i < macro_func->arguments.size(); i++) {
-			auto &arg = macro_func->arguments[i];
-			if (child.Equals(arg.get())) {
-				child =
-			}
-		}
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *bound_expression, [&](unique_ptr<ParsedExpression> child) -> unique_ptr<ParsedExpression> {
+		    for (idx_t i = 0; i < macro_func->arguments.size(); i++) {
+			    auto &arg = macro_func->arguments[i];
+			    if (child->Equals(arg.get())) {
+				    child = move(macro_func->arguments[i]->Copy());
+			    }
+		    }
+		    return child;
+	    });
 
 	auto result = make_unique<BoundMacroExpression>(LogicalType::SQLNULL, function.name, nullptr, move(children));
 
