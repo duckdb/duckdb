@@ -17,7 +17,7 @@ class LogicalExecute : public LogicalOperator {
 public:
 	LogicalExecute(PreparedStatementData *prepared)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXECUTE), prepared(prepared) {
-		assert(prepared);
+		D_ASSERT(prepared);
 		types = prepared->types;
 	}
 

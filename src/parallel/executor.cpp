@@ -146,10 +146,10 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		case PhysicalOperatorType::DELIM_SCAN: {
 			// check if this chunk scan scans a duplicate eliminated join collection
 			auto entry = delim_join_dependencies.find(op);
-			assert(entry != delim_join_dependencies.end());
+			D_ASSERT(entry != delim_join_dependencies.end());
 			// this chunk scan introduces a dependency to the current pipeline
 			// namely a dependency on the duplicate elimination pipeline to finish
-			assert(parent);
+			D_ASSERT(parent);
 			parent->AddDependency(entry->second);
 			break;
 		}
@@ -210,7 +210,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 }
 
 vector<LogicalType> Executor::GetTypes() {
-	assert(physical_plan);
+	D_ASSERT(physical_plan);
 	return physical_plan->GetTypes();
 }
 
@@ -228,7 +228,7 @@ void Executor::Flush(ThreadContext &tcontext) {
 }
 
 unique_ptr<DataChunk> Executor::FetchChunk() {
-	assert(physical_plan);
+	D_ASSERT(physical_plan);
 
 	ThreadContext thread(context);
 	TaskContext task;

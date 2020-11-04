@@ -20,14 +20,14 @@ DataChunk::DataChunk() : count(0) {
 }
 
 void DataChunk::InitializeEmpty(vector<LogicalType> &types) {
-	assert(types.size() > 0);
+	D_ASSERT(types.size() > 0);
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(Vector(types[i], nullptr));
 	}
 }
 
 void DataChunk::Initialize(vector<LogicalType> &types) {
-	assert(types.size() > 0);
+	D_ASSERT(types.size() > 0);
 	InitializeEmpty(types);
 	for (idx_t i = 0; i < types.size(); i++) {
 		data[i].Initialize();
@@ -47,7 +47,7 @@ void DataChunk::Destroy() {
 }
 
 Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
-	assert(index < size());
+	D_ASSERT(index < size());
 	return data[col_idx].GetValue(index);
 }
 
@@ -56,7 +56,7 @@ void DataChunk::SetValue(idx_t col_idx, idx_t index, Value val) {
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
-	assert(chunk.column_count() <= column_count());
+	D_ASSERT(chunk.column_count() <= column_count());
 	SetCardinality(chunk);
 	for (idx_t i = 0; i < chunk.column_count(); i++) {
 		data[i].Reference(chunk.data[i]);
@@ -64,11 +64,11 @@ void DataChunk::Reference(DataChunk &chunk) {
 }
 
 void DataChunk::Copy(DataChunk &other, idx_t offset) {
-	assert(column_count() == other.column_count());
-	assert(other.size() == 0);
+	D_ASSERT(column_count() == other.column_count());
+	D_ASSERT(other.size() == 0);
 
 	for (idx_t i = 0; i < column_count(); i++) {
-		assert(other.data[i].vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(other.data[i].vector_type == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
 	}
 	other.SetCardinality(size() - offset);
@@ -82,7 +82,7 @@ void DataChunk::Append(DataChunk &other) {
 		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
 	}
 	for (idx_t i = 0; i < column_count(); i++) {
-		assert(data[i].vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(data[i].vector_type == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
 	}
 	SetCardinality(size() + other.size());
@@ -150,7 +150,7 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
 }
 
 void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset) {
-	assert(other.column_count() <= col_offset + column_count());
+	D_ASSERT(other.column_count() <= col_offset + column_count());
 	this->count = count;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.column_count(); c++) {
@@ -173,7 +173,7 @@ unique_ptr<VectorData[]> DataChunk::Orrify() {
 }
 
 void DataChunk::Hash(Vector &result) {
-	assert(result.type.id() == LogicalTypeId::HASH);
+	D_ASSERT(result.type.id() == LogicalTypeId::HASH);
 	VectorOperations::Hash(data[0], result, size());
 	for (idx_t i = 1; i < column_count(); i++) {
 		VectorOperations::CombineHash(result, data[i], size());
@@ -182,7 +182,7 @@ void DataChunk::Hash(Vector &result) {
 
 void DataChunk::Verify() {
 #ifdef DEBUG
-	assert(size() <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(size() <= STANDARD_VECTOR_SIZE);
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < column_count(); i++) {
 		data[i].Verify(size());
@@ -214,7 +214,7 @@ static void release_duckdb_arrow_array(ArrowArray *array) {
 }
 
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
-	assert(out_array);
+	D_ASSERT(out_array);
 
 	auto root_holder = new DuckDBArrowArrayHolder();
 	root_holder->children = unique_ptr<ArrowArray *[]>(new ArrowArray *[column_count()]);
@@ -290,7 +290,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				child.n_buffers = 3;
 				holder->string_offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
 				child.buffers[1] = holder->string_offsets.get();
-				assert(child.buffers[1]);
+				D_ASSERT(child.buffers[1]);
 				// step 1: figure out total string length:
 				idx_t total_string_length = 0;
 				auto string_t_ptr = FlatVector::GetData<string_t>(vector);
@@ -304,7 +304,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				// step 2: allocate this much
 				holder->string_data = unique_ptr<data_t[]>(new data_t[total_string_length]);
 				child.buffers[2] = holder->string_data.get();
-				assert(child.buffers[2]);
+				D_ASSERT(child.buffers[2]);
 				// step 3: assign buffers
 				idx_t current_heap_offset = 0;
 				auto target_ptr = (uint32_t *)child.buffers[1];

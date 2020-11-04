@@ -27,7 +27,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 			if (def_elem->defaction == PG_DEFELEM_UNSPEC && !val) { // e.g. NO MINVALUE
 				continue;
 			}
-			assert(val);
+			D_ASSERT(val);
 			int64_t opt_value;
 			if (val->type == T_PGInteger) {
 				opt_value = val->val.ival;

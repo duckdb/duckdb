@@ -126,7 +126,7 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		break;
 	default:
 		// called on non BoundExpression type!
-		assert(0);
+		D_ASSERT(0);
 		break;
 	}
 }
@@ -165,7 +165,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		break;
 	}
 	default:
-		assert(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
+		D_ASSERT(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
 		       ref.type == TableReferenceType::EMPTY);
 		break;
 	}
@@ -181,7 +181,7 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		break;
 	}
 	default:
-		assert(node.type == QueryNodeType::SELECT_NODE);
+		D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
 		auto &bound_select = (BoundSelectNode &)node;
 		for (idx_t i = 0; i < bound_select.select_list.size(); i++) {
 			EnumerateExpression(bound_select.select_list[i], callback);

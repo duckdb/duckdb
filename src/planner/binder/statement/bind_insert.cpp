@@ -29,7 +29,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
-	assert(table);
+	D_ASSERT(table);
 	if (!table->temporary) {
 		// inserting into a non-temporary table: alters underlying database
 		this->read_only = false;
@@ -88,14 +88,14 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			expr_list.expected_types.resize(expected_columns);
 			expr_list.expected_names.resize(expected_columns);
 
-			assert(expr_list.values.size() > 0);
+			D_ASSERT(expr_list.values.size() > 0);
 			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), stmt.columns.size() != 0,
 			                               table->name.c_str());
 
 			// VALUES list!
 			for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
 				idx_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
-				assert(table_col_idx < table->columns.size());
+				D_ASSERT(table_col_idx < table->columns.size());
 
 				// set the expected types as the types for the INSERT statement
 				auto &column = table->columns[table_col_idx];

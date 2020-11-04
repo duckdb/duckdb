@@ -200,8 +200,8 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
                             vector<TableFilter> &tableFilter) {
 	auto vector_index = state.vector_index;
-	assert(vector_index < max_vector_count);
-	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+	D_ASSERT(vector_index < max_vector_count);
+	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
 	auto handle = manager.Pin(block_id);
@@ -242,9 +242,9 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-		assert(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		D_ASSERT(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-		assert(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+		D_ASSERT(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 		       tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
 
 		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
@@ -275,8 +275,8 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 // Fetch base data
 //===--------------------------------------------------------------------===//
 void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	assert(vector_index < max_vector_count);
-	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+	D_ASSERT(vector_index < max_vector_count);
+	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
 	auto handle = manager.Pin(block_id);
@@ -320,8 +320,8 @@ static void templated_assignment(SelectionVector &sel, data_ptr_t source, data_p
 void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
                                          idx_t &approved_tuple_count) {
 	auto vector_index = state.vector_index;
-	assert(vector_index < max_vector_count);
-	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+	D_ASSERT(vector_index < max_vector_count);
+	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
 	auto handle = manager.Pin(block_id);
@@ -390,7 +390,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 	// get the vector index
 	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
 	idx_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
-	assert(vector_index < max_vector_count);
+	D_ASSERT(vector_index < max_vector_count);
 
 	// first fetch the data from the base table
 	auto data = handle->node->buffer + vector_index * vector_size;
@@ -410,7 +410,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 // Append
 //===--------------------------------------------------------------------===//
 idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	assert(data.type.InternalType() == type);
+	D_ASSERT(data.type.InternalType() == type);
 	auto handle = manager.Pin(block_id);
 
 	idx_t initial_count = tuple_count;

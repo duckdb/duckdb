@@ -7,7 +7,7 @@ using namespace std;
 using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformNullTest(PGNullTest *root) {
-	assert(root);
+	D_ASSERT(root);
 	auto arg = TransformExpression(reinterpret_cast<PGNode *>(root->arg));
 	if (root->argisrow) {
 		throw NotImplementedException("IS NULL argisrow");

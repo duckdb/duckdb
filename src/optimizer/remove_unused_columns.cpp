@@ -26,7 +26,7 @@ void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBi
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs != column_references.end()) {
 		for (auto &colref : colrefs->second) {
-			assert(colref->binding == current_binding);
+			D_ASSERT(colref->binding == current_binding);
 			colref->binding = new_binding;
 		}
 	}

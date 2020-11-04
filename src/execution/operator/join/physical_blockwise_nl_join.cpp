@@ -15,9 +15,9 @@ PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr
 	children.push_back(move(left));
 	children.push_back(move(right));
 	// MARK, SINGLE and RIGHT OUTER joins not handled
-	assert(join_type != JoinType::MARK);
-	assert(join_type != JoinType::RIGHT);
-	assert(join_type != JoinType::SINGLE);
+	D_ASSERT(join_type != JoinType::MARK);
+	D_ASSERT(join_type != JoinType::RIGHT);
+	D_ASSERT(join_type != JoinType::SINGLE);
 }
 
 //===--------------------------------------------------------------------===//
@@ -102,7 +102,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 			// for SEMI or INNER join: empty RHS means empty result
 			return;
 		}
-		assert(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI);
+		D_ASSERT(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI);
 		// pull a chunk from the LHS
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
@@ -169,7 +169,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 		auto &rchunk = *gstate.right_chunks.chunks[state->right_position];
 
 		// fill in the current element of the LHS into the chunk
-		assert(chunk.column_count() == lchunk.column_count() + rchunk.column_count());
+		D_ASSERT(chunk.column_count() == lchunk.column_count() + rchunk.column_count());
 		for (idx_t i = 0; i < lchunk.column_count(); i++) {
 			auto lvalue = lchunk.GetValue(i, state->left_position);
 			chunk.data[i].Reference(lvalue);

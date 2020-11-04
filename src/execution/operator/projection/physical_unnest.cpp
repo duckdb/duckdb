@@ -29,7 +29,7 @@ PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expr
                                PhysicalOperatorType type)
     : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
 
-	assert(this->select_list.size() > 0);
+	D_ASSERT(this->select_list.size() > 0);
 }
 
 void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -49,7 +49,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			ExpressionExecutor executor;
 			vector<LogicalType> list_data_types;
 			for (auto &exp : select_list) {
-				assert(exp->type == ExpressionType::BOUND_UNNEST);
+				D_ASSERT(exp->type == ExpressionType::BOUND_UNNEST);
 				auto bue = (BoundUnnestExpression *)exp.get();
 				list_data_types.push_back(bue->child->return_type);
 				executor.AddExpression(*bue->child.get());
@@ -61,8 +61,8 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			// paranoia aplenty
 			state->child_chunk.Verify();
 			state->list_data.Verify();
-			assert(state->child_chunk.size() == state->list_data.size());
-			assert(state->list_data.column_count() == select_list.size());
+			D_ASSERT(state->child_chunk.size() == state->list_data.size());
+			D_ASSERT(state->list_data.column_count() == select_list.size());
 		}
 
 		// need to figure out how many times we need to repeat for current row
@@ -70,7 +70,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			for (idx_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 				auto &v = state->list_data.data[col_idx];
 
-				assert(v.type == LogicalType::LIST);
+				D_ASSERT(v.type == LogicalType::LIST);
 				// TODO deal with NULL values here!
 				auto list_data = FlatVector::GetData<list_entry_t>(v);
 				auto list_entry = list_data[state->parent_position];
@@ -80,7 +80,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			}
 		}
 
-		assert(state->list_length >= 0);
+		D_ASSERT(state->list_length >= 0);
 
 		auto this_chunk_len = min((idx_t)STANDARD_VECTOR_SIZE, state->list_length - state->list_position);
 

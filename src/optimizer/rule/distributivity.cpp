@@ -46,11 +46,11 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 	} else {
 		// not an AND node! remove the entire expression
 		// this happens in the case of e.g. (X AND B) OR X
-		assert(Expression::Equals(child.get(), &expr));
+		D_ASSERT(Expression::Equals(child.get(), &expr));
 		result = move(child);
 		conj.children[idx] = nullptr;
 	}
-	assert(result);
+	D_ASSERT(result);
 	return result;
 }
 
@@ -86,7 +86,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 	// the OR
 	auto new_root = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 	for (auto &expr : candidate_set) {
-		assert(initial_or->children.size() > 0);
+		D_ASSERT(initial_or->children.size() > 0);
 
 		// extract the expression from the first child of the OR
 		auto result = ExtractExpression(*initial_or, 0, (Expression &)*expr);

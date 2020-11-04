@@ -132,6 +132,8 @@ option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
+option(ASSERT_EXCEPTION "Throw an exception on an assert failing, instead of triggering a sigabort" TRUE)
+option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 
@@ -148,6 +150,16 @@ endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
+endif()
+
+if (!ASSERT_EXCEPTION)
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -DDUCKDB_USE_STANDARD_ASSERT")
+endif()
+
+if (FORCE_ASSERT)
+set(CMAKE_CXX_FLAGS
+    "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
 endif()
 
 if(NOT MSVC)

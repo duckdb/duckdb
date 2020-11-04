@@ -39,7 +39,7 @@ CheckpointManager::CheckpointManager(StorageManager &manager)
 
 void CheckpointManager::CreateCheckpoint() {
 	// assert that the checkpoint manager hasn't been used before
-	assert(!metadata_writer);
+	D_ASSERT(!metadata_writer);
 
 	Connection con(database);
 	con.BeginTransaction();

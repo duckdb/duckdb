@@ -62,7 +62,7 @@ void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state,
 			// default expression, set to the default value of the column
 			ustate.default_executor.ExecuteExpression(columns[i], update_chunk.data[i]);
 		} else {
-			assert(expressions[i]->type == ExpressionType::BOUND_REF);
+			D_ASSERT(expressions[i]->type == ExpressionType::BOUND_REF);
 			// index into child chunk
 			auto &binding = (BoundReferenceExpression &)*expressions[i];
 			update_chunk.data[i].Reference(chunk.data[binding.index]);

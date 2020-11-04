@@ -27,7 +27,7 @@ public:
 	~TransactionContext();
 
 	Transaction &ActiveTransaction() {
-		assert(current_transaction);
+		D_ASSERT(current_transaction);
 		return *current_transaction;
 	}
 

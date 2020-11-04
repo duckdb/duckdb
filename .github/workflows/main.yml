@@ -193,6 +193,31 @@ jobs:
         python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
+  release-assert:
+    name: Release Assertions
+    runs-on: ubuntu-latest
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install
+      run: sudo apt-get install ninja-build
+
+    - name: Build
+      run: make relassert
+
+    - name: Test
+      run: build/relassert/test/unittest "*"
+
+
   valgrind:
     name: Valgrind
     runs-on: ubuntu-latest
@@ -237,31 +262,32 @@ jobs:
       run: make ubsandebug
 
 
-  codecov:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    needs: linux-debug
-
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: pip install --user cpp-coveralls
-
-
-    - name: Coverage
-      run: |
-        mkdir -p build/coverage
-        (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
-        build/coverage/test/unittest
-        ~/.local/bin/coveralls -b build/coverage --exclude-pattern '.*CMake.*' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
+# borked somehow. needs investigation.
+#  codecov:
+#    name: Code Coverage
+#    runs-on: ubuntu-latest
+#    needs: linux-debug
+#
+#    env:
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: pip install --user cpp-coveralls
+#
+#
+#    - name: Coverage
+#      run: |
+#        mkdir -p build/coverage
+#        (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+#        build/coverage/test/unittest
+#        ~/.local/bin/coveralls -b build/coverage --exclude-pattern '.*CMake.*' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
 
 
   vector-sizes:

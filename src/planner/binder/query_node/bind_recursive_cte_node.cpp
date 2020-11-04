@@ -14,8 +14,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// first recursively visit the recursive CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
-	assert(statement.left);
-	assert(statement.right);
+	D_ASSERT(statement.left);
+	D_ASSERT(statement.right);
 
 	result->ctename = statement.ctename;
 	result->union_all = statement.union_all;

@@ -184,7 +184,7 @@ char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
 
 // write a value in the range of 0..999999 padded to 6 digits
 char *StrfTimeFormat::WritePadded(char *target, int32_t value, int32_t padding) {
-	assert(padding % 2 == 0);
+	D_ASSERT(padding % 2 == 0);
 	for (int i = 0; i < padding / 2; i++) {
 		int decimals = value % 100;
 		WritePadded2(target + padding - 2 * (i + 1), decimals);
@@ -520,7 +520,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 					// parse the subformat in a separate format specifier
 					StrfTimeFormat locale_format;
 					string error = StrTimeFormat::ParseFormatSpecifier(subformat, locale_format);
-					assert(error.empty());
+					D_ASSERT(error.empty());
 					// add the previous literal to the first literal of the subformat
 					locale_format.literals[0] = move(current_literal) + locale_format.literals[0];
 					// now push the subformat into the current format specifier

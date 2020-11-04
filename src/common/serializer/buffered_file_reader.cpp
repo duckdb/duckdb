@@ -25,7 +25,7 @@ void BufferedFileReader::ReadData(data_ptr_t target_buffer, uint64_t read_size) 
 			target_buffer += to_read;
 		}
 		if (target_buffer < end_ptr) {
-			assert(offset == read_data);
+			D_ASSERT(offset == read_data);
 			total_read += read_data;
 			// did not finish reading yet but exhausted buffer
 			// read data into buffer

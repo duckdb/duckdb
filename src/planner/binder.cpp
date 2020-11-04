@@ -71,7 +71,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 		result = BindNode((RecursiveCTENode &)node);
 		break;
 	default:
-		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
 		result = BindNode((SetOperationNode &)node);
 		break;
 	}
@@ -148,8 +148,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 }
 
 void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
-	assert(info);
-	assert(!name.empty());
+	D_ASSERT(info);
+	D_ASSERT(!name.empty());
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
 		throw BinderException("Duplicate CTE \"%s\" in query!", name);
@@ -182,12 +182,12 @@ void Binder::PushExpressionBinder(ExpressionBinder *binder) {
 }
 
 void Binder::PopExpressionBinder() {
-	assert(HasActiveBinder());
+	D_ASSERT(HasActiveBinder());
 	GetActiveBinders().pop_back();
 }
 
 void Binder::SetActiveBinder(ExpressionBinder *binder) {
-	assert(HasActiveBinder());
+	D_ASSERT(HasActiveBinder());
 	GetActiveBinders().back() = binder;
 }
 

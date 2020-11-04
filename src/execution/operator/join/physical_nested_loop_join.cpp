@@ -37,7 +37,7 @@ static bool HasNullValues(DataChunk &chunk) {
 
 template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
-	assert(left.column_count() == result.column_count());
+	D_ASSERT(left.column_count() == result.column_count());
 	// create the selection vector from the matches that were found
 	idx_t result_count = 0;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);

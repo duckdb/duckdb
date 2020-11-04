@@ -127,7 +127,7 @@ struct DecimalToString {
 
 struct HugeintToStringCast {
 	static int UnsignedLength(hugeint_t value) {
-		assert(value.upper >= 0);
+		D_ASSERT(value.upper >= 0);
 		if (value.upper == 0) {
 			return NumericHelper::UnsignedLength<uint64_t>(value.lower);
 		}
@@ -237,7 +237,7 @@ struct HugeintToStringCast {
 		if (negative) {
 			*--endptr = '-';
 		}
-		assert(endptr == dataptr);
+		D_ASSERT(endptr == dataptr);
 		result.Finalize();
 		return result;
 	}
