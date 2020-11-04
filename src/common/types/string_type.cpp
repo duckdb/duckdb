@@ -27,7 +27,7 @@ void string_t::Verify() {
 
 void string_t::VerifyNull() {
 	for (idx_t i = 0; i < GetSize(); i++) {
-		assert(GetDataUnsafe()[i] != '\0');
+		D_ASSERT(GetDataUnsafe()[i] != '\0');
 	}
 }
 

@@ -16,7 +16,7 @@ static void nfc_normalize_function(DataChunk &args, ExpressionState &state, Vect
 			return input;
 		}
 		auto normalized_str = Utf8Proc::Normalize(input_data, input_length);
-		assert(normalized_str);
+		D_ASSERT(normalized_str);
 		auto result_str = StringVector::AddString(result, normalized_str);
 		free(normalized_str);
 		return result_str;
