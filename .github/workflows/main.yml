@@ -88,6 +88,7 @@ jobs:
         cmake --build . --target duckdb --config Release
         cmake --build . --target unittest --config Release
         cmake --build . --target shell --config Release
+        cmake --build . --target jdbc --config Release
 
     - name: Test
       run: test/Release/unittest.exe
