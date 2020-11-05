@@ -192,7 +192,7 @@ jobs:
       run: |
         sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
         sudo apt-get update
-        sudo apt-get install gcc-10 ninja-build
+        sudo apt-get install gcc-9 ninja-build
 
     - name: Build
       run: make
