@@ -1,0 +1,78 @@
+# name: test/sql/overflow/table_overflow.test
+# description: Test handling of integer overflows in table
+# group: [overflow]
+
+# statement ok
+# PRAGMA enable_verification
+
+# tinyint
+statement ok
+CREATE TABLE tinyints(i TINYINT);
+
+statement ok
+INSERT INTO tinyints VALUES (1), (10);
+
+# addition
+query I
+SELECT i+100::TINYINT FROM tinyints ORDER BY 1;
+----
+101
+110
+
+# overflow in addition
+statement error
+SELECT i+120::TINYINT FROM tinyints ORDER BY 1;
+
+# no overflow if we filter the offending element
+query I
+SELECT i+120::TINYINT FROM tinyints WHERE i=1 ORDER BY 1;
+----
+121
+
+# subtraction
+query I
+SELECT -100::TINYINT-i FROM tinyints ORDER BY 1;
+----
+-110
+-101
+
+statement error
+SELECT -120::TINYINT-i FROM tinyints ORDER BY 1;
+
+# no overflow if we filter the offending element
+query I
+SELECT -120::TINYINT-i FROM tinyints WHERE i=1 ORDER BY 1;
+----
+-121
+
+# addition with negation
+statement error
+SELECT -120::TINYINT + (-i) FROM tinyints ORDER BY 1;
+
+# multiple negations
+statement error
+SELECT -120::TINYINT + (-(-(-i))) FROM tinyints ORDER BY 1;
+
+# multiplication
+query I
+SELECT i*10::TINYINT FROM tinyints ORDER BY 1;
+----
+10
+100
+
+statement error
+SELECT i*15::TINYINT FROM tinyints ORDER BY 1;
+
+statement error
+SELECT (i*10::TINYINT)*10::TINYINT FROM tinyints ORDER BY 1;
+
+# no overflow if we filter the offending element
+query I
+SELECT (i*10::TINYINT)*10::TINYINT FROM tinyints WHERE i=1 ORDER BY 1;
+----
+100
+
+# FIXME: include casts
+# include subqueries
+# include multiple projections...
+# include joins (specifically left joins! they add nulls)
