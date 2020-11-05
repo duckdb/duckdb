@@ -115,8 +115,7 @@ void Database::Schedule(Work_Callback callback, Baton* baton, bool exclusive) {
 }
 
 Database::Database(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Database>(info) {
-    init();
-    Napi::Env env = info.Env();
+
 
     if (info.Length() <= 0 || !info[0].IsString()) {
         Napi::TypeError::New(env, "String expected").ThrowAsJavaScriptException();
@@ -190,6 +189,7 @@ void Database::Work_AfterOpen(napi_env e, napi_status status, void* data) {
     }
 
     Napi::Function cb = baton->callback.Value();
+
 
     if (!cb.IsUndefined() && cb.IsFunction()) {
         TRY_CATCH_CALL(db->Value(), cb, 1, argv);

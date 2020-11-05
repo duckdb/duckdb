@@ -17,7 +17,6 @@ using namespace Napi;
 namespace node_duckdb {
 
 typedef std::vector<duckdb::Value> Parameters;
-
 class Statement : public Napi::ObjectWrap<Statement> {
 public:
     static Napi::Object Init(Napi::Env env, Napi::Object exports);
@@ -101,7 +100,7 @@ public:
         uv_async_t watcher;
         Statement* stmt;
         duckdb::ChunkCollection data;
-		vector<string> names;
+		std::vector<std::string> names;
 
         std::mutex mutex;
 		bool completed;

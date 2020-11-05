@@ -29,7 +29,7 @@ var Database = duckdb.Database;
 var Statement = duckdb.Statement;
 
 inherits(Database, EventEmitter);
-inherits(Statement, EventEmitter);
+//inherits(Statement, EventEmitter);
 
 // Database#prepare(sql, [bind1, bind2, ...], [callback])
 Database.prototype.prepare = normalizeMethod(function(statement, params) {
@@ -67,29 +67,29 @@ Database.prototype.map = normalizeMethod(function(statement, params) {
     return this;
 });
 
-
-Statement.prototype.map = function() {
-    var params = Array.prototype.slice.call(arguments);
-    var callback = params.pop();
-    params.push(function(err, rows) {
-        if (err) return callback(err);
-        var result = {};
-        if (rows.length) {
-            var keys = Object.keys(rows[0]), key = keys[0];
-            if (keys.length > 2) {
-                // Value is an object
-                for (var i = 0; i < rows.length; i++) {
-                    result[rows[i][key]] = rows[i];
-                }
-            } else {
-                var value = keys[1];
-                // Value is a plain value
-                for (i = 0; i < rows.length; i++) {
-                    result[rows[i][key]] = rows[i][value];
-                }
-            }
-        }
-        callback(err, result);
-    });
-    return this.all.apply(this, params);
-};
+//
+// Statement.prototype.map = function() {
+//     var params = Array.prototype.slice.call(arguments);
+//     var callback = params.pop();
+//     params.push(function(err, rows) {
+//         if (err) return callback(err);
+//         var result = {};
+//         if (rows.length) {
+//             var keys = Object.keys(rows[0]), key = keys[0];
+//             if (keys.length > 2) {
+//                 // Value is an object
+//                 for (var i = 0; i < rows.length; i++) {
+//                     result[rows[i][key]] = rows[i];
+//                 }
+//             } else {
+//                 var value = keys[1];
+//                 // Value is a plain value
+//                 for (i = 0; i < rows.length; i++) {
+//                     result[rows[i][key]] = rows[i][value];
+//                 }
+//             }
+//         }
+//         callback(err, result);
+//     });
+//     return this.all.apply(this, params);
+// };
