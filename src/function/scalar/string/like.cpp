@@ -58,8 +58,142 @@ bool like_operator(string_t &s, string_t &pat, char escape = '\0') {
 	return like_operator(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize(), escape);
 }
 
-bool LikeFun::Glob(const char *s, idx_t slen, const char *pattern, idx_t plen, char escape) {
-	return templated_like_operator<'*', '?'>(s, slen, pattern, plen, escape);
+bool LikeFun::Glob(const char *string, idx_t slen, const char *pattern, idx_t plen) {
+	idx_t sidx = 0;
+	idx_t pidx = 0;
+main_loop: {
+	// main matching loop
+	while(sidx < slen && pidx < plen) {
+		char s = string[sidx];
+		char p = pattern[pidx];
+		switch(p) {
+		case '*': {
+			// asterisk: match any set of characters
+			// skip any subsequent asterisks
+			pidx++;
+			while(pidx < plen && pattern[pidx] == '*') {
+				pidx++;
+			}
+			// if the asterisk is the last character, the pattern always matches
+			if (pidx == plen) {
+				return true;
+			}
+			// recursively match the remainder of the pattern
+			for (; sidx < slen; sidx++) {
+				if (LikeFun::Glob(string + sidx, slen - sidx, pattern + pidx, plen - pidx)) {
+					return true;
+				}
+			}
+			return false;
+		}
+		case '?':
+			// wildcard: matches anything but null
+			sidx++;
+			pidx++;
+			break;
+		case '[':
+			pidx++;
+			goto parse_bracket;
+		case '\\':
+			// escape character, next character needs to match literally
+			pidx++;
+			// check that we still have a character remaining
+			if (pidx == plen) {
+				return false;
+			}
+			p = pattern[pidx];
+			if (s != p) {
+				return false;
+			}
+			sidx++;
+			pidx++;
+			break;
+		default:
+			// not a control character: characters need to match literally
+			if (s != p) {
+				return false;
+			}
+			sidx++;
+			pidx++;
+			break;
+
+		}
+	}
+	while(pidx < plen && pattern[pidx] == '*') {
+		pidx++;
+	}
+	// we are finished only if we have consumed the full pattern
+	return pidx == plen && sidx == slen;}
+parse_bracket: {
+	// inside a bracket
+	if (pidx == plen) {
+		return false;
+	}
+	// check the first character
+	// if it is an exclamation mark we need to invert our logic
+	char p = pattern[pidx];
+	char s = string[sidx];
+	bool invert = false;
+	if (p == '!') {
+		invert = true;
+		pidx++;
+	}
+	bool found_match = invert;
+	idx_t start_pos = pidx;
+	bool found_closing_bracket = false;
+	// now check the remainder of the pattern
+	while(pidx < plen) {
+		p = pattern[pidx];
+		// if the first character is a closing bracket, we match it literally
+		// otherwise it indicates an end of bracket
+		if (p == ']' && pidx > start_pos) {
+			// end of bracket found: we are done
+			found_closing_bracket = true;
+			pidx++;
+			break;
+		}
+		// we either match a range (a-b) or a single character (a)
+		// check if the next character is a dash
+		if (pidx + 1 == plen) {
+			// no next character!
+			break;
+		}
+		bool matches;
+		if (pattern[pidx + 1] == '-') {
+			// range! find the next character in the range
+			if (pidx + 2 == plen) {
+				break;
+			}
+			char next_char = pattern[pidx + 2];
+			// check if the current character is within the range
+			matches = s >= p && s <= next_char;
+			// shift the pattern forward past the range
+			pidx += 3;
+		} else {
+			// no range! perform a direct match
+			matches = p == s;
+			// shift the pattern forward past the character
+			pidx++;
+		}
+		if (found_match == invert && matches) {
+			// found a match! set the found_matches flag
+			// we keep on pattern matching after this until we reach the end bracket
+			// however, we don't need to update the found_match flag anymore
+			found_match = !invert;
+		}
+	}
+	if (!found_closing_bracket) {
+		// no end of bracket: invalid pattern
+		return false;
+	}
+	if (!found_match) {
+		// did not match the bracket: return false;
+		return false;
+	}
+	// finished the bracket matching: move forward
+	sidx++;
+	goto main_loop;
+}
 }
 
 struct LikeEscapeOperator {
