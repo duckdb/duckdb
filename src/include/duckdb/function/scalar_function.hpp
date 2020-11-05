@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 class BoundFunctionExpression;
@@ -24,6 +25,7 @@ typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_fun
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function,
                                                            vector<unique_ptr<Expression>> &arguments);
+typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, BoundFunctionExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats);
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
@@ -31,15 +33,17 @@ class ScalarFunction : public BaseScalarFunction {
 public:
 	ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr, LogicalType varargs = LogicalType::INVALID)
+	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
+				   LogicalType varargs = LogicalType::INVALID)
 	    : BaseScalarFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
-	      dependency(dependency) {
+	      dependency(dependency), statistics(statistics) {
 	}
 
 	ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr, LogicalType varargs = LogicalType::INVALID)
-	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, varargs) {
+	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
+				   LogicalType varargs = LogicalType::INVALID)
+	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, statistics, varargs) {
 	}
 
 	//! The main scalar function to execute
@@ -48,6 +52,8 @@ public:
 	bind_scalar_function_t bind;
 	// The dependency function (if any)
 	dependency_function_t dependency;
+	//! The statistics propagation function (if any)
+	function_statistics_t statistics;
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
 	                                                              vector<unique_ptr<Expression>> children,
@@ -134,37 +140,6 @@ public:
 		}
 		return function;
 	}
-
-	template <class OP> static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
-		scalar_function_t function;
-		switch (type) {
-		case PhysicalType::INT8:
-			function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
-			break;
-		case PhysicalType::INT16:
-			function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
-			break;
-		case PhysicalType::INT32:
-			function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
-			break;
-		case PhysicalType::INT64:
-			function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
-			break;
-		case PhysicalType::INT128:
-			function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP, true>;
-			break;
-		case PhysicalType::FLOAT:
-			function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
-			break;
-		case PhysicalType::DOUBLE:
-			function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
-		}
-		return function;
-	}
-
 
 	template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
 		scalar_function_t function;

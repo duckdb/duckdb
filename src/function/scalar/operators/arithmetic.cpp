@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -17,9 +18,112 @@ using namespace std;
 
 namespace duckdb {
 
+template <class OP> static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
+	scalar_function_t function;
+	switch (type) {
+	case PhysicalType::INT8:
+		function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+		break;
+	case PhysicalType::INT16:
+		function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+		break;
+	case PhysicalType::INT32:
+		function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+		break;
+	case PhysicalType::INT64:
+		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
+	}
+	return function;
+}
+
+template <class OP> static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
+	scalar_function_t function;
+	switch (type) {
+	case PhysicalType::INT128:
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP, true>;
+		break;
+	case PhysicalType::FLOAT:
+		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
+		break;
+	case PhysicalType::DOUBLE:
+		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+		break;
+	default:
+		function = GetScalarIntegerFunction<OP>(type);
+		break;
+	}
+	return function;
+}
+
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
+struct AddPropagateStatistics {
+	template<class T, class OP>
+	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min, Value &new_max) {
+		T min, max;
+		// new min is min+min
+		if (!OP::Operation(lstats.min.GetValueUnsafe<T>(), rstats.min.GetValueUnsafe<T>(), min)) {
+			return true;
+		}
+		// new max is max+max
+		if (!OP::Operation(lstats.max.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>(), max)) {
+			return true;
+		}
+		new_min = Value::Numeric(type, min);
+		new_max = Value::Numeric(type, max);
+		return false;
+	}
+};
+
+template<class OP, class PROPAGATE, class BASEOP>
+static unique_ptr<BaseStatistics> propagate_numeric_statistics(
+	ClientContext &context,
+	BoundFunctionExpression &expr,
+	FunctionData *bind_data,
+	vector<unique_ptr<BaseStatistics>> &child_stats) {
+	assert(child_stats.size() == 2);
+	// can only propagate stats if the children have stats
+	if (!child_stats[0] || !child_stats[1]) {
+		return nullptr;
+	}
+	auto &lstats = (NumericStatistics &) *child_stats[0];
+	auto &rstats = (NumericStatistics &) *child_stats[1];
+	Value new_min, new_max;
+	bool potential_overflow = true;
+	if (!lstats.min.is_null && !lstats.max.is_null && !rstats.min.is_null && !rstats.max.is_null) {
+		switch(expr.return_type.InternalType()) {
+		case PhysicalType::INT8:
+			potential_overflow = PROPAGATE::template Operation<int8_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::INT16:
+			potential_overflow = PROPAGATE::template Operation<int16_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::INT32:
+			potential_overflow = PROPAGATE::template Operation<int32_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			break;
+		case PhysicalType::INT64:
+			potential_overflow = PROPAGATE::template Operation<int64_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			break;
+		default:
+			return nullptr;
+		}
+	}
+	if (potential_overflow) {
+		new_min = Value(expr.return_type);
+		new_max = Value(expr.return_type);
+	} else {
+		// no potential overflow: replace with non-overflowing operator
+		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
+	}
+	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
+	stats->has_null = lstats.has_null || rstats.has_null;
+	return move(stats);
+}
+
 template <class OP, class OPOVERFLOWCHECK>
 unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
@@ -65,9 +169,12 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
 	if (check_overflow) {
-		bound_function.function = ScalarFunction::GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType());
+		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType());
+		if (result_type.InternalType() != PhysicalType::INT128) {
+			bound_function.statistics = propagate_numeric_statistics<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
+		}
 	} else {
-		bound_function.function = ScalarFunction::GetScalarBinaryFunction<OP>(result_type.InternalType());
+		bound_function.function = GetScalarBinaryFunction<OP>(result_type.InternalType());
 	}
 	return nullptr;
 }
@@ -85,20 +192,21 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<AddOperator, DecimalAddOperatorOverflowCheck>));
+			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<AddOperator, DecimalAddOverflowCheck>));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperatorOverflowCheck>(type.InternalType())));
+			    ScalarFunction({type, type}, type, GetScalarIntegerFunction<AddOperatorOverflowCheck>(type.InternalType()),
+			                   false, nullptr, nullptr, propagate_numeric_statistics<TryAddOperator, AddPropagateStatistics, AddOperator>));
 		} else {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperator>(type.InternalType())));
+			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type.InternalType())));
 		}
 	}
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
+	                                     GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
 	functions.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::DATE}, LogicalType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
+	                                     GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
 	// we can add intervals together
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
@@ -136,6 +244,22 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
+struct SubtractPropagateStatistics {
+	template<class T, class OP>
+	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min, Value &new_max) {
+		T min, max;
+		if (!OP::Operation(lstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>(), min)) {
+			return true;
+		}
+		if (!OP::Operation(lstats.max.GetValueUnsafe<T>(), rstats.min.GetValueUnsafe<T>(), max)) {
+			return true;
+		}
+		new_min = Value::Numeric(type, min);
+		new_max = Value::Numeric(type, max);
+		return false;
+	}
+};
+
 unique_ptr<FunctionData> decimal_negate_bind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
@@ -154,6 +278,51 @@ unique_ptr<FunctionData> decimal_negate_bind(ClientContext &context, ScalarFunct
 	return nullptr;
 }
 
+struct NegatePropagateStatistics {
+	template<class T>
+	static void Operation(LogicalType type, NumericStatistics &istats, Value &new_min, Value &new_max) {
+		// new min is -max
+		new_min = Value::Numeric(type, NegateOperator::Operation<T, T>(istats.max.GetValueUnsafe<T>()));
+		// new max is -min
+		new_max = Value::Numeric(type, NegateOperator::Operation<T, T>(istats.min.GetValueUnsafe<T>()));
+	}
+};
+
+static unique_ptr<BaseStatistics> negate_bind_statistics(
+	ClientContext &context,
+	BoundFunctionExpression &expr,
+	FunctionData *bind_data,
+	vector<unique_ptr<BaseStatistics>> &child_stats) {
+	assert(child_stats.size() == 1);
+	// can only propagate stats if the children have stats
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &istats = (NumericStatistics &) *child_stats[0];
+	Value new_min, new_max;
+	if (!istats.min.is_null && !istats.max.is_null) {
+		switch(expr.return_type.InternalType()) {
+		case PhysicalType::INT8:
+			NegatePropagateStatistics::Operation<int8_t>(expr.return_type, istats, new_min, new_max);
+			break;
+		case PhysicalType::INT16:
+			NegatePropagateStatistics::Operation<int16_t>(expr.return_type, istats, new_min, new_max);
+			break;
+		case PhysicalType::INT32:
+			NegatePropagateStatistics::Operation<int32_t>(expr.return_type, istats, new_min, new_max);
+			break;
+		case PhysicalType::INT64:
+			NegatePropagateStatistics::Operation<int64_t>(expr.return_type, istats, new_min, new_max);
+			break;
+		default:
+			return nullptr;
+		}
+	}
+	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
+	stats->has_null = istats.has_null;
+	return move(stats);
+}
+
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
@@ -163,17 +332,18 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<SubtractOperator, DecimalSubtractOperatorOverflowCheck>));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperatorOverflowCheck>(type.InternalType())));
+			    ScalarFunction({type, type}, type, GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(type.InternalType()),
+			                   false, nullptr, nullptr, propagate_numeric_statistics<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>));
 		} else {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(type.InternalType())));
+			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type.InternalType())));
 		}
 	}
 	// we can subtract dates from each other
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::DATE}, LogicalType::INTEGER,
-	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
+	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
+	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
 	// we can subtract timestamps from each other
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL,
@@ -195,10 +365,12 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
-			functions.AddFunction(ScalarFunction({type}, type, nullptr, false, decimal_negate_bind));
+			functions.AddFunction(ScalarFunction({type}, type, nullptr, false, decimal_negate_bind,
+			                   nullptr, negate_bind_statistics));
 		} else {
 			functions.AddFunction(
-			    ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
+			    ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type),
+			                   false, nullptr, nullptr, negate_bind_statistics));
 		}
 	}
 	set.AddFunction(functions);
@@ -207,6 +379,42 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // * [multiply]
 //===--------------------------------------------------------------------===//
+struct MultiplyPropagateStatistics {
+	template<class T, class OP>
+	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min, Value &new_max) {
+		// statistics propagation on the multiplication is slightly less straightforward because of negative numbers
+		// the new min/max depend on the signs of the input types
+		// if both are positive the result is [lmin * rmin][lmax * rmax]
+		// if lmin/lmax are negative the result is [lmin * rmax][lmax * rmin]
+		// etc
+		// rather than doing all this switcheroo we just multiply all combinations of lmin/lmax with rmin/rmax
+		// and check what the minimum/maximum value is
+		T lvals[] { lstats.min.GetValueUnsafe<T>(), lstats.max.GetValueUnsafe<T>() };
+		T rvals[] { rstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>() };
+		T min = NumericLimits<T>::Maximum();
+		T max = NumericLimits<T>::Minimum();
+		// multiplications
+		for(idx_t l = 0; l < 2; l++) {
+			for(idx_t r = 0; r < 2; r++) {
+				T result;
+				if (!OP::Operation(lvals[l], rvals[r], result)) {
+					// potential overflow
+					return true;
+				}
+				if (result < min) {
+					min = result;
+				}
+				if (result > max) {
+					max = result;
+				}
+			}
+		}
+		new_min = Value::Numeric(type, min);
+		new_max = Value::Numeric(type, max);
+		return false;
+	}
+};
+
 unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	uint8_t result_width = 0, result_scale = 0;
@@ -253,9 +461,9 @@ unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFun
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
 	if (check_overflow) {
-		bound_function.function = ScalarFunction::GetScalarBinaryFunction<DecimalMultiplyOperatorOverflowCheck>(result_type.InternalType());
+		bound_function.function = GetScalarBinaryFunction<DecimalMultiplyOperatorOverflowCheck>(result_type.InternalType());
 	} else {
-		bound_function.function = ScalarFunction::GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType());
+		bound_function.function = GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType());
 	}
 	return nullptr;
 }
@@ -267,10 +475,11 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, false, bind_decimal_multiply));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<MultiplyOperatorOverflowCheck>(type.InternalType())));
+			    ScalarFunction({type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
+			                   false, nullptr, nullptr, propagate_numeric_statistics<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
+			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
 	functions.AddFunction(

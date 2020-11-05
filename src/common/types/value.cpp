@@ -403,6 +403,7 @@ template <> Value Value::CreateValue(double value) {
 template <> Value Value::CreateValue(Value value) {
 	return value;
 }
+
 //===--------------------------------------------------------------------===//
 // GetValue
 //===--------------------------------------------------------------------===//
@@ -510,6 +511,50 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
 }
+
+//===--------------------------------------------------------------------===//
+// GetValueUnsafe
+//===--------------------------------------------------------------------===//
+template <> int8_t& Value::GetValueUnsafe() {
+	assert(type_.InternalType() == PhysicalType::INT8);
+	return value_.tinyint;
+}
+
+template <> int16_t& Value::GetValueUnsafe() {
+	assert(type_.InternalType() == PhysicalType::INT16);
+	return value_.smallint;
+}
+
+template <> int32_t& Value::GetValueUnsafe() {
+	assert(type_.InternalType() == PhysicalType::INT32);
+	return value_.integer;
+}
+
+template <> int64_t& Value::GetValueUnsafe() {
+	assert(type_.InternalType() == PhysicalType::INT64);
+	return value_.bigint;
+}
+
+template <> hugeint_t& Value::GetValueUnsafe() {
+	assert(type_.InternalType() == PhysicalType::INT128);
+	return value_.hugeint;
+}
+
+template <> string& Value::GetValueUnsafe() {
+	assert(type_.InternalType() == PhysicalType::VARCHAR || type_.InternalType() == PhysicalType::VARBINARY);
+	return str_value;
+}
+
+template <> float& Value::GetValueUnsafe() {
+	assert(type_.InternalType() == PhysicalType::FLOAT);
+	return value_.float_;
+}
+
+template <> double& Value::GetValueUnsafe() {
+	assert(type_.InternalType() == PhysicalType::DOUBLE);
+	return value_.double_;
+}
+
 
 Value Value::Numeric(LogicalType type, hugeint_t value) {
 	switch (type.id()) {

@@ -89,66 +89,75 @@ template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t righ
 //===--------------------------------------------------------------------===//
 struct OverflowCheckedAddition {
 	template<class SRCTYPE, class UTYPE>
-	static inline SRCTYPE Operation(SRCTYPE left, SRCTYPE right) {
-		UTYPE result = AddOperator::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
-		if (result < NumericLimits<SRCTYPE>::Minimum() || result > NumericLimits<SRCTYPE>::Maximum()) {
-			throw OutOfRangeException("Overflow in addition of %s (%d + %d = %d)!", TypeIdToString(GetTypeId<SRCTYPE>()), left, right, result);
+	static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
+		UTYPE uresult = AddOperator::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
+		if (uresult < NumericLimits<SRCTYPE>::Minimum() || uresult > NumericLimits<SRCTYPE>::Maximum()) {
+			return false;
 		}
-		return result;
+		result = SRCTYPE(uresult);
+		return true;
 	}
 };
 
-template <> int8_t AddOperatorOverflowCheck::Operation(int8_t left, int8_t right) {
-	return OverflowCheckedAddition::Operation<int8_t, int16_t>(left, right);
+template <> bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result) {
+	return OverflowCheckedAddition::Operation<int8_t, int16_t>(left, right, result);
 }
 
-template <> int16_t AddOperatorOverflowCheck::Operation(int16_t left, int16_t right) {
-	return OverflowCheckedAddition::Operation<int16_t, int32_t>(left, right);
+template <> bool TryAddOperator::Operation(int16_t left, int16_t right, int16_t &result) {
+	return OverflowCheckedAddition::Operation<int16_t, int32_t>(left, right, result);
 }
 
-template <> int32_t AddOperatorOverflowCheck::Operation(int32_t left, int32_t right) {
-	return OverflowCheckedAddition::Operation<int32_t, int64_t>(left, right);
+template <> bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t &result) {
+	return OverflowCheckedAddition::Operation<int32_t, int64_t>(left, right, result);
 }
 
-template <> int64_t AddOperatorOverflowCheck::Operation(int64_t left, int64_t right) {
+template <> bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 #if defined(__GNUC__) || defined(__clang__)
-	int64_t result;
 	if (__builtin_add_overflow(left, right, &result)) {
-		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d).", left, right);
+		return false;
 	}
 #else
 	// https://blog.regehr.org/archives/1139
-	int64_t result = int64_t((uint64_t)left + (uint64_t)right);
+	result = int64_t((uint64_t)left + (uint64_t)right);
 	if ((left < 0 && right < 0 && result >= 0) || (left >= 0 && right >= 0 && result < 0)) {
-		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d).", left, right);
+		return false;
 	}
 #endif
 	// FIXME: this check can be removed if we get rid of NullValue<T>
 	if (result == std::numeric_limits<int64_t>::min()) {
-		throw OutOfRangeException("Overflow in addition of BIGINT (%d + %d).", left, right);
+		return false;
 	}
-	return result;
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
 // add decimal with overflow check
 //===--------------------------------------------------------------------===//
-template <> int64_t DecimalAddOperatorOverflowCheck::Operation(int64_t left, int64_t right) {
+template <> bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t& result) {
 	if (right < 0) {
 		if (-999999999999999999 - right > left) {
-			throw OutOfRangeException("Overflow in addition of DECIMAL(18) (%d + %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+			return false;
 		}
 	} else {
 		if (999999999999999999 - right < left) {
-			throw OutOfRangeException("Overflow in addition of DECIMAL(18) (%d + %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+			return false;
 		}
 	}
-	return left + right;
+	result = left + right;
+	return true;
 }
 
-template <> hugeint_t DecimalAddOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
-	hugeint_t result = left + right;
+template <> bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t& result) {
+	result = left + right;
 	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
+		return false;
+	}
+	return true;
+}
+
+template <> hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
+	hugeint_t result;
+	if (!TryDecimalAdd::Operation(left, right, result)) {
 		throw OutOfRangeException("Overflow in addition of DECIMAL(38) (%s + %s);", left.ToString(), right.ToString());
 	}
 	return result;

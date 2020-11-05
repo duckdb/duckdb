@@ -63,50 +63,50 @@ template <> interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t
 //===--------------------------------------------------------------------===//
 struct OverflowCheckedSubtract {
 	template<class SRCTYPE, class UTYPE>
-	static inline SRCTYPE Operation(SRCTYPE left, SRCTYPE right) {
-		UTYPE result = SubtractOperator::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
-		if (result < NumericLimits<SRCTYPE>::Minimum() || result > NumericLimits<SRCTYPE>::Maximum()) {
-			throw OutOfRangeException("Overflow in subtract of %s (%d - %d = %d)!", TypeIdToString(GetTypeId<SRCTYPE>()), left, right, result);
+	static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
+		UTYPE uresult = SubtractOperator::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
+		if (uresult < NumericLimits<SRCTYPE>::Minimum() || uresult > NumericLimits<SRCTYPE>::Maximum()) {
+			return false;
 		}
-		return result;
+		result = SRCTYPE(uresult);
+		return true;
 	}
 };
 
-template <> int8_t SubtractOperatorOverflowCheck::Operation(int8_t left, int8_t right) {
-	return OverflowCheckedSubtract::Operation<int8_t, int16_t>(left, right);
+template <> bool TrySubtractOperator::Operation(int8_t left, int8_t right, int8_t &result) {
+	return OverflowCheckedSubtract::Operation<int8_t, int16_t>(left, right, result);
 }
 
-template <> int16_t SubtractOperatorOverflowCheck::Operation(int16_t left, int16_t right) {
-	return OverflowCheckedSubtract::Operation<int16_t, int32_t>(left, right);
+template <> bool TrySubtractOperator::Operation(int16_t left, int16_t right, int16_t &result) {
+	return OverflowCheckedSubtract::Operation<int16_t, int32_t>(left, right, result);
 }
 
-template <> int32_t SubtractOperatorOverflowCheck::Operation(int32_t left, int32_t right) {
-	return OverflowCheckedSubtract::Operation<int32_t, int64_t>(left, right);
+template <> bool TrySubtractOperator::Operation(int32_t left, int32_t right, int32_t &result) {
+	return OverflowCheckedSubtract::Operation<int32_t, int64_t>(left, right, result);
 }
 
-template <> int64_t SubtractOperatorOverflowCheck::Operation(int64_t left, int64_t right) {
+template <> bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 #if defined(__GNUC__) || defined(__clang__)
-	int64_t result;
 	if (__builtin_sub_overflow(left, right, &result)) {
-		throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d).", left, right);
+		return false;
 	}
 	// FIXME: this check can be removed if we get rid of NullValue<T>
 	if (result == std::numeric_limits<int64_t>::min()) {
-		throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d).", left, right);
+		return false;
 	}
-	return result;
 #else
 	if (right < 0) {
 		if (NumericLimits<int64_t>::Maximum() + right < left) {
-			throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d).", left, right);
+			return false;
 		}
 	} else {
 		if (NumericLimits<int64_t>::Minimum() + right > left) {
-			throw OutOfRangeException("Overflow in subtract of BIGINT (%d - %d).", left, right);
+			return false;
 		}
 	}
-	return left - right;
+	result = left - right;
 #endif
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

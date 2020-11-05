@@ -27,25 +27,48 @@ template <> date_t AddOperator::Operation(interval_t left, date_t right);
 template <> timestamp_t AddOperator::Operation(timestamp_t left, interval_t right);
 template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t right);
 
+
+struct TryAddOperator {
+	template <class TA, class TB, class TR> static inline bool Operation(TA left, TB right, TR &result) {
+		throw InternalException("Unimplemented type for TryAddOperator");
+	}
+};
+
+template <> bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result);
+template <> bool TryAddOperator::Operation(int16_t left, int16_t right, int16_t &result);
+template <> bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t &result);
+template <> bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result);
+
 struct AddOperatorOverflowCheck {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		throw InternalException("Unimplemented type for AddOperatorOverflowCheck");
+		TR result;
+		if (!TryAddOperator::Operation(left, right, result)) {
+			throw OutOfRangeException("Overflow in addition of %s (%d + %d)!", TypeIdToString(GetTypeId<TA>()), left, right);
+		}
+		return result;
 	}
 };
 
-template <> int8_t AddOperatorOverflowCheck::Operation(int8_t left, int8_t right);
-template <> int16_t AddOperatorOverflowCheck::Operation(int16_t left, int16_t right);
-template <> int32_t AddOperatorOverflowCheck::Operation(int32_t left, int32_t right);
-template <> int64_t AddOperatorOverflowCheck::Operation(int64_t left, int64_t right);
+struct TryDecimalAdd {
+	template <class TA, class TB, class TR> static inline bool Operation(TA left, TB right, TR &result) {
+		throw InternalException("Unimplemented type for TryDecimalAdd");
+	}
+};
 
-struct DecimalAddOperatorOverflowCheck {
+template <> bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result);
+template <> bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+
+struct DecimalAddOverflowCheck {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		throw InternalException("Unimplemented type for DecimalAddOperatorOverflowCheck");
+		TR result;
+		if (!TryDecimalAdd::Operation<TA, TB, TR>(left, right, result)) {
+			throw OutOfRangeException("Overflow in addition of DECIMAL(18) (%d + %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+		}
+		return result;
 	}
 };
 
-template <> int64_t DecimalAddOperatorOverflowCheck::Operation(int64_t left, int64_t right);
-template <> hugeint_t DecimalAddOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right);
+template <> hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint_t right);
 
 struct AddTimeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right);
