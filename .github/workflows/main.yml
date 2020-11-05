@@ -169,12 +169,12 @@ jobs:
 
   linux-release-64:
     name: Linux (64 Bit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-16.04
     needs: linux-debug
 
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc-9
+      CXX: g++-9
       GEN: ninja
       BUILD_ICU: 1
       BUILD_TPCH: 1
@@ -189,7 +189,10 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: |
+        sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+        sudo apt-get update
+        sudo apt-get install gcc-9 ninja-build
 
     - name: Build
       run: make
