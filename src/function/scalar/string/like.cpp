@@ -10,7 +10,7 @@ template <char PERCENTAGE, char UNDERSCORE>
 bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, idx_t plen, char escape) {
 	idx_t pidx = 0;
 	idx_t sidx = 0;
-	for(; pidx < plen && sidx < slen; pidx++) {
+	for (; pidx < plen && sidx < slen; pidx++) {
 		char pchar = pdata[pidx];
 		char schar = sdata[sidx];
 		if (pchar == escape) {
@@ -33,7 +33,8 @@ bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, i
 				return true; /* tail is acceptable */
 			}
 			for (; sidx < slen; sidx++) {
-				if (templated_like_operator<PERCENTAGE, UNDERSCORE>(sdata + sidx, slen - sidx, pdata + pidx, plen - pidx, escape)) {
+				if (templated_like_operator<PERCENTAGE, UNDERSCORE>(sdata + sidx, slen - sidx, pdata + pidx,
+				                                                    plen - pidx, escape)) {
 					return true;
 				}
 			}
@@ -44,7 +45,7 @@ bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, i
 			return false;
 		}
 	}
-	while(pidx < plen && pdata[pidx] == PERCENTAGE) {
+	while (pidx < plen && pdata[pidx] == PERCENTAGE) {
 		pidx++;
 	}
 	return pidx == plen && sidx == slen;
@@ -61,17 +62,17 @@ bool like_operator(string_t &s, string_t &pat, char escape = '\0') {
 bool LikeFun::Glob(const char *string, idx_t slen, const char *pattern, idx_t plen) {
 	idx_t sidx = 0;
 	idx_t pidx = 0;
-main_loop: {
+main_loop : {
 	// main matching loop
-	while(sidx < slen && pidx < plen) {
+	while (sidx < slen && pidx < plen) {
 		char s = string[sidx];
 		char p = pattern[pidx];
-		switch(p) {
+		switch (p) {
 		case '*': {
 			// asterisk: match any set of characters
 			// skip any subsequent asterisks
 			pidx++;
-			while(pidx < plen && pattern[pidx] == '*') {
+			while (pidx < plen && pattern[pidx] == '*') {
 				pidx++;
 			}
 			// if the asterisk is the last character, the pattern always matches
@@ -116,15 +117,15 @@ main_loop: {
 			sidx++;
 			pidx++;
 			break;
-
 		}
 	}
-	while(pidx < plen && pattern[pidx] == '*') {
+	while (pidx < plen && pattern[pidx] == '*') {
 		pidx++;
 	}
 	// we are finished only if we have consumed the full pattern
-	return pidx == plen && sidx == slen;}
-parse_bracket: {
+	return pidx == plen && sidx == slen;
+}
+parse_bracket : {
 	// inside a bracket
 	if (pidx == plen) {
 		return false;
@@ -142,7 +143,7 @@ parse_bracket: {
 	idx_t start_pos = pidx;
 	bool found_closing_bracket = false;
 	// now check the remainder of the pattern
-	while(pidx < plen) {
+	while (pidx < plen) {
 		p = pattern[pidx];
 		// if the first character is a closing bracket, we match it literally
 		// otherwise it indicates an end of bracket
@@ -203,7 +204,8 @@ struct LikeEscapeOperator {
 			throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
 		}
 		char escape_char = escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
-		return like_operator(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(), escape_char);
+		return like_operator(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(),
+		                     escape_char);
 	}
 };
 
