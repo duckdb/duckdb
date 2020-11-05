@@ -15,7 +15,12 @@ unique_ptr<ShowStatement> Transformer::TransformShowSelect(PGNode *node) {
 	if(string(stmt->name) == "select"){
 		cout << "select statement\n";
 		auto result = make_unique<ShowStatement>();
-		result->selectStatement = TransformStatement(stmt->stmt);
+		auto &info = *result->info;
+
+		info.query = TransformStatement(stmt->stmt).node;
+		// parse the arguments, if any
+
+		//result->selectStatement = TransformStatement(stmt->stmt);
 		//result->selectStatement->node = TransformSelectNode(select_stmt);
 		return result;
 	}

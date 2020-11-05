@@ -14,7 +14,7 @@ struct ShowSelectFunctionData : public TableFunctionData {
 	ShowSelectFunctionData() : offset(0) {
 	}
 
-	//CatalogEntry *entry;
+	ViewCatalogEntry *entry;
 	idx_t offset;
 };
 
@@ -75,6 +75,10 @@ static void show_select_info_schema(ShowSelectFunctionData &data, ShowSelectInfo
 
 static void show_select_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((ShowSelectFunctionData *)dataptr);
+
+  auto info = CreateInfo(CatalogType::VIEW, DEFAULT_SCHEMA)
+  data.entry.Initialize(info);
+
 	if (!data.entry) {
 		// first call: load the entry from the catalog
 		assert(input.size() == 1);
