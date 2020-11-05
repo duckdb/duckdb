@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 
 namespace duckdb {
 
@@ -8,24 +9,26 @@ StatisticsPropagator::StatisticsPropagator(ClientContext &context) : context(con
 
 }
 
-void StatisticsPropagator::PropagateStatistics(LogicalOperator &node) {
+bool StatisticsPropagator::PropagateStatistics(LogicalOperator &node) {
 	switch(node.type) {
-	case LogicalOperatorType::FILTER:
-		PropagateStatistics((LogicalFilter &) node);
-		return;
-	case LogicalOperatorType::GET:
-		PropagateStatistics((LogicalGet &) node);
-		return;
-	case LogicalOperatorType::PROJECTION:
-		PropagateStatistics((LogicalProjection &) node);
-		return;
+	case LogicalOperatorType::LOGICAL_FILTER:
+		return PropagateStatistics((LogicalFilter &) node);
+	case LogicalOperatorType::LOGICAL_GET:
+		return PropagateStatistics((LogicalGet &) node);
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		return PropagateStatistics((LogicalProjection &) node);
 	default:
 		break;
 	}
-	for(auto &child : node.children) {
-		PropagateStatistics(*child);
+	for(idx_t child_idx = 0; child_idx < node.children.size(); child_idx++) {
+		if (PropagateStatistics(*node.children[child_idx])) {
+			// replace this child with an empty result
+			node.children[child_idx] = make_unique<LogicalEmptyResult>(move(node.children[child_idx]));
+		}
 	}
+	return false;
 }
+
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression &expr) {
 	switch(expr.GetExpressionClass()) {

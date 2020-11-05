@@ -19,15 +19,26 @@ namespace duckdb {
 class ClientContext;
 class LogicalOperator;
 
+enum class FilterPropagateResult : uint8_t {
+	NO_PRUNING_POSSIBLE = 0,
+	FILTER_ALWAYS_TRUE = 1,
+	FILTER_ALWAYS_FALSE = 2
+};
+
 class StatisticsPropagator {
 public:
 	StatisticsPropagator(ClientContext &context);
 
-	void PropagateStatistics(LogicalOperator &root);
+	//! Propagate statistics through an operator; returns true if the operator should be replaced with a LogicalEmptyResult
+	bool PropagateStatistics(LogicalOperator &root);
 private:
-	void PropagateStatistics(LogicalFilter &op);
-	void PropagateStatistics(LogicalGet &op);
-	void PropagateStatistics(LogicalProjection &op);
+	bool PropagateStatistics(LogicalFilter &op);
+	bool PropagateStatistics(LogicalGet &op);
+	bool PropagateStatistics(LogicalProjection &op);
+
+	//! Propagate a filter condition down to the statistics.
+	FilterPropagateResult PropagateFilter(Expression &expr);
+	FilterPropagateResult PropagateFilter(ColumnBinding binding, ExpressionType comparison, Value constant);
 
 	unique_ptr<BaseStatistics> PropagateExpression(Expression &expr);
 

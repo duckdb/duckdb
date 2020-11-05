@@ -685,13 +685,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	//! Check if we need to update the segment's nullmask
 	for (idx_t i = 0; i < update_count; i++) {
 		if (!update_nullmask[i]) {
-<<<<<<< HEAD
 			update_string_stats(stats, strings[i]);
-=======
-			auto min = (char *)stats.minimum.get();
-			auto max = (char *)stats.maximum.get();
-			update_min_max_string_segment(strings[i].GetString(), min, max);
->>>>>>> master
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {

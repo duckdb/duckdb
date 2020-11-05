@@ -3,9 +3,11 @@
 
 namespace duckdb {
 
-void StatisticsPropagator::PropagateStatistics(LogicalProjection &proj) {
+bool StatisticsPropagator::PropagateStatistics(LogicalProjection &proj) {
 	// first propagate to the child
-	PropagateStatistics(*proj.children[0]);
+	if (PropagateStatistics(*proj.children[0])) {
+		return true;
+	}
 	// then propagate to each of the expressions
 	for(idx_t i = 0; i < proj.expressions.size(); i++) {
 		auto stats = PropagateExpression(*proj.expressions[i]);
@@ -14,6 +16,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalProjection &proj) {
 			statistics_map.insert(make_pair(binding, move(stats)));
 		}
 	}
+	return false;
 }
 
 }

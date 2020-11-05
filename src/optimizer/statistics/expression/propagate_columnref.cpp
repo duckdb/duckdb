@@ -8,7 +8,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundColumn
 	if (stats == statistics_map.end()) {
 		return nullptr;
 	}
-	return move(stats->second);
+	return stats->second->Copy();
 }
 
 }

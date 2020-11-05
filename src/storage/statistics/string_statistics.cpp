@@ -58,7 +58,7 @@ static int string_value_comparison(const_data_ptr_t data, idx_t len, const_data_
 }
 
 void StringStatistics::Update(const string_t &value) {
-	auto data = (const_data_ptr_t) value.GetData();
+	auto data = (const_data_ptr_t) value.GetDataUnsafe();
 	auto size = value.GetSize();
 
 	//! we can only fit 8 bytes, so we might need to trim our string

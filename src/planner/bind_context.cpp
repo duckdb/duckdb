@@ -99,7 +99,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (!binding) {
 		return BindResult(error);
 	}
-	return binding->Bind(binder.context, colref, depth);
+	return binding->Bind(colref, depth);
 }
 
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding) {
