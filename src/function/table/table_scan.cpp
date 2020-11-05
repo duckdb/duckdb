@@ -43,6 +43,11 @@ static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, 
 
 static unique_ptr<BaseStatistics> table_scan_statistics(ClientContext &context, const FunctionData *bind_data_, column_t column_id) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
+	auto &transaction = Transaction::GetTransaction(context);
+	if (transaction.storage.Find(bind_data.table->storage.get())) {
+		// we don't emit any statistics for tables that have outstanding transaction-local data
+		return nullptr;
+	}
 	return bind_data.table->storage->GetStatistics(context, column_id);
 }
 
