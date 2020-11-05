@@ -173,8 +173,8 @@ jobs:
    #  needs: linux-debug
 
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc-9
+      CXX: g++-9
       GEN: ninja
       BUILD_ICU: 1
       BUILD_TPCH: 1
