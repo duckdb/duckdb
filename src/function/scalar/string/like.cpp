@@ -89,8 +89,6 @@ main_loop : {
 		}
 		case '?':
 			// wildcard: matches anything but null
-			sidx++;
-			pidx++;
 			break;
 		case '[':
 			pidx++;
@@ -106,18 +104,16 @@ main_loop : {
 			if (s != p) {
 				return false;
 			}
-			sidx++;
-			pidx++;
 			break;
 		default:
 			// not a control character: characters need to match literally
 			if (s != p) {
 				return false;
 			}
-			sidx++;
-			pidx++;
 			break;
 		}
+		sidx++;
+		pidx++;
 	}
 	while (pidx < plen && pattern[pidx] == '*') {
 		pidx++;
