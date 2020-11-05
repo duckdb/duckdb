@@ -8,15 +8,15 @@
 
 #pragma once
 
-//#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
 struct ShowSelectInfo : public ParseInfo {
 
-	ShowSelectInfo(string schema) : ParseInfo() {
-	}
+	//ShowSelectInfo() : ParseInfo() {
+	//}
 
 	//! Return types
 	vector<SQLType> types;

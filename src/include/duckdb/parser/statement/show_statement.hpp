@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/parsed_data/show_select_info.hpp"
 
 namespace duckdb {
 

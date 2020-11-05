@@ -14,7 +14,6 @@ struct ShowSelectFunctionData : public TableFunctionData {
 	ShowSelectFunctionData() : offset(0) {
 	}
 
-	ViewCatalogEntry *entry;
 	idx_t offset;
 };
 
@@ -74,7 +73,7 @@ static void show_select_info_schema(ShowSelectFunctionData &data, ShowSelectInfo
 }
 
 static void show_select_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = *((ShowSelectFunctionData *)dataptr);
+	/*auto &data = *((ShowSelectFunctionData *)dataptr);
 
   auto info = CreateInfo(CatalogType::VIEW, DEFAULT_SCHEMA)
   data.entry.Initialize(info);
@@ -90,17 +89,8 @@ static void show_select_info(ClientContext &context, vector<Value> &input, DataC
 		// look up the table name in the catalog
 		auto &catalog = Catalog::GetCatalog(context);
 		data.entry = catalog.GetEntry(context, CatalogType::TABLE, schema, table_name);
-	}
-	switch (data.entry->type) {
-	case CatalogType::TABLE:
-		pragma_table_info_table(data, (TableCatalogEntry *)data.entry, output);
-		break;
-	case CatalogType::VIEW:
-		pragma_table_info_view(data, (ViewCatalogEntry *)data.entry, output);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");
-	}
+	}*/
+
 }
 
 void ShowSelectTableInfo::RegisterFunction(BuiltinFunctions &set) {

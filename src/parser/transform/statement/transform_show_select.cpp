@@ -10,14 +10,15 @@ unique_ptr<ShowStatement> Transformer::TransformShowSelect(PGNode *node) {
 	// we transform SHOW x into PRAGMA SHOW('x')
 	cout << "Here\n";
 	auto stmt = reinterpret_cast<PGVariableShowStmtSelect *>(node);
-	//auto select_stmt = reinterpret_cast<PGSelectStmt *>(stmt->stmt);
+	auto select_stmt = reinterpret_cast<PGSelectStmt *>(stmt->stmt);
 	cout << "Here222\n";
 	if(string(stmt->name) == "select"){
 		cout << "select statement\n";
 		auto result = make_unique<ShowStatement>();
 		auto &info = *result->info;
 
-		info.query = TransformStatement(stmt->stmt).node;
+	//	auto selectStatement = TransformStatement(stmt->stmt);
+		info.query = TransformSelectNode(select_stmt);
 		// parse the arguments, if any
 
 		//result->selectStatement = TransformStatement(stmt->stmt);
