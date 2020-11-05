@@ -13,6 +13,11 @@ select count(*) from parquet_scan('*/sql/*/parquet/*/glob/t?.parquet')
 2
 
 query I
+select count(*) from parquet_scan('*/sql/*/parquet/*/glob/t[0-9].parquet')
+----
+2
+
+query I
 select count(*) from parquet_scan('test/sql/copy/parquet/data/glob/*')
 ----
 2

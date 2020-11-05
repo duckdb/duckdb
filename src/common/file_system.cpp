@@ -674,7 +674,6 @@ static bool HasGlob(const string &str) {
 		case '*':
 		case '?':
 		case '[':
-		case '\\':
 			return true;
 		default:
 			break;
@@ -749,7 +748,7 @@ vector<string> FileSystem::Glob(string path) {
 		if (!has_glob) {
 			// no glob, just append as-is
 			if (previous_directories.empty()) {
-				previous_directories.push_back(splits[i]);
+				result.push_back(splits[i]);
 			} else {
 				for (auto &prev_directory : previous_directories) {
 					result.push_back(JoinPath(prev_directory, splits[i]));
