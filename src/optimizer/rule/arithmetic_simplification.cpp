@@ -28,7 +28,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	auto root = (BoundFunctionExpression *)bindings[0];
 	auto constant = (BoundConstantExpression *)bindings[1];
 	int constant_child = root->children[0].get() == constant ? 0 : 1;
-	assert(root->children.size() == 2);
+	D_ASSERT(root->children.size() == 2);
 	(void)root;
 	// any arithmetic operator involving NULL is always NULL
 	if (constant->value.is_null) {
@@ -56,7 +56,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 			return ExpressionRewriter::ConstantOrNull(move(root->children[1 - constant_child]), Value::Numeric(root->return_type, 0));
 		}
 	} else {
-		assert(func_name == "/");
+		D_ASSERT(func_name == "/");
 		if (constant_child == 1) {
 			if (constant->value == 1) {
 				// divide by 1, replace with non-constant child

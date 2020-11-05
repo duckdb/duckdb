@@ -67,6 +67,26 @@ SELECT 'ababac' LIKE '%abac'
 1
 
 query T
+SELECT 'ababac' LIKE '%%%abac'
+----
+1
+
+query T
+SELECT 'ababac' LIKE 'abab%%%%%'
+----
+1
+
+query T
+SELECT 'ababac' LIKE '%%%a%%%b%%a%b%%%%%a%c%%'
+----
+1
+
+query T
+SELECT 'ababac' LIKE '%%%a%%%b%%a%b%%%%%a%d%%'
+----
+0
+
+query T
 SELECT 'ababac' NOT LIKE '%abac'
 ----
 0

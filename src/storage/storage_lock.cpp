@@ -12,7 +12,7 @@ StorageLockKey::~StorageLockKey() {
 	if (type == StorageLockType::EXCLUSIVE) {
 		lock.ReleaseExclusiveLock();
 	} else {
-		assert(type == StorageLockType::SHARED);
+		D_ASSERT(type == StorageLockType::SHARED);
 		lock.ReleaseSharedLock();
 	}
 }

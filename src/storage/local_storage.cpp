@@ -36,7 +36,7 @@ LocalScanState::~LocalScanState() {
 
 void LocalScanState::SetStorage(LocalTableStorage *new_storage) {
 	if (storage != nullptr) {
-		assert(storage->active_scans > 0);
+		D_ASSERT(storage->active_scans > 0);
 		storage->active_scans--;
 	}
 	storage = new_storage;
@@ -52,7 +52,7 @@ void LocalTableStorage::Clear() {
 	indexes.clear();
 	deleted_rows = 0;
 	for (auto &index : table.info->indexes) {
-		assert(index->type == IndexType::ART);
+		D_ASSERT(index->type == IndexType::ART);
 		auto &art = (ART &)*index;
 		if (art.is_unique) {
 			// unique index: create a local ART index that maintains the same unique constraint
@@ -186,7 +186,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 
 LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 	auto entry = table_storage.find(table);
-	assert(entry != table_storage.end());
+	D_ASSERT(entry != table_storage.end());
 	return entry->second.get();
 }
 
@@ -201,7 +201,7 @@ void LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
 	idx_t chunk_idx = GetChunk(row_ids);
-	assert(chunk_idx < storage->collection.chunks.size());
+	D_ASSERT(chunk_idx < storage->collection.chunks.size());
 
 	// get a pointer to the deleted entries for this chunk
 	bool *deleted;
@@ -247,8 +247,8 @@ static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_
 }
 
 static void update_chunk(Vector &data, Vector &updates, Vector &row_ids, idx_t count, idx_t base_index) {
-	assert(data.type == updates.type);
-	assert(row_ids.type == LOGICAL_ROW_TYPE);
+	D_ASSERT(data.type == updates.type);
+	D_ASSERT(row_ids.type == LOGICAL_ROW_TYPE);
 
 	switch (data.type.InternalType()) {
 	case PhysicalType::INT8:
@@ -278,7 +278,7 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &c
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
 	idx_t chunk_idx = GetChunk(row_ids);
-	assert(chunk_idx < storage->collection.chunks.size());
+	D_ASSERT(chunk_idx < storage->collection.chunks.size());
 
 	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 

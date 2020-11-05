@@ -73,6 +73,8 @@ public:
 	bool read_only;
 	//! Whether or not the statement requires a valid transaction to run
 	bool requires_valid_transaction = true;
+	//! The alias for the currently processing subquery, if it exists
+	string alias;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);
@@ -91,7 +93,7 @@ public:
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo *cte);
 	//! Find a common table expression by name; returns nullptr if none exists
-	CommonTableExpressionInfo *FindCTE(const string &name);
+	CommonTableExpressionInfo *FindCTE(const string &name, bool skip = false);
 
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();
@@ -186,6 +188,8 @@ private:
 
 	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
+	void BindNamedParameters(unordered_map<string, LogicalType> &types, unordered_map<string, Value> &values,
+	                         QueryErrorContext &error_context, string &func_name);
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
 	unique_ptr<Expression> BindFilter(unique_ptr<ParsedExpression> condition);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);

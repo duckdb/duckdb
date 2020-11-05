@@ -10,7 +10,7 @@ BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, Logical
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, LogicalType target_type) {
-	assert(expr);
+	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
 		parameter.return_type = target_type;

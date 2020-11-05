@@ -33,13 +33,13 @@ static idx_t next_needle(const char *input_haystack, idx_t size_haystack, const 
 static string_t replace_scalar_function(const string_t &haystack, const string_t &needle, const string_t &thread,
                                         vector<char> &result) {
 	// Get information about the needle, the haystack and the "thread"
-	auto input_haystack = haystack.GetData();
+	auto input_haystack = haystack.GetDataUnsafe();
 	auto size_haystack = haystack.GetSize();
 
-	const auto input_needle = needle.GetData();
+	const auto input_needle = needle.GetDataUnsafe();
 	const auto size_needle = needle.GetSize();
 
-	const auto input_thread = thread.GetData();
+	const auto input_thread = thread.GetDataUnsafe();
 	const auto size_thread = thread.GetSize();
 
 	//  Reuse the buffer

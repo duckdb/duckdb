@@ -9,7 +9,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::GET);
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = (LogicalGet &)*op;
 	// first push down arbitrary filters
 	if (get.function.pushdown_complex_filter) {

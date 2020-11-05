@@ -44,7 +44,7 @@ idx_t Node16::GetNextPos(idx_t pos) {
 }
 
 unique_ptr<Node> *Node16::GetChild(idx_t pos) {
-	assert(pos < count);
+	D_ASSERT(pos < count);
 	return &child[pos];
 }
 

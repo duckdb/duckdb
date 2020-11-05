@@ -14,12 +14,12 @@ void Node::CopyPrefix(ART &art, Node *src, Node *dst) {
 }
 
 unique_ptr<Node> *Node::GetChild(idx_t pos) {
-	assert(0);
+	D_ASSERT(0);
 	return nullptr;
 }
 
 idx_t Node::GetMin() {
-	assert(0);
+	D_ASSERT(0);
 	return 0;
 }
 
@@ -48,7 +48,7 @@ void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<
 		Node256::insert(art, node, key, newNode);
 		break;
 	default:
-		assert(0);
+		D_ASSERT(0);
 	}
 }
 
@@ -70,7 +70,7 @@ void Node::Erase(ART &art, unique_ptr<Node> &node, idx_t pos) {
 		Node256::erase(art, node, pos);
 		break;
 	default:
-		assert(0);
+		D_ASSERT(0);
 		break;
 	}
 }

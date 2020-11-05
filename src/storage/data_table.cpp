@@ -115,7 +115,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		}
 	}
 	// erase the column from this DataTable
-	assert(removed_column < types.size());
+	D_ASSERT(removed_column < types.size());
 	types.erase(types.begin() + removed_column);
 	columns.erase(columns.begin() + removed_column);
 
@@ -211,7 +211,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 	state.version_info = (MorselInfo *)versions->GetRootSegment();
 	state.table_filters = table_filters;
 	if (table_filters) {
-		assert(table_filters->filters.size() > 0);
+		D_ASSERT(table_filters->filters.size() > 0);
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 }
@@ -224,8 +224,8 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
                                          TableFilterSet *table_filters, idx_t start_row, idx_t end_row) {
-	assert(start_row % STANDARD_VECTOR_SIZE == 0);
-	assert(end_row > start_row);
+	D_ASSERT(start_row % STANDARD_VECTOR_SIZE == 0);
+	D_ASSERT(end_row > start_row);
 	idx_t vector_offset = start_row / STANDARD_VECTOR_SIZE;
 	// initialize a column scan state for each column
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
@@ -376,7 +376,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			auto column = column_ids[i];
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
 				// scan row id
-				assert(result.data[i].type.InternalType() == ROW_TYPE);
+				D_ASSERT(result.data[i].type.InternalType() == ROW_TYPE);
 				result.data[i].Sequence(current_row, 1);
 			} else {
 				columns[column]->Scan(transaction, state.column_scans[i], result.data[i]);
@@ -409,7 +409,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			if (!state.table_filters || state.table_filters->filters.find(i) == state.table_filters->filters.end()) {
 				auto column = column_ids[i];
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
-					assert(result.data[i].type.InternalType() == PhysicalType::INT64);
+					D_ASSERT(result.data[i].type.InternalType() == PhysicalType::INT64);
 					result.data[i].vector_type = VectorType::FLAT_VECTOR;
 					auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
 					for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
@@ -451,7 +451,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		auto column = column_ids[col_idx];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			assert(result.data[col_idx].type.InternalType() == PhysicalType::INT64);
+			D_ASSERT(result.data[col_idx].type.InternalType() == PhysicalType::INT64);
 			result.data[col_idx].vector_type = VectorType::FLAT_VECTOR;
 			auto data = FlatVector::GetData<row_t>(result.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
@@ -468,7 +468,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 }
 
 idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]) {
-	assert(row_identifiers.type.InternalType() == ROW_TYPE);
+	D_ASSERT(row_identifiers.type.InternalType() == ROW_TYPE);
 
 	// now iterate over the row ids and figure out which rows to use
 	idx_t count = 0;
@@ -588,7 +588,7 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 	// start writing to the morsels
 	lock_guard<mutex> morsel_lock(versions->node_lock);
 	auto last_morsel = (MorselInfo *)versions->GetLastSegment();
-	assert(last_morsel->start <= (idx_t)state.row_start);
+	D_ASSERT(last_morsel->start <= (idx_t)state.row_start);
 	idx_t current_position = state.row_start - last_morsel->start;
 	idx_t remaining = append_count;
 	while (true) {
@@ -615,8 +615,8 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 }
 
 void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state) {
-	assert(is_root);
-	assert(chunk.column_count() == types.size());
+	D_ASSERT(is_root);
+	D_ASSERT(chunk.column_count() == types.size());
 	chunk.Verify();
 
 	// append the physical data to each of the entries
@@ -708,7 +708,7 @@ void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
 	// adjust the cardinality
 	info->cardinality = start_row;
 	total_rows = start_row;
-	assert(is_root);
+	D_ASSERT(is_root);
 	// revert changes in the base columns
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns[i]->RevertAppend(start_row);
@@ -755,7 +755,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 // Indexes
 //===--------------------------------------------------------------------===//
 bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
-	assert(is_root);
+	D_ASSERT(is_root);
 	if (info->indexes.size() == 0) {
 		return true;
 	}
@@ -783,7 +783,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
-	assert(is_root);
+	D_ASSERT(is_root);
 	if (info->indexes.size() == 0) {
 		return;
 	}
@@ -796,14 +796,14 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
-	assert(is_root);
+	D_ASSERT(is_root);
 	for (idx_t i = 0; i < info->indexes.size(); i++) {
 		info->indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
 	}
 }
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
-	assert(is_root);
+	D_ASSERT(is_root);
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	// create a selection vector from the row_ids
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -829,7 +829,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 // Delete
 //===--------------------------------------------------------------------===//
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers, idx_t count) {
-	assert(row_identifiers.type.InternalType() == ROW_TYPE);
+	D_ASSERT(row_identifiers.type.InternalType() == ROW_TYPE);
 	if (count == 0) {
 		return;
 	}
@@ -921,14 +921,14 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
 	for (idx_t i = 0; i < info->indexes.size(); i++) {
-		assert(!info->indexes[i]->IndexIsUpdated(column_ids));
+		D_ASSERT(!info->indexes[i]->IndexIsUpdated(column_ids));
 	}
 #endif
 }
 
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
                        DataChunk &updates) {
-	assert(row_ids.type.InternalType() == ROW_TYPE);
+	D_ASSERT(row_ids.type.InternalType() == ROW_TYPE);
 
 	updates.Verify();
 	if (updates.size() == 0) {
@@ -952,7 +952,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
-		assert(column != COLUMN_IDENTIFIER_ROW_ID);
+		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 
 		columns[column]->Update(transaction, updates.data[i], row_ids, updates.size());
 	}
@@ -990,7 +990,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 		auto column = column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type.InternalType() == ROW_TYPE);
+			D_ASSERT(result.data[i].type.InternalType() == ROW_TYPE);
 			result.data[i].Sequence(current_row, 1);
 		} else {
 			// scan actual base column

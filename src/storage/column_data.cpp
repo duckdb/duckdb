@@ -114,13 +114,13 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		if (data.root_node.get() == segment) {
 			data.root_node = move(transient);
 		} else {
-			assert(data.nodes.size() >= 2);
+			D_ASSERT(data.nodes.size() >= 2);
 			data.nodes[data.nodes.size() - 2].node->next = move(transient);
 		}
 	} else {
 		state.current = (TransientSegment *)segment;
 	}
-	assert(state.current->segment_type == ColumnSegmentType::TRANSIENT);
+	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
 }
 
@@ -152,14 +152,14 @@ void ColumnData::RevertAppend(row_t start_row) {
 	// check if this row is in the segment tree at all
 	if (idx_t(start_row) >= data.nodes.back().row_start + data.nodes.back().node->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		assert(idx_t(start_row) == data.nodes.back().row_start + data.nodes.back().node->count);
+		D_ASSERT(idx_t(start_row) == data.nodes.back().row_start + data.nodes.back().node->count);
 		return;
 	}
 	// find the segment index that the current row belongs to
 	idx_t segment_index = data.GetSegmentIndex(start_row);
 	auto segment = data.nodes[segment_index].node;
 	auto &transient = (TransientSegment &)*segment;
-	assert(transient.segment_type == ColumnSegmentType::TRANSIENT);
+	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
 
 	// remove any segments AFTER this segment: they should be deleted entirely
 	if (segment_index < data.nodes.size() - 1) {

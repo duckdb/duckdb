@@ -11,9 +11,9 @@ RadixPartitionInfo::RadixPartitionInfo(idx_t _n_partitions_upper_bound)
 		}
 	}
 	// finalize_threads needs to be a power of 2
-	assert(n_partitions > 0);
-	assert(n_partitions <= 256);
-	assert((n_partitions & (n_partitions - 1)) == 0);
+	D_ASSERT(n_partitions > 0);
+	D_ASSERT(n_partitions <= 256);
+	D_ASSERT((n_partitions & (n_partitions - 1)) == 0);
 
 	auto radix_partitions_copy = n_partitions;
 	while (radix_partitions_copy - 1) {
@@ -21,7 +21,7 @@ RadixPartitionInfo::RadixPartitionInfo(idx_t _n_partitions_upper_bound)
 		radix_partitions_copy >>= 1;
 	}
 
-	assert(radix_bits <= 8);
+	D_ASSERT(radix_bits <= 8);
 
 	// we use the fifth byte of the 64 bit hash as radix source
 	for (idx_t i = 0; i < radix_bits; i++) {
@@ -76,18 +76,18 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	}
 
 	// makes no sense to do this with 1 partition
-	assert(partition_info.n_partitions > 0);
+	D_ASSERT(partition_info.n_partitions > 0);
 
 	for (hash_t r = 0; r < partition_info.n_partitions; r++) {
 		sel_vector_sizes[r] = 0;
 	}
 
-	assert(hashes.vector_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes.vector_type == VectorType::FLAT_VECTOR);
 	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 
 	for (idx_t i = 0; i < groups.size(); i++) {
 		auto partition = (hashes_ptr[i] & partition_info.radix_mask) >> partition_info.RADIX_SHIFT;
-		assert(partition < partition_info.n_partitions);
+		D_ASSERT(partition < partition_info.n_partitions);
 		sel_vectors[partition].set_index(sel_vector_sizes[partition]++, i);
 	}
 
@@ -97,7 +97,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	for (idx_t r = 0; r < partition_info.n_partitions; r++) {
 		total_count += sel_vector_sizes[r];
 	}
-	assert(total_count == groups.size());
+	D_ASSERT(total_count == groups.size());
 #endif
 	idx_t group_count = 0;
 	for (hash_t r = 0; r < partition_info.n_partitions; r++) {
@@ -111,10 +111,9 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 }
 
 void PartitionableHashTable::Partition() {
-	assert(!IsPartitioned());
-	assert(radix_partitioned_hts.size() == 0);
-	assert(!unpartitioned_hts.empty());
-	assert(partition_info.n_partitions > 1);
+	D_ASSERT(!IsPartitioned());
+	D_ASSERT(radix_partitioned_hts.size() == 0);
+	D_ASSERT(partition_info.n_partitions > 1);
 
 	vector<GroupedAggregateHashTable *> partition_hts;
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
@@ -135,13 +134,13 @@ bool PartitionableHashTable::IsPartitioned() {
 }
 
 HashTableList PartitionableHashTable::GetPartition(idx_t partition) {
-	assert(IsPartitioned());
-	assert(partition < partition_info.n_partitions);
-	assert(radix_partitioned_hts.size() > partition);
+	D_ASSERT(IsPartitioned());
+	D_ASSERT(partition < partition_info.n_partitions);
+	D_ASSERT(radix_partitioned_hts.size() > partition);
 	return move(radix_partitioned_hts[partition]);
 }
 HashTableList PartitionableHashTable::GetUnpartitioned() {
-	assert(!IsPartitioned());
+	D_ASSERT(!IsPartitioned());
 	return move(unpartitioned_hts);
 }
 
@@ -149,13 +148,13 @@ void PartitionableHashTable::Finalize() {
 	if (IsPartitioned()) {
 		for (auto &ht_list : radix_partitioned_hts) {
 			for (auto &ht : ht_list.second) {
-				assert(ht);
+				D_ASSERT(ht);
 				ht->Finalize();
 			}
 		}
 	} else {
 		for (auto &ht : unpartitioned_hts) {
-			assert(ht);
+			D_ASSERT(ht);
 			ht->Finalize();
 		}
 	}

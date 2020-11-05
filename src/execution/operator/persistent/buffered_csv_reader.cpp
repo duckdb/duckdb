@@ -39,12 +39,8 @@ static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	return std::to_string(linenr + 1) + estimated;
 }
 
-static bool is_digit(char c) {
-	return std::isdigit(c);
-}
-
 static bool StartsWithNumericDate(string &separator, const string_t &value) {
-	auto begin = value.GetData();
+	auto begin = value.GetDataUnsafe();
 	auto end = begin + value.GetSize();
 
 	//	StrpTimeFormat::Parse will skip whitespace, so we can too
@@ -54,26 +50,26 @@ static bool StartsWithNumericDate(string &separator, const string_t &value) {
 	}
 
 	//	first numeric field must start immediately
-	if (!std::isdigit(*field1)) {
+	if (!StringUtil::CharacterIsDigit(*field1)) {
 		return false;
 	}
-	auto literal1 = std::find_if_not(field1, end, is_digit);
+	auto literal1 = std::find_if_not(field1, end, StringUtil::CharacterIsDigit);
 	if (literal1 == end) {
 		return false;
 	}
 
 	//	second numeric field must exist
-	auto field2 = std::find_if(literal1, end, is_digit);
+	auto field2 = std::find_if(literal1, end, StringUtil::CharacterIsDigit);
 	if (field2 == end) {
 		return false;
 	}
-	auto literal2 = std::find_if_not(field2, end, is_digit);
+	auto literal2 = std::find_if_not(field2, end, StringUtil::CharacterIsDigit);
 	if (literal2 == end) {
 		return false;
 	}
 
 	//	third numeric field must exist
-	auto field3 = std::find_if(literal2, end, is_digit);
+	auto field3 = std::find_if(literal2, end, StringUtil::CharacterIsDigit);
 	if (field3 == end) {
 		return false;
 	}
@@ -512,7 +508,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
 	    LogicalType::DATE,    LogicalType::TIME,
 	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN, LogicalType::SQLNULL};
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
+	    LogicalType::SQLNULL};
 
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
@@ -719,7 +716,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 
 		// set sql types
-		for (auto & best_sql_types_candidate : best_sql_types_candidates) {
+		for (auto &best_sql_types_candidate : best_sql_types_candidates) {
 			LogicalType d_type = best_sql_types_candidate.back();
 			if (best_sql_types_candidate.size() == type_candidates.size()) {
 				d_type = LogicalType::VARCHAR;
@@ -1348,7 +1345,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			for (idx_t i = 0; i < parse_chunk.size(); i++) {
 				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
 					auto s = parse_data[i];
-					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
+					auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
 					if (utf_type == UnicodeType::INVALID) {
 						throw InvalidInputException(
 						    "Error in file \"%s\" between line %d and %d: file is not valid UTF8. (%s)",

@@ -51,7 +51,7 @@ struct TimeConvert {
 
 struct StringConvert {
 	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
-		return py::str(val.GetData());
+		return py::str(val.GetString());
 	}
 };
 
@@ -524,7 +524,7 @@ struct DuckDBPyResult {
 				break;
 
 			case LogicalTypeId::TIMESTAMP: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT64);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
 				auto timestamp = val.GetValue<int64_t>();
 				auto date = Timestamp::GetDate(timestamp);
@@ -536,7 +536,7 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::TIME: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
 				int32_t hour, min, sec, msec;
 				auto time = val.GetValue<int32_t>();
@@ -545,7 +545,7 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::DATE: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
 				auto date = val.GetValue<int32_t>();
 				res[col_idx] = PyDate_FromDate(duckdb::Date::ExtractYear(date), duckdb::Date::ExtractMonth(date),
@@ -586,7 +586,7 @@ struct DuckDBPyResult {
 		} else {
 			mres = (MaterializedQueryResult *)result.get();
 		}
-		assert(mres);
+		D_ASSERT(mres);
 
 		py::dict res;
 		for (idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
@@ -868,7 +868,7 @@ struct DuckDBPyConnection {
 		}
 
 		static int my_stream_getschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			if (!stream->release) {
 				my_stream->last_error = "stream was released";
@@ -879,7 +879,7 @@ struct DuckDBPyConnection {
 		}
 
 		static int my_stream_getnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			if (!stream->release) {
 				my_stream->last_error = "stream was released";
@@ -905,7 +905,7 @@ struct DuckDBPyConnection {
 			if (!stream->release) {
 				return "stream was released";
 			}
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			return my_stream->last_error.c_str();
 		}

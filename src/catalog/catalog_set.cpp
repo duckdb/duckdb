@@ -207,7 +207,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 }
 
 idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
-	assert(mapping.find(entry->name) != mapping.end());
+	D_ASSERT(mapping.find(entry->name) != mapping.end());
 	return mapping[entry->name]->index;
 }
 
@@ -231,7 +231,7 @@ MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name,
 			break;
 		}
 		mapping_value = mapping_value->child.get();
-		assert(mapping_value);
+		D_ASSERT(mapping_value);
 	}
 	return mapping_value;
 }
@@ -252,7 +252,7 @@ void CatalogSet::PutMapping(ClientContext &context, const string &name, idx_t en
 
 void CatalogSet::DeleteMapping(ClientContext &context, const string &name) {
 	auto entry = mapping.find(name);
-	assert(entry != mapping.end());
+	D_ASSERT(entry != mapping.end());
 	auto delete_marker = make_unique<MappingValue>(entry->second->index);
 	delete_marker->deleted = true;
 	delete_marker->timestamp = Transaction::GetTransaction(context).transaction_id;
@@ -280,7 +280,7 @@ CatalogEntry *CatalogSet::GetEntryForTransaction(ClientContext &context, Catalog
 			break;
 		}
 		current = current->child.get();
-		assert(current);
+		D_ASSERT(current);
 	}
 	return current;
 }

@@ -11,8 +11,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceEx
 
 void ExpressionExecutor::Execute(BoundReferenceExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	assert(expr.index != INVALID_INDEX);
-	assert(expr.index < chunk->column_count());
+	D_ASSERT(expr.index != INVALID_INDEX);
+	D_ASSERT(expr.index < chunk->column_count());
 	if (sel) {
 		result.Slice(chunk->data[expr.index], *sel, count);
 	} else {

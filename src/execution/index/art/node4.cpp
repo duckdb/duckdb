@@ -44,7 +44,7 @@ idx_t Node4::GetNextPos(idx_t pos) {
 }
 
 unique_ptr<Node> *Node4::GetChild(idx_t pos) {
-	assert(pos < count);
+	D_ASSERT(pos < count);
 	return &child[pos];
 }
 
@@ -82,7 +82,7 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 
 void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node4 *n = static_cast<Node4 *>(node.get());
-	assert(pos < n->count);
+	D_ASSERT(pos < n->count);
 
 	// erase the child and decrease the count
 	n->child[pos].reset();

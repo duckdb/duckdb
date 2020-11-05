@@ -97,7 +97,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 		}
 	}
 	transaction_t lowest_stored_query = lowest_start_time;
-	assert(t_index != active_transactions.size());
+	D_ASSERT(t_index != active_transactions.size());
 	auto current_transaction = move(active_transactions[t_index]);
 	if (transaction->commit_id != 0) {
 		// the transaction was committed, add it to the list of recently
@@ -114,7 +114,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	// traverse the recently_committed transactions to see if we can remove any
 	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
-		assert(recently_committed_transactions[i]);
+		D_ASSERT(recently_committed_transactions[i]);
 		lowest_stored_query = MinValue(recently_committed_transactions[i]->start_time, lowest_stored_query);
 		if (recently_committed_transactions[i]->commit_id < lowest_start_time) {
 			// changes made BEFORE this transaction are no longer relevant
@@ -149,8 +149,8 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	// check if we can free the memory of any old transactions
 	i = active_transactions.size() == 0 ? old_transactions.size() : 0;
 	for (; i < old_transactions.size(); i++) {
-		assert(old_transactions[i]);
-		assert(old_transactions[i]->highest_active_query > 0);
+		D_ASSERT(old_transactions[i]);
+		D_ASSERT(old_transactions[i]->highest_active_query > 0);
 		if (old_transactions[i]->highest_active_query >= lowest_active_query) {
 			// there is still a query running that could be using
 			// this transactions' data
@@ -163,7 +163,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	}
 	// check if we can free the memory of any old catalog sets
 	for (i = 0; i < old_catalog_sets.size(); i++) {
-		assert(old_catalog_sets[i].highest_active_query > 0);
+		D_ASSERT(old_catalog_sets[i].highest_active_query > 0);
 		if (old_catalog_sets[i].highest_active_query >= lowest_stored_query) {
 			// there is still a query running that could be using
 			// this catalog sets' data

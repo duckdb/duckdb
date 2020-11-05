@@ -81,7 +81,7 @@ void ExpressionRewriter::Apply(LogicalOperator &root) {
 	}
 
 	// if it is a LogicalFilter, we split up filter conjunctions again
-	if (root.type == LogicalOperatorType::FILTER) {
+	if (root.type == LogicalOperatorType::LOGICAL_FILTER) {
 		auto &filter = (LogicalFilter &)root;
 		filter.SplitPredicates();
 	}

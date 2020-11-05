@@ -25,7 +25,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                      bool &changes_made) {
 	auto root = (BoundFunctionExpression *)bindings[0];
-	assert(root->children.size() == 2);
+	D_ASSERT(root->children.size() == 2);
 	(void)root;
 	auto prefix_expr = bindings[2];
 
@@ -33,7 +33,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	if (!prefix_expr->IsFoldable()) {
 		return nullptr;
 	}
-	assert(root->return_type.id() == LogicalTypeId::BOOLEAN);
+	D_ASSERT(root->return_type.id() == LogicalTypeId::BOOLEAN);
 
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(*prefix_expr);
 
@@ -41,8 +41,8 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 
-	assert(prefix_value.type() == prefix_expr->return_type);
-	string needle_string = string(((string_t)prefix_value.str_value).GetData());
+	D_ASSERT(prefix_value.type() == prefix_expr->return_type);
+	auto needle_string = prefix_value.str_value;
 
 	// PREFIX('xyz', '') is TRUE
 	// PREFIX(NULL, '') is NULL

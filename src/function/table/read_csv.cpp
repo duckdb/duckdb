@@ -101,7 +101,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 		result->initial_reader = move(initial_reader);
 	} else {
 		result->sql_types = return_types;
-		assert(return_types.size() == names.size());
+		D_ASSERT(return_types.size() == names.size());
 	}
 	if (result->include_file_name) {
 		return_types.push_back(LogicalType::VARCHAR);

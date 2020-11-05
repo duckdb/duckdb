@@ -27,7 +27,7 @@ TransientSegment::TransientSegment(PersistentSegment &segment)
 	data = move(segment.data);
 	stats = move(segment.stats);
 	count = segment.count;
-	assert(!segment.next);
+	D_ASSERT(!segment.next);
 }
 
 void TransientSegment::InitializeScan(ColumnScanState &state) {

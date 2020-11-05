@@ -18,6 +18,7 @@
 #include "dss.h"
 #include "dsstypes.h"
 
+#include <cassert>
 #include <mutex>
 
 using namespace duckdb;

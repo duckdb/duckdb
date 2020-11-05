@@ -25,7 +25,7 @@ public:
 	}
 
 	void Move(StringHeap &other) {
-		assert(!other.chunk);
+		D_ASSERT(!other.chunk);
 		other.tail = tail;
 		other.chunk = move(chunk);
 		tail = nullptr;

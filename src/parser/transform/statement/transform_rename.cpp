@@ -7,8 +7,8 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 	auto stmt = reinterpret_cast<PGRenameStmt *>(node);
-	assert(stmt);
-	assert(stmt->relation);
+	D_ASSERT(stmt);
+	D_ASSERT(stmt->relation);
 
 	unique_ptr<AlterInfo> info;
 
@@ -20,7 +20,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 		// get the table and schema
 		string schema = INVALID_SCHEMA;
 		string table;
-		assert(stmt->relation->relname);
+		D_ASSERT(stmt->relation->relname);
 		if (stmt->relation->relname) {
 			table = stmt->relation->relname;
 		}
@@ -39,7 +39,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 		// get the table and schema
 		string schema = DEFAULT_SCHEMA;
 		string table;
-		assert(stmt->relation->relname);
+		D_ASSERT(stmt->relation->relname);
 		if (stmt->relation->relname) {
 			table = stmt->relation->relname;
 		}
@@ -57,7 +57,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 		// get the view and schema
 		string schema = DEFAULT_SCHEMA;
 		string view;
-		assert(stmt->relation->relname);
+		D_ASSERT(stmt->relation->relname);
 		if (stmt->relation->relname) {
 			view = stmt->relation->relname;
 		}
@@ -72,7 +72,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 	default:
 		throw NotImplementedException("Schema element not supported yet!");
 	}
-	assert(info);
+	D_ASSERT(info);
 	return make_unique<AlterStatement>(move(info));
 }
 

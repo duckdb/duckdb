@@ -8,7 +8,7 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateTableAsStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	if (stmt->relkind == PG_OBJECT_MATVIEW) {
 		throw NotImplementedException("Materialized view not implemented");
 	}

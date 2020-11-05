@@ -129,7 +129,8 @@ template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_en
 template <> unique_ptr<Key> Key::CreateKey(string_t value, bool is_little_endian) {
 	idx_t len = value.GetSize() + 1;
 	auto data = unique_ptr<data_t[]>(new data_t[len]);
-	memcpy(data.get(), value.GetData(), len);
+	memcpy(data.get(), value.GetDataUnsafe(), len - 1);
+	data[len - 1] = '\0';
 	return make_unique<Key>(move(data), len);
 }
 

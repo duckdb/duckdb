@@ -52,7 +52,7 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
-class TableFunction : public SimpleFunction {
+class TableFunction : public SimpleNamedParameterFunction {
 public:
 	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_t init = nullptr,
@@ -65,7 +65,7 @@ public:
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false)
-	    : SimpleFunction(name, move(arguments)), bind(bind), init(init), function(function), statistics(statistics),
+	    : SimpleNamedParameterFunction(name, move(arguments)), bind(bind), init(init), function(function), statistics(statistics),
 	      cleanup(cleanup),
 	      dependency(dependency), cardinality(cardinality), pushdown_complex_filter(pushdown_complex_filter),
 	      to_string(to_string), max_threads(max_threads), init_parallel_state(init_parallel_state),
@@ -86,7 +86,7 @@ public:
 	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_init,
 	                    parallel_state_next, projection_pushdown, filter_pushdown) {
 	}
-	TableFunction() : SimpleFunction("", {}) {
+	TableFunction() : SimpleNamedParameterFunction("", {}) {
 	}
 
 	//! (Optional) Bind function
@@ -126,8 +126,6 @@ public:
 	//! (Optional) return the next chunk to process in the parallel scan, or return nullptr if there is none
 	table_function_parallel_state_next_t parallel_state_next;
 
-	//! Supported named parameters by the function
-	unordered_map<string, LogicalType> named_parameters;
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.
 	bool projection_pushdown;
@@ -135,7 +133,9 @@ public:
 	//! that applies the table filter directly.
 	bool filter_pushdown;
 
-	string ToString();
+	string ToString() {
+		return SimpleNamedParameterFunction::ToString();
+	}
 };
 
 } // namespace duckdb

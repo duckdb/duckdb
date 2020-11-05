@@ -1,0 +1,39 @@
+# name: test/sql/join/inner/join_cross_product.test
+# description: Test column binding in cross product of multiple joins
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t1(i integer);
+
+statement ok
+create table t2(j integer);
+
+statement ok
+create table t3(k integer);
+
+statement ok
+create table t4(l integer);
+
+statement ok
+insert into t1 values (1);
+
+statement ok
+insert into t2 values (1);
+
+statement ok
+insert into t3 values (2), (3);
+
+statement ok
+insert into t4 values (2), (3);
+
+query IIII
+select * from t1 join t2 on (i=j), t3 join t4 on (k=l) order by 1, 2, 3, 4;
+----
+1	1	2	2
+1	1	3	3
+
+statement error
+select * from t1 join t2 on (i=j), t3 join t4 on (i+k=j+l)

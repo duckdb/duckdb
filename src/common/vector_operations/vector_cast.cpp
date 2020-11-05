@@ -13,7 +13,7 @@ namespace duckdb {
 using namespace std;
 
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result, idx_t count) {
-	assert(result.type.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(result.type.InternalType() == PhysicalType::VARCHAR);
 	UnaryExecutor::Execute<SRC, string_t, true>(source, result, count,
 	                                            [&](SRC input) { return OP::template Operation<SRC>(input, result); });
 }
@@ -93,7 +93,7 @@ template <class T> static void from_decimal_cast(Vector &source, Vector &result,
 
 template <class SOURCE, class DEST, class POWERS_SOURCE, class POWERS_DEST>
 void decimal_scale_up_loop(Vector &source, Vector &result, idx_t count) {
-	assert(result.type.scale() >= source.type.scale());
+	D_ASSERT(result.type.scale() >= source.type.scale());
 	idx_t scale_difference = result.type.scale() - source.type.scale();
 	auto multiply_factor = POWERS_DEST::PowersOfTen[scale_difference];
 	idx_t target_width = result.type.width() - scale_difference;
@@ -116,7 +116,7 @@ void decimal_scale_up_loop(Vector &source, Vector &result, idx_t count) {
 
 template <class SOURCE, class DEST, class POWERS_SOURCE>
 void decimal_scale_down_loop(Vector &source, Vector &result, idx_t count) {
-	assert(result.type.scale() < source.type.scale());
+	D_ASSERT(result.type.scale() < source.type.scale());
 	idx_t scale_difference = source.type.scale() - result.type.scale();
 	idx_t target_width = result.type.width() + scale_difference;
 	auto divide_factor = POWERS_SOURCE::PowersOfTen[scale_difference];
@@ -483,7 +483,7 @@ static void value_string_cast_switch(Vector &source, Vector &result, idx_t count
 }
 
 void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool strict) {
-	assert(source.type != result.type);
+	D_ASSERT(source.type != result.type);
 	// first switch on source type
 	switch (source.type.id()) {
 	case LogicalTypeId::BOOLEAN:

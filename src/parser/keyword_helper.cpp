@@ -16,6 +16,9 @@ bool KeywordHelper::RequiresQuotes(const string &text) {
 		if (text[i] >= 'a' && text[i] <= 'z') {
 			continue;
 		}
+		if (text[i] == '_') {
+			continue;
+		}
 		return true;
 	}
 	return IsKeyword(text);

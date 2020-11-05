@@ -31,7 +31,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	if (entry->temporary || entry->parent->temporary) {
 		return;
 	}
-	assert(log);
+	D_ASSERT(log);
 	// look at the type of the parent entry
 	auto parent = entry->parent;
 	switch (parent->type) {
@@ -107,7 +107,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 }
 
 void CommitState::WriteDelete(DeleteInfo *info) {
-	assert(log);
+	D_ASSERT(log);
 	// switch to the current table, if necessary
 	SwitchTable(info->table->info.get(), UndoFlags::DELETE_TUPLE);
 
@@ -125,7 +125,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 }
 
 void CommitState::WriteUpdate(UpdateInfo *info) {
-	assert(log);
+	D_ASSERT(log);
 	// switch to the current table, if necessary
 	SwitchTable(&info->column_data->table_info, UndoFlags::UPDATE_TUPLE);
 
@@ -155,7 +155,7 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		assert(catalog_entry->parent);
+		D_ASSERT(catalog_entry->parent);
 		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, commit_id);
 		if (catalog_entry->name != catalog_entry->parent->name) {
 			catalog_entry->set->UpdateTimestamp(catalog_entry, commit_id);
@@ -207,7 +207,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		assert(catalog_entry->parent);
+		D_ASSERT(catalog_entry->parent);
 		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, transaction_id);
 		if (catalog_entry->name != catalog_entry->parent->name) {
 			catalog_entry->set->UpdateTimestamp(catalog_entry, transaction_id);

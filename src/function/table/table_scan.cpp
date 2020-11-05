@@ -219,8 +219,8 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 				// bindings[1] = the index expression
 				// bindings[2] = the constant
 				auto comparison = (BoundComparisonExpression *)bindings[0];
-				assert(bindings[0]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-				assert(bindings[2]->type == ExpressionType::VALUE_CONSTANT);
+				D_ASSERT(bindings[0]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+				D_ASSERT(bindings[2]->type == ExpressionType::VALUE_CONSTANT);
 
 				auto constant_value = ((BoundConstantExpression *)bindings[2])->value;
 				auto comparison_type = comparison->type;
@@ -280,7 +280,7 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 				// less than predicate
 				index_state = index->InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
 			} else {
-				assert(!high_value.is_null);
+				D_ASSERT(!high_value.is_null);
 				index_state = index->InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
 			}
 			if (index->Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {

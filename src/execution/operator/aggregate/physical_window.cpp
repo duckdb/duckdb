@@ -32,7 +32,7 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 }
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {
-	assert(start <= end);
+	D_ASSERT(start <= end);
 	for (idx_t i = start; i < end; i++) {
 		if (a[i] != b[i]) {
 			return false;
@@ -120,7 +120,7 @@ static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollectio
 		executor.AddExpression(*oexpr);
 	}
 
-	assert(sort_types.size() > 0);
+	D_ASSERT(sort_types.size() > 0);
 
 	// create a chunkcollection for the results of the expressions in the window definitions
 	for (idx_t i = 0; i < input.chunks.size(); i++) {
@@ -133,7 +133,7 @@ static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollectio
 		sort_collection.Append(sort_chunk);
 	}
 
-	assert(input.count == sort_collection.count);
+	D_ASSERT(input.count == sort_collection.count);
 
 	auto sorted_vector = unique_ptr<idx_t[]>(new idx_t[input.count]);
 	sort_collection.Sort(orders, null_order_types, sorted_vector.get());
@@ -213,17 +213,17 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		assert(0); // disallowed
+		D_ASSERT(0); // disallowed
 		break;
 	case WindowBoundary::EXPR_PRECEDING: {
-		assert(boundary_start_collection.column_count() > 0);
+		D_ASSERT(boundary_start_collection.column_count() > 0);
 		bounds.window_start =
 		    (int64_t)row_idx -
 		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
-		assert(boundary_start_collection.column_count() > 0);
+		D_ASSERT(boundary_start_collection.column_count() > 0);
 		bounds.window_start =
 		    row_idx +
 		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
@@ -236,7 +236,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 
 	switch (wexpr->end) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
-		assert(0); // disallowed
+		D_ASSERT(0); // disallowed
 		break;
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		bounds.window_end = row_idx + 1;
@@ -248,13 +248,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING:
-		assert(boundary_end_collection.column_count() > 0);
+		D_ASSERT(boundary_end_collection.column_count() > 0);
 		bounds.window_end =
 		    (int64_t)row_idx -
 		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
-		assert(boundary_end_collection.column_count() > 0);
+		D_ASSERT(boundary_end_collection.column_count() > 0);
 		bounds.window_end =
 		    row_idx +
 		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
@@ -404,14 +404,14 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 			int64_t n_size = (n_total / n_param);
 			// find the row idx within the group
-			assert(row_idx >= bounds.partition_start);
+			D_ASSERT(row_idx >= bounds.partition_start);
 			int64_t adjusted_row_idx = row_idx - bounds.partition_start;
 			// now compute the ntile
 			int64_t n_large = n_total - n_param * n_size;
 			int64_t i_small = n_large * (n_size + 1);
 			int64_t result_ntile;
 
-			assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
+			D_ASSERT((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
 
 			if (adjusted_row_idx < i_small) {
 				result_ntile = 1 + adjusted_row_idx / (n_size + 1);
@@ -419,7 +419,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				result_ntile = 1 + n_large + (adjusted_row_idx - i_small) / n_size;
 			}
 			// result has to be between [1, NTILE]
-			assert(result_ntile >= 1 && result_ntile <= n_param);
+			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
 			res = Value::Numeric(wexpr->return_type, result_ntile);
 			break;
 		}
@@ -502,11 +502,11 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			window_results.Append(window_chunk);
 		}
 
-		assert(window_results.column_count() == select_list.size());
+		D_ASSERT(window_results.column_count() == select_list.size());
 		idx_t window_output_idx = 0;
 		// we can have multiple window functions
 		for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			// sort by partition and order clause in window def
 			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
 			ComputeWindowExpression(wexpr, big_data, window_results, window_output_idx++);
@@ -522,7 +522,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	auto &wind_ch = window_results.GetChunk(state->position);
 
 	idx_t out_idx = 0;
-	assert(proj_ch.size() == wind_ch.size());
+	D_ASSERT(proj_ch.size() == wind_ch.size());
 	chunk.SetCardinality(proj_ch);
 	for (idx_t col_idx = 0; col_idx < proj_ch.column_count(); col_idx++) {
 		chunk.data[out_idx++].Reference(proj_ch.data[col_idx]);

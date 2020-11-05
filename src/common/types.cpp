@@ -591,8 +591,8 @@ LogicalType LogicalType::MaxLogicalType(LogicalType left, LogicalType right) {
 void LogicalType::Verify() const {
 #ifdef DEBUG
 	if (id_ == LogicalTypeId::DECIMAL) {
-		assert(width_ >= 1 && width_ <= Decimal::MAX_WIDTH_DECIMAL);
-		assert(scale_ >= 0 && scale_ <= width_);
+		D_ASSERT(width_ >= 1 && width_ <= Decimal::MAX_WIDTH_DECIMAL);
+		D_ASSERT(scale_ >= 0 && scale_ <= width_);
 	}
 #endif
 }

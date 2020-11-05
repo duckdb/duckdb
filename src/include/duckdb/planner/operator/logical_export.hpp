@@ -17,7 +17,7 @@ namespace duckdb {
 class LogicalExport : public LogicalOperator {
 public:
 	LogicalExport(CopyFunction function, unique_ptr<CopyInfo> copy_info)
-	    : LogicalOperator(LogicalOperatorType::EXPORT), function(function), copy_info(move(copy_info)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPORT), function(function), copy_info(move(copy_info)) {
 	}
 	CopyFunction function;
 	unique_ptr<CopyInfo> copy_info;

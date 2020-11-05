@@ -50,17 +50,10 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len) {
 }
 
 
-std::string Utf8Proc::Normalize(std::string s) {
-	auto normalized = Normalize(s.c_str());
-	auto res = std::string(normalized);
-	free(normalized);
-	return res;
-}
-
-char* Utf8Proc::Normalize(const char *s) {
+char* Utf8Proc::Normalize(const char *s, size_t len) {
 	assert(s);
-	assert(Utf8Proc::Analyze(s) != UnicodeType::INVALID);
-	return (char*) utf8proc_NFC((const utf8proc_uint8_t*) s);
+	assert(Utf8Proc::Analyze(s, len) != UnicodeType::INVALID);
+	return (char*) utf8proc_NFC((const utf8proc_uint8_t*) s, len);
 }
 
 bool Utf8Proc::IsValid(const char *s, size_t len) {

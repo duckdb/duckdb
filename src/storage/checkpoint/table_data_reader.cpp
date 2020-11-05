@@ -22,7 +22,7 @@ TableDataReader::TableDataReader(CheckpointManager &manager, MetaBlockReader &re
 
 void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
-	assert(columns.size() > 0);
+	D_ASSERT(columns.size() > 0);
 
 	// load the column statistics
 	for (idx_t col = 0; col < columns.size(); col++) {
