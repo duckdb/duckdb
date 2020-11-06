@@ -79,7 +79,7 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 		// for each column, we append whatever we can fit into the block
 		idx_t chunk_size = chunk.size();
 		for (idx_t i = 0; i < table.columns.size(); i++) {
-			assert(chunk.data[i].type == table.columns[i].type);
+			D_ASSERT(chunk.data[i].type == table.columns[i].type);
 			AppendData(transaction, i, chunk.data[i], chunk_size);
 		}
 	}
@@ -223,8 +223,8 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	Store<uint32_t>(string_length, handle->node->buffer + offset);
 	offset += sizeof(uint32_t);
 	// now write the remainder of the string
-	auto strptr = string.GetData();
-	uint32_t remaining = string_length + 1;
+	auto strptr = string.GetDataUnsafe();
+	uint32_t remaining = string_length;
 	while (remaining > 0) {
 		uint32_t to_write = MinValue<uint32_t>(remaining, STRING_SPACE - offset);
 		if (to_write > 0) {

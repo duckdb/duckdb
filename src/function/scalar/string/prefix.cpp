@@ -15,9 +15,9 @@ struct PrefixOperator {
 	}
 };
 static bool prefix(const string_t &str, const string_t &pattern) {
-	auto str_size = str.GetSize();
+	auto str_length = str.GetSize();
 	auto patt_length = pattern.GetSize();
-	if (patt_length > str_size) {
+	if (patt_length > str_length) {
 		return false;
 	}
 	if (patt_length <= string_t::PREFIX_LENGTH) {
@@ -46,8 +46,9 @@ static bool prefix(const string_t &str, const string_t &pattern) {
 			}
 		}
 		// compare the rest of the prefix
-		const char *str_data = str.GetData();
-		const char *patt_data = pattern.GetData();
+		const char *str_data = str.GetDataUnsafe();
+		const char *patt_data = pattern.GetDataUnsafe();
+		D_ASSERT(patt_length <= str_length);
 		for (idx_t i = string_t::PREFIX_LENGTH; i < patt_length; ++i) {
 			if (str_data[i] != patt_data[i]) {
 				return false;

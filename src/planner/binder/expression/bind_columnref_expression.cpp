@@ -8,7 +8,7 @@ namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t depth) {
-	assert(!colref.column_name.empty());
+	D_ASSERT(!colref.column_name.empty());
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	if (colref.table_name.empty()) {
@@ -17,8 +17,9 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 		if (colref.table_name.empty()) {
 			auto similar_bindings = binder.bind_context.GetSimilarBindings(colref.column_name);
 			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-			return BindResult(binder.FormatError(colref, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
-			                                     colref.column_name.c_str(), candidate_str)));
+			return BindResult(
+			    binder.FormatError(colref, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
+			                                                  colref.column_name.c_str(), candidate_str)));
 		}
 	}
 	BindResult result = binder.bind_context.BindColumn(colref, depth);

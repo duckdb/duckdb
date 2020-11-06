@@ -66,6 +66,158 @@ SELECT 'ababac' GLOB '*abac'
 ----
 1
 
+# bracket matching
+query T
+SELECT '3' GLOB '[0-9]'
+----
+1
+
+query T
+SELECT 'a' GLOB '[0-9]'
+----
+0
+
+# multiple brackets in a row
+query T
+SELECT '012' GLOB '[0-9][0-9][0-9]'
+----
+1
+
+# trailing in pattern after brackets
+query T
+SELECT '012' GLOB '[0-9][0-9][0-9]a'
+----
+0
+
+# trailing in string after brackets
+query T
+SELECT '012a' GLOB '[0-9][0-9][0-9]'
+----
+0
+
+# more complicated brackets
+query T
+SELECT 'b3' GLOB '[abc0-9][abc0-9]'
+----
+1
+
+query T
+SELECT 'd3' GLOB '[abc0-9][abc0-9]'
+----
+0
+
+# inverse brackets
+query T
+SELECT 'a' GLOB '[!0-9]'
+----
+1
+
+query T
+SELECT '1' GLOB '[!0-9]'
+----
+0
+
+# escapes
+query T
+SELECT '*' GLOB '\*'
+----
+1
+
+query T
+SELECT 'a' GLOB '\*'
+----
+0
+
+# escaped escape
+query T
+SELECT '\' GLOB '\\'
+----
+1
+
+# '
+query T
+SELECT 'a' GLOB '\\'
+----
+0
+
+# bracket in a bracket
+# this is valid as long as the closing bracket is the first non-exclamation mark character
+query T
+SELECT '3]' GLOB '[]3][]]'
+----
+1
+
+query T
+SELECT '3]' GLOB '[]3][]]'
+----
+1
+
+# bracket is not properly closed
+query T
+SELECT '3' GLOB '[3'
+----
+0
+
+# trailing range
+query T
+SELECT '3' GLOB '[3-'
+----
+0
+
+# trailing escape
+query T
+SELECT '3' GLOB '\\'
+----
+0
+
+# a bunch of asterisks
+query T
+SELECT '3' GLOB '3***'
+----
+1
+
+query T
+SELECT '1245' GLOB '**1***2*******4*5***'
+----
+1
+
+query T
+SELECT 'aaaaaaaaaaaaaaaaaaaaaaa' GLOB '*a'
+----
+1
+
+# special characters in brackets
+query T
+SELECT '?' GLOB '[?]'
+----
+1
+
+query T
+SELECT '3' GLOB '[?]'
+----
+0
+
+query T
+SELECT '*' GLOB '[*]'
+----
+1
+
+query T
+SELECT '3' GLOB '[*]'
+----
+0
+
+# multiple ranges in a bracket
+query T
+SELECT '6' GLOB '[1-35-7]'
+----
+1
+
+query T
+SELECT '4' GLOB '[1-35-7]'
+----
+0
+
 # like with table
 statement ok
 CREATE TABLE strings(s STRING, pat STRING);

@@ -28,7 +28,7 @@ void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk 
 		break;
 	}
 	default:
-		assert(0);
+		D_ASSERT(0);
 		throw NotImplementedException("Unimplemented index type");
 	}
 	index_entry->index = index.get();

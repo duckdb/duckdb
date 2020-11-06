@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -20,6 +21,10 @@ public:
 	BoundJoinRef() : BoundTableRef(TableReferenceType::JOIN) {
 	}
 
+	//! The binder used to bind the LHS of the join
+	unique_ptr<Binder> left_binder;
+	//! The binder used to bind the RHS of the join
+	unique_ptr<Binder> right_binder;
 	//! The left hand side of the join
 	unique_ptr<BoundTableRef> left;
 	//! The right hand side of the join

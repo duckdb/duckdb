@@ -5,6 +5,41 @@
 statement ok
 PRAGMA enable_verification
 
+# contains of various lengths
+query IIIIIIIIII
+SELECT CONTAINS('hello world', 'h'),
+       CONTAINS('hello world', 'he'),
+       CONTAINS('hello world', 'hel'),
+       CONTAINS('hello world', 'hell'),
+       CONTAINS('hello world', 'hello'),
+       CONTAINS('hello world', 'hello '),
+       CONTAINS('hello world', 'hello w'),
+       CONTAINS('hello world', 'hello wo'),
+       CONTAINS('hello world', 'hello wor'),
+       CONTAINS('hello world', 'hello worl')
+----
+1	1	1	1	1	1	1	1	1	1
+
+query IIIIIIIIII
+SELECT CONTAINS('hello world', 'a'),
+       CONTAINS('hello world', 'ha'),
+       CONTAINS('hello world', 'hea'),
+       CONTAINS('hello world', 'hela'),
+       CONTAINS('hello world', 'hella'),
+       CONTAINS('hello world', 'helloa'),
+       CONTAINS('hello world', 'hello a'),
+       CONTAINS('hello world', 'hello wa'),
+       CONTAINS('hello world', 'hello woa'),
+       CONTAINS('hello world', 'hello wora')
+----
+0	0	0	0	0	0	0	0	0	0
+
+# empty contains
+query III
+select contains('hello', ''), contains('', ''), contains(NULL, '')
+----
+1	1	NULL
+
 statement ok
 CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
 

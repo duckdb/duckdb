@@ -71,7 +71,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 		do {
 			function.function(context.client, bind_data.get(), state.operator_data.get(), chunk);
 			if (chunk.size() == 0) {
-				assert(function.parallel_state_next);
+				D_ASSERT(function.parallel_state_next);
 				if (function.parallel_state_next(context.client, bind_data.get(), state.operator_data.get(),
 				                                 state.parallel_state)) {
 					continue;
@@ -83,7 +83,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			}
 		} while (true);
 	}
-	assert(chunk.size() == 0);
+	D_ASSERT(chunk.size() == 0);
 	if (function.cleanup) {
 		function.cleanup(context.client, bind_data.get(), state.operator_data.get());
 	}
@@ -115,7 +115,7 @@ string PhysicalTableScan::ParamsToString() const {
 				if (filter.column_index < names.size()) {
 					result += "\n";
 					result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
-							filter.constant.ToString();
+					          filter.constant.ToString();
 				}
 			}
 		}

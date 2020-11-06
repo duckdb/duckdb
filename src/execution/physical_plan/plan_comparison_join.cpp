@@ -48,12 +48,12 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
 	// now visit the children
-	assert(op.children.size() == 2);
+	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality();
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality();
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
-	assert(left && right);
+	D_ASSERT(left && right);
 
 	if (op.conditions.size() == 0) {
 		// no conditions: insert a cross product
@@ -62,9 +62,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	bool has_equality = false;
 	bool has_inequality = false;
-#ifndef NDEBUG
 	bool has_null_equal_conditions = false;
-#endif
 	for (auto &cond : op.conditions) {
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
@@ -73,12 +71,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			has_inequality = true;
 		}
 		if (cond.null_values_are_equal) {
-#ifndef NDEBUG
 			has_null_equal_conditions = true;
-#endif
-			assert(cond.comparison == ExpressionType::COMPARE_EQUAL);
+			D_ASSERT(cond.comparison == ExpressionType::COMPARE_EQUAL);
 		}
 	}
+	(void)has_null_equal_conditions;
+
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
 		Index *left_index{}, *right_index{};
@@ -100,7 +98,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 		                                     op.left_projection_map, op.right_projection_map);
 	} else {
-		assert(!has_null_equal_conditions); // don't support this for anything but hash joins for now
+		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && !has_inequality) {
 			// range join: use piecewise merge join
 			plan =

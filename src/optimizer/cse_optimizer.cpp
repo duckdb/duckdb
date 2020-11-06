@@ -10,8 +10,8 @@ using namespace std;
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::FILTER:
-	case LogicalOperatorType::PROJECTION:
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
 		ExtractCommonSubExpresions(op);
 		break;
 	default:

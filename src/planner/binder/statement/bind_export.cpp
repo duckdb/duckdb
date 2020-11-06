@@ -70,8 +70,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		auto bound_statement = copy_binder.Bind(copy_stmt);
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union = make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
-			                                                   move(bound_statement.plan), LogicalOperatorType::UNION);
+			auto copy_union =
+			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
+			                                     move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
 			child_operator = move(copy_union);
 		} else {
 			child_operator = move(bound_statement.plan);

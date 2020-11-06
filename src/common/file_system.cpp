@@ -45,13 +45,13 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
 	// cannot combine Read and CREATE/Append flags
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 	// cannot combine CREATE and CREATE_NEW flags
-	assert(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 }
 
 #ifndef _WIN32
@@ -93,7 +93,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags = O_RDONLY;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::FILE_FLAGS_WRITE);
+		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
 		open_flags = O_RDWR | O_CLOEXEC;
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			open_flags |= O_CREAT;
@@ -402,7 +402,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		share_mode = FILE_SHARE_READ;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::FILE_FLAGS_WRITE);
+		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
@@ -670,8 +670,13 @@ void FileHandle::Truncate(int64_t new_size) {
 
 static bool HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
-		if (str[i] == '*' || str[i] == '?') {
+		switch (str[i]) {
+		case '*':
+		case '?':
+		case '[':
 			return true;
+		default:
+			break;
 		}
 	}
 	return false;
@@ -683,7 +688,7 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 		if (is_directory != match_directory) {
 			return;
 		}
-		if (LikeFun::Glob(fname.c_str(), glob.c_str(), nullptr)) {
+		if (LikeFun::Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
 			if (join_path) {
 				result.push_back(fs.JoinPath(path, fname));
 			} else {
@@ -736,17 +741,29 @@ vector<string> FileSystem::Glob(string path) {
 	}
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
+		bool has_glob = HasGlob(splits[i]);
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern
 		vector<string> result;
-		if (previous_directories.empty()) {
-			// no previous directories: list in the current path
-			GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+		if (!has_glob) {
+			// no glob, just append as-is
+			if (previous_directories.empty()) {
+				result.push_back(splits[i]);
+			} else {
+				for (auto &prev_directory : previous_directories) {
+					result.push_back(JoinPath(prev_directory, splits[i]));
+				}
+			}
 		} else {
-			// previous directories
-			// we iterate over each of the previous directories, and apply the glob of the current directory
-			for (auto &prev_directory : previous_directories) {
-				GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+			if (previous_directories.empty()) {
+				// no previous directories: list in the current path
+				GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+			} else {
+				// previous directories
+				// we iterate over each of the previous directories, and apply the glob of the current directory
+				for (auto &prev_directory : previous_directories) {
+					GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+				}
 			}
 		}
 		if (is_last_chunk || result.size() == 0) {

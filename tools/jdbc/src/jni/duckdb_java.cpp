@@ -308,7 +308,8 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 					continue;
 				}
 				env->SetObjectArrayElement(
-				    varlen_data, row_idx, env->NewStringUTF(((string_t *)FlatVector::GetData(vec))[row_idx].GetData()));
+				    varlen_data, row_idx,
+				    env->NewStringUTF(((string_t *)FlatVector::GetData(vec))[row_idx].GetString().c_str()));
 			}
 			break;
 		default:

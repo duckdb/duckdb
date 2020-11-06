@@ -15,7 +15,7 @@ struct MyArrowArrayStream {
 	}
 
 	static int my_stream_getschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
-		assert(stream->private_data);
+		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
 			my_stream->last_error = "stream was released";
@@ -26,7 +26,7 @@ struct MyArrowArrayStream {
 	}
 
 	static int my_stream_getnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
-		assert(stream->private_data);
+		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
 			my_stream->last_error = "stream was released";
@@ -52,7 +52,7 @@ struct MyArrowArrayStream {
 		if (!stream->release) {
 			return "stream was released";
 		}
-		assert(stream->private_data);
+		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		return my_stream->last_error.c_str();
 	}
@@ -101,7 +101,6 @@ TEST_CASE("Test Arrow API round trip", "[arrow]") {
 	    "'1969-01-01'::date, TIME '13:07:16'::time c_time, timestamp '1992-01-01 12:00:00' c_timestamp "
 	    "from (select case when range % 2 == 0 then range else null end as c from range(-10, 10)) sq");
 	// big result set
-	test_arrow_round_trip(
-	    "select i from range(0, 2000) sq(i)");
+	test_arrow_round_trip("select i from range(0, 2000) sq(i)");
 }
 // TODO interval decimal

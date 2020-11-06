@@ -52,21 +52,22 @@ ColumnDefinition Transformer::TransformColumnDefinition(PGColumnDef *cdef) {
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTableInfo>();
 
 	if (stmt->inhRelations) {
 		throw NotImplementedException("inherited relations not implemented");
 	}
-	assert(stmt->relation);
+	D_ASSERT(stmt->relation);
 
 	info->schema = INVALID_SCHEMA;
 	if (stmt->relation->schemaname) {
 		info->schema = stmt->relation->schemaname;
 	}
 	info->table = stmt->relation->relname;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict =
+	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = stmt->relation->relpersistence == PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
 
 	if (info->temporary && stmt->oncommit != PGOnCommitAction::PG_ONCOMMIT_PRESERVE_ROWS &&

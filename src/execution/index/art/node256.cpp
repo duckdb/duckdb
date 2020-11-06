@@ -47,7 +47,7 @@ idx_t Node256::GetNextPos(idx_t pos) {
 }
 
 unique_ptr<Node> *Node256::GetChild(idx_t pos) {
-	assert(child[pos]);
+	D_ASSERT(child[pos]);
 	return &child[pos];
 }
 

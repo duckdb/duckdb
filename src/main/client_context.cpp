@@ -53,7 +53,7 @@ void ClientContext::Cleanup() {
 			transaction.Rollback();
 		}
 	}
-	assert(prepared_statements);
+	D_ASSERT(prepared_statements);
 	db.transaction_manager->AddCatalogSet(*this, move(prepared_statements));
 	// invalidate any prepared statements
 	for (auto &statement : prepared_statement_objects) {
@@ -165,7 +165,7 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	profiler.StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
-	assert(planner.plan);
+	D_ASSERT(planner.plan);
 	profiler.EndPhase();
 
 	auto plan = move(planner.plan);
@@ -180,7 +180,7 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 		profiler.StartPhase("optimizer");
 		Optimizer optimizer(planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
-		assert(plan);
+		D_ASSERT(plan);
 		profiler.EndPhase();
 	}
 
@@ -214,7 +214,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	executor.Initialize(move(statement.plan));
 
 	auto types = executor.GetTypes();
-	assert(types == statement.types);
+	D_ASSERT(types == statement.types);
 
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
@@ -388,7 +388,7 @@ unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_
 	}
 	if (!result->success) {
 		// initial failures should always be reported as MaterializedResult
-		assert(result->type != QueryResultType::STREAM_RESULT);
+		D_ASSERT(result->type != QueryResultType::STREAM_RESULT);
 		// query failed: abort now
 		FinalizeQuery(false);
 		return result;
@@ -499,7 +499,7 @@ void ClientContext::Invalidate() {
 }
 
 string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
-	assert(statement->type == StatementType::SELECT_STATEMENT);
+	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// aggressive query verification
 
 	// the purpose of this function is to test correctness of otherwise hard to test features:
@@ -520,26 +520,26 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	BufferedDeserializer source(serializer);
 	auto deserialized_stmt = SelectStatement::Deserialize(source);
 	// all the statements should be equal
-	assert(copied_stmt->Equals(statement.get()));
-	assert(deserialized_stmt->Equals(statement.get()));
-	assert(copied_stmt->Equals(deserialized_stmt.get()));
+	D_ASSERT(copied_stmt->Equals(statement.get()));
+	D_ASSERT(deserialized_stmt->Equals(statement.get()));
+	D_ASSERT(copied_stmt->Equals(deserialized_stmt.get()));
 
 	// now perform checking on the expressions
 #ifdef DEBUG
 	auto &orig_expr_list = select_stmt->node->GetSelectList();
 	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
 	auto &cp_expr_list = copied_stmt->node->GetSelectList();
-	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
+	D_ASSERT(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (idx_t i = 0; i < orig_expr_list.size(); i++) {
 		// run the ToString, to verify that it doesn't crash
 		orig_expr_list[i]->ToString();
 		// check that the expressions are equivalent
-		assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
-		assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
-		assert(de_expr_list[i]->Equals(cp_expr_list[i].get()));
+		D_ASSERT(orig_expr_list[i]->Equals(de_expr_list[i].get()));
+		D_ASSERT(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
+		D_ASSERT(de_expr_list[i]->Equals(cp_expr_list[i].get()));
 		// check that the hashes are equivalent too
-		assert(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
-		assert(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
+		D_ASSERT(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
+		D_ASSERT(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
 	}
 	// now perform additional checking within the expressions
 	for (idx_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
@@ -548,7 +548,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 			auto hash2 = orig_expr_list[inner_idx]->Hash();
 			if (hash != hash2) {
 				// if the hashes are not equivalent, the expressions should not be equivalent
-				assert(!orig_expr_list[outer_idx]->Equals(orig_expr_list[inner_idx].get()));
+				D_ASSERT(!orig_expr_list[outer_idx]->Equals(orig_expr_list[inner_idx].get()));
 			}
 		}
 	}
@@ -727,7 +727,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 		// bind the expressions
 		Binder binder(*this);
 		auto result = relation.Bind(binder);
-		assert(result.names.size() == result.types.size());
+		D_ASSERT(result.names.size() == result.types.size());
 		for (idx_t i = 0; i < result.names.size(); i++) {
 			result_columns.push_back(ColumnDefinition(result.names[i], result.types[i]));
 		}

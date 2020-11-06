@@ -38,8 +38,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	}
 
 	for (auto &expr : expressions) {
-		assert(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
-		assert(expr->IsAggregate());
+		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
+		D_ASSERT(expr->IsAggregate());
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		bindings.push_back(&aggr);
 
@@ -171,7 +171,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 
 	group_chunk.Verify();
 	payload_chunk.Verify();
-	assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
+	D_ASSERT(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
 	// if we have non-combinable aggregates (e.g. string_agg) or any distinct aggregates we cannot keep parallel hash
 	// tables
@@ -183,13 +183,13 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client), group_types,
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64));
 		}
-		assert(gstate.finalized_hts.size() == 1);
+		D_ASSERT(gstate.finalized_hts.size() == 1);
 		gstate.lossy_total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_chunk);
 		return;
 	}
 
-	assert(all_combinable);
-	assert(!any_distinct);
+	D_ASSERT(all_combinable);
+	D_ASSERT(!any_distinct);
 
 	if (group_chunk.size() > 0) {
 		llstate.is_empty = false;
@@ -232,7 +232,7 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	// in parallel
 
 	if (ForceSingleHT(state)) {
-		assert(gstate.finalized_hts.size() <= 1);
+		D_ASSERT(gstate.finalized_hts.size() <= 1);
 		return;
 	}
 
@@ -246,8 +246,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 	}
 
 	lock_guard<mutex> glock(gstate.lock);
-	assert(all_combinable);
-	assert(!any_distinct);
+	D_ASSERT(all_combinable);
+	D_ASSERT(!any_distinct);
 
 	if (!llstate.is_empty) {
 		gstate.is_empty = false;
@@ -268,7 +268,7 @@ public:
 	    : parent(parent_), state(state_), radix(radix_) {
 	}
 	static void FinalizeHT(HashAggregateGlobalState &gstate, idx_t radix) {
-		assert(gstate.finalized_hts[radix]);
+		D_ASSERT(gstate.finalized_hts[radix]);
 		for (auto &pht : gstate.intermediate_hts) {
 			for (auto &ht : pht->GetPartition(radix)) {
 				gstate.finalized_hts[radix]->Combine(*ht);
@@ -311,7 +311,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 	// special case if we have non-combinable aggregates
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
 	if (ForceSingleHT(gstate)) {
-		assert(gstate.finalized_hts.size() <= 1);
+		D_ASSERT(gstate.finalized_hts.size() <= 1);
 		return;
 	}
 
@@ -336,7 +336,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 		}
 		// schedule additional tasks to combine the partial HTs
 		if (!immediate) {
-			assert(pipeline);
+			D_ASSERT(pipeline);
 			pipeline->total_tasks += gstate.partition_info.n_partitions;
 		}
 		gstate.finalized_hts.resize(gstate.partition_info.n_partitions);
@@ -347,7 +347,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 			if (immediate) {
 				PhysicalHashAggregateFinalizeTask::FinalizeHT(gstate, r);
 			} else {
-				assert(pipeline);
+				D_ASSERT(pipeline);
 				auto new_task = make_unique<PhysicalHashAggregateFinalizeTask>(*pipeline, gstate, r);
 				TaskScheduler::GetScheduler(context).ScheduleTask(pipeline->token, move(new_task));
 			}
@@ -361,7 +361,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 		for (auto &pht : gstate.intermediate_hts) {
 			auto unpartitioned = pht->GetUnpartitioned();
 			for (auto &unpartitioned_ht : unpartitioned) {
-				assert(unpartitioned_ht);
+				D_ASSERT(unpartitioned_ht);
 				gstate.finalized_hts[0]->Combine(*unpartitioned_ht);
 				unpartitioned_ht.reset();
 			}
@@ -381,11 +381,11 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (gstate.is_empty && is_implicit_aggr) {
-		assert(chunk.column_count() == aggregates.size());
+		D_ASSERT(chunk.column_count() == aggregates.size());
 		// for each column in the aggregates, set to initial state
 		chunk.SetCardinality(1);
 		for (idx_t i = 0; i < chunk.column_count(); i++) {
-			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			D_ASSERT(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(aggr_state.get());
@@ -428,7 +428,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 			chunk.data[chunk_index++].Reference(state.scan_chunk.data[col_idx]);
 		}
 	} else {
-		assert(aggregates.size() == chunk.column_count());
+		D_ASSERT(aggregates.size() == chunk.column_count());
 	}
 
 	for (idx_t col_idx = 0; col_idx < aggregates.size(); col_idx++) {

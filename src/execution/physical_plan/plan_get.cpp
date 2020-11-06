@@ -10,7 +10,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
-	assert(op.children.empty());
+	D_ASSERT(op.children.empty());
 
 	// create the table filter map
 	unordered_map<idx_t, vector<TableFilter>> table_filter_umap;

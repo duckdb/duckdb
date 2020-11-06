@@ -42,7 +42,7 @@ idx_t Node48::GetNextPos(idx_t pos) {
 }
 
 unique_ptr<Node> *Node48::GetChild(idx_t pos) {
-	assert(childIndex[pos] != Node::EMPTY_MARKER);
+	D_ASSERT(childIndex[pos] != Node::EMPTY_MARKER);
 	return &child[childIndex[pos]];
 }
 

@@ -14,11 +14,11 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
                                                        JoinType join_type)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type) {
 	// for now we only support one condition!
-	assert(conditions.size() == 1);
+	D_ASSERT(conditions.size() == 1);
 	for (auto &cond : conditions) {
 		// COMPARE NOT EQUAL not supported with merge join
-		assert(cond.comparison != ExpressionType::COMPARE_NOTEQUAL);
-		assert(cond.left->return_type == cond.right->return_type);
+		D_ASSERT(cond.comparison != ExpressionType::COMPARE_NOTEQUAL);
+		D_ASSERT(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);
 	}
 	children.push_back(move(left));
@@ -104,7 +104,7 @@ void PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, ClientContext &con
 		gstate.right_orders.resize(gstate.right_conditions.chunks.size());
 		for (idx_t i = 0; i < gstate.right_conditions.chunks.size(); i++) {
 			auto &chunk_to_order = *gstate.right_conditions.chunks[i];
-			assert(chunk_to_order.column_count() == 1);
+			D_ASSERT(chunk_to_order.column_count() == 1);
 			for (idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
 				OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), gstate.right_orders[i]);
 				if (gstate.right_orders[i].count < chunk_to_order.size()) {
@@ -339,7 +339,7 @@ static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, co
 			result.set_index(high--, idx);
 		}
 	}
-	assert(low == high);
+	D_ASSERT(low == high);
 	result.set_index(low, pivot_idx);
 	return low;
 }

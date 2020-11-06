@@ -6,12 +6,12 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
-	assert(op.children.size() == 1);
+	D_ASSERT(op.children.size() == 1);
 
 	auto plan = CreatePlan(*op.children[0]);
 #ifdef DEBUG
 	for (auto &expr : op.expressions) {
-		assert(expr->IsWindow());
+		D_ASSERT(expr->IsWindow());
 	}
 #endif
 

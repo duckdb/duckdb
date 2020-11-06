@@ -33,11 +33,11 @@ static void strreverse_unicode(const char *input, idx_t n, char *output) {
 
 static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
-		auto input_data = input.GetData();
+		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 
 		auto target = StringVector::EmptyString(result, input_length);
-		auto target_data = target.GetData();
+		auto target_data = target.GetDataWriteable();
 		if (!strreverse_ascii(input_data, input_length, target_data)) {
 			strreverse_unicode(input_data, input_length, target_data);
 		}

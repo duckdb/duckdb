@@ -9,9 +9,8 @@ using namespace std;
 
 namespace duckdb {
 
-template<int FACTOR>
-static void epoch_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	assert(input.column_count() == 1);
+template <int FACTOR> static void epoch_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.column_count() == 1);
 
 	string output_buffer;
 	UnaryExecutor::Execute<int64_t, timestamp_t, true>(input.data[0], result, input.size(), [&](int64_t input) {

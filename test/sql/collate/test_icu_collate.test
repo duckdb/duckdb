@@ -74,3 +74,6 @@ SELECT * FROM strings ORDER BY s COLLATE ja.NOCASE
 賃借人側連絡先 (Lessee side contact)
 賃貸人側連絡先 (Lessor side contact)
 
+# test icu_sort_key function
+statement ok
+select icu_sort_key('Ş', 'ro');

@@ -38,8 +38,8 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 }
 
 void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression *expr) {
-	assert(window_spec);
-	assert(expr);
+	D_ASSERT(window_spec);
+	D_ASSERT(expr);
 
 	// next: partitioning/ordering expressions
 	TransformExpressionList(window_spec->partitionClause, expr->partitions);
@@ -63,9 +63,11 @@ void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression 
 		expr->start = WindowBoundary::EXPR_PRECEDING;
 	} else if (window_spec->frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) {
 		expr->start = WindowBoundary::EXPR_FOLLOWING;
-	} else if ((window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) && (window_spec->frameOptions & FRAMEOPTION_RANGE)) {
+	} else if ((window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
+	           (window_spec->frameOptions & FRAMEOPTION_RANGE)) {
 		expr->start = WindowBoundary::CURRENT_ROW_RANGE;
-	} else if ((window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) && (window_spec->frameOptions & FRAMEOPTION_ROWS)) {
+	} else if ((window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
+	           (window_spec->frameOptions & FRAMEOPTION_ROWS)) {
 		expr->start = WindowBoundary::CURRENT_ROW_ROWS;
 	}
 
@@ -77,13 +79,15 @@ void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression 
 		expr->end = WindowBoundary::EXPR_PRECEDING;
 	} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_FOLLOWING) {
 		expr->end = WindowBoundary::EXPR_FOLLOWING;
-	} else if ((window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) && (window_spec->frameOptions & FRAMEOPTION_RANGE)) {
+	} else if ((window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) &&
+	           (window_spec->frameOptions & FRAMEOPTION_RANGE)) {
 		expr->end = WindowBoundary::CURRENT_ROW_RANGE;
-	} else if ((window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) && (window_spec->frameOptions & FRAMEOPTION_ROWS)) {
+	} else if ((window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) &&
+	           (window_spec->frameOptions & FRAMEOPTION_ROWS)) {
 		expr->end = WindowBoundary::CURRENT_ROW_ROWS;
 	}
 
-	assert(expr->start != WindowBoundary::INVALID && expr->end != WindowBoundary::INVALID);
+	D_ASSERT(expr->start != WindowBoundary::INVALID && expr->end != WindowBoundary::INVALID);
 	if (((expr->start == WindowBoundary::EXPR_PRECEDING || expr->start == WindowBoundary::EXPR_PRECEDING) &&
 	     !expr->start_expr) ||
 	    ((expr->end == WindowBoundary::EXPR_PRECEDING || expr->end == WindowBoundary::EXPR_PRECEDING) &&
@@ -142,14 +146,14 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 					expr->children.push_back(move(function_list[0]));
 				}
 				if (function_list.size() > 1) {
-					assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
+					D_ASSERT(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
 					expr->offset_expr = move(function_list[1]);
 				}
 				if (function_list.size() > 2) {
-					assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
+					D_ASSERT(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
 					expr->default_expr = move(function_list[2]);
 				}
-				assert(function_list.size() <= 3);
+				D_ASSERT(function_list.size() <= 3);
 			}
 		}
 		auto window_spec = reinterpret_cast<PGWindowDef *>(root->over);
@@ -159,7 +163,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 				throw ParserException("window \"%s\" does not exist", window_spec->name);
 			}
 			window_spec = it->second;
-			assert(window_spec);
+			D_ASSERT(window_spec);
 		}
 		TransformWindowDef(window_spec, expr.get());
 

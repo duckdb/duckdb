@@ -141,6 +141,7 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		    make_unique_base<StandardEntry, MacroFunctionCatalogEntry>(catalog, this, (CreateMacroFunctionInfo *)info);
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+		D_ASSERT(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 		// create an aggregate function
 		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
 		                                                                          (CreateAggregateFunctionInfo *)info);

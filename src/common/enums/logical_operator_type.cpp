@@ -9,95 +9,95 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 string LogicalOperatorToString(LogicalOperatorType type) {
 	switch (type) {
-	case LogicalOperatorType::GET:
+	case LogicalOperatorType::LOGICAL_GET:
 		return "GET";
-	case LogicalOperatorType::CHUNK_GET:
+	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 		return "CHUNK_GET";
-	case LogicalOperatorType::DELIM_GET:
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
 		return "DELIM_GET";
-	case LogicalOperatorType::EMPTY_RESULT:
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 		return "EMPTY_RESULT";
-	case LogicalOperatorType::EXPRESSION_GET:
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		return "EXPRESSION_GET";
-	case LogicalOperatorType::ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		return "ANY_JOIN";
-	case LogicalOperatorType::COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		return "COMPARISON_JOIN";
-	case LogicalOperatorType::DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		return "DELIM_JOIN";
-	case LogicalOperatorType::PROJECTION:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
 		return "PROJECTION";
-	case LogicalOperatorType::FILTER:
+	case LogicalOperatorType::LOGICAL_FILTER:
 		return "FILTER";
-	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		return "AGGREGATE";
-	case LogicalOperatorType::WINDOW:
+	case LogicalOperatorType::LOGICAL_WINDOW:
 		return "WINDOW";
-	case LogicalOperatorType::UNNEST:
+	case LogicalOperatorType::LOGICAL_UNNEST:
 		return "UNNEST";
-	case LogicalOperatorType::LIMIT:
+	case LogicalOperatorType::LOGICAL_LIMIT:
 		return "LIMIT";
-	case LogicalOperatorType::ORDER_BY:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		return "ORDER_BY";
-	case LogicalOperatorType::TOP_N:
+	case LogicalOperatorType::LOGICAL_TOP_N:
 		return "TOP_N";
-	case LogicalOperatorType::COPY_TO_FILE:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return "COPY_TO_FILE";
-	case LogicalOperatorType::JOIN:
+	case LogicalOperatorType::LOGICAL_JOIN:
 		return "JOIN";
-	case LogicalOperatorType::CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
-	case LogicalOperatorType::UNION:
+	case LogicalOperatorType::LOGICAL_UNION:
 		return "UNION";
-	case LogicalOperatorType::EXCEPT:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
 		return "EXCEPT";
-	case LogicalOperatorType::INTERSECT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
 		return "INTERSECT";
-	case LogicalOperatorType::INSERT:
+	case LogicalOperatorType::LOGICAL_INSERT:
 		return "INSERT";
-	case LogicalOperatorType::DISTINCT:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
 		return "DISTINCT";
-	case LogicalOperatorType::DELETE:
+	case LogicalOperatorType::LOGICAL_DELETE:
 		return "DELETE";
-	case LogicalOperatorType::UPDATE:
+	case LogicalOperatorType::LOGICAL_UPDATE:
 		return "UPDATE";
-	case LogicalOperatorType::PREPARE:
+	case LogicalOperatorType::LOGICAL_PREPARE:
 		return "PREPARE";
-	case LogicalOperatorType::DUMMY_SCAN:
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		return "DUMMY_SCAN";
-	case LogicalOperatorType::CREATE_INDEX:
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
 		return "CREATE_INDEX";
-	case LogicalOperatorType::CREATE_TABLE:
+	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return "CREATE_TABLE";
-	case LogicalOperatorType::CREATE_FUNCTION:
+	case LogicalOperatorType::LOGICAL_CREATE_FUNCTION:
 		return "CREATE_FUNCTION";
-	case LogicalOperatorType::EXPLAIN:
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return "EXPLAIN";
-	case LogicalOperatorType::EXECUTE:
+	case LogicalOperatorType::LOGICAL_EXECUTE:
 		return "EXECUTE";
-	case LogicalOperatorType::VACUUM:
+	case LogicalOperatorType::LOGICAL_VACUUM:
 		return "VACUUM";
-	case LogicalOperatorType::RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return "REC_CTE";
-	case LogicalOperatorType::CTE_REF:
+	case LogicalOperatorType::LOGICAL_CTE_REF:
 		return "CTE_SCAN";
-	case LogicalOperatorType::INVALID:
+	case LogicalOperatorType::LOGICAL_INVALID:
 		return "INVALID";
-	case LogicalOperatorType::ALTER:
+	case LogicalOperatorType::LOGICAL_ALTER:
 		return "ALTER";
-	case LogicalOperatorType::CREATE_SEQUENCE:
+	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
 		return "CREATE_SEQUENCE";
-	case LogicalOperatorType::CREATE_VIEW:
+	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 		return "CREATE_VIEW";
-	case LogicalOperatorType::CREATE_SCHEMA:
+	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
-	case LogicalOperatorType::DROP:
+	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
-	case LogicalOperatorType::PRAGMA:
+	case LogicalOperatorType::LOGICAL_PRAGMA:
 		return "PRAGMA";
-	case LogicalOperatorType::TRANSACTION:
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		return "TRANSACTION";
-	case LogicalOperatorType::EXPORT:
+	case LogicalOperatorType::LOGICAL_EXPORT:
 		return "EXPORT";
 	}
 	return "UNDEFINED";

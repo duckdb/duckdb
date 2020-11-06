@@ -109,7 +109,7 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema);
 	serializer.WriteList(children);
 	serializer.WriteList(partitions);
-	assert(orders.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(orders.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)orders.size());
 	for (auto &order : orders) {
 		order.Serialize(serializer);
@@ -144,4 +144,4 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	return move(expr);
 }
 
-}
+} // namespace duckdb

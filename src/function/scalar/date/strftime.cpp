@@ -147,7 +147,7 @@ idx_t StrfTimeFormat::GetLength(date_t date, time_t time) {
 
 char *StrfTimeFormat::WriteString(char *target, string_t &str) {
 	idx_t size = str.GetSize();
-	memcpy(target, str.GetData(), str.GetSize());
+	memcpy(target, str.GetDataUnsafe(), size);
 	return target + size;
 }
 
@@ -184,7 +184,7 @@ char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
 
 // write a value in the range of 0..999999 padded to 6 digits
 char *StrfTimeFormat::WritePadded(char *target, int32_t value, int32_t padding) {
-	assert(padding % 2 == 0);
+	D_ASSERT(padding % 2 == 0);
 	for (int i = 0; i < padding / 2; i++) {
 		int decimals = value % 100;
 		WritePadded2(target + padding - 2 * (i + 1), decimals);
@@ -520,7 +520,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 					// parse the subformat in a separate format specifier
 					StrfTimeFormat locale_format;
 					string error = StrTimeFormat::ParseFormatSpecifier(subformat, locale_format);
-					assert(error.empty());
+					D_ASSERT(error.empty());
 					// add the previous literal to the first literal of the subformat
 					locale_format.literals[0] = move(current_literal) + locale_format.literals[0];
 					// now push the subformat into the current format specifier
@@ -588,7 +588,7 @@ static void strftime_function_date(DataChunk &args, ExpressionState &state, Vect
 	UnaryExecutor::Execute<date_t, string_t, true>(args.data[0], result, args.size(), [&](date_t date) {
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);
-		info.format.FormatString(date, time, target.GetData());
+		info.format.FormatString(date, time, target.GetDataWriteable());
 		target.Finalize();
 		return target;
 	});
@@ -610,7 +610,7 @@ static void strftime_function_timestamp(DataChunk &args, ExpressionState &state,
 		Timestamp::Convert(timestamp, date, time);
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);
-		info.format.FormatString(date, time, target.GetData());
+		info.format.FormatString(date, time, target.GetDataWriteable());
 		target.Finalize();
 		return target;
 	});
@@ -679,7 +679,7 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
                                            idx_t collection_count) {
 	for (idx_t c = 0; c < collection_count; c++) {
 		auto &entry = collection[c];
-		auto entry_data = entry.GetData();
+		auto entry_data = entry.GetDataUnsafe();
 		auto entry_size = entry.GetSize();
 		// check if this entry matches
 		if (pos + entry_size > size) {
@@ -717,7 +717,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	result_data[5] = 0;
 	result_data[6] = 0;
 
-	auto data = str.GetData();
+	auto data = str.GetDataUnsafe();
 	idx_t size = str.GetSize();
 	// skip leading spaces
 	while (StringUtil::CharacterIsSpace(*data)) {
@@ -744,7 +744,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 			// numeric specifier: parse a number
 			uint64_t number = 0;
 			size_t start_pos = pos;
-			while (pos < size && std::isdigit(data[pos])) {
+			while (pos < size && StringUtil::CharacterIsDigit(data[pos])) {
 				if (number > 1000000ULL) {
 					// no number bigger than this is required anywhere
 					error_message = "Number is out of range of format specifier";
@@ -932,7 +932,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 		}
 	}
 	// skip trailing spaces
-	while (StringUtil::CharacterIsSpace(data[pos])) {
+	while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
 		pos++;
 	}
 	if (pos != size) {
@@ -997,9 +997,8 @@ date_t StrpTimeFormat::ParseDate(string_t input) {
 	ParseResult result;
 	if (!Parse(input, result)) {
 		throw InvalidInputException(
-		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetData(),
-		    format_specifier, FormatStrpTimeError(string(input.GetData(), input.GetSize()), result.error_position),
-		    result.error_message);
+		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetString(),
+		    format_specifier, FormatStrpTimeError(input.GetString(), result.error_position), result.error_message);
 	}
 	return Date::FromDate(result.data[0], result.data[1], result.data[2]);
 }
@@ -1008,9 +1007,8 @@ timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
 	ParseResult result;
 	if (!Parse(input, result)) {
 		throw InvalidInputException(
-		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetData(),
-		    format_specifier, FormatStrpTimeError(string(input.GetData(), input.GetSize()), result.error_position),
-		    result.error_message);
+		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetString(),
+		    format_specifier, FormatStrpTimeError(input.GetString(), result.error_position), result.error_message);
 	}
 	date_t date = Date::FromDate(result.data[0], result.data[1], result.data[2]);
 	dtime_t time = Time::FromTime(result.data[3], result.data[4], result.data[5], result.data[6]);

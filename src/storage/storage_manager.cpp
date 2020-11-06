@@ -132,7 +132,7 @@ void StorageManager::LoadDatabase() {
 			// replay the WAL
 			WriteAheadLog::Replay(database, wal_path);
 			if (database.config.checkpoint_only) {
-				assert(!read_only);
+				D_ASSERT(!read_only);
 				// checkpoint the database
 				checkpointer.CreateCheckpoint();
 				// remove the WAL

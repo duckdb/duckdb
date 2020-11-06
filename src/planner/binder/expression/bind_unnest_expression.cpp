@@ -28,7 +28,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 		return BindResult(binder.FormatError(function, "Unnest() can only be applied to lists"));
 	}
 	LogicalType return_type = LogicalType::ANY;
-	assert(child_type.child_types().size() <= 1);
+	D_ASSERT(child_type.child_types().size() <= 1);
 	if (child_type.child_types().size() == 1) {
 		return_type = child_type.child_types()[0].second;
 	}

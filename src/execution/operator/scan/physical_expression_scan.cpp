@@ -28,7 +28,7 @@ void PhysicalExpressionScan::GetChunkInternal(ExecutionContext &context, DataChu
 
 	if (state->expression_index == 0) {
 		// first run, fetch the chunk from the child
-		assert(children.size() == 1);
+		D_ASSERT(children.size() == 1);
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
 			return;

@@ -9,7 +9,7 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<PrepareStatement> Transformer::TransformPrepare(PGNode *node) {
 	auto stmt = reinterpret_cast<PGPrepareStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 
 	if (stmt->argtypes && stmt->argtypes->length > 0) {
 		throw NotImplementedException("Prepared statement argument types are not supported, use CAST");
@@ -25,7 +25,7 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(PGNode *node) {
 
 unique_ptr<ExecuteStatement> Transformer::TransformExecute(PGNode *node) {
 	auto stmt = reinterpret_cast<PGExecuteStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 
 	auto result = make_unique<ExecuteStatement>();
 	result->name = string(stmt->name);
@@ -41,7 +41,7 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(PGNode *node) {
 
 unique_ptr<DropStatement> Transformer::TransformDeallocate(PGNode *node) {
 	auto stmt = reinterpret_cast<PGDeallocateStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 
 	auto result = make_unique<DropStatement>();
 	result->info->type = CatalogType::PREPARED_STATEMENT;

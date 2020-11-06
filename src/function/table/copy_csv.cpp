@@ -17,8 +17,7 @@ void SubstringDetection(string &str_1, string &str_2, string name_str_1, string 
 		return;
 	}
 	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
-		throw BinderException(name_str_1 + " must not appear in the " + name_str_2 +
-		                      " specification and vice versa");
+		throw BinderException(name_str_1 + " must not appear in the " + name_str_2 + " specification and vice versa");
 	}
 }
 
@@ -474,7 +473,7 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 			// FIXME: we could gain some performance here by checking for certain types if they ever require quotes
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
-			WriteQuotedString(writer, csv_data, str_value.GetData(), str_value.GetSize(),
+			WriteQuotedString(writer, csv_data, str_value.GetDataUnsafe(), str_value.GetSize(),
 			                  csv_data.force_quote[col_idx]);
 		}
 		writer.WriteBufferData(csv_data.newline);

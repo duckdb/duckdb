@@ -18,7 +18,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	vector<idx_t> result_lengths(args.size(), 0);
 	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
-		assert(input.type.id() == LogicalTypeId::VARCHAR);
+		D_ASSERT(input.type.id() == LogicalTypeId::VARCHAR);
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(input)) {
 				// constant null, skip
@@ -68,10 +68,10 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 			}
 			// append the constant vector to each of the strings
 			auto input_data = ConstantVector::GetData<string_t>(input);
-			auto input_ptr = input_data->GetData();
+			auto input_ptr = input_data->GetDataUnsafe();
 			auto input_len = input_data->GetSize();
 			for (idx_t i = 0; i < args.size(); i++) {
-				memcpy(result_data[i].GetData() + result_lengths[i], input_ptr, input_len);
+				memcpy(result_data[i].GetDataWriteable() + result_lengths[i], input_ptr, input_len);
 				result_lengths[i] += input_len;
 			}
 		} else {
@@ -85,9 +85,9 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 				if ((*idata.nullmask)[idx]) {
 					continue;
 				}
-				auto input_ptr = input_data[idx].GetData();
+				auto input_ptr = input_data[idx].GetDataUnsafe();
 				auto input_len = input_data[idx].GetSize();
-				memcpy(result_data[i].GetData() + result_lengths[i], input_ptr, input_len);
+				memcpy(result_data[i].GetDataWriteable() + result_lengths[i], input_ptr, input_len);
 				result_lengths[i] += input_len;
 			}
 		}
@@ -100,14 +100,14 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 static void concat_operator(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t, true>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
-		    auto a_data = a.GetData();
-		    auto b_data = b.GetData();
+		    auto a_data = a.GetDataUnsafe();
+		    auto b_data = b.GetDataUnsafe();
 		    auto a_length = a.GetSize();
 		    auto b_length = b.GetSize();
 
 		    auto target_length = a_length + b_length;
 		    auto target = StringVector::EmptyString(result, target_length);
-		    auto target_data = target.GetData();
+		    auto target_data = target.GetDataWriteable();
 
 		    memcpy(target_data, a_data, a_length);
 		    memcpy(target_data + a_length, b_data, b_length);
@@ -169,13 +169,13 @@ static void templated_concat_ws(DataChunk &args, string_t *sep_data, const Selec
 			}
 			if (has_results[ridx]) {
 				auto sep_size = sep_data[sep_idx].GetSize();
-				auto sep_ptr = sep_data[sep_idx].GetData();
-				memcpy(result_data[ridx].GetData() + result_lengths[ridx], sep_ptr, sep_size);
+				auto sep_ptr = sep_data[sep_idx].GetDataUnsafe();
+				memcpy(result_data[ridx].GetDataWriteable() + result_lengths[ridx], sep_ptr, sep_size);
 				result_lengths[ridx] += sep_size;
 			}
-			auto input_ptr = input_data[idx].GetData();
+			auto input_ptr = input_data[idx].GetDataUnsafe();
 			auto input_len = input_data[idx].GetSize();
-			memcpy(result_data[ridx].GetData() + result_lengths[ridx], input_ptr, input_len);
+			memcpy(result_data[ridx].GetDataWriteable() + result_lengths[ridx], input_ptr, input_len);
 			result_lengths[ridx] += input_len;
 			has_results[ridx] = true;
 		}

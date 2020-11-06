@@ -1343,6 +1343,7 @@ typedef struct PGJoinExpr {
 	PGNode *quals;       /* qualifiers on join, if any */
 	PGAlias *alias;      /* user-written alias clause, if any */
 	int rtindex;         /* RT index assigned for join, or 0 */
+	int location;          /* token location, or -1 if unknown */
 } PGJoinExpr;
 
 /*----------

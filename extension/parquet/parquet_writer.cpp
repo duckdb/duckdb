@@ -282,7 +282,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				for (idx_t r = 0; r < input.size(); r++) {
 					if (!nullmask[r]) {
 						temp_writer.Write<uint32_t>(ptr[r].GetSize());
-						temp_writer.WriteData((const_data_ptr_t)ptr[r].GetData(), ptr[r].GetSize());
+						temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
 					}
 				}
 				break;

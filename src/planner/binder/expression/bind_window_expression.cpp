@@ -26,12 +26,12 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, Logic
 		return LogicalType::BIGINT;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
-		assert(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
+		D_ASSERT(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	case ExpressionType::WINDOW_LEAD:
 	default:
-		assert(window_type == ExpressionType::WINDOW_LAG || window_type == ExpressionType::WINDOW_LEAD);
-		assert(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
+		D_ASSERT(window_type == ExpressionType::WINDOW_LAG || window_type == ExpressionType::WINDOW_LEAD);
+		D_ASSERT(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	}
 }
@@ -40,8 +40,8 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 	if (!expr) {
 		return nullptr;
 	}
-	assert(expr.get());
-	assert(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(expr.get());
+	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	return move(((BoundExpression &)*expr).expr);
 }
 
@@ -78,8 +78,8 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> children;
 	for (auto &child : window.children) {
-		assert(child.get());
-		assert(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(child.get());
+		D_ASSERT(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound = (BoundExpression &)*child;
 		types.push_back(bound.expr->return_type);
 		children.push_back(move(bound.expr));

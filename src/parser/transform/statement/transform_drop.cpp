@@ -9,7 +9,7 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(PGNode *node) {
 	auto stmt = (PGDropStmt *)(node);
 	auto result = make_unique<DropStatement>();
 	auto &info = *result->info.get();
-	assert(stmt);
+	D_ASSERT(stmt);
 	if (stmt->objects->length != 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
@@ -35,7 +35,7 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(PGNode *node) {
 
 	switch (stmt->removeType) {
 	case PG_OBJECT_SCHEMA:
-		assert(stmt->objects && stmt->objects->length == 1);
+		D_ASSERT(stmt->objects && stmt->objects->length == 1);
 		info.name = ((PGValue *)stmt->objects->head->data.ptr_value)->val.str;
 		break;
 	default: {

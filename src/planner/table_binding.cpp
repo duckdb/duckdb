@@ -15,10 +15,10 @@ using namespace std;
 
 Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, idx_t index)
     : alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {
-	assert(types.size() == names.size());
+	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
-		assert(!name.empty());
+		D_ASSERT(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
@@ -46,16 +46,6 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		colref.alias = names[column_entry->second];
 	}
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
-}
-
-void Binding::GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) {
-	for (auto &column_name : names) {
-		assert(!column_name.empty());
-		if (context.BindingIsHidden(alias, column_name)) {
-			continue;
-		}
-		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
-	}
 }
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vector<string> names_, LogicalGet &get,

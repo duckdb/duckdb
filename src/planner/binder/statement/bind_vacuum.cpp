@@ -10,7 +10,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::VACUUM, move(stmt.info));
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_VACUUM, move(stmt.info));
 	return result;
 }
 

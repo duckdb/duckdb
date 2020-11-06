@@ -18,7 +18,7 @@ namespace duckdb {
 class LogicalPragma : public LogicalOperator {
 public:
 	LogicalPragma(PragmaFunction function_, PragmaInfo info_)
-	    : LogicalOperator(LogicalOperatorType::PRAGMA), function(move(function_)), info(move(info_)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_PRAGMA), function(move(function_)), info(move(info_)) {
 	}
 
 	//! The pragma function to call

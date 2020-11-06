@@ -79,7 +79,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				vector<unique_ptr<Expression>> bound_expressions;
 				idx_t key_nr = 0;
 				for (auto &key : unique.keys) {
-					assert(key < columns.size());
+					D_ASSERT(key < columns.size());
 
 					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
 					    columns[key].name, columns[key].type, ColumnBinding(0, column_ids.size())));
@@ -100,7 +100,7 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
-	assert(!internal);
+	D_ASSERT(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
@@ -157,7 +157,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 
 		create_info->columns.push_back(move(copy));
 		if (info.name == columns[i].name) {
-			assert(!found);
+			D_ASSERT(!found);
 			create_info->columns[i].name = info.new_name;
 			found = true;
 		}
@@ -220,7 +220,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	create_info->temporary = temporary;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (columns[i].name == info.removed_column) {
-			assert(removed_index == INVALID_INDEX);
+			D_ASSERT(removed_index == INVALID_INDEX);
 			removed_index = i;
 			continue;
 		}
@@ -236,7 +236,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
 	// handle constraints for the new table
-	assert(constraints.size() == bound_constraints.size());
+	D_ASSERT(constraints.size() == bound_constraints.size());
 	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
 		auto &constraint = constraints[constr_idx];
 		auto &bound_constraint = bound_constraints[constr_idx];
@@ -416,12 +416,12 @@ vector<LogicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_i
 void TableCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
-	assert(columns.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(columns.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)columns.size());
 	for (auto &column : columns) {
 		column.Serialize(serializer);
 	}
-	assert(constraints.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(constraints.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)constraints.size());
 	for (auto &constraint : constraints) {
 		constraint->Serialize(serializer);

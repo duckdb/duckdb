@@ -27,7 +27,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 			if (def_elem->defaction == PG_DEFELEM_UNSPEC && !val) { // e.g. NO MINVALUE
 				continue;
 			}
-			assert(val);
+			D_ASSERT(val);
 			int64_t opt_value;
 			if (val->type == T_PGInteger) {
 				opt_value = val->val.ival;
@@ -70,7 +70,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 		}
 	}
 	info->temporary = !stmt->sequence->relpersistence;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict =
+	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	if (info->max_value <= info->min_value) {
 		throw ParserException("MINVALUE (%lld) must be less than MAXVALUE (%lld)", info->min_value, info->max_value);
 	}

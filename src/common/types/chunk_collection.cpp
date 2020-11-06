@@ -46,7 +46,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		types = new_chunk.GetTypes();
 	} else {
 		// the types of the new chunk should match the types of the previous one
-		assert(types.size() == new_chunk.column_count());
+		D_ASSERT(types.size() == new_chunk.column_count());
 		auto new_types = new_chunk.GetTypes();
 		for (idx_t i = 0; i < types.size(); i++) {
 			if (new_types[i] != types[i]) {
@@ -60,8 +60,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
 						auto &chunk_types = ListVector::GetEntry(chunk_vec).types;
 						auto &new_types = ListVector::GetEntry(new_vec).types;
-						assert(new_types.size() <= 1);
-						assert(chunk_types.size() <= 1);
+						D_ASSERT(new_types.size() <= 1);
+						D_ASSERT(chunk_types.size() <= 1);
 						if (chunk_types.size() > 0 && new_types.size() > 0 && chunk_types != new_types) {
 							throw TypeMismatchException(chunk_types[0], new_types[0],
 							                            "Type mismatch when combining lists");
@@ -107,7 +107,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 
 template <class TYPE>
 static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, idx_t left_idx, idx_t right_idx) {
-	assert(left_vec.type == right_vec.type);
+	D_ASSERT(left_vec.type == right_vec.type);
 	auto left_val = FlatVector::GetData<TYPE>(left_vec)[left_idx];
 	auto right_val = FlatVector::GetData<TYPE>(right_vec)[right_idx];
 	if (Equals::Operation<TYPE>(left_val, right_val)) {
@@ -161,7 +161,7 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 
 static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
                          idx_t left, idx_t right) {
-	assert(sort_by);
+	D_ASSERT(sort_by);
 
 	idx_t chunk_idx_left = left / STANDARD_VECTOR_SIZE;
 	idx_t chunk_idx_right = right / STANDARD_VECTOR_SIZE;
@@ -177,9 +177,9 @@ static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, vect
 		Vector &left_vec = left_chunk->data[col_idx];
 		Vector &right_vec = right_chunk->data[col_idx];
 
-		assert(left_vec.vector_type == VectorType::FLAT_VECTOR);
-		assert(right_vec.vector_type == VectorType::FLAT_VECTOR);
-		assert(left_vec.type == right_vec.type);
+		D_ASSERT(left_vec.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(right_vec.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(left_vec.type == right_vec.type);
 
 		auto comp_res = compare_value(left_vec, right_vec, vector_idx_left, vector_idx_right, null_order[col_idx]);
 
@@ -205,7 +205,7 @@ static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &d
 			result[high--] = i;
 		}
 	}
-	assert(low == high);
+	D_ASSERT(low == high);
 	result[low] = pivot;
 	return low;
 }
@@ -244,7 +244,7 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc
 	auto left = info.left;
 	auto right = info.right;
 
-	assert(left < right);
+	D_ASSERT(left < right);
 
 	int64_t middle = left + (right - left) / 2;
 	int64_t pivot = result[middle];
@@ -287,7 +287,7 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc
 }
 
 void ChunkCollection::Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]) {
-	assert(result);
+	D_ASSERT(result);
 	if (count == 0) {
 		return;
 	}
@@ -342,7 +342,7 @@ void ChunkCollection::Reorder(idx_t order_org[]) {
 template <class TYPE>
 static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, idx_t order[], idx_t col_idx,
                                  idx_t start_offset, idx_t remaining_data) {
-	assert(src_coll);
+	D_ASSERT(src_coll);
 
 	for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
 		idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
@@ -364,7 +364,7 @@ static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, idx
 // TODO: reorder functionality is similar, perhaps merge
 void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset) {
 	idx_t remaining_data = min((idx_t)STANDARD_VECTOR_SIZE, count - start_offset);
-	assert(target.GetTypes() == types);
+	D_ASSERT(target.GetTypes() == types);
 
 	target.SetCardinality(remaining_data);
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
@@ -514,7 +514,7 @@ static void _heap_create(ChunkCollection *input, vector<OrderType> &desc, vector
 
 void ChunkCollection::Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[],
                            idx_t heap_size) {
-	assert(heap);
+	D_ASSERT(heap);
 	if (count == 0)
 		return;
 
@@ -529,7 +529,7 @@ void ChunkCollection::Heap(vector<OrderType> &desc, vector<OrderByNullType> &nul
 
 idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size) {
 	idx_t remaining_data = min((idx_t)STANDARD_VECTOR_SIZE, heap_size - start_offset);
-	assert(target.GetTypes() == types);
+	D_ASSERT(target.GetTypes() == types);
 
 	target.SetCardinality(remaining_data);
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {

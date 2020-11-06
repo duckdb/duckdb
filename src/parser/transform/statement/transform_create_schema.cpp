@@ -8,13 +8,14 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateSchema(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateSchemaStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateSchemaInfo>();
 
-	assert(stmt->schemaname);
+	D_ASSERT(stmt->schemaname);
 	info->schema = stmt->schemaname;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict =
+	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
 	if (stmt->schemaElts) {
 		// schema elements
