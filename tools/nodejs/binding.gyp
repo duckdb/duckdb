@@ -3,7 +3,12 @@
         {
             "target_name": "<(module_name)",
             "sources": [
-            "src/duckdb_node.cpp"
+            "src/duckdb_node.cpp",
+            "src/database.cpp",
+            "src/connection.cpp",
+            "src/statement.cpp",
+            "src/result.cpp"
+
 #                  "src/node_duckdb.cc",
 #                 "src/database.cc",
 #                 "src/statement.cc",
@@ -13,7 +18,7 @@
                 "<!@(node -p \"require('node-addon-api').include\")"
             ],
             'defines': [
-            'NAPI_CPP_EXCEPTIONS=1',
+           # 'NAPI_CPP_EXCEPTIONS=1',
             "NAPI_VERSION=4"],
             "cflags_cc": [
                 "-frtti",
