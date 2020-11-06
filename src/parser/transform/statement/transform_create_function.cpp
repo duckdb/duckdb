@@ -8,11 +8,11 @@ using namespace std;
 using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
-	assert(node);
-	assert(node->type == T_PGCreateFunctionStmt);
+	D_ASSERT(node);
+    D_ASSERT(node->type == T_PGCreateFunctionStmt);
 
 	auto stmt = reinterpret_cast<PGCreateFunctionStmt *>(node);
-	assert(stmt);
+    D_ASSERT(stmt);
 
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateMacroFunctionInfo>();
@@ -22,7 +22,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
 	info->name = qname.name;
 
 	auto function = TransformExpression(stmt->function);
-	assert(function);
+    D_ASSERT(function);
 	auto macro_func = make_unique<MacroFunction>(move(function));
 
 	if (stmt->args) {
