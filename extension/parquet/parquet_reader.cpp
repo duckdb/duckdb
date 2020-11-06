@@ -281,14 +281,18 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 			type = LogicalType::INTEGER;
 			break;
 		case Type::INT64:
-			switch(s_ele.converted_type) {
-			case ConvertedType::TIMESTAMP_MICROS:
-			case ConvertedType::TIMESTAMP_MILLIS:
-				type = LogicalType::TIMESTAMP;
-				break;
-			default:
+			if (s_ele.__isset.converted_type) {
+				switch(s_ele.converted_type) {
+				case ConvertedType::TIMESTAMP_MICROS:
+				case ConvertedType::TIMESTAMP_MILLIS:
+					type = LogicalType::TIMESTAMP;
+					break;
+				default:
+					type = LogicalType::BIGINT;
+					break;
+				}
+			} else {
 				type = LogicalType::BIGINT;
-				break;
 			}
 			break;
 		case Type::INT96: // always a timestamp?
@@ -303,7 +307,18 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 			//			case parquet::format::Type::FIXED_LEN_BYTE_ARRAY: {
 			// TODO some decimals yuck
 		case Type::BYTE_ARRAY:
-			type = LogicalType::VARCHAR;
+			if (s_ele.__isset.converted_type) {
+				switch(s_ele.converted_type) {
+				case ConvertedType::UTF8:
+					type = LogicalType::VARCHAR;
+					break;
+				default:
+					type = LogicalType::BLOB;
+					break;
+				}
+			} else {
+				type = LogicalType::BLOB;
+			}
 			break;
 		default:
 			throw FormatException("Unsupported type");
@@ -414,6 +429,23 @@ static void fill_timestamp_dict(ParquetReaderColumnData &col_data) {
 	for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
 		auto impala_ts = Load<T>((data_ptr_t)(col_data.payload.ptr + dict_index * sizeof(T)));
 		((timestamp_t *)col_data.dict.ptr)[dict_index] = FUNC(impala_ts);
+	}
+}
+
+void ParquetReader::VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len) {
+	if (id != LogicalTypeId::VARCHAR) {
+		return;
+	}
+	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
+	// technically Parquet should guarantee this, but reality is often disappointing
+	auto utf_type = Utf8Proc::Analyze(str_data, str_len);
+	if (utf_type == UnicodeType::INVALID) {
+		throw FormatException("Invalid string encoding found in Parquet file: value is not valid UTF8!");
+	}
+	for(idx_t i = 0; i < str_len; i++) {
+		if (str_data[i] == '\0') {
+			throw FormatException("Invalid string encoding found in Parquet file: string contains null bytes!");
+		}
 	}
 }
 
@@ -575,13 +607,14 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 				throw InternalException("Unsupported type for timestamp");
 			}
 			break;
+		case LogicalTypeId::BLOB:
 		case LogicalTypeId::VARCHAR: {
 			// strings we directly fill a string heap that we can use for the vectors later
 			col_data.string_collection = make_unique<ChunkCollection>();
 
 			// we hand-roll a chunk collection to avoid copying strings
 			auto append_chunk = make_unique<DataChunk>();
-			vector<LogicalType> types = {LogicalType::VARCHAR};
+			vector<LogicalType> types = { return_types[col_idx] };
 			col_data.string_collection->types = types;
 			append_chunk->Initialize(types);
 
@@ -596,12 +629,9 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 					append_chunk->Initialize(types);
 				}
 
-				auto utf_type = Utf8Proc::Analyze(col_data.payload.ptr, str_len);
-				if (utf_type == UnicodeType::INVALID) {
-					throw FormatException("invalid string encoding");
-				}
+				VerifyString(return_types[col_idx].id(), col_data.payload.ptr, str_len);
 				FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-				    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
+				    StringVector::AddStringOrBlob(append_chunk->data[0], string_t(col_data.payload.ptr, str_len));
 
 				append_chunk->SetCardinality(append_chunk->size() + 1);
 				col_data.payload.inc(str_len);
@@ -818,6 +848,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 				case LogicalTypeId::TIMESTAMP:
 					fill_from_dict<timestamp_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
+				case LogicalTypeId::BLOB:
 				case LogicalTypeId::VARCHAR: {
 					if (!col_data.string_collection) {
 						throw FormatException("Did not see a dictionary for strings. Corrupt file?");
@@ -907,13 +938,15 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 						throw InternalException("Unsupported type for timestamp");
 					}
 					break;
+				case LogicalTypeId::BLOB:
 				case LogicalTypeId::VARCHAR: {
 					for (idx_t i = 0; i < current_batch_size; i++) {
 						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 							uint32_t str_len = col_data.payload.read<uint32_t>();
 							col_data.payload.available(str_len);
+							VerifyString(return_types[file_col_idx].id(), col_data.payload.ptr, str_len);
 							FlatVector::GetData<string_t>(output.data[out_col_idx])[i + output_offset] =
-							    StringVector::AddString(output.data[out_col_idx], col_data.payload.ptr, str_len);
+							    StringVector::AddStringOrBlob(output.data[out_col_idx], string_t(col_data.payload.ptr, str_len));
 							col_data.payload.inc(str_len);
 						} else {
 							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
