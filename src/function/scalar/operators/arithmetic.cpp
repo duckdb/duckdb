@@ -79,6 +79,22 @@ struct AddPropagateStatistics {
 	}
 };
 
+struct SubtractPropagateStatistics {
+	template<class T, class OP>
+	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min, Value &new_max) {
+		T min, max;
+		if (!OP::Operation(lstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>(), min)) {
+			return true;
+		}
+		if (!OP::Operation(lstats.max.GetValueUnsafe<T>(), rstats.min.GetValueUnsafe<T>(), max)) {
+			return true;
+		}
+		new_min = Value::Numeric(type, min);
+		new_max = Value::Numeric(type, max);
+		return false;
+	}
+};
+
 template<class OP, class PROPAGATE, class BASEOP>
 static unique_ptr<BaseStatistics> propagate_numeric_statistics(
 	ClientContext &context,
@@ -124,7 +140,7 @@ static unique_ptr<BaseStatistics> propagate_numeric_statistics(
 	return move(stats);
 }
 
-template <class OP, class OPOVERFLOWCHECK>
+template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT=false>
 unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	// get the max width and scale of the input arguments
@@ -171,7 +187,11 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	if (check_overflow) {
 		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType());
 		if (result_type.InternalType() != PhysicalType::INT128) {
-			bound_function.statistics = propagate_numeric_statistics<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
+			if (IS_SUBTRACT) {
+				bound_function.statistics = propagate_numeric_statistics<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>;
+			} else {
+				bound_function.statistics = propagate_numeric_statistics<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
+			}
 		}
 	} else {
 		bound_function.function = GetScalarBinaryFunction<OP>(result_type.InternalType());
@@ -244,22 +264,6 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
-struct SubtractPropagateStatistics {
-	template<class T, class OP>
-	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min, Value &new_max) {
-		T min, max;
-		if (!OP::Operation(lstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>(), min)) {
-			return true;
-		}
-		if (!OP::Operation(lstats.max.GetValueUnsafe<T>(), rstats.min.GetValueUnsafe<T>(), max)) {
-			return true;
-		}
-		new_min = Value::Numeric(type, min);
-		new_max = Value::Numeric(type, max);
-		return false;
-	}
-};
-
 unique_ptr<FunctionData> decimal_negate_bind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
@@ -329,7 +333,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<SubtractOperator, DecimalSubtractOperatorOverflowCheck>));
+			    ScalarFunction({type, type}, type, nullptr, false, bind_decimal_add_subtract<SubtractOperator, DecimalSubtractOverflowCheck, true>));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
 			functions.AddFunction(
 			    ScalarFunction({type, type}, type, GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(type.InternalType()),
@@ -461,7 +465,10 @@ unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFun
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
 	if (check_overflow) {
-		bound_function.function = GetScalarBinaryFunction<DecimalMultiplyOperatorOverflowCheck>(result_type.InternalType());
+		bound_function.function = GetScalarBinaryFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType());
+		if (result_type.InternalType() != PhysicalType::INT128) {
+			bound_function.statistics = propagate_numeric_statistics<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
+		}
 	} else {
 		bound_function.function = GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType());
 	}

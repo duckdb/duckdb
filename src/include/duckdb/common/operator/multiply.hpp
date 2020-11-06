@@ -45,13 +45,25 @@ struct MultiplyOperatorOverflowCheck {
 	}
 };
 
-struct DecimalMultiplyOperatorOverflowCheck {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		throw InternalException("Unimplemented type for DecimalMultiplyOperatorOverflowCheck");
+struct TryDecimalMultiply {
+	template <class TA, class TB, class TR> static inline bool Operation(TA left, TB right, TR &result) {
+		throw InternalException("Unimplemented type for TryDecimalMultiply");
 	}
 };
 
-template <> int64_t DecimalMultiplyOperatorOverflowCheck::Operation(int64_t left, int64_t right);
-template <> hugeint_t DecimalMultiplyOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right);
+template <> bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t &result);
+template <> bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+
+struct DecimalMultiplyOverflowCheck {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+		TR result;
+		if (!TryDecimalMultiply::Operation<TA, TB, TR>(left, right, result)) {
+			throw OutOfRangeException("Overflow in multiplication of DECIMAL(18) (%d * %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+		}
+		return result;
+	}
+};
+
+template <> hugeint_t DecimalMultiplyOverflowCheck::Operation(hugeint_t left, hugeint_t right);
 
 }

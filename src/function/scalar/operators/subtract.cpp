@@ -112,23 +112,32 @@ template <> bool TrySubtractOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // subtract decimal with overflow check
 //===--------------------------------------------------------------------===//
-template <> int64_t DecimalSubtractOperatorOverflowCheck::Operation(int64_t left, int64_t right) {
+template <> bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t& result) {
 	if (right < 0) {
 		if (999999999999999999 + right < left) {
-			throw OutOfRangeException("Overflow in subtraction of DECIMAL(18) (%d - %d).  You might want to add an explicit cast to a bigger decimal.", left, right);
+			return false;
 		}
 	} else {
 		if (-999999999999999999 + right > left) {
-			throw OutOfRangeException("Overflow in subtraction of DECIMAL(18) (%d - %d).  You might want to add an explicit cast to a bigger decimal.", left, right);
+			return false;
 		}
 	}
-	return left - right;
+	result = left - right;
+	return true;
 }
 
-template <> hugeint_t DecimalSubtractOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
-	hugeint_t result = left - right;
+template <> bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t& result) {
+	result = left - right;
 	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
-		throw OutOfRangeException("Overflow in subtraction of DECIMAL(38) (%s - %s).", left.ToString(), right.ToString());
+		return false;
+	}
+	return true;
+}
+
+template <> hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
+	hugeint_t result;
+	if (!TryDecimalSubtract::Operation(left, right, result)) {
+		throw OutOfRangeException("Overflow in subtract of DECIMAL(38) (%s - %s);", left.ToString(), right.ToString());
 	}
 	return result;
 }

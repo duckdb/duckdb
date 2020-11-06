@@ -11,6 +11,7 @@ CREATE TABLE decimals(d DECIMAL(18,1))
 statement ok
 INSERT INTO decimals VALUES (99000000000000000.0)
 
+# addition
 query I
 SELECT d+1 FROM decimals
 ----
@@ -18,3 +19,21 @@ SELECT d+1 FROM decimals
 
 statement error
 SELECT d+1000000000000000.0 FROM decimals
+
+# subtraction
+query I
+SELECT -1-d FROM decimals
+----
+-99000000000000001.0
+
+statement error
+SELECT -1000000000000000.0-d FROM decimals
+
+# multiplication
+query I
+SELECT 1*d FROM decimals
+----
+99000000000000000.0
+
+statement error
+SELECT 2*d FROM decimals

@@ -75,26 +75,36 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 	uint64_t left_non_negative = uint64_t(abs(left));
 	uint64_t right_non_negative = uint64_t(abs(right));
 	// split values into 2 32-bit parts
-	uint64_t top[2] = {left_non_negative >> 32, left_non_negative & 0xffffffff };
-	uint64_t bottom[2] = {right_non_negative >> 32, right_non_negative & 0xffffffff };
+	uint64_t left_high_bits = left_non_negative >> 32;
+	uint64_t left_low_bits = left_non_negative & 0xffffffff;
+	uint64_t right_high_bits = right_non_negative >> 32;
+	uint64_t right_low_bits = right_non_negative & 0xffffffff;
 
 	// check the high bits of both
 	// the high bits define the overflow
-	if (top[0] == 0) {
-		if (bottom[0] != 0) {
+	if (left_high_bits == 0) {
+		if (right_high_bits != 0) {
 			// only the right has high bits set
-			// multiply the high bits of right with the low bits of left and check if there is an overflow
-			auto low_high = top[1] * bottom[0];
-			if (low_high & 0xffffff80000000) {
+			// multiply the high bits of right with the low bits of left
+			// multiply the low bits, and carry any overflow to the high bits
+			// then check for any overflow
+			auto low_low = left_low_bits * right_low_bits;
+			auto low_high = left_low_bits * right_high_bits;
+			auto high_bits = low_high + (low_low >> 32);
+			if (high_bits & 0xffffff80000000) {
 				// there is! abort
 				return false;
 			}
 		}
-	} else if (bottom[0] == 0) {
+	} else if (right_high_bits == 0) {
 		// only the left has high bits set
-		// multiply the high bits of left with the low bits of right and check if there is an overflow
-		auto high_low = top[0] * bottom[1];
-		if (high_low & 0xffffff80000000) {
+		// multiply the high bits of left with the low bits of right
+		// multiply the low bits, and carry any overflow to the high bits
+		// then check for any overflow
+		auto low_low = left_low_bits * right_low_bits;
+		auto high_low = left_high_bits * right_low_bits;
+		auto high_bits = high_low + (low_low >> 32);
+		if (high_bits & 0xffffff80000000) {
 			// there is! abort
 			return false;
 		}
@@ -116,21 +126,27 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//
-template <> int64_t DecimalMultiplyOperatorOverflowCheck::Operation(int64_t left, int64_t right) {
-	int64_t result;
+template <> bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t& result) {
 	if (!TryMultiplyOperator::Operation(left, right, result) || result <= -1000000000000000000 || result >= 1000000000000000000) {
-		throw OutOfRangeException("Overflow in multiplication of DECIMAL(18) (%d * %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+		return false;
 	}
-	return result;
+	return true;
 }
 
-template <> hugeint_t DecimalMultiplyOperatorOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
-	hugeint_t result = left * right;
+template <> bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t& result) {
+	result = left * right;
 	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
-		throw OutOfRangeException("Overflow in subtraction of DECIMAL(38) (%s - %s).", left.ToString(), right.ToString());
+		return false;
+	}
+	return true;
+}
+
+template <> hugeint_t DecimalMultiplyOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
+	hugeint_t result;
+	if (!TryDecimalMultiply::Operation(left, right, result)) {
+		throw OutOfRangeException("Overflow in multiplication of DECIMAL(38) (%s * %s). You might want to add an explicit cast to a decimal with a smaller scale.", left.ToString(), right.ToString());
 	}
 	return result;
 }
-
 
 }
