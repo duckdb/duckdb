@@ -7,6 +7,7 @@ add_library_unity(duckdb_expression_executor
                   execute_conjunction.cpp
                   execute_constant.cpp
                   execute_function.cpp
+                  execute_macro.cpp
                   execute_operator.cpp
                   execute_parameter.cpp
                   execute_reference.cpp)
