@@ -33,6 +33,7 @@ class BoundConjunctionExpression;
 class BoundConstantExpression;
 class BoundDefaultExpression;
 class BoundFunctionExpression;
+class BoundMacroExpression;
 class BoundOperatorExpression;
 class BoundParameterExpression;
 class BoundReferenceExpression;

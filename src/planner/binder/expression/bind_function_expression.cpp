@@ -75,8 +75,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 		result = ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*func, move(children), error,
 		                                            function.is_operator);
 	} else {
-		result = MacroFunction::BindMacroFunction(context, (MacroFunctionCatalogEntry &)*func, move(children), error);
-		// TODO: the result may have CTE that need to be added to the bind_context
+		vector<unique_ptr<ParsedExpression>> parsed_children;
+        for (idx_t i = 0; i < function.children.size(); i++) {
+            auto &child = (BoundExpression &)*function.children[i];
+            parsed_children.push_back(move(child.parsed_expr));
+        }
+		result = MacroFunction::BindMacroFunction(*this, (MacroFunctionCatalogEntry &)*func, move(parsed_children), move(children), error);
+		// TODO: the result may have CTE that needs to be added to the bind_context
 	}
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));

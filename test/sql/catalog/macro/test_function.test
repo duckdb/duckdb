@@ -17,12 +17,12 @@ CREATE FUNCTION IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
 statement error
 CREATE FUNCTION IFELSE(a,b) AS a+b
 
-#query T
-#SELECT IFELSE(1,'true','false')
-#----
-#true
+query T
+SELECT IFELSE(1,'true','false')
+----
+true
 
 #query T
-#SELECT IFELSE(1,'true','false')
+#SELECT IFELSE(0,'true','false')
 #----
 #false

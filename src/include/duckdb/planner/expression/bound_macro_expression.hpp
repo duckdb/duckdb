@@ -9,12 +9,11 @@
 #pragma once
 
 #include "duckdb/function/macro_function.hpp"
-#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 class MacroFunctionCatalogEntry;
 
-//! Represents a function call that has been bound to a base function
+//! Represents a function call that has been bound to a macro function
 class BoundMacroExpression : public Expression {
 public:
 	BoundMacroExpression(LogicalType return_type, string name, unique_ptr<Expression> bound_expression,
