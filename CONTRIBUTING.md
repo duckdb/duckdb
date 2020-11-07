@@ -22,6 +22,11 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * When maintaining a branch, submit merge requests to the master frequently.
 * If you are working on a bigger issue try to split it up into several smaller issues.
 
+## Building
+* To build the project, run `make`.
+* To build optional components, use the flags defined in the Makefile, e.g. to build the JDBC driver, run `BUILD_JDBC=1 make`.
+* For parallel builds, you can use the [Ninja](https://ninja-build.org/) build system: `GEN=ninja make`.
+
 ## Testing
 * `make unit` runs the **fast** unit tests (~one minute), `make allunit` runs **all** unit tests (~one hour).
 * Make sure **all** unit tests pass before merging into the master branch.
