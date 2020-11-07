@@ -80,7 +80,7 @@ idx_t Blob::GetBlobSize(string_t str) {
 			}
 			str_len++;
 			i += 3;
-		} else if (data[i] >= 32 || data[i] <= 127) {
+		} else if (data[i] >= 32 && data[i] <= 127) {
 			str_len++;
 		} else {
 			throw ConversionException("Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
@@ -103,7 +103,7 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 			D_ASSERT(data[i + 1] == 'x');
 			output[blob_idx++] = (Blob::HEX_MAP[data[i + 2]] << 4) + Blob::HEX_MAP[data[i + 3]];
 			i += 3;
-		} else if (data[i] >= 32 || data[i] <= 127) {
+		} else if (data[i] >= 32 && data[i] <= 127) {
 			output[blob_idx++] = data_t(data[i]);
 		} else {
 			throw ConversionException("Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
