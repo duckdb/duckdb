@@ -1,0 +1,88 @@
+# name: benchmark/trainbenchmark/poslength.benchmark
+# description: The Train Benchmark's PosLength query
+# group: [trainbenchmark]
+
+load
+CREATE TABLE Route          (id int NOT NULL, active int, entry int, exit int, PRIMARY KEY (id));
+CREATE TABLE Region         (id int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE Segment        (id int NOT NULL, length int NOT NULL DEFAULT 1, PRIMARY KEY (id));
+CREATE TABLE Sensor         (id int NOT NULL, region int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE Semaphore      (id int NOT NULL, segment int NOT NULL, signal int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE Switch         (id int NOT NULL, currentPosition int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE SwitchPosition (id int NOT NULL, route int, target int, position int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE TrackElement   (id int NOT NULL, region int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE connectsTo     (TrackElement1_id int NOT NULL, TrackElement2_id int NOT NULL, PRIMARY KEY (TrackElement1_id, TrackElement2_id));
+CREATE TABLE monitoredBy    (TrackElement_id int NOT NULL, Sensor_id int NOT NULL, PRIMARY KEY (TrackElement_id, Sensor_id));
+CREATE TABLE requires       (Route_id int NOT NULL, Sensor_id int NOT NULL, PRIMARY KEY (Route_id, Sensor_id));
+COPY connectsTo     FROM 'benchmark/trainbenchmark/sf1/connectsTo.csv';
+COPY monitoredBy    FROM 'benchmark/trainbenchmark/sf1/monitoredBy.csv';
+COPY Region         FROM 'benchmark/trainbenchmark/sf1/Region.csv';
+COPY requires       FROM 'benchmark/trainbenchmark/sf1/requires.csv';
+COPY Route          FROM 'benchmark/trainbenchmark/sf1/Route.csv';
+COPY Segment        FROM 'benchmark/trainbenchmark/sf1/Segment.csv';
+COPY Semaphore      FROM 'benchmark/trainbenchmark/sf1/Semaphore.csv';
+COPY Sensor         FROM 'benchmark/trainbenchmark/sf1/Sensor.csv';
+COPY Switch         FROM 'benchmark/trainbenchmark/sf1/Switch.csv';
+COPY SwitchPosition FROM 'benchmark/trainbenchmark/sf1/SwitchPosition.csv';
+COPY TrackElement   FROM 'benchmark/trainbenchmark/sf1/TrackElement.csv';
+
+run
+SELECT
+	id AS segment,
+	length AS length
+FROM Segment
+WHERE length <= 0;
+
+result II
+9	-58
+14	-333
+16	-437
+59	-515
+65	-210
+79	-178
+85	-731
+86	-540
+102	-427
+118	-816
+131	-513
+138	-992
+140	-713
+186	-189
+200	-21
+224	-611
+230	-393
+237	-617
+239	-618
+248	-701
+274	-300
+288	-695
+293	-997
+294	-340
+318	-296
+343	-794
+362	-577
+369	-608
+394	-331
+398	-516
+418	-512
+419	-456
+423	-268
+426	-818
+439	-367
+454	-73
+462	-158
+473	-92
+483	-641
+549	-40
+586	-93
+605	-825
+607	-747
+612	-902
+639	-856
+651	-133
+657	-637
+678	-223
+686	-902
+707	-161
+726	-498
+729	-681
