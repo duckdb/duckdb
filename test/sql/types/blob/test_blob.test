@@ -61,6 +61,10 @@ INSERT INTO blobs VALUES('\xAA\xA')
 statement error
 INSERT INTO blobs VALUES('blablabla\x')
 
+# BLOB with “non-printable” octets
+statement error
+SELECT 'abc �'::BYTEA;
+
 # BLOB null and empty values
 query T
 SELECT ''::BLOB
