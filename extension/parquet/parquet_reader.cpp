@@ -204,7 +204,7 @@ template <class T> static void thrift_unpack(const uint8_t *buf, uint32_t *len, 
 	*len = *len - bytes_left;
 }
 
-ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types)
+ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types, string initial_filename)
     : file_name(move(file_name_)), context(context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 
@@ -325,8 +325,13 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		}
 		if (has_expected_types) {
 			if (return_types[col_idx - 1] != type) {
-				throw FormatException("PARQUET file contains type %s, could not auto cast to type %s", type.ToString(),
-				                      return_types[col_idx - 1].ToString());
+				if (initial_filename.empty()) {
+					throw FormatException("column \"%s\" in parquet file is of type %s, could not auto cast to expected type %s for this column",
+					s_ele.name, type.ToString(), return_types[col_idx - 1].ToString());
+				} else {
+					throw FormatException("schema mismatch in Parquet glob: column \"%s\" in parquet file is of type %s, but in the original file \"%s\" this column is of type \"%s\"",
+										s_ele.name, type.ToString(), initial_filename, return_types[col_idx - 1].ToString());
+				}
 			}
 		} else {
 			names.push_back(s_ele.name);

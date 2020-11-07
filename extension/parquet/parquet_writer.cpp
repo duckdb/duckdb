@@ -290,6 +290,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				}
 				break;
 			}
+			case LogicalTypeId::BLOB:
 			case LogicalTypeId::VARCHAR: {
 				auto *ptr = FlatVector::GetData<string_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
@@ -300,7 +301,6 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				}
 				break;
 			}
-				// TODO date blob etc.
 			default:
 				throw NotImplementedException((sql_types[i].ToString()));
 			}
