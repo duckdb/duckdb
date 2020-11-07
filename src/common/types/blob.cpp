@@ -18,7 +18,7 @@ const int Blob::HEX_MAP[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 idx_t Blob::GetStringSize(string_t blob) {
-	auto data = blob.GetDataUnsafe();
+	auto data = (const_data_ptr_t) blob.GetDataUnsafe();
 	auto len = blob.GetSize();
 	idx_t str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -34,7 +34,7 @@ idx_t Blob::GetStringSize(string_t blob) {
 }
 
 void Blob::ToString(string_t blob, char *output) {
-	auto data = (data_ptr_t)blob.GetDataUnsafe();
+	auto data = (const_data_ptr_t) blob.GetDataUnsafe();
 	auto len = blob.GetSize();
 	idx_t str_idx = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -64,7 +64,7 @@ string Blob::ToString(string_t blob) {
 }
 
 idx_t Blob::GetBlobSize(string_t str) {
-	auto data = str.GetDataUnsafe();
+	auto data = (const_data_ptr_t) str.GetDataUnsafe();
 	auto len = str.GetSize();
 	idx_t str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -73,10 +73,10 @@ idx_t Blob::GetBlobSize(string_t str) {
 				throw ConversionException("Invalid hex escape code encountered in string -> blob conversion: "
 				                          "unterminated escape code at end of blob");
 			}
-			if (data[i + 1] != 'x' || Blob::HEX_MAP[unsigned(data[i + 2])] < 0 ||
-			    Blob::HEX_MAP[unsigned(data[i + 3])] < 0) {
+			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 ||
+			    Blob::HEX_MAP[data[i + 3]] < 0) {
 				throw ConversionException("Invalid hex escape code encountered in string -> blob conversion: %s",
-				                          string(data + i, 4));
+				                          string((char*) data + i, 4));
 			}
 			str_len++;
 			i += 3;
@@ -91,17 +91,17 @@ idx_t Blob::GetBlobSize(string_t str) {
 }
 
 void Blob::ToBlob(string_t str, data_ptr_t output) {
-	auto data = str.GetDataUnsafe();
+	auto data = (const_data_ptr_t) str.GetDataUnsafe();
 	auto len = str.GetSize();
 	idx_t blob_idx = 0;
 	for (idx_t i = 0; i < len; i++) {
 		if (data[i] == '\\') {
-			int byte_a = Blob::HEX_MAP[unsigned(data[i + 2])];
-			int byte_b = Blob::HEX_MAP[unsigned(data[i + 3])];
+			int byte_a = Blob::HEX_MAP[data[i + 2]];
+			int byte_b = Blob::HEX_MAP[data[i + 3]];
 			D_ASSERT(i + 3 < len);
 			D_ASSERT(byte_a >= 0 && byte_b >= 0);
 			D_ASSERT(data[i + 1] == 'x');
-			output[blob_idx++] = (Blob::HEX_MAP[unsigned(data[i + 2])] << 4) + Blob::HEX_MAP[unsigned(data[i + 3])];
+			output[blob_idx++] = (Blob::HEX_MAP[data[i + 2]] << 4) + Blob::HEX_MAP[data[i + 3]];
 			i += 3;
 		} else if (data[i] >= 32 || data[i] <= 127) {
 			output[blob_idx++] = data_t(data[i]);
@@ -128,7 +128,7 @@ idx_t Blob::ToBase64Size(string_t blob) {
 }
 
 void Blob::ToBase64(string_t blob, char *output) {
-	auto input_data = (data_ptr_t)blob.GetDataUnsafe();
+	auto input_data = (const_data_ptr_t) blob.GetDataUnsafe();
 	auto input_size = blob.GetSize();
 	idx_t out_idx = 0;
 	idx_t i;
@@ -196,7 +196,7 @@ idx_t Blob::FromBase64Size(string_t str) {
 	return base_size;
 }
 
-template <bool ALLOW_PADDING> uint32_t DecodeBytes(const string_t &str, data_ptr_t input_data, idx_t base_idx) {
+template <bool ALLOW_PADDING> uint32_t DecodeBase64Bytes(const string_t &str, const_data_ptr_t input_data, idx_t base_idx) {
 	int decoded_bytes[4];
 	for (idx_t decode_idx = 0; decode_idx < 4; decode_idx++) {
 		if (ALLOW_PADDING && decode_idx >= 2 && input_data[base_idx + decode_idx] == Blob::BASE64_PADDING) {
@@ -217,7 +217,7 @@ template <bool ALLOW_PADDING> uint32_t DecodeBytes(const string_t &str, data_ptr
 
 void Blob::FromBase64(string_t str, data_ptr_t output, idx_t output_size) {
 	D_ASSERT(output_size == FromBase64Size(str));
-	auto input_data = (data_ptr_t)str.GetDataUnsafe();
+	auto input_data = (const_data_ptr_t) str.GetDataUnsafe();
 	auto input_size = str.GetSize();
 	if (input_size == 0) {
 		return;
@@ -225,13 +225,13 @@ void Blob::FromBase64(string_t str, data_ptr_t output, idx_t output_size) {
 	idx_t out_idx = 0;
 	idx_t i = 0;
 	for (i = 0; i + 4 < input_size; i += 4) {
-		auto combined = DecodeBytes<false>(str, input_data, i);
+		auto combined = DecodeBase64Bytes<false>(str, input_data, i);
 		output[out_idx++] = (combined >> 2 * 8) & 0xFF;
 		output[out_idx++] = (combined >> 1 * 8) & 0xFF;
 		output[out_idx++] = (combined >> 0 * 8) & 0xFF;
 	}
 	// decode the final four bytes: padding is allowed here
-	auto combined = DecodeBytes<true>(str, input_data, i);
+	auto combined = DecodeBase64Bytes<true>(str, input_data, i);
 	output[out_idx++] = (combined >> 2 * 8) & 0xFF;
 	if (out_idx < output_size) {
 		output[out_idx++] = (combined >> 1 * 8) & 0xFF;
