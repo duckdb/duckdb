@@ -61,4 +61,4 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 	return op;
 }
 
-}
+} // namespace duckdb

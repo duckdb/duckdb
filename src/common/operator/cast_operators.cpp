@@ -825,7 +825,7 @@ template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
 	idx_t result_size = Blob::GetBlobSize(input);
 
 	string_t result = StringVector::EmptyString(vector, result_size);
-	Blob::ToBlob(input, (data_ptr_t) result.GetDataWriteable());
+	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
 	result.Finalize();
 	return result;
 }

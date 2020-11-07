@@ -173,8 +173,8 @@ string TypeIdToString(PhysicalType type) {
 		return "STRUCT<?>";
 	case PhysicalType::LIST:
 		return "LIST<?>";
-    case PhysicalType::INVALID:
-        return "INVALID";
+	case PhysicalType::INVALID:
+		return "INVALID";
 	default:
 		throw ConversionException("Invalid PhysicalType %d", type);
 	}

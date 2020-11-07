@@ -24,6 +24,7 @@ public:
 	static constexpr const char *BASE64_MAP = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	//! padding character used in base64 encoding
 	static constexpr const char BASE64_PADDING = '=';
+
 public:
 	//! Returns the string size of a blob -> string conversion
 	static idx_t GetStringSize(string_t blob);
@@ -35,7 +36,8 @@ public:
 
 	//! Returns the blob size of a string -> blob conversion
 	static idx_t GetBlobSize(string_t str);
-	//! Convert a string to a blob. This function should ONLY be called after calling GetBlobSize, since it does NOT perform data validation.
+	//! Convert a string to a blob. This function should ONLY be called after calling GetBlobSize, since it does NOT
+	//! perform data validation.
 	static void ToBlob(string_t str, data_ptr_t output);
 	//! Convert a string object to a blob
 	static string ToBlob(string_t str);

@@ -18,7 +18,7 @@ static void base64_decode_function(DataChunk &args, ExpressionState &state, Vect
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto result_size = Blob::FromBase64Size(input);
 		auto result_blob = StringVector::EmptyString(result, result_size);
-		Blob::FromBase64(input, (data_ptr_t) result_blob.GetDataWriteable(), result_size);
+		Blob::FromBase64(input, (data_ptr_t)result_blob.GetDataWriteable(), result_size);
 		result_blob.Finalize();
 		return result_blob;
 	});
@@ -34,5 +34,4 @@ void Base64Fun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("from_base64", {LogicalType::VARCHAR}, LogicalType::BLOB, base64_decode_function));
 }
 
-
-}
+} // namespace duckdb

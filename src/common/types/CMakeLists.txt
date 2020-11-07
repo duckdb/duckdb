@@ -1,24 +1,25 @@
-add_library_unity(duckdb_common_types
-                  OBJECT
-                  blob.cpp
-                  chunk_collection.cpp
-                  data_chunk.cpp
-                  date.cpp
-                  decimal.cpp
-                  hash.cpp
-                  hugeint.cpp
-                  interval.cpp
-                  numeric_helper.cpp
-                  null_value.cpp
-                  selection_vector.cpp
-                  string_heap.cpp
-                  string_type.cpp
-                  timestamp.cpp
-                  time.cpp
-                  value.cpp
-                  vector_buffer.cpp
-                  vector.cpp
-                  vector_constants.cpp)
+add_library_unity(
+  duckdb_common_types
+  OBJECT
+  blob.cpp
+  chunk_collection.cpp
+  data_chunk.cpp
+  date.cpp
+  decimal.cpp
+  hash.cpp
+  hugeint.cpp
+  interval.cpp
+  numeric_helper.cpp
+  null_value.cpp
+  selection_vector.cpp
+  string_heap.cpp
+  string_type.cpp
+  timestamp.cpp
+  time.cpp
+  value.cpp
+  vector_buffer.cpp
+  vector.cpp
+  vector_constants.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types>
     PARENT_SCOPE)

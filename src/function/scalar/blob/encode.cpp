@@ -16,7 +16,8 @@ static void decode_function(DataChunk &args, ExpressionState &state, Vector &res
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {
-			throw ConversionException("Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters");
+			throw ConversionException(
+			    "Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters");
 		}
 		return input;
 	});
@@ -30,5 +31,4 @@ void EncodeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("decode", {LogicalType::BLOB}, LogicalType::VARCHAR, decode_function));
 }
 
-
-}
+} // namespace duckdb
