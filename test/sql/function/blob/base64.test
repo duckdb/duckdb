@@ -1,0 +1,92 @@
+# name: test/sql/function/blob/base64.test
+# description: Test blob base64 functions
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+# test base64 encoding
+query I
+SELECT base64(encode(''))
+----
+(empty)
+
+query I
+SELECT base64(encode('a'))
+----
+YQ==
+
+query I
+SELECT base64(encode('ab'))
+----
+YWI=
+
+query I
+SELECT base64(encode('abc'))
+----
+YWJj
+
+query I
+SELECT base64(encode('üäabcdef'))
+----
+w7zDpGFiY2RlZg==
+
+query I
+SELECT base64(encode('iJWERiuhjruhwuiehr8493231'))
+----
+aUpXRVJpdWhqcnVod3VpZWhyODQ5MzIzMQ==
+
+query I
+SELECT base64(encode('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'))
+----
+YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWjEyMzQ1Njc4OTA=
+
+query I
+SELECT to_base64(encode('base64 encoded string'));
+----
+YmFzZTY0IGVuY29kZWQgc3RyaW5n
+
+# test base64 decoding round-trip
+query I
+SELECT from_base64(base64(encode('')))
+----
+(empty)
+
+query I
+SELECT from_base64(base64(encode('a')))
+----
+a
+
+query I
+SELECT from_base64(base64(encode('ab')))
+----
+ab
+
+query I
+SELECT from_base64(base64(encode('abc')))
+----
+abc
+
+query I
+SELECT from_base64(base64(encode('iJWERiuhjruhwuiehr8493231')))
+----
+iJWERiuhjruhwuiehr8493231
+
+query I
+SELECT from_base64(base64(encode('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890')))
+----
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
+
+query I
+select from_base64('AAAA');
+----
+\x00\x00\x00
+
+# malformed base64
+# must be multiple of 4
+statement error
+SELECT from_base64('ab');
+
+# unknown bytes
+statement error
+SELECT from_base64('üab');

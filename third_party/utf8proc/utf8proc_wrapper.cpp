@@ -27,6 +27,9 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len) {
 	char c;
 	for (size_t i = 0; i < len; i++) {
 		c = s[i];
+		if (c == '\0') {
+			return UnicodeType::INVALID;
+		}
 		// 1 Byte / ASCII
 		if ((c & 0x80) == 0)
 			continue;

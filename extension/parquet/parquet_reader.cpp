@@ -447,11 +447,6 @@ void ParquetReader::VerifyString(LogicalTypeId id, const char *str_data, idx_t s
 	if (utf_type == UnicodeType::INVALID) {
 		throw FormatException("Invalid string encoding found in Parquet file: value is not valid UTF8!");
 	}
-	for(idx_t i = 0; i < str_len; i++) {
-		if (str_data[i] == '\0') {
-			throw FormatException("Invalid string encoding found in Parquet file: string contains null bytes!");
-		}
-	}
 }
 
 bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx) {

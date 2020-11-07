@@ -108,4 +108,130 @@ string Blob::ToBlob(string_t str) {
 	return string(buffer.get(), blob_len);
 }
 
+// base64 functions are adapted from https://gist.github.com/tomykaira/f0fd86b6c73063283afe550bc5d77594
+idx_t Blob::ToBase64Size(string_t blob) {
+	// every 4 characters in base64 encode 3 bytes, plus (potential) padding at the end
+	auto input_size = blob.GetSize();
+	return ((input_size + 2) / 3) * 4;
+}
+
+void Blob::ToBase64(string_t blob, char *output) {
+	auto input_data = (data_ptr_t) blob.GetDataUnsafe();
+	auto input_size = blob.GetSize();
+	idx_t out_idx = 0;
+	idx_t i;
+	// convert the bulk of the string to base64
+	// this happens in steps of 3 bytes -> 4 output bytes
+	for(i = 0; i + 2 < input_size; i += 3) {
+		output[out_idx++] = Blob::BASE64_MAP[(input_data[i] >> 2) & 0x3F];
+		output[out_idx++] = Blob::BASE64_MAP[((input_data[i] & 0x3) << 4) | ((input_data[i + 1] & 0xF0) >> 4)];
+		output[out_idx++] = Blob::BASE64_MAP[((input_data[i + 1] & 0xF) << 2) | ((input_data[i + 2] & 0xC0) >> 6)];
+		output[out_idx++] = Blob::BASE64_MAP[input_data[i + 2] & 0x3F];
+	}
+
+	if (i < input_size) {
+		// there are one or two bytes left over: we have to insert padding
+		// first write the first 6 bits of the first byte
+		output[out_idx++] = Blob::BASE64_MAP[(input_data[i] >> 2) & 0x3F];
+		// now check the character count
+		if (i == input_size - 1) {
+			// single byte left over: convert the remainder of that byte and insert padding
+			output[out_idx++] = Blob::BASE64_MAP[((input_data[i] & 0x3) << 4)];
+			output[out_idx++] = Blob::BASE64_PADDING;
+		} else {
+			// two bytes left over: convert the second byte as well
+			output[out_idx++] = Blob::BASE64_MAP[((input_data[i] & 0x3) << 4) | ((input_data[i + 1] & 0xF0) >> 4)];
+			output[out_idx++] = Blob::BASE64_MAP[((input_data[i + 1] & 0xF) << 2)];
+		}
+		output[out_idx++] = Blob::BASE64_PADDING;
+	}
+}
+
+static constexpr int BASE64_DECODING_TABLE[256] = {
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
+	52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+	-1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+	15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
+	-1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+};
+
+idx_t Blob::FromBase64Size(string_t str) {
+	auto input_data = str.GetDataUnsafe();
+	auto input_size = str.GetSize();
+	if (input_size % 4 != 0) {
+		// valid base64 needs to always be cleanly divisible by 4
+		throw ConversionException("Could not decode string \"%s\" as base64: length must be a multiple of 4", str.GetString());
+	}
+	if (input_size < 4) {
+		// empty string
+		return 0;
+	}
+	auto base_size = input_size / 4 * 3;
+	// check for padding to figure out the length
+	if (input_data[input_size - 2] == Blob::BASE64_PADDING) {
+		// two bytes of padding
+		return base_size - 2;
+	}
+	if (input_data[input_size - 1] == Blob::BASE64_PADDING) {
+		// one byte of padding
+		return base_size - 1;
+	}
+	// no padding
+	return base_size;
+}
+
+template<bool ALLOW_PADDING>
+uint32_t DecodeBytes(const string_t &str, data_ptr_t input_data, idx_t base_idx) {
+	int decoded_bytes[4];
+	for(idx_t decode_idx = 0; decode_idx < 4; decode_idx++) {
+		if (ALLOW_PADDING && decode_idx >= 2 && input_data[base_idx + decode_idx] == Blob::BASE64_PADDING) {
+			// the last two bytes of a base64 string can have padding: in this case we set the byte to 0
+			decoded_bytes[decode_idx] = 0;
+		} else {
+			decoded_bytes[decode_idx] = BASE64_DECODING_TABLE[input_data[base_idx + decode_idx]];
+		}
+		if (decoded_bytes[decode_idx] < 0) {
+			throw ConversionException("Could not decode string \"%s\" as base64: invalid byte value '%d' at position %d", str.GetString(), input_data[base_idx + decode_idx], base_idx + decode_idx);
+		}
+	}
+	return (decoded_bytes[0] << 3 * 6) + (decoded_bytes[1] << 2 * 6) + (decoded_bytes[2] << 1 * 6) + (decoded_bytes[3] << 0 * 6);
+}
+
+void Blob::FromBase64(string_t str, data_ptr_t output, idx_t output_size) {
+	D_ASSERT(output_size == FromBase64Size(str));
+	auto input_data = (data_ptr_t) str.GetDataUnsafe();
+	auto input_size = str.GetSize();
+	if (input_size == 0) {
+		return;
+	}
+	idx_t out_idx = 0;
+	idx_t i = 0;
+	for (i = 0; i + 4 < input_size; i += 4) {
+		auto combined = DecodeBytes<false>(str, input_data, i);
+		output[out_idx++] = (combined >> 2 * 8) & 0xFF;
+		output[out_idx++] = (combined >> 1 * 8) & 0xFF;
+		output[out_idx++] = (combined >> 0 * 8) & 0xFF;
+	}
+	// decode the final four bytes: padding is allowed here
+	auto combined = DecodeBytes<true>(str, input_data, i);
+	output[out_idx++] = (combined >> 2 * 8) & 0xFF;
+	if (out_idx < output_size) {
+		output[out_idx++] = (combined >> 1 * 8) & 0xFF;
+	}
+	if (out_idx < output_size) {
+		output[out_idx++] = (combined >> 0 * 8) & 0xFF;
+	}
+}
+
 }
