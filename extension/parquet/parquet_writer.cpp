@@ -31,6 +31,7 @@ using parquet::format::PageHeader;
 using parquet::format::PageType;
 using parquet::format::RowGroup;
 using parquet::format::Type;
+using parquet::format::ConvertedType;
 
 class MyTransport : public TTransport {
 public:
@@ -79,6 +80,17 @@ static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
 	default:
 		throw NotImplementedException(duckdb_type.ToString());
 	}
+}
+
+static bool duckdb_type_to_converted_type(LogicalType duckdb_type, ConvertedType::type &result) {
+	switch(duckdb_type.id()) {
+	case LogicalTypeId::VARCHAR:
+		result = ConvertedType::UTF8;
+		return true;
+	default:
+		return false;
+	}
+
 }
 
 static void VarintEncode(uint32_t val, Serializer &ser) {
@@ -141,6 +153,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalTy
 		schema_element.__isset.type = true;
 		schema_element.__isset.repetition_type = true;
 		schema_element.name = column_names[i];
+		schema_element.__isset.converted_type = duckdb_type_to_converted_type(sql_types[i], schema_element.converted_type);
 	}
 }
 

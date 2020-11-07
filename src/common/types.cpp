@@ -207,6 +207,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(hash_t);
 	case PhysicalType::POINTER:
 		return sizeof(uintptr_t);
+	case PhysicalType::VARBINARY:
 	case PhysicalType::VARCHAR:
 		return sizeof(string_t);
 	case PhysicalType::INTERVAL:
@@ -215,8 +216,6 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return 16; // offset + len
-	case PhysicalType::VARBINARY:
-		return sizeof(blob_t);
 	default:
 		throw ConversionException("Invalid PhysicalType %d", type);
 	}

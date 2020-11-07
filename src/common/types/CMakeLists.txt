@@ -1,5 +1,6 @@
 add_library_unity(duckdb_common_types
                   OBJECT
+                  blob.cpp
                   chunk_collection.cpp
                   data_chunk.cpp
                   date.cpp

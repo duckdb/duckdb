@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
@@ -809,87 +810,23 @@ template <> timestamp_t CastToTimestamp::Operation(string_t input) {
 // Cast From Blob
 //===--------------------------------------------------------------------===//
 template <> string_t CastFromBlob::Operation(string_t input, Vector &vector) {
-	idx_t input_size = input.GetSize();
-	// double chars for hex string plus two because of hex identifier ('\x')
-	string_t result = StringVector::EmptyString(vector, input_size * 2 + 2);
-	CastFromBlob::ToHexString(input, result);
+	idx_t result_size = Blob::GetStringSize(input);
+
+	string_t result = StringVector::EmptyString(vector, result_size);
+	Blob::ToString(input, result.GetDataWriteable());
+	result.Finalize();
 	return result;
-}
-
-void CastFromBlob::ToHexString(string_t input, string_t &output) {
-	const char hexa_table[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-	idx_t input_size = input.GetSize();
-	D_ASSERT(output.GetSize() == (input_size * 2 + 2));
-	auto input_data = input.GetDataUnsafe();
-	auto hexa_data = output.GetDataWriteable();
-	// hex identifier
-	hexa_data[0] = '\\';
-	hexa_data[1] = 'x';
-	hexa_data += 2;
-	for (idx_t idx = 0; idx < input_size; ++idx) {
-		hexa_data[idx * 2] = hexa_table[(input_data[idx] >> 4) & 0x0F];
-		hexa_data[idx * 2 + 1] = hexa_table[input_data[idx] & 0x0F];
-	}
-	output.Finalize();
-}
-
-void CastFromBlob::FromHexToBytes(string_t input, string_t &output) {
-	idx_t in_size = input.GetSize();
-	// amount of hex chars must be even
-	if ((in_size % 2) != 0) {
-		throw OutOfRangeException("Hex string must have an even number of bytes.");
-	}
-
-	auto in_data = input.GetDataUnsafe();
-	// removing '\x'
-	in_data += 2;
-	in_size -= 2;
-
-	auto out_data = output.GetDataWriteable();
-	D_ASSERT(output.GetSize() == (in_size / 2));
-	idx_t out_idx = 0;
-
-	idx_t num_hex_per_byte = 2;
-	uint8_t hex[2];
-
-	for (idx_t in_idx = 0; in_idx < in_size; in_idx += 2, ++out_idx) {
-		for (idx_t hex_idx = 0; hex_idx < num_hex_per_byte; ++hex_idx) {
-			uint8_t int_ch = in_data[in_idx + hex_idx];
-			if (int_ch >= (uint8_t)'0' && int_ch <= (uint8_t)'9') {
-				// numeric ascii chars: '0' to '9'
-				hex[hex_idx] = int_ch & 0X0F;
-			} else if ((int_ch >= (uint8_t)'A' && int_ch <= (uint8_t)'F') ||
-			           (int_ch >= (uint8_t)'a' && int_ch <= (uint8_t)'f')) {
-				// hex chars: ['A':'F'] or ['a':'f']
-				// transforming char into an integer in the range of 10 to 15
-				hex[hex_idx] = ((int_ch & 0X0F) - 1) + 10;
-			} else {
-				throw OutOfRangeException("\"%c\" is not a valid hexadecimal char.", in_data[in_idx + hex_idx]);
-			}
-		}
-		// adding two hex into the same byte
-		out_data[out_idx] = hex[0];
-		out_data[out_idx] = (out_data[out_idx] << 4) | hex[1];
-	}
-	out_data[out_idx] = '\0';
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Blob
 //===--------------------------------------------------------------------===//
 template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
-	idx_t input_size = input.GetSize();
-	auto input_data = input.GetDataUnsafe();
-	string_t result;
-	// Check by a hex string
-	if (input_size >= 2 && input_data[0] == '\\' && input_data[1] == 'x') {
-		auto output = StringVector::EmptyString(vector, (input_size - 2) / 2);
-		CastFromBlob::FromHexToBytes(input, output);
-		result = output;
-	} else {
-		// raw string
-		result = StringVector::AddStringOrBlob(vector, input);
-	}
+	idx_t result_size = Blob::GetBlobSize(input);
+
+	string_t result = StringVector::EmptyString(vector, result_size);
+	Blob::ToBlob(input, (data_ptr_t) result.GetDataWriteable());
+	result.Finalize();
 	return result;
 }
 
