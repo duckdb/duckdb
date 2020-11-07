@@ -267,19 +267,17 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
-Value Value::BLOB(string data, bool must_cast) {
+Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	// hex string identifier: "\\x", must be double '\'
-	// single '\x' is a special char for hex chars in C++,
-	// e.g., '\xAA' will be transformed into the char "ª" (1010 1010),
-	// and Postgres uses double "\\x" for hex -> SELECT E'\\xDEADBEEF';
-	if (must_cast) {
-		result.str_value = Blob::ToBlob(string_t(data));
-	} else {
-		// raw string
-		result.str_value = data;
-	}
+	result.str_value = string((const char*) data, len);
+	return result;
+}
+
+Value Value::BLOB(string data) {
+	Value result(LogicalType::BLOB);
+	result.is_null = false;
+	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
 

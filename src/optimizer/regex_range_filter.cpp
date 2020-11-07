@@ -41,10 +41,10 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 			}
 			auto filter_left = make_unique<BoundComparisonExpression>(
 			    ExpressionType::COMPARE_GREATERTHANOREQUALTO, func.children[0]->Copy(),
-			    make_unique<BoundConstantExpression>(Value::BLOB(info.range_min, false)));
+			    make_unique<BoundConstantExpression>(Value::BLOB((const_data_ptr_t) info.range_min.c_str(), info.range_min.size())));
 			auto filter_right = make_unique<BoundComparisonExpression>(
 			    ExpressionType::COMPARE_LESSTHANOREQUALTO, func.children[0]->Copy(),
-			    make_unique<BoundConstantExpression>(Value::BLOB(info.range_max, false)));
+			    make_unique<BoundConstantExpression>(Value::BLOB((const_data_ptr_t) info.range_max.c_str(), info.range_max.size())));
 			auto filter_expr = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
 			                                                           move(filter_left), move(filter_right));
 
