@@ -317,7 +317,7 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 	// Insert blob values through a PreparedStatement
 	string str_blob(blob_chars.get(), num_chars);
 	unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
-	ps->Execute(str_blob);
+	ps->Execute(Value::BLOB(str_blob, false));
 	REQUIRE(ps->success);
 	ps.reset();
 
@@ -329,7 +329,7 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("SELECT b FROM blobs");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB(str_blob)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB(str_blob, false)}));
 
 	blob_chars.reset();
 }
