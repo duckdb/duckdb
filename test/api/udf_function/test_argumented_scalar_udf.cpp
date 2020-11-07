@@ -177,7 +177,6 @@ TEST_CASE("UDF functions with arguments", "[udf_function][.]") {
 			    &udf_varchar);
 			break;
 		}
-			//		case LogicalTypeId::VARBINARY:
 		default:
 			break;
 		}
