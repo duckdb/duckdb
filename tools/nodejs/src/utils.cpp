@@ -1,3 +1,5 @@
+#include "duckdb_node.hpp"
+
 namespace node_duckdb {
 
 bool Utils::OtherIsInt(Napi::Number source) {
@@ -11,9 +13,7 @@ bool Utils::OtherIsInt(Napi::Number source) {
 }
 
 Napi::Value Utils::CreateError(Napi::Env env, std::string msg) {
-    return Napi::Error::New(env, Napi::String::New(env, msg).Utf8Value()).Value();
+	return Napi::Error::New(env, Napi::String::New(env, msg).Utf8Value()).Value();
 }
 
-
-
-}
+} // namespace node_duckdb

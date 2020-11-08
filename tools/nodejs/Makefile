@@ -12,7 +12,7 @@ build: ./node_modules src/duckdb.cpp
 	./node_modules/.bin/node-pre-gyp build --loglevel=silent
 
 debug: ./node_modules src/duckdb.cpp
-	./node_modules/.bin/node-pre-gyp rebuild --debug --verbose
+	./node_modules/.bin/node-pre-gyp build --debug --verbose
 
 clean:
 	@rm -rf ./build
