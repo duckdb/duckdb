@@ -627,6 +627,14 @@ string FileSystem::GetWorkingDirectory() {
 }
 #endif
 
+string FileSystem::GetHomeDirectory() {
+	const char *homedir = getenv("HOME");
+	if (!homedir) {
+		return string();
+	}
+	return homedir;
+}
+
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	// seek to the location
 	SetFilePointer(handle, location);
@@ -718,6 +726,7 @@ vector<string> FileSystem::Glob(string path) {
 		if (path[i] == '\\' || path[i] == '/') {
 			if (i == last_pos) {
 				// empty: skip this position
+				last_pos = i + 1;
 				continue;
 			}
 			splits.push_back(path.substr(last_pos, i - last_pos));
@@ -733,6 +742,13 @@ vector<string> FileSystem::Glob(string path) {
 	} else if (StringUtil::Contains(splits[0], ":")) {
 		// first split has a colon -  windows absolute path
 		absolute_path = true;
+	} else if (splits[0] == "~") {
+		// starts with home directory
+		auto home_directory = GetHomeDirectory();
+		if (!home_directory.empty()) {
+			absolute_path = true;
+			splits[0] = home_directory;
+		}
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {
@@ -771,7 +787,7 @@ vector<string> FileSystem::Glob(string path) {
 		}
 		previous_directories = move(result);
 	}
-	throw InternalException("Eeek");
+	return vector<string>();
 }
 
 } // namespace duckdb
