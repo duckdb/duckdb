@@ -315,7 +315,7 @@ template <class T> bool LocalStorage::ScanTableStorage(DataTable &table, LocalTa
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
-	if (storage.collection.count == 0) {
+	if (storage.collection.count <= storage.deleted_rows) {
 		return;
 	}
 	idx_t append_count = storage.collection.count - storage.deleted_rows;
