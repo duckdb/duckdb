@@ -1,0 +1,60 @@
+# name: test/issues/general/test_1091.test
+# description: Issue 1091: INTERNAL error with insert and delete in same transaction
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SEQUENCE elems_seq;
+
+statement ok
+CREATE TABLE nodes (  id BIGINT PRIMARY KEY,  label VARCHAR NOT NULL);
+
+statement ok
+CREATE INDEX nodes_label ON nodes (label);
+
+statement ok
+CREATE TABLE edges (id BIGINT PRIMARY KEY,from_node_id BIGINT NOT NULL,to_node_id BIGINT NOT NULL,label STRING NOT NULL,UNIQUE (from_node_id, to_node_id, label));
+
+statement ok
+CREATE INDEX edges_outgoing ON edges (from_node_id, label);
+
+statement ok
+CREATE INDEX edges_incoming ON edges (to_node_id, label);
+
+statement ok
+CREATE TABLE properties (  elem_id BIGINT NOT NULL,  name VARCHAR NOT NULL, value_boolean BOOLEAN, value_long BIGINT, value_int INTEGER, value_float FLOAT, value_double DOUBLE, value_string VARCHAR, value_blob BLOB,  PRIMARY KEY (elem_id, name));
+
+statement ok
+CREATE INDEX properties_elemid ON properties (elem_id);
+
+statement ok
+INSERT INTO nodes (id, label) SELECT nextval('elems_seq'), 'test';
+
+statement ok
+SELECT * FROM nodes;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+UPDATE properties SET value_int = 5 WHERE elem_id = 1 AND name = 'x';
+
+statement ok
+INSERT INTO properties (elem_id, name, value_int) VALUES (1, 'x', 5);
+
+statement ok
+SELECT value_boolean, value_long, value_int, value_float, value_double, value_string, CAST(value_blob AS VARCHAR) FROM properties WHERE elem_id = 1 AND name = 'x';
+
+statement ok
+SELECT name FROM properties WHERE elem_id = 1;
+
+statement ok
+DELETE FROM properties WHERE elem_id = 1 AND name = 'x';
+
+statement ok
+SELECT name FROM properties WHERE elem_id = 1;
+
+statement ok
+COMMIT;
