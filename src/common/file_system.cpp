@@ -729,7 +729,11 @@ vector<string> FileSystem::Glob(string path) {
 				last_pos = i + 1;
 				continue;
 			}
-			splits.push_back(path.substr(last_pos, i - last_pos));
+			if (splits.empty()) {
+				splits.push_back(path.substr(0, i));
+			} else {
+				splits.push_back(path.substr(last_pos, i - last_pos));
+			}
 			last_pos = i + 1;
 		}
 	}
