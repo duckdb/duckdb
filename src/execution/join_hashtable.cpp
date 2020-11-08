@@ -192,7 +192,7 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 			} else if (source[source_idx].IsInlined()) {
 				new_val = source[source_idx];
 			} else {
-				new_val = local_heap.AddString(source[source_idx]);
+				new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
 			}
 			Store<string_t>(new_val, key_locations[i]);
 			key_locations[i] += sizeof(string_t);

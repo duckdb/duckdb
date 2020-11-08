@@ -10,6 +10,7 @@
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
@@ -25,11 +26,11 @@
 namespace duckdb {
 using namespace std;
 
-Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
+Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
-	auto utf_type = Utf8Proc::Analyze(val);
+	auto utf_type = Utf8Proc::Analyze(val.c_str(), val.size());
 	if (utf_type == UnicodeType::INVALID) {
 		throw Exception("String value is not valid UTF8");
 	}
@@ -266,23 +267,17 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
-Value Value::BLOB(string data, bool must_cast) {
+Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	// hex string identifier: "\\x", must be double '\'
-	// single '\x' is a special char for hex chars in C++,
-	// e.g., '\xAA' will be transformed into the char "ª" (1010 1010),
-	// and Postgres uses double "\\x" for hex -> SELECT E'\\xDEADBEEF';
-	if (must_cast && data.size() >= 2 && data.substr(0, 2) == "\\x") {
-		size_t hex_size = (data.size() - 2) / 2;
-		unique_ptr<char[]> hex_data(new char[hex_size + 1]);
-		string_t hex_str(hex_data.get(), hex_size);
-		CastFromBlob::FromHexToBytes(string_t(data), hex_str);
-		result.str_value = string(hex_str.GetData());
-	} else {
-		// raw string
-		result.str_value = data;
-	}
+	result.str_value = string((const char*) data, len);
+	return result;
+}
+
+Value Value::BLOB(string data) {
+	Value result(LogicalType::BLOB);
+	result.is_null = false;
+	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
 
@@ -510,13 +505,8 @@ string Value::ToString() const {
 		return Interval::ToString(value_.interval);
 	case LogicalTypeId::VARCHAR:
 		return str_value;
-	case LogicalTypeId::BLOB: {
-		unique_ptr<char[]> hex_data(new char[str_value.size() * 2 + 2 + 1]);
-		string_t hex_str(hex_data.get(), str_value.size() * 2 + 2);
-		CastFromBlob::ToHexString(string_t(str_value), hex_str);
-		string result(hex_str.GetData());
-		return result;
-	}
+	case LogicalTypeId::BLOB:
+		return Blob::ToString(string_t(str_value));
 	case LogicalTypeId::POINTER:
 		return to_string(value_.pointer);
 	case LogicalTypeId::HASH:

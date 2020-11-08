@@ -44,9 +44,9 @@ SELECT format('{} {} = {}', DATE '1992-01-01', TIME '12:01:00', TIMESTAMP '1992-
 
 # blob
 query T
-SELECT format('{}', BLOB '\x01a0')
+SELECT format('{}', BLOB '\x00hello')
 ----
-\x01A0
+\x00hello
 
 # hugeint
 query T

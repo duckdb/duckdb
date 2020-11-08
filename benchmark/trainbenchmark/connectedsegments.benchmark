@@ -1,0 +1,60 @@
+# name: benchmark/trainbenchmark/connectedsegments.benchmark
+# description: The Train Benchmark's ConnectedSegments query
+# group: [trainbenchmark]
+
+load
+CREATE TABLE Route          (id int NOT NULL, active int, entry int, exit int, PRIMARY KEY (id));
+CREATE TABLE Region         (id int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE Segment        (id int NOT NULL, length int NOT NULL DEFAULT 1, PRIMARY KEY (id));
+CREATE TABLE Sensor         (id int NOT NULL, region int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE Semaphore      (id int NOT NULL, segment int NOT NULL, signal int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE Switch         (id int NOT NULL, currentPosition int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE SwitchPosition (id int NOT NULL, route int, target int, position int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE TrackElement   (id int NOT NULL, region int NOT NULL, PRIMARY KEY (id));
+CREATE TABLE connectsTo     (TrackElement1_id int NOT NULL, TrackElement2_id int NOT NULL, PRIMARY KEY (TrackElement1_id, TrackElement2_id));
+CREATE TABLE monitoredBy    (TrackElement_id int NOT NULL, Sensor_id int NOT NULL, PRIMARY KEY (TrackElement_id, Sensor_id));
+CREATE TABLE requires       (Route_id int NOT NULL, Sensor_id int NOT NULL, PRIMARY KEY (Route_id, Sensor_id));
+COPY connectsTo     FROM 'benchmark/trainbenchmark/sf1/connectsTo.csv';
+COPY monitoredBy    FROM 'benchmark/trainbenchmark/sf1/monitoredBy.csv';
+COPY Region         FROM 'benchmark/trainbenchmark/sf1/Region.csv';
+COPY requires       FROM 'benchmark/trainbenchmark/sf1/requires.csv';
+COPY Route          FROM 'benchmark/trainbenchmark/sf1/Route.csv';
+COPY Segment        FROM 'benchmark/trainbenchmark/sf1/Segment.csv';
+COPY Semaphore      FROM 'benchmark/trainbenchmark/sf1/Semaphore.csv';
+COPY Sensor         FROM 'benchmark/trainbenchmark/sf1/Sensor.csv';
+COPY Switch         FROM 'benchmark/trainbenchmark/sf1/Switch.csv';
+COPY SwitchPosition FROM 'benchmark/trainbenchmark/sf1/SwitchPosition.csv';
+COPY TrackElement   FROM 'benchmark/trainbenchmark/sf1/TrackElement.csv';
+
+run
+SELECT
+    mb1.Sensor_id AS sensor,
+    ct1.TrackElement1_id AS segment1,
+    ct2.TrackElement1_id AS segment2,
+    ct3.TrackElement1_id AS segment3,
+    ct4.TrackElement1_id AS segment4,
+    ct5.TrackElement1_id AS segment5,
+    ct5.TrackElement2_id AS segment6
+FROM Segment
+INNER JOIN connectsTo as ct1 ON Segment.id = ct1.TrackElement1_id
+INNER JOIN connectsTo as ct2 ON ct1.TrackElement2_id = ct2.TrackElement1_id
+INNER JOIN connectsTo as ct3 ON ct2.TrackElement2_id = ct3.TrackElement1_id
+INNER JOIN connectsTo as ct4 ON ct3.TrackElement2_id = ct4.TrackElement1_id
+INNER JOIN connectsTo as ct5 ON ct4.TrackElement2_id = ct5.TrackElement1_id
+INNER JOIN monitoredBy as mb1 ON mb1.TrackElement_id = ct1.TrackElement1_id
+INNER JOIN monitoredBy as mb2 ON mb2.TrackElement_id = ct2.TrackElement1_id
+INNER JOIN monitoredBy as mb3 ON mb3.TrackElement_id = ct3.TrackElement1_id
+INNER JOIN monitoredBy as mb4 ON mb4.TrackElement_id = ct4.TrackElement1_id
+INNER JOIN monitoredBy as mb5 ON mb5.TrackElement_id = ct5.TrackElement1_id
+INNER JOIN monitoredBy as mb6 ON mb6.TrackElement_id = ct5.TrackElement2_id
+WHERE mb1.Sensor_id = mb2.Sensor_id
+  AND mb1.Sensor_id = mb3.Sensor_id
+  AND mb1.Sensor_id = mb4.Sensor_id
+  AND mb1.Sensor_id = mb5.Sensor_id
+  AND mb1.Sensor_id = mb6.Sensor_id;
+
+result IIIIIII
+6	7	8	9	10	11	12
+121	122	123	124	125	126	127
+688	689	690	691	692	693	694
+128	129	130	131	132	133	134

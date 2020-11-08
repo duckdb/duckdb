@@ -485,7 +485,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);
 				} else {
-					Store<string_t>(string_heap.AddString(string_data[group_idx]), ptr);
+					Store<string_t>(string_heap.AddBlob(string_data[group_idx].GetDataUnsafe(), string_data[group_idx].GetSize()), ptr);
 				}
 
 				pointers[pointer_idx] += type_size;

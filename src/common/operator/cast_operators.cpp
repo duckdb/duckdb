@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
@@ -168,7 +169,7 @@ template <> float Cast::Operation(double input) {
 template <class T> static T try_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result)) {
-		throw ConversionException("Could not convert string '%s' to %s", input.GetData(),
+		throw ConversionException("Could not convert string '%s' to %s", input.GetString(),
 		                          TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
@@ -177,7 +178,7 @@ template <class T> static T try_cast_string(string_t input) {
 template <class T> static T try_strict_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result, true)) {
-		throw ConversionException("Could not convert string '%s' to %s", input.GetData(),
+		throw ConversionException("Could not convert string '%s' to %s", input.GetString(),
 		                          TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
@@ -222,7 +223,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
 	idx_t pos = start_pos;
 	while (pos < len) {
-		if (!std::isdigit((unsigned char)buf[pos])) {
+		if (!StringUtil::CharacterIsDigit(buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
 				if (strict) {
@@ -235,7 +236,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				pos++;
 				idx_t start_digit = pos;
 				while (pos < len) {
-					if (!std::isdigit((unsigned char)buf[pos])) {
+					if (!StringUtil::CharacterIsDigit(buf[pos])) {
 						return false;
 					}
 					if (!OP::template HandleDecimal<T, NEGATIVE>(result, buf[pos] - '0')) {
@@ -312,7 +313,7 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 }
 
 template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
-	auto input_data = input.GetData();
+	auto input_data = input.GetDataUnsafe();
 	auto input_size = input.GetSize();
 
 	switch (input_size) {
@@ -355,16 +356,16 @@ template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	}
 }
 template <> bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
-	return TryIntegerCast<int8_t>(input.GetData(), input.GetSize(), result, strict);
+	return TryIntegerCast<int8_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 template <> bool TryCast::Operation(string_t input, int16_t &result, bool strict) {
-	return TryIntegerCast<int16_t>(input.GetData(), input.GetSize(), result, strict);
+	return TryIntegerCast<int16_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 template <> bool TryCast::Operation(string_t input, int32_t &result, bool strict) {
-	return TryIntegerCast<int32_t>(input.GetData(), input.GetSize(), result, strict);
+	return TryIntegerCast<int32_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 template <> bool TryCast::Operation(string_t input, int64_t &result, bool strict) {
-	return TryIntegerCast<int64_t>(input.GetData(), input.GetSize(), result, strict);
+	return TryIntegerCast<int64_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 
 template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx_t decimal, idx_t decimal_factor) {
@@ -383,7 +384,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 	idx_t decimal = 0;
 	idx_t decimal_factor = 0;
 	while (pos < len) {
-		if (!std::isdigit((unsigned char)buf[pos])) {
+		if (!StringUtil::CharacterIsDigit(buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
 				// decimal point
@@ -476,10 +477,10 @@ template <class T> static bool TryDoubleCast(const char *buf, idx_t len, T &resu
 }
 
 template <> bool TryCast::Operation(string_t input, float &result, bool strict) {
-	return TryDoubleCast<float>(input.GetData(), input.GetSize(), result, strict);
+	return TryDoubleCast<float>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 template <> bool TryCast::Operation(string_t input, double &result, bool strict) {
-	return TryDoubleCast<double>(input.GetData(), input.GetSize(), result, strict);
+	return TryDoubleCast<double>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 
 template <> bool Cast::Operation(string_t input) {
@@ -668,7 +669,7 @@ template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
 	idx_t length = DateToStringCast::Length(date, year_length, add_bc);
 
 	string_t result = StringVector::EmptyString(vector, length);
-	auto data = result.GetData();
+	auto data = result.GetDataWriteable();
 
 	DateToStringCast::Format(data, date, year_length, add_bc);
 
@@ -680,11 +681,11 @@ template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
 // Cast To Date
 //===--------------------------------------------------------------------===//
 template <> date_t CastToDate::Operation(string_t input) {
-	return Date::FromCString(input.GetData());
+	return Date::FromCString(input.GetDataUnsafe(), input.GetSize());
 }
 
 template <> date_t StrictCastToDate::Operation(string_t input) {
-	return Date::FromCString(input.GetData(), true);
+	return Date::FromCString(input.GetDataUnsafe(), input.GetSize(), true);
 }
 
 //===--------------------------------------------------------------------===//
@@ -737,7 +738,7 @@ template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
 	idx_t length = TimeToStringCast::Length(time);
 
 	string_t result = StringVector::EmptyString(vector, length);
-	auto data = result.GetData();
+	auto data = result.GetDataWriteable();
 
 	TimeToStringCast::Format(data, length, time);
 
@@ -749,11 +750,11 @@ template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
 // Cast To Time
 //===--------------------------------------------------------------------===//
 template <> dtime_t CastToTime::Operation(string_t input) {
-	return Time::FromCString(input.GetData());
+	return Time::FromCString(input.GetDataUnsafe(), input.GetSize());
 }
 
 template <> dtime_t StrictCastToTime::Operation(string_t input) {
-	return Time::FromCString(input.GetData(), true);
+	return Time::FromCString(input.GetDataUnsafe(), input.GetSize(), true);
 }
 
 template <> timestamp_t CastDateToTimestamp::Operation(date_t input) {
@@ -780,7 +781,7 @@ template <> string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vec
 	idx_t length = date_length + time_length + 1;
 
 	string_t result = StringVector::EmptyString(vector, length);
-	auto data = result.GetData();
+	auto data = result.GetDataWriteable();
 
 	DateToStringCast::Format(data, date, year_length, add_bc);
 	data[date_length] = ' ';
@@ -802,94 +803,30 @@ template <> dtime_t CastTimestampToTime::Operation(timestamp_t input) {
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <> timestamp_t CastToTimestamp::Operation(string_t input) {
-	return Timestamp::FromCString(input.GetData(), input.GetSize());
+	return Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//
 // Cast From Blob
 //===--------------------------------------------------------------------===//
 template <> string_t CastFromBlob::Operation(string_t input, Vector &vector) {
-	idx_t input_size = input.GetSize();
-	// double chars for hex string plus two because of hex identifier ('\x')
-	string_t result = StringVector::EmptyString(vector, input_size * 2 + 2);
-	CastFromBlob::ToHexString(input, result);
+	idx_t result_size = Blob::GetStringSize(input);
+
+	string_t result = StringVector::EmptyString(vector, result_size);
+	Blob::ToString(input, result.GetDataWriteable());
+	result.Finalize();
 	return result;
-}
-
-void CastFromBlob::ToHexString(string_t input, string_t &output) {
-	const char hexa_table[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-	idx_t input_size = input.GetSize();
-	D_ASSERT(output.GetSize() == (input_size * 2 + 2));
-	auto input_data = input.GetData();
-	auto hexa_data = output.GetData();
-	// hex identifier
-	hexa_data[0] = '\\';
-	hexa_data[1] = 'x';
-	hexa_data += 2;
-	for (idx_t idx = 0; idx < input_size; ++idx) {
-		hexa_data[idx * 2] = hexa_table[(input_data[idx] >> 4) & 0x0F];
-		hexa_data[idx * 2 + 1] = hexa_table[input_data[idx] & 0x0F];
-	}
-	output.Finalize();
-}
-
-void CastFromBlob::FromHexToBytes(string_t input, string_t &output) {
-	idx_t in_size = input.GetSize();
-	// amount of hex chars must be even
-	if ((in_size % 2) != 0) {
-		throw OutOfRangeException("Hex string must have an even number of bytes.");
-	}
-
-	auto in_data = input.GetData();
-	// removing '\x'
-	in_data += 2;
-	in_size -= 2;
-
-	auto out_data = output.GetData();
-	D_ASSERT(output.GetSize() == (in_size / 2));
-	idx_t out_idx = 0;
-
-	idx_t num_hex_per_byte = 2;
-	uint8_t hex[2];
-
-	for (idx_t in_idx = 0; in_idx < in_size; in_idx += 2, ++out_idx) {
-		for (idx_t hex_idx = 0; hex_idx < num_hex_per_byte; ++hex_idx) {
-			uint8_t int_ch = in_data[in_idx + hex_idx];
-			if (int_ch >= (uint8_t)'0' && int_ch <= (uint8_t)'9') {
-				// numeric ascii chars: '0' to '9'
-				hex[hex_idx] = int_ch & 0X0F;
-			} else if ((int_ch >= (uint8_t)'A' && int_ch <= (uint8_t)'F') ||
-			           (int_ch >= (uint8_t)'a' && int_ch <= (uint8_t)'f')) {
-				// hex chars: ['A':'F'] or ['a':'f']
-				// transforming char into an integer in the range of 10 to 15
-				hex[hex_idx] = ((int_ch & 0X0F) - 1) + 10;
-			} else {
-				throw OutOfRangeException("\"%c\" is not a valid hexadecimal char.", in_data[in_idx + hex_idx]);
-			}
-		}
-		// adding two hex into the same byte
-		out_data[out_idx] = hex[0];
-		out_data[out_idx] = (out_data[out_idx] << 4) | hex[1];
-	}
-	out_data[out_idx] = '\0';
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Blob
 //===--------------------------------------------------------------------===//
 template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
-	idx_t input_size = input.GetSize();
-	auto input_data = input.GetData();
-	string_t result;
-	// Check by a hex string
-	if (input_size >= 2 && input_data[0] == '\\' && input_data[1] == 'x') {
-		auto output = StringVector::EmptyString(vector, (input_size - 2) / 2);
-		CastFromBlob::FromHexToBytes(input, output);
-		result = output;
-	} else {
-		// raw string
-		result = StringVector::AddStringOrBlob(vector, input);
-	}
+	idx_t result_size = Blob::GetBlobSize(input);
+
+	string_t result = StringVector::EmptyString(vector, result_size);
+	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
+	result.Finalize();
 	return result;
 }
 
@@ -897,7 +834,7 @@ template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
 // Cast From Interval
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(string_t input, interval_t &result, bool strict) {
-	return Interval::FromCString(input.GetData(), input.GetSize(), result);
+	return Interval::FromCString(input.GetDataUnsafe(), input.GetSize(), result);
 }
 
 template <> interval_t StrictCast::Operation(string_t input) {
@@ -999,7 +936,7 @@ struct HugeIntegerCastOperation {
 
 template <> bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 	HugeIntCastData data;
-	if (!TryIntegerCast<HugeIntCastData, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), data,
+	if (!TryIntegerCast<HugeIntCastData, true, HugeIntegerCastOperation>(input.GetDataUnsafe(), input.GetSize(), data,
 	                                                                     strict)) {
 		return false;
 	}
@@ -1226,9 +1163,9 @@ template <class T> T decimal_string_cast(string_t input, uint8_t width, uint8_t 
 	state.scale = scale;
 	state.digit_count = 0;
 	state.decimal_count = 0;
-	if (!TryIntegerCast<DecimalCastData<T>, false, DecimalCastOperation, false>(input.GetData(), input.GetSize(), state,
-	                                                                            false)) {
-		throw ConversionException("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetData(), (int)width,
+	if (!TryIntegerCast<DecimalCastData<T>, false, DecimalCastOperation, false>(input.GetDataUnsafe(), input.GetSize(),
+	                                                                            state, false)) {
+		throw ConversionException("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(), (int)width,
 		                          (int)scale);
 	}
 	return state.result;

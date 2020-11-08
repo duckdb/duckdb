@@ -57,7 +57,7 @@ public:
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
 		string_t result = StringVector::EmptyString(vector, length);
-		auto dataptr = result.GetData();
+		auto dataptr = result.GetDataWriteable();
 		auto endptr = dataptr + length;
 		endptr = FormatUnsigned(unsigned_value, endptr);
 		if (sign) {
@@ -119,7 +119,7 @@ struct DecimalToString {
 	template <class SIGNED, class UNSIGNED> static string_t Format(SIGNED value, uint8_t scale, Vector &vector) {
 		int len = DecimalLength<SIGNED, UNSIGNED>(value, scale);
 		string_t result = StringVector::EmptyString(vector, len);
-		FormatDecimal<SIGNED, UNSIGNED>(value, scale, result.GetData(), len);
+		FormatDecimal<SIGNED, UNSIGNED>(value, scale, result.GetDataWriteable(), len);
 		result.Finalize();
 		return result;
 	}
@@ -226,7 +226,7 @@ struct HugeintToStringCast {
 		}
 		int length = UnsignedLength(value) + negative;
 		string_t result = StringVector::EmptyString(vector, length);
-		auto dataptr = result.GetData();
+		auto dataptr = result.GetDataWriteable();
 		auto endptr = dataptr + length;
 		if (value.upper == 0) {
 			// small value: format as uint64_t
@@ -300,7 +300,7 @@ struct HugeintToStringCast {
 		int length = DecimalLength(value, scale);
 		string_t result = StringVector::EmptyString(vector, length);
 
-		auto dst = result.GetData();
+		auto dst = result.GetDataWriteable();
 
 		FormatDecimal(value, scale, dst, length);
 

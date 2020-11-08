@@ -15,7 +15,7 @@ static void md5_function(DataChunk &args, ExpressionState &state, Vector &result
 		auto hash = StringVector::EmptyString(result, MD5Context::MD5_HASH_LENGTH_TEXT);
 		MD5Context context;
 		context.Add(input);
-		context.FinishHex(hash.GetData());
+		context.FinishHex(hash.GetDataWriteable());
 		hash.Finalize();
 		return hash;
 	});

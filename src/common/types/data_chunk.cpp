@@ -315,7 +315,8 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 						continue;
 					}
 					auto &str = string_t_ptr[row_idx];
-					memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetData(), str.GetSize());
+					memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetDataUnsafe(),
+					       str.GetSize());
 					current_heap_offset += str.GetSize();
 				}
 				target_ptr[size()] = current_heap_offset; // need to terminate last string!

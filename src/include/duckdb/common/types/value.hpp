@@ -109,8 +109,10 @@ public:
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
 
-	//! Create a blob Value from a specified value
-	static Value BLOB(string data, bool must_cast = true);
+	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
+	static Value BLOB(const_data_ptr_t data, idx_t len);
+	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
+	static Value BLOB(string data);
 
 	template <class T> T GetValue() const {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");

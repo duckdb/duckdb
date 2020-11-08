@@ -141,8 +141,8 @@ template <typename TYPE> static void udf_unary_function(DataChunk &input, Expres
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetData();
-			memcpy(target_data, ldata[i].GetData(), input_length);
+			auto target_data = target.GetDataWriteable();
+			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}
@@ -180,8 +180,8 @@ template <typename TYPE> static void udf_binary_function(DataChunk &input, Expre
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetData();
-			memcpy(target_data, ldata[i].GetData(), input_length);
+			auto target_data = target.GetDataWriteable();
+			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}
@@ -219,8 +219,8 @@ template <typename TYPE> static void udf_ternary_function(DataChunk &input, Expr
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetData();
-			memcpy(target_data, ldata[i].GetData(), input_length);
+			auto target_data = target.GetDataWriteable();
+			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}

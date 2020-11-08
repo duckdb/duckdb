@@ -29,7 +29,7 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {
 }
 
 static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
-	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
+	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
 
 static void ParseRegexOptions(string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
@@ -150,7 +150,7 @@ static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vec
 	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
 	    strings, patterns, replaces, result, args.size(), [&](string_t input, string_t pattern, string_t replace) {
 		    RE2 re(CreateStringPiece(pattern), info.options);
-		    std::string sstring(input.GetData(), input.GetSize());
+		    std::string sstring = input.GetString();
 		    if (info.global_replace) {
 			    RE2::GlobalReplace(&sstring, re, CreateStringPiece(replace));
 		    } else {

@@ -12,7 +12,7 @@ namespace duckdb {
 
 static string_t repeat_scalar_function(const string_t &str, const int64_t cnt, vector<char> &result) {
 	// Get information about the repeated string
-	const auto input_str = str.GetData();
+	const auto input_str = str.GetDataUnsafe();
 	const auto size_str = str.GetSize();
 
 	//  Reuse the buffer

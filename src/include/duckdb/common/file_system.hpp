@@ -117,6 +117,8 @@ public:
 	virtual void SetWorkingDirectory(string path);
 	//! Gets the working directory
 	virtual string GetWorkingDirectory();
+	//! Gets the users home directory
+	virtual string GetHomeDirectory();
 
 	//! Runs a glob on the file system, returning a list of matching files
 	virtual vector<string> Glob(string path);
