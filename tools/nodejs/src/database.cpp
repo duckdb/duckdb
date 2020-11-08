@@ -13,7 +13,8 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	     InstanceMethod("prepare", &Database::Prepare), InstanceMethod("close", &Database::Close),
 	     InstanceMethod("wait", &Database::Wait), InstanceMethod("serialize", &Database::Serialize),
 	     InstanceMethod("parallelize", &Database::Parallelize), InstanceMethod("interrupt", &Database::Interrupt),
-	     InstanceAccessor("open", &Database::OpenGetter, nullptr)});
+	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt),
+	     InstanceMethod("each", &Database::Each), InstanceAccessor("open", &Database::OpenGetter, nullptr)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -24,20 +25,21 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 
 struct OpenTask : public Task {
 	OpenTask(Database &database_, std::string filename_, Napi::Function callback_)
-	    : Task(callback_), database(database_), filename(filename_) {
-		database.Ref(); // TODO perhaps we move this to task
+	    : Task(database_, callback_), filename(filename_) {
 	}
 
 	void DoWork() override {
 		try {
-			database.database = duckdb::make_unique<duckdb::DuckDB>(filename);
+			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename);
 			success = true;
+
 		} catch (std::exception &ex) {
 			error = ex.what();
 		}
 	}
 
 	void Callback() override {
+		auto &database = Get<Database>();
 		Napi::Env env = database.Env();
 
 		std::vector<napi_value> args;
@@ -48,13 +50,13 @@ struct OpenTask : public Task {
 		}
 
 		Napi::HandleScope scope(env);
+
+		database.default_connection = Utils::NewUnwrap<Connection>({database.Value()});
+		database.default_connection->Ref();
+
 		callback.Value().MakeCallback(database.Value(), args);
 	}
 
-	~OpenTask() {
-		database.Unref();
-	}
-	Database &database;
 	std::string filename;
 	std::string error = "";
 	bool success = false;
@@ -75,7 +77,15 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 	if (info.Length() >= pos && info[pos].IsFunction()) {
 		callback = info[pos++].As<Napi::Function>();
 	}
+
 	Schedule(info.Env(), duckdb::make_unique<OpenTask>(*this, filename, callback));
+}
+
+Database::~Database() {
+	printf("~Database\n");
+	if (default_connection) {
+		default_connection->Unref();
+	}
 }
 
 void Database::Schedule(Napi::Env env, unique_ptr<Task> task) {
@@ -133,17 +143,29 @@ Napi::Value Database::Serialize(const Napi::CallbackInfo &info) {
 }
 
 Napi::Value Database::Run(const Napi::CallbackInfo &info) {
-	construct_node_object<Connection>({Value()})->Run(info);
+	// TODO check default_connection and database openness here
+	default_connection->Run(info);
 	return info.This();
 }
 
 Napi::Value Database::All(const Napi::CallbackInfo &info) {
-	construct_node_object<Connection>({Value()})->All(info);
+	// TODO check default_connection and database openness here
+
+	default_connection->All(info);
+	return info.This();
+}
+
+Napi::Value Database::Each(const Napi::CallbackInfo &info) {
+	// TODO check default_connection and database openness here
+
+	default_connection->Each(info);
 	return info.This();
 }
 
 Napi::Value Database::Prepare(const Napi::CallbackInfo &info) {
-	return construct_node_object<Connection>({Value()})->Prepare(info);
+	// TODO check default_connection and database openness here
+
+	return default_connection->Prepare(info);
 }
 
 // TODO implement these
@@ -151,12 +173,30 @@ Napi::Value Database::Wait(const Napi::CallbackInfo &info) {
 	return info.This();
 }
 
+struct CloseTask : public Task {
+	CloseTask(Database &database_) : Task(database_, database_.Env().Null().As<Napi::Function>()) {
+	}
+
+	void DoWork() override {
+		Get<Database>().database.reset();
+	}
+
+	void Callback() override {
+	}
+};
+
 Napi::Value Database::Close(const Napi::CallbackInfo &info) {
+	Schedule(info.Env(), duckdb::make_unique<CloseTask>(*this));
+
 	return info.This();
 }
 
 Napi::Value Database::Interrupt(const Napi::CallbackInfo &info) {
 	return info.This();
+}
+
+Napi::Value Database::Connect(const Napi::CallbackInfo &info) {
+	return Connection::constructor.New({Value()});
 }
 
 } // namespace node_duckdb

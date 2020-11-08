@@ -13,11 +13,18 @@ function createDb() {
 
 
 function createTable() {
+	/* yay we can have connections too */
+	var conn = db.connect()
+	conn.all('select 42', function(err, res) {
+		console.log(res)
+	});
+
     console.log("createTable lorem");
     db.run("CREATE TABLE IF NOT EXISTS lorem (info TEXT)", insertRows);
 }
 
-function insertRows() {
+function insertRows(err) {
+	console.log(err)
     console.log("insertRows Ipsum i");
     var stmt = db.prepare("INSERT INTO lorem VALUES (?)");
 
@@ -31,6 +38,7 @@ function insertRows() {
 function readAllRows() {
     console.log("readAllRows lorem");
     db.all("SELECT rowid AS id, info FROM lorem", function(err, rows) {
+    	console.log(err)
         rows.forEach(function (row) {
             console.log(row.id + ": " + row.info);
         });
@@ -38,10 +46,15 @@ function readAllRows() {
     });
 }
 
+var count = 0
 function each() {
         console.log("each");
         db.each("SELECT rowid AS id, info FROM lorem", function(err, row) {
             console.log(row)
+            count++;
+            if (count == 10) {
+            	closeDb()
+            }
         })
 }
 

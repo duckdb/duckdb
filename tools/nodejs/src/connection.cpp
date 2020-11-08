@@ -7,9 +7,10 @@ Napi::FunctionReference Connection::constructor;
 Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t = DefineClass(env, "Connection",
-	                               {InstanceMethod("run", &Connection::Run), InstanceMethod("all", &Connection::All),
-	                                InstanceMethod("exec", &Connection::Exec)});
+	Napi::Function t =
+	    DefineClass(env, "Connection",
+	                {InstanceMethod("run", &Connection::Run), InstanceMethod("each", &Connection::Each),
+	                 InstanceMethod("all", &Connection::All), InstanceMethod("exec", &Connection::Exec)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -34,62 +35,25 @@ Connection::~Connection() {
 	database_ref->Unref();
 }
 
-struct RunTask : public Task {
-	RunTask(Connection &connection_, std::string sql_, Napi::Function callback_)
-	    : Task(callback_), connection(connection_), sql(sql_) {
-		connection.Ref();
-	}
-
-	void DoWork() override {
-		result = connection.connection->Query(sql);
-	}
-
-	void Callback() override {
-		Napi::Env env = connection.Env();
-
-		std::vector<napi_value> args;
-		if (!result->success) {
-			args.push_back(Utils::CreateError(env, result->error));
-		} else {
-			args.push_back(env.Null());
-		}
-
-		Napi::HandleScope scope(env);
-		callback.Value().MakeCallback(connection.Value(), args);
-	}
-
-	~RunTask() {
-		connection.Unref();
-	}
-
-	unique_ptr<duckdb::QueryResult> result;
-	Connection &connection;
-	std::string sql;
-};
-
 Napi::Value Connection::Run(const Napi::CallbackInfo &info) {
-	// TODO check those params, could also have params here
-	std::string sql = info[0].As<Napi::String>();
-	auto callback = info[1].As<Napi::Function>();
-	database_ref->Schedule(info.Env(), duckdb::make_unique<RunTask>(*this, sql, callback));
+	Utils::NewUnwrap<Statement>({Value(), info[0].As<Napi::String>()})->Run(info);
 	return info.This();
 }
 
 Napi::Value Connection::Exec(const Napi::CallbackInfo &info) {
+	// FIXME Utils::NewUnwrap<Statement>( {Value(), info[0].As<Napi::String>()})->Exec(info);
 	return info.This();
 }
 
 // TODO make this a template?
 Napi::Value Connection::All(const Napi::CallbackInfo &info) {
-	std::vector<napi_value> args;
-	// push the connection as first argument
-	args.push_back(Value());
-	// push the query as second argument
-	auto sql = info[0].As<Napi::String>();
-	args.push_back(sql);
+	Utils::NewUnwrap<Statement>({Value(), info[0].As<Napi::String>()})->All(info);
+	return info.This();
+}
 
-	construct_node_object<Statement>(args)->All(info);
-
+// TODO make this a template?
+Napi::Value Connection::Each(const Napi::CallbackInfo &info) {
+	Utils::NewUnwrap<Statement>({Value(), info[0].As<Napi::String>()})->Each(info);
 	return info.This();
 }
 
@@ -107,7 +71,9 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 	for (size_t i = 0; i < info.Length(); i++) {
 		args.push_back(info[i]);
 	}
-	return Statement::constructor.New(args);
+	auto res = Utils::NewUnwrap<Statement>(args);
+	res->SetProcessFirstParam();
+	return res->Value();
 }
 
 } // namespace node_duckdb

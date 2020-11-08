@@ -7,7 +7,6 @@
             "src/database.cpp",
             "src/connection.cpp",
             "src/statement.cpp",
-            "src/result.cpp",
             "src/utils.cpp"
 
 #                  "src/node_duckdb.cc",

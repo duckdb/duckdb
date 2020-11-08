@@ -9,6 +9,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 
 	Napi::Function t = DefineClass(env, "Result",
 	                               {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
+	                                InstanceMethod("each", &Statement::Each),
 
 	                                InstanceMethod("finalize", &Statement::Finalize_)});
 
@@ -30,7 +31,12 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 
 	// TODO check those params
 	std::string sql = info[1].As<Napi::String>();
+
 	statement = connection_ref->connection->Prepare(sql);
+	// FIXME communicate back
+	if (!statement->success) {
+		printf("XXX: %s\n", statement->error.c_str());
+	}
 }
 
 Statement::~Statement() {
@@ -77,20 +83,21 @@ static duckdb::Value bind_parameter(const Napi::Value source) {
 
 struct RunPreparedTask : public Task {
 	RunPreparedTask(Statement &statement_, std::vector<duckdb::Value> params_, Napi::Function callback_)
-	    : Task(callback_), statement(statement_), params(params_) {
-		statement.Ref();
+	    : Task(statement_, callback_), params(params_) {
 	}
 
 	void DoWork() override {
-		result = statement.statement->Execute(params, true);
+		auto &statement = Get<Statement>();
+		statement.result = statement.statement->Execute(params, true);
 	}
 
 	void Callback() override {
+		auto &statement = Get<Statement>();
 		Napi::Env env = statement.Env();
 
 		std::vector<napi_value> args;
-		if (!result->success) {
-			args.push_back(Utils::CreateError(env, result->error));
+		if (!statement.result->success) {
+			args.push_back(Utils::CreateError(env, statement.result->error));
 		} else {
 			args.push_back(env.Null());
 		}
@@ -101,13 +108,6 @@ struct RunPreparedTask : public Task {
 		Napi::HandleScope scope(env);
 		callback.Value().MakeCallback(statement.Value(), args);
 	}
-
-	~RunPreparedTask() {
-		statement.Unref();
-	}
-
-	unique_ptr<duckdb::QueryResult> result;
-	Statement &statement;
 	std::vector<duckdb::Value> params;
 };
 
@@ -167,15 +167,16 @@ static Napi::Value convert_chunk(Napi::Env &env, vector<string> names, duckdb::D
 
 struct RunAllTask : public Task {
 	RunAllTask(Statement &statement_, std::vector<duckdb::Value> params_, Napi::Function callback_)
-	    : Task(callback_), statement(statement_), params(params_) {
-		statement.Ref();
+	    : Task(statement_, callback_), params(params_) {
 	}
 
 	void DoWork() override {
-		result = statement.statement->Execute(params, true);
+		auto &statement = Get<Statement>();
+		statement.result = statement.statement->Execute(params, true);
 	}
 
 	void Callback() override {
+		auto &statement = Get<Statement>();
 
 		Napi::Env env = statement.Env();
 
@@ -186,19 +187,19 @@ struct RunAllTask : public Task {
 			return;
 		}
 
-		if (!result->success) {
-			callback.Value().MakeCallback(statement.Value(), {Utils::CreateError(env, result->error)});
+		if (!statement.result->success) {
+			callback.Value().MakeCallback(statement.Value(), {Utils::CreateError(env, statement.result->error)});
 			return;
 		}
 
 		// regrettably this needs to know the result size
 		// ensure result is materialized
-		if (result->type == duckdb::QueryResultType::STREAM_RESULT) {
-			auto streaming_result = (duckdb::StreamQueryResult *)result.get();
+		if (statement.result->type == duckdb::QueryResultType::STREAM_RESULT) {
+			auto streaming_result = (duckdb::StreamQueryResult *)statement.result.get();
 			auto materialized_result = streaming_result->Materialize();
-			result = move(materialized_result);
+			statement.result = move(materialized_result);
 		}
-		auto materialized_result = (duckdb::MaterializedQueryResult *)result.get();
+		auto materialized_result = (duckdb::MaterializedQueryResult *)statement.result.get();
 
 		Napi::Array result(Napi::Array::New(env, materialized_result->collection.count));
 
@@ -222,55 +223,106 @@ struct RunAllTask : public Task {
 		callback.Value().MakeCallback(statement.Value(), {env.Null(), result});
 	}
 
-	~RunAllTask() {
-		statement.Unref();
-	}
-
-	unique_ptr<duckdb::QueryResult> result;
-	Statement &statement;
 	std::vector<duckdb::Value> params;
 };
+
+struct StatementParam {
+	std::vector<duckdb::Value> params;
+	Napi::Function callback;
+};
+
+void Statement::HandleArgs(const Napi::CallbackInfo &info, StatementParam &params_out) {
+	size_t start_idx = ignore_first_param ? 1 : 0;
+
+	for (auto i = start_idx; i < info.Length(); i++) {
+		auto &p = info[i];
+		if (p.IsFunction()) {
+			params_out.callback = p.As<Napi::Function>();
+			continue;
+		}
+		if (p.IsUndefined()) {
+			continue;
+		}
+		params_out.params.push_back(bind_parameter(p));
+	}
+}
 
 // TODO loads of overlap, abstract this
 // TODO better param parsing?
 Napi::Value Statement::All(const Napi::CallbackInfo &info) {
-	Napi::Function callback;
-
-	std::vector<duckdb::Value> params;
-	for (size_t i = 1; i < info.Length(); i++) {
-		auto &p = info[i];
-		if (p.IsFunction()) {
-			callback = p.As<Napi::Function>();
-			break;
-		}
-
-		params.push_back(bind_parameter(p));
-	}
-
-	connection_ref->database_ref->Schedule(info.Env(), duckdb::make_unique<RunAllTask>(*this, params, callback));
+	StatementParam params;
+	HandleArgs(info, params);
+	connection_ref->database_ref->Schedule(info.Env(),
+	                                       duckdb::make_unique<RunAllTask>(*this, params.params, params.callback));
 	return info.This();
 }
 
 Napi::Value Statement::Run(const Napi::CallbackInfo &info) {
-	Napi::Function callback;
+	StatementParam params;
+	HandleArgs(info, params);
+	connection_ref->database_ref->Schedule(info.Env(),
+	                                       duckdb::make_unique<RunPreparedTask>(*this, params.params, params.callback));
+	return info.This();
+}
 
-	std::vector<duckdb::Value> params;
-	for (size_t i = 0; i < info.Length(); i++) {
-		auto &p = info[i];
-		if (p.IsFunction()) {
-			callback = p.As<Napi::Function>();
-			break;
+struct RunEachTask : public Task {
+	RunEachTask(Statement &statement_, std::vector<duckdb::Value> params_, Napi::Function callback_)
+	    : Task(statement_, callback_), params(params_) {
+	}
+
+	void DoWork() override {
+		auto &statement = Get<Statement>();
+		statement.result = statement.statement->Execute(params, true);
+	}
+
+	void Callback() override {
+		auto &statement = Get<Statement>();
+
+		Napi::Env env = statement.Env();
+
+		// somehow the function can disappear mid-flight (?)
+		Napi::HandleScope scope(env);
+
+		if (!callback.Value().IsFunction()) {
+			return;
 		}
 
-		params.push_back(bind_parameter(p));
+		if (!statement.result->success) {
+			callback.Value().MakeCallback(statement.Value(), {Utils::CreateError(env, statement.result->error)});
+			return;
+		}
+
+		duckdb::idx_t out_idx = 0;
+		while (true) {
+			auto chunk = statement.result->Fetch();
+			if (chunk->size() == 0) {
+				break;
+			}
+			auto chunk_converted = convert_chunk(env, statement.result->names, *chunk);
+			if (!chunk_converted.IsArray()) {
+				// error was set before
+				return;
+			}
+			for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+				// fire ze missiles
+				callback.Value().MakeCallback(statement.Value(), {env.Null(), chunk_converted.ToObject().Get(row_idx)});
+			}
+		}
 	}
-	connection_ref->database_ref->Schedule(info.Env(), duckdb::make_unique<RunPreparedTask>(*this, params, callback));
+
+	std::vector<duckdb::Value> params;
+};
+
+Napi::Value Statement::Each(const Napi::CallbackInfo &info) {
+	StatementParam params;
+	HandleArgs(info, params);
+	connection_ref->database_ref->Schedule(info.Env(),
+	                                       duckdb::make_unique<RunEachTask>(*this, params.params, params.callback));
 	return info.This();
 }
 
 struct FinalizeTask : public Task {
-	FinalizeTask(Statement &statement_, Napi::Function callback_) : Task(callback_), statement(statement_) {
-		statement.Ref();
+	FinalizeTask(Statement &statement_, Napi::Function callback_) : Task(statement_, callback_) {
 	}
 
 	void DoWork() override {
@@ -278,6 +330,8 @@ struct FinalizeTask : public Task {
 	}
 
 	void Callback() override {
+		auto &statement = Get<Statement>();
+
 		// somehow the function can disappear mid-flight (?)
 		Napi::HandleScope scope(statement.Env());
 		if (!callback.Value().IsFunction()) {
@@ -286,21 +340,10 @@ struct FinalizeTask : public Task {
 		// TODO if no results, call with empty result arr
 		callback.Value().MakeCallback(statement.Value(), {statement.Env().Null()});
 	}
-
-	~FinalizeTask() {
-		statement.Unref();
-	}
-
-	unique_ptr<duckdb::QueryResult> result;
-	Statement &statement;
-	std::vector<duckdb::Value> params;
 };
 
 Napi::Value Statement::Finalize_(const Napi::CallbackInfo &info) {
-	// statement.reset();
-
 	// TODO check args
-	// TODO do we need to wait here? yes!
 	Napi::HandleScope scope(Env());
 
 	auto callback = info[0].As<Napi::Function>();
