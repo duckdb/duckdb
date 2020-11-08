@@ -151,11 +151,6 @@ static bool HasCorrelatedColumns(Expression &expression) {
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
-	if (ref.type == JoinType::RIGHT) {
-		ref.type = JoinType::LEFT;
-		std::swap(left, right);
-	}
-
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition))) {
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
