@@ -52,9 +52,13 @@ select count(*) from parquet_scan('test\sql\copy\parquet\data\g*\t1.parquet')
 statement error
 select count(*) from parquet_scan('')
 
+# schema mismatch in parquet glob
+statement error
+select count(*) from parquet_scan('test/sql/copy/parquet/data/*.parquet')
+
 # parquet glob with COPY FROM
 statement ok
-CREATE TABLE vals (i INTEGER, j VARCHAR)
+CREATE TABLE vals (i INTEGER, j BLOB)
 
 statement ok
 COPY vals FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);
@@ -64,3 +68,10 @@ SELECT * FROM vals ORDER BY 1, 2
 ----
 1	hello
 1	hello
+
+# failed to copy: incorrect types found in parquet file
+statement ok
+CREATE TABLE vals2 (i INTEGER, j INTEGER)
+
+statement error
+COPY vals2 FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);

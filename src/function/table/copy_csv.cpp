@@ -17,8 +17,7 @@ void SubstringDetection(string &str_1, string &str_2, string name_str_1, string 
 		return;
 	}
 	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
-		throw BinderException(name_str_1 + " must not appear in the " + name_str_2 +
-		                      " specification and vice versa");
+		throw BinderException(name_str_1 + " must not appear in the " + name_str_2 + " specification and vice versa");
 	}
 }
 
@@ -443,8 +442,7 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 	auto &cast_chunk = local_data.cast_chunk;
 	cast_chunk.SetCardinality(input);
 	for (idx_t col_idx = 0; col_idx < input.column_count(); col_idx++) {
-		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR ||
-		    csv_data.sql_types[col_idx].id() == LogicalTypeId::BLOB) {
+		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// VARCHAR, just create a reference
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
 		} else {

@@ -325,8 +325,6 @@ private:
 		case LogicalTypeId::CHAR:
 		case LogicalTypeId::BLOB:
 			return std::is_same<T, string_t>();
-		case LogicalTypeId::VARBINARY:
-			return std::is_same<T, blob_t>();
 		default:
 			throw InvalidTypeException(sql_type.InternalType(), "Type does not supported!");
 		}

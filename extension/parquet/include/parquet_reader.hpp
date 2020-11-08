@@ -64,7 +64,8 @@ struct ParquetReaderScanState {
 
 class ParquetReader {
 public:
-	ParquetReader(ClientContext &context, string file_name, vector<LogicalType> expected_types);
+	ParquetReader(ClientContext &context, string file_name, vector<LogicalType> expected_types,
+	              string initial_filename = string());
 	ParquetReader(ClientContext &context, string file_name) : ParquetReader(context, file_name, vector<LogicalType>()) {
 	}
 	~ParquetReader();
@@ -84,6 +85,7 @@ private:
 	parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	void PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
 	bool PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx);
+	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 
 	template <typename... Args> std::runtime_error FormatException(const string fmt_str, Args... params) {
 		return std::runtime_error("Failed to read Parquet file \"" + file_name +

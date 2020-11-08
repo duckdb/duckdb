@@ -19,7 +19,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function][.]") {
 	const vector<LogicalTypeId> all_sql_types = {
 	    LogicalTypeId::BOOLEAN, LogicalTypeId::TINYINT, LogicalTypeId::SMALLINT, LogicalTypeId::DATE,
 	    LogicalTypeId::TIME,    LogicalTypeId::INTEGER, LogicalTypeId::BIGINT,   LogicalTypeId::TIMESTAMP,
-	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::VARCHAR,  LogicalTypeId::BLOB};
+	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::VARCHAR};
 
 	// Creating the tables
 	for (LogicalType sql_type : all_sql_types) {
@@ -153,17 +153,6 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function][.]") {
 			                             LogicalType::VARCHAR, &udf_ternary_function<char *>);
 			break;
 		}
-		case LogicalTypeId::BLOB: {
-			con.CreateVectorizedFunction(func_name + "_1", {LogicalType::BLOB}, LogicalType::BLOB,
-			                             &udf_unary_function<char *>);
-
-			con.CreateVectorizedFunction(func_name + "_2", {LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB,
-			                             &udf_binary_function<char *>);
-
-			con.CreateVectorizedFunction(func_name + "_3", {LogicalType::BLOB, LogicalType::BLOB, LogicalType::BLOB},
-			                             LogicalType::BLOB, &udf_ternary_function<char *>);
-			break;
-		}
 		default:
 			break;
 		}
@@ -179,7 +168,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function][.]") {
 				con.Query(query + "(true, true, true), (true, true, false), (false, false, false);");
 			} else if (sql_type.IsNumeric()) {
 				con.Query(query + "(1, 10, 100),(2, 20, 100),(3, 30, 100);");
-			} else if (sql_type == LogicalType::VARCHAR | sql_type == LogicalType::BLOB) {
+			} else if (sql_type == LogicalType::VARCHAR) {
 				con.Query(query + "('a', 'b', 'c'),('a', 'b', 'c'),('a', 'b', 'c');");
 			} else if (sql_type == LogicalType::DATE) {
 				con.Query(query + "('2008-01-01', '2009-01-01', '2010-01-01')," +
@@ -227,15 +216,6 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function][.]") {
 
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"c", "c", "c"}));
-			} else if (sql_type == LogicalType::BLOB) {
-				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {"\\x61", "\\x61", "\\x61"}));
-
-				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {"\\x62", "\\x62", "\\x62"}));
-
-				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {"\\x63", "\\x63", "\\x63"}));
 			} else if (sql_type == LogicalType::DATE) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"2008-01-01", "2008-01-01", "2008-01-01"}));
