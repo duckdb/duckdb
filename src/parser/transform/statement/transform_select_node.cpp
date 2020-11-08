@@ -18,6 +18,44 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
 
+		// checks distinct clause
+		if (stmt->distinctClause != NULL) {
+			auto modifier = make_unique<DistinctModifier>();
+			// checks distinct on clause
+			auto target = reinterpret_cast<PGNode *>(stmt->distinctClause->head->data.ptr_value);
+			if (target) {
+				//  add the columns defined in the ON clause to the select list
+				if (!TransformExpressionList(stmt->distinctClause, modifier->distinct_on_targets)) {
+					throw Exception("Failed to transform expression list from DISTINCT ON.");
+				}
+			}
+			result->modifiers.push_back(move(modifier));
+		}
+
+		// do this early so the value lists also have a `FROM`
+		if (stmt->valuesLists) {
+			// VALUES list, create an ExpressionList
+			D_ASSERT(!stmt->fromClause);
+			result->from_table = TransformValuesList(stmt->valuesLists);
+			result->select_list.push_back(make_unique<StarExpression>());
+		} else {
+			if (!stmt->targetList) {
+				throw ParserException("SELECT clause without selection list");
+			}
+			// select list
+			if (!TransformExpressionList(stmt->targetList, result->select_list)) {
+				throw InternalException("Failed to transform expression list.");
+			}
+			result->from_table = TransformFrom(stmt->fromClause);
+		}
+
+		// where
+		result->where_clause = TransformExpression(stmt->whereClause);
+		// group by
+		TransformGroupBy(stmt->groupClause, result->groups);
+		// having
+		result->having = TransformExpression(stmt->havingClause);
+
 		if (stmt->windowClause) {
 			for (auto window_ele = stmt->windowClause->head; window_ele != NULL; window_ele = window_ele->next) {
 				auto window_def = reinterpret_cast<PGWindowDef *>(window_ele->data.ptr_value);
@@ -32,42 +70,6 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 				window_clauses[window_name] = window_def;
 			}
 		}
-
-		// do this early so the value lists also have a `FROM`
-		if (stmt->valuesLists) {
-			// VALUES list, create an ExpressionList
-			D_ASSERT(!stmt->fromClause);
-			result->from_table = TransformValuesList(stmt->valuesLists);
-			result->select_list.push_back(make_unique<StarExpression>());
-		} else {
-			result->from_table = TransformFrom(stmt->fromClause);
-			if (!stmt->targetList) {
-				throw ParserException("SELECT clause without selection list");
-			}
-			// select list
-			if (!TransformExpressionList(stmt->targetList, result->select_list)) {
-				throw Exception("Failed to transform expression list.");
-			}
-		}
-		// checks distinct clause
-		if (stmt->distinctClause != NULL) {
-			auto modifier = make_unique<DistinctModifier>();
-			// checks distinct on clause
-			auto target = reinterpret_cast<PGNode *>(stmt->distinctClause->head->data.ptr_value);
-			if (target) {
-				//  add the columns defined in the ON clause to the select list
-				if (!TransformExpressionList(stmt->distinctClause, modifier->distinct_on_targets)) {
-					throw Exception("Failed to transform expression list from DISTINCT ON.");
-				}
-			}
-			result->modifiers.push_back(move(modifier));
-		}
-		// from table
-		// group by
-		TransformGroupBy(stmt->groupClause, result->groups);
-		result->having = TransformExpression(stmt->havingClause);
-		// where
-		result->where_clause = TransformExpression(stmt->whereClause);
 		break;
 	}
 	case PG_SETOP_UNION:
