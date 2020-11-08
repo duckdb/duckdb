@@ -25,14 +25,14 @@ Expression *FilterCombiner::GetNode(Expression *expr) {
 	// expression does not exist yet: create a copy and store it
 	auto copy = expr->Copy();
 	auto pointer_copy = copy.get();
-	assert(stored_expressions.find(pointer_copy) == stored_expressions.end());
+	D_ASSERT(stored_expressions.find(pointer_copy) == stored_expressions.end());
 	stored_expressions.insert(make_pair(pointer_copy, move(copy)));
 	return pointer_copy;
 }
 
 idx_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
-	assert(stored_expressions.find(expr) != stored_expressions.end());
-	assert(stored_expressions.find(expr)->second.get() == expr);
+	D_ASSERT(stored_expressions.find(expr) != stored_expressions.end());
+	D_ASSERT(stored_expressions.find(expr)->second.get() == expr);
 
 	auto entry = equivalence_set_map.find(expr);
 	if (entry == equivalence_set_map.end()) {
@@ -279,7 +279,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			return FilterResult::SUCCESS;
 		}
 	}
-	assert(!expr->IsFoldable());
+	D_ASSERT(!expr->IsFoldable());
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_BETWEEN) {
 		auto &comparison = (BoundBetweenExpression &)*expr;
 		//! check if one of the sides is a scalar value
@@ -302,7 +302,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			info.constant = constant_value;
 
 			// get the current bucket of constant values
-			assert(constant_values.find(equivalence_set) != constant_values.end());
+			D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 			auto &info_list = constant_values.find(equivalence_set)->second;
 			// check the existing constant comparisons to see if we can do any pruning
 			AddConstantComparison(info_list, info);
@@ -318,7 +318,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			info.constant = constant_value;
 
 			// get the current bucket of constant values
-			assert(constant_values.find(equivalence_set) != constant_values.end());
+			D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 			// check the existing constant comparisons to see if we can do any pruning
 			return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 		}
@@ -348,7 +348,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			info.constant = constant_value;
 
 			// get the current bucket of constant values
-			assert(constant_values.find(equivalence_set) != constant_values.end());
+			D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 			auto &info_list = constant_values.find(equivalence_set)->second;
 			// check the existing constant comparisons to see if we can do any pruning
 			auto ret = AddConstantComparison(info_list, info);
@@ -387,8 +387,8 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 				return FilterResult::SUCCESS;
 			}
 			// add the right bucket into the left bucket
-			assert(equivalence_map.find(left_equivalence_set) != equivalence_map.end());
-			assert(equivalence_map.find(right_equivalence_set) != equivalence_map.end());
+			D_ASSERT(equivalence_map.find(left_equivalence_set) != equivalence_map.end());
+			D_ASSERT(equivalence_map.find(right_equivalence_set) != equivalence_map.end());
 
 			auto &left_bucket = equivalence_map.find(left_equivalence_set)->second;
 			auto &right_bucket = equivalence_map.find(right_equivalence_set)->second;
@@ -399,8 +399,8 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 				left_bucket.push_back(right_bucket[i]);
 			}
 			// now add all constant values from the right bucket to the left bucket
-			assert(constant_values.find(left_equivalence_set) != constant_values.end());
-			assert(constant_values.find(right_equivalence_set) != constant_values.end());
+			D_ASSERT(constant_values.find(left_equivalence_set) != constant_values.end());
+			D_ASSERT(constant_values.find(right_equivalence_set) != constant_values.end());
 			auto &left_constant_bucket = constant_values.find(left_equivalence_set)->second;
 			auto &right_constant_bucket = constant_values.find(right_equivalence_set)->second;
 			for (idx_t i = 0; i < right_constant_bucket.size(); i++) {
@@ -421,7 +421,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
 */
 FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison) {
-	assert(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
+	D_ASSERT(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
 	// get the LHS and RHS nodes
 	Expression *left_node = GetNode(comparison.left.get());
 	Expression *right_node = GetNode(comparison.right.get());
@@ -559,7 +559,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 			prune_right_side = left.constant != right.constant;
 			break;
 		default:
-			assert(right.comparison_type == ExpressionType::COMPARE_EQUAL);
+			D_ASSERT(right.comparison_type == ExpressionType::COMPARE_EQUAL);
 			prune_right_side = left.constant == right.constant;
 			break;
 		}
@@ -590,7 +590,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 			prune_left_side = left.constant < right.constant;
 			break;
 		default:
-			assert(right.comparison_type == ExpressionType::COMPARE_NOTEQUAL);
+			D_ASSERT(right.comparison_type == ExpressionType::COMPARE_NOTEQUAL);
 			prune_left_side = left.constant == right.constant;
 			break;
 		}
@@ -644,7 +644,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 			}
 		}
 	} else if (IsLessThan(left.comparison_type)) {
-		assert(IsGreaterThan(right.comparison_type));
+		D_ASSERT(IsGreaterThan(right.comparison_type));
 		// left is [<] and right is [>], in this case we can either
 		// (1) prune nothing or
 		// (2) return UNSATISFIABLE
@@ -656,7 +656,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 		}
 	} else {
 		// left is [>] and right is [<] or [!=]
-		assert(IsLessThan(right.comparison_type) && IsGreaterThan(left.comparison_type));
+		D_ASSERT(IsLessThan(right.comparison_type) && IsGreaterThan(left.comparison_type));
 		return InvertValueComparisonResult(CompareValueInformation(right, left));
 	}
 }

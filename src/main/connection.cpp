@@ -70,7 +70,7 @@ unique_ptr<QueryResult> Connection::SendQuery(string query) {
 
 unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 	auto result = context->Query(query, false);
-	assert(result->type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 }
 

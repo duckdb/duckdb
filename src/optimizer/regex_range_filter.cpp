@@ -23,7 +23,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 		op->children[child_idx] = Rewrite(move(op->children[child_idx]));
 	}
 
-	if (op->type != LogicalOperatorType::FILTER) {
+	if (op->type != LogicalOperatorType::LOGICAL_FILTER) {
 		return op;
 	}
 

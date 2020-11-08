@@ -143,8 +143,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 		children.push_back(move(left_expr));
 
 		auto &similar_func = reinterpret_cast<FunctionExpression &>(*right_expr);
-		assert(similar_func.function_name == "similar_escape");
-		assert(similar_func.children.size() == 2);
+		D_ASSERT(similar_func.function_name == "similar_escape");
+		D_ASSERT(similar_func.children.size() == 2);
 		if (similar_func.children[1]->type != ExpressionType::VALUE_CONSTANT) {
 			throw NotImplementedException("Custom escape in SIMILAR TO");
 		}

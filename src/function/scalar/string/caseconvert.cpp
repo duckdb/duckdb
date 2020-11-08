@@ -22,7 +22,7 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 			int codepoint = utf8proc_codepoint(input_data + i, sz);
 			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
 			int new_sz = utf8proc_codepoint_length(converted_codepoint);
-			assert(new_sz >= 0);
+			D_ASSERT(new_sz >= 0);
 			output_length += new_sz;
 			i += sz;
 		} else {
@@ -41,7 +41,7 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 			int codepoint = utf8proc_codepoint(input_data + i, sz);
 			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
 			const auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
-			assert(success);
+			D_ASSERT(success);
 			(void)success;
 			result_data += new_sz;
 			i += sz;
@@ -57,7 +57,7 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 }
 
 template <bool IS_UPPER> static void caseconvert_function(Vector &input, Vector &result, idx_t count) {
-	assert(input.type.id() == LogicalTypeId::VARCHAR);
+	D_ASSERT(input.type.id() == LogicalTypeId::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(input, result, count, [&](string_t input) {
 		auto input_data = input.GetData();
@@ -67,12 +67,12 @@ template <bool IS_UPPER> static void caseconvert_function(Vector &input, Vector 
 }
 
 static void caseconvert_upper_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 1);
+	D_ASSERT(args.column_count() == 1);
 	caseconvert_function<true>(args.data[0], result, args.size());
 }
 
 static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 1);
+	D_ASSERT(args.column_count() == 1);
 	caseconvert_function<false>(args.data[0], result, args.size());
 }
 

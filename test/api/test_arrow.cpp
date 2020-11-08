@@ -15,7 +15,7 @@ struct MyArrowArrayStream {
 	}
 
 	static int my_stream_getschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
-		assert(stream->private_data);
+		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
 			my_stream->last_error = "stream was released";
@@ -26,7 +26,7 @@ struct MyArrowArrayStream {
 	}
 
 	static int my_stream_getnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
-		assert(stream->private_data);
+		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
 			my_stream->last_error = "stream was released";
@@ -52,7 +52,7 @@ struct MyArrowArrayStream {
 		if (!stream->release) {
 			return "stream was released";
 		}
-		assert(stream->private_data);
+		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		return my_stream->last_error.c_str();
 	}

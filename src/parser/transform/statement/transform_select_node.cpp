@@ -21,8 +21,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		if (stmt->windowClause) {
 			for (auto window_ele = stmt->windowClause->head; window_ele != NULL; window_ele = window_ele->next) {
 				auto window_def = reinterpret_cast<PGWindowDef *>(window_ele->data.ptr_value);
-				assert(window_def);
-				assert(window_def->name);
+				D_ASSERT(window_def);
+				D_ASSERT(window_def->name);
 				auto window_name = StringUtil::Lower(string(window_def->name));
 
 				auto it = window_clauses.find(window_name);
@@ -36,7 +36,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		// do this early so the value lists also have a `FROM`
 		if (stmt->valuesLists) {
 			// VALUES list, create an ExpressionList
-			assert(!stmt->fromClause);
+			D_ASSERT(!stmt->fromClause);
 			result->from_table = TransformValuesList(stmt->valuesLists);
 			result->select_list.push_back(make_unique<StarExpression>());
 		} else {

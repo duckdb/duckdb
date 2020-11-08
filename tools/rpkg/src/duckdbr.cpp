@@ -404,7 +404,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 		if (!generic_result->success) {
 			Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
 		}
-		assert(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
+		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
 		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
 
 		// Protect during destruction of generic_result
@@ -468,8 +468,8 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		if (chunk->size() == 0) {
 			break;
 		}
-		assert(chunk->column_count() == ncols);
-		assert(chunk->column_count() == LENGTH(retlist));
+		D_ASSERT(chunk->column_count() == ncols);
+		D_ASSERT(chunk->column_count() == LENGTH(retlist));
 		for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 			SEXP dest = VECTOR_ELT(retlist, col_idx);
 			switch (result->types[col_idx].id()) {
@@ -619,7 +619,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		dest_offset += chunk->size();
 	}
 
-	assert(dest_offset == nrows);
+	D_ASSERT(dest_offset == nrows);
 	UNPROTECT(1); /* retlist */
 	return retlist;
 }

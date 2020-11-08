@@ -7,7 +7,7 @@ clean:
 	rm -rf target
 
 duckdb:
-	make -C ../.. jdbc
+	BUILD_JDBC=1 make -C ../..
 
 main:
 	javac DuckDBExample.java

@@ -35,7 +35,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	}
 	// fetch the schema in which we want to create the object
 	auto schema_obj = Catalog::GetCatalog(context).GetSchema(context, info.schema);
-	assert(schema_obj->type == CatalogType::SCHEMA_ENTRY);
+	D_ASSERT(schema_obj->type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj->name;
 	return schema_obj;
 }
@@ -65,7 +65,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY:
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SCHEMA, move(stmt.info));
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, move(stmt.info));
 		break;
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
@@ -73,12 +73,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto schema = BindSchema(*stmt.info);
 
 		BindCreateViewInfo(base);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_VIEW, move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SEQUENCE, move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -99,7 +99,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 
 		auto plan = CreatePlan(*bound_table);
-		if (plan->type != LogicalOperatorType::GET) {
+		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
 		}
 		auto &get = (LogicalGet &)*plan;

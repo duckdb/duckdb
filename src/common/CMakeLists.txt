@@ -9,6 +9,7 @@ add_subdirectory(vector_operations)
 add_library_unity(
   duckdb_common
   OBJECT
+  assert.cpp
   constants.cpp
   checksum.cpp
   exception.cpp

@@ -15,8 +15,8 @@ FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
 	if (bufsiz % SECTOR_SIZE != 0) {
 		bufsiz += SECTOR_SIZE - (bufsiz % SECTOR_SIZE);
 	}
-	assert(bufsiz % SECTOR_SIZE == 0);
-	assert(bufsiz >= SECTOR_SIZE);
+	D_ASSERT(bufsiz % SECTOR_SIZE == 0);
+	D_ASSERT(bufsiz >= SECTOR_SIZE);
 	// we add (SECTOR_SIZE - 1) to ensure that we can align the buffer to SECTOR_SIZE
 	malloced_buffer = (data_ptr_t)malloc(bufsiz + (SECTOR_SIZE - 1));
 	if (!malloced_buffer) {
@@ -28,9 +28,9 @@ FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
 	if (remainder != 0) {
 		num = num + SECTOR_SIZE - remainder;
 	}
-	assert(num % SECTOR_SIZE == 0);
-	assert(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (SECTOR_SIZE - 1)));
-	assert(num >= (uint64_t)malloced_buffer);
+	D_ASSERT(num % SECTOR_SIZE == 0);
+	D_ASSERT(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (SECTOR_SIZE - 1)));
+	D_ASSERT(num >= (uint64_t)malloced_buffer);
 	// construct the FileBuffer object
 	internal_buffer = (data_ptr_t)num;
 	internal_size = bufsiz;

@@ -13,7 +13,7 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	//	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	//	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
-	assert(result.type.id() == LogicalTypeId::LIST);
+	D_ASSERT(result.type.id() == LogicalTypeId::LIST);
 	auto list_child = make_unique<ChunkCollection>();
 	ListVector::SetEntry(result, move(list_child));
 

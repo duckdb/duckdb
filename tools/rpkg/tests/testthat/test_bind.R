@@ -52,18 +52,18 @@ test_that("dbBind() works as expected for all types", {
 test_that("dbBind() is called from dbGetQuery and dbExecute", {
   con <- dbConnect(duckdb::duckdb())
 
-  res <- dbGetQuery(con, "SELECT CAST (? AS INTEGER), CAST(? AS STRING)", 42, "Hello")
+  res <- dbGetQuery(con, "SELECT CAST (? AS INTEGER), CAST(? AS STRING)", params = list(42, "Hello"))
 
   expect_equal(res[[1]][1], 42L)
   expect_equal(res[[2]][1], "Hello")
 
-  res <- dbGetQuery(con, "SELECT CAST (? AS INTEGER), CAST(? AS STRING)", list(42, "Hello"))
+  res <- dbGetQuery(con, "SELECT CAST (? AS INTEGER), CAST(? AS STRING)", params = list(42, "Hello"))
 
   expect_equal(res[[1]][1], 42L)
   expect_equal(res[[2]][1], "Hello")
 
 
-  q <- dbSendQuery(con, "SELECT CAST (? AS INTEGER), CAST(? AS STRING)", 42, "Hello")
+  q <- dbSendQuery(con, "SELECT CAST (? AS INTEGER), CAST(? AS STRING)", params = list(42, "Hello"))
   # already have a result
 
   res <- dbFetch(q)

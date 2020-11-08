@@ -24,8 +24,8 @@ unique_ptr<BufferEntry> BufferList::Pop() {
 }
 
 unique_ptr<BufferEntry> BufferList::Erase(BufferEntry *entry) {
-	assert(entry->prev || entry == root.get());
-	assert(entry->next || entry == last);
+	D_ASSERT(entry->prev || entry == root.get());
+	D_ASSERT(entry->next || entry == last);
 	// first get the entry, either from the previous entry or from the root node
 	auto current = entry->prev ? move(entry->prev->next) : move(root);
 	auto prev = entry->prev;
@@ -44,9 +44,9 @@ unique_ptr<BufferEntry> BufferList::Erase(BufferEntry *entry) {
 		} else {
 			last = nullptr;
 		}
-		assert(!root || !root->prev);
+		D_ASSERT(!root || !root->prev);
 	} else if (prev != last) {
-		assert(next);
+		D_ASSERT(next);
 		next->prev = prev;
 		prev->next = move(next);
 	}
@@ -55,7 +55,7 @@ unique_ptr<BufferEntry> BufferList::Erase(BufferEntry *entry) {
 }
 
 void BufferList::Append(unique_ptr<BufferEntry> entry) {
-	assert(!entry->next);
+	D_ASSERT(!entry->next);
 	if (!last) {
 		// empty list: set as root
 		entry->prev = nullptr;

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
@@ -48,6 +49,11 @@ struct TableFunctionData : public FunctionData {
 	vector<idx_t> column_ids;
 };
 
+struct FunctionParameters {
+	vector<Value> values;
+	unordered_map<string, Value> named_parameters;
+};
+
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:
@@ -64,21 +70,28 @@ public:
 	static string CallToString(string name, vector<LogicalType> arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	static string CallToString(string name, vector<LogicalType> arguments, LogicalType return_type);
+	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
+	static string CallToString(string name, vector<LogicalType> arguments,
+	                           unordered_map<string, LogicalType> named_parameters);
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns INVALID_INDEX and sets error if none could be found
-	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments, string &error);
-	static idx_t BindFunction(string name, vector<ScalarFunction> &functions,
-	                          vector<unique_ptr<Expression>> &arguments, string &error);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
+	                          string &error);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments,
+	                          string &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns INVALID_INDEX and sets error if none could be found
-	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments, string &error);
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
+	                          string &error);
 	static idx_t BindFunction(string name, vector<AggregateFunction> &functions,
 	                          vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns INVALID_INDEX and sets error if none could be found
-	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments, string &error);
-	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments, string &error);
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
+	                          string &error);
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments,
+	                          string &error);
 	//! Bind a pragma function from the set of functions and input arguments
 	static idx_t BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error);
 };
@@ -105,6 +118,31 @@ public:
 	bool HasVarArgs() {
 		return varargs.id() != LogicalTypeId::INVALID;
 	}
+};
+
+class SimpleNamedParameterFunction : public SimpleFunction {
+public:
+	SimpleNamedParameterFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID)
+	    : SimpleFunction(name, move(arguments), varargs) {
+	}
+	virtual ~SimpleNamedParameterFunction() {
+	}
+
+	//! The named parameters of the function
+	unordered_map<string, LogicalType> named_parameters;
+
+public:
+	virtual string ToString() {
+		return Function::CallToString(name, arguments, named_parameters);
+	}
+
+	bool HasNamedParameters() {
+		return named_parameters.size() != 0;
+	}
+
+	void EvaluateInputParameters(vector<LogicalType> &arguments, vector<Value> &parameters,
+	                             unordered_map<string, Value> &named_parameters,
+	                             vector<unique_ptr<ParsedExpression>> &children);
 };
 
 class BaseScalarFunction : public SimpleFunction {

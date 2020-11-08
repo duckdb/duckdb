@@ -14,7 +14,7 @@ namespace duckdb {
 
 class LogicalUpdate : public LogicalOperator {
 public:
-	LogicalUpdate(TableCatalogEntry *table) : LogicalOperator(LogicalOperatorType::UPDATE), table(table) {
+	LogicalUpdate(TableCatalogEntry *table) : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table) {
 	}
 
 	TableCatalogEntry *table;

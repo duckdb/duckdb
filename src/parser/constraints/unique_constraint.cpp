@@ -23,7 +23,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() {
 	if (index == INVALID_INDEX) {
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	} else {
-		assert(columns.size() == 0);
+		D_ASSERT(columns.size() == 0);
 		return make_unique<UniqueConstraint>(index, is_primary_key);
 	}
 }
@@ -32,7 +32,7 @@ void UniqueConstraint::Serialize(Serializer &serializer) {
 	Constraint::Serialize(serializer);
 	serializer.Write<bool>(is_primary_key);
 	serializer.Write<uint64_t>(index);
-	assert(columns.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(columns.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)columns.size());
 	for (auto &column : columns) {
 		serializer.WriteString(column);

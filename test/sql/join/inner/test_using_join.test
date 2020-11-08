@@ -71,6 +71,10 @@ SELECT * FROM t1 JOIN t2 USING(a,b)
 statement error
 SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (b);
 
+# this is the same, but now with a duplicate potential binding on the RHS
+statement error
+select * from (values (1)) tbl(i) join ((values (1)) tbl2(i) join  (values (1)) tbl3(i) on tbl2.i=tbl3.i) using (i)
+
 # a chain with the same column name is allowed though!
 query IIIIIII
 SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (a) ORDER BY 1, 2, 3, 4, 5, 6, 7
@@ -79,4 +83,3 @@ SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (a) ORDER BY 1, 2, 3, 4, 5, 
 1	2	3	2	3	3	4
 1	2	3	3	4	2	3
 1	2	3	3	4	3	4
-

@@ -76,7 +76,7 @@ public:
 	//! Locates the chunk that belongs to the specific index
 	idx_t LocateChunk(idx_t index) {
 		idx_t result = index / STANDARD_VECTOR_SIZE;
-		assert(result < chunks.size());
+		D_ASSERT(result < chunks.size());
 		return result;
 	}
 

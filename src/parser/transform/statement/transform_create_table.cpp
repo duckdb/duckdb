@@ -52,14 +52,14 @@ ColumnDefinition Transformer::TransformColumnDefinition(PGColumnDef *cdef) {
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTableInfo>();
 
 	if (stmt->inhRelations) {
 		throw NotImplementedException("inherited relations not implemented");
 	}
-	assert(stmt->relation);
+	D_ASSERT(stmt->relation);
 
 	info->schema = INVALID_SCHEMA;
 	if (stmt->relation->schemaname) {

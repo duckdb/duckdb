@@ -9,7 +9,7 @@ ExpressionExecutor::ExpressionExecutor() {
 }
 
 ExpressionExecutor::ExpressionExecutor(Expression *expression) {
-	assert(expression);
+	D_ASSERT(expression);
 	AddExpression(*expression);
 }
 
@@ -18,7 +18,7 @@ ExpressionExecutor::ExpressionExecutor(Expression &expression) {
 }
 
 ExpressionExecutor::ExpressionExecutor(vector<unique_ptr<Expression>> &exprs) {
-	assert(exprs.size() > 0);
+	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {
 		AddExpression(*expr);
 	}
@@ -39,8 +39,8 @@ void ExpressionExecutor::Initialize(Expression &expression, ExpressionExecutorSt
 void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	SetChunk(input);
 
-	assert(expressions.size() == result.column_count());
-	assert(expressions.size() > 0);
+	D_ASSERT(expressions.size() == result.column_count());
+	D_ASSERT(expressions.size() > 0);
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
@@ -54,38 +54,38 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 }
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
-	assert(expressions.size() == 1);
+	D_ASSERT(expressions.size() == 1);
 	SetChunk(&input);
 	return Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
 }
 
 void ExpressionExecutor::ExecuteExpression(Vector &result) {
-	assert(expressions.size() == 1);
+	D_ASSERT(expressions.size() == 1);
 	ExecuteExpression(0, result);
 }
 
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
-	assert(expr_idx < expressions.size());
-	assert(result.type == expressions[expr_idx]->return_type);
+	D_ASSERT(expr_idx < expressions.size());
+	D_ASSERT(result.type == expressions[expr_idx]->return_type);
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
 }
 
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
-	assert(expr.IsFoldable());
+	D_ASSERT(expr.IsFoldable());
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(expr);
 
 	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);
 
-	assert(result.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(result.vector_type == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
-	assert(result_value.type() == expr.return_type);
+	D_ASSERT(result_value.type() == expr.return_type);
 	return result_value;
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
-	assert(expr.return_type == vector.type);
+	D_ASSERT(expr.return_type == vector.type);
 	vector.Verify(count);
 }
 
@@ -163,8 +163,8 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 	if (count == 0) {
 		return 0;
 	}
-	assert(true_sel || false_sel);
-	assert(expr.return_type.id() == LogicalTypeId::BOOLEAN);
+	D_ASSERT(true_sel || false_sel);
+	D_ASSERT(expr.return_type.id() == LogicalTypeId::BOOLEAN);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select((BoundBetweenExpression &)expr, state, sel, count, true_sel, false_sel);
@@ -212,7 +212,7 @@ static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector
 		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
 		                                               true_sel, false_sel);
 	} else {
-		assert(false_sel);
+		D_ASSERT(false_sel);
 		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
 		                                               true_sel, false_sel);
 	}

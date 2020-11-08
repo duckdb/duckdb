@@ -14,13 +14,13 @@ ConnectionManager::~ConnectionManager() {
 }
 
 void ConnectionManager::AddConnection(Connection *conn) {
-	assert(conn);
+	D_ASSERT(conn);
 	std::lock_guard<std::mutex> lock(connections_lock);
 	connections.insert(conn);
 }
 
 void ConnectionManager::RemoveConnection(Connection *conn) {
-	assert(conn);
+	D_ASSERT(conn);
 	std::lock_guard<std::mutex> lock(connections_lock);
 	connections.erase(conn);
 }

@@ -16,7 +16,7 @@ PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, idx_
                                      idx_t start, idx_t count, data_t stats_min[], data_t stats_max[])
     : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count, stats_min, stats_max), manager(manager),
       block_id(id), offset(offset) {
-	assert(offset == 0);
+	D_ASSERT(offset == 0);
 	if (type == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(manager, start, id);
 		data->max_vector_count = count / STANDARD_VECTOR_SIZE + (count % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);

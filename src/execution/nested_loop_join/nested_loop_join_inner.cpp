@@ -55,7 +55,7 @@ struct RefineNestedLoopJoin {
 		// refine phase of the nested loop join
 		// refine lvector and rvector based on matches of subsequent conditions (in case there are multiple conditions
 		// in the join)
-		assert(current_match_count > 0);
+		D_ASSERT(current_match_count > 0);
 		auto ldata = (T *)left_data.data;
 		auto rdata = (T *)right_data.data;
 		idx_t result_count = 0;
@@ -120,7 +120,7 @@ template <class NLTYPE>
 idx_t nested_loop_join_inner(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
                              SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count,
                              ExpressionType comparison_type) {
-	assert(left.type == right.type);
+	D_ASSERT(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return nested_loop_join_inner_operator<NLTYPE, duckdb::Equals>(left, right, left_size, right_size, lpos, rpos,
@@ -148,7 +148,7 @@ idx_t nested_loop_join_inner(Vector &left, Vector &right, idx_t left_size, idx_t
 idx_t NestedLoopJoinInner::Perform(idx_t &lpos, idx_t &rpos, DataChunk &left_conditions, DataChunk &right_conditions,
                                    SelectionVector &lvector, SelectionVector &rvector,
                                    vector<JoinCondition> &conditions) {
-	assert(left_conditions.column_count() == right_conditions.column_count());
+	D_ASSERT(left_conditions.column_count() == right_conditions.column_count());
 	if (lpos >= left_conditions.size() || rpos >= right_conditions.size()) {
 		return 0;
 	}

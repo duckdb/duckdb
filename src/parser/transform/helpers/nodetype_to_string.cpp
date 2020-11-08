@@ -812,7 +812,7 @@ std::string Transformer::NodetypeToString(PGNodeTag type) {
 	case T_PGForeignKeyCacheInfo:
 		return "T_ForeignKeyCacheInfo";
 	default:
-		assert(0);
+		D_ASSERT(0);
 		return "";
 	}
 }
