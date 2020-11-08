@@ -19,6 +19,8 @@ struct ShowSelectFunctionData : public TableFunctionData {
 
 static unique_ptr<FunctionData> show_select_info_bind(ClientContext &context, vector<Value> inputs,
                                                        vector<SQLType> &return_types, vector<string> &names) {
+
+	// Because of context, probably here columns of select statement will be binded.
 	names.push_back("cid");
 	return_types.push_back(SQLType::INTEGER);
 
@@ -73,9 +75,12 @@ static void show_select_info_schema(ShowSelectFunctionData &data, ShowSelectInfo
 }
 
 static void show_select_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
+
+	auto &data = *((ShowSelectFunctionData *)dataptr);
+	show_select_info_schema(data, info, output);
 	/*auto &data = *((ShowSelectFunctionData *)dataptr);
 
-  auto info = CreateInfo(CatalogType::VIEW, DEFAULT_SCHEMA)
+  auto info = CreateInfo(CatalogType::VIEW, DEFAULT_SCHEMA);
   data.entry.Initialize(info);
 
 	if (!data.entry) {
