@@ -52,7 +52,6 @@ public:
 public:
 	constexpr static int DUCKDB_NODEJS_ERROR = -1;
 	constexpr static int DUCKDB_NODEJS_READONLY = 1;
-	static Napi::FunctionReference constructor;
 	std::unique_ptr<duckdb::DuckDB> database;
 	Connection *default_connection;
 

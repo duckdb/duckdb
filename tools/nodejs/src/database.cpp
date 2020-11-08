@@ -2,8 +2,6 @@
 
 namespace node_duckdb {
 
-Napi::FunctionReference Database::constructor;
-
 Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
@@ -12,12 +10,9 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	    {InstanceMethod("run", &Database::Run), InstanceMethod("all", &Database::All),
 	     InstanceMethod("prepare", &Database::Prepare), InstanceMethod("close", &Database::Close),
 	     InstanceMethod("wait", &Database::Wait), InstanceMethod("serialize", &Database::Serialize),
-	     InstanceMethod("parallelize", &Database::Parallelize), InstanceMethod("interrupt", &Database::Interrupt),
-	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt),
-	     InstanceMethod("each", &Database::Each), InstanceAccessor("open", &Database::OpenGetter, nullptr)});
-
-	constructor = Napi::Persistent(t);
-	constructor.SuppressDestruct();
+	     InstanceMethod("parallelize", &Database::Parallelize), InstanceMethod("connect", &Database::Connect),
+	     InstanceMethod("interrupt", &Database::Interrupt), InstanceMethod("each", &Database::Each),
+	     InstanceAccessor("open", &Database::OpenGetter, nullptr)});
 
 	exports.Set("Database", t);
 	return exports;
