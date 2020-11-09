@@ -1032,7 +1032,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
-	for (; state.block_position < blocks.size(); state.block_position++) {
+	for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
 		auto &block = blocks[state.block_position];
 		auto &handle = pinned_handles[state.block_position];
 		auto baseptr = handle->node->buffer;
