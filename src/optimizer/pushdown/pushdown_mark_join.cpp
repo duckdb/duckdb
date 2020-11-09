@@ -13,7 +13,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	auto &join = (LogicalJoin &)*op;
 	auto &comp_join = (LogicalComparisonJoin &)*op;
 	D_ASSERT(join.join_type == JoinType::MARK);
-	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);

@@ -16,7 +16,7 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 template <class OP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
 	D_ASSERT(left.type.id() == LogicalTypeId::BOOLEAN && right.type.id() == LogicalTypeId::BOOLEAN &&
-	       result.type.id() == LogicalTypeId::BOOLEAN);
+	         result.type.id() == LogicalTypeId::BOOLEAN);
 
 	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 		// operation on two constants, result is constant vector

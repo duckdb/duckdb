@@ -14,7 +14,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSchema(PGNode *node) {
 
 	D_ASSERT(stmt->schemaname);
 	info->schema = stmt->schemaname;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict =
+	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
 	if (stmt->schemaElts) {
 		// schema elements

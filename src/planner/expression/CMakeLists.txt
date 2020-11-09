@@ -9,6 +9,7 @@ add_library_unity(duckdb_planner_expression
                   bound_conjunction_expression.cpp
                   bound_constant_expression.cpp
                   bound_function_expression.cpp
+                  bound_macro_expression.cpp
                   bound_operator_expression.cpp
                   bound_parameter_expression.cpp
                   bound_reference_expression.cpp

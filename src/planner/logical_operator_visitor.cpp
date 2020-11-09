@@ -116,6 +116,9 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_FUNCTION:
 		result = VisitReplace((BoundFunctionExpression &)expr, expression);
 		break;
+	case ExpressionClass::BOUND_MACRO:
+		result = VisitReplace((BoundMacroExpression &)expr, expression);
+		break;
 	case ExpressionClass::BOUND_SUBQUERY:
 		result = VisitReplace((BoundSubqueryExpression &)expr, expression);
 		break;
@@ -204,6 +207,11 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundDefaultExpressi
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundFunctionExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
+	return nullptr;
+}
+
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundMacroExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

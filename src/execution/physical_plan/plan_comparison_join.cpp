@@ -75,7 +75,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			D_ASSERT(cond.comparison == ExpressionType::COMPARE_EQUAL);
 		}
 	}
-	(void) has_null_equal_conditions;
+	(void)has_null_equal_conditions;
 
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {

@@ -8,7 +8,8 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
-	if (op->type == LogicalOperatorType::LOGICAL_LIMIT && op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+	if (op->type == LogicalOperatorType::LOGICAL_LIMIT &&
+	    op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
 		auto &limit = (LogicalLimit &)*op;
 		auto &order_by = (LogicalOrder &)*(op->children[0]);
 

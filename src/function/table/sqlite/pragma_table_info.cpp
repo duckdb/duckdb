@@ -70,17 +70,17 @@ static void check_constraints(TableCatalogEntry *table, idx_t oid, bool &out_not
 	out_pk = false;
 	// check all constraints
 	// FIXME: this is pretty inefficient, it probably doesn't matter
-	for(auto &constraint : table->bound_constraints) {
-		switch(constraint->type) {
+	for (auto &constraint : table->bound_constraints) {
+		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (BoundNotNullConstraint &) *constraint;
+			auto &not_null = (BoundNotNullConstraint &)*constraint;
 			if (not_null.index == oid) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (BoundUniqueConstraint &) *constraint;
+			auto &unique = (BoundUniqueConstraint &)*constraint;
 			if (unique.is_primary_key && unique.keys.find(oid) != unique.keys.end()) {
 				out_pk = true;
 			}

@@ -128,7 +128,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// columns were cleared
 				setop.column_count = entries.size();
 
-				for(idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
+				for (idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
 					RemoveUnusedColumns remove(binder, context, true);
 					auto &child = op.children[child_idx];
 
@@ -137,9 +137,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					auto bindings = child->GetColumnBindings();
 					vector<unique_ptr<Expression>> expressions;
 					for (auto &column_idx : entries) {
-						expressions.push_back(make_unique<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+						expressions.push_back(
+						    make_unique<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
 					}
-					auto new_projection = make_unique<LogicalProjection>(binder.GenerateTableIndex(), move(expressions));
+					auto new_projection =
+					    make_unique<LogicalProjection>(binder.GenerateTableIndex(), move(expressions));
 					new_projection->children.push_back(move(child));
 					op.children[child_idx] = move(new_projection);
 

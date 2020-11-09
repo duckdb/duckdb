@@ -72,6 +72,13 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		break;
 	}
+	case ExpressionClass::BOUND_MACRO: {
+		auto &macro_expr = (BoundMacroExpression &)expr;
+		for (auto &child : macro_expr.children) {
+			child = callback(move(child));
+		}
+		break;
+	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op_expr = (BoundOperatorExpression &)expr;
 		for (auto &child : op_expr.children) {
@@ -166,7 +173,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 	}
 	default:
 		D_ASSERT(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
-		       ref.type == TableReferenceType::EMPTY);
+		         ref.type == TableReferenceType::EMPTY);
 		break;
 	}
 }

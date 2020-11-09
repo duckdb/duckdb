@@ -1,19 +1,20 @@
-#include "duckdb/parser/statement/create_statement.hpp"
-#include "duckdb/planner/operator/logical_create.hpp"
-#include "duckdb/planner/operator/logical_create_table.hpp"
-#include "duckdb/planner/operator/logical_create_index.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_sql_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/index_binder.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/planner/operator/logical_create.hpp"
+#include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/operator/logical_create_table.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -58,12 +59,29 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
-unique_ptr<BoundCreateFunctionInfo> Binder::BindCreateFunctionInfo(CreateFunctionInfo &info) {
-	auto &base = (CreateSQLFunctionInfo &)info;
+SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
+	auto &base = (CreateMacroFunctionInfo &)info;
 
-	//	ScalarFunction func
-	// TODO: make a scalar_function_t, a ScalarFunction, and a CreateScalarFunctionInfo here
-	//	auto func_info = make_unique<CreateScalarFunctionInfo>(nullptr);
+	// arguments become dummy column names
+	vector<string> dummy_column_names;
+	vector<LogicalType> dummy_column_types;
+	for (auto &arg : base.function->arguments) {
+		string arg_str = arg->ToString();
+		if (arg->expression_class != ExpressionClass::COLUMN_REF)
+			throw BinderException("Invalid parameter \"%s\"", arg_str);
+		dummy_column_names.push_back(arg_str);
+		dummy_column_types.push_back(LogicalType::SQLNULL);
+	}
+
+	// create a copy of the expression because we do not want to alter the original
+	auto expression = base.function->expression->Copy();
+
+	// bind it to verify the function was defined correctly
+	ExpressionBinder binder(*this, context);
+	bind_context.AddGenericBinding(-1, "0_macro_arguments", dummy_column_names, dummy_column_types);
+	auto bound_expression = binder.Bind(expression, 0, true);
+
+	return BindSchema(info);
 }
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
@@ -88,6 +106,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
+		break;
+	}
+	case CatalogType::MACRO_FUNCTION_ENTRY: {
+		auto schema = BindCreateFunctionInfo(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_FUNCTION, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -135,10 +158,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		result.plan = move(create_table);
 		return result;
-	}
-	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		// TODO: implement
-		//		auto bound_info = BindCreateFunctionInfo(move(stmt.info));
 	}
 	default:
 		throw Exception("Unrecognized type!");

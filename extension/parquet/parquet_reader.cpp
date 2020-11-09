@@ -281,21 +281,21 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		case Type::INT32:
 			type = LogicalType::INTEGER;
 			break;
-		case Type::INT64:
-			if (s_ele.__isset.converted_type) {
-				switch (s_ele.converted_type) {
-				case ConvertedType::TIMESTAMP_MICROS:
-				case ConvertedType::TIMESTAMP_MILLIS:
-					type = LogicalType::TIMESTAMP;
-					break;
-				default:
-					type = LogicalType::BIGINT;
-					break;
-				}
-			} else {
-				type = LogicalType::BIGINT;
-			}
-			break;
+        case Type::INT64:
+            if (s_ele.__isset.converted_type) {
+                switch (s_ele.converted_type) {
+                case ConvertedType::TIMESTAMP_MICROS:
+                case ConvertedType::TIMESTAMP_MILLIS:
+                    type = LogicalType::TIMESTAMP;
+                    break;
+                default:
+                    type = LogicalType::BIGINT;
+                    break;
+                }
+            } else {
+                type = LogicalType::BIGINT;
+            }
+            break;
 		case Type::INT96: // always a timestamp?
 			type = LogicalType::TIMESTAMP;
 			break;
