@@ -1,0 +1,39 @@
+# name: test/optimizer/pullup_filters.test
+# description: Test Filters Pull Up
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = 'PHYSICAL_ONLY'
+
+statement ok
+CREATE TABLE vals1 AS SELECT i AS i, i AS j FROM range(0, 11, 1) t1(i)
+
+statement ok
+CREATE TABLE vals2(k BIGINT, l BIGINT)
+
+statement ok
+INSERT INTO vals2 SELECT * FROM vals1
+
+#### LEFT JOIN: pull up a single filter from LHS ####
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM vals1 WHERE i=5) tbl1 LEFT JOIN (SELECT * FROM vals1) AS tbl2 ON tbl1.i=tbl2.i
+----
+physical_plan	<REGEX>:.*=5.*.*=5.*
+
+#### LEFT JOIN: pull up two filters from LHS ####
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=10) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k
+----
+physical_plan	<REGEX>:.*=5.*.*=10.*.*=5.*.*=10.*
+
+## CROSS PRODUCT: pull up two filters from LHS ####
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=10) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k
+----
+physical_plan	<REGEX>:.*=5.*.*=10.*.*=5.*.*=10.*
+
+## CROSS PRODUCT: with more levels from LHS ####
+query II
+EXPLAIN SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl1.k AND tbl1.i=tbl2.k AND tbl1.i=tbl2.i AND tbl1.i=5
+----
+physical_plan	<REGEX>:.*=5.*.*=5.*.*=5.*.*=5.*
