@@ -44,6 +44,10 @@ bool Interval::FromCString(const char *str, idx_t len, interval_t &result) {
 	result.msecs = 0;
 	result.months = 0;
 
+	if (len == 0) {
+		return false;
+	}
+
 	switch (str[pos]) {
 	case '@':
 		pos++;
@@ -106,7 +110,7 @@ interval_parse_number:
 	goto end_of_string;
 interval_parse_time : {
 	// parse the remainder of the time as a Time type
-	dtime_t time = Time::FromCString(str + start_pos);
+	dtime_t time = Time::FromCString(str + start_pos, len);
 	result.msecs += time;
 	found_any = true;
 	goto end_of_string;

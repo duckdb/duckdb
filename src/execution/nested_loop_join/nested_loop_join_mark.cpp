@@ -59,7 +59,7 @@ static void mark_join_operator(Vector &left, Vector &right, idx_t lcount, idx_t 
 
 static void mark_join(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
                       ExpressionType comparison_type) {
-	assert(left.type == right.type);
+	D_ASSERT(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return mark_join_operator<duckdb::Equals>(left, right, lcount, rcount, found_match);

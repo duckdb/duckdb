@@ -72,7 +72,7 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 	uint8_t flags;
 	FileLockType lock;
 	if (read_only) {
-		assert(!create_new);
+		D_ASSERT(!create_new);
 		flags = FileFlags::FILE_FLAGS_READ;
 		lock = FileLockType::READ_LOCK;
 	} else {
@@ -214,13 +214,13 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
 }
 
 void SingleFileBlockManager::Read(Block &block) {
-	assert(block.id >= 0);
-	assert(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
+	D_ASSERT(block.id >= 0);
+	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
 	block.Read(*handle, BLOCK_START + block.id * Storage::BLOCK_ALLOC_SIZE);
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
-	assert(block_id >= 0);
+	D_ASSERT(block_id >= 0);
 	buffer.Write(*handle, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
 }
 

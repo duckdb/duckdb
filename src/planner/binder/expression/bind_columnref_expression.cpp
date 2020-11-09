@@ -8,7 +8,7 @@ namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t depth) {
-	assert(!colref.column_name.empty());
+	D_ASSERT(!colref.column_name.empty());
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	if (colref.table_name.empty()) {

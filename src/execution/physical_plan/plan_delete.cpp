@@ -8,9 +8,9 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
-	assert(op.children.size() == 1);
-	assert(op.expressions.size() == 1);
-	assert(op.expressions[0]->type == ExpressionType::BOUND_REF);
+	D_ASSERT(op.children.size() == 1);
+	D_ASSERT(op.expressions.size() == 1);
+	D_ASSERT(op.expressions[0]->type == ExpressionType::BOUND_REF);
 
 	auto plan = CreatePlan(*op.children[0]);
 

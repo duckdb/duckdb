@@ -93,7 +93,7 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("Schema with name %s already exists!", info->schema);
 		} else {
-			assert(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
+			D_ASSERT(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
 		}
 		return nullptr;
 	}

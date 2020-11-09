@@ -70,7 +70,7 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 		heap_collection.Append(heap_chunk);
 	}
 
-	assert(heap_collection.count == big_data.count);
+	D_ASSERT(heap_collection.count == big_data.count);
 
 	// create and use the heap
 	auto heap = unique_ptr<idx_t[]>(new idx_t[heap_size]);

@@ -7,7 +7,7 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<TransactionStatement> Transformer::TransformTransaction(PGNode *node) {
 	auto stmt = reinterpret_cast<PGTransactionStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 	switch (stmt->kind) {
 	case PG_TRANS_STMT_BEGIN:
 	case PG_TRANS_STMT_START:

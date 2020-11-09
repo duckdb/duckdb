@@ -36,7 +36,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell) {
 
 unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell, ColumnDefinition &column, idx_t index) {
 	auto constraint = reinterpret_cast<PGConstraint *>(cell->data.ptr_value);
-	assert(constraint);
+	D_ASSERT(constraint);
 	switch (constraint->contype) {
 	case PG_CONSTR_NOTNULL:
 		return make_unique<NotNullConstraint>(index);

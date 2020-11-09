@@ -56,7 +56,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			// join condition does not reference both sides, add it as filter under the join
 			if (type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
 				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
-				if (right_child->type != LogicalOperatorType::FILTER) {
+				if (right_child->type != LogicalOperatorType::LOGICAL_FILTER) {
 					// not a filter yet, push a new empty filter
 					auto filter = make_unique<LogicalFilter>();
 					filter->AddChild(move(right_child));
@@ -189,13 +189,13 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	                                                expressions);
 
 	LogicalOperator *join;
-	if (result->type == LogicalOperatorType::FILTER) {
+	if (result->type == LogicalOperatorType::LOGICAL_FILTER) {
 		join = result->children[0].get();
 	} else {
 		join = result.get();
 	}
 	for (auto &child : join->children) {
-		if (child->type == LogicalOperatorType::FILTER) {
+		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {
 			auto &filter = (LogicalFilter &)*child;
 			for (auto &expr : filter.expressions) {
 				PlanSubqueries(&expr, &filter.children[0]);
@@ -204,7 +204,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	// we visit the expressions depending on the type of join
-	if (join->type == LogicalOperatorType::COMPARISON_JOIN) {
+	if (join->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		// comparison join
 		// in this join we visit the expressions on the LHS with the LHS as root node
 		// and the expressions on the RHS with the RHS as root node
@@ -213,7 +213,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 			PlanSubqueries(&comp_join.conditions[i].left, &comp_join.children[0]);
 			PlanSubqueries(&comp_join.conditions[i].right, &comp_join.children[1]);
 		}
-	} else if (join->type == LogicalOperatorType::ANY_JOIN) {
+	} else if (join->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		auto &any_join = (LogicalAnyJoin &)*join;
 		// for the any join we just visit the condition
 		if (any_join.condition->HasSubquery()) {

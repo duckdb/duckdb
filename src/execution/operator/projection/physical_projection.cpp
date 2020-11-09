@@ -10,7 +10,7 @@ class PhysicalProjectionState : public PhysicalOperatorState {
 public:
 	PhysicalProjectionState(PhysicalOperator &op, PhysicalOperator *child, vector<unique_ptr<Expression>> &expressions)
 	    : PhysicalOperatorState(op, child), executor(expressions) {
-		assert(child);
+		D_ASSERT(child);
 	}
 
 	ExpressionExecutor executor;

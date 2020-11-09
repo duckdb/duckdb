@@ -17,14 +17,14 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 
 unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                            bool &changes_made) {
-	assert(bindings[0]->expression_class == ExpressionClass::BOUND_COMPARISON);
+	D_ASSERT(bindings[0]->expression_class == ExpressionClass::BOUND_COMPARISON);
 	auto expr = (BoundComparisonExpression *)bindings[0];
 	auto constant_expr = bindings[1];
 	bool column_ref_left = expr->left.get() != constant_expr;
 	auto column_ref_expr = !column_ref_left ? expr->right.get() : expr->left.get();
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
-	assert(constant_expr->IsFoldable());
+	D_ASSERT(constant_expr->IsFoldable());
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 	if (constant_value.is_null) {
 		// comparison with constant NULL, return NULL

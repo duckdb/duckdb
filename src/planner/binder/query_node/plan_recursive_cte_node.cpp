@@ -26,11 +26,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 
 	if (node.right_binder->bind_context.cte_references[node.ctename] == 0) {
 		auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node),
-		                                             move(right_node), LogicalOperatorType::UNION);
+		                                             move(right_node), LogicalOperatorType::LOGICAL_UNION);
 		return VisitQueryNode(node, move(root));
 	}
 	auto root = make_unique<LogicalRecursiveCTE>(node.setop_index, node.types.size(), node.union_all, move(left_node),
-	                                             move(right_node), LogicalOperatorType::RECURSIVE_CTE);
+	                                             move(right_node), LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
 
 	return VisitQueryNode(node, move(root));
 }

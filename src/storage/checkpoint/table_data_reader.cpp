@@ -23,7 +23,7 @@ TableDataReader::TableDataReader(CheckpointManager &manager, MetaBlockReader &re
 
 void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
-	assert(columns.size() > 0);
+	D_ASSERT(columns.size() > 0);
 
 	// load the data pointers for the table
 	idx_t table_count = 0;

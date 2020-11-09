@@ -141,7 +141,7 @@ private:
 	//-------------------------------- Templated functions --------------------------------//
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateUnaryFunction(string name, TR (*udf_func)(Args...)) {
-		assert(sizeof...(Args) == 1);
+		D_ASSERT(sizeof...(Args) == 1);
 		return CreateUnaryFunction<TR, Args...>(name, udf_func);
 	}
 
@@ -154,7 +154,7 @@ private:
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateBinaryFunction(string name, TR (*udf_func)(Args...)) {
-		assert(sizeof...(Args) == 2);
+		D_ASSERT(sizeof...(Args) == 2);
 		return CreateBinaryFunction<TR, Args...>(name, udf_func);
 	}
 
@@ -168,7 +168,7 @@ private:
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateTernaryFunction(string name, TR (*udf_func)(Args...)) {
-		assert(sizeof...(Args) == 3);
+		D_ASSERT(sizeof...(Args) == 3);
 		return CreateTernaryFunction<TR, Args...>(name, udf_func);
 	}
 
@@ -220,7 +220,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateUnaryFunction(string name, vector<LogicalType> args, LogicalType ret_type,
 	                                             TR (*udf_func)(Args...)) {
-		assert(sizeof...(Args) == 1);
+		D_ASSERT(sizeof...(Args) == 1);
 		return CreateUnaryFunction<TR, Args...>(name, args, ret_type, udf_func);
 	}
 
@@ -244,7 +244,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateBinaryFunction(string name, vector<LogicalType> args, LogicalType ret_type,
 	                                              TR (*udf_func)(Args...)) {
-		assert(sizeof...(Args) == 2);
+		D_ASSERT(sizeof...(Args) == 2);
 		return CreateBinaryFunction<TR, Args...>(name, args, ret_type, udf_func);
 	}
 
@@ -272,7 +272,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateTernaryFunction(string name, vector<LogicalType> args, LogicalType ret_type,
 	                                               TR (*udf_func)(Args...)) {
-		assert(sizeof...(Args) == 3);
+		D_ASSERT(sizeof...(Args) == 3);
 		return CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
 	}
 
@@ -325,8 +325,6 @@ private:
 		case LogicalTypeId::CHAR:
 		case LogicalTypeId::BLOB:
 			return std::is_same<T, string_t>();
-		case LogicalTypeId::VARBINARY:
-			return std::is_same<T, blob_t>();
 		default:
 			throw InvalidTypeException(sql_type.InternalType(), "Type does not supported!");
 		}

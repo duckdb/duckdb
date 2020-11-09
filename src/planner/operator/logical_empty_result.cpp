@@ -4,7 +4,7 @@ namespace duckdb {
 using namespace std;
 
 LogicalEmptyResult::LogicalEmptyResult(unique_ptr<LogicalOperator> op)
-    : LogicalOperator(LogicalOperatorType::EMPTY_RESULT) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 
 	this->bindings = op->GetColumnBindings();
 

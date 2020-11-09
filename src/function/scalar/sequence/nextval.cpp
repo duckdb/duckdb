@@ -97,7 +97,7 @@ static unique_ptr<FunctionData> nextval_bind(ClientContext &context, ScalarFunct
 		// evaluate the constant and perform the catalog lookup already
 		Value seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (!seqname.is_null) {
-			assert(seqname.type().id() == LogicalTypeId::VARCHAR);
+			D_ASSERT(seqname.type().id() == LogicalTypeId::VARCHAR);
 			Catalog::ParseRangeVar(seqname.str_value, schema, seq);
 			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, schema, seq);
 		}

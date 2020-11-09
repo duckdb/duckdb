@@ -10,14 +10,14 @@ using namespace std;
 class BoundSubqueryNode : public QueryNode {
 public:
 	BoundSubqueryNode(unique_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node,
-	                  unique_ptr<QueryNode> subquery)
+	                  unique_ptr<SelectStatement> subquery)
 	    : QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(move(subquery_binder)),
 	      bound_node(move(bound_node)), subquery(move(subquery)) {
 	}
 
 	unique_ptr<Binder> subquery_binder;
 	unique_ptr<BoundQueryNode> bound_node;
-	unique_ptr<QueryNode> subquery;
+	unique_ptr<SelectStatement> subquery;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const {
 		throw Exception("Cannot get select list of bound subquery node");
@@ -29,13 +29,14 @@ public:
 };
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
-	if (expr.subquery->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
-		assert(depth == 0);
+	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
+		D_ASSERT(depth == 0);
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = make_unique<Binder>(context, &binder);
-		// the subquery may refer to CTEs from the parent query
-		subquery_binder->CTE_bindings = binder.CTE_bindings;
-		auto bound_node = subquery_binder->BindNode(*expr.subquery);
+		for (auto &cte_it : expr.subquery->cte_map) {
+			subquery_binder->AddCTE(cte_it.first, cte_it.second.get());
+		}
+		auto bound_node = subquery_binder->BindNode(*expr.subquery->node);
 		// check the correlated columns of the subquery for correlated columns with depth > 1
 		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
 			CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];
@@ -49,7 +50,10 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		if (expr.subquery_type != SubqueryType::EXISTS && bound_node->types.size() > 1) {
 			throw BinderException("Subquery returns %zu columns - expected 1", bound_node->types.size());
 		}
-		expr.subquery = make_unique<BoundSubqueryNode>(move(subquery_binder), move(bound_node), move(expr.subquery));
+		auto prior_subquery = move(expr.subquery);
+		expr.subquery = make_unique<SelectStatement>();
+		expr.subquery->node =
+		    make_unique<BoundSubqueryNode>(move(subquery_binder), move(bound_node), move(prior_subquery));
 	}
 	// now bind the child node of the subquery
 	if (expr.child) {
@@ -60,8 +64,8 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		}
 	}
 	// both binding the child and binding the subquery was successful
-	assert(expr.subquery->type == QueryNodeType::BOUND_SUBQUERY_NODE);
-	auto bound_subquery = (BoundSubqueryNode *)expr.subquery.get();
+	D_ASSERT(expr.subquery->node->type == QueryNodeType::BOUND_SUBQUERY_NODE);
+	auto bound_subquery = (BoundSubqueryNode *)expr.subquery->node.get();
 	auto child = (BoundExpression *)expr.child.get();
 	auto subquery_binder = move(bound_subquery->subquery_binder);
 	auto bound_node = move(bound_subquery->bound_node);
@@ -75,7 +79,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	if (expr.subquery_type == SubqueryType::ANY) {
 		// ANY comparison
 		// cast child and subquery child to equivalent types
-		assert(bound_node->types.size() == 1);
+		D_ASSERT(bound_node->types.size() == 1);
 		auto compare_type = LogicalType::MaxLogicalType(child->expr->return_type, bound_node->types[0]);
 		child->expr = BoundCastExpression::AddCastToType(move(child->expr), compare_type);
 		result->child_type = bound_node->types[0];

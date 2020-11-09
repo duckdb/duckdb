@@ -74,7 +74,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		sort_collection.Append(sort_chunk);
 	}
 
-	assert(sort_collection.count == big_data.count);
+	D_ASSERT(sort_collection.count == big_data.count);
 
 	// now perform the actual sort
 	sink.sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.count]);

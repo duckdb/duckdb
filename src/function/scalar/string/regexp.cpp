@@ -29,7 +29,7 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {
 }
 
 static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
-	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
+	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
 
 static void ParseRegexOptions(string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
@@ -110,7 +110,7 @@ template <class OP> static void regexp_matches_function(DataChunk &args, Express
 static unique_ptr<FunctionData> regexp_matches_get_bind_function(ClientContext &context, ScalarFunction &bound_function,
                                                                  vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
-	assert(arguments.size() == 2 || arguments.size() == 3);
+	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	RE2::Options options;
 	options.set_log_errors(false);
 	if (arguments.size() == 3) {
@@ -150,7 +150,7 @@ static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vec
 	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
 	    strings, patterns, replaces, result, args.size(), [&](string_t input, string_t pattern, string_t replace) {
 		    RE2 re(CreateStringPiece(pattern), info.options);
-		    std::string sstring(input.GetData(), input.GetSize());
+		    std::string sstring = input.GetString();
 		    if (info.global_replace) {
 			    RE2::GlobalReplace(&sstring, re, CreateStringPiece(replace));
 		    } else {

@@ -15,25 +15,15 @@ INSERT INTO blobs VALUES ('a'::BYTEA)
 query T
 SELECT b || 'ZZ'::BYTEA FROM blobs
 ----
-\x615A5A
+aZZ
 
 query T
-SELECT 'abc '::BYTEA || 'klm *©T'::BYTEA
+SELECT 'abc '::BYTEA || 'klm *\xEF\xBF\xBDT'::BYTEA
 ----
-\x616263206B6C6D202AA954
-
-query T
-SELECT 'abc '::BYTEA || 'klm *©T'::BYTEA
-----
-\x616263206B6C6D202AA954
-
-query T
-SELECT 'abc '::BYTEA || 'klm *©T'::BYTEA
-----
-\x616263206B6C6D202AA954
+abc klm *\xEF\xBF\xBDT
 
 statement ok
-INSERT INTO blobs VALUES ('abc klm *©T'::BYTEA)
+INSERT INTO blobs VALUES ('abc klm *\xEF\xBF\xBDT'::BYTEA)
 
 query I
 SELECT COUNT(*) FROM blobs
@@ -45,7 +35,7 @@ query I
 SELECT OCTET_LENGTH(b) FROM blobs
 ----
 1
-11
+13
 
 # HEX strings
 statement ok
@@ -57,12 +47,12 @@ INSERT INTO blobs VALUES ('\xFF'::BYTEA)
 query T
 SELECT b || 'ZZ'::BYTEA FROM blobs
 ----
-\xFF5A5A
+\xFFZZ
 
 query T
-SELECT b || '\x5A5A'::BYTEA FROM blobs
+SELECT b || '\x5A\x5A'::BYTEA FROM blobs
 ----
-\xFF5A5A
+\xFFZZ
 
 # BLOB || VARCHAR is not allowed, should fail
 statement error
@@ -79,7 +69,7 @@ statement ok
 INSERT INTO blobs VALUES ('FF'::BYTEA)
 
 statement ok
-INSERT INTO blobs VALUES ('\x55AAFF55AAFF55AAFF01'::BYTEA)
+INSERT INTO blobs VALUES ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01'::BYTEA)
 
 statement ok
 INSERT INTO blobs VALUES ('55AAFF55AAFF55AAFF01'::BYTEA)

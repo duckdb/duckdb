@@ -11,7 +11,7 @@ namespace duckdb {
 using namespace std;
 
 template <class T> void templated_generate_sequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	assert(result.type.IsNumeric());
+	D_ASSERT(result.type.IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
@@ -55,7 +55,7 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 template <class T>
 void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                  int64_t increment) {
-	assert(result.type.IsNumeric());
+	D_ASSERT(result.type.IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}

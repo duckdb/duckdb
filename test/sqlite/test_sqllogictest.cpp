@@ -604,7 +604,16 @@ void Statement::Execute() {
 
 	/* Check to see if we are expecting success or failure */
 	if (!expect_ok) {
-		error = !error;
+		// even in the case of "statement error", we do not accept ALL errors
+		// internal errors are never expected
+		// neither are "unoptimized result differs from original result" errors
+		bool internal_error = StringUtil::Contains(result->error, "Unoptimized Result differs from original result!");
+		internal_error = internal_error || StringUtil::Contains(result->error, "INTERNAL");
+		if (!internal_error) {
+			error = !error;
+		} else {
+			expect_ok = true;
+		}
 	}
 
 	/* Report an error if the results do not match expectation */

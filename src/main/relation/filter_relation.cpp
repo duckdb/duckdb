@@ -21,7 +21,7 @@ unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
 	if (child_ptr->type == RelationType::JOIN_RELATION) {
 		// child node is a join: push filter into WHERE clause of select node
 		auto child_node = child->GetQueryNode();
-		assert(child_node->type == QueryNodeType::SELECT_NODE);
+		D_ASSERT(child_node->type == QueryNodeType::SELECT_NODE);
 		auto &select_node = (SelectNode &)*child_node;
 		if (!select_node.where_clause) {
 			select_node.where_clause = condition->Copy();

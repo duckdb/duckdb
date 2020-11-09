@@ -55,7 +55,7 @@ static inline void templated_loop_hash(Vector &input, Vector &result, const Sele
 
 template <bool HAS_RSEL>
 static inline void hash_type_switch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
-	assert(result.type.id() == LogicalTypeId::HASH);
+	D_ASSERT(result.type.id() == LogicalTypeId::HASH);
 	switch (input.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -165,7 +165,7 @@ void templated_loop_combine_hash(Vector &input, Vector &hashes, const SelectionV
 			                                              FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
 			                                              *idata.nullmask);
 		} else {
-			assert(hashes.vector_type == VectorType::FLAT_VECTOR);
+			D_ASSERT(hashes.vector_type == VectorType::FLAT_VECTOR);
 			tight_loop_combine_hash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(hashes), rsel, count,
 			                                     idata.sel, *idata.nullmask);
 		}
@@ -174,7 +174,7 @@ void templated_loop_combine_hash(Vector &input, Vector &hashes, const SelectionV
 
 template <bool HAS_RSEL>
 static inline void combine_hash_type_switch(Vector &hashes, Vector &input, const SelectionVector *rsel, idx_t count) {
-	assert(hashes.type.id() == LogicalTypeId::HASH);
+	D_ASSERT(hashes.type.id() == LogicalTypeId::HASH);
 	switch (input.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

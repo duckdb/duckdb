@@ -57,7 +57,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
-	assert(!stmt.info->table.empty());
+	D_ASSERT(!stmt.info->table.empty());
 	// COPY FROM a file
 	// generate an insert statement for the the to-be-inserted table
 	InsertStatement insert;
@@ -67,7 +67,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// bind the insert statement to the base table
 	auto insert_statement = Bind(insert);
-	assert(insert_statement.plan->type == LogicalOperatorType::INSERT);
+	D_ASSERT(insert_statement.plan->type == LogicalOperatorType::LOGICAL_INSERT);
 
 	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
 

@@ -10,28 +10,28 @@ CREATE TABLE blobs (b BYTEA);
 
 # Insert valid hex strings
 statement ok
-INSERT INTO blobs VALUES('\xAAFFAA'), ('\xAAFFAAAAFFAA'), ('\xAAFFAAAAFFAAAAFFAA')
+INSERT INTO blobs VALUES('\xaa\xff\xaa'), ('\xAA\xFF\xAA\xAA\xFF\xAA'), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA')
 
 query T
 SELECT * FROM blobs
 ----
-\xAAFFAA
-\xAAFFAAAAFFAA
-\xAAFFAAAAFFAAAAFFAA
+\xAA\xFF\xAA
+\xAA\xFF\xAA\xAA\xFF\xAA
+\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA
 
 # Insert valid hex strings, lower case
 statement ok
 DELETE FROM blobs
 
 statement ok
-INSERT INTO blobs VALUES('\xaaffaa'), ('\xaaffaaaaffaa'), ('\xaaffaaaaffaaaaffaa')
+INSERT INTO blobs VALUES('\xaa\xff\xaa'), ('\xaa\xff\xaa\xaa\xff\xaa'), ('\xaa\xff\xaa\xaa\xff\xaa\xaa\xff\xaa')
 
 query T
 SELECT * FROM blobs
 ----
-\xAAFFAA
-\xAAFFAAAAFFAA
-\xAAFFAAAAFFAAAAFFAA
+\xAA\xFF\xAA
+\xAA\xFF\xAA\xAA\xFF\xAA
+\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA
 
 # Insert valid hex strings with number and letters
 statement ok
@@ -44,81 +44,32 @@ query T
 SELECT * FROM blobs
 ----
 \xAA1199
-\xAA1199AA1199
-\xAA1199AA1199AA1199
+\xAA1199aa1199
+\xAA1199aa1199aa1199
 
 # Insert invalid hex strings (invalid hex chars: G, H, I)
 statement error
-INSERT INTO blobs VALUES('\xGAFFAA'), ('\xHAFFAAAAFFAA'), ('\xIAFFAAAAFFAAAAFFAA')
+INSERT INTO blobs VALUES('\xGA\xFF\xAA')
 
 # Insert invalid hex strings (odd # of chars)
 statement error
-INSERT INTO blobs VALUES('\xAAAFFAA'), ('\xAAAFFAAAAFFAA'), ('\xAAAFFAAAAFFAAAAFFAA')
-
-# insert BLOB with ‚Äúnon-printable‚Äù octets
-statement ok
-INSERT INTO blobs VALUES ('klm *©T'::BYTEA)
-
-# insert BLOB with ‚Äúnon-printable‚Äù octets, but now using VARCHAR string (should fail)
-statement error
-INSERT INTO blobs VALUES ('klm *©T'::VARCHAR)
+INSERT INTO blobs VALUES('\xA')
 
 statement error
-INSERT INTO blobs VALUES ('klm *©T')
+INSERT INTO blobs VALUES('\xAA\xA')
 
-# insert BLOB with ‚Äúnon-printable‚Äù octets, but now using string
-statement ok
-INSERT INTO blobs VALUES ('klm *©T'::BLOB)
+statement error
+INSERT INTO blobs VALUES('blablabla\x')
 
 # BLOB with ‚Äúnon-printable‚Äù octets
-query T
-SELECT 'abc Å'::BYTEA;
-----
-\x6162632081
-
-query T
-SELECT 'abc Å'::BYTEA;
-----
-\x6162632081
-
-query T
-SELECT 'abc klm *©T'::BYTEA;
-----
-\x616263206B6C6D202AA954
-
-query T
-SELECT 'abc klm *©T'::BYTEA;
-----
-\x616263206B6C6D202AA954
-
-# now VARCHAR with ‚Äúnon-printable‚Äù octets, should fail
 statement error
-SELECT 'abc Å'::VARCHAR;
-
-statement error
-SELECT 'abc klm *©T'::VARCHAR;
-
-statement ok
-CREATE TABLE blob_invalid_octet (b BYTEA);
-
-statement ok
-INSERT INTO blob_invalid_octet VALUES ('\xFF00AA'), ('a a'::BYTEA)
-
-statement ok
-INSERT INTO blob_invalid_octet VALUES ('klm *©T'::BYTEA)
-
-query T
-SELECT * FROM blob_invalid_octet
-----
-\xFF00AA
-\x612061
-\x6B6C6D202AA954
+SELECT 'abc ÔøΩ'::BYTEA;
 
 # BLOB null and empty values
 query T
 SELECT ''::BLOB
 ----
-\x
+(empty)
 
 query T
 SELECT NULL::BLOB
@@ -137,8 +88,8 @@ INSERT INTO blob_empty VALUES(NULL), (NULL::BLOB)
 query T
 SELECT * FROM blob_empty
 ----
-\x
-\x
+(empty)
+(empty)
 NULL
 NULL
 

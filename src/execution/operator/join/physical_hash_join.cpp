@@ -18,7 +18,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	children.push_back(move(left));
 	children.push_back(move(right));
 
-	assert(left_projection_map.size() == 0);
+	D_ASSERT(left_projection_map.size() == 0);
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}

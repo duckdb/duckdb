@@ -21,7 +21,7 @@ PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vect
 struct AggregateState {
 	AggregateState(vector<unique_ptr<Expression>> &aggregate_expressions) {
 		for (auto &aggregate : aggregate_expressions) {
-			assert(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(state.get());
@@ -30,7 +30,7 @@ struct AggregateState {
 		}
 	}
 	~AggregateState() {
-		assert(destructors.size() == aggregates.size());
+		D_ASSERT(destructors.size() == aggregates.size());
 		for (idx_t i = 0; i < destructors.size(); i++) {
 			if (!destructors[i]) {
 				continue;
@@ -73,7 +73,7 @@ public:
 	SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
 		vector<LogicalType> payload_types;
 		for (auto &aggregate : aggregates) {
-			assert(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			// initialize the payload chunk
 			if (aggr.children.size()) {
