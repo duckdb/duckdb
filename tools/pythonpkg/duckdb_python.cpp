@@ -740,7 +740,21 @@ struct DuckDBPyConnection {
 		}
 		result = nullptr;
 
-		auto prep = connection->Prepare(query);
+		auto statements = connection->ExtractStatements(query);
+		if (statements.size() == 0) {
+			// no statements to execute
+			return this;
+		}
+		// if there are multiple statements, we directly execute the statements besides the last one
+		// we only return the result of the last statement to the user, unless one of the previous statements fails
+		for(idx_t i = 0; i + 1 < statements.size(); i++) {
+			auto res = connection->Query(move(statements[i]));
+			if (!res->success) {
+				throw runtime_error(res->error);
+			}
+		}
+
+		auto prep = connection->Prepare(move(statements.back()));
 		if (!prep->success) {
 			throw runtime_error(prep->error);
 		}

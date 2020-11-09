@@ -65,6 +65,9 @@ public:
 	//! Issues a query to the database and materializes the result (if necessary). Always returns a
 	//! MaterializedQueryResult.
 	unique_ptr<MaterializedQueryResult> Query(string query);
+	//! Issues a query to the database and materializes the result (if necessary). Always returns a
+	//! MaterializedQueryResult.
+	unique_ptr<MaterializedQueryResult> Query(unique_ptr<SQLStatement> statement);
 	// prepared statements
 	template <typename... Args> unique_ptr<QueryResult> Query(string query, Args... args) {
 		vector<Value> values;
@@ -73,6 +76,8 @@ public:
 
 	//! Prepare the specified query, returning a prepared statement object
 	unique_ptr<PreparedStatement> Prepare(string query);
+	//! Prepare the specified statement, returning a prepared statement object
+	unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
 	//! Get the table info of a specific table (in the default schema), or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string table_name);

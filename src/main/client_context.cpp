@@ -249,18 +249,48 @@ void ClientContext::InitialCleanup() {
 	interrupted = false;
 }
 
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query, idx_t *n_prepared_statements) {
+vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query) {
 	Parser parser;
 	parser.ParseQuery(query);
-
-	if (n_prepared_statements) {
-		*n_prepared_statements = parser.n_prepared_parameters;
-	}
 
 	PragmaHandler handler(*this);
 	handler.HandlePragmaStatements(parser.statements);
 
 	return move(parser.statements);
+}
+
+unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLStatement> statement) {
+	auto n_param = statement->n_param;
+
+	// now write the prepared statement data into the catalog
+	string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
+	prepare_count++;
+	// create a prepare statement out of the underlying statement
+	auto prepare = make_unique<PrepareStatement>();
+	prepare->name = prepare_name;
+	prepare->statement = move(statement);
+
+	// now perform the actual PREPARE query
+	auto result = RunStatement(query, move(prepare), false);
+	if (!result->success) {
+		throw Exception(result->error);
+	}
+	auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
+	auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared, n_param);
+	prepared_statement_objects.insert(prepared_object.get());
+	return prepared_object;
+}
+
+unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
+	lock_guard<mutex> client_guard(context_lock);
+	// prepare the query
+	try {
+		InitialCleanup();
+		return PrepareInternal(move(statement));
+	} catch (Exception &ex) {
+		return make_unique<PreparedStatement>(ex.what());
+	}
+
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
@@ -270,32 +300,14 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		InitialCleanup();
 
 		// first parse the query
-		idx_t n_prepared_parameters;
-		auto statements = ParseStatements(query, &n_prepared_parameters);
+		auto statements = ParseStatements(query);
 		if (statements.size() == 0) {
 			throw Exception("No statement to prepare!");
 		}
 		if (statements.size() > 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
-		// now write the prepared statement data into the catalog
-		string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
-		prepare_count++;
-		// create a prepare statement out of the underlying statement
-		auto prepare = make_unique<PrepareStatement>();
-		prepare->name = prepare_name;
-		prepare->statement = move(statements[0]);
-
-		// now perform the actual PREPARE query
-		auto result = RunStatement(query, move(prepare), false);
-		if (!result->success) {
-			throw Exception(result->error);
-		}
-		auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
-		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared,
-		                                                      n_prepared_parameters);
-		prepared_statement_objects.insert(prepared_object.get());
-		return prepared_object;
+		return PrepareInternal(move(statements[0]));
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
@@ -432,14 +444,31 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
+void ClientContext::LogQueryInternal(string query) {
+	if (!log_query_writer) {
+		return;
+	}
+	// log query path is set: log the query
+	log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
+	log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+	log_query_writer->Flush();
+}
+
+unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (log_query_writer) {
-		// log query path is set: log the query
-		log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
-		log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
-		log_query_writer->Flush();
+		LogQueryInternal(statement->query.substr(statement->stmt_location, statement->stmt_length));
 	}
+
+	vector<unique_ptr<SQLStatement>> statements;
+	statements.push_back(move(statement));
+
+	return RunStatements(query, statements, allow_stream_result);
+}
+
+unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
+	lock_guard<mutex> client_guard(context_lock);
+	LogQueryInternal(query);
 
 	vector<unique_ptr<SQLStatement>> statements;
 	try {

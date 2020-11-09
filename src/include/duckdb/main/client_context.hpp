@@ -88,6 +88,7 @@ public:
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT
 	//! statement.
 	unique_ptr<QueryResult> Query(string query, bool allow_stream_result);
+	unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, bool allow_stream_result);
 	//! Fetch a query from the current result set (if any)
 	unique_ptr<DataChunk> Fetch();
 	//! Cleanup the result set (if any).
@@ -109,6 +110,9 @@ public:
 
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
+	//! Directly prepare a SQL statement
+	unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
+
 	//! Execute a prepared statement with the given name and set of parameters
 	unique_ptr<QueryResult> Execute(string name, vector<Value> &values, bool allow_stream_result = true,
 	                                string query = string());
@@ -122,7 +126,7 @@ public:
 	void RegisterFunction(CreateFunctionInfo *info);
 
 	//! Parse statements from a query
-	vector<unique_ptr<SQLStatement>> ParseStatements(string query, idx_t *n_prepared_parameters = nullptr);
+	vector<unique_ptr<SQLStatement>> ParseStatements(string query);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -156,6 +160,8 @@ private:
 	//! Call CreatePreparedStatement() and ExecutePreparedStatement() without any bound values
 	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
 	                                             bool allow_stream_result);
+	unique_ptr<PreparedStatement> PrepareInternal(unique_ptr<SQLStatement> statement);
+	void LogQueryInternal(string query);
 
 private:
 	idx_t prepare_count = 0;
