@@ -116,8 +116,8 @@ void PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, ClientContext &con
 			}
 		}
 	}
-	if (join_type == JoinType::OUTER) {
-		// for FULL OUTER JOIN, initialize found_match to false for every tuple
+	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);
 		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.count);
 	}
@@ -217,7 +217,7 @@ void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
 				// exhausted LHS: in case of full outer join output remaining entries
-				if (join_type == JoinType::OUTER) {
+				if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
 					// if the LHS is exhausted in a FULL OUTER JOIN, we scan the found_match for any chunks we still
 					// need to output
 					ConstructFullOuterJoinResult(gstate.right_found_match.get(), gstate.right_chunks, chunk,
@@ -307,6 +307,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ExecutionContext &context, Dat
 		break;
 	case JoinType::LEFT:
 	case JoinType::INNER:
+	case JoinType::RIGHT:
 	case JoinType::OUTER:
 		ResolveComplexJoin(context, chunk, state_);
 		break;
