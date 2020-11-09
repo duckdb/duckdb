@@ -14,6 +14,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "resizable_buffer.hpp"
 
+#include "parquet_file_metadata_cache.hpp"
 #include "parquet_types.h"
 
 #include <exception>
@@ -81,6 +82,9 @@ public:
 	idx_t NumRows();
 	idx_t NumRowGroups();
 
+	ParquetFileMetadataCache *get_cached_metadata();
+	parquet::format::FileMetaData* get_file_metadata();
+
 private:
 	parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	void PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
@@ -103,7 +107,6 @@ private:
 	static constexpr unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
 
 	ClientContext &context;
-	parquet::format::FileMetaData file_meta_data;
 };
 
 } // namespace duckdb

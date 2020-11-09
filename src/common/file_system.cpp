@@ -180,6 +180,15 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	return s.st_size;
 }
 
+time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		return -1;
+	}
+	return s.st_mtime;
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	if (ftruncate(fd, new_size) != 0) {
@@ -470,6 +479,33 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 		return -1;
 	}
 	return result.QuadPart;
+}
+
+time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
+	FILETIME last_write;
+	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
+		return -1;
+	}
+
+	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
+	ULARGE_INTEGER ul;
+	ul.LowPart = last_write.dwLowDateTime;
+	ul.HighPart = last_write.dwHighDateTime;
+	int64_t fileTime64 = ul.QuadPart;
+
+	// fileTime64 contains a 64-bit value representing the number of
+	// 100-nanosecond intervals since January 1, 1601 (UTC).
+	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
+
+
+	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
+	const auto WINDOWS_TICK = 10000000;
+	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
+	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+	return result;
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {

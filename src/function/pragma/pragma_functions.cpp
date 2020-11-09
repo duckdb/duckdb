@@ -118,6 +118,14 @@ static void pragma_disable_force_parallelism(ClientContext &context, FunctionPar
 	context.force_parallelism = false;
 }
 
+static void pragma_enable_object_cache(ClientContext &context, FunctionParameters parameters){
+	context.object_cache_enable = true;
+}
+
+static void pragma_disable_object_cache(ClientContext &context, FunctionParameters parameters){
+	context.object_cache_enable = false;
+}
+
 static void pragma_log_query_path(ClientContext &context, FunctionParameters parameters) {
 	auto str_val = parameters.values[0].ToString();
 	if (str_val.empty()) {
@@ -178,6 +186,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_parallelism", pragma_enable_force_parallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_parallelism", pragma_disable_force_parallelism));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", pragma_enable_object_cache));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", pragma_disable_object_cache));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", pragma_enable_optimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", pragma_disable_optimizer));
