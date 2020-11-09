@@ -99,6 +99,84 @@ void FilterPushdown::GenerateFilters() {
 	});
 }
 
+static Expression *GetColumnRefExpression(Expression &expr) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		return &expr;
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { return GetColumnRefExpression(child); });
+	return &expr;
+}
+
+static bool GenerateBinding(LogicalProjection &proj, BoundColumnRefExpression &colref, ColumnBinding &binding) {
+	// assert(colref.binding.table_index != proj.table_index);
+	D_ASSERT(colref.depth == 0);
+	int column_index = -1;
+	// find the corresponding column index in the projection
+	for (idx_t proj_idx = 0; proj_idx < proj.expressions.size(); proj_idx++) {
+		auto proj_colref = GetColumnRefExpression(*proj.expressions[proj_idx]);
+		if (proj_colref->type == ExpressionType::BOUND_COLUMN_REF) {
+			// auto proj_colref = (BoundColumnRefExpression *)proj.expressions[proj_idx].get();
+			if (colref.Equals(proj_colref)) {
+				column_index = proj_idx;
+				break;
+			}
+		}
+	}
+	// Case the filter column is not projected, returns false
+	if (column_index == -1) {
+		return false;
+	}
+	binding.table_index = proj.table_index;
+	binding.column_index = column_index;
+	return true;
+}
+
+static unique_ptr<Expression> ReplaceProjectionBindingsPullup(LogicalProjection &proj, unique_ptr<Expression> expr) {
+	// we do not use ExpressionIterator here because we need to check if the filtered column is being projected,
+	// otherwise we should avoid the filter to be pulled up by returning nullptr
+	if (expr->expression_class == ExpressionClass::BOUND_COMPARISON) {
+		auto &comp_expr = (BoundComparisonExpression &)*expr;
+		if (comp_expr.left->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &colref = (BoundColumnRefExpression &)*comp_expr.left;
+			ColumnBinding binding;
+			if (GenerateBinding(proj, colref, binding) == false) {
+				// the filtered column is not projected, this filter doesn't need to be pulled up
+				return nullptr;
+			}
+			comp_expr.left =
+			    make_unique<BoundColumnRefExpression>(colref.alias, colref.return_type, binding, colref.depth);
+		}
+		if (comp_expr.right->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &colref = (BoundColumnRefExpression &)*comp_expr.right;
+			ColumnBinding binding;
+			if (GenerateBinding(proj, colref, binding) == false) {
+				// the filtered column is not projected, this filter doesn't need to be pulled up
+				return nullptr;
+			}
+			comp_expr.right =
+			    make_unique<BoundColumnRefExpression>(colref.alias, colref.return_type, binding, colref.depth);
+		}
+	}
+	return expr;
+}
+
+void FilterPushdown::GenerateFiltersPullup(LogicalOperator &op) {
+	combiner_pullup.GenerateFilters([&](unique_ptr<Expression> filter) {
+		auto f = make_unique<Filter>();
+		f->filter = move(filter);
+		f->ExtractBindings();
+		if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto new_filter = ReplaceProjectionBindingsPullup((LogicalProjection &)op, move(f->filter));
+			if (new_filter != nullptr) {
+				f->filter = move(new_filter);
+				filters.push_back(move(f));
+			}
+		} else if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			filters.push_back(move(f));
+		}
+	});
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (idx_t i = 0; i < op->children.size(); i++) {
