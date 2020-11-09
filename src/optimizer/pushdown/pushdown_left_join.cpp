@@ -108,6 +108,18 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			}
 		}
 	}
+
+    op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
+
+	// move the filters pulled up from the LHS
+	for(idx_t i = 0; i < left_pushdown.filters.size(); i++) {
+			// pull up filters from the LHS
+			filter_combiner.AddFilter(move(left_pushdown.filters[i]->filter));
+			// erase the remaning filter from the left
+			left_pushdown.filters.erase(left_pushdown.filters.begin() + i);
+			i--;
+	}
+
 	// finally we check the FilterCombiner to see if there are any predicates we can push into the RHS
 	// we only added (1) predicates that have JoinSide::BOTH from the conditions, and
 	// (2) predicates that have JoinSide::LEFT from the filters
@@ -120,7 +132,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		}
 	});
 	right_pushdown.GenerateFilters();
-	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
+
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
 	return FinishPushdown(move(op));
 }
