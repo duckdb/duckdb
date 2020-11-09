@@ -32,9 +32,21 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 				join_conditions.push_back(move(f->filter));
 			}
 		}
+		// need to clear up the filters for subsequent use, e.g., filters pull up
+		filters.clear();
 	}
 	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
+
+    //appending filters from the LHS to pushdown into the RHS
+    combiner.Append(left_pushdown.combiner_pullup);
+    GenerateFilters();
+
+	//FIXME case filters are in the RHS, they are not pulled up and then pushed down to the LHS
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
+
+    //appending filters from both LHS and RHS to pull up
+	combiner_pullup.Append(left_pushdown.combiner_pullup);
+	combiner_pullup.Append(right_pushdown.combiner_pullup);
 
 	if (join_conditions.size() > 0) {
 		// join conditions found: turn into inner join
