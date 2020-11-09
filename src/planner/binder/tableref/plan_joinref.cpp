@@ -11,6 +11,7 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -151,11 +152,12 @@ static bool HasCorrelatedColumns(Expression &expression) {
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
-	if (ref.type == JoinType::RIGHT) {
+	if (ref.type == JoinType::RIGHT && context.enable_optimizer) {
+		// we turn any right outer joins into left outer joins for optimization purposes
+		// they are the same but with sides flipped, so treating them the same simplifies life
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
 	}
-
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition))) {
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
