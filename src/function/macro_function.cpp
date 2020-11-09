@@ -1,6 +1,5 @@
 #include "duckdb/function/macro_function.hpp"
 
-#include "duckdb/planner/expression/bound_macro_expression.hpp"
 #include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
@@ -9,11 +8,9 @@ namespace duckdb {
 MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {
 }
 
-unique_ptr<BoundMacroExpression> MacroFunction::BindMacroFunction(ExpressionBinder &binder,
-                                                                  MacroFunctionCatalogEntry &function,
-                                                                  vector<unique_ptr<ParsedExpression>> parsed_children,
-                                                                  vector<unique_ptr<Expression>> bound_children,
-                                                                  string &error) {
+unique_ptr<Expression> MacroFunction::BindMacroFunction(ExpressionBinder &binder, MacroFunctionCatalogEntry &function,
+                                                        vector<unique_ptr<ParsedExpression>> parsed_children,
+                                                        vector<unique_ptr<Expression>> bound_children, string &error) {
 	// TODO: to support arguments with side-effects a projection must be pushed
 	for (auto &child : bound_children) {
 		if (!child->IsFoldable()) {
@@ -36,9 +33,7 @@ unique_ptr<BoundMacroExpression> MacroFunction::BindMacroFunction(ExpressionBind
 
 	// now we perform the binding
 	LogicalType return_type;
-	auto bound_expression = binder.Bind(parsed_expression, &return_type);
-
-	return make_unique<BoundMacroExpression>(return_type, function.name, move(bound_expression), move(bound_children));
+	return binder.Bind(parsed_expression, &return_type);
 }
 
 } // namespace duckdb

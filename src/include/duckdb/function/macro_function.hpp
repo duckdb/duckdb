@@ -13,16 +13,14 @@
 
 namespace duckdb {
 
-class BoundMacroExpression;
 class MacroFunctionCatalogEntry;
 
 class MacroFunction {
 public:
 	MacroFunction(unique_ptr<ParsedExpression> expression);
-	static unique_ptr<BoundMacroExpression> BindMacroFunction(ExpressionBinder &binder,
-	                                                          MacroFunctionCatalogEntry &function,
-                                                              vector<unique_ptr<ParsedExpression>> parsed_children,
-                                                              vector<unique_ptr<Expression>> bound_children, string &error);
+	static unique_ptr<Expression> BindMacroFunction(ExpressionBinder &binder, MacroFunctionCatalogEntry &function,
+	                                                vector<unique_ptr<ParsedExpression>> parsed_children,
+	                                                vector<unique_ptr<Expression>> bound_children, string &error);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
 	//! The macro arguments

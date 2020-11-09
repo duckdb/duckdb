@@ -107,8 +107,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr
 		return InitializeState((BoundConstantExpression &)expr, state);
 	case ExpressionClass::BOUND_FUNCTION:
 		return InitializeState((BoundFunctionExpression &)expr, state);
-	case ExpressionClass::BOUND_MACRO:
-		return InitializeState((BoundMacroExpression &)expr, state);
 	case ExpressionClass::BOUND_OPERATOR:
 		return InitializeState((BoundOperatorExpression &)expr, state);
 	case ExpressionClass::BOUND_PARAMETER:
@@ -147,9 +145,6 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
 		Execute((BoundFunctionExpression &)expr, state, sel, count, result);
-		break;
-	case ExpressionClass::BOUND_MACRO:
-		Execute((BoundMacroExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
 		Execute((BoundOperatorExpression &)expr, state, sel, count, result);

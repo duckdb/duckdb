@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_macro_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 
@@ -76,11 +75,12 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 		                                            function.is_operator);
 	} else {
 		vector<unique_ptr<ParsedExpression>> parsed_children;
-        for (idx_t i = 0; i < function.children.size(); i++) {
-            auto &child = (BoundExpression &)*function.children[i];
-            parsed_children.push_back(move(child.parsed_expr));
-        }
-		result = MacroFunction::BindMacroFunction(*this, (MacroFunctionCatalogEntry &)*func, move(parsed_children), move(children), error);
+		for (idx_t i = 0; i < function.children.size(); i++) {
+			auto &child = (BoundExpression &)*function.children[i];
+			parsed_children.push_back(move(child.parsed_expr));
+		}
+		result = MacroFunction::BindMacroFunction(*this, (MacroFunctionCatalogEntry &)*func, move(parsed_children),
+		                                          move(children), error);
 		// TODO: the result may have CTE that needs to be added to the bind_context
 	}
 	if (!result) {
