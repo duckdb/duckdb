@@ -40,9 +40,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 			return make_unique<LogicalEmptyResult>(move(op));
 		}
 	}
+	// clear up the filters for subsequent use
+	filters.clear();
 	child_pushdown.GenerateFilters();
 	// now push into children
 	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
+
+	// copy filter pulled up from the child node
+	combiner_pullup.Append(child_pushdown.combiner_pullup);
+	// generate pulled up filters into this projection for subsequent push down
+	GenerateFiltersPullup(*op);
+
 	if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		// child returns an empty result: generate an empty result here too
 		return make_unique<LogicalEmptyResult>(move(op));
