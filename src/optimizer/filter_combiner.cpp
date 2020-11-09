@@ -661,4 +661,37 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 	}
 }
 
+//Append filters, filling internal structures, from the other filter combiner
+void FilterCombiner::Append(const FilterCombiner &other) {
+	// map structure to link the copy expressions
+	unordered_map<Expression *, Expression *> map_expr_copy;
+	for(auto &expr: other.stored_expressions) {
+		// linking the expression with its new copy
+		auto node_copy = this->GetNode(expr.second.get());
+		map_expr_copy[expr.second.get()] = node_copy;
+
+		equivalence_set_map[node_copy] =  set_index++;
+	}
+
+	for(auto it = other.equivalence_map.begin(); it != other.equivalence_map.end(); ++it) {
+		auto idx_set = it->first;
+		for(auto expr: it->second) {
+			// get the associated pointer from the copied expression
+			auto expr_copy_ptr = map_expr_copy[expr];
+			D_ASSERT(expr_copy_ptr != nullptr);
+			equivalence_map[idx_set].push_back(expr_copy_ptr);
+		}
+	}
+
+	// copy constants
+	for(auto it = other.constant_values.begin(); it != other.constant_values.end(); ++it) {
+		auto idx_constant = it->first;
+		vector<ExpressionValueInformation> values;
+		for(auto expr_evaluation: it->second) {
+			values.push_back(expr_evaluation);
+		}
+		constant_values.insert(make_pair(idx_constant, values));
+	}
+}
+
 } // namespace duckdb

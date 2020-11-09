@@ -39,6 +39,8 @@ public:
 	bool HasFilters();
 	vector<TableFilter> GenerateTableScanFilters(vector<idx_t> &column_ids);
 
+    void Append(const FilterCombiner &other);
+
 private:
 	FilterResult AddFilter(Expression *expr);
 	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison);
