@@ -2,6 +2,7 @@ import sys
 import subprocess
 import tempfile
 import os
+import shutil
 
 if len(sys.argv) < 2:
      raise Exception('need shell binary as parameter')
@@ -390,6 +391,28 @@ INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());
 INSERT INTO b SELECT * FROM range(0,10);
 .dump
 ''', 'CREATE TABLE a(d DATE, k FLOAT, t TIMESTAMP);')
+
+# import/export database
+target_dir = 'duckdb_shell_test_export_dir'
+try:
+     shutil.rmtree(target_dir)
+except:
+     pass
+test('''
+.mode csv
+.changes off
+CREATE TABLE integers(i INTEGER);
+CREATE TABLE integers2(i INTEGER);
+INSERT INTO integers SELECT * FROM range(100);
+INSERT INTO integers2 VALUES (1), (3), (99);
+EXPORT DATABASE '%s';
+DROP TABLE integers;
+DROP TABLE integers2;
+IMPORT DATABASE '%s';
+SELECT SUM(i)*MAX(i) FROM integers JOIN integers2 USING (i);
+''' % (target_dir, target_dir), '10197')
+
+shutil.rmtree(target_dir)
 
 # dump blobs: FIXME
 # test('''
