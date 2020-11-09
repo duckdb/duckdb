@@ -78,6 +78,9 @@ private:
 	void PushFilters();
 
 	FilterCombiner combiner;
+
+    void GenerateFiltersPullup(LogicalOperator &op);
+    FilterCombiner combiner_pullup;
 };
 
 } // namespace duckdb
