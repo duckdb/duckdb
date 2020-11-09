@@ -5,24 +5,67 @@
 statement ok
 PRAGMA enable_verification
 
+# b cannot be found
 statement error
 CREATE FUNCTION add(a) AS a+b
 
+# cannot create function with existing name
 statement error
 CREATE FUNCTION string_split(a,b) AS a+b
 
 statement ok
+CREATE FUNCTION one() AS (SELECT 1);
+
+query T
+SELECT one()
+----
+1
+
+statement ok
 CREATE FUNCTION IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
 
+#query T
+#SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
+#----
+#a
+
+# cannot create function with same name different parameters
 statement error
 CREATE FUNCTION IFELSE(a,b) AS a+b
+
+# cannot supply argument with side effects
+statement error
+SELECT IFELSE(RANDOM(), 'true', 'false')
 
 query T
 SELECT IFELSE(1,'true','false')
 ----
 true
 
-#query T
-#SELECT IFELSE(0,'true','false')
-#----
-#false
+query T
+SELECT IFELSE(0,'true','false')
+----
+false
+
+query T
+SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
+----
+a
+
+query T
+SELECT IFELSE(1, IFELSE(0,'a','b'), 'c')
+----
+b
+
+query T
+SELECT IFELSE(0, IFELSE(1,'a','b'), 'c')
+----
+c
+
+statement ok
+CREATE FUNCTION subquery(a) AS (SELECT a)
+
+query T
+SELECT subquery(1)
+----
+1

@@ -19,8 +19,7 @@ class MacroFunction {
 public:
 	MacroFunction(unique_ptr<ParsedExpression> expression);
 	static unique_ptr<Expression> BindMacroFunction(ExpressionBinder &binder, MacroFunctionCatalogEntry &function,
-	                                                vector<unique_ptr<ParsedExpression>> parsed_children,
-	                                                vector<unique_ptr<Expression>> bound_children, string &error);
+	                                                vector<unique_ptr<ParsedExpression>> children);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
 	//! The macro arguments

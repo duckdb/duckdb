@@ -74,13 +74,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 		result = ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*func, move(children), error,
 		                                            function.is_operator);
 	} else {
-		vector<unique_ptr<ParsedExpression>> parsed_children;
-		for (idx_t i = 0; i < function.children.size(); i++) {
-			auto &child = (BoundExpression &)*function.children[i];
-			parsed_children.push_back(move(child.parsed_expr));
+		for (auto &child : children) {
+            // TODO: to support arguments with side-effects a projection must be pushed
+			if (!child->IsFoldable()) {
+				throw BinderException("Arguments with side-effects not yet supported \"%s\"", child->ToString());
+			}
 		}
-		result = MacroFunction::BindMacroFunction(*this, (MacroFunctionCatalogEntry &)*func, move(parsed_children),
-		                                          move(children), error);
+		result = MacroFunction::BindMacroFunction(*this, (MacroFunctionCatalogEntry &)*func, move(function.children));
 		// TODO: the result may have CTE that needs to be added to the bind_context
 	}
 	if (!result) {
