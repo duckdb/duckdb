@@ -17,6 +17,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 			return make_unique<LogicalEmptyResult>(move(op));
 		}
 	}
+	// append filter combiner to the pullup filter_combiner
+	combiner_pullup.Append(combiner);
 	GenerateFilters();
 	return Rewrite(move(filter.children[0]));
 }
