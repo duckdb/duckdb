@@ -11,25 +11,27 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 	D_ASSERT(!colref.column_name.empty());
 	// individual column reference
 	// resolve to either a base table or a subquery expression
-	BindResult result = BindResult(string());
+	bool macro_arg = false;
 	if (colref.table_name.empty()) {
 		// no table name: find a binding that contains this
 		if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(colref.column_name)) {
 			// priority to macro parameter bindings TODO: throw a warning when this name conflicts
 			colref.table_name = binder.macro_binding->alias;
-			result = binder.macro_binding->Bind(colref, depth);
+			macro_arg = true;
 		} else {
 			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
-			if (colref.table_name.empty()) {
-				auto similar_bindings = binder.bind_context.GetSimilarBindings(colref.column_name);
-				string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-				return BindResult(binder.FormatError(
-				    colref, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
-				                               colref.column_name.c_str(), candidate_str)));
-			}
-			result = binder.bind_context.BindColumn(colref, depth);
+		}
+		if (colref.table_name.empty()) {
+			auto similar_bindings = binder.bind_context.GetSimilarBindings(colref.column_name);
+			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
+			return BindResult(
+			    binder.FormatError(colref, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
+			                                                  colref.column_name.c_str(), candidate_str)));
 		}
 	}
+	// if it was a macro argument, let the macro_binding bind it
+	BindResult result =
+	    macro_arg ? binder.macro_binding->Bind(colref, depth) : binder.bind_context.BindColumn(colref, depth);
 	if (!result.HasError()) {
 		bound_columns = true;
 	} else {

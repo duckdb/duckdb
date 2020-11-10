@@ -19,7 +19,7 @@ static ParsedExpression &GetParsedExpressionRecursive(ParsedExpression &expr) {
 unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, ExpressionBinder &expr_binder,
                                                         MacroFunctionCatalogEntry &function,
                                                         vector<unique_ptr<Expression>> arguments) {
-	// create macro_binder in binder to bind macro arguments
+	// create macro_binder in binder to bind parameters to arguments
 	auto &macro_func = function.function;
 	auto &parameters = macro_func->parameters;
 	D_ASSERT(parameters.size() == arguments.size());
@@ -33,11 +33,14 @@ unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, Expressi
 	binder.macro_binding = make_shared<MacroBinding>(types, names);
 	binder.macro_binding->arguments = move(arguments);
 
-	// TODO: write table_binding.cpp stuff
-
 	// now we perform the binding
 	auto parsed_expression = macro_func->expression->Copy();
-	return expr_binder.Bind(parsed_expression);
+	auto result = expr_binder.Bind(parsed_expression);
+
+	// delete the macro binding so that it cannot effect bindings outside of the macro call
+	binder.macro_binding.reset();
+
+	return result;
 }
 
 } // namespace duckdb

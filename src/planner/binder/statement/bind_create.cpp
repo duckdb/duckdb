@@ -85,6 +85,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	string error = binder.Bind(&expression, 0, false);
 	if (!error.empty())
 		throw BinderException(error);
+	macro_binding.reset();
 
 	return BindSchema(info);
 }
