@@ -18,6 +18,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/common/enums/output_type.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 #include <random>
 
@@ -71,6 +72,12 @@ public:
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
+
+	//! Wether or not object cache is used
+	bool object_cache_enable = false;
+
+	//! Object Cache
+	unordered_map<string, unique_ptr<ObjectCache>> cache;
 
 public:
 	Transaction &ActiveTransaction() {
