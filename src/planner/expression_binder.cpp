@@ -167,7 +167,10 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 		auto &colref = (ColumnRefExpression &)expr;
 		if (colref.table_name.empty()) {
 			// no table name: find a binding that contains this
-			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
+            if (binder.macro_binding == nullptr || !binder.macro_binding->HasMatchingBinding(colref.column_name)) {
+				// only add the table name if it is definitely not a macro parameter
+                colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
+			}
 		}
 		binder.bind_context.BindColumn(colref, 0);
 	}

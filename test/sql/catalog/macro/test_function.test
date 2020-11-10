@@ -66,4 +66,18 @@ SELECT subquery(1)
 1
 
 statement ok
+CREATE TABLE test (a INT)
+
+statement ok
+CREATE FUNCTION bla(a) AS (SELECT a+a FROM test)
+
+statement ok
+INSERT INTO test VALUES (1)
+
+query T
+SELECT bla(3)
+----
+6
+
+statement ok
 CREATE FUNCTION cte_query(a) AS (WITH cte AS (SELECT 42 AS answer) SELECT answer + a)
