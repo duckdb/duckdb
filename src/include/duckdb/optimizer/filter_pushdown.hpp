@@ -15,7 +15,6 @@
 namespace duckdb {
 
 class Optimizer;
-class LogicalProjection;
 
 class FilterPushdown {
 public:
