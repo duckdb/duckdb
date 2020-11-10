@@ -75,12 +75,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 		                                            function.is_operator);
 	} else {
 		for (auto &child : children) {
-            // TODO: to support arguments with side-effects a projection must be pushed
+			// TODO: to support arguments with side-effects a projection must be pushed
 			if (!child->IsFoldable()) {
 				throw BinderException("Arguments with side-effects not yet supported \"%s\"", child->ToString());
 			}
 		}
-		result = MacroFunction::BindMacroFunction(*this, (MacroFunctionCatalogEntry &)*func, move(function.children));
+		result =
+		    MacroFunction::BindMacroFunction(this->binder, *this, (MacroFunctionCatalogEntry &)*func, move(children));
 		// TODO: the result may have CTE that needs to be added to the bind_context
 	}
 	if (!result) {

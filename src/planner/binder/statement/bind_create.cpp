@@ -62,24 +62,29 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroFunctionInfo &)info;
 
-	// arguments become dummy column names
-	vector<string> dummy_column_names;
-	vector<LogicalType> dummy_column_types;
-	for (auto &arg : base.function->arguments) {
-		string arg_str = arg->ToString();
-		if (arg->expression_class != ExpressionClass::COLUMN_REF)
-			throw BinderException("Invalid parameter \"%s\"", arg_str);
-		dummy_column_names.push_back(arg_str);
-		dummy_column_types.push_back(LogicalType::SQLNULL);
+	// create macro binding in order to bind the function
+	vector<LogicalType> dummy_types;
+	vector<string> dummy_names;
+	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
+		if (base.function->parameters[i]->expression_class != ExpressionClass::COLUMN_REF)
+			throw BinderException("Invalid parameter \"%s\"", base.function->parameters[i]->ToString());
+
+		auto param = (ColumnRefExpression &)*base.function->parameters[i];
+		if (!param.table_name.empty())
+			throw BinderException("Invalid parameter \"%s\"", param.ToString());
+		dummy_types.push_back(LogicalType::SQLNULL);
+		dummy_names.push_back(param.column_name);
 	}
+	macro_binding = make_shared<MacroBinding>(dummy_types, dummy_names);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = base.function->expression->Copy();
 
 	// bind it to verify the function was defined correctly
 	ExpressionBinder binder(*this, context);
-	bind_context.AddGenericBinding(-1, "0_macro_arguments", dummy_column_names, dummy_column_types);
-	auto bound_expression = binder.Bind(expression, 0, true);
+	string error = binder.Bind(&expression, 0, false);
+	if (!error.empty())
+		throw BinderException(error);
 
 	return BindSchema(info);
 }

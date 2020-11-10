@@ -32,7 +32,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
 			throw Exception("Failed to transform function arguments");
 		}
 		for (auto &arg : arg_list) {
-			macro_func->arguments.push_back(move(arg));
+			macro_func->parameters.push_back(move(arg));
 		}
 	}
 

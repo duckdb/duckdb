@@ -16,24 +16,28 @@ static ParsedExpression &GetParsedExpressionRecursive(ParsedExpression &expr) {
 	return GetParsedExpressionRecursive(*bound_expr.parsed_expr);
 }
 
-unique_ptr<Expression> MacroFunction::BindMacroFunction(ExpressionBinder &binder, MacroFunctionCatalogEntry &function,
-                                                        vector<unique_ptr<ParsedExpression>> children) {
-	// replace arguments with those that were supplied
+unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, ExpressionBinder &expr_binder,
+                                                        MacroFunctionCatalogEntry &function,
+                                                        vector<unique_ptr<Expression>> arguments) {
+	// create macro_binder in binder to bind macro arguments
 	auto &macro_func = function.function;
-	auto parsed_expression = macro_func->expression->Copy();
-	for (idx_t i = 0; i < children.size(); i++) {
-		auto &argument = GetParsedExpressionRecursive(*children[i]);
-		ParsedExpressionIterator::EnumerateChildren(
-		    *parsed_expression, [&](unique_ptr<ParsedExpression> child) -> unique_ptr<ParsedExpression> {
-			    if (child->Equals(macro_func->arguments[i].get())) {
-				    return argument.Copy();
-			    }
-			    return child;
-		    });
+	auto &parameters = macro_func->parameters;
+	D_ASSERT(parameters.size() == arguments.size());
+	vector<LogicalType> types;
+	vector<string> names;
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		types.push_back(arguments[i]->return_type);
+		auto &param = (ColumnRefExpression &)*parameters[i];
+		names.push_back(param.column_name);
 	}
+	binder.macro_binding = make_shared<MacroBinding>(types, names);
+	binder.macro_binding->arguments = move(arguments);
+
+	// TODO: write table_binding.cpp stuff
 
 	// now we perform the binding
-	return binder.Bind(parsed_expression);
+	auto parsed_expression = macro_func->expression->Copy();
+	return expr_binder.Bind(parsed_expression);
 }
 
 } // namespace duckdb

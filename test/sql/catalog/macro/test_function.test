@@ -24,11 +24,6 @@ SELECT one()
 statement ok
 CREATE FUNCTION IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
 
-#query T
-#SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
-#----
-#a
-
 # cannot create function with same name different parameters
 statement error
 CREATE FUNCTION IFELSE(a,b) AS a+b
@@ -69,3 +64,6 @@ query T
 SELECT subquery(1)
 ----
 1
+
+statement ok
+CREATE FUNCTION cte_query(a) AS (WITH cte AS (SELECT 42 AS answer) SELECT answer + a)

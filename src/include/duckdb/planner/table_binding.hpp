@@ -57,4 +57,16 @@ public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 };
 
+//! MacroBinding is like the Binding, except the alias and index are set by default. Used for binding Macro
+//! Params/Arguments.
+struct MacroBinding : public Binding {
+	MacroBinding(vector<LogicalType> types_, vector<string> names_);
+
+	//! Arguments
+	vector<unique_ptr<Expression>> arguments;
+
+public:
+	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+};
+
 } // namespace duckdb
