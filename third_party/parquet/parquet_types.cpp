@@ -6542,6 +6542,7 @@ FileMetaData& FileMetaData::operator=(const FileMetaData& other196) {
   __isset = other196.__isset;
   return *this;
 }
+
 void FileMetaData::printTo(std::ostream& out) const {
   using ::apache::thrift::to_string;
   out << "FileMetaData(";

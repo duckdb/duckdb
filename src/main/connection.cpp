@@ -74,8 +74,18 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 }
 
+unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {
+	auto result = context->Query(move(statement), false);
+	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+}
+
 unique_ptr<PreparedStatement> Connection::Prepare(string query) {
 	return context->Prepare(query);
+}
+
+unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> statement) {
+	return context->Prepare(move(statement));
 }
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Value> &values) {
