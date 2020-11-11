@@ -124,10 +124,11 @@ void BenchmarkRunner::LogOutput(string message) {
 
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
-	LogLine(string(benchmark->name.size() + 6, '-'));
-	LogLine("|| " + benchmark->name + " ||");
-	LogLine(string(benchmark->name.size() + 6, '-'));
-	auto state = benchmark->Initialize();
+	auto display_name = benchmark->DisplayName();
+	LogLine(string(display_name.size() + 6, '-'));
+	LogLine("|| " + display_name + " ||");
+	LogLine(string(display_name.size() + 6, '-'));
+	auto state = benchmark->Initialize(configuration);
 	auto nruns = benchmark->NRuns();
 	for (size_t i = 0; i < nruns + 1; i++) {
 		bool hotrun = i > 0;
@@ -137,7 +138,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 			Log("Cold run...");
 		}
 		if (hotrun && benchmark->RequireReinit()) {
-			state = benchmark->Initialize();
+			state = benchmark->Initialize(configuration);
 		}
 		is_active = true;
 		timeout = false;
@@ -186,21 +187,14 @@ void BenchmarkRunner::RunBenchmarks() {
 void print_help() {
 	fprintf(stderr, "Usage: benchmark_runner\n");
 	fprintf(stderr, "              --list         Show a list of all benchmarks\n");
+	fprintf(stderr, "              --profile      Prints the query profile information\n");
 	fprintf(stderr, "              --out=[file]   Move benchmark output to file\n");
 	fprintf(stderr, "              --log=[file]   Move log output to file\n");
 	fprintf(stderr, "              --info         Prints info about the benchmark\n");
-	fprintf(stderr, "              --group        Prints group name of the benchmark\n");
 	fprintf(stderr, "              --query        Prints query of the benchmark\n");
 	fprintf(stderr, "              [name_pattern] Run only the benchmark which names match the specified name pattern, "
 	                "e.g., DS.* for TPC-DS benchmarks\n");
 }
-
-enum class BenchmarkMetaType { NONE, INFO, GROUP, QUERY };
-
-struct BenchmarkConfiguration {
-	std::string name_pattern{};
-	BenchmarkMetaType meta = BenchmarkMetaType::NONE;
-};
 
 enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 
@@ -217,10 +211,9 @@ void LoadInterpretedBenchmarks() {
 /**
  * Builds a configuration based on the passed arguments.
  */
-BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const *arg_values) {
+void parse_arguments(const int arg_counter, char const *const *arg_values) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
-	BenchmarkConfiguration configuration;
 	for (int arg_index = 1; arg_index < arg_counter; ++arg_index) {
 		string arg = arg_values[arg_index];
 		if (arg == "--list") {
@@ -231,13 +224,13 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const 
 			exit(0);
 		} else if (arg == "--info") {
 			// write info of benchmark
-			configuration.meta = BenchmarkMetaType::INFO;
-		} else if (arg == "--group") {
-			// write group of benchmark
-			configuration.meta = BenchmarkMetaType::GROUP;
+			instance.configuration.meta = BenchmarkMetaType::INFO;
+		} else if (arg == "--profile") {
+			// write info of benchmark
+			instance.configuration.print_profile_info = true;
 		} else if (arg == "--query") {
 			// write group of benchmark
-			configuration.meta = BenchmarkMetaType::QUERY;
+			instance.configuration.meta = BenchmarkMetaType::QUERY;
 		} else if (StringUtil::StartsWith(arg, "--out=") || StringUtil::StartsWith(arg, "--log=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -251,33 +244,32 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const 
 				exit(1);
 			}
 		} else {
-			if (!configuration.name_pattern.empty()) {
+			if (!instance.configuration.name_pattern.empty()) {
 				fprintf(stderr, "Only one benchmark can be specified.\n");
 				print_help();
 				exit(1);
 			}
-			configuration.name_pattern = arg;
+			instance.configuration.name_pattern = arg;
 		}
 	}
-	return configuration;
 }
 
 /**
  * Runs the benchmarks specified by the configuration if possible.
  * Returns an configuration error code.
  */
-ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
+ConfigurationError run_benchmarks() {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
-	if (!configuration.name_pattern.empty()) {
+	if (!instance.configuration.name_pattern.empty()) {
 		// run only benchmarks which names matches the
 		// passed name pattern.
 		std::vector<int> benchmark_indices{};
 		benchmark_indices.reserve(benchmarks.size());
 		for (idx_t index = 0; index < benchmarks.size(); ++index) {
-			if (RE2::FullMatch(benchmarks[index]->name, configuration.name_pattern)) {
+			if (RE2::FullMatch(benchmarks[index]->name, instance.configuration.name_pattern)) {
 				benchmark_indices.emplace_back(index);
-			} else if (RE2::FullMatch(benchmarks[index]->group, configuration.name_pattern)) {
+			} else if (RE2::FullMatch(benchmarks[index]->group, instance.configuration.name_pattern)) {
 				benchmark_indices.emplace_back(index);
 			}
 		}
@@ -287,18 +279,13 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 		}
 		std::sort(benchmark_indices.begin(), benchmark_indices.end(),
 		          [&](const int a, const int b) -> bool { return benchmarks[a]->name < benchmarks[b]->name; });
-		if (configuration.meta == BenchmarkMetaType::INFO) {
+		if (instance.configuration.meta == BenchmarkMetaType::INFO) {
 			// print info of benchmarks
 			for (const auto &benchmark_index : benchmark_indices) {
 				auto info = benchmarks[benchmark_index]->GetInfo();
 				fprintf(stdout, "%s\n", info.c_str());
 			}
-		} else if (configuration.meta == BenchmarkMetaType::GROUP) {
-			// print group of benchmarks
-			for (const auto &benchmark_index : benchmark_indices) {
-				fprintf(stdout, "%s\n", benchmarks[benchmark_index]->group.c_str());
-			}
-		} else if (configuration.meta == BenchmarkMetaType::QUERY) {
+		} else if (instance.configuration.meta == BenchmarkMetaType::QUERY) {
 			for (const auto &benchmark_index : benchmark_indices) {
 				auto query = benchmarks[benchmark_index]->GetQuery();
 				if (query.empty()) {
@@ -312,7 +299,7 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 			}
 		}
 	} else {
-		if (configuration.meta != BenchmarkMetaType::NONE) {
+		if (instance.configuration.meta != BenchmarkMetaType::NONE) {
 			return ConfigurationError::InfoWithoutBenchmarkName;
 		}
 		// default: run all benchmarks
@@ -340,8 +327,8 @@ int main(int argc, char **argv) {
 	fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 	// load interpreted benchmarks before doing anything else
 	LoadInterpretedBenchmarks();
-	BenchmarkConfiguration configuration = parse_arguments(argc, argv);
-	const auto configuration_error = run_benchmarks(configuration);
+	parse_arguments(argc, argv);
+	const auto configuration_error = run_benchmarks();
 	if (configuration_error != ConfigurationError::None) {
 		print_error_message(configuration_error);
 		exit(1);

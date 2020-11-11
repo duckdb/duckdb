@@ -20,7 +20,7 @@ public:
 
 	void LoadBenchmark();
 	//! Initialize the benchmark state
-	unique_ptr<BenchmarkState> Initialize() override;
+	unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override;
 	//! Run the benchmark
 	void Run(BenchmarkState *state) override;
 	//! Cleanup the benchmark, called after each Run
@@ -36,6 +36,10 @@ public:
 
 	string GetLogOutput(BenchmarkState *state) override;
 
+	string DisplayName() override;
+	string Group() override;
+	string Subgroup() override;
+
 private:
 	bool is_loaded = false;
 	std::unordered_map<string, string> replacement_mapping;
@@ -48,6 +52,10 @@ private:
 	std::unordered_set<string> extensions;
 	int64_t result_column_count = 0;
 	vector<vector<string>> result_values;
+
+	string display_name;
+	string display_group;
+	string subgroup;
 };
 
 } // namespace duckdb

@@ -2,6 +2,9 @@
 # description: Create index on 10000000 integer tuples
 # group: [index]
 
+name Create Index
+group index
+
 load
 CREATE TABLE integers AS SELECT (i * 9876983769044 % 10000000) AS i FROM range(0, 10000000) t(i);
 

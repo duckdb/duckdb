@@ -1,0 +1,23 @@
+[aggregate]
+[Aggregate]
+The aggregate micro benchmark set contains several micro benchmarks that are aimed at measuring raw aggregation performance.
+
+[aggregate][tpch]
+[Aggregate (TPC-H)]
+The benchmarks below run several micro-benchmarks on the TPC-H dataset with scale factor 1 (~1GB of data).
+
+[csv]
+[CSV]
+The CSV micro benchmark set contains several benchmarks that are aimed at measuring CSV reading and writing performance.
+
+[tpch]
+[TPC-H]
+The TPC-H benchmark is an industry standard benchmark geared towards measuring the performance of OLAP systems. It consists of 22 different queries that test different optimizations in the system.
+
+[tpch][sf1]
+[TPC-H (SF1)]
+The benchmarks below run the TPC-H queries with Scale Factor 1 (~1GB of data) using a single-thread.
+
+[tpch][sf1-parallel]
+[TPC-H (SF1, 4T)]
+The benchmarks below run the TPC-H queries with Scale Factor 1 (~1GB of data) using four threads.

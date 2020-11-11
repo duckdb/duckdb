@@ -2,7 +2,8 @@
 # description: Index Join where RHS has no projection
 # group: [join]
 
-
+name Benno Equality Join (Index, Count Only)
+group join
 
 load
 PRAGMA force_index_join;

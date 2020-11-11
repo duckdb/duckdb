@@ -84,7 +84,6 @@ void InterpretedBenchmark::LoadBenchmark() {
 	if (is_loaded) {
 		return;
 	}
-	is_loaded = true;
 	BenchmarkFileReader reader(benchmark_path, replacement_mapping);
 	string line;
 	while (reader.ReadLine(line)) {
@@ -107,6 +106,25 @@ void InterpretedBenchmark::LoadBenchmark() {
 					query += line + " ";
 				}
 			}
+			if (splits.size() > 1 && !splits[1].empty()) {
+				// read entire file into query
+				std::ifstream file(splits[1], std::ios::ate);
+				std::streamsize size = file.tellg();
+				file.seekg(0, std::ios::beg);
+				if (size < 0) {
+					throw std::runtime_error("Failed to read " + splits[0] + " from file " + splits[1]);
+				}
+
+				auto buffer = unique_ptr<char[]>(new char[size]);
+				if (!file.read(buffer.get(), size)) {
+					throw std::runtime_error("Failed to read " + splits[0] + " from file " + splits[1]);
+				}
+				query = string(buffer.get(), size);
+			}
+			StringUtil::Trim(query);
+			if (query.empty()) {
+				throw std::runtime_error("Encountered an empty " + splits[0] + " node!");
+			}
 			queries[splits[0]] = query;
 		} else if (splits[0] == "require") {
 			if (splits.size() != 2) {
@@ -118,6 +136,19 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
 			}
 			data_cache = splits[1];
+		} else if (splits[0] == "name" || splits[0] == "group" || splits[0] == "subgroup") {
+			if (splits.size() == 1) {
+				throw std::runtime_error(reader.FormatException(splits[0] + " requires a parameter"));
+			}
+			string result = line.substr(splits[0].size() + 1, line.size() - 1);
+			StringUtil::Trim(result);
+			if (splits[0] == "name") {
+				display_name = result;
+			} else if (splits[0] == "group") {
+				display_group = result;
+			} else {
+				subgroup = result;
+			}
 		} else if (splits[0] == "result") {
 			if (result_column_count > 0) {
 				throw std::runtime_error(reader.FormatException("multiple results found"));
@@ -206,9 +237,10 @@ void InterpretedBenchmark::LoadBenchmark() {
 		throw Exception("Invalid benchmark file: no \"run\" query specified");
 	}
 	run_query = queries["run"];
+	is_loaded = true;
 }
 
-unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
+unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
 	unique_ptr<QueryResult> result;
 	LoadBenchmark();
 	auto state = make_unique<InterpretedBenchmarkState>();
@@ -254,6 +286,9 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 			throw Exception(result->error);
 		}
 		result = move(result->next);
+	}
+	if (config.print_profile_info) {
+		state->con.Query("PRAGMA enable_profiling");
 	}
 	return state;
 }
@@ -333,6 +368,21 @@ string InterpretedBenchmark::BenchmarkInfo() {
 string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_) {
 	auto &state = (InterpretedBenchmarkState &)*state_;
 	return state.con.context->profiler.ToJSON();
+}
+
+string InterpretedBenchmark::DisplayName() {
+	LoadBenchmark();
+	return display_name.empty() ? name : display_name;
+}
+
+string InterpretedBenchmark::Group() {
+	LoadBenchmark();
+	return display_group.empty() ? group : display_group;
+}
+
+string InterpretedBenchmark::Subgroup() {
+	LoadBenchmark();
+	return subgroup;
 }
 
 } // namespace duckdb

@@ -2,6 +2,9 @@
 # description: RIGHT OUTER JOIN between two tables, where the left table is significantly bigger than the right table
 # group: [join]
 
+name Right Outer Join (big LHS, small RHS)
+group join
+
 load
 CREATE TABLE small_table ( pkey integer, c0 char(2), c_1k integer, c_10k integer, c_100k integer, c_1m integer, c_10m integer, c_100m integer );
 insert into small_table
