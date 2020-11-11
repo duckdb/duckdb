@@ -2,6 +2,10 @@
 # description: ${DESCRIPTION}
 # group: [sf1]
 
+name Q${QUERY_NUMBER_PADDED}
+group tpch
+subgroup sf1-parallel
+
 require tpch
 
 cache tpch_sf1
@@ -9,10 +13,8 @@ cache tpch_sf1
 init
 PRAGMA threads=4
 
-load
-CALL dbgen(sf=1);
+load benchmark/tpch/sf1/load.sql
 
-run
-PRAGMA tpch(${QUERY_NUMBER})
+run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
 
 result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv

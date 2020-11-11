@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/string_agg_short.benchmark
+# description: String Agg
+# group: [string]
+
+name String Agg
+group string
+
+load benchmark/micro/string/strings_small.sql
+
+run
+SELECT STRLEN(STRING_AGG(s1, ' ')) FROM strings
+
+result I
+38899999

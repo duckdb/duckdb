@@ -2,6 +2,10 @@
 # description: Perform TPC-H Q1 including a nop join (FK-PK join)
 # group: [aggregate]
 
+name Q1 + Nop Join
+group aggregate
+subgroup tpch
+
 require tpch
 
 cache tpch_sf1

@@ -2,6 +2,10 @@
 # description: Execute aggregate + projection over lineitem with a view on top to test projection pushdown
 # group: [parquet]
 
+name Lineitem Projection Pushdown (View)
+group parquet
+subgroup tpch
+
 require parquet
 require tpch
 
