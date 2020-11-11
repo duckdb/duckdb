@@ -1,6 +1,7 @@
 #include "benchmark_runner.hpp"
 
 #include "duckdb/common/profiler.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb.hpp"
 #include "duckdb_benchmark.hpp"
@@ -332,6 +333,8 @@ void print_error_message(const ConfigurationError &error) {
 }
 
 int main(int argc, char **argv) {
+	FileSystem fs;
+	fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 	BenchmarkConfiguration configuration = parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks(configuration);
 	if (configuration_error != ConfigurationError::None) {
