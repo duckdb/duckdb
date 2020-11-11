@@ -28,9 +28,7 @@ public:
 	//! Verify that the output of the benchmark was correct
 	string Verify(BenchmarkState *state) override;
 
-	string GetQuery() override {
-		return run_query;
-	}
+	string GetQuery() override;
 	//! Interrupt the benchmark because of a timeout
 	void Interrupt(BenchmarkState *state) override;
 	//! Returns information about the benchmark
@@ -39,6 +37,7 @@ public:
 	string GetLogOutput(BenchmarkState *state) override;
 
 private:
+	bool is_loaded = false;
 	std::unordered_map<string, string> replacement_mapping;
 
 	std::unordered_map<string, string> queries;

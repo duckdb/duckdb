@@ -204,6 +204,16 @@ struct BenchmarkConfiguration {
 
 enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 
+void LoadInterpretedBenchmarks() {
+	// load interpreted benchmarks
+	FileSystem fs;
+	listFiles(fs, "benchmark", [](string path) {
+		if (endsWith(path, ".benchmark")) {
+			new InterpretedBenchmark(path);
+		}
+	});
+}
+
 /**
  * Builds a configuration based on the passed arguments.
  */
@@ -258,13 +268,6 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const 
  */
 ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 	auto &instance = BenchmarkRunner::GetInstance();
-	// first load interpreted benchmarks
-	FileSystem fs;
-	listFiles(fs, "benchmark", [](string path) {
-		if (endsWith(path, ".benchmark")) {
-			new InterpretedBenchmark(path);
-		}
-	});
 	auto &benchmarks = instance.benchmarks;
 	if (!configuration.name_pattern.empty()) {
 		// run only benchmarks which names matches the
@@ -335,6 +338,8 @@ void print_error_message(const ConfigurationError &error) {
 int main(int argc, char **argv) {
 	FileSystem fs;
 	fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
+	// load interpreted benchmarks before doing anything else
+	LoadInterpretedBenchmarks();
 	BenchmarkConfiguration configuration = parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks(configuration);
 	if (configuration_error != ConfigurationError::None) {

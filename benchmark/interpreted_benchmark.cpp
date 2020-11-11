@@ -81,6 +81,10 @@ InterpretedBenchmark::InterpretedBenchmark(string full_path)
 }
 
 void InterpretedBenchmark::LoadBenchmark() {
+	if (is_loaded) {
+		return;
+	}
+	is_loaded = true;
 	BenchmarkFileReader reader(benchmark_path, replacement_mapping);
 	string line;
 	while (reader.ReadLine(line)) {
@@ -197,16 +201,16 @@ void InterpretedBenchmark::LoadBenchmark() {
 			throw std::runtime_error(reader.FormatException("unrecognized command " + splits[0]));
 		}
 	}
+	// set up the queries
+	if (queries.find("run") == queries.end()) {
+		throw Exception("Invalid benchmark file: no \"run\" query specified");
+	}
+	run_query = queries["run"];
 }
 
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 	unique_ptr<QueryResult> result;
 	LoadBenchmark();
-	if (queries.find("run") == queries.end()) {
-		throw Exception("Invalid benchmark file: no \"run\" query specified");
-	}
-	run_query = queries["run"];
-
 	auto state = make_unique<InterpretedBenchmarkState>();
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
@@ -252,6 +256,11 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 		result = move(result->next);
 	}
 	return state;
+}
+
+string InterpretedBenchmark::GetQuery() {
+	LoadBenchmark();
+	return run_query;
 }
 
 void InterpretedBenchmark::Run(BenchmarkState *state_) {
@@ -317,6 +326,7 @@ void InterpretedBenchmark::Interrupt(BenchmarkState *state_) {
 }
 
 string InterpretedBenchmark::BenchmarkInfo() {
+	LoadBenchmark();
 	return name + " - " + run_query;
 }
 
