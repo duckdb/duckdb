@@ -1,5 +1,7 @@
 #pragma once
 #include <napi.h>
+#include <queue>
+
 #include "duckdb.hpp"
 
 namespace node_duckdb {
@@ -33,17 +35,18 @@ public:
 	Database(const Napi::CallbackInfo &info);
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
 	void Process(Napi::Env env);
-    void TaskComplete(Napi::Env env);
+	void TaskComplete(Napi::Env env);
 
-    void Schedule(Napi::Env env, unique_ptr<Task> task);
+	void Schedule(Napi::Env env, std::unique_ptr<Task> task);
 
-    static bool HasInstance(Napi::Value val) {
-        Napi::Env env = val.Env();
-        Napi::HandleScope scope(env);
-        if (!val.IsObject()) return false;
-        Napi::Object obj = val.As<Napi::Object>();
-        return obj.InstanceOf(constructor.Value());
-    }
+	static bool HasInstance(Napi::Value val) {
+		Napi::Env env = val.Env();
+		Napi::HandleScope scope(env);
+		if (!val.IsObject())
+			return false;
+		Napi::Object obj = val.As<Napi::Object>();
+		return obj.InstanceOf(constructor.Value());
+	}
 
 public:
 	Napi::Value Connect(const Napi::CallbackInfo &info);
@@ -63,8 +66,7 @@ private:
 	std::queue<unique_ptr<Task>> task_queue;
 	std::mutex task_mutex;
 	bool task_inflight;
-    static Napi::FunctionReference constructor;
-
+	static Napi::FunctionReference constructor;
 };
 
 class Connection : public Napi::ObjectWrap<Connection> {
@@ -76,13 +78,14 @@ public:
 public:
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
 
-    static bool HasInstance(Napi::Value val) {
-        Napi::Env env = val.Env();
-        Napi::HandleScope scope(env);
-        if (!val.IsObject()) return false;
-        Napi::Object obj = val.As<Napi::Object>();
-        return obj.InstanceOf(constructor.Value());
-    }
+	static bool HasInstance(Napi::Value val) {
+		Napi::Env env = val.Env();
+		Napi::HandleScope scope(env);
+		if (!val.IsObject())
+			return false;
+		Napi::Object obj = val.As<Napi::Object>();
+		return obj.InstanceOf(constructor.Value());
+	}
 
 public:
 	static Napi::FunctionReference constructor;
@@ -116,7 +119,7 @@ public:
 	std::string sql;
 
 private:
-    std::unique_ptr<StatementParam> HandleArgs(const Napi::CallbackInfo &info);
+	std::unique_ptr<StatementParam> HandleArgs(const Napi::CallbackInfo &info);
 };
 
 struct TaskHolder {

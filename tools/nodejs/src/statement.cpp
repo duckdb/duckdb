@@ -19,51 +19,49 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	return exports;
 }
 
-
 struct PrepareTask : public Task {
-    PrepareTask(Statement &statement_, Napi::Function callback_) : Task(statement_, callback_) {
-    }
+	PrepareTask(Statement &statement_, Napi::Function callback_) : Task(statement_, callback_) {
+	}
 
-    void DoWork() override {
-        auto &statement = Get<Statement>();
-        statement.statement = statement.connection_ref->connection->Prepare(statement.sql);
-    }
+	void DoWork() override {
+		auto &statement = Get<Statement>();
+		statement.statement = statement.connection_ref->connection->Prepare(statement.sql);
+	}
 
-    void Callback() override {
-        auto &statement = Get<Statement>();
+	void Callback() override {
+		auto &statement = Get<Statement>();
+		auto env = statement.Env();
+		Napi::HandleScope scope(env);
 
-        // somehow the function can disappear mid-flight (?)
-        Napi::HandleScope scope(statement.Env());
-        auto cb = callback.Value();
-        if (!cb.IsFunction()) {
-            return;
-        }
-		// TODO error callback here and invalidate statement if borked
-        cb.MakeCallback(statement.Value(), {statement.Env().Null(), statement.Value()});
-    }
+		auto cb = callback.Value();
+		if (!statement.statement->success) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
+			return;
+		}
+		cb.MakeCallback(statement.Value(), {env.Null(), statement.Value()});
+	}
 };
-
 
 Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statement>(info) {
 
-    Napi::Env env = info.Env();
-    int length = info.Length();
+	Napi::Env env = info.Env();
+	int length = info.Length();
 
-    if (length <= 0 || !Connection::HasInstance(info[0])) {
-        Napi::TypeError::New(env, "Connection object expected").ThrowAsJavaScriptException();
-        return;
-    }
-    else if (length <= 1 || !info[1].IsString()) {
-        Napi::TypeError::New(env, "SQL query expected").ThrowAsJavaScriptException();
-        return;
-    }
+	if (length <= 0 || !Connection::HasInstance(info[0])) {
+		Napi::TypeError::New(env, "Connection object expected").ThrowAsJavaScriptException();
+		return;
+	} else if (length <= 1 || !info[1].IsString()) {
+		Napi::TypeError::New(env, "SQL query expected").ThrowAsJavaScriptException();
+		return;
+	}
 
 	connection_ref = Napi::ObjectWrap<Connection>::Unwrap(info[0].As<Napi::Object>());
 	connection_ref->Ref();
 
 	sql = info[1].As<Napi::String>();
 
-    connection_ref->database_ref->Schedule(env, duckdb::make_unique<PrepareTask>(*this, env.Null().As<Napi::Function>()));
+	connection_ref->database_ref->Schedule(env,
+	                                       duckdb::make_unique<PrepareTask>(*this, env.Null().As<Napi::Function>()));
 }
 
 Statement::~Statement() {
@@ -165,10 +163,9 @@ static Napi::Value convert_chunk(Napi::Env &env, vector<string> names, duckdb::D
 
 enum ResultHandlingType { RUN, EACH, ALL };
 
-
 struct StatementParam {
-    std::vector<duckdb::Value> params;
-    Napi::Function callback;
+	std::vector<duckdb::Value> params;
+	Napi::Function callback;
 };
 
 struct RunPreparedTask : public Task {
@@ -177,7 +174,12 @@ struct RunPreparedTask : public Task {
 	}
 
 	void DoWork() override {
-		result = Get<Statement>().statement->Execute(params, result_handling_type != ResultHandlingType::ALL);
+		auto &statement = Get<Statement>();
+		// ignorant folk arrive here without caring about the prepare callback error
+		if (!statement.statement->success) {
+			return;
+		}
+		result = statement.statement->Execute(params, result_handling_type != ResultHandlingType::ALL);
 	}
 
 	void Callback() override {
@@ -186,16 +188,11 @@ struct RunPreparedTask : public Task {
 		Napi::HandleScope scope(env);
 
 		auto cb = callback.Value();
-		// if there is no callback we dont have to do anything
-		if (!cb.IsFunction()) {
-			result.reset();
+		// if there was an error we need to say so
+		if (!statement.statement->success) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
 			return;
 		}
-		if (!statement.statement->success) {
-            cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
-            return;
-        }
-		// if there was an error we need to say so
 		if (!result->success) {
 			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, result->error)});
 			return;
@@ -239,7 +236,7 @@ struct RunPreparedTask : public Task {
 					return;
 				}
 				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-                    result_arr.Set(out_idx++, chunk_converted.ToObject().Get(row_idx));
+					result_arr.Set(out_idx++, chunk_converted.ToObject().Get(row_idx));
 				}
 			}
 
@@ -252,46 +249,41 @@ struct RunPreparedTask : public Task {
 	ResultHandlingType result_handling_type;
 };
 
-
 unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
 	size_t start_idx = ignore_first_param ? 1 : 0;
-    auto params = duckdb::make_unique<StatementParam>();
+	auto params = duckdb::make_unique<StatementParam>();
 
 	for (auto i = start_idx; i < info.Length(); i++) {
 		auto &p = info[i];
 		if (p.IsFunction()) {
-            params->callback = p.As<Napi::Function>();
+			params->callback = p.As<Napi::Function>();
 			continue;
 		}
 		if (p.IsUndefined()) {
 			continue;
 		}
-        params->params.push_back(bind_parameter(p));
+		params->params.push_back(bind_parameter(p));
 	}
 	return params;
 }
 
-
 Napi::Value Statement::All(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(
-	    info.Env(),
-	    duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::ALL));
+	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::ALL));
 	return info.This();
 }
 
 Napi::Value Statement::Run(const Napi::CallbackInfo &info) {
-    auto params = HandleArgs(info);
+	auto params = HandleArgs(info);
 	connection_ref->database_ref->Schedule(
-	    info.Env(),
-	    duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::RUN));
+	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::RUN));
 	return info.This();
 }
 
 Napi::Value Statement::Each(const Napi::CallbackInfo &info) {
-    auto params = HandleArgs(info);
+	auto params = HandleArgs(info);
 	connection_ref->database_ref->Schedule(
-	    info.Env(),
-	    duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::EACH));
+	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::EACH));
 	return info.This();
 }
 
@@ -318,16 +310,17 @@ struct FinalizeTask : public Task {
 };
 
 Napi::Value Statement::Finalize_(const Napi::CallbackInfo &info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() <= 0 || !info[0].IsFunction()) {
-        Napi::TypeError::New(env, "Callback expected").ThrowAsJavaScriptException();
-        return env.Null();
-    }
-
+	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
-	auto callback = info[0].As<Napi::Function>();
-	connection_ref->database_ref->Schedule(env, duckdb::make_unique<FinalizeTask>(*this, callback));
+
+	Napi::Value callback = env.Null();
+
+	if (info.Length() > 0 && info[0].IsFunction()) {
+		callback = info[0];
+	}
+
+	connection_ref->database_ref->Schedule(env,
+	                                       duckdb::make_unique<FinalizeTask>(*this, callback.As<Napi::Function>()));
 	return env.Null();
 }
 

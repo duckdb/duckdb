@@ -13,7 +13,12 @@ bool Utils::OtherIsInt(Napi::Number source) {
 }
 
 Napi::Value Utils::CreateError(Napi::Env env, std::string msg) {
-	return Napi::Error::New(env, Napi::String::New(env, msg).Utf8Value()).Value();
+	auto err = Napi::Error::New(env, Napi::String::New(env, msg).Utf8Value()).Value();
+	Napi::Object obj = err.As<Napi::Object>();
+	obj.Set(Napi::String::New(env, "errno"), Napi::Number::New(env, Database::DUCKDB_NODEJS_ERROR));
+	obj.Set(Napi::String::New(env, "code"), Napi::String::New(env, "DUCKDB_NODEJS_ERROR"));
+
+	return obj;
 }
 
 } // namespace node_duckdb

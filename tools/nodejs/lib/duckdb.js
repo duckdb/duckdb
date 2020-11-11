@@ -29,7 +29,6 @@ Database.prototype.prepare = function() {
     if (this.default_connection == undefined) {
         this.default_connection = new duckdb.Connection(this);
     }
-    console.log(this.default_connection.prepare)
     return this.default_connection.prepare.apply(this.default_connection, arguments);
 }
 

@@ -17,12 +17,13 @@ function createDb() {
 function createTable() {
 	/* yay we can have connections too */
 	var conn = db.connect()
-	conn.all('select 42', function(err, res) {
+	db.get('select * from none', function(err, res) {
+        console.log(err)
 		console.log(res)
 	});
 
     console.log("createTable lorem");
-    //db.run("CREATE TABLE IF NOT EXISTS lorem (info TEXT)", insertRows);
+    db.run("CREATE TABLE IF NOT EXISTS lorem (info TEXT)", insertRows);
 }
 
 function insertRows(err) {

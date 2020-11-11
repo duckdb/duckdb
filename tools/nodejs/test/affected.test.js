@@ -22,7 +22,7 @@ describe('query properties', function() {
         }
         db.wait(done);
     });
-    */
+
 
     it('should return the correct changes count', function(done) {
         db.run("UPDATE foo SET id = id + 1 WHERE id % 2 = 0", function(err) {
@@ -31,4 +31,6 @@ describe('query properties', function() {
             done();
         });
     });
+    */
+
 });

@@ -4,7 +4,6 @@ namespace node_duckdb {
 
 Napi::FunctionReference Database::constructor;
 
-
 Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
@@ -14,8 +13,8 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	     InstanceMethod("serialize", &Database::Serialize), InstanceMethod("parallelize", &Database::Parallelize),
 	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt)});
 
-    constructor = Napi::Persistent(t);
-    constructor.SuppressDestruct();
+	constructor = Napi::Persistent(t);
+	constructor.SuppressDestruct();
 
 	exports.Set("Database", t);
 	return exports;
@@ -92,8 +91,10 @@ static void task_execute(napi_env e, void *data) {
 
 static void task_complete(napi_env e, napi_status status, void *data) {
 	std::unique_ptr<TaskHolder> holder((TaskHolder *)data);
-    holder->db->TaskComplete(e);
-	holder->task->Callback();
+	holder->db->TaskComplete(e);
+	if (holder->task->callback.Value().IsFunction()) {
+		holder->task->Callback();
+	}
 }
 
 void Database::TaskComplete(Napi::Env env) {
@@ -106,14 +107,14 @@ void Database::TaskComplete(Napi::Env env) {
 
 void Database::Process(Napi::Env env) {
 	std::lock_guard<std::mutex> lock(task_mutex);
+	if (task_queue.empty()) {
+		return;
+	}
 	if (task_inflight) {
 		return;
 	}
 	task_inflight = true;
 
-	if (task_queue.empty()) {
-		return;
-	}
 	auto task = move(task_queue.front());
 	task_queue.pop();
 
@@ -122,8 +123,8 @@ void Database::Process(Napi::Env env) {
 	holder->db = this;
 
 	// TODO do we need to do error checking here?
-	napi_create_async_work(env, NULL, Napi::String::New(env, "duckdb.Database.Task"), task_execute, task_complete, holder,
-	                       &holder->request);
+	napi_create_async_work(env, NULL, Napi::String::New(env, "duckdb.Database.Task"), task_execute, task_complete,
+	                       holder, &holder->request);
 
 	napi_queue_async_work(env, holder->request);
 }
@@ -132,16 +133,36 @@ Napi::Value Database::Parallelize(const Napi::CallbackInfo &info) {
 	return Serialize(info);
 }
 
-// TODO check params
-// TODO can we get multiple params here?
 Napi::Value Database::Serialize(const Napi::CallbackInfo &info) {
+	Napi::Env env = info.Env();
+	if (info.Length() < 1 || !info[0].IsFunction()) {
+		Napi::TypeError::New(env, "Callback expected").ThrowAsJavaScriptException();
+		return env.Null();
+	}
+	Napi::HandleScope scope(env);
 	info[0].As<Napi::Function>().MakeCallback(info.This(), {});
-	Process(info.Env());
+	Process(env);
 	return info.This();
 }
 
-// TODO implement these
+struct WaitTask : public Task {
+	WaitTask(Database &database_, Napi::Function callback_) : Task(database_, callback_) {
+	}
+
+	void DoWork() override {
+		// nop
+	}
+
+	void Callback() override {
+		auto &database = Get<Database>();
+		Napi::Env env = database.Env();
+		Napi::HandleScope scope(env);
+		callback.Value().MakeCallback(database.Value(), {env.Null()});
+	}
+};
+
 Napi::Value Database::Wait(const Napi::CallbackInfo &info) {
+	Schedule(info.Env(), duckdb::make_unique<WaitTask>(*this, info[0].As<Napi::Function>()));
 	return info.This();
 }
 
