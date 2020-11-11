@@ -97,7 +97,7 @@ static duckdb::Value bind_parameter(const Napi::Value source) {
 		return duckdb::Value();
 	} else if (source.IsBuffer()) {
 		Napi::Buffer<char> buffer = source.As<Napi::Buffer<char>>();
-		return duckdb::Value::BLOB(string(buffer.Data(), buffer.Length()));
+		return duckdb::Value::BLOB(std::string(buffer.Data(), buffer.Length()));
 	} else if (other_instance_of(source.As<Napi::Object>(), "Date")) {
 		// FIXME
 		// return new Values::Float(pos, source.ToNumber().DoubleValue());
@@ -107,9 +107,9 @@ static duckdb::Value bind_parameter(const Napi::Value source) {
 	return duckdb::Value();
 }
 
-static Napi::Value convert_chunk(Napi::Env &env, vector<string> names, duckdb::DataChunk &chunk) {
+static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names, duckdb::DataChunk &chunk) {
 	Napi::EscapableHandleScope scope(env);
-	vector<Napi::String> node_names;
+	std::vector<Napi::String> node_names;
 	assert(names.size() == chunk.column_count());
 	for (auto &name : names) {
 		node_names.push_back(Napi::String::New(env, name));
@@ -208,14 +208,14 @@ struct RunPreparedTask : public Task {
 				if (chunk->size() == 0) {
 					break;
 				}
-				auto chunk_converted = convert_chunk(env, result->names, *chunk);
+
+				auto chunk_converted = convert_chunk(env, result->names, *chunk).ToObject();
 				if (!chunk_converted.IsArray()) {
 					// error was set before
 					return;
 				}
 				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					callback.Value().MakeCallback(statement.Value(),
-					                              {env.Null(), chunk_converted.ToObject().Get(row_idx)});
+					cb.MakeCallback(statement.Value(), {env.Null(), chunk_converted.Get(row_idx)});
 				}
 			}
 
@@ -230,13 +230,14 @@ struct RunPreparedTask : public Task {
 				if (chunk->size() == 0) {
 					break;
 				}
-				auto chunk_converted = convert_chunk(env, result->names, *chunk);
+				// ToObject has to happen here otherwise the converted chunk gets garbage collected for some reason
+				auto chunk_converted = convert_chunk(env, result->names, *chunk).ToObject();
 				if (!chunk_converted.IsArray()) {
 					// error was set before
 					return;
 				}
 				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					result_arr.Set(out_idx++, chunk_converted.ToObject().Get(row_idx));
+					result_arr.Set(out_idx++, chunk_converted.Get(row_idx));
 				}
 			}
 

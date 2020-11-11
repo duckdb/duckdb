@@ -15,6 +15,7 @@ describe('each', function() {
         db.each('SELECT id, txt FROM foo WHERE ROWID < ?', total, function(err, row) {
             if (err) throw err;
             retrieved++;
+
             if(retrieved === total) {
                 assert.equal(retrieved, total, "Only retrieved " + retrieved + " out of " + total + " rows.");
                 done();

@@ -76,7 +76,7 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 	Schedule(info.Env(), duckdb::make_unique<OpenTask>(*this, filename, callback));
 }
 
-void Database::Schedule(Napi::Env env, unique_ptr<Task> task) {
+void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
 	{
 		std::lock_guard<std::mutex> lock(task_mutex);
 		task_queue.push(move(task));

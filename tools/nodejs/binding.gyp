@@ -51,11 +51,11 @@
                 }
             },
             "libraries": [
-              "/Users/hannes/source/duckdb/build/debug/src/libduckdb_static.a",
-              "/Users/hannes/source/duckdb/build/debug/third_party/fmt/libfmt.a",
-              "/Users/hannes/source/duckdb/build/debug/third_party/libpg_query/libpg_query.a",
-              "/Users/hannes/source/duckdb/build/debug/third_party/utf8proc/libutf8proc.a",
-                            "/Users/hannes/source/duckdb/build/debug/third_party/re2/libduckdb_re2.a"
+              "/Users/hannes/source/duckdb/build/release/src/libduckdb_static.a",
+              "/Users/hannes/source/duckdb/build/release/third_party/fmt/libfmt.a",
+              "/Users/hannes/source/duckdb/build/release/third_party/libpg_query/libpg_query.a",
+              "/Users/hannes/source/duckdb/build/release/third_party/utf8proc/libutf8proc.a",
+              "/Users/hannes/source/duckdb/build/release/third_party/re2/libduckdb_re2.a"
 
               ]
         },

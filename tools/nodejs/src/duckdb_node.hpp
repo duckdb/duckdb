@@ -63,7 +63,7 @@ public:
 
 private:
 	// TODO this task queue can also live in the connection?
-	std::queue<unique_ptr<Task>> task_queue;
+	std::queue<std::unique_ptr<Task>> task_queue;
 	std::mutex task_mutex;
 	bool task_inflight;
 	static Napi::FunctionReference constructor;
@@ -123,7 +123,7 @@ private:
 };
 
 struct TaskHolder {
-	unique_ptr<Task> task;
+	std::unique_ptr<Task> task;
 	napi_async_work request;
 	Database *db;
 };
