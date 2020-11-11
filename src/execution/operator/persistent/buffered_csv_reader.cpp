@@ -167,14 +167,17 @@ void BufferedCSVReader::PrepareComplexParser() {
 }
 
 void BufferedCSVReader::ConfigureSampling() {
-	if (options.sample_size > STANDARD_VECTOR_SIZE) {
+	if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {
 		throw InvalidInputException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)",
-		                            options.sample_size, STANDARD_VECTOR_SIZE);
-	} else if (options.sample_size < 1) {
+		                            options.sample_chunk_size, STANDARD_VECTOR_SIZE);
+	} else if (options.sample_chunk_size < 1) {
 		throw InvalidInputException("Chunk size cannot be smaller than 1.");
 	}
-	SAMPLE_CHUNK_SIZE = options.sample_size;
-	MAX_SAMPLE_CHUNKS = options.num_samples;
+	if (options.sample_chunks < 1) {
+		throw InvalidInputException("Number of chunks cannot be smaller than 1.");
+	}
+	SAMPLE_CHUNK_SIZE = options.sample_chunk_size;
+	MAX_SAMPLE_CHUNKS = options.sample_chunks;
 }
 
 unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
@@ -1230,10 +1233,49 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	return read_count > 0;
 }
 
+ConversionException BufferedCSVReader::GenerateConversionException(Exception e_orig, idx_t col_idx) {
+	string col_name = std::to_string(col_idx);
+	if (col_idx < col_names.size()) {
+		col_name = "\""+col_names[col_idx]+"\"";
+	}
+	return ConversionException(
+	    "%s between line %llu and %llu in column %s. Auto detected type: %s. Parser "
+	    "options: %s. Consider either increasing the sample size (using SAMPLE_CHUNKS=n, SAMPLE_CHUNK_SIZE=m) "
+	    "or activate automatic fallback to VARCHAR column types (FALLBACK_TO_ALL_VARCHAR=1).",
+	    e_orig.message_raw, linenr - parse_chunk.size(), linenr, col_name, sql_types[col_idx].ToString(),
+	    options.toString());
+}
+
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	cached_buffers.clear();
 
-	ParseCSV(ParserMode::PARSING, insert_chunk);
+	try {
+		ParseCSV(ParserMode::PARSING, insert_chunk);
+	} catch (const ConversionException &e) {
+		if (options.auto_detect) {
+			if (options.fallback_to_all_varchar) {
+				// set all sql_types to VARCHAR
+				sql_types.clear();
+				sql_types.assign(options.num_cols, LogicalType::VARCHAR);
+
+				// change insert chunk
+				insert_chunk.Destroy();
+				insert_chunk.Initialize(sql_types);
+
+				// reset parser
+				InitParseChunk(sql_types.size());
+				JumpToBeginning(options.skip_rows, options.header);
+
+				// try again
+				
+				ParseCSV(ParserMode::PARSING, insert_chunk);
+			} else {
+				throw;
+			}
+		} else {
+			throw;
+		}
+	}
 }
 
 void BufferedCSVReader::ParseCSV(ParserMode parser_mode, DataChunk &insert_chunk) {
@@ -1348,8 +1390,10 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
 					if (utf_type == UnicodeType::INVALID) {
 						throw InvalidInputException(
-						    "Error in file \"%s\" between line %d and %d: file is not valid UTF8. (%s)",
-						    options.file_path, linenr - parse_chunk.size(), linenr, options.toString());
+						    "Error in file \"%s\" between line %llu and %llu in column \"%s\": file is not valid UTF8. (%s)",
+						                            options.file_path, linenr - parse_chunk.size(), linenr,
+						                            col_names[col_idx],
+						                            options.toString());
 					}
 				}
 			}
@@ -1361,9 +1405,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
 			} catch (const Exception &e) {
-				throw InvalidInputException("Error in file \"%s\" between line %llu and %llu: %s. (%s)",
-				                            options.file_path, linenr - parse_chunk.size(), linenr, e.what(),
-				                            options.toString());
+				throw GenerateConversionException(e, col_idx);
 			}
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
 		           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
@@ -1374,18 +1416,14 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
 				    });
 			} catch (const Exception &e) {
-				throw InvalidInputException("Error in file \"%s\" between line %llu and %llu: %s. (%s)",
-				                            options.file_path, linenr - parse_chunk.size(), linenr, e.what(),
-				                            options.toString());
+				throw GenerateConversionException(e, col_idx);
 			}
 		} else {
 			try {
 				// target type is not varchar: perform a cast
 				VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
 			} catch (const Exception &e) {
-				throw InvalidInputException("Error in file \"%s\" between line %llu and %llu: %s. (%s)",
-				                            options.file_path, linenr - parse_chunk.size(), linenr, e.what(),
-				                            options.toString());
+				throw GenerateConversionException(e, col_idx);
 			}
 		}
 	}

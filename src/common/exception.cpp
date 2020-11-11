@@ -5,11 +5,11 @@
 namespace duckdb {
 using namespace std;
 
-Exception::Exception(string message) : std::exception(), type(ExceptionType::INVALID) {
+Exception::Exception(string message) : std::exception(), type(ExceptionType::INVALID), message_raw(message) {
 	exception_message_ = message;
 }
 
-Exception::Exception(ExceptionType exception_type, string message) : std::exception(), type(exception_type) {
+Exception::Exception(ExceptionType exception_type, string message) : std::exception(), type(exception_type), message_raw(message) {
 	exception_message_ = ExceptionTypeToString(exception_type) + " Error: " + message;
 }
 

@@ -81,17 +81,22 @@ struct BufferedCSVReaderOptions {
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
 	//! Size of sample chunk used for dialect and type detection
-	idx_t sample_size = DEFAULT_SAMPLE_CHUNK_SIZE;
+	idx_t sample_chunk_size = DEFAULT_SAMPLE_CHUNK_SIZE;
 	//! Number of sample chunks used for type detection
-	idx_t num_samples = 10;
+	idx_t sample_chunks = 10;
+	//! If automatic type detection fails, recover and default to varchar types
+	bool fallback_to_all_varchar = false;
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
 	std::string toString() const {
-		return "delimiter=" + delimiter + ", quote=" + quote + ", escape=" + escape +
-		       ", header=" + (header ? "TRUE" : "FALSE");
+		return "delimiter='" + delimiter +
+			   "', quote='" + quote +
+		       "', escape='" + escape +
+		       "', header=" + (header ? "TRUE" : "FALSE") +
+			   "', auto_detect=" + (auto_detect ? "TRUE" : "FALSE");
 	}
 };
 
@@ -193,6 +198,8 @@ private:
 	void ConfigureSampling();
 	//! Prepare candidate sets for auto detection based on user input
 	void PrepareCandidateSets();
+	//! Generates error message with line info, column info and user guidance
+	ConversionException GenerateConversionException(Exception e_orig, idx_t col_idx);
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	void ParseSimpleCSV(DataChunk &insert_chunk);

@@ -44,20 +44,22 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 			options.has_escape = true;
 		} else if (kv.first == "nullstr") {
 			options.null_str = kv.second.str_value;
-		} else if (kv.first == "sample_size") {
-			options.sample_size = kv.second.GetValue<int64_t>();
-			if (options.sample_size > STANDARD_VECTOR_SIZE) {
+		} else if (kv.first == "sample_chunk_size") {
+			options.sample_chunk_size = kv.second.GetValue<int64_t>();
+			if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {
 				throw BinderException(
-				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+				    "Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
 				    STANDARD_VECTOR_SIZE);
-			} else if (options.sample_size < 1) {
-				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
+			} else if (options.sample_chunk_size < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
 			}
-		} else if (kv.first == "num_samples") {
-			options.num_samples = kv.second.GetValue<int64_t>();
-			if (options.num_samples < 1) {
-				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
+		} else if (kv.first == "sample_chunks") {
+			options.sample_chunks = kv.second.GetValue<int64_t>();
+			if (options.sample_chunks < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
 			}
+		} else if (kv.first == "fallback_to_all_varchar") {
+			options.fallback_to_all_varchar = kv.second.value_.boolean;
 		} else if (kv.first == "dateformat") {
 			options.has_format[LogicalTypeId::DATE] = true;
 			auto &date_format = options.date_format[LogicalTypeId::DATE];
@@ -90,7 +92,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 		}
 	}
 	if (!options.auto_detect && return_types.size() == 0) {
-		throw BinderException("Specifying CSV options requires columns to be specified as well (for now)");
+		throw BinderException("read_csv requires columns to be specified. Use read_csv_auto or set read_csv(..., AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
@@ -171,8 +173,9 @@ static void add_named_parameters(TableFunction &table_function) {
 	table_function.named_parameters["columns"] = LogicalType::STRUCT;
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["num_samples"] = LogicalType::BIGINT;
+	table_function.named_parameters["sample_chunk_size"] = LogicalType::BIGINT;
+	table_function.named_parameters["sample_chunks"] = LogicalType::BIGINT;
+	table_function.named_parameters["fallback_to_all_varchar"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;

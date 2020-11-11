@@ -207,19 +207,19 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 		} else if (ParseBaseOption(options, loption, set)) {
 			// parsed option in base CSV options: continue
 			continue;
-		} else if (loption == "sample_size") {
-			options.sample_size = ParseInteger(set);
-			if (options.sample_size > STANDARD_VECTOR_SIZE) {
+		} else if (loption == "sample_chunk_size") {
+			options.sample_chunk_size = ParseInteger(set);
+			if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {
 				throw BinderException(
-				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+				    "Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
 				    STANDARD_VECTOR_SIZE);
-			} else if (options.sample_size < 1) {
-				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
+			} else if (options.sample_chunk_size < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
 			}
-		} else if (loption == "num_samples") {
-			options.num_samples = ParseInteger(set);
-			if (options.num_samples < 1) {
-				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
+		} else if (loption == "sample_chunks") {
+			options.sample_chunks = ParseInteger(set);
+			if (options.sample_chunks < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
 			}
 		} else if (loption == "force_not_null") {
 			options.force_not_null = ParseColumnList(set, expected_names);
