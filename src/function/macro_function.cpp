@@ -8,14 +8,6 @@ namespace duckdb {
 MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {
 }
 
-// for nested function expressions
-static ParsedExpression &GetParsedExpressionRecursive(ParsedExpression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_EXPRESSION)
-		return expr;
-	auto &bound_expr = (BoundExpression &)expr;
-	return GetParsedExpressionRecursive(*bound_expr.parsed_expr);
-}
-
 unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, ExpressionBinder &expr_binder,
                                                         MacroFunctionCatalogEntry &function,
                                                         vector<unique_ptr<Expression>> arguments, string &error) {

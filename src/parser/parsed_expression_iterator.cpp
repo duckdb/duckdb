@@ -15,7 +15,7 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &express
 }
 
 void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
-                                                 std::function<void(ParsedExpression &child)> callback) {
+                                                 function<void(ParsedExpression &child)> callback) {
 	EnumerateChildren(expr, [&](unique_ptr<ParsedExpression> child) -> unique_ptr<ParsedExpression> {
 		callback(*child);
 		return child;
