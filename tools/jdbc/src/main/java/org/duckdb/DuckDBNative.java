@@ -83,4 +83,17 @@ public class DuckDBNative {
 	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref);
 	
 	protected static native int duckdb_jdbc_fetch_size();
+
+	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name);
+
+	protected static native void duckdb_jdbc_appender_begin_row(ByteBuffer appender_ref);
+
+	protected static native void duckdb_jdbc_appender_end_row(ByteBuffer appender_ref);
+
+	protected static native void duckdb_jdbc_appender_flush(ByteBuffer appender_ref);
+
+	protected static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref);
+
+	protected static native void duckdb_jdbc_appender_append_int(ByteBuffer appender_ref, int value);
+
 }

@@ -1,6 +1,8 @@
+
 #include "org_duckdb_DuckDBNative.h"
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/appender.hpp"
 #include "parquet-extension.hpp"
 
 using namespace duckdb;
@@ -341,4 +343,58 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1ty
 		env->ThrowNew(Exception, "Invalid statement");
 	}
 	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->type).c_str());
+}
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1appender
+  (JNIEnv *env, jclass, jobject conn_ref_buf, jbyteArray schema_name_j, jbyteArray table_name_j) {
+
+	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+	if (!conn_ref || !conn_ref->context || conn_ref->context->is_invalidated) {
+		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Invalid connection");
+	}
+	auto schema_name = byte_array_to_string(env, schema_name_j);
+	auto table_name = byte_array_to_string(env, table_name_j);
+	auto appender = new Appender(*conn_ref, schema_name, table_name);
+	return env->NewDirectByteBuffer(appender, 0);
+
+}
+
+static Appender* get_appender(JNIEnv *env, jobject appender_ref_buf) {
+	auto appender_ref = (Appender *)env->GetDirectBufferAddress(appender_ref_buf);
+	if (!appender_ref) {
+		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Invalid appender");
+	}
+//	try {
+//		appender_ref->CheckInvalidated();
+//	} catch (exception &e) {
+//		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Invalid appender");
+//	}
+	return appender_ref;
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1begin_1row
+  (JNIEnv *env, jclass, jobject appender_ref_buf) {
+	get_appender(env, appender_ref_buf)->BeginRow();
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1end_1row
+  (JNIEnv *env, jclass, jobject appender_ref_buf) {
+	get_appender(env, appender_ref_buf)->EndRow();
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1flush
+  (JNIEnv *env, jclass, jobject appender_ref_buf) {
+	get_appender(env, appender_ref_buf)->Flush();
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1close
+  (JNIEnv *env, jclass, jobject appender_ref_buf) {
+	auto appender = get_appender(env, appender_ref_buf);
+	appender->Close();
+	delete appender;
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1int
+  (JNIEnv *env, jclass, jobject appender_ref_buf, jint value) {
+	get_appender(env, appender_ref_buf)->Append((int32_t) value);
 }

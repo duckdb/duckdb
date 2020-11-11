@@ -21,6 +21,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Properties;
 
+import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDriver;
 
@@ -1009,6 +1010,44 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
+
+	public static void test_appender() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE integers (a INTEGER, b INTEGER)");
+		DuckDBAppender appender = conn.createAppender("main", "integers");
+
+		for (int i = 0; i < 1000; i++) {
+			appender.beginRow();
+			appender.append(i);
+			appender.append(i+1);
+			appender.endRow();
+		}
+		appender.close();
+
+		ResultSet rs = stmt.executeQuery("SELECT max(a), min(b) FROM integers");
+		assertFalse(rs.isClosed());
+
+		assertTrue(rs.next());
+		int resA = rs.getInt(1);
+		assertEquals(resA, 999);
+		int resB = rs.getInt(2);
+		assertEquals(resB, 1);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	// TODO: more test cases
+	// - the table is deleted while the appender is open
+	// - the table doesn't exist
+	// - type mismatches
+	// - number of columns mismatches
+	// - shouldn't segfault
+	// - add strings
+
 
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
