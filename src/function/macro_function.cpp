@@ -18,11 +18,20 @@ static ParsedExpression &GetParsedExpressionRecursive(ParsedExpression &expr) {
 
 unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, ExpressionBinder &expr_binder,
                                                         MacroFunctionCatalogEntry &function,
-                                                        vector<unique_ptr<Expression>> arguments) {
+                                                        vector<unique_ptr<Expression>> arguments, string &error) {
 	// create macro_binder in binder to bind parameters to arguments
 	auto &macro_func = function.function;
 	auto &parameters = macro_func->parameters;
-	D_ASSERT(parameters.size() == arguments.size());
+	if (parameters.size() != arguments.size()) {
+		error = StringUtil::Format("Macro function '%s(%s)' requires ", function.name,
+		                           StringUtil::Join(parameters, parameters.size(), ", ",
+		                                            [](const unique_ptr<ParsedExpression> &p) { return ((ColumnRefExpression &)*p).column_name; }));
+		error += parameters.size() == 1 ? "a single argument" : StringUtil::Format("%i arguments", parameters.size());
+		error += ", but ";
+		error += arguments.size() == 1 ? "a single argument was" : StringUtil::Format("%i arguments were", arguments.size());
+		error += " provided.";
+		return nullptr;
+	}
 	vector<LogicalType> types;
 	vector<string> names;
 	for (idx_t i = 0; i < parameters.size(); i++) {

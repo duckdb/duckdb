@@ -1,5 +1,5 @@
 # name: test/sql/catalog/function/test_macro.test
-# description: Test Macro
+# description: Test Macro Simple
 # group: [function]
 
 statement ok
@@ -41,54 +41,4 @@ query T
 SELECT IFELSE(0,'true','false')
 ----
 false
-
-query T
-SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
-----
-a
-
-query T
-SELECT IFELSE(1, IFELSE(0,'a','b'), 'c')
-----
-b
-
-query T
-SELECT IFELSE(0, IFELSE(1,'a','b'), 'c')
-----
-c
-
-statement ok
-CREATE MACRO subquery(a) AS (SELECT a)
-
-query T
-SELECT subquery(1)
-----
-1
-
-query T
-SELECT subquery(NULL)
-----
-NULL
-
-statement ok
-CREATE TABLE test (a INT)
-
-statement ok
-CREATE MACRO bla(a) AS (SELECT a+a FROM test)
-
-statement ok
-INSERT INTO test VALUES (1)
-
-query T
-SELECT bla(3)
-----
-6
-
-statement ok
-CREATE MACRO cte_query(a) AS (WITH cte AS (SELECT 42 AS answer) SELECT answer + a FROM cte)
-
-query T
-SELECT cte_query(42)
-----
-84
 

@@ -21,7 +21,7 @@ public:
 	MacroFunction(unique_ptr<ParsedExpression> expression);
 	static unique_ptr<Expression> BindMacroFunction(Binder &binder, ExpressionBinder &expr_binder,
 	                                                MacroFunctionCatalogEntry &function,
-	                                                vector<unique_ptr<Expression>> arguments);
+	                                                vector<unique_ptr<Expression>> arguments, string &error);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
 	//! The macro parameters

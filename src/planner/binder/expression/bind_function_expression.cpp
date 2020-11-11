@@ -80,8 +80,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 				throw BinderException("Arguments with side-effects not yet supported \"%s\"", child->ToString());
 			}
 		}
-		result =
-		    MacroFunction::BindMacroFunction(this->binder, *this, (MacroFunctionCatalogEntry &)*func, move(children));
+		result = MacroFunction::BindMacroFunction(this->binder, *this, (MacroFunctionCatalogEntry &)*func,
+		                                          move(children), error);
 	}
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
