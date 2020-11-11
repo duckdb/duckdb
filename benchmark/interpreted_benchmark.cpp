@@ -361,8 +361,7 @@ void InterpretedBenchmark::Interrupt(BenchmarkState *state_) {
 }
 
 string InterpretedBenchmark::BenchmarkInfo() {
-	LoadBenchmark();
-	return name + " - " + run_query;
+	return string();
 }
 
 string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_) {
