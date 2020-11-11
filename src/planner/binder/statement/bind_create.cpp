@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -79,6 +81,18 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = base.function->expression->Copy();
+
+    // TODO: bind CTE's
+//    ((SelectStatement &)*((SubqueryExpression &)*base.function->expression).subquery).node
+//    ((SubqueryExpression &)((ParsedExpression &)*expression)).subquery->cte_map->
+    ParsedExpressionIterator::EnumerateChildren(*expression, [&](ParsedExpression &child) {
+	  if (child.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+          auto &sqe = (SubqueryExpression &) child;
+		  for (auto &kv : sqe.subquery->cte_map) {
+			  AddCTE(kv.first, kv.second.get());
+		  }
+	  }
+    });
 
 	// bind it to verify the function was defined correctly
 	ExpressionBinder binder(*this, context);

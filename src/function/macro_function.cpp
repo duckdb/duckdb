@@ -1,7 +1,7 @@
 #include "duckdb/function/macro_function.hpp"
 
 #include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -36,6 +36,13 @@ unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, Expressi
 	// now we perform the binding
 	auto parsed_expression = macro_func->expression->Copy();
 	auto result = expr_binder.Bind(parsed_expression);
+
+	// TODO: add CTE stuff
+    //    ((SelectStatement &)*((SubqueryExpression &)*base.function->expression).subquery).node
+    ExpressionIterator::EnumerateChildren(*result, [&](Expression &child) {
+		// do nothing
+		// no really, do nothing
+	});
 
 	// delete the macro binding so that it cannot effect bindings outside of the macro call
 	binder.macro_binding.reset();
