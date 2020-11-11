@@ -37,13 +37,6 @@ unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, Expressi
 	auto parsed_expression = macro_func->expression->Copy();
 	auto result = expr_binder.Bind(parsed_expression);
 
-	// TODO: add CTE stuff
-    //    ((SelectStatement &)*((SubqueryExpression &)*base.function->expression).subquery).node
-    ExpressionIterator::EnumerateChildren(*result, [&](Expression &child) {
-		// do nothing
-		// no really, do nothing
-	});
-
 	// delete the macro binding so that it cannot effect bindings outside of the macro call
 	binder.macro_binding.reset();
 

@@ -27,7 +27,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	                             false, error_context);
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
-	case CatalogType::MACRO_FUNCTION_ENTRY:
+	case CatalogType::MACRO_ENTRY:
 		// scalar (macro) function
 		return BindFunction(function, func, depth);
 	default:
@@ -82,7 +82,6 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 		}
 		result =
 		    MacroFunction::BindMacroFunction(this->binder, *this, (MacroFunctionCatalogEntry &)*func, move(children));
-		// TODO: the result may have CTE that needs to be added to the bind_context
 	}
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));

@@ -69,7 +69,7 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_INDEX";
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return "CREATE_TABLE";
-	case LogicalOperatorType::LOGICAL_CREATE_FUNCTION:
+	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		return "CREATE_FUNCTION";
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return "EXPLAIN";

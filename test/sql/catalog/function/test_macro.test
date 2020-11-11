@@ -1,23 +1,20 @@
-# name: test/sql/catalog/macro/test_function.test
-# description: Test functions
-# group: [macro]
+# name: test/sql/catalog/function/test_macro.test
+# description: Test Macro
+# group: [function]
 
 statement ok
 PRAGMA enable_verification
 
-statement ok
-CREATE FUNCTION cte_query(a) AS (WITH cte AS (SELECT 42 AS answer) SELECT answer + a)
-
 # b cannot be found
 statement error
-CREATE FUNCTION add(a) AS a+b
+CREATE MACRO add(a) AS a+b
 
 # cannot create function with existing name
 statement error
-CREATE FUNCTION string_split(a,b) AS a+b
+CREATE MACRO string_split(a,b) AS a+b
 
 statement ok
-CREATE FUNCTION one() AS (SELECT 1);
+CREATE MACRO one() AS (SELECT 1);
 
 query T
 SELECT one()
@@ -25,11 +22,11 @@ SELECT one()
 1
 
 statement ok
-CREATE FUNCTION IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
+CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
 
 # cannot create function with same name different parameters
 statement error
-CREATE FUNCTION IFELSE(a,b) AS a+b
+CREATE MACRO IFELSE(a,b) AS a+b
 
 # cannot supply argument with side effects
 statement error
@@ -61,10 +58,15 @@ SELECT IFELSE(0, IFELSE(1,'a','b'), 'c')
 c
 
 statement ok
-CREATE FUNCTION subquery(a) AS (SELECT a)
+CREATE MACRO subquery(a) AS (SELECT a)
 
 query T
 SELECT subquery(1)
+----
+1
+
+query T
+SELECT subquery(NULL)
 ----
 1
 
@@ -72,7 +74,7 @@ statement ok
 CREATE TABLE test (a INT)
 
 statement ok
-CREATE FUNCTION bla(a) AS (SELECT a+a FROM test)
+CREATE MACRO bla(a) AS (SELECT a+a FROM test)
 
 statement ok
 INSERT INTO test VALUES (1)
@@ -83,4 +85,10 @@ SELECT bla(3)
 6
 
 statement ok
-CREATE FUNCTION cte_query(a) AS (WITH cte AS (SELECT 42 AS answer) SELECT answer + a)
+CREATE MACRO cte_query(a) AS (WITH cte AS (SELECT 42 AS answer) SELECT answer + a FROM cte)
+
+query T
+SELECT cte_query(42)
+----
+84
+

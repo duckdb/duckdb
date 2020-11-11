@@ -135,7 +135,7 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,
 		                                                                       (CreateScalarFunctionInfo *)info);
 		break;
-	case CatalogType::MACRO_FUNCTION_ENTRY:
+	case CatalogType::MACRO_ENTRY:
 		// create a macro function
 		function =
 		    make_unique_base<StandardEntry, MacroFunctionCatalogEntry>(catalog, this, (CreateMacroFunctionInfo *)info);
@@ -232,7 +232,7 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 		return pragma_functions;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
-	case CatalogType::MACRO_FUNCTION_ENTRY:
+	case CatalogType::MACRO_ENTRY:
 		return functions;
 	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;

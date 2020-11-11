@@ -82,18 +82,6 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = base.function->expression->Copy();
 
-    // TODO: bind CTE's
-//    ((SelectStatement &)*((SubqueryExpression &)*base.function->expression).subquery).node
-//    ((SubqueryExpression &)((ParsedExpression &)*expression)).subquery->cte_map->
-    ParsedExpressionIterator::EnumerateChildren(*expression, [&](ParsedExpression &child) {
-	  if (child.GetExpressionClass() == ExpressionClass::SUBQUERY) {
-          auto &sqe = (SubqueryExpression &) child;
-		  for (auto &kv : sqe.subquery->cte_map) {
-			  AddCTE(kv.first, kv.second.get());
-		  }
-	  }
-    });
-
 	// bind it to verify the function was defined correctly
 	ExpressionBinder binder(*this, context);
 	string error = binder.Bind(&expression, 0, false);
@@ -128,9 +116,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
 		break;
 	}
-	case CatalogType::MACRO_FUNCTION_ENTRY: {
+	case CatalogType::MACRO_ENTRY: {
 		auto schema = BindCreateFunctionInfo(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_FUNCTION, move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
