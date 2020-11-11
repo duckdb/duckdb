@@ -4,6 +4,8 @@
 "use strict";
 
 var duckdb = require('./lib');
+//var duckdb = require('/Users/hannes/source/duckdb/tools/nodejs/build-tmp-napi-v3/Debug/node_duckdb.node');
+
 var db;
 
 function createDb() {
@@ -20,14 +22,14 @@ function createTable() {
 	});
 
     console.log("createTable lorem");
-    db.run("CREATE TABLE IF NOT EXISTS lorem (info TEXT)", insertRows);
+    //db.run("CREATE TABLE IF NOT EXISTS lorem (info TEXT)", insertRows);
 }
 
 function insertRows(err) {
-	console.log(err)
     console.log("insertRows Ipsum i");
+    console.log(db)
     var stmt = db.prepare("INSERT INTO lorem VALUES (?)");
-
+    console.log(stmt)
     for (var i = 0; i < 10; i++) {
         stmt.run("Ipsum " + i);
     }

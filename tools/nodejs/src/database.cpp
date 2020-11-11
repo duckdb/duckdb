@@ -2,17 +2,20 @@
 
 namespace node_duckdb {
 
+Napi::FunctionReference Database::constructor;
+
+
 Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
 	Napi::Function t = DefineClass(
 	    env, "Database",
-	    {InstanceMethod("run", &Database::Run), InstanceMethod("all", &Database::All),
-	     InstanceMethod("prepare", &Database::Prepare), InstanceMethod("close", &Database::Close),
-	     InstanceMethod("wait", &Database::Wait), InstanceMethod("serialize", &Database::Serialize),
-	     InstanceMethod("parallelize", &Database::Parallelize), InstanceMethod("connect", &Database::Connect),
-	     InstanceMethod("interrupt", &Database::Interrupt), InstanceMethod("each", &Database::Each),
-	     InstanceAccessor("open", &Database::OpenGetter, nullptr)});
+	    {InstanceMethod("close", &Database::Close), InstanceMethod("wait", &Database::Wait),
+	     InstanceMethod("serialize", &Database::Serialize), InstanceMethod("parallelize", &Database::Parallelize),
+	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt)});
+
+    constructor = Napi::Persistent(t);
+    constructor.SuppressDestruct();
 
 	exports.Set("Database", t);
 	return exports;
@@ -46,9 +49,6 @@ struct OpenTask : public Task {
 
 		Napi::HandleScope scope(env);
 
-		database.default_connection = Utils::NewUnwrap<Connection>({database.Value()});
-		database.default_connection->Ref();
-
 		callback.Value().MakeCallback(database.Value(), args);
 	}
 
@@ -57,7 +57,8 @@ struct OpenTask : public Task {
 	bool success = false;
 };
 
-Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(info) {
+// TODO handle parameters here
+Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(info), task_inflight(false) {
 	if (info.Length() <= 0 || !info[0].IsString()) {
 		throw std::runtime_error("eek4");
 	}
@@ -76,13 +77,6 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 	Schedule(info.Env(), duckdb::make_unique<OpenTask>(*this, filename, callback));
 }
 
-Database::~Database() {
-	printf("~Database\n");
-	if (default_connection) {
-		default_connection->Unref();
-	}
-}
-
 void Database::Schedule(Napi::Env env, unique_ptr<Task> task) {
 	{
 		std::lock_guard<std::mutex> lock(task_mutex);
@@ -91,19 +85,31 @@ void Database::Schedule(Napi::Env env, unique_ptr<Task> task) {
 	Process(env);
 }
 
-static void TaskExecute(napi_env e, void *data) {
+static void task_execute(napi_env e, void *data) {
 	auto holder = (TaskHolder *)data;
 	holder->task->DoWork();
 }
 
-static void TaskComplete(napi_env e, napi_status status, void *data) {
+static void task_complete(napi_env e, napi_status status, void *data) {
 	std::unique_ptr<TaskHolder> holder((TaskHolder *)data);
+    holder->db->TaskComplete(e);
 	holder->task->Callback();
-	holder->db->Process(e);
+}
+
+void Database::TaskComplete(Napi::Env env) {
+	{
+		std::lock_guard<std::mutex> lock(task_mutex);
+		task_inflight = false;
+	}
+	Process(env);
 }
 
 void Database::Process(Napi::Env env) {
 	std::lock_guard<std::mutex> lock(task_mutex);
+	if (task_inflight) {
+		return;
+	}
+	task_inflight = true;
 
 	if (task_queue.empty()) {
 		return;
@@ -115,14 +121,11 @@ void Database::Process(Napi::Env env) {
 	holder->task = move(task);
 	holder->db = this;
 
-	napi_create_async_work(env, NULL, Napi::String::New(env, "duckdb.Database.Task"), TaskExecute, TaskComplete, holder,
+	// TODO do we need to do error checking here?
+	napi_create_async_work(env, NULL, Napi::String::New(env, "duckdb.Database.Task"), task_execute, task_complete, holder,
 	                       &holder->request);
 
 	napi_queue_async_work(env, holder->request);
-}
-
-Napi::Value Database::OpenGetter(const Napi::CallbackInfo &info) {
-	return Napi::Boolean::New(this->Env(), this->database != nullptr);
 }
 
 Napi::Value Database::Parallelize(const Napi::CallbackInfo &info) {
@@ -130,37 +133,11 @@ Napi::Value Database::Parallelize(const Napi::CallbackInfo &info) {
 }
 
 // TODO check params
+// TODO can we get multiple params here?
 Napi::Value Database::Serialize(const Napi::CallbackInfo &info) {
 	info[0].As<Napi::Function>().MakeCallback(info.This(), {});
-	;
 	Process(info.Env());
 	return info.This();
-}
-
-Napi::Value Database::Run(const Napi::CallbackInfo &info) {
-	// TODO check default_connection and database openness here
-	default_connection->Run(info);
-	return info.This();
-}
-
-Napi::Value Database::All(const Napi::CallbackInfo &info) {
-	// TODO check default_connection and database openness here
-
-	default_connection->All(info);
-	return info.This();
-}
-
-Napi::Value Database::Each(const Napi::CallbackInfo &info) {
-	// TODO check default_connection and database openness here
-
-	default_connection->Each(info);
-	return info.This();
-}
-
-Napi::Value Database::Prepare(const Napi::CallbackInfo &info) {
-	// TODO check default_connection and database openness here
-
-	return default_connection->Prepare(info);
 }
 
 // TODO implement these

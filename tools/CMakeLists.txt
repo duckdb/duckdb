@@ -9,3 +9,6 @@ endif()
 if(BUILD_REST)
   add_subdirectory(rest)
 endif()
+
+# FIXME
+add_subdirectory(nodejs)

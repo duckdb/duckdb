@@ -7,10 +7,7 @@ Napi::FunctionReference Connection::constructor;
 Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t =
-	    DefineClass(env, "Connection",
-	                {InstanceMethod("run", &Connection::Run), InstanceMethod("each", &Connection::Each),
-	                 InstanceMethod("all", &Connection::All), InstanceMethod("exec", &Connection::Exec)});
+	Napi::Function t = DefineClass(env, "Connection", {InstanceMethod("prepare", &Connection::Prepare)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -19,42 +16,49 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	return exports;
 }
 
+
+struct ConnectTask : public Task {
+    ConnectTask(Connection &connection_, Napi::Function callback_) : Task(connection_, callback_) {
+    }
+
+    void DoWork() override {
+        auto &connection = Get<Connection>();
+        connection.connection = duckdb::make_unique<duckdb::Connection>(*connection.database_ref->database);
+    }
+
+    void Callback() override {
+        auto &connection = Get<Connection>();
+
+        // somehow the function can disappear mid-flight (?)
+        Napi::HandleScope scope(connection.Env());
+        auto cb = callback.Value();
+        if (!cb.IsFunction()) {
+            return;
+        }
+        cb.MakeCallback(connection.Value(), {connection.Env().Null(), connection.Value()});
+    }
+};
+
+
 Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connection>(info) {
-	if (info.Length() <= 0) {
-		// TODO check that what is passed is a Database instance. compare constructors (gah)
-		Napi::TypeError::New(info.Env(), "Database object expected").ThrowAsJavaScriptException();
-		return;
-	}
+    Napi::Env env = info.Env();
+    int length = info.Length();
+
+    if (length <= 0 || !Database::HasInstance(info[0])) {
+        Napi::TypeError::New(env, "Database object expected").ThrowAsJavaScriptException();
+        return;
+    }
+
 	database_ref = Napi::ObjectWrap<Database>::Unwrap(info[0].As<Napi::Object>());
 	database_ref->Ref();
 
-	connection = duckdb::make_unique<duckdb::Connection>(*database_ref->database);
+	database_ref->Schedule(env, duckdb::make_unique<ConnectTask>(*this, env.Null().As<Napi::Function>()));
 }
 
 Connection::~Connection() {
 	database_ref->Unref();
-}
+    database_ref = nullptr;
 
-Napi::Value Connection::Run(const Napi::CallbackInfo &info) {
-	Utils::NewUnwrap<Statement>({Value(), info[0].As<Napi::String>()})->Run(info);
-	return info.This();
-}
-
-Napi::Value Connection::Exec(const Napi::CallbackInfo &info) {
-	// FIXME Utils::NewUnwrap<Statement>( {Value(), info[0].As<Napi::String>()})->Exec(info);
-	return info.This();
-}
-
-// TODO make this a template?
-Napi::Value Connection::All(const Napi::CallbackInfo &info) {
-	Utils::NewUnwrap<Statement>({Value(), info[0].As<Napi::String>()})->All(info);
-	return info.This();
-}
-
-// TODO make this a template?
-Napi::Value Connection::Each(const Napi::CallbackInfo &info) {
-	Utils::NewUnwrap<Statement>({Value(), info[0].As<Napi::String>()})->Each(info);
-	return info.This();
 }
 
 Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {

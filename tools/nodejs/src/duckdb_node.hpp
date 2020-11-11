@@ -31,34 +31,40 @@ class Connection;
 class Database : public Napi::ObjectWrap<Database> {
 public:
 	Database(const Napi::CallbackInfo &info);
-	~Database();
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
 	void Process(Napi::Env env);
-	void Schedule(Napi::Env env, unique_ptr<Task> task);
+    void TaskComplete(Napi::Env env);
+
+    void Schedule(Napi::Env env, unique_ptr<Task> task);
+
+    static bool HasInstance(Napi::Value val) {
+        Napi::Env env = val.Env();
+        Napi::HandleScope scope(env);
+        if (!val.IsObject()) return false;
+        Napi::Object obj = val.As<Napi::Object>();
+        return obj.InstanceOf(constructor.Value());
+    }
 
 public:
-	Napi::Value Prepare(const Napi::CallbackInfo &info);
-	Napi::Value Run(const Napi::CallbackInfo &info);
-	Napi::Value All(const Napi::CallbackInfo &info);
-	Napi::Value Each(const Napi::CallbackInfo &info);
 	Napi::Value Connect(const Napi::CallbackInfo &info);
 	Napi::Value Wait(const Napi::CallbackInfo &info);
 	Napi::Value Serialize(const Napi::CallbackInfo &info);
 	Napi::Value Parallelize(const Napi::CallbackInfo &info);
 	Napi::Value Interrupt(const Napi::CallbackInfo &info);
-	Napi::Value OpenGetter(const Napi::CallbackInfo &info);
 	Napi::Value Close(const Napi::CallbackInfo &info);
 
 public:
 	constexpr static int DUCKDB_NODEJS_ERROR = -1;
 	constexpr static int DUCKDB_NODEJS_READONLY = 1;
 	std::unique_ptr<duckdb::DuckDB> database;
-	Connection *default_connection;
 
 private:
 	// TODO this task queue can also live in the connection?
 	std::queue<unique_ptr<Task>> task_queue;
 	std::mutex task_mutex;
+	bool task_inflight;
+    static Napi::FunctionReference constructor;
+
 };
 
 class Connection : public Napi::ObjectWrap<Connection> {
@@ -69,10 +75,14 @@ public:
 
 public:
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
-	Napi::Value Run(const Napi::CallbackInfo &info);
-	Napi::Value All(const Napi::CallbackInfo &info);
-	Napi::Value Each(const Napi::CallbackInfo &info);
-	Napi::Value Exec(const Napi::CallbackInfo &info);
+
+    static bool HasInstance(Napi::Value val) {
+        Napi::Env env = val.Env();
+        Napi::HandleScope scope(env);
+        if (!val.IsObject()) return false;
+        Napi::Object obj = val.As<Napi::Object>();
+        return obj.InstanceOf(constructor.Value());
+    }
 
 public:
 	static Napi::FunctionReference constructor;
@@ -101,12 +111,12 @@ public:
 public:
 	static Napi::FunctionReference constructor;
 	std::unique_ptr<duckdb::PreparedStatement> statement;
-	unique_ptr<duckdb::QueryResult> result;
 	Connection *connection_ref;
 	bool ignore_first_param = true;
+	std::string sql;
 
 private:
-	void HandleArgs(const Napi::CallbackInfo &info, StatementParam &params_out);
+    std::unique_ptr<StatementParam> HandleArgs(const Napi::CallbackInfo &info);
 };
 
 struct TaskHolder {
