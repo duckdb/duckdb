@@ -5,6 +5,14 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+CREATE MACRO one() AS (SELECT 1);
+
+query T
+SELECT one()
+----
+1
+
 # b cannot be found
 statement error
 CREATE MACRO add(a) AS a+b
@@ -14,21 +22,13 @@ statement error
 CREATE MACRO string_split(a,b) AS a+b
 
 statement ok
-CREATE MACRO one() AS (SELECT 1);
-
-query T
-SELECT one()
-----
-1
-
-statement ok
 CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
 
-# cannot create function with same name different parameters
+# no duplicate names
 statement error
 CREATE MACRO IFELSE(a,b) AS a+b
 
-# cannot supply argument with side effects
+# arguments with side effects are not supported
 statement error
 SELECT IFELSE(RANDOM(), 'true', 'false')
 
@@ -68,7 +68,7 @@ SELECT subquery(1)
 query T
 SELECT subquery(NULL)
 ----
-1
+NULL
 
 statement ok
 CREATE TABLE test (a INT)
