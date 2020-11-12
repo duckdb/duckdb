@@ -1011,29 +1011,29 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
-	public static void test_appender_ints() throws Exception {
+	public static void test_appender_numbers() throws Exception {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		stmt.execute("CREATE TABLE integers (a INTEGER, b INTEGER)");
+		stmt.execute("CREATE TABLE integers (a INTEGER, b LONG)");
 		DuckDBAppender appender = conn.createAppender("main", "integers");
 
 		for (int i = 0; i < 1000; i++) {
 			appender.beginRow();
 			appender.append(i);
-			appender.append(i+1);
+			appender.append(Long.MAX_VALUE - i);
 			appender.endRow();
 		}
 		appender.close();
 
-		ResultSet rs = stmt.executeQuery("SELECT max(a), min(b) FROM integers");
+		ResultSet rs = stmt.executeQuery("SELECT min(a), max(b) FROM integers");
 		assertFalse(rs.isClosed());
 
 		assertTrue(rs.next());
 		int resA = rs.getInt(1);
-		assertEquals(resA, 999);
-		int resB = rs.getInt(2);
-		assertEquals(resB, 1);
+		assertEquals(resA, 0);
+		long resB = rs.getLong(2);
+		assertEquals(resB, Long.MAX_VALUE);
 
 		rs.close();
 		stmt.close();
@@ -1061,7 +1061,7 @@ public class TestDuckDBJDBC {
 		assertTrue(rs.next());
 		int resA = rs.getInt(1);
 		assertEquals(resA, 999);
-		int resB = rs.getInt(2);
+		String resB = rs.getString(2);
 		assertEquals(resB, "str 0");
 
 		rs.close();

@@ -399,6 +399,11 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	get_appender(env, appender_ref_buf)->Append((int32_t) value);
 }
 
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1long
+  (JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
+	get_appender(env, appender_ref_buf)->Append((int64_t) value);
+}
+
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1string
   (JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
     auto string_value = byte_array_to_string(env, value);

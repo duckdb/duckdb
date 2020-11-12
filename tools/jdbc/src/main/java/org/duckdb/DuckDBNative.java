@@ -98,6 +98,8 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_appender_append_int(ByteBuffer appender_ref, int value);
 
+	protected static native void duckdb_jdbc_appender_append_long(ByteBuffer appender_ref, long value);
+
 	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value);
 
 }

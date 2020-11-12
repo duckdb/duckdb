@@ -35,6 +35,10 @@ public class DuckDBAppender implements AutoCloseable {
         DuckDBNative.duckdb_jdbc_appender_append_int(appender_ref, value);
     }
 
+    public void append(long value) {
+        DuckDBNative.duckdb_jdbc_appender_append_long(appender_ref, value);
+    }
+
     public void append(String value) {
         DuckDBNative.duckdb_jdbc_appender_append_string(appender_ref, value.getBytes(StandardCharsets.UTF_8));
     }
