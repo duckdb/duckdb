@@ -16,7 +16,6 @@ PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr
 	children.push_back(move(right));
 	// MARK, SINGLE and RIGHT OUTER joins not handled
 	D_ASSERT(join_type != JoinType::MARK);
-	D_ASSERT(join_type != JoinType::RIGHT);
 	D_ASSERT(join_type != JoinType::SINGLE);
 }
 
@@ -61,7 +60,7 @@ void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorStat
 void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &context,
                                        unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
-	if (join_type == JoinType::OUTER) {
+	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.count);
 	}
@@ -102,7 +101,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 			// for SEMI or INNER join: empty RHS means empty result
 			return;
 		}
-		D_ASSERT(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI);
+		D_ASSERT(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI || join_type == JoinType::RIGHT);
 		// pull a chunk from the LHS
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
@@ -151,7 +150,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			// no more data on LHS, if FULL OUTER JOIN iterate over RHS
 			if (state->child_chunk.size() == 0) {
-				if (join_type == JoinType::OUTER) {
+				if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
 					state->fill_in_rhs = true;
 					continue;
 				} else {

@@ -9,43 +9,43 @@ PRAGMA enable_verification
 query T
 SELECT 'a'::BYTEA::VARCHAR
 ----
-\x61
+a
 
 # VARCHAR to BLOB -> CastToBlob
 query T
 SELECT 'a'::VARCHAR::BYTEA
 ----
-\x61
+a
 
 # Hex string with BLOB
 query T
-SELECT '\xAAFFAAAAFFAAAAFFAA'::BYTEA
+SELECT '\x20\x00\xFF'::BYTEA
 ----
-\xAAFFAAAAFFAAAAFFAA
+ \x00\xFF
 
 # CastFromBlob with hex string
 query T
-SELECT '\xAAFFAAAAFFAAAAFFAA'::BLOB::VARCHAR
+SELECT '\x20\x00\xFF'::BLOB::VARCHAR
 ----
-\xAAFFAAAAFFAAAAFFAA
+ \x00\xFF
 
 # CastFromBlob and after CastToBlob with hex string
 query T
-SELECT '\xAAFFAAAAFFAAAAFFAA'::BLOB::VARCHAR::BLOB
+SELECT '\x20\x00\xFF'::BLOB::VARCHAR::BLOB
 ----
-\xAAFFAAAAFFAAAAFFAA
+ \x00\xFF
 
 # CastFromBlob -> CastToBlob -> CastFromBlob with hex string
 query T
-SELECT '\xAAFFAAAAFFAAAAFFAA'::BLOB::VARCHAR::BLOB::VARCHAR
+SELECT '\x20\x00\xFF'::BLOB::VARCHAR::BLOB::VARCHAR
 ----
-\xAAFFAAAAFFAAAAFFAA
+ \x00\xFF
 
 # CastToBlob -> CastFromBlob -> CastToBlob with hex string
 query T
-SELECT '\xAAFFAAAAFFAAAAFFAA'::VARCHAR::BLOB::VARCHAR::BLOB
+SELECT '\x20\x00\xFF'::VARCHAR::BLOB::VARCHAR::BLOB
 ----
-\xAAFFAAAAFFAAAAFFAA
+ \x00\xFF
 
 statement error
 SELECT 1::BYTEA

@@ -344,7 +344,7 @@ Value Vector::GetValue(idx_t index) const {
 	}
 	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
-		return Value::BLOB(str.GetString(), false);
+		return Value::BLOB((const_data_ptr_t) str.GetDataUnsafe(), str.GetSize());
 	}
 	case LogicalTypeId::STRUCT: {
 		Value ret(type);

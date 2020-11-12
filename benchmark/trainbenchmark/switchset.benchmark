@@ -1,0 +1,28 @@
+# name: benchmark/trainbenchmark/switchset.benchmark
+# description: The Train Benchmark's SwitchSet query
+# group: [trainbenchmark]
+
+load benchmark/trainbenchmark/load.sql
+
+run
+SELECT
+	Semaphore.id AS semaphore,
+	Route.id AS route,
+	SwitchPosition.id AS swP,
+	Switch.id AS sw,
+	SwitchPosition.position AS position,
+	Switch.currentPosition AS currentPosition
+FROM Route
+INNER JOIN SwitchPosition
+ON Route.id = SwitchPosition.route
+INNER JOIN Switch
+ON SwitchPosition.target = Switch.id
+INNER JOIN Semaphore
+ON Route.entry = Semaphore.id
+WHERE Route.active = 1
+	AND Switch.currentPosition != SwitchPosition.position
+	AND Semaphore.signal = 2;
+
+
+result IIIIII
+1	3	49	5	2	0

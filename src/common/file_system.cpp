@@ -180,6 +180,15 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	return s.st_size;
 }
 
+time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		return -1;
+	}
+	return s.st_mtime;
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	if (ftruncate(fd, new_size) != 0) {
@@ -472,6 +481,33 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	return result.QuadPart;
 }
 
+time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
+	FILETIME last_write;
+	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
+		return -1;
+	}
+
+	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
+	ULARGE_INTEGER ul;
+	ul.LowPart = last_write.dwLowDateTime;
+	ul.HighPart = last_write.dwHighDateTime;
+	int64_t fileTime64 = ul.QuadPart;
+
+	// fileTime64 contains a 64-bit value representing the number of
+	// 100-nanosecond intervals since January 1, 1601 (UTC).
+	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
+
+
+	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
+	const auto WINDOWS_TICK = 10000000;
+	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
+	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+	return result;
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	// seek to the location
@@ -627,6 +663,14 @@ string FileSystem::GetWorkingDirectory() {
 }
 #endif
 
+string FileSystem::GetHomeDirectory() {
+	const char *homedir = getenv("HOME");
+	if (!homedir) {
+		return string();
+	}
+	return homedir;
+}
+
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	// seek to the location
 	SetFilePointer(handle, location);
@@ -718,9 +762,14 @@ vector<string> FileSystem::Glob(string path) {
 		if (path[i] == '\\' || path[i] == '/') {
 			if (i == last_pos) {
 				// empty: skip this position
+				last_pos = i + 1;
 				continue;
 			}
-			splits.push_back(path.substr(last_pos, i - last_pos));
+			if (splits.empty()) {
+				splits.push_back(path.substr(0, i));
+			} else {
+				splits.push_back(path.substr(last_pos, i - last_pos));
+			}
 			last_pos = i + 1;
 		}
 	}
@@ -733,6 +782,13 @@ vector<string> FileSystem::Glob(string path) {
 	} else if (StringUtil::Contains(splits[0], ":")) {
 		// first split has a colon -  windows absolute path
 		absolute_path = true;
+	} else if (splits[0] == "~") {
+		// starts with home directory
+		auto home_directory = GetHomeDirectory();
+		if (!home_directory.empty()) {
+			absolute_path = true;
+			splits[0] = home_directory;
+		}
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {
@@ -771,7 +827,7 @@ vector<string> FileSystem::Glob(string path) {
 		}
 		previous_directories = move(result);
 	}
-	throw InternalException("Eeek");
+	return vector<string>();
 }
 
 } // namespace duckdb

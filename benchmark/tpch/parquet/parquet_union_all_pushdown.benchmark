@@ -2,6 +2,10 @@
 # description: Read parquet files through a union all where we don't use any columns (manual pushdown)
 # group: [parquet]
 
+name Parquet Union All
+group parquet
+subgroup tpch
+
 require parquet
 require tpch
 

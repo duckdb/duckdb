@@ -6,5 +6,9 @@ if(${BUILD_SUN})
   set(LINK_EXTRA -lsocket)
 endif()
 
+add_extension_definitions()
+
 target_link_libraries(duckdb_rest_server duckdb_static Threads::Threads
                       ${LINK_EXTRA})
+
+link_extension_libraries(duckdb_rest_server)

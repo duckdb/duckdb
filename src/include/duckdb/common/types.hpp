@@ -211,7 +211,6 @@ enum class PhysicalType : uint8_t {
 
 	// DuckDB Extensions
 	VARCHAR = 200, // our own string representation, different from STRING and LARGE_STRING above
-	VARBINARY = 201,
 	POINTER = 202,
 	HASH = 203,
 	INT128 = 204, // 128-bit integers
@@ -241,7 +240,6 @@ enum class LogicalTypeId : uint8_t {
 	DOUBLE = 20,
 	CHAR = 21,
 	VARCHAR = 22,
-	VARBINARY = 23,
 	BLOB = 24,
 	INTERVAL = 25,
 
@@ -332,7 +330,6 @@ public:
 	static const LogicalType TIMESTAMP;
 	static const LogicalType TIME;
 	static const LogicalType VARCHAR;
-	static const LogicalType VARBINARY;
 	static const LogicalType STRUCT;
 	static const LogicalType LIST;
 	static const LogicalType ANY;

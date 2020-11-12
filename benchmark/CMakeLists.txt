@@ -12,6 +12,7 @@ add_subdirectory(tpcds)
 add_subdirectory(imdb)
 
 add_extension_definitions()
+add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 
 add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp
                                 ${BENCHMARK_OBJECT_FILES})

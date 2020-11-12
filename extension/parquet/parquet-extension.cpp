@@ -133,7 +133,8 @@ public:
 					data.file_index++;
 					string file = bind_data.files[data.file_index];
 					// move to the next file
-					data.reader = make_shared<ParquetReader>(context, file, data.reader->return_types);
+					data.reader =
+					    make_shared<ParquetReader>(context, file, data.reader->return_types, bind_data.files[0]);
 					vector<idx_t> group_ids;
 					for (idx_t i = 0; i < data.reader->NumRowGroups(); i++) {
 						group_ids.push_back(i);

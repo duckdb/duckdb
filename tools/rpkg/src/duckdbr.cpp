@@ -19,6 +19,33 @@
 using namespace duckdb;
 using namespace std;
 
+struct RStrings {
+	SEXP secs;
+	SEXP mins;
+	SEXP hours;
+	SEXP days;
+	SEXP weeks;
+
+	static const RStrings& get() {
+		// On demand
+		static RStrings strings;
+		return strings;
+	}
+
+private:
+	RStrings() {
+		// allocate strings once
+		SEXP out = Rf_allocVector(STRSXP, 5);
+		SET_STRING_ELT(out, 0, secs  = Rf_mkChar("secs"));
+		SET_STRING_ELT(out, 1, mins  = Rf_mkChar("mins"));
+		SET_STRING_ELT(out, 2, hours = Rf_mkChar("hours"));
+		SET_STRING_ELT(out, 3, days  = Rf_mkChar("days"));
+		SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
+		R_PreserveObject(out);
+		MARK_NOT_MUTABLE(out);
+	}
+};
+
 struct RStatement {
 	unique_ptr<PreparedStatement> stmt;
 	vector<Value> parameters;
@@ -64,25 +91,52 @@ struct RDoubleType {
 	}
 };
 
-struct RDateType {
-	static bool IsNull(double val) {
-		return RDoubleType::IsNull(val);
-	}
-
+struct RDateType : public RDoubleType {
 	static double Convert(double val) {
 		return (date_t)val + 719528; // MAGIC!
 	}
 };
 
-struct RTimestampType {
-	static bool IsNull(double val) {
-		return RDoubleType::IsNull(val);
-	}
-
+struct RTimestampType : public RDoubleType {
 	static timestamp_t Convert(double val) {
 		date_t date = Date::EpochToDate((int64_t)val);
 		dtime_t time = (dtime_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
 		return Timestamp::FromDatetime(date, time);
+	}
+};
+
+struct RTimeSecondsType : public RDoubleType  {
+	static timestamp_t Convert(double val) {
+		dtime_t time = (dtime_t)(val * (1000.0));
+		return time;
+	}
+};
+
+struct RTimeMinutesType : public RDoubleType  {
+	static timestamp_t Convert(double val) {
+		dtime_t time = (dtime_t)(val * (1000.0 * 60));
+		return time;
+	}
+};
+
+struct RTimeHoursType : public RDoubleType  {
+	static timestamp_t Convert(double val) {
+		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60));
+		return time;
+	}
+};
+
+struct RTimeDaysType : public RDoubleType  {
+	static timestamp_t Convert(double val) {
+		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60 * 24));
+		return time;
+	}
+};
+
+struct RTimeWeeksType : public RDoubleType  {
+	static timestamp_t Convert(double val) {
+		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60 * 24 * 7));
+		return time;
 	}
 };
 
@@ -96,11 +150,7 @@ struct RIntegerType {
 	}
 };
 
-struct RBooleanType {
-	static bool IsNull(int val) {
-		return RIntegerType::IsNull(val);
-	}
-
+struct RBooleanType : public RIntegerType {
 	static bool Convert(int val) {
 		return val;
 	}
@@ -165,15 +215,32 @@ static SEXP cpp_str_to_strsexp(vector<string> s) {
 	return retsexp;
 }
 
-enum class RType { UNKNOWN, LOGICAL, INTEGER, NUMERIC, STRING, FACTOR, DATE, TIMESTAMP };
+enum class RType { UNKNOWN, LOGICAL, INTEGER, NUMERIC, STRING, FACTOR, DATE, TIMESTAMP, TIME_SECONDS, TIME_MINUTES, TIME_HOURS, TIME_DAYS, TIME_WEEKS };
 
 static RType detect_rtype(SEXP v) {
-	if (TYPEOF(v) == REALSXP && TYPEOF(GET_CLASS(v)) == STRSXP &&
-	    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(v), 0))) == 0) {
+	if (TYPEOF(v) == REALSXP && Rf_inherits(v, "POSIXct")) {
 		return RType::TIMESTAMP;
-	} else if (TYPEOF(v) == REALSXP && TYPEOF(GET_CLASS(v)) == STRSXP &&
-	           strcmp("Date", CHAR(STRING_ELT(GET_CLASS(v), 0))) == 0) {
+	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "Date")) {
 		return RType::DATE;
+	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "difftime")) {
+		SEXP units = Rf_getAttrib(v, Rf_install("units"));
+		if (TYPEOF(units) != STRSXP) {
+			return RType::UNKNOWN;
+		}
+		SEXP units0 = STRING_ELT(units, 0);
+		if (units0 == RStrings::get().secs) {
+			return RType::TIME_SECONDS;
+		} else if (units0 == RStrings::get().mins) {
+			return RType::TIME_MINUTES;
+		} else if (units0 == RStrings::get().hours) {
+			return RType::TIME_HOURS;
+		} else if (units0 == RStrings::get().days) {
+			return RType::TIME_DAYS;
+		} else if (units0 == RStrings::get().weeks) {
+			return RType::TIME_WEEKS;
+		} else {
+			return RType::UNKNOWN;
+		}
 	} else if (isFactor(v) && TYPEOF(v) == INTSXP) {
 		return RType::FACTOR;
 	} else if (TYPEOF(v) == LGLSXP) {
@@ -377,6 +444,36 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 			val.is_null = RDateType::IsNull(d_val);
 			break;
 		}
+		case RType::TIME_SECONDS: {
+			auto ts_val = NUMERIC_POINTER(valsexp)[0];
+			val = Value::TIME(RTimeSecondsType::Convert(ts_val));
+			val.is_null = RTimeSecondsType::IsNull(ts_val);
+			break;
+		}
+		case RType::TIME_MINUTES: {
+			auto ts_val = NUMERIC_POINTER(valsexp)[0];
+			val = Value::TIME(RTimeMinutesType::Convert(ts_val));
+			val.is_null = RTimeMinutesType::IsNull(ts_val);
+			break;
+		}
+		case RType::TIME_HOURS: {
+			auto ts_val = NUMERIC_POINTER(valsexp)[0];
+			val = Value::TIME(RTimeHoursType::Convert(ts_val));
+			val.is_null = RTimeHoursType::IsNull(ts_val);
+			break;
+		}
+		case RType::TIME_DAYS: {
+			auto ts_val = NUMERIC_POINTER(valsexp)[0];
+			val = Value::TIME(RTimeDaysType::Convert(ts_val));
+			val.is_null = RTimeDaysType::IsNull(ts_val);
+			break;
+		}
+		case RType::TIME_WEEKS: {
+			auto ts_val = NUMERIC_POINTER(valsexp)[0];
+			val = Value::TIME(RTimeWeeksType::Convert(ts_val));
+			val.is_null = RTimeWeeksType::IsNull(ts_val);
+			break;
+		}
 		default:
 			Rf_error("duckdb_bind_R: Unsupported parameter type");
 		}
@@ -532,18 +629,13 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
 						time_t n = src_data[row_idx];
-						int h;
-						double frac;
-						h = n / 3600000;
-						n -= h * 3600000;
-						frac = (n / 60000.0) / 60.0;
-						dest_ptr[row_idx] = h + frac;
+						dest_ptr[row_idx] = n / 1000.0;
 					}
 				}
 
 				// some dresssup for R
 				SET_CLASS(dest, PROTECT(mkString("difftime")));
-				setAttrib(dest, install("units"), PROTECT(mkString("hours")));
+				setAttrib(dest, install("units"), PROTECT(mkString("secs")));
 				UNPROTECT(2);
 				break;
 			}
@@ -691,6 +783,13 @@ struct DataFrameScanFunction : public TableFunction {
 			case RType::TIMESTAMP:
 				duckdb_col_type = LogicalType::TIMESTAMP;
 				break;
+			case RType::TIME_SECONDS:
+			case RType::TIME_MINUTES:
+			case RType::TIME_HOURS:
+			case RType::TIME_DAYS:
+			case RType::TIME_WEEKS:
+				duckdb_col_type = LogicalType::TIME;
+				break;
 			case RType::DATE:
 				duckdb_col_type = LogicalType::DATE;
 				break;
@@ -751,6 +850,31 @@ struct DataFrameScanFunction : public TableFunction {
 			case RType::TIMESTAMP: {
 				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 				AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::TIME_SECONDS: {
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+				AppendColumnSegment<double, dtime_t, RTimeSecondsType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::TIME_MINUTES: {
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+				AppendColumnSegment<double, dtime_t, RTimeMinutesType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::TIME_HOURS: {
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+				AppendColumnSegment<double, dtime_t, RTimeHoursType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::TIME_DAYS: {
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+				AppendColumnSegment<double, dtime_t, RTimeDaysType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::TIME_WEEKS: {
+				auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
+				AppendColumnSegment<double, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
 				break;
 			}
 			case RType::DATE: {

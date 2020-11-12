@@ -32,7 +32,7 @@ query II
 SELECT * FROM string_values ORDER BY 1
 ----
 NULL	NULL
-hello world	\xAAFFAA
+hello world	\xAA\xFF\xAA
 
 query III
 SELECT * FROM date_values ORDER BY 1

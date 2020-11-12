@@ -2,6 +2,9 @@
 # description: Contains word 'regular' in the l_comment (11.5%~)
 # group: [string]
 
+name Like ('%regular%')
+group string
+
 require tpch
 
 cache tpch_sf1

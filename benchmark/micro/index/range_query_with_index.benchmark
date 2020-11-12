@@ -2,6 +2,9 @@
 # description: Range query with index
 # group: [index]
 
+name Range Query (Index)
+group index
+
 load
 CREATE TABLE integers AS SELECT i, i + 2 AS j FROM range(0, 100000000) t(i);
 CREATE INDEX i_index ON integers using art(i);

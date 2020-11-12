@@ -36,7 +36,6 @@ void Parser::ParseQuery(string query) {
 		// if it succeeded, we transform the Postgres parse tree into a list of
 		// SQLStatements
 		transformer.TransformParseTree(parser.parse_tree, statements);
-		n_prepared_parameters = transformer.ParamCount();
 	}
 	if (statements.size() > 0) {
 		auto &last_statement = statements.back();

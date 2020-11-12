@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/blob_functions.hpp"
 
 using namespace std;
 
@@ -31,6 +32,10 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<UnicodeFun>();
 	Register<NFCNormalizeFun>();
 	Register<StringSplitFun>();
+
+	// blob functions
+	Register<Base64Fun>();
+	Register<EncodeFun>();
 }
 
 } // namespace duckdb

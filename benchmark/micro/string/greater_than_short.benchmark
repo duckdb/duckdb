@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/greater_than_short.benchmark
+# description: String Greater Than
+# group: [string]
+
+name String Greater Than
+group string
+
+load benchmark/micro/string/strings_small.sql
+
+run
+SELECT MIN(s1 > s2) FROM strings
+
+result I
+false
