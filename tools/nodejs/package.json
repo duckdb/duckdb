@@ -1,5 +1,5 @@
 {
-  "name": "node_duckdb",
+  "name": "duckdb",
   "main": "./lib/duckdb.js",
   "version": "0.2.3",
   "description": "DuckDB node.js API",
@@ -12,7 +12,7 @@
     "node-pre-gyp": "^0.15.0"
   },
   "binary": {
-    "module_name": "node_duckdb",
+    "module_name": "duckdb",
     "module_path": "./lib/binding/napi-v{napi_build_version}-{platform}-{arch}",
     "host": "https://example.com",
     "remote_path": "./{name}/v{version}/{toolset}/",
