@@ -15,7 +15,7 @@
             ],
             'defines': [
             'NAPI_DISABLE_CPP_EXCEPTIONS=1',
-            "NAPI_VERSION=4"],
+            "NAPI_VERSION=3"],
             "cflags_cc": [
                 "-frtti",
                 "-fexceptions"
