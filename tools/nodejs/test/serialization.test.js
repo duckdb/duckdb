@@ -14,7 +14,7 @@ describe('serialize() and parallelize()', function() {
 
     it('should toggle', function(done) {
         db.serialize();
-        db.run("CREATE TABLE foo (txt text, num int, flt float, blb blob)");
+        db.run("CREATE TABLE foo (txt text, num int, flt double, blb blob)");
         db.parallelize(done);
     });
 
@@ -23,12 +23,12 @@ describe('serialize() and parallelize()', function() {
         var stmt2 = db.prepare("INSERT INTO foo VALUES(?, ?, ?, ?)");
         for (var i = 0; i < count; i++) {
             // Interleaved inserts with two statements.
-            stmt1.run('String ' + i, i, i * Math.PI, function(err) {
+            stmt1.run('String ' + i, i, i * Math.PI, null, function(err) {
                 if (err) throw err;
                 inserted1++;
             });
             i++;
-            stmt2.run('String ' + i, i, i * Math.PI, function(err) {
+            stmt2.run('String ' + i, i, i * Math.PI, null, function(err) {
                 if (err) throw err;
                 inserted2++;
             });
@@ -69,11 +69,11 @@ describe('serialize(fn)', function() {
 
     it('should call the callback', function(done) {
         db.serialize(function() {
-            db.run("CREATE TABLE foo (txt text, num int, flt float, blb blob)");
+            db.run("CREATE TABLE foo (txt text, num int, flt double, blb blob)");
 
             var stmt = db.prepare("INSERT INTO foo VALUES(?, ?, ?, ?)");
             for (var i = 0; i < count; i++) {
-                stmt.run('String ' + i, i, i * Math.PI, function(err) {
+                stmt.run('String ' + i, i, i * Math.PI, null, function(err) {
                     if (err) throw err;
                     inserted++;
                 });

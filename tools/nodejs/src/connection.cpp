@@ -7,7 +7,9 @@ Napi::FunctionReference Connection::constructor;
 Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t = DefineClass(env, "Connection", {InstanceMethod("prepare", &Connection::Prepare)});
+	Napi::Function t =
+	    DefineClass(env, "Connection",
+	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -52,18 +54,9 @@ Connection::~Connection() {
 }
 
 Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
-	// TODO check those params
-	auto sql = info[0].As<Napi::String>();
-
 	std::vector<napi_value> args;
 	// push the connection as first argument
 	args.push_back(Value());
-	// push the query as second argument
-	args.push_back(sql);
-	if (info.Length() > 0 && info[1].IsFunction()) {
-		args.push_back(info[1].As<Napi::Function>());
-	}
-
 	// we need to pass all the arguments onward to statement
 	for (size_t i = 0; i < info.Length(); i++) {
 		args.push_back(info[i]);
@@ -71,6 +64,54 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 	auto res = Utils::NewUnwrap<Statement>(args);
 	res->SetProcessFirstParam();
 	return res->Value();
+}
+
+struct ExecTask : public Task {
+	ExecTask(Connection &connection_, std::string sql_, Napi::Function callback_)
+	    : Task(connection_, callback_), sql(sql_) {
+	}
+
+	void DoWork() override {
+		auto &connection = Get<Connection>();
+
+		success = true;
+		auto statements = connection.connection->ExtractStatements(sql);
+		if (statements.size() == 0) {
+			return;
+		}
+
+		// thanks Mark
+		for (duckdb::idx_t i = 0; i < statements.size(); i++) {
+			auto res = connection.connection->Query(move(statements[i]));
+			if (!res->success) {
+				success = false;
+				error = res->error;
+				break;
+			}
+		}
+	}
+	std::string sql;
+	bool success;
+	std::string error;
+};
+
+Napi::Value Connection::Exec(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
+
+	if (info.Length() < 1 || !info[0].IsString()) {
+		Napi::TypeError::New(env, "SQL query expected").ThrowAsJavaScriptException();
+		return env.Null();
+	}
+
+	std::string sql = info[0].As<Napi::String>();
+
+	Napi::Function callback;
+	if (info.Length() > 0 && info[1].IsFunction()) {
+		callback = info[1].As<Napi::Function>();
+	}
+
+	database_ref->Schedule(info.Env(), duckdb::make_unique<ExecTask>(*this, sql, callback));
+	return Value();
 }
 
 } // namespace node_duckdb

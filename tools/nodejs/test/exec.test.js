@@ -11,6 +11,7 @@ describe('exec', function() {
     it('Database#exec', function(done) {
         var sql = fs.readFileSync('test/support/script.sql', 'utf8');
         db.exec(sql, function(err) {
+            if (err) throw err;
             done();
         });
     });

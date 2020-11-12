@@ -1,4 +1,5 @@
 #pragma once
+#define NODE_ADDON_API_DISABLE_DEPRECATED
 #include <napi.h>
 #include <queue>
 
@@ -82,6 +83,7 @@ public:
 
 public:
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
+	Napi::Value Exec(const Napi::CallbackInfo &info);
 
 	static bool HasInstance(Napi::Value val) {
 		Napi::Env env = val.Env();
@@ -114,6 +116,7 @@ public:
 	Napi::Value Each(const Napi::CallbackInfo &info);
 	Napi::Value Run(const Napi::CallbackInfo &info);
 	Napi::Value Bind(const Napi::CallbackInfo &info);
+
 	Napi::Value Finalize_(const Napi::CallbackInfo &info);
 
 public:

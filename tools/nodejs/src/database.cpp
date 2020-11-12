@@ -56,10 +56,11 @@ struct OpenTask : public Task {
 	bool success = false;
 };
 
-// TODO handle parameters here
 Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(info), task_inflight(false) {
-	if (info.Length() <= 0 || !info[0].IsString()) {
-		throw std::runtime_error("eek4");
+	auto env = info.Env();
+	if (info.Length() < 1 || !info[0].IsString()) {
+		Napi::TypeError::New(env, "Database location expected").ThrowAsJavaScriptException();
+		return;
 	}
 	std::string filename = info[0].As<Napi::String>();
 	unsigned int pos = 1;
@@ -68,12 +69,14 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 		mode = info[pos++].As<Napi::Number>().Int32Value();
 	}
 
+	// TODO check read only flag
+
 	Napi::Function callback;
 	if (info.Length() >= pos && info[pos].IsFunction()) {
 		callback = info[pos++].As<Napi::Function>();
 	}
 
-	Schedule(info.Env(), duckdb::make_unique<OpenTask>(*this, filename, callback));
+	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, callback));
 }
 
 void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
@@ -122,7 +125,6 @@ void Database::Process(Napi::Env env) {
 	holder->task = move(task);
 	holder->db = this;
 
-	// TODO do we need to do error checking here?
 	napi_create_async_work(env, NULL, Napi::String::New(env, "duckdb.Database.Task"), task_execute, task_complete,
 	                       holder, &holder->request);
 
@@ -135,6 +137,9 @@ Napi::Value Database::Parallelize(const Napi::CallbackInfo &info) {
 
 Napi::Value Database::Serialize(const Napi::CallbackInfo &info) {
 	Napi::Env env = info.Env();
+	if (info.Length() < 1) {
+		return info.This();
+	}
 	if (info.Length() < 1 || !info[0].IsFunction()) {
 		Napi::TypeError::New(env, "Callback expected").ThrowAsJavaScriptException();
 		return env.Null();
@@ -164,8 +169,29 @@ struct CloseTask : public Task {
 	}
 
 	void DoWork() override {
-		Get<Database>().database.reset();
+		auto &database = Get<Database>();
+		if (database.database) {
+			database.database.reset();
+			success = true;
+		} else {
+			success = false;
+		}
 	}
+
+	void Callback() override {
+		auto &database = Get<Database>();
+		auto env = database.Env();
+		Napi::HandleScope scope(env);
+
+		auto cb = callback.Value();
+		if (!success) {
+			cb.MakeCallback(database.Value(), {Utils::CreateError(env, "Database was already closed")});
+			return;
+		}
+		cb.MakeCallback(database.Value(), {env.Null(), database.Value()});
+	}
+
+	bool success = false;
 };
 
 Napi::Value Database::Close(const Napi::CallbackInfo &info) {

@@ -4,3 +4,4 @@ src/duckdb.cpp
 src/duckdb.hpp
 lib/binding
 package-lock.json
+test/support/big.db*

@@ -8,7 +8,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
 	Napi::Function t =
-	    DefineClass(env, "Result",
+	    DefineClass(env, "Statement",
 	                {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
 	                 InstanceMethod("each", &Statement::Each), InstanceMethod("finalize", &Statement::Finalize_)});
 
@@ -65,8 +65,9 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 		callback = info[2].As<Napi::Function>();
 	}
 
-	// TODO can we have parameters here? I think not?
-
+	// TODO we can have parameters here as well. Forward if that is the case.
+	Value().As<Napi::Object>().DefineProperty(
+	    Napi::PropertyDescriptor::Value("sql", info[1].As<Napi::String>(), napi_default));
 	connection_ref->database_ref->Schedule(env, duckdb::make_unique<PrepareTask>(*this, callback));
 }
 
@@ -142,6 +143,9 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			case duckdb::LogicalTypeId::FLOAT: {
 				value = Napi::Number::New(env, dval.value_.float_);
 			} break;
+			case duckdb::LogicalTypeId::DOUBLE: {
+				value = Napi::Number::New(env, dval.value_.double_);
+			} break;
 			case duckdb::LogicalTypeId::BIGINT: {
 				value = Napi::Number::New(env, dval.value_.bigint);
 			} break;
@@ -167,25 +171,27 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 	return scope.Escape(result);
 }
 
-enum ResultHandlingType { RUN, EACH, ALL };
+enum RunType { RUN, EACH, ALL };
 
 struct StatementParam {
 	std::vector<duckdb::Value> params;
 	Napi::Function callback;
+	Napi::Function complete;
 };
 
 struct RunPreparedTask : public Task {
-	RunPreparedTask(Statement &statement_, unique_ptr<StatementParam> params_, ResultHandlingType result_handling_type_)
-	    : Task(statement_, params_->callback), params(params_->params), result_handling_type(result_handling_type_) {
+	RunPreparedTask(Statement &statement_, unique_ptr<StatementParam> params_, RunType run_type_)
+	    : Task(statement_, params_->callback), params(move(params_)), run_type(run_type_) {
 	}
 
 	void DoWork() override {
 		auto &statement = Get<Statement>();
 		// ignorant folk arrive here without caring about the prepare callback error
-		if (!statement.statement->success) {
+		if (!statement.statement || !statement.statement->success) {
 			return;
 		}
-		result = statement.statement->Execute(params, result_handling_type != ResultHandlingType::ALL);
+
+		result = statement.statement->Execute(params->params, run_type != RunType::ALL);
 	}
 
 	void Callback() override {
@@ -195,6 +201,14 @@ struct RunPreparedTask : public Task {
 
 		auto cb = callback.Value();
 		// if there was an error we need to say so
+		if (!statement.statement) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, "statement was finalized")});
+			return;
+		}
+		if (!statement.statement->success) {
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
+			return;
+		}
 		if (!statement.statement->success) {
 			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
 			return;
@@ -204,11 +218,12 @@ struct RunPreparedTask : public Task {
 			return;
 		}
 
-		switch (result_handling_type) {
-		case ResultHandlingType::RUN:
+		switch (run_type) {
+		case RunType::RUN:
 			cb.MakeCallback(statement.Value(), {env.Null()});
 			break;
-		case ResultHandlingType::EACH:
+		case RunType::EACH: {
+			duckdb::idx_t count = 0;
 			while (true) {
 				auto chunk = result->Fetch();
 				if (chunk->size() == 0) {
@@ -222,11 +237,15 @@ struct RunPreparedTask : public Task {
 				}
 				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
 					cb.MakeCallback(statement.Value(), {env.Null(), chunk_converted.Get(row_idx)});
+					count++;
 				}
 			}
-
+			if (!params->complete.IsUndefined() && params->complete.IsFunction()) {
+				params->complete.MakeCallback(statement.Value(), {env.Null(), Napi::Number::New(env, count)});
+			}
 			break;
-		case ResultHandlingType::ALL: {
+		}
+		case RunType::ALL: {
 			auto materialized_result = (duckdb::MaterializedQueryResult *)result.get();
 			Napi::Array result_arr(Napi::Array::New(env, materialized_result->collection.count));
 
@@ -251,9 +270,9 @@ struct RunPreparedTask : public Task {
 		} break;
 		}
 	}
-	std::vector<duckdb::Value> params;
-	unique_ptr<duckdb::QueryResult> result;
-	ResultHandlingType result_handling_type;
+	std::unique_ptr<duckdb::QueryResult> result;
+	unique_ptr<StatementParam> params;
+	RunType run_type;
 };
 
 unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
@@ -263,7 +282,11 @@ unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info)
 	for (auto i = start_idx; i < info.Length(); i++) {
 		auto &p = info[i];
 		if (p.IsFunction()) {
-			params->callback = p.As<Napi::Function>();
+			if (!params->callback.IsUndefined()) { // we already saw a callback, so this is the finalizer
+				params->complete = p.As<Napi::Function>();
+			} else {
+				params->callback = p.As<Napi::Function>();
+			}
 			continue;
 		}
 		if (p.IsUndefined()) {
@@ -275,22 +298,22 @@ unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info)
 }
 
 Napi::Value Statement::All(const Napi::CallbackInfo &info) {
-	connection_ref->database_ref->Schedule(
-	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::ALL));
+	connection_ref->database_ref->Schedule(info.Env(),
+	                                       duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ALL));
 	return info.This();
 }
 
 Napi::Value Statement::Run(const Napi::CallbackInfo &info) {
 	auto params = HandleArgs(info);
-	connection_ref->database_ref->Schedule(
-	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::RUN));
+	connection_ref->database_ref->Schedule(info.Env(),
+	                                       duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::RUN));
 	return info.This();
 }
 
 Napi::Value Statement::Each(const Napi::CallbackInfo &info) {
 	auto params = HandleArgs(info);
 	connection_ref->database_ref->Schedule(
-	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), ResultHandlingType::EACH));
+	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::EACH));
 	return info.This();
 }
 
@@ -299,7 +322,8 @@ struct FinalizeTask : public Task {
 	}
 
 	void DoWork() override {
-		Get<Statement>().statement.reset();
+		// TODO why does this break stuff?
+		// Get<Statement>().statement.reset();
 	}
 };
 
@@ -307,14 +331,13 @@ Napi::Value Statement::Finalize_(const Napi::CallbackInfo &info) {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
 
-	Napi::Value callback = env.Null();
+	Napi::Function callback;
 
 	if (info.Length() > 0 && info[0].IsFunction()) {
-		callback = info[0];
+		callback = info[0].As<Napi::Function>();
 	}
 
-	connection_ref->database_ref->Schedule(env,
-	                                       duckdb::make_unique<FinalizeTask>(*this, callback.As<Napi::Function>()));
+	connection_ref->database_ref->Schedule(env, duckdb::make_unique<FinalizeTask>(*this, callback));
 	return env.Null();
 }
 

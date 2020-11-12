@@ -10,6 +10,7 @@ var Database = duckdb.Database;
 var Connection = duckdb.Connection;
 var Statement = duckdb.Statement;
 
+
 Connection.prototype.run = function(sql) {
     var statement = new Statement(this, sql);
     return statement.run.apply(statement, arguments);
@@ -54,4 +55,20 @@ Database.prototype.all = function() {
     }
     this.default_connection.all.apply(this.default_connection, arguments);
     return this;
+}
+
+Database.prototype.exec = function() {
+    if (this.default_connection == undefined) {
+        this.default_connection = new Connection(this);
+    }
+    this.default_connection.exec.apply(this.default_connection, arguments);
+    return this;
+}
+
+Database.prototype.get = function() {
+    throw 'get() is not implemented because its evil';
+}
+
+Statement.prototype.get = function() {
+    throw 'get() is not implemented because its evil';
 }

@@ -8,11 +8,7 @@
             "src/connection.cpp",
             "src/statement.cpp",
             "src/utils.cpp"
-
-#                  "src/node_duckdb.cc",
-#                 "src/database.cc",
-#                 "src/statement.cc",
-               # "src/duckdb.cpp" # comment this out to build against existing lib
+             "src/duckdb.cpp" # comment this out to build against existing lib
             ],
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")"
@@ -50,14 +46,15 @@
                     "ExceptionHandling": 1
                 }
             },
-            "libraries": [
-              "/Users/hannes/source/duckdb/build/release/src/libduckdb_static.a",
-              "/Users/hannes/source/duckdb/build/release/third_party/fmt/libfmt.a",
-              "/Users/hannes/source/duckdb/build/release/third_party/libpg_query/libpg_query.a",
-              "/Users/hannes/source/duckdb/build/release/third_party/utf8proc/libutf8proc.a",
-              "/Users/hannes/source/duckdb/build/release/third_party/re2/libduckdb_re2.a"
-
-              ]
+# uncomment this to build against existing lib
+#             "libraries": [
+#               "/Users/hannes/source/duckdb/build/release/src/libduckdb_static.a",
+#               "/Users/hannes/source/duckdb/build/release/third_party/fmt/libfmt.a",
+#               "/Users/hannes/source/duckdb/build/release/third_party/libpg_query/libpg_query.a",
+#               "/Users/hannes/source/duckdb/build/release/third_party/utf8proc/libutf8proc.a",
+#               "/Users/hannes/source/duckdb/build/release/third_party/re2/libduckdb_re2.a"
+#
+#               ]
         },
         {
       "target_name": "action_after_build",
