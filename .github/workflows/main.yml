@@ -675,9 +675,62 @@ jobs:
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
 
-  nodejs:
+  linux-nodejs:
     name: node.js Package
     runs-on: ubuntu-latest
+    # needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+
+    - name: Node 10 
+      run: |
+        source scripts/install_node.sh 10
+        cd tools/nodejs
+        make clean
+        ./configure
+        npm install --build-from-source
+        npm test
+        export PATH=node_modules/node-pre-gyp/bin:$PATH
+        node-pre-gyp package testpackage testbinary
+        node-pre-gyp publish
+        node-pre-gyp info
+
+    - name: Node 12 
+      run: |
+        source scripts/install_node.sh 12
+        cd tools/nodejs
+        make clean
+        ./configure
+        npm install --build-from-source
+        npm test
+        export PATH=node_modules/node-pre-gyp/bin:$PATH
+        node-pre-gyp package testpackage testbinary
+        node-pre-gyp publish
+        node-pre-gyp info
+
+    - name: Node 14 
+      run: |
+        source scripts/install_node.sh 14
+        cd tools/nodejs
+        make clean
+        ./configure
+        npm install --build-from-source
+        npm test
+        export PATH=node_modules/node-pre-gyp/bin:$PATH
+        node-pre-gyp package testpackage testbinary
+        node-pre-gyp publish
+        node-pre-gyp info
+
+
+  osx-nodejs:
+    name: node.js Package
+    runs-on: macos-latest
     # needs: linux-debug
 
     steps:
