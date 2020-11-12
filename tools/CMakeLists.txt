@@ -10,5 +10,5 @@ if(BUILD_REST)
   add_subdirectory(rest)
 endif()
 
-# FIXME
-add_subdirectory(nodejs)
+# just to make CLion happier
+# add_subdirectory(nodejs)
