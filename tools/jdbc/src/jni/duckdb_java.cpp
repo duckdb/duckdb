@@ -394,6 +394,21 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1clos
 	delete appender;
 }
 
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1boolean
+  (JNIEnv *env, jclass, jobject appender_ref_buf, jboolean value) {
+	get_appender(env, appender_ref_buf)->Append((bool) value);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1byte
+  (JNIEnv *env, jclass, jobject appender_ref_buf, jbyte value) {
+	get_appender(env, appender_ref_buf)->Append((int8_t) value);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1short
+  (JNIEnv *env, jclass, jobject appender_ref_buf, jshort value) {
+	get_appender(env, appender_ref_buf)->Append((int16_t) value);
+}
+
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1int
   (JNIEnv *env, jclass, jobject appender_ref_buf, jint value) {
 	get_appender(env, appender_ref_buf)->Append((int32_t) value);
@@ -404,13 +419,18 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 	get_appender(env, appender_ref_buf)->Append((int64_t) value);
 }
 
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1float
+  (JNIEnv *env, jclass, jobject appender_ref_buf, jfloat value) {
+	get_appender(env, appender_ref_buf)->Append((float) value);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1double
+  (JNIEnv *env, jclass, jobject appender_ref_buf, jdouble value) {
+	get_appender(env, appender_ref_buf)->Append((double) value);
+}
+
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1string
   (JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
     auto string_value = byte_array_to_string(env, value);
 	get_appender(env, appender_ref_buf)->Append(string_value.c_str());
-}
-
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1boolean
-  (JNIEnv *env, jclass, jobject appender_ref_buf, jboolean value) {
-	get_appender(env, appender_ref_buf)->Append((bool) value);
 }
