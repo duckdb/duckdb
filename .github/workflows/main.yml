@@ -7,6 +7,8 @@ defaults:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+  node_pre_gyp_accessKeyId: AKIAVBLKPL2ZW2T7TYFQ
+  node_pre_gyp_secretAccessKey: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
 
 jobs:
 
@@ -675,28 +677,38 @@ jobs:
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
 
-  nodejs:
-    name: node.js Package
+  linux-nodejs:
+    name: node.js Linux
     runs-on: ubuntu-latest
     needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+    - name: Node 10 
+      run: ./scripts/node_build.sh 10
+
+    - name: Node 12 
+      run: ./scripts/node_build.sh 10
+
+    - name: Node 14 
+      run: ./scripts/node_build.sh 14
 
 
-    - name: Install
-      run: sudo apt-get install -y nodejs
+  osx-nodejs:
+    name: node.js OSX
+    runs-on: macos-latest
+    needs: linux-debug
 
-    - name: Build
-      run: |
-        cd tools/nodejs
-        ./configure
-        make
+    steps:
+    - uses: actions/checkout@v2
 
-    - name: Test
-      run: |
-        make -C tools/nodejs test
+    - name: Node 10 
+      run: ./scripts/node_build.sh 10
+
+    - name: Node 12 
+      run: ./scripts/node_build.sh 10
+
+    - name: Node 14 
+      run: ./scripts/node_build.sh 14
+
