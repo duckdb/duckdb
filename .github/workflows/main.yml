@@ -692,8 +692,8 @@ jobs:
 
     - name: Node 10 
       run: |
-        cd tools/nodejs    
         source scripts/install_node.sh 10
+        cd tools/nodejs
         make clean
         ./configure
         npm install --build-from-source
@@ -705,8 +705,8 @@ jobs:
 
     - name: Node 14 
       run: |
-        cd tools/nodejs    
         source scripts/install_node.sh 14
+        cd tools/nodejs
         make clean
         ./configure
         npm install --build-from-source
