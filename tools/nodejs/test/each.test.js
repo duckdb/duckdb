@@ -22,7 +22,7 @@ describe('each', function() {
             }
         });
     });
-
+/*
     it('Statement#each with complete callback', function(done) {
         var total = 10000;
         var retrieved = 0;
@@ -35,5 +35,5 @@ describe('each', function() {
             assert.equal(retrieved, total, "Only retrieved " + retrieved + " out of " + total + " rows.");
             done();
         });
-    });
+    });*/
 });
