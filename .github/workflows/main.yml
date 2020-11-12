@@ -672,3 +672,29 @@ jobs:
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
+
+  nodejs:
+    name: node.js Package
+    runs-on: ubuntu-latest
+   # needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+
+    - name: Install
+      run: sudo apt-get install -y nodejs
+
+    - name: Build
+      run: |
+        cd tools/nodejs
+        ./configure
+        make
+
+    - name: Test
+      run: |
+        make test
