@@ -676,7 +676,7 @@ jobs:
   nodejs:
     name: node.js Package
     runs-on: ubuntu-latest
-   # needs: linux-debug
+    needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
