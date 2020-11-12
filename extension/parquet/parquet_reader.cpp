@@ -1,5 +1,6 @@
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
+#include "parquet_file_metadata_cache.hpp"
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
@@ -25,6 +27,7 @@
 
 #include <sstream>
 #include <cassert>
+#include <chrono>
 
 namespace duckdb {
 
@@ -204,6 +207,25 @@ template <class T> static void thrift_unpack(const uint8_t *buf, uint32_t *len, 
 	*len = *len - bytes_left;
 }
 
+static unique_ptr<parquet::format::FileMetaData>
+read_metadata(duckdb::FileSystem &fs, duckdb::FileHandle *handle, uint32_t footer_len, uint64_t file_size){
+	auto metadata = make_unique<parquet::format::FileMetaData>();
+	// read footer into buffer and de-thrift
+	ResizeableBuffer buf;
+	buf.resize(footer_len);
+	fs.Read(*handle, buf.ptr, footer_len, file_size - (footer_len + 8));
+	thrift_unpack((const uint8_t *)buf.ptr, &footer_len, metadata.get());
+	return metadata;
+}
+
+static unique_ptr<ParquetFileMetadataCache>
+cache_metadata(duckdb::FileSystem &fs, duckdb::FileHandle *handle, uint32_t footer_len, uint64_t file_size){
+	return make_unique<ParquetFileMetadataCache>(
+			read_metadata(fs, handle, footer_len, file_size),
+			chrono::system_clock::to_time_t(chrono::system_clock::now())
+		);
+}
+
 ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types,
                              string initial_filename)
     : file_name(move(file_name_)), context(context) {
@@ -241,20 +263,27 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		throw FormatException("Footer length %d is too big for the file of size %d", footer_len, file_size);
 	}
 
-	// read footer into buffer and de-thrift
-	buf.resize(footer_len);
-	fs.Read(*handle, buf.ptr, footer_len, file_size - (footer_len + 8));
+	// If object cached is disabled
+	// or if this file has cached metadata
+	// or if the cached version already expired
+	if (
+		!context.object_cache_enable ||
+	 	context.cache.find(file_name) == context.cache.end() ||
+		!(fs.GetLastModifiedTime(*handle) < get_cached_metadata()->read_time)
+	) {
+		context.cache[file_name] = cache_metadata(fs, handle.get(), footer_len, file_size);
+	}
 
-	thrift_unpack((const uint8_t *)buf.ptr, &footer_len, &file_meta_data);
+	auto file_meta_data = get_file_metadata();
 
-	if (file_meta_data.__isset.encryption_algorithm) {
+	if (file_meta_data->__isset.encryption_algorithm) {
 		throw FormatException("Encrypted Parquet files are not supported");
 	}
 	// check if we like this schema
-	if (file_meta_data.schema.size() < 2) {
+	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one column in the file");
 	}
-	if (file_meta_data.schema[0].num_children != (int32_t)(file_meta_data.schema.size() - 1)) {
+	if (file_meta_data->schema[0].num_children != (int32_t)(file_meta_data->schema.size() - 1)) {
 		throw FormatException("Only flat tables are supported (no nesting)");
 	}
 
@@ -262,8 +291,8 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	bool has_expected_types = expected_types.size() > 0;
 
 	// skip the first column its the root and otherwise useless
-	for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size(); col_idx++) {
-		auto &s_ele = file_meta_data.schema[col_idx];
+	for (uint64_t col_idx = 1; col_idx < file_meta_data->schema.size(); col_idx++) {
+		auto &s_ele = file_meta_data->schema[col_idx];
 		if (!s_ele.__isset.type || s_ele.num_children > 0) {
 			throw FormatException("Only flat tables are supported (no nesting)");
 		}
@@ -347,6 +376,17 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 ParquetReader::~ParquetReader() {
 }
 
+ParquetFileMetadataCache* ParquetReader::get_cached_metadata(){
+	auto cached = dynamic_cast<ParquetFileMetadataCache *>(context.cache[file_name].get());
+	assert(cached != nullptr); // We assume the cache exists here
+	return cached;
+}
+
+parquet::format::FileMetaData* ParquetReader::get_file_metadata(){
+	assert(get_cached_metadata()->metadata.get() != nullptr);
+	return get_cached_metadata()->metadata.get();
+}
+
 ParquetReaderColumnData::~ParquetReaderColumnData() {
 }
 
@@ -417,10 +457,11 @@ static void fill_timestamp_plain(ParquetReaderColumnData &col_data, idx_t count,
 }
 
 RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
+	auto file_meta_data = get_file_metadata();
 	assert(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
 	assert(state.group_idx_list[state.current_group] >= 0 &&
-	       state.group_idx_list[state.current_group] < file_meta_data.row_groups.size());
-	return file_meta_data.row_groups[state.group_idx_list[state.current_group]];
+	       state.group_idx_list[state.current_group] < file_meta_data->row_groups.size());
+	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
 }
 
 timestamp_t arrow_timestamp_micros_to_timestamp(const int64_t &raw_ts) {
@@ -453,7 +494,7 @@ void ParquetReader::VerifyString(LogicalTypeId id, const char *str_data, idx_t s
 
 bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx) {
 	auto &col_data = *state.column_data[col_idx];
-	auto &s_ele = file_meta_data.schema[col_idx + 1];
+	auto &s_ele = get_file_metadata()->schema[col_idx + 1];
 	auto &chunk = GetGroup(state).columns[col_idx];
 
 	// clean up a bit to avoid nasty surprises
@@ -723,7 +764,7 @@ void ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 
 	state.column_data[col_idx]->has_nulls =
-	    file_meta_data.schema[col_idx + 1].repetition_type == FieldRepetitionType::OPTIONAL;
+	    get_file_metadata()->schema[col_idx + 1].repetition_type == FieldRepetitionType::OPTIONAL;
 
 	// read entire chunk into RAM
 	state.column_data[col_idx]->buf.resize(chunk_len);
@@ -731,11 +772,11 @@ void ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 }
 
 idx_t ParquetReader::NumRows() {
-	return file_meta_data.num_rows;
+	return get_file_metadata()->num_rows;
 }
 
 idx_t ParquetReader::NumRowGroups() {
-	return file_meta_data.row_groups.size();
+	return get_file_metadata()->row_groups.size();
 }
 
 void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> column_ids,
@@ -785,6 +826,8 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 		return;
 	}
 
+	auto file_meta_data = get_file_metadata();
+
 	for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
 		auto file_col_idx = state.column_ids[out_col_idx];
 		if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
@@ -792,7 +835,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 			output.data[out_col_idx].Reference(constant_42);
 			continue;
 		}
-		auto &s_ele = file_meta_data.schema[file_col_idx + 1];
+		auto &s_ele = file_meta_data->schema[file_col_idx + 1];
 		auto &col_data = *state.column_data[file_col_idx];
 
 		// we might need to read multiple pages to fill the data chunk

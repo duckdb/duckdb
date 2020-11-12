@@ -5,14 +5,7 @@ add_library(
   bulkupdate.cpp
   cast.cpp
   data_skipping.cpp
-  groupby.cpp
   in.cpp
-  multiplications.cpp
-  orderby.cpp
-  rangejoin.cpp
-  rangequery.cpp
-  string.cpp
-  window.cpp
   storage.cpp)
 set(BENCHMARK_OBJECT_FILES
     ${BENCHMARK_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_benchmark_micro>

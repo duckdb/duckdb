@@ -2,6 +2,9 @@
 # description: Hash Join where RHS has no projection
 # group: [join]
 
+name Benno Equality Join (No Index, Count Only)
+group join
+
 load
 CREATE TABLE words(index INTEGER, doc INTEGER, word VARCHAR);
 COPY words FROM 'benchmark/micro/index/indexjoin.csv.gz' (DELIMITER ',' , AUTO_DETECT FALSE);

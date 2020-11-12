@@ -2,6 +2,10 @@
 # description: Execute Q1 over lineitem stored in a parquet file
 # group: [parquet]
 
+name Q1 (Parquet)
+group parquet
+subgroup tpch
+
 require parquet
 require tpch
 

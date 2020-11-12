@@ -10,11 +10,13 @@ using namespace duckdb_libpgquery;
 
 bool Transformer::TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
+		SetParamCount(0);
 		auto stmt = TransformStatement((PGNode *)entry->data.ptr_value);
 		if (!stmt) {
 			statements.clear();
 			return false;
 		}
+		stmt->n_param = ParamCount();
 		statements.push_back(move(stmt));
 	}
 	return true;

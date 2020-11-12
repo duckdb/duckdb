@@ -48,8 +48,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
 	entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
-	if (join_type == JoinType::OUTER) {
-		// outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
+	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
 		entry_size += sizeof(bool);
 		pointer_offset += sizeof(bool);
@@ -353,8 +353,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
 	}
-	if (join_type == JoinType::OUTER) {
-		// for OUTER joins initialize the "found" boolean to false
+	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		initialize_outer_join(added_count, key_locations);
 	}
 	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
@@ -477,6 +477,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 
 	switch (ht.join_type) {
 	case JoinType::INNER:
+	case JoinType::RIGHT:
 		NextInnerJoin(keys, left, result);
 		break;
 	case JoinType::SEMI:
@@ -748,8 +749,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
-		if (ht.join_type == JoinType::OUTER) {
-			// outer join: mark join matches as FOUND in the HT
+		if (ht.join_type == JoinType::OUTER || ht.join_type == JoinType::RIGHT) {
+			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
 				auto idx = result_vector.get_index(i);
@@ -1031,7 +1032,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
-	for (; state.block_position < blocks.size(); state.block_position++) {
+	for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
 		auto &block = blocks[state.block_position];
 		auto &handle = pinned_handles[state.block_position];
 		auto baseptr = handle->node->buffer;

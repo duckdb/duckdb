@@ -14,6 +14,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "parquet-extension.hpp"
 
 #include <random>
@@ -722,7 +723,6 @@ struct DuckDBPyResult {
 struct DuckDBPyRelation;
 
 struct DuckDBPyConnection {
-
 	DuckDBPyConnection *executemany(string query, py::object params = py::list()) {
 		execute(query, params, true);
 		return this;
@@ -740,7 +740,21 @@ struct DuckDBPyConnection {
 		}
 		result = nullptr;
 
-		auto prep = connection->Prepare(query);
+		auto statements = connection->ExtractStatements(query);
+		if (statements.size() == 0) {
+			// no statements to execute
+			return this;
+		}
+		// if there are multiple statements, we directly execute the statements besides the last one
+		// we only return the result of the last statement to the user, unless one of the previous statements fails
+		for(idx_t i = 0; i + 1 < statements.size(); i++) {
+			auto res = connection->Query(move(statements[i]));
+			if (!res->success) {
+				throw runtime_error(res->error);
+			}
+		}
+
+		auto prep = connection->Prepare(move(statements.back()));
 		if (!prep->success) {
 			throw runtime_error(prep->error);
 		}
@@ -1021,8 +1035,9 @@ struct DuckDBPyConnection {
 	static shared_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 		auto res = make_shared<DuckDBPyConnection>();
 		DBConfig config;
-		if (read_only)
+		if (read_only) {
 			config.access_mode = AccessMode::READ_ONLY;
+		}
 		res->database = make_unique<DuckDB>(database, &config);
 		res->database->LoadExtension<ParquetExtension>();
 		res->connection = make_unique<Connection>(*res->database);
@@ -1305,11 +1320,62 @@ struct DuckDBPyRelation {
 	shared_ptr<Relation> rel;
 };
 
+enum PySQLTokenType {
+	PySQLTokenIdentifier = 0,
+	PySQLTokenNumericConstant,
+	PySQLTokenStringConstant,
+	PySQLTokenOperator,
+	PySQLTokenKeyword,
+	PySQLTokenComment
+};
+
+static py::object py_tokenize(string query) {
+	auto tokens = Parser::Tokenize(query);
+	py::list result;
+	for(auto &token : tokens) {
+		auto tuple = py::tuple(2);
+		tuple[0] = token.start;
+		switch(token.type) {
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+			tuple[1] = PySQLTokenIdentifier;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+			tuple[1] = PySQLTokenNumericConstant;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+			tuple[1] = PySQLTokenStringConstant;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+			tuple[1] = PySQLTokenOperator;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+			tuple[1] = PySQLTokenKeyword;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+			tuple[1] = PySQLTokenComment;
+			break;
+		}
+		result.append(tuple);
+	}
+	return move(result);
+}
+
 PYBIND11_MODULE(duckdb, m) {
 	m.def("connect", &DuckDBPyConnection::connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
 	      py::arg("database") = ":memory:", py::arg("read_only") = false);
+	m.def("tokenize", py_tokenize, "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
+	      "used for e.g. syntax highlighting",
+		  py::arg("query"));
+    py::enum_<PySQLTokenType>(m, "token_type")
+        .value("identifier", PySQLTokenType::PySQLTokenIdentifier)
+        .value("numeric_const", PySQLTokenType::PySQLTokenNumericConstant)
+        .value("string_const", PySQLTokenType::PySQLTokenStringConstant)
+        .value("operator", PySQLTokenType::PySQLTokenOperator)
+        .value("keyword", PySQLTokenType::PySQLTokenKeyword)
+        .value("comment", PySQLTokenType::PySQLTokenComment)
+        .export_values();
 
 	auto conn_class =
 	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection")

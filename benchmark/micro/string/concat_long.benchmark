@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/concat_long.benchmark
+# description: String Concat (Long Strings)
+# group: [string]
+
+name String Concat (Long)
+group string
+
+load benchmark/micro/string/strings_long.sql
+
+run
+SELECT MIN(STRLEN(s1 || s2)) FROM strings
+
+result I
+10

@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/length_long.benchmark
+# description: String Length (Long)
+# group: [string]
+
+name String Length (Long)
+group string
+
+load benchmark/micro/string/strings_long.sql
+
+run
+SELECT MIN(LENGTH(s1) + LENGTH(s2)) FROM strings
+
+result I
+10

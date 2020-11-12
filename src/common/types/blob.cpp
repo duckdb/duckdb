@@ -101,7 +101,7 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 			D_ASSERT(i + 3 < len);
 			D_ASSERT(byte_a >= 0 && byte_b >= 0);
 			D_ASSERT(data[i + 1] == 'x');
-			output[blob_idx++] = (Blob::HEX_MAP[data[i + 2]] << 4) + Blob::HEX_MAP[data[i + 3]];
+			output[blob_idx++] = (byte_a << 4) + byte_b;
 			i += 3;
 		} else if (data[i] >= 32 && data[i] <= 127) {
 			output[blob_idx++] = data_t(data[i]);

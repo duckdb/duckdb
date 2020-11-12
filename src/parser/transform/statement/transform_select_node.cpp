@@ -33,22 +33,6 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 			}
 		}
 
-		// do this early so the value lists also have a `FROM`
-		if (stmt->valuesLists) {
-			// VALUES list, create an ExpressionList
-			D_ASSERT(!stmt->fromClause);
-			result->from_table = TransformValuesList(stmt->valuesLists);
-			result->select_list.push_back(make_unique<StarExpression>());
-		} else {
-			result->from_table = TransformFrom(stmt->fromClause);
-			if (!stmt->targetList) {
-				throw ParserException("SELECT clause without selection list");
-			}
-			// select list
-			if (!TransformExpressionList(stmt->targetList, result->select_list)) {
-				throw Exception("Failed to transform expression list.");
-			}
-		}
 		// checks distinct clause
 		if (stmt->distinctClause != NULL) {
 			auto modifier = make_unique<DistinctModifier>();
@@ -62,12 +46,30 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 			}
 			result->modifiers.push_back(move(modifier));
 		}
-		// from table
-		// group by
-		TransformGroupBy(stmt->groupClause, result->groups);
-		result->having = TransformExpression(stmt->havingClause);
+
+		// do this early so the value lists also have a `FROM`
+		if (stmt->valuesLists) {
+			// VALUES list, create an ExpressionList
+			D_ASSERT(!stmt->fromClause);
+			result->from_table = TransformValuesList(stmt->valuesLists);
+			result->select_list.push_back(make_unique<StarExpression>());
+		} else {
+			if (!stmt->targetList) {
+				throw ParserException("SELECT clause without selection list");
+			}
+			// select list
+			if (!TransformExpressionList(stmt->targetList, result->select_list)) {
+				throw InternalException("Failed to transform expression list.");
+			}
+			result->from_table = TransformFrom(stmt->fromClause);
+		}
+
 		// where
 		result->where_clause = TransformExpression(stmt->whereClause);
+		// group by
+		TransformGroupBy(stmt->groupClause, result->groups);
+		// having
+		result->having = TransformExpression(stmt->havingClause);
 		break;
 	}
 	case PG_SETOP_UNION:

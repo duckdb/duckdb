@@ -1,0 +1,63 @@
+# name: test/sql/copy/parquet/parquet_metadata_cache.test
+# description: Test parquet metadata cache
+# group: [parquet]
+
+require parquet
+
+statement ok
+pragma enable_object_cache
+
+# test the cached file
+query II
+select * from parquet_scan('test/sql/copy/parquet/data/cache/cache1.parquet')
+----
+1	hello
+
+query II
+select * from parquet_scan('test/sql/copy/parquet/data/cache/cache1.parquet')
+----
+1	hello
+
+# copy cache1.parquet to cached.parquet
+statement ok
+COPY (
+	SELECT * FROM parquet_scan('test/sql/copy/parquet/data/cache/cache1.parquet')
+	)
+TO '__TEST_DIR__/cached.parquet' (FORMAT 'parquet')
+
+query II
+select * from parquet_scan('__TEST_DIR__/cached.parquet')
+----
+1	hello
+
+# copy cache2.parquet to cached.parquet
+statement ok
+COPY (
+	SELECT * FROM parquet_scan('test/sql/copy/parquet/data/cache/cache2.parquet')
+	)
+TO '__TEST_DIR__/cached.parquet' (FORMAT 'parquet')
+
+query II
+select * from parquet_scan('__TEST_DIR__/cached.parquet')
+----
+0	10
+1	20
+2	30
+
+
+# test two files with the same name on different directories
+query II
+select * from parquet_scan('test/sql/copy/parquet/data/glob/t1.parquet')
+----
+1	hello
+
+query II
+select * from parquet_scan('test/sql/copy/parquet/data/glob2/t1.parquet')
+----
+1	hello
+
+# test using *
+query I
+select count(*) from parquet_scan('test/sql/copy/parquet/data/glob/*.parquet')
+----
+2

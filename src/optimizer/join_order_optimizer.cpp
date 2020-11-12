@@ -89,13 +89,29 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		LogicalJoin *join = (LogicalJoin *)op;
-		if (join->join_type == JoinType::INNER) {
+		auto &join = (LogicalComparisonJoin &)*op;
+		if (join.join_type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
 		} else {
-			// non-inner join, not reordarable yet
+			// non-inner join, not reorderable yet
 			non_reorderable_operation = true;
+			if (join.join_type == JoinType::LEFT &&
+			    join.right_projection_map.size() == 0) {
+				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
+				// we convert to doing a RIGHT OUTER JOIN
+				// FIXME: for now we don't swap if the right_projection_map is not empty
+				// this can be fixed once we implement the left_projection_map properly...
+				auto lhs_cardinality = join.children[0]->EstimateCardinality();
+				auto rhs_cardinality = join.children[1]->EstimateCardinality();
+				if (rhs_cardinality > lhs_cardinality * 2) {
+					join.join_type = JoinType::RIGHT;
+					std::swap(join.children[0], join.children[1]);
+					for(auto &cond : join.conditions) {
+						std::swap(cond.left, cond.right);
+					}
+				}
+			}
 		}
 	}
 	if (non_reorderable_operation) {

@@ -2,6 +2,9 @@
 # description: Contains the string 'riously. regular, express dep' in the l_comment (3)
 # group: [string]
 
+name Contains ('1234')
+group string
+
 require tpch
 
 load

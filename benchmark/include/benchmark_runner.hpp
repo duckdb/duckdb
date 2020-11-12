@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "benchmark_configuration.hpp"
 #include "benchmark.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/fstream.hpp"
@@ -23,6 +24,7 @@ class BenchmarkRunner {
 
 public:
 	static constexpr const char *DUCKDB_BENCHMARK_DIRECTORY = "duckdb_benchmark_data";
+	BenchmarkConfiguration configuration;
 
 	static BenchmarkRunner &GetInstance() {
 		static BenchmarkRunner instance;
