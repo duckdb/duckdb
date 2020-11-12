@@ -152,13 +152,6 @@ struct WaitTask : public Task {
 	void DoWork() override {
 		// nop
 	}
-
-	void Callback() override {
-		auto &database = Get<Database>();
-		Napi::Env env = database.Env();
-		Napi::HandleScope scope(env);
-		callback.Value().MakeCallback(database.Value(), {env.Null()});
-	}
 };
 
 Napi::Value Database::Wait(const Napi::CallbackInfo &info) {
@@ -167,19 +160,21 @@ Napi::Value Database::Wait(const Napi::CallbackInfo &info) {
 }
 
 struct CloseTask : public Task {
-	CloseTask(Database &database_) : Task(database_, database_.Env().Null().As<Napi::Function>()) {
+	CloseTask(Database &database_, Napi::Function callback_) : Task(database_, callback_) {
 	}
 
 	void DoWork() override {
 		Get<Database>().database.reset();
 	}
-
-	void Callback() override {
-	}
 };
 
 Napi::Value Database::Close(const Napi::CallbackInfo &info) {
-	Schedule(info.Env(), duckdb::make_unique<CloseTask>(*this));
+	Napi::Function callback;
+	if (info.Length() > 0 && info[0].IsFunction()) {
+		callback = info[0].As<Napi::Function>();
+	}
+
+	Schedule(info.Env(), duckdb::make_unique<CloseTask>(*this, callback));
 
 	return info.This();
 }

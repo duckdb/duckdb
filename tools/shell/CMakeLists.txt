@@ -10,7 +10,7 @@ endif()
 include_directories(include)
 include_directories(../sqlite3_api_wrapper/include)
 add_executable(shell ${SHELL_SOURCES})
-target_link_libraries(shell sqlite3_api_wrapper_static Threads::Threads -static)
+target_link_libraries(shell sqlite3_api_wrapper_static Threads::Threads)
 
 if(NOT AMALGAMATION_BUILD AND NOT WIN32)
   target_link_libraries(shell utf8proc)

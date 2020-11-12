@@ -320,7 +320,6 @@ describe('prepare', function() {
         for (var i = 0; i < length; i++) {
             data.push([ randomString(), i, i * Math.random(), null ]);
         }
-
         var inserted = 0;
         var retrieved = 0;
 

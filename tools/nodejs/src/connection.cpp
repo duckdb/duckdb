@@ -16,49 +16,39 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	return exports;
 }
 
-
 struct ConnectTask : public Task {
-    ConnectTask(Connection &connection_, Napi::Function callback_) : Task(connection_, callback_) {
-    }
+	ConnectTask(Connection &connection_, Napi::Function callback_) : Task(connection_, callback_) {
+	}
 
-    void DoWork() override {
-        auto &connection = Get<Connection>();
-        connection.connection = duckdb::make_unique<duckdb::Connection>(*connection.database_ref->database);
-    }
-
-    void Callback() override {
-        auto &connection = Get<Connection>();
-
-        // somehow the function can disappear mid-flight (?)
-        Napi::HandleScope scope(connection.Env());
-        auto cb = callback.Value();
-        if (!cb.IsFunction()) {
-            return;
-        }
-        cb.MakeCallback(connection.Value(), {connection.Env().Null(), connection.Value()});
-    }
+	void DoWork() override {
+		auto &connection = Get<Connection>();
+		connection.connection = duckdb::make_unique<duckdb::Connection>(*connection.database_ref->database);
+	}
 };
 
-
 Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connection>(info) {
-    Napi::Env env = info.Env();
-    int length = info.Length();
+	Napi::Env env = info.Env();
+	int length = info.Length();
 
-    if (length <= 0 || !Database::HasInstance(info[0])) {
-        Napi::TypeError::New(env, "Database object expected").ThrowAsJavaScriptException();
-        return;
-    }
+	if (length <= 0 || !Database::HasInstance(info[0])) {
+		Napi::TypeError::New(env, "Database object expected").ThrowAsJavaScriptException();
+		return;
+	}
 
 	database_ref = Napi::ObjectWrap<Database>::Unwrap(info[0].As<Napi::Object>());
 	database_ref->Ref();
 
-	database_ref->Schedule(env, duckdb::make_unique<ConnectTask>(*this, env.Null().As<Napi::Function>()));
+	Napi::Function callback;
+	if (info.Length() > 0 && info[1].IsFunction()) {
+		callback = info[1].As<Napi::Function>();
+	}
+
+	database_ref->Schedule(env, duckdb::make_unique<ConnectTask>(*this, callback));
 }
 
 Connection::~Connection() {
 	database_ref->Unref();
-    database_ref = nullptr;
-
+	database_ref = nullptr;
 }
 
 Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
@@ -70,6 +60,9 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 	args.push_back(Value());
 	// push the query as second argument
 	args.push_back(sql);
+	if (info.Length() > 0 && info[1].IsFunction()) {
+		args.push_back(info[1].As<Napi::Function>());
+	}
 
 	// we need to pass all the arguments onward to statement
 	for (size_t i = 0; i < info.Length(); i++) {

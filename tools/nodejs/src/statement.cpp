@@ -60,8 +60,14 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 
 	sql = info[1].As<Napi::String>();
 
-	connection_ref->database_ref->Schedule(env,
-	                                       duckdb::make_unique<PrepareTask>(*this, env.Null().As<Napi::Function>()));
+	Napi::Function callback;
+	if (info.Length() > 1 && info[2].IsFunction()) {
+		callback = info[2].As<Napi::Function>();
+	}
+
+	// TODO can we have parameters here? I think not?
+
+	connection_ref->database_ref->Schedule(env, duckdb::make_unique<PrepareTask>(*this, callback));
 }
 
 Statement::~Statement() {
@@ -293,20 +299,7 @@ struct FinalizeTask : public Task {
 	}
 
 	void DoWork() override {
-		auto &statement = Get<Statement>();
-		statement.statement.reset();
-	}
-
-	void Callback() override {
-		auto &statement = Get<Statement>();
-
-		// somehow the function can disappear mid-flight (?)
-		Napi::HandleScope scope(statement.Env());
-		auto cb = callback.Value();
-		if (!cb.IsFunction()) {
-			return;
-		}
-		cb.MakeCallback(statement.Value(), {statement.Env().Null()});
+		Get<Statement>().statement.reset();
 	}
 };
 

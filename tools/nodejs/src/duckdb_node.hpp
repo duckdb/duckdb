@@ -14,7 +14,12 @@ struct Task {
 		object.Ref();
 	}
 	virtual void DoWork() = 0;
-	virtual void Callback() = 0;
+
+	virtual void Callback() {
+		auto env = object.Env();
+		Napi::HandleScope scope(env);
+		callback.Value().MakeCallback(object.Value(), {env.Null()});
+	};
 
 	virtual ~Task() {
 		object.Unref();
