@@ -697,4 +697,4 @@ jobs:
 
     - name: Test
       run: |
-        make test
+        make -C tools/nodejs test
