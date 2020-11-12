@@ -7,7 +7,7 @@
             "src/database.cpp",
             "src/connection.cpp",
             "src/statement.cpp",
-            "src/utils.cpp"
+            "src/utils.cpp",
              "src/duckdb.cpp" # comment this out to build against existing lib
             ],
             "include_dirs": [
