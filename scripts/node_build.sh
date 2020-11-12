@@ -8,5 +8,7 @@ npm install --build-from-source
 npm test
 export PATH=node_modules/node-pre-gyp/bin:$PATH
 node-pre-gyp package testpackage testbinary
-node-pre-gyp publish
-node-pre-gyp info
+if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+  node-pre-gyp publish
+  node-pre-gyp info
+fi
