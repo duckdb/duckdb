@@ -5,6 +5,7 @@
   "description": "DuckDB node.js API",
   "gypfile": true,
   "dependencies": {
+    "aws-sdk": "^2.790.0",
     "bindings": "*",
     "mocha": "^8.1.3",
     "node-addon-api": "*",
@@ -13,13 +14,8 @@
   },
   "binary": {
     "module_name": "duckdb",
-    "module_path": "./lib/binding/napi-v{napi_build_version}-{platform}-{arch}",
-    "host": "https://example.com",
-    "remote_path": "./{name}/v{version}/{toolset}/",
-    "package_name": "napi-v{napi_build_version}-{platform}-{arch}.tar.gz",
-    "napi_versions": [
-      3
-    ]
+    "module_path": "./lib/binding/",
+    "host": "https://duckdb-node.s3-us-east-1.amazonaws.com"
   },
   "scripts": {
     "install": "node-pre-gyp install --fallback-to-build",
