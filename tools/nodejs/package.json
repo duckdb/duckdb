@@ -1,0 +1,50 @@
+{
+  "name": "node_duckdb",
+  "main": "./lib/duckdb.js",
+  "version": "0.2.3",
+  "description": "DuckDB node.js API",
+  "gypfile": true,
+  "dependencies": {
+    "bindings": "*",
+    "mocha": "^8.1.3",
+    "node-addon-api": "*",
+    "node-gyp": "^7.1.2",
+    "node-pre-gyp": "^0.15.0"
+  },
+  "binary": {
+    "module_name": "node_duckdb",
+    "module_path": "./lib/binding/napi-v{napi_build_version}-{platform}-{arch}",
+    "host": "https://example.com",
+    "remote_path": "./{name}/v{version}/{toolset}/",
+    "package_name": "napi-v{napi_build_version}-{platform}-{arch}.tar.gz",
+    "napi_versions": [
+      3
+    ]
+  },
+  "scripts": {
+    "install": "node-pre-gyp install --fallback-to-build",
+    "pretest": "node test/support/createdb.js",
+    "test": "mocha -R spec --timeout 480000",
+    "pack": "node-pre-gyp package"
+  },
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cwida/duckdb.git"
+  },
+  "keywords": [
+    "database",
+    "sql",
+    "duckdb"
+  ],
+  "author": "Hannes Mühleisen",
+  "license": "MPL-2.0",
+  "bugs": {
+    "url": "https://github.com/cwida/duckdb/issues"
+  },
+  "homepage": "https://www.duckdb.org"
+}
