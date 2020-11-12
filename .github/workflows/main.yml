@@ -8,7 +8,7 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
   node_pre_gyp_accessKeyId: AKIAVBLKPL2ZW2T7TYFQ
-  node_pre_gyp_secretAccessKey: ${{ secrets.TWINE_PASSWORD }}
+  node_pre_gyp_secretAccessKey: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
 
 jobs:
 
