@@ -94,6 +94,10 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref);
 
+	protected static native void duckdb_jdbc_appender_append_boolean(ByteBuffer appender_ref, boolean value);
+
 	protected static native void duckdb_jdbc_appender_append_int(ByteBuffer appender_ref, int value);
+
+	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value);
 
 }

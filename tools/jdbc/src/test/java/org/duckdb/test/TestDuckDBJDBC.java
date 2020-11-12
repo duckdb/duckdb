@@ -1011,7 +1011,7 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
-	public static void test_appender() throws Exception {
+	public static void test_appender_ints() throws Exception {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
@@ -1040,6 +1040,35 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_appender_int_string() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (a INTEGER, s VARCHAR)");
+		DuckDBAppender appender = conn.createAppender("main", "data");
+
+		for (int i = 0; i < 1000; i++) {
+			appender.beginRow();
+			appender.append(i);
+			appender.append("str " + i);
+			appender.endRow();
+		}
+		appender.close();
+
+		ResultSet rs = stmt.executeQuery("SELECT max(a), min(s) FROM data");
+		assertFalse(rs.isClosed());
+
+		assertTrue(rs.next());
+		int resA = rs.getInt(1);
+		assertEquals(resA, 999);
+		int resB = rs.getInt(2);
+		assertEquals(resB, "str 0");
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	// TODO: more test cases
 	// - the table is deleted while the appender is open
 	// - the table doesn't exist
@@ -1047,7 +1076,6 @@ public class TestDuckDBJDBC {
 	// - number of columns mismatches
 	// - shouldn't segfault
 	// - add strings
-
 
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
