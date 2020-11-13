@@ -85,6 +85,32 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				break;
 			}
 		}
+		// after we have propagated, we can update the statistics on both sides
+		// note that it is fine to do this now, even if the same column is used again later
+		// e.g. if we have i=j AND i=k, and the stats for j and k are disjoint, we know there are no results
+		// so if we have e.g. i: [0, 100], j: [0, 25], k: [75, 100]
+		// we can set i: [0, 25] after the first comparison, and statically determine that the second comparison is fals
+
+		// note that we can't update statistics the same for all join types
+		// mark and single joins don't filter any tuples -> so there is no propagation possible
+		// anti joins have inverse statistics propagation
+		// (i.e. if we have an anti join on i: [0, 100] and j: [0, 25], the resulting stats are i:[25,100])
+		// for now we dont'handle anti joins here
+		if (condition.null_values_are_equal) {
+			// skip update when null values are equal (for now?)
+			continue;
+		}
+		switch(join.join_type) {
+		case JoinType::INNER:
+		case JoinType::SEMI:
+		case JoinType::LEFT:
+		case JoinType::RIGHT:
+		case JoinType::OUTER:
+			UpdateFilterStatistics(*condition.left, *condition.right, condition.comparison);
+			break;
+		default:
+			break;
+		}
 	}
 }
 

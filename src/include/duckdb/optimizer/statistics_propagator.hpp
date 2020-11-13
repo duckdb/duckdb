@@ -52,6 +52,10 @@ private:
 
 	//! Update filter statistics from a filter with a constant
 	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, Value constant);
+	//! Update statistics from a filter between two stats
+	void UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats, ExpressionType comparison_type);
+	//! Update filter statistics from a generic comparison
+	void UpdateFilterStatistics(Expression &left, Expression &right, ExpressionType comparison_type);
 	//! Update filter statistics from an expression
 	void UpdateFilterStatistics(Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
