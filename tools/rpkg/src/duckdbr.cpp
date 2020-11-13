@@ -15,9 +15,6 @@
 #include <algorithm>
 #include <sstream>
 
-// motherfucker
-#undef error
-
 using namespace duckdb;
 using namespace std;
 
