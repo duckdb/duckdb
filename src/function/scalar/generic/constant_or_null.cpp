@@ -25,11 +25,11 @@ static void constant_or_null(DataChunk &args, ExpressionState &state, Vector &re
 	for(idx_t idx = 0; idx < args.column_count(); idx++) {
 		switch(args.data[idx].vector_type) {
 		case VectorType::FLAT_VECTOR: {
-			auto &result_mask = FlatVector::Nullmask(result);
-			if (result_mask.any()) {
+			auto &input_mask = FlatVector::Nullmask(args.data[idx]);
+			if (input_mask.any()) {
 				// there are null values: need to merge them into the result
 				result.Normalify(args.size());
-				auto &input_mask = FlatVector::Nullmask(args.data[0]);
+				auto &result_mask = FlatVector::Nullmask(result);
 				result_mask |= input_mask;
 			}
 			break;
@@ -70,7 +70,7 @@ unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 }
 
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, Value val) {
-	if (expr.function.function.target<void(DataChunk &, ExpressionState &, Vector &)>() != constant_or_null) {
+	if (expr.function.name != "constant_or_null") {
 		return false;
 	}
 	D_ASSERT(expr.bind_info);
