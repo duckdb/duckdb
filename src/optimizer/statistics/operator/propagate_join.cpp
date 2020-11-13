@@ -95,7 +95,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		// mark and single joins don't filter any tuples -> so there is no propagation possible
 		// anti joins have inverse statistics propagation
 		// (i.e. if we have an anti join on i: [0, 100] and j: [0, 25], the resulting stats are i:[25,100])
-		// for now we dont'handle anti joins here
+		// for now we don't handle anti joins
 		if (condition.null_values_are_equal) {
 			// skip update when null values are equal (for now?)
 			continue;

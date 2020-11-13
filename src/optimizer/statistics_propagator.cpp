@@ -47,6 +47,8 @@ void StatisticsPropagator::PropagateStatistics(unique_ptr<LogicalOperator> &node
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression &expr, unique_ptr<Expression> *expr_ptr) {
 	switch(expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_CASE:
+		return PropagateExpression((BoundCaseExpression &) expr, expr_ptr);
 	case ExpressionClass::BOUND_FUNCTION:
 		return PropagateExpression((BoundFunctionExpression &) expr, expr_ptr);
 	case ExpressionClass::BOUND_CAST:

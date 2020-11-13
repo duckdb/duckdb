@@ -1,5 +1,6 @@
 add_library_unity(duckdb_optimizer_statistics_expr
    OBJECT
+   propagate_case.cpp
    propagate_cast.cpp
    propagate_comparison.cpp
    propagate_conjunction.cpp
