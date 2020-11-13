@@ -3,10 +3,10 @@
 
 namespace duckdb {
 
-bool StatisticsPropagator::PropagateStatistics(LogicalGet &get) {
+void StatisticsPropagator::PropagateStatistics(LogicalGet &get, unique_ptr<LogicalOperator> *node_ptr) {
 	if (!get.function.statistics) {
 		// no statistics to get
-		return false;
+		return;
 	}
 	for(idx_t i = 0; i < get.column_ids.size(); i++) {
 		auto stats = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
@@ -18,18 +18,35 @@ bool StatisticsPropagator::PropagateStatistics(LogicalGet &get) {
 	// push table filters into the statistics
 	for(idx_t i = 0; i < get.tableFilters.size(); i++) {
 		auto &tableFilter = get.tableFilters[i];
-		auto propagate_result = PropagateFilter(ColumnBinding(get.table_index, tableFilter.column_index), tableFilter.comparison_type, tableFilter.constant);
-		if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+		// find the stats
+		ColumnBinding stats_binding(get.table_index, tableFilter.column_index);
+		auto entry = statistics_map.find(stats_binding);
+		if (entry == statistics_map.end()) {
+			// no stats for this entry
+			continue;
+		}
+		auto constant_stats = StatisticsFromValue(tableFilter.constant);
+		if (!constant_stats) {
+			continue;
+		}
+		auto propagate_result = PropagateComparison(*entry->second, *constant_stats, tableFilter.comparison_type);
+		switch(propagate_result) {
+		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			get.tableFilters.erase(get.tableFilters.begin() + i);
 			i--;
-		} else if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			break;
+		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
+		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 			// filter is always false; this entire filter should be replaced by an empty result block
-			return true;
+			ReplaceWithEmptyResult(*node_ptr);
+			return;
+		default:
+			break;
 		}
+		UpdateFilterStatistics(*entry->second, tableFilter.comparison_type, tableFilter.constant);
 	}
-	return false;
 }
 
 }

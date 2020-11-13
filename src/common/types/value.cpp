@@ -536,7 +536,7 @@ template <> hugeint_t& Value::GetValueUnsafe() {
 }
 
 template <> string& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::VARCHAR || type_.InternalType() == PhysicalType::VARBINARY);
+	assert(type_.InternalType() == PhysicalType::VARCHAR);
 	return str_value;
 }
 

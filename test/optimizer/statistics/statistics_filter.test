@@ -1,0 +1,130 @@
+# name: test/optimizer/statistics/statistics_filter.test
+# description: Statistics propagation test with filters
+# group: [optimizer]
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# = filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i=0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM integers WHERE i=4;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# = filter is in range
+query II
+EXPLAIN SELECT * FROM integers WHERE i=1;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# > filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i>3;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# > filter is in of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i>2;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# >= filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i>=4;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# >= filter is in of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i>=3;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# < filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i<1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# < filter is in of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i<2;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# <= filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i<=0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# <= filter is in of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i<=1;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+statement ok
+PRAGMA enable_verification
+
+# verify that all these queries return correct results
+query I
+SELECT * FROM integers WHERE i=0;
+----
+
+query I
+SELECT * FROM integers WHERE i=4;
+----
+
+query I
+SELECT * FROM integers WHERE i=1;
+----
+1
+
+query I
+SELECT * FROM integers WHERE i>3;
+----
+
+query I
+SELECT * FROM integers WHERE i>2;
+----
+3
+
+query I
+SELECT * FROM integers WHERE i>=4;
+----
+
+
+query I
+SELECT * FROM integers WHERE i>=3;
+----
+3
+
+query I
+SELECT * FROM integers WHERE i<1;
+----
+
+
+query I
+SELECT * FROM integers WHERE i<2;
+----
+1
+
+query I
+SELECT * FROM integers WHERE i<=0;
+----
+
+
+query I
+SELECT * FROM integers WHERE i<=1;
+----
+1

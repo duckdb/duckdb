@@ -99,7 +99,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// perform statistics propagation
 	context.profiler.StartPhase("statistics_propagation");
 	StatisticsPropagator propagator(context);
-	propagator.PropagateStatistics(*plan);
+	propagator.PropagateStatistics(plan);
 	context.profiler.EndPhase();
 
 	return plan;

@@ -281,7 +281,7 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 		}
 		if (state->fetch_next_left) {
 			// we exhausted all chunks on the right: move to the next chunk on the left
-			if (join_type == JoinType::LEFT || join_type == JoinType::OUTER) {
+			if (IsLeftOuterJoin(join_type)) {
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
 				if (state->left_found_match) {

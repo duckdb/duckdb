@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundColumnRefExpression &colref) {
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundColumnRefExpression &colref, unique_ptr<Expression> *expr_ptr) {
 	auto stats = statistics_map.find(colref.binding);
 	if (stats == statistics_map.end()) {
 		return nullptr;

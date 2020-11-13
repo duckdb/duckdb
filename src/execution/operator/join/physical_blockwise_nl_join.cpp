@@ -60,7 +60,7 @@ void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorStat
 void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &context,
                                        unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
-	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+	if (IsRightOuterJoin(join_type)) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.count);
 	}
@@ -76,7 +76,7 @@ public:
 	                             Expression &condition)
 	    : PhysicalOperatorState(op, left), left_position(0), right_position(0), fill_in_rhs(false),
 	      checked_found_match(false), executor(condition) {
-		if (join_type == JoinType::LEFT || join_type == JoinType::OUTER) {
+		if (IsLeftOuterJoin(join_type)) {
 			lhs_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 		}
 	}
@@ -150,7 +150,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			// no more data on LHS, if FULL OUTER JOIN iterate over RHS
 			if (state->child_chunk.size() == 0) {
-				if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+				if (IsRightOuterJoin(join_type)) {
 					state->fill_in_rhs = true;
 					continue;
 				} else {

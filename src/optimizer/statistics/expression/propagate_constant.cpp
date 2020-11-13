@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-unique_ptr<BaseStatistics> StatisticsOperationsFromValue(const Value &input) {
+unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value &input) {
 	switch(input.type().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -23,8 +23,8 @@ unique_ptr<BaseStatistics> StatisticsOperationsFromValue(const Value &input) {
 	}
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConstantExpression &constant) {
-	return StatisticsOperationsFromValue(constant.value);
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConstantExpression &constant, unique_ptr<Expression> *expr_ptr) {
+	return StatisticsFromValue(constant.value);
 }
 
 }

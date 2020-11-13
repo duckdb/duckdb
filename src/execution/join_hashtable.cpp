@@ -48,7 +48,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
 	entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
-	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+	if (IsRightOuterJoin(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
 		entry_size += sizeof(bool);
@@ -353,7 +353,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
 	}
-	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		initialize_outer_join(added_count, key_locations);
 	}
@@ -749,7 +749,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
-		if (ht.join_type == JoinType::OUTER || ht.join_type == JoinType::RIGHT) {
+		if (IsRightOuterJoin(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {

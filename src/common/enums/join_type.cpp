@@ -28,4 +28,16 @@ string JoinTypeToString(JoinType type) {
 	}
 }
 
+bool IsOuterJoin(JoinType type) {
+	return type == JoinType::LEFT || type == JoinType::OUTER || type == JoinType::RIGHT;
+}
+
+bool IsLeftOuterJoin(JoinType type) {
+	return type == JoinType::LEFT || type == JoinType::OUTER;
+}
+
+bool IsRightOuterJoin(JoinType type) {
+	return type == JoinType::OUTER || type == JoinType::RIGHT;
+}
+
 } // namespace duckdb
