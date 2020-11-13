@@ -15,12 +15,6 @@
 #include <map>
 #include <sstream>
 
-#define DEFAULT_SAMPLE_CHUNK_SIZE 100
-#if STANDARD_VECTOR_SIZE < DEFAULT_SAMPLE_CHUNK_SIZE
-#undef DEFAULT_SAMPLE_CHUNK_SIZE
-#define DEFAULT_SAMPLE_CHUNK_SIZE STANDARD_VECTOR_SIZE
-#endif
-
 namespace duckdb {
 struct CopyInfo;
 struct StrpTimeFormat;
@@ -80,23 +74,25 @@ struct BufferedCSVReaderOptions {
 	string null_str;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
+	//! Total number of sampled lines with default chunk size
+	idx_t sample_size = STANDARD_VECTOR_SIZE * 10;
 	//! Size of sample chunk used for dialect and type detection
-	idx_t sample_chunk_size = DEFAULT_SAMPLE_CHUNK_SIZE;
+	idx_t sample_chunk_size = STANDARD_VECTOR_SIZE;
 	//! Number of sample chunks used for type detection
 	idx_t sample_chunks = 10;
-	//! If automatic type detection fails, recover and default to varchar types
-	bool fallback_to_all_varchar = false;
+	//! Consider all columns to be of type varchar
+	bool all_varchar = false;
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
 	std::string toString() const {
-		return "delimiter='" + delimiter +
-			   "', quote='" + quote +
-		       "', escape='" + escape +
-		       "', header=" + (header ? "TRUE" : "FALSE") +
-			   "', auto_detect=" + (auto_detect ? "TRUE" : "FALSE");
+		return "DELIMITER='" + delimiter + (has_delimiter ? "'" : "' (auto detected)") + ", QUOTE='" + quote +
+		       (has_quote ? "'" : "' (auto detected)") + ", ESCAPE='" + escape +
+		       (has_escape ? "'" : "' (auto detected)") + ", HEADER=" + std::to_string(header) +
+		       (has_header ? "" : " (auto detected)") + ", SAMPLE_SIZE=" + std::to_string(sample_size) +
+		       ", ALL_VARCHAR=" + std::to_string(all_varchar);
 	}
 };
 
@@ -144,8 +140,8 @@ public:
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
 
-	idx_t SAMPLE_CHUNK_SIZE;
-	idx_t MAX_SAMPLE_CHUNKS;
+	idx_t sample_chunk_size;
+	idx_t sample_chunks;
 
 	vector<idx_t> sniffed_column_counts;
 	uint8_t sample_chunk_idx = 0;
@@ -198,8 +194,6 @@ private:
 	void ConfigureSampling();
 	//! Prepare candidate sets for auto detection based on user input
 	void PrepareCandidateSets();
-	//! Generates error message with line info, column info and user guidance
-	ConversionException GenerateConversionException(Exception e_orig, idx_t col_idx);
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	void ParseSimpleCSV(DataChunk &insert_chunk);

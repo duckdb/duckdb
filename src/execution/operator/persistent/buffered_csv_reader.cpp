@@ -176,8 +176,8 @@ void BufferedCSVReader::ConfigureSampling() {
 	if (options.sample_chunks < 1) {
 		throw InvalidInputException("Number of chunks cannot be smaller than 1.");
 	}
-	SAMPLE_CHUNK_SIZE = options.sample_chunk_size;
-	MAX_SAMPLE_CHUNKS = options.sample_chunks;
+	sample_chunk_size = options.sample_chunk_size;
+	sample_chunks = options.sample_chunks;
 }
 
 unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
@@ -271,7 +271,7 @@ void BufferedCSVReader::JumpToBeginning(idx_t skip_rows, bool skip_header) {
 }
 
 bool BufferedCSVReader::JumpToNextSample() {
-	if (end_of_file_reached || sample_chunk_idx >= MAX_SAMPLE_CHUNKS) {
+	if (end_of_file_reached || sample_chunk_idx + 1 >= sample_chunks) {
 		return false;
 	}
 
@@ -280,14 +280,14 @@ bool BufferedCSVReader::JumpToNextSample() {
 	bytes_in_chunk -= remaining_bytes_in_buffer;
 
 	// update average bytes per line
-	double bytes_per_line = bytes_in_chunk / (double)SAMPLE_CHUNK_SIZE;
+	double bytes_per_line = bytes_in_chunk / (double)sample_chunk_size;
 	bytes_per_line_avg = ((bytes_per_line_avg * sample_chunk_idx) + bytes_per_line) / (sample_chunk_idx + 1);
 
 	// assess if it makes sense to jump, based on size of the first chunk relative to size of the entire file
 	if (sample_chunk_idx == 0) {
 		idx_t bytes_first_chunk = bytes_in_chunk;
 		double chunks_fit = (file_size / (double)bytes_first_chunk);
-		jumping_samples = chunks_fit >= (MAX_SAMPLE_CHUNKS - 1);
+		jumping_samples = chunks_fit >= sample_chunks;
 	}
 
 	// if we deal with any other sources than plaintext files, jumping_samples can be tricky. In that case
@@ -299,7 +299,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 	}
 
 	// if none of the previous conditions were met, we can jump
-	idx_t partition_size = (idx_t)round(file_size / (double)MAX_SAMPLE_CHUNKS);
+	idx_t partition_size = (idx_t)round(file_size / (double)sample_chunks);
 
 	// calculate offset to end of the current partition
 	int64_t offset = partition_size - bytes_in_chunk - remaining_bytes_in_buffer;
@@ -673,7 +673,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 	} else {
 		// jump through the rest of the file and continue to refine the sql type guess
-		while (JumpToNextSample()) {
+		while (JumpToNextSample() && !options.all_varchar) {
 			// if jump ends up a bad line, we just skip this chunk
 			try {
 				ParseCSV(ParserMode::SNIFFING_DATATYPES);
@@ -798,7 +798,13 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	// back to normal
 	JumpToBeginning(0, false);
 
-	return detected_types;
+	if (options.all_varchar) {
+		vector<LogicalType> varchar_types;
+		varchar_types.assign(options.num_cols, LogicalType::VARCHAR);
+		return varchar_types;
+	} else {
+		return detected_types;
+	}
 }
 
 void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
@@ -1233,49 +1239,10 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	return read_count > 0;
 }
 
-ConversionException BufferedCSVReader::GenerateConversionException(Exception e_orig, idx_t col_idx) {
-	string col_name = std::to_string(col_idx);
-	if (col_idx < col_names.size()) {
-		col_name = "\""+col_names[col_idx]+"\"";
-	}
-	return ConversionException(
-	    "%s between line %llu and %llu in column %s. Auto detected type: %s. Parser "
-	    "options: %s. Consider either increasing the sample size (using SAMPLE_CHUNKS=n, SAMPLE_CHUNK_SIZE=m) "
-	    "or activate automatic fallback to VARCHAR column types (FALLBACK_TO_ALL_VARCHAR=1).",
-	    e_orig.message_raw, linenr - parse_chunk.size(), linenr, col_name, sql_types[col_idx].ToString(),
-	    options.toString());
-}
-
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	cached_buffers.clear();
 
-	try {
-		ParseCSV(ParserMode::PARSING, insert_chunk);
-	} catch (const ConversionException &e) {
-		if (options.auto_detect) {
-			if (options.fallback_to_all_varchar) {
-				// set all sql_types to VARCHAR
-				sql_types.clear();
-				sql_types.assign(options.num_cols, LogicalType::VARCHAR);
-
-				// change insert chunk
-				insert_chunk.Destroy();
-				insert_chunk.Initialize(sql_types);
-
-				// reset parser
-				InitParseChunk(sql_types.size());
-				JumpToBeginning(options.skip_rows, options.header);
-
-				// try again
-				
-				ParseCSV(ParserMode::PARSING, insert_chunk);
-			} else {
-				throw;
-			}
-		} else {
-			throw;
-		}
-	}
+	ParseCSV(ParserMode::PARSING, insert_chunk);
 }
 
 void BufferedCSVReader::ParseCSV(ParserMode parser_mode, DataChunk &insert_chunk) {
@@ -1353,14 +1320,14 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	if (mode == ParserMode::SNIFFING_DIALECT) {
 		sniffed_column_counts.push_back(column);
 
-		if (sniffed_column_counts.size() == SAMPLE_CHUNK_SIZE) {
+		if (sniffed_column_counts.size() == sample_chunk_size) {
 			return true;
 		}
 	} else {
 		parse_chunk.SetCardinality(parse_chunk.size() + 1);
 	}
 
-	if (mode == ParserMode::SNIFFING_DATATYPES && parse_chunk.size() == SAMPLE_CHUNK_SIZE) {
+	if (mode == ParserMode::SNIFFING_DATATYPES && parse_chunk.size() == sample_chunk_size) {
 		return true;
 	}
 
@@ -1389,41 +1356,49 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					auto s = parse_data[i];
 					auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
 					if (utf_type == UnicodeType::INVALID) {
-						throw InvalidInputException(
-						    "Error in file \"%s\" between line %llu and %llu in column \"%s\": file is not valid UTF8. (%s)",
+						throw InvalidInputException("Error in file \"%s\" between line %llu and %llu in column \"%s\": "
+						                            "file is not valid UTF8. Parser options: %s",
 						                            options.file_path, linenr - parse_chunk.size(), linenr,
-						                            col_names[col_idx],
-						                            options.toString());
+						                            col_names[col_idx], options.toString());
 					}
 				}
 			}
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
-		} else if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
-			try {
-				// use the date format to cast the chunk
-				UnaryExecutor::Execute<string_t, date_t, true>(
-				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
-				    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
-			} catch (const Exception &e) {
-				throw GenerateConversionException(e, col_idx);
-			}
-		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-		           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
-			try {
-				// use the date format to cast the chunk
-				UnaryExecutor::Execute<string_t, timestamp_t, true>(
-				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
-					    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
-				    });
-			} catch (const Exception &e) {
-				throw GenerateConversionException(e, col_idx);
-			}
 		} else {
 			try {
-				// target type is not varchar: perform a cast
-				VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
+				if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
+					// use the date format to cast the chunk
+					UnaryExecutor::Execute<string_t, date_t, true>(
+					    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
+					    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
+				} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+				           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+					// use the date format to cast the chunk
+					UnaryExecutor::Execute<string_t, timestamp_t, true>(
+					    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
+						    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
+					    });
+				} else {
+					// target type is not varchar: perform a cast
+					VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
+				}
 			} catch (const Exception &e) {
-				throw GenerateConversionException(e, col_idx);
+				string col_name = std::to_string(col_idx);
+				if (col_idx < col_names.size()) {
+					col_name = "\"" + col_names[col_idx] + "\"";
+				}
+
+				if (options.auto_detect) {
+					throw InvalidInputException(
+					    "%s in column %s, between line %llu and %llu. Parser "
+					    "options: %s. Consider either increasing the sample size (using SAMPLE_SIZE=X) "
+					    "or skipping column conversion (ALL_VARCHAR=1)",
+					    e.what(), col_name, linenr - parse_chunk.size() + 1, linenr, options.toString());
+				} else {
+					throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
+					                            e.what(), linenr - parse_chunk.size(), linenr, col_name,
+					                            options.toString());
+				}
 			}
 		}
 	}

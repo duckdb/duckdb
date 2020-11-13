@@ -207,6 +207,19 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 		} else if (ParseBaseOption(options, loption, set)) {
 			// parsed option in base CSV options: continue
 			continue;
+		} else if (loption == "sample_size") {
+			options.sample_size = ParseInteger(set);
+			if (options.sample_size < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
+			}
+
+			if (options.sample_size <= STANDARD_VECTOR_SIZE) {
+				options.sample_chunk_size = options.sample_size;
+				options.sample_chunks = 1;
+			} else {
+				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
+				options.sample_chunks = options.sample_size / STANDARD_VECTOR_SIZE;
+			}
 		} else if (loption == "sample_chunk_size") {
 			options.sample_chunk_size = ParseInteger(set);
 			if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {

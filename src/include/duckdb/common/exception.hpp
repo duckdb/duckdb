@@ -81,7 +81,6 @@ public:
 	Exception(ExceptionType exception_type, string message);
 
 	ExceptionType type;
-	string message_raw;
 
 public:
 	const char *what() const noexcept override;
