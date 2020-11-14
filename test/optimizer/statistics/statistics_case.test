@@ -17,7 +17,6 @@ EXPLAIN SELECT * FROM integers WHERE (CASE WHEN i=2 THEN i+1 ELSE i+2 END) IS NU
 ----
 logical_opt	<REGEX>:.*EMPTY_RESULT.*
 
-
 # we can't here, because one of the children of the case has null
 query II
 EXPLAIN SELECT * FROM integers WHERE (CASE WHEN i=2 THEN i+1 ELSE NULL END) IS NULL;

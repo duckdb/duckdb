@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -156,12 +157,12 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 		right.type == ExpressionType::BOUND_COLUMN_REF) {
 		constant = (BoundConstantExpression*) &left;
 		columnref = (BoundColumnRefExpression*) &right;
+		comparison_type = FlipComparisionExpression(comparison_type);
 	} else if (
 		left.type == ExpressionType::BOUND_COLUMN_REF &&
 		right.type == ExpressionType::VALUE_CONSTANT) {
 		columnref = (BoundColumnRefExpression*) &left;
 		constant = (BoundConstantExpression*) &right;
-		comparison_type = FlipComparisionExpression(comparison_type);
 	} else if (
 		left.type == ExpressionType::BOUND_COLUMN_REF &&
 		right.type == ExpressionType::BOUND_COLUMN_REF) {
@@ -191,9 +192,20 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
 	// in filters, we check for constant comparisons with bound columns
 	// if we find a comparison in the form of e.g. "i=3", we can update our statistics for that column
-	if (condition.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+	switch(condition.GetExpressionClass()) {
+	case ExpressionClass::BOUND_BETWEEN: {
+		auto &between = (BoundBetweenExpression &) condition;
+		UpdateFilterStatistics(*between.input, *between.lower, between.LowerComparisonType());
+		UpdateFilterStatistics(*between.input, *between.upper, between.UpperComparisonType());
+		break;
+	}
+	case ExpressionClass::BOUND_COMPARISON: {
 		auto &comparison = (BoundComparisonExpression &) condition;
 		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.type);
+		break;
+	}
+	default:
+		break;
 	}
 }
 
@@ -211,14 +223,20 @@ void StatisticsPropagator::PropagateStatistics(LogicalFilter &filter, unique_ptr
 			// erase this condition
 			filter.expressions.erase(filter.expressions.begin() + i);
 			i--;
+			if (filter.expressions.size() == 0) {
+				// all conditions have been erased: remove the entire filter
+				*node_ptr = move(filter.children[0]);
+				return;
+			}
 		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
 			ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(*node_ptr);
 			return;
+		} else {
+			// cannot prune this filter: propagate statistics from the filter
+			UpdateFilterStatistics(*condition);
 		}
-		// cannot prune this filter: propagate statistics from the filter
-		UpdateFilterStatistics(*condition);
 	}
 }
 

@@ -43,9 +43,10 @@ void StatisticsPropagator::PropagateStatistics(LogicalGet &get, unique_ptr<Logic
 			ReplaceWithEmptyResult(*node_ptr);
 			return;
 		default:
+			// general case: filter can be true or false, update this columns' statistics
+			UpdateFilterStatistics(*entry->second, tableFilter.comparison_type, tableFilter.constant);
 			break;
 		}
-		UpdateFilterStatistics(*entry->second, tableFilter.comparison_type, tableFilter.constant);
 	}
 }
 

@@ -90,7 +90,6 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundComparisonExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	auto left_stats  = PropagateExpression(expr.left);
 	auto right_stats = PropagateExpression(expr.right);
-
 	if (!left_stats || !right_stats) {
 		return nullptr;
 	}
@@ -103,12 +102,20 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCompar
 	case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 		*expr_ptr = make_unique<BoundConstantExpression>(Value::BOOLEAN(false));
 		return PropagateExpression(*expr_ptr);
-	case FilterPropagateResult::FILTER_TRUE_OR_NULL:
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(move(expr.left), move(expr.right), Value::BOOLEAN(true));
+	case FilterPropagateResult::FILTER_TRUE_OR_NULL: {
+		vector<unique_ptr<Expression>> children;
+		children.push_back(move(expr.left));
+		children.push_back(move(expr.right));
+		*expr_ptr = ExpressionRewriter::ConstantOrNull(move(children), Value::BOOLEAN(true));
 		return nullptr;
-	case FilterPropagateResult::FILTER_FALSE_OR_NULL:
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(move(expr.left), move(expr.right), Value::BOOLEAN(false));
+	}
+	case FilterPropagateResult::FILTER_FALSE_OR_NULL: {
+		vector<unique_ptr<Expression>> children;
+		children.push_back(move(expr.left));
+		children.push_back(move(expr.right));
+		*expr_ptr = ExpressionRewriter::ConstantOrNull(move(children), Value::BOOLEAN(false));
 		return nullptr;
+	}
 	default:
 		// FIXME: we can propagate nulls here, i.e. this expression will have nulls only if left and right has nulls
 		return nullptr;
