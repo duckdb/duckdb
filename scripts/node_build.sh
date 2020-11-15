@@ -9,12 +9,13 @@ make clean
 
 git describe --tags --long  
 
-export LASTTAG=`git tag -l --sort tag | tail -n 1`
-export LASTVER=`echo $LASTTAG | tr -d "v"`
+export LASTVER=`git describe --tags --abbrev=0 | tr -d "v"`
+export DIST=`git describe --tags --long | cut -f2 -d-`
+
+# set version to lastver
 npm version $LASTVER
 # TODO when we're on the tag build, dont do this
-export MASTERDIST=`git log $LASTTAG..HEAD --pretty=oneline | wc -l | tr -d " "`
-npm version prerelease --preid=$MASTERDIST
+npm version prerelease --preid="dev"$DIST
 npm publish --tag next --dry-run
 
 
