@@ -40,8 +40,10 @@ private:
 	void PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> *node_ptr);
 	void PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> *node_ptr);
 	void PropagateStatistics(LogicalProjection &op, unique_ptr<LogicalOperator> *node_ptr);
-	void PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> *node_ptr);
-	void PropagateStatistics(LogicalAnyJoin &join, unique_ptr<LogicalOperator> *node_ptr);
+	void PropagateStatistics(LogicalComparisonJoin &op, unique_ptr<LogicalOperator> *node_ptr);
+	void PropagateStatistics(LogicalAnyJoin &op, unique_ptr<LogicalOperator> *node_ptr);
+	void PropagateStatistics(LogicalSetOperation &op, unique_ptr<LogicalOperator> *node_ptr);
+	void PropagateStatistics(LogicalAggregate &op, unique_ptr<LogicalOperator> *node_ptr);
 
 	void PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr);
 

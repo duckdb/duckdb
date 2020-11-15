@@ -69,6 +69,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 		break;
 	}
 }
+
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats, ExpressionType comparison_type) {
 	// any comparison filter removes all null values
 	lstats.has_null = false;

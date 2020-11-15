@@ -35,6 +35,11 @@ void StatisticsPropagator::PropagateStatistics(LogicalOperator &node, unique_ptr
 	case LogicalOperatorType::LOGICAL_JOIN:
 		PropagateStatistics((LogicalJoin &) node, node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+		PropagateStatistics((LogicalSetOperation &) node, node_ptr);
+		break;
 	default:
 		PropagateChildren(node, node_ptr);
 		break;
