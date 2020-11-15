@@ -16,6 +16,18 @@ INTEGER	VARCHAR	DATE	VARCHAR
 statement ok
 DROP TABLE test
 
+# CSV file with very sparse column
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE=-1);
+
+query IIII
+SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1
+----
+INTEGER	DOUBLE	DATE	VARCHAR
+
+statement ok
+DROP TABLE test
+
 # CSV file with very sparse column and sample size 500
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_CHUNK_SIZE = 500);
@@ -73,4 +85,18 @@ CREATE TABLE test (TestInteger integer, TestDouble double, TestDate varchar, Tes
 
 # CSV file with very sparse column, automatically aligns column types, small sample size
 statement ok
-COPY test FROM 'test/sql/copy/csv/data/auto/issue_811.csv' (SAMPLE_CHUNK_SIZE 2, AUTO_DETECT TRUE);
+COPY test FROM 'test/sql/copy/csv/data/auto/issue_811.csv' (SAMPLE_CHUNK_SIZE 4, AUTO_DETECT TRUE);
+
+statement ok
+drop table test;
+
+# CSV file with very sparse column using copy into
+statement ok
+CREATE TABLE test (TestInteger integer, TestDouble double, TestDate varchar, TestText varchar);
+
+# CSV file with very sparse column, automatically aligns column types, small sample size
+statement ok
+COPY test FROM 'test/sql/copy/csv/data/auto/issue_811.csv' (SAMPLE_SIZE -1, AUTO_DETECT TRUE);
+
+statement ok
+drop table test;

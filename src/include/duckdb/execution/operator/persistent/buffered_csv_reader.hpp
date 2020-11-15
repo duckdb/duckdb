@@ -11,9 +11,11 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 #include <map>
 #include <sstream>
+#include <queue>
 
 namespace duckdb {
 struct CopyInfo;
@@ -49,7 +51,7 @@ struct BufferedCSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
 	//! Whether or not to automatically detect dialect and datatypes
-	bool auto_detect = true;
+	bool auto_detect = false;
 	//! Whether or not a delimiter was defined by the user
 	bool has_delimiter = false;
 	//! Delimiter to separate columns within each line
@@ -74,12 +76,12 @@ struct BufferedCSVReaderOptions {
 	string null_str;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
-	//! Total number of sampled lines with default chunk size
-	idx_t sample_size = STANDARD_VECTOR_SIZE * 10;
 	//! Size of sample chunk used for dialect and type detection
 	idx_t sample_chunk_size = STANDARD_VECTOR_SIZE;
 	//! Number of sample chunks used for type detection
 	idx_t sample_chunks = 10;
+	//! Number of samples to buffer
+	idx_t buffer_size = STANDARD_VECTOR_SIZE * 10;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
 	//! The date format to use (if any is specified)
@@ -88,17 +90,19 @@ struct BufferedCSVReaderOptions {
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
 	std::string toString() const {
-		return "DELIMITER='" + delimiter + (has_delimiter ? "'" : "' (auto detected)") + ", QUOTE='" + quote +
-		       (has_quote ? "'" : "' (auto detected)") + ", ESCAPE='" + escape +
-		       (has_escape ? "'" : "' (auto detected)") + ", HEADER=" + std::to_string(header) +
-		       (has_header ? "" : " (auto detected)") + ", SAMPLE_SIZE=" + std::to_string(sample_size) +
+		return "DELIMITER='" + delimiter + (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+		       ", QUOTE='" + quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+		       ", ESCAPE='" + escape + (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+		       ", HEADER=" + std::to_string(header) +
+		       (has_header ? "" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+		       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
 		       ", ALL_VARCHAR=" + std::to_string(all_varchar);
 	}
 };
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
-enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2 };
+enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
 
 static DataChunk DUMMY_CHUNK;
 
@@ -140,11 +144,8 @@ public:
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
 
-	idx_t sample_chunk_size;
-	idx_t sample_chunks;
-
 	vector<idx_t> sniffed_column_counts;
-	uint8_t sample_chunk_idx = 0;
+	int64_t sample_chunk_idx = -1;
 	bool jumping_samples = false;
 	bool end_of_file_reached = false;
 
@@ -156,6 +157,8 @@ public:
 	TextSearchShiftArray delimiter_search, escape_search, quote_search;
 
 	DataChunk parse_chunk;
+
+	std::queue<unique_ptr<DataChunk>> cached_chunks;
 
 public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
@@ -178,8 +181,10 @@ private:
 	bool TryCastValue(Value value, LogicalType sql_type);
 	//! Try to cast a vector of values to the specified sql type
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, LogicalType sql_type);
-	//! Skips header rows and skip_rows in the input stream
-	void SkipHeader(idx_t skip_rows, bool skip_header);
+	//! Skips skip_rows, reads header row from input stream
+	void SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header);
+	//! Extracts column names from header row
+	void GenerateColumnNames(DataChunk &header_row);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
 	void JumpToBeginning(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
@@ -188,10 +193,6 @@ private:
 	void ResetBuffer();
 	//! Resets the steam
 	void ResetStream();
-	//! Resets the parse_chunk and related internal states, keep_types keeps the parse_chunk initialized
-	void ResetParseChunk();
-	//! Sets size of sample chunk and number of chunks for dialect and type detection
-	void ConfigureSampling();
 	//! Prepare candidate sets for auto detection based on user input
 	void PrepareCandidateSets();
 

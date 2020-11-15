@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
+
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -22,11 +23,6 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 	}
 
-	options.auto_detect = false;
-	options.header = false;
-	options.delimiter = ",";
-	options.quote = "\"";
-
 	for (auto &kv : named_parameters) {
 		if (kv.first == "auto_detect") {
 			options.auto_detect = kv.second.value_.boolean;
@@ -45,17 +41,19 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 		} else if (kv.first == "nullstr") {
 			options.null_str = kv.second.str_value;
 		} else if (kv.first == "sample_size") {
-			options.sample_size = kv.second.GetValue<int64_t>();
-			if (options.sample_size < 1) {
+			int64_t sample_size = kv.second.GetValue<int64_t>();
+			if (sample_size < 1 && sample_size != -1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
-
-			if (options.sample_size <= STANDARD_VECTOR_SIZE) {
-				options.sample_chunk_size = options.sample_size;
+			if (sample_size == -1) {
+				options.sample_chunks = ULLONG_MAX;
+				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
+			} else if (sample_size <= STANDARD_VECTOR_SIZE) {
+				options.sample_chunk_size = sample_size;
 				options.sample_chunks = 1;
 			} else {
 				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
-				options.sample_chunks = options.sample_size / STANDARD_VECTOR_SIZE;
+				options.sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
 			}
 		} else if (kv.first == "sample_chunk_size") {
 			options.sample_chunk_size = kv.second.GetValue<int64_t>();

@@ -59,6 +59,18 @@ static idx_t ParseInteger(vector<Value> &set) {
 	return set[0].GetValue<int64_t>();
 }
 
+static int64_t ParseIntegerUnsigned(vector<Value> &set) {
+	if (set.size() != 1) {
+		// no option specified or multiple options specified
+		throw BinderException("Expected a single argument as a integer value");
+	}
+	if (set[0].type().id() == LogicalTypeId::FLOAT || set[0].type().id() == LogicalTypeId::DOUBLE ||
+	    set[0].type().id() == LogicalTypeId::DECIMAL) {
+		throw BinderException("Expected a integer argument!");
+	}
+	return set[0].GetValue<int64_t>();
+}
+
 //===--------------------------------------------------------------------===//
 // Bind
 //===--------------------------------------------------------------------===//
@@ -208,17 +220,19 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 			// parsed option in base CSV options: continue
 			continue;
 		} else if (loption == "sample_size") {
-			options.sample_size = ParseInteger(set);
-			if (options.sample_size < 1) {
+			int64_t sample_size = ParseIntegerUnsigned(set);
+			if (sample_size < 1 && sample_size != -1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
-
-			if (options.sample_size <= STANDARD_VECTOR_SIZE) {
-				options.sample_chunk_size = options.sample_size;
+			if (sample_size == -1) {
+				options.sample_chunks = ULLONG_MAX;
+				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
+			} else if (sample_size <= STANDARD_VECTOR_SIZE) {
+				options.sample_chunk_size = sample_size;
 				options.sample_chunks = 1;
 			} else {
 				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
-				options.sample_chunks = options.sample_size / STANDARD_VECTOR_SIZE;
+				options.sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
 			}
 		} else if (loption == "sample_chunk_size") {
 			options.sample_chunk_size = ParseInteger(set);
