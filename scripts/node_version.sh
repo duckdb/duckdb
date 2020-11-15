@@ -20,5 +20,5 @@ fi
 
 # upload to npm, maybe
 if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$1" = "upload" ]] ; then
-	npm publish --dry-run $TAG
+	npm publish $TAG
 fi
