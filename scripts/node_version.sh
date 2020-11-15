@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 cd tools/nodejs
+./configure
 
 export TAG=''
 # for master do prereleases
@@ -20,5 +21,6 @@ fi
 
 # upload to npm, maybe
 if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$1" = "upload" ]] ; then
-	npm publish $TAG
+	npm config set //registry.npmjs.org/:_authToken $NODE_AUTH_TOKEN
+	npm publish --access public $TAG
 fi
