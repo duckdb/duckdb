@@ -10,6 +10,7 @@
 
 #include "duckdb/function/function.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -25,6 +26,8 @@ typedef void (*aggregate_update_t)(Vector inputs[], idx_t input_count, Vector &s
 typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count);
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, Vector &result, idx_t count);
+//! The type used for propagating statistics in aggregate functions (optional)
+typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
                                                               vector<unique_ptr<Expression>> &arguments);
@@ -39,18 +42,18 @@ public:
 	AggregateFunction(string name, vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
+	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
 	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), bind(bind),
-	      destructor(destructor) {
+	      destructor(destructor), statistics(statistics) {
 	}
 
 	AggregateFunction(vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
+	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        simple_update, bind, destructor) {
+	                        simple_update, bind, destructor, statistics) {
 	}
 
 	//! The hashed aggregate state sizing function
@@ -70,6 +73,9 @@ public:
 	bind_aggregate_function_t bind;
 	//! The destructor method (may be null)
 	aggregate_destructor_t destructor;
+
+	//! The statistics propagation function (may be null)
+	aggregate_statistics_t statistics;
 
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
