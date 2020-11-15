@@ -719,17 +719,23 @@ jobs:
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
 
-# TODO use ccache here?
 
   linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-latest
     #needs: linux-debug
 
+    env:
+      CC: ccache gcc
+      CXX: ccache g++
+
     steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get install -y ccache
 
     - name: Setup
       run: ./scripts/node_version.sh upload
