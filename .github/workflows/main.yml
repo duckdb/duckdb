@@ -731,6 +731,9 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Setup
+      run: ./scripts/node_version.sh upload
+
     - name: Node 10 
       run: ./scripts/node_build.sh 10
 
@@ -753,6 +756,9 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
+
+    - name: Setup
+      run: ./scripts/node_version.sh
 
     - name: Node 10 
       run: ./scripts/node_build.sh 10
