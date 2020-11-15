@@ -21,6 +21,9 @@ void StatisticsPropagator::PropagateChildren(LogicalOperator &node, unique_ptr<L
 
 void StatisticsPropagator::PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr) {
 	switch(node.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		PropagateStatistics((LogicalAggregate &) node, node_ptr);
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		PropagateStatistics((LogicalFilter &) node, node_ptr);
 		break;
