@@ -15,7 +15,7 @@
   "binary": {
     "module_name": "duckdb",
     "module_path": "./lib/binding/",
-    "host": "https://duckdb-node.s3-us-east-1.amazonaws.com"
+    "host": "https://duckdb-node.s3.amazonaws.com"
   },
   "scripts": {
     "install": "node-pre-gyp install --fallback-to-build",

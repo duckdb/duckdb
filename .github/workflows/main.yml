@@ -9,6 +9,7 @@ env:
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
   node_pre_gyp_accessKeyId: AKIAVBLKPL2ZW2T7TYFQ
   node_pre_gyp_secretAccessKey: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
 
@@ -24,6 +25,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build
@@ -42,6 +45,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -79,6 +84,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -121,6 +128,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -161,6 +170,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Build
       run: make debug
@@ -184,6 +195,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -233,6 +246,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -268,6 +283,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -297,6 +314,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build
@@ -321,6 +340,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build valgrind
@@ -344,6 +365,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build
@@ -391,6 +414,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -411,6 +436,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Test
       run: make sqlite
@@ -430,6 +457,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build
@@ -451,6 +480,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: |
@@ -480,6 +511,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: |
@@ -509,6 +542,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -548,6 +583,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -580,6 +617,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -618,6 +657,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -648,6 +689,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -677,22 +720,32 @@ jobs:
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
 
+
   linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-latest
     needs: linux-debug
 
+
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup
+      run: ./scripts/node_version.sh upload
 
     - name: Node 10 
       run: ./scripts/node_build.sh 10
 
     - name: Node 12 
-      run: ./scripts/node_build.sh 10
+      run: ./scripts/node_build.sh 12
 
     - name: Node 14 
       run: ./scripts/node_build.sh 14
+
+    - name: Node 15 
+      run: ./scripts/node_build.sh 15
 
 
   osx-nodejs:
@@ -702,13 +755,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup
+      run: ./scripts/node_version.sh
 
     - name: Node 10 
       run: ./scripts/node_build.sh 10
 
     - name: Node 12 
-      run: ./scripts/node_build.sh 10
+      run: ./scripts/node_build.sh 12
 
     - name: Node 14 
       run: ./scripts/node_build.sh 14
+
+    - name: Node 15 
+      run: ./scripts/node_build.sh 15
 
