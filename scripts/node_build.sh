@@ -7,7 +7,7 @@ make clean
 
 # figure out the version number from the tag
 
-git tag -l --sort tag
+git describe --tags --long  
 
 export LASTTAG=`git tag -l --sort tag | tail -n 1`
 export LASTVER=`echo $LASTTAG | tr -d "v"`
