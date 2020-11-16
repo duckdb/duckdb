@@ -252,33 +252,28 @@ void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = 
 	ResetBuffer();
 	ResetStream();
 	SkipRowsAndReadHeader(skip_rows, skip_header);
-	sample_chunk_idx = -1;
+	sample_chunk_idx = 0;
 }
 
 bool BufferedCSVReader::JumpToNextSample() {
-	if (sample_chunk_idx == -1) {
-		JumpToBeginning(options.skip_rows, options.header);
-		sample_chunk_idx++;
-		return true;
-	}
-
-	if (end_of_file_reached || sample_chunk_idx + 1 >= options.sample_chunks) {
-		return false;
-	}
-
-	// adjust the value of bytes_in_chunk, based on current state of the buffer
+	// get bytes contained in the previously read chunk
 	idx_t remaining_bytes_in_buffer = buffer_size - start;
 	bytes_in_chunk -= remaining_bytes_in_buffer;
-
-	// update average bytes per line
-	double bytes_per_line = bytes_in_chunk / (double)options.sample_chunk_size;
-	bytes_per_line_avg = ((bytes_per_line_avg * sample_chunk_idx) + bytes_per_line) / (sample_chunk_idx + 1);
 
 	// assess if it makes sense to jump, based on size of the first chunk relative to size of the entire file
 	if (sample_chunk_idx == 0) {
 		idx_t bytes_first_chunk = bytes_in_chunk;
 		double chunks_fit = (file_size / (double)bytes_first_chunk);
 		jumping_samples = chunks_fit >= options.sample_chunks;
+
+		// jump back to the beginning
+		JumpToBeginning(options.skip_rows, options.header);
+		sample_chunk_idx++;
+		return true;
+	}
+
+	if (end_of_file_reached || sample_chunk_idx >= options.sample_chunks) {
+		return false;
 	}
 
 	// if we deal with any other sources than plaintext files, jumping_samples can be tricky. In that case
@@ -287,6 +282,10 @@ bool BufferedCSVReader::JumpToNextSample() {
 		sample_chunk_idx++;
 		return true;
 	}
+
+	// update average bytes per line
+	double bytes_per_line = bytes_in_chunk / (double)options.sample_chunk_size;
+	bytes_per_line_avg = ((bytes_per_line_avg * (sample_chunk_idx)) + bytes_per_line) / (sample_chunk_idx + 1);
 
 	// if none of the previous conditions were met, we can jump
 	idx_t partition_size = (idx_t)round(file_size / (double)options.sample_chunks);
@@ -786,7 +785,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			}
 
 			if (!jumping_samples) {
-				if ((sample_chunk_idx + 1) * options.sample_chunk_size <= options.buffer_size) {
+				if ((sample_chunk_idx) * options.sample_chunk_size <= options.buffer_size) {
 					// cache parse chunk
 					// create a new chunk and fill it with the remainder
 					auto chunk = make_unique<DataChunk>();
@@ -1244,17 +1243,15 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 }
 
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
-	if (!options.auto_detect || jumping_samples) {
+	// if no auto-detect or auto-detect with jumping samples, we have nothing cached and start from the beginning
+	if (cached_chunks.empty()) {
 		cached_buffers.clear();
 	} else {
-		// flush buffered chunks, as long as they are available
-		if (!cached_chunks.empty()) {
-			auto &chunk = cached_chunks.front();
-			parse_chunk.Reference(*chunk);
-			cached_chunks.pop();
-			Flush(insert_chunk);
-			return;
-		}
+		auto &chunk = cached_chunks.front();
+		parse_chunk.Reference(*chunk);
+		cached_chunks.pop();
+		Flush(insert_chunk);
+		return;
 	}
 
 	ParseCSV(ParserMode::PARSING, insert_chunk);
