@@ -24,6 +24,16 @@ CREATE TABLE integers (a INT)
 statement ok
 INSERT INTO integers VALUES (1)
 
+query T
+SELECT subquery(3) + a FROM integers
+----
+4
+
+query T
+SELECT subquery(a) FROM integers
+----
+1
+
 statement ok
 CREATE MACRO a1(a) AS (SELECT a + a FROM integers)
 
