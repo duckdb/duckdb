@@ -20,9 +20,10 @@ class MacroFunctionCatalogEntry;
 class MacroFunction {
 public:
 	MacroFunction(unique_ptr<ParsedExpression> expression);
-	static unique_ptr<Expression> BindMacroFunction(ClientContext &context, Binder &binder, ExpressionBinder &expr_binder,
-	                                                MacroFunctionCatalogEntry &function,
-	                                                vector<unique_ptr<Expression>> arguments, string &error);
+
+	//! Check whether the supplied arguments are valid
+	static string CheckArguments(ClientContext &context, QueryErrorContext &error_context,
+	                             MacroFunctionCatalogEntry &macro_func, FunctionExpression &function_expr);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
 	//! The macro parameters

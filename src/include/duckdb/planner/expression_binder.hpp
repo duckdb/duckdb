@@ -20,10 +20,12 @@ class Binder;
 class ClientContext;
 class SelectNode;
 
+class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
 class MacroFunctionCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
+class MacroBinding;
 
 struct BindResult {
 	BindResult(string error) : error(error) {
@@ -87,10 +89,14 @@ protected:
 protected:
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
-	virtual BindResult BindFunction(FunctionExpression &expr, CatalogEntry *function, idx_t depth);
+	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
-    virtual BindResult BindMacro(FunctionExpression &expr, MacroFunctionCatalogEntry &function, vector<unique_ptr<Expression>> children);
+	virtual BindResult BindMacro(FunctionExpression &expr);
+
+	unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr, string &error);
+	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,
+	                                                          MacroBinding &macro_binding, string &error);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

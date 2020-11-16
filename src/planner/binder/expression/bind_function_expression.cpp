@@ -3,11 +3,13 @@
 #include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -27,16 +29,18 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	                             false, error_context);
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
+		// scalar function
+		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	case CatalogType::MACRO_ENTRY:
-		// scalar (macro) function
-		return BindFunction(function, func, depth);
+		// macro function
+		return BindMacro(function);
 	default:
 		// aggregate function
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
 	}
 }
 
-BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogEntry *func, idx_t depth) {
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, idx_t depth) {
 	// bind the children of the function expression
 	string error;
 	for (idx_t i = 0; i < function.children.size(); i++) {
@@ -69,14 +73,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 		string type = children[0]->return_type.ToString();
 		return BindResult(make_unique<BoundConstantExpression>(Value(type)));
 	}
-	unique_ptr<Expression> result;
-	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-		result = ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*func, move(children), error,
-		                                            function.is_operator);
-	} else {
-		result = MacroFunction::BindMacroFunction(context, this->binder, *this, (MacroFunctionCatalogEntry &)*func,
-		                                          move(children), error);
-	}
+	unique_ptr<Expression> result =
+	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}
@@ -92,41 +90,80 @@ BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth) {
 	return BindResult(binder.FormatError(expr, UnsupportedUnnestMessage()));
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &expr, MacroFunctionCatalogEntry &function, vector<unique_ptr<Expression>> arguments) {
-	string error;
+unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr, string &error) {
+	auto macro_binding = make_unique<MacroBinding>(vector<LogicalType>(), vector<string>(), string());
+	return UnfoldMacroRecursive(move(expr), *macro_binding, error);
+}
 
-    // verify correct number of arguments
-    auto &macro_func = function.function;
-    auto &parameters = macro_func->parameters;
-    if (parameters.size() != arguments.size()) {
-        error = StringUtil::Format(
-            "Macro function '%s(%s)' requires ", function.name,
-            StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
-              return ((ColumnRefExpression &)*p).column_name;
-            }));
-        error += parameters.size() == 1 ? "a single argument" : StringUtil::Format("%i arguments", parameters.size());
-        error += ", but ";
-        error +=
-            arguments.size() == 1 ? "a single argument was" : StringUtil::Format("%i arguments were", arguments.size());
-        error += " provided.";
-        throw BinderException(binder.FormatError(expr, error));
-    }
+unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,
+                                                                    MacroBinding &macro_binding, string &error) {
+	if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		// if expr is a parameter, replace it with its argument
+		auto &colref = (ColumnRefExpression &)*expr;
+		if (colref.table_name == macro_binding.alias && macro_binding.HasMatchingBinding(colref.column_name)) {
+			expr = macro_binding.ParamToArg(colref);
+			return UnfoldMacroRecursive(move(expr), macro_binding, error);
+		}
+		return expr;
+	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		// if expr is a macro function, unfold it
+		auto &function_expr = (FunctionExpression &)*expr;
+		QueryErrorContext error_context(binder.root_statement, function_expr.query_location);
+		auto &catalog = Catalog::GetCatalog(context);
+		auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function_expr.schema,
+		                             function_expr.function_name, false, error_context);
+		if (func->type == CatalogType::MACRO_ENTRY) {
+			auto &macro_func = (MacroFunctionCatalogEntry &)*func;
+			error = MacroFunction::CheckArguments(context, error_context, macro_func, function_expr);
+			if (!error.empty())
+				return nullptr;
 
-    // check for arguments with side-effects TODO: to support this, a projection must be pushed
-    for (idx_t i = 0; i < arguments.size(); i++) {
-        if (arguments[i]->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-            auto &bound_func = (BoundFunctionExpression &)*arguments[i];
-            if (bound_func.function.has_side_effects) {
-                error = StringUtil::Format(
-                    "Arguments with side-effects are not supported ('%s' was supplied). As a "
-                    "workaround, try creating a CTE that evaluates the argument with side-effects.",
-                    bound_func.function.name);
-                throw BinderException(binder.FormatError(expr, error));
-            }
+			// create macro_binding to bind parameters to arguments
+			vector<LogicalType> types;
+			vector<string> names;
+			for (idx_t i = 0; i < macro_func.function->parameters.size(); i++) {
+				types.push_back(LogicalType::SQLNULL);
+				auto &param = (ColumnRefExpression &)*macro_func.function->parameters[i];
+				names.push_back(param.column_name);
+			}
+			auto new_macro_binding = make_unique<MacroBinding>(types, names, func->name);
+			new_macro_binding->arguments = move(function_expr.children);
+
+            expr = macro_func.function->expression->Copy();
+			return UnfoldMacroRecursive(move(expr), *new_macro_binding, error);
+		}
+	} else if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		// replacing parameters within a subquery is slightly different
+		auto &sqe = (SubqueryExpression &)*expr;
+		if (sqe.subquery->node->type != QueryNodeType::SELECT_NODE) {
+			// TODO: throw an error
+		}
+        auto &sel_node = (SelectNode &) *sqe.subquery->node;
+		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
+			sel_node.select_list[i] = UnfoldMacroRecursive(move(sel_node.select_list[i]), macro_binding, error);
+		}
+        for (idx_t i = 0; i < sel_node.groups.size(); i++) {
+            sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding, error);
         }
-    }
+		if (sel_node.where_clause != nullptr)
+            sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding, error);
+		if (sel_node.having != nullptr)
+            sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding, error);
+	}
+	// unfold child expressions
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](ParsedExpression &child) { UnfoldMacroRecursive(move(expr), macro_binding, error); });
+	if (!error.empty())
+		return nullptr;
+	return expr;
+}
 
-	// TODO: unfold macro recursive
+BindResult ExpressionBinder::BindMacro(FunctionExpression &expr) {
+	string error;
+	auto unfolded_expr = UnfoldMacroRecursive(expr.Copy(), error);
+	if (!error.empty())
+		throw BinderException(binder.FormatError(expr, error));
+	return BindExpression(*unfolded_expr, 0, true);
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {
