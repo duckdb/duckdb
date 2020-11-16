@@ -183,8 +183,6 @@ private:
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, LogicalType sql_type);
 	//! Skips skip_rows, reads header row from input stream
 	void SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header);
-	//! Extracts column names from header row
-	void GenerateColumnNames(DataChunk &header_row);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
 	void JumpToBeginning(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states

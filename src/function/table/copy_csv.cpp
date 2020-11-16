@@ -7,6 +7,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include <limits>
 
 using namespace std;
 
@@ -225,7 +226,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
 			if (sample_size == -1) {
-				options.sample_chunks = ULLONG_MAX;
+				options.sample_chunks = std::numeric_limits<long>::max();
 				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
 			} else if (sample_size <= STANDARD_VECTOR_SIZE) {
 				options.sample_chunk_size = sample_size;

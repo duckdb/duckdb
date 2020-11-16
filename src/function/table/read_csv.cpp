@@ -5,6 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
+#include <limits>
+
 using namespace std;
 
 namespace duckdb {
@@ -46,7 +48,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
 			if (sample_size == -1) {
-				options.sample_chunks = ULLONG_MAX;
+				options.sample_chunks = std::numeric_limits<long>::max();
 				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
 			} else if (sample_size <= STANDARD_VECTOR_SIZE) {
 				options.sample_chunk_size = sample_size;

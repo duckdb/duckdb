@@ -208,39 +208,6 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 	return string(prefix + leading_zeros + value);
 }
 
-void BufferedCSVReader::GenerateColumnNames(DataChunk &header_row) {
-	col_names.clear();
-
-	if (header_row.size() > 0) {
-		vector<string> t_col_names;
-		for (idx_t col = 0; col < options.num_cols; col++) {
-			const auto &val = header_row.GetValue(col, 0);
-			string col_name = val.ToString();
-			if (col_name.empty() || val.is_null) {
-				col_name = GenerateColumnName(options.num_cols, col);
-			}
-			// We'll keep column names as they appear in the file, no canonicalization
-			// col_name = StringUtil::Lower(col_name);
-			t_col_names.push_back(col_name);
-		}
-		for (idx_t col = 0; col < t_col_names.size(); col++) {
-			string col_name = t_col_names[col];
-			idx_t exists_n_times = std::count(t_col_names.begin(), t_col_names.end(), col_name);
-			idx_t exists_n_times_before = std::count(t_col_names.begin(), t_col_names.begin() + col, col_name);
-			if (exists_n_times > 1) {
-				col_name = GenerateColumnName(exists_n_times, exists_n_times_before, col_name + "_");
-			}
-			col_names.push_back(col_name);
-		}
-	} else {
-		idx_t total_columns = parse_chunk.column_count();
-		for (idx_t col = 0; col < total_columns; col++) {
-			string column_name = GenerateColumnName(total_columns, col);
-			col_names.push_back(column_name);
-		}
-	}
-}
-
 void BufferedCSVReader::ResetBuffer() {
 	buffer.reset();
 	buffer_size = 0;
@@ -294,7 +261,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 		return true;
 	}
 
-	if (end_of_file_reached || sample_chunk_idx + 1 >= options.sample_chunks) {
+	if (end_of_file_reached || sample_chunk_idx + 1 >= static_cast<int64_t>(options.sample_chunks)) {
 		return false;
 	}
 
@@ -567,7 +534,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		// jump to beginning and skip potential header
 		JumpToBeginning(options.skip_rows, true);
 		DataChunk header_row;
-		header_row.Initialize(parse_chunk.GetTypes());
+		header_row.Initialize(sql_types);
 		parse_chunk.Copy(header_row);
 
 		// init parse chunk and read csv with info candidate
@@ -676,7 +643,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			best_sql_types_candidates = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
 			best_header_row.Destroy();
-			best_header_row.Initialize(header_row.GetTypes());
+			auto header_row_types = header_row.GetTypes();
+			best_header_row.Initialize(header_row_types);
 			header_row.Copy(best_header_row);
 		}
 	}
@@ -716,10 +684,33 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
 		options.header = true;
-		GenerateColumnNames(best_header_row);
+		vector<string> t_col_names;
+		for (idx_t col = 0; col < options.num_cols; col++) {
+			const auto &val = best_header_row.GetValue(col, 0);
+			string col_name = val.ToString();
+			if (col_name.empty() || val.is_null) {
+				col_name = GenerateColumnName(options.num_cols, col);
+			}
+			// We'll keep column names as they appear in the file, no canonicalization
+			// col_name = StringUtil::Lower(col_name);
+			t_col_names.push_back(col_name);
+		}
+		for (idx_t col = 0; col < t_col_names.size(); col++) {
+			string col_name = t_col_names[col];
+			idx_t exists_n_times = std::count(t_col_names.begin(), t_col_names.end(), col_name);
+			idx_t exists_n_times_before = std::count(t_col_names.begin(), t_col_names.begin() + col, col_name);
+			if (exists_n_times > 1) {
+				col_name = GenerateColumnName(exists_n_times, exists_n_times_before, col_name + "_");
+			}
+			col_names.push_back(col_name);
+		}
 	} else {
 		options.header = false;
-		GenerateColumnNames(DataChunk());
+		idx_t total_columns = parse_chunk.column_count();
+		for (idx_t col = 0; col < total_columns; col++) {
+			string column_name = GenerateColumnName(total_columns, col);
+			col_names.push_back(column_name);
+		}
 	}
 
 	// #######
@@ -796,7 +787,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					// cache parse chunk
 					// create a new chunk and fill it with the remainder
 					auto chunk = make_unique<DataChunk>();
-					chunk->Initialize(parse_chunk.GetTypes());
+					auto parse_chunk_types = parse_chunk.GetTypes();
+					chunk->Initialize(parse_chunk_types);
 					chunk->Reference(parse_chunk);
 					cached_chunks.push(move(chunk));
 				}
