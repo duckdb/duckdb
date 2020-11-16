@@ -74,6 +74,14 @@ public:
 		return table_storage.find(table) != table_storage.end();
 	}
 
+	idx_t AddedRows(DataTable *table) {
+		auto entry = table_storage.find(table);
+		if (entry == table_storage.end()) {
+			return 0;
+		}
+		return entry->second->collection.count - entry->second->deleted_rows;
+	}
+
 	void AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value);
 	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, LogicalType target_type,
 	                vector<column_t> bound_columns, Expression &cast_expr);

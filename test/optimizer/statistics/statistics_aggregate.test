@@ -60,3 +60,42 @@ NULL	0
 1	1
 2	1
 3	1
+
+# sum
+# sum that fits in int64
+statement ok
+CREATE TABLE bigints AS SELECT i::BIGINT as i FROM (VALUES (1), (2), (3)) tbl(i);
+
+query I
+SELECT SUM(i) FROM bigints;
+----
+6
+
+# sum no longer fits in int64
+statement ok
+INSERT INTO bigints VALUES (9223372036854775806);
+
+query I
+SELECT SUM(i) FROM bigints;
+----
+9223372036854775812
+
+statement ok
+DROP TABLE bigints;
+
+statement ok
+CREATE TABLE bigints AS SELECT i::BIGINT as i FROM (VALUES (-1), (-2), (-3)) tbl(i);
+
+query I
+SELECT SUM(i) FROM bigints;
+----
+-6
+
+# sum no longer fits in int64 [negative]
+statement ok
+INSERT INTO bigints VALUES (-9223372036854775806);
+
+query I
+SELECT SUM(i) FROM bigints;
+----
+-9223372036854775812

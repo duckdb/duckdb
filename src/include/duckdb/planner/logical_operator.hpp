@@ -61,11 +61,11 @@ public:
 		children.push_back(move(child));
 	}
 
-	virtual idx_t EstimateCardinality() {
+	virtual idx_t EstimateCardinality(ClientContext &context) {
 		// simple estimator, just take the max of the children
 		idx_t max_cardinality = 0;
 		for (auto &child : children) {
-			max_cardinality = MaxValue(child->EstimateCardinality(), max_cardinality);
+			max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);
 		}
 		return max_cardinality;
 	}

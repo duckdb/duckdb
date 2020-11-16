@@ -41,7 +41,7 @@ public:
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 
-	idx_t EstimateCardinality() override;
+	idx_t EstimateCardinality(ClientContext &context) override;
 
 protected:
 	void ResolveTypes() override;

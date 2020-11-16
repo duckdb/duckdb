@@ -64,7 +64,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	context.profiler.StartPhase("join_order");
-	JoinOrderOptimizer optimizer;
+	JoinOrderOptimizer optimizer(context);
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
 

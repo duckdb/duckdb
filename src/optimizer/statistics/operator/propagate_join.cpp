@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
 namespace duckdb {
 
@@ -119,8 +120,37 @@ void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<
 	PropagateExpression(join.condition);
 }
 
-void StatisticsPropagator::PropagateStatistics(LogicalJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
+void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats) {
+	if (!stats->has_estimated_cardinality || !new_stats.has_estimated_cardinality ||
+	    !stats->has_max_cardinality || !new_stats.has_max_cardinality) {
+		stats = nullptr;
+		return;
+	}
+	stats->estimated_cardinality = MaxValue<idx_t>(stats->estimated_cardinality, new_stats.estimated_cardinality);
+	auto new_max = Hugeint::Multiply(stats->max_cardinality, new_stats.max_cardinality);
+	if (new_max < NumericLimits<int64_t>::Maximum()) {
+		int64_t result;
+		if (!Hugeint::TryCast<int64_t>(new_max, result)) {
+			throw InternalException("Overflow in cast in statistics propagation");
+		}
+		D_ASSERT(result >= 0);
+		stats->max_cardinality = idx_t(result);
+	} else {
+		stats = nullptr;
+	}
+}
+
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate through the children of the join
+	node_stats = PropagateStatistics(join.children[0]);
+	for(idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
+		auto child_stats = PropagateStatistics(join.children[child_idx]);
+		if (!child_stats) {
+			node_stats = nullptr;
+		} else if (node_stats) {
+			MultiplyCardinalities(node_stats, *child_stats);
+		}
+	}
 	PropagateChildren(join, node_ptr);
 
 	auto join_type = join.join_type;
@@ -165,6 +195,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalJoin &join, unique_ptr<Log
 			}
 		}
 	}
+	return move(node_stats);
 }
 
 }

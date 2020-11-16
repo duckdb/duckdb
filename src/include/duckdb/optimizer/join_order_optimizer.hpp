@@ -43,10 +43,13 @@ public:
 	};
 
 public:
+	JoinOrderOptimizer(ClientContext &context) : context(context) {}
+
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
 private:
+	ClientContext &context;
 	//! The total amount of join pairs that have been considered
 	idx_t pairs = 0;
 	//! Set of all relations considered in the join optimizer

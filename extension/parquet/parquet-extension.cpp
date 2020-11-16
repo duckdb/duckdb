@@ -150,9 +150,9 @@ public:
 		} while (true);
 	}
 
-	static idx_t parquet_cardinality(const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> parquet_cardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
-		return data.initial_reader->NumRows() * data.files.size();
+		return make_unique<NodeStatistics>(data.initial_reader->NumRows() * data.files.size());
 	}
 
 	static idx_t parquet_max_threads(ClientContext &context, const FunctionData *bind_data) {

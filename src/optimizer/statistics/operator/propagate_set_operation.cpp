@@ -3,10 +3,30 @@
 
 namespace duckdb {
 
-void StatisticsPropagator::PropagateStatistics(LogicalSetOperation &setop, unique_ptr<LogicalOperator> *node_ptr) {
+void StatisticsPropagator::AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats) {
+	if (!stats->has_estimated_cardinality || !new_stats.has_estimated_cardinality ||
+	    !stats->has_max_cardinality || !new_stats.has_max_cardinality) {
+		stats = nullptr;
+		return;
+	}
+	stats->estimated_cardinality += new_stats.estimated_cardinality;
+	auto new_max = Hugeint::Add(stats->max_cardinality, new_stats.max_cardinality);
+	if (new_max < NumericLimits<int64_t>::Maximum()) {
+		int64_t result;
+		if (!Hugeint::TryCast<int64_t>(new_max, result)) {
+			throw InternalException("Overflow in cast in statistics propagation");
+		}
+		D_ASSERT(result >= 0);
+		stats->max_cardinality = idx_t(result);
+	} else {
+		stats = nullptr;
+	}
+}
+
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetOperation &setop, unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate statistics in the child nodes
-	PropagateStatistics(setop.children[0]);
-	PropagateStatistics(setop.children[1]);
+	auto left_stats = PropagateStatistics(setop.children[0]);
+	auto right_stats = PropagateStatistics(setop.children[1]);
 
 	// now fetch the column bindings on both sides
 	auto left_bindings = setop.children[0]->GetColumnBindings();
@@ -45,6 +65,13 @@ void StatisticsPropagator::PropagateStatistics(LogicalSetOperation &setop, uniqu
 		ColumnBinding binding(setop.table_index, i);
 		statistics_map[binding] = move(new_stats);
 	}
+	if (!left_stats || !right_stats) {
+		return nullptr;
+	}
+	if (setop.type == LogicalOperatorType::LOGICAL_UNION) {
+		AddCardinalities(left_stats, *right_stats);
+	}
+	return left_stats;
 }
 
 }

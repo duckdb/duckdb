@@ -68,8 +68,8 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
-	idx_t lhs_cardinality = op.children[0]->EstimateCardinality();
-	idx_t rhs_cardinality = op.children[1]->EstimateCardinality();
+	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
+	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
 	D_ASSERT(left && right);

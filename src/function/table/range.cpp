@@ -84,9 +84,10 @@ static void range_function(ClientContext &context, const FunctionData *bind_data
 	output.SetCardinality(remaining);
 }
 
-idx_t range_cardinality(const FunctionData *bind_data_) {
+unique_ptr<NodeStatistics> range_cardinality(ClientContext &context, const FunctionData *bind_data_) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_;
-	return (bind_data.end - bind_data.start) / bind_data.increment;
+	idx_t cardinality = (bind_data.end - bind_data.start) / bind_data.increment;
+	return make_unique<NodeStatistics>(cardinality, cardinality);
 }
 
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {

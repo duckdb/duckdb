@@ -25,7 +25,7 @@ public:
 		return {ColumnBinding(table_index, 0)};
 	}
 
-	idx_t EstimateCardinality() override {
+	idx_t EstimateCardinality(ClientContext &context) override {
 		return 1;
 	}
 

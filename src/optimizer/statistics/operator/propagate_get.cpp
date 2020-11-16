@@ -3,10 +3,13 @@
 
 namespace duckdb {
 
-void StatisticsPropagator::PropagateStatistics(LogicalGet &get, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get, unique_ptr<LogicalOperator> *node_ptr) {
+	if (get.function.cardinality) {
+		node_stats = get.function.cardinality(context, get.bind_data.get());
+	}
 	if (!get.function.statistics) {
-		// no statistics to get
-		return;
+		// no column statistics to get
+		return move(node_stats);
 	}
 	for(idx_t i = 0; i < get.column_ids.size(); i++) {
 		auto stats = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
@@ -18,8 +21,15 @@ void StatisticsPropagator::PropagateStatistics(LogicalGet &get, unique_ptr<Logic
 	// push table filters into the statistics
 	for(idx_t i = 0; i < get.tableFilters.size(); i++) {
 		auto &tableFilter = get.tableFilters[i];
+		idx_t column_index;
+		for(column_index = 0; column_index < get.column_ids.size(); column_index++) {
+			if (get.column_ids[column_index] == tableFilter.column_index) {
+				break;
+			}
+		}
+		D_ASSERT(get.column_ids[column_index] == tableFilter.column_index);
 		// find the stats
-		ColumnBinding stats_binding(get.table_index, tableFilter.column_index);
+		ColumnBinding stats_binding(get.table_index, column_index);
 		auto entry = statistics_map.find(stats_binding);
 		if (entry == statistics_map.end()) {
 			// no stats for this entry
@@ -41,13 +51,14 @@ void StatisticsPropagator::PropagateStatistics(LogicalGet &get, unique_ptr<Logic
 		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 			// filter is always false; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(*node_ptr);
-			return;
+			return make_unique<NodeStatistics>(0, 0);
 		default:
 			// general case: filter can be true or false, update this columns' statistics
 			UpdateFilterStatistics(*entry->second, tableFilter.comparison_type, tableFilter.constant);
 			break;
 		}
 	}
+	return move(node_stats);
 }
 
 }

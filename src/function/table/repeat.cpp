@@ -44,9 +44,9 @@ static void repeat_function(ClientContext &context, const FunctionData *bind_dat
 	state.current_count += remaining;
 }
 
-static idx_t repeat_cardinality(const FunctionData *bind_data_) {
+static unique_ptr<NodeStatistics> repeat_cardinality(ClientContext &context, const FunctionData *bind_data_) {
 	auto &bind_data = (RepeatFunctionData &)*bind_data_;
-	return bind_data.target_count;
+	return make_unique<NodeStatistics>(bind_data.target_count, bind_data.target_count);
 }
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {

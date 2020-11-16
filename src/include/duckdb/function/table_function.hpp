@@ -10,6 +10,7 @@
 
 #include "duckdb/function/function.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 
 #include <functional>
 
@@ -46,7 +47,7 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(Clien
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
-typedef idx_t (*table_function_cardinality_t)(const FunctionData *bind_data);
+typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context, const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);

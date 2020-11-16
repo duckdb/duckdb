@@ -74,7 +74,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		}
 		if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY || op->type == LogicalOperatorType::LOGICAL_WINDOW) {
 			// don't push filters through projection or aggregate and group by
-			JoinOrderOptimizer optimizer;
+			JoinOrderOptimizer optimizer(context);
 			op->children[0] = optimizer.Optimize(move(op->children[0]));
 			return false;
 		}
@@ -102,8 +102,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 				// we convert to doing a RIGHT OUTER JOIN
 				// FIXME: for now we don't swap if the right_projection_map is not empty
 				// this can be fixed once we implement the left_projection_map properly...
-				auto lhs_cardinality = join.children[0]->EstimateCardinality();
-				auto rhs_cardinality = join.children[1]->EstimateCardinality();
+				auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+				auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
 				if (rhs_cardinality > lhs_cardinality * 2) {
 					join.join_type = JoinType::RIGHT;
 					std::swap(join.children[0], join.children[1]);
@@ -122,7 +122,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 		for (idx_t i = 0; i < op->children.size(); i++) {
-			JoinOrderOptimizer optimizer;
+			JoinOrderOptimizer optimizer(context);
 			op->children[i] = optimizer.Optimize(move(op->children[i]));
 		}
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
@@ -169,7 +169,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	} else if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		auto proj = (LogicalProjection *)op;
 		// we run the join order optimizer witin the subquery as well
-		JoinOrderOptimizer optimizer;
+		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(move(op->children[0]));
 		// projection, add to the set of relations
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
@@ -753,7 +753,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality());
+		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality(context));
 	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();

@@ -55,12 +55,14 @@ void LogicalGet::ResolveTypes() {
 	}
 }
 
-idx_t LogicalGet::EstimateCardinality() {
+idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	if (function.cardinality) {
-		return function.cardinality(bind_data.get());
-	} else {
-		return 1;
+		auto node_stats = function.cardinality(context, bind_data.get());
+		if (node_stats && node_stats->has_estimated_cardinality) {
+			return node_stats->estimated_cardinality;
+		}
 	}
+	return 1;
 }
 
 } // namespace duckdb

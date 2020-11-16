@@ -11,6 +11,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, Vector &result, idx_t count);
 //! The type used for propagating statistics in aggregate functions (optional)
-typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats);
+typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats, NodeStatistics *node_stats);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
                                                               vector<unique_ptr<Expression>> &arguments);

@@ -54,10 +54,11 @@ AggregateFunction CountStarFun::GetFunction() {
 	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
 }
 
-unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAggregateExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats) {
+unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAggregateExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats, NodeStatistics *node_stats) {
 	if (child_stats[0] && !child_stats[0]->has_null) {
 		// count on a column without null values: use count star
 		expr.function = CountStarFun::GetFunction();
+		expr.children.clear();
 	}
 	return nullptr;
 }

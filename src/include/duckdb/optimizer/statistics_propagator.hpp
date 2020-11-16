@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -31,21 +32,25 @@ class StatisticsPropagator {
 public:
 	StatisticsPropagator(ClientContext &context);
 
-	void PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
 private:
 	//! Propagate statistics through an operator
-	void PropagateStatistics(LogicalOperator &root, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &root, unique_ptr<LogicalOperator> *node_ptr);
 
-	void PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> *node_ptr);
-	void PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> *node_ptr);
-	void PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> *node_ptr);
-	void PropagateStatistics(LogicalProjection &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalProjection &op, unique_ptr<LogicalOperator> *node_ptr);
 	void PropagateStatistics(LogicalComparisonJoin &op, unique_ptr<LogicalOperator> *node_ptr);
 	void PropagateStatistics(LogicalAnyJoin &op, unique_ptr<LogicalOperator> *node_ptr);
-	void PropagateStatistics(LogicalSetOperation &op, unique_ptr<LogicalOperator> *node_ptr);
-	void PropagateStatistics(LogicalAggregate &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalSetOperation &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalAggregate &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalCrossProduct &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalLimit &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOrder &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalWindow &op, unique_ptr<LogicalOperator> *node_ptr);
 
-	void PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr);
 
 	//! Return statistics from a constant value
 	unique_ptr<BaseStatistics> StatisticsFromValue(const Value &input);
@@ -62,6 +67,11 @@ private:
 	void UpdateFilterStatistics(Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
 	void SetStatisticsNotNull(ColumnBinding binding);
+
+	//! Add cardinalities together (i.e. new max is stats.max + new_stats.max): used for union
+	void AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);
+	//! Multiply the cardinalities together (i.e. new max cardinality is stats.max * new_stats.max): used for joins/cross products
+	void MultiplyCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);
 
 	unique_ptr<BaseStatistics> PropagateExpression(unique_ptr<Expression> &expr);
 	unique_ptr<BaseStatistics> PropagateExpression(Expression &expr, unique_ptr<Expression> *expr_ptr);
@@ -84,6 +94,8 @@ private:
 	ClientContext &context;
 	//! The map of ColumnBinding -> statistics for the various nodes
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	//! Node stats for the current node
+	unique_ptr<NodeStatistics> node_stats;
 };
 
 } // namespace duckdb

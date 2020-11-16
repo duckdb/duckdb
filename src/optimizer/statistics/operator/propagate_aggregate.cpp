@@ -3,9 +3,9 @@
 
 namespace duckdb {
 
-void StatisticsPropagator::PropagateStatistics(LogicalAggregate &aggr, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggregate &aggr, unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate statistics in the child node
-	PropagateStatistics(aggr.children[0]);
+	node_stats = PropagateStatistics(aggr.children[0]);
 
 	// handle the groups: simply propagate statistics and assign the stats to the group binding
 	for(idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
@@ -25,6 +25,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalAggregate &aggr, unique_pt
 		ColumnBinding aggregate_binding(aggr.aggregate_index, aggregate_idx);
 		statistics_map[aggregate_binding] = move(stats);
 	}
+	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique group)
+	return move(node_stats);
 }
 
 }

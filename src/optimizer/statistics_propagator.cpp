@@ -13,44 +13,40 @@ void StatisticsPropagator::ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &n
 	node = make_unique<LogicalEmptyResult>(move(node));
 }
 
-void StatisticsPropagator::PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr) {
 	for(idx_t child_idx = 0; child_idx < node.children.size(); child_idx++) {
 		PropagateStatistics(node.children[child_idx]);
 	}
+	return nullptr;
 }
 
-void StatisticsPropagator::PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr) {
 	switch(node.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		PropagateStatistics((LogicalAggregate &) node, node_ptr);
-		break;
+		return PropagateStatistics((LogicalAggregate &) node, node_ptr);
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		return PropagateStatistics((LogicalCrossProduct &) node, node_ptr);
 	case LogicalOperatorType::LOGICAL_FILTER:
-		PropagateStatistics((LogicalFilter &) node, node_ptr);
-		break;
+		return PropagateStatistics((LogicalFilter &) node, node_ptr);
 	case LogicalOperatorType::LOGICAL_GET:
-		PropagateStatistics((LogicalGet &) node, node_ptr);
-		break;
+		return PropagateStatistics((LogicalGet &) node, node_ptr);
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		PropagateStatistics((LogicalProjection &) node, node_ptr);
-		break;
+		return PropagateStatistics((LogicalProjection &) node, node_ptr);
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_JOIN:
-		PropagateStatistics((LogicalJoin &) node, node_ptr);
-		break;
+		return PropagateStatistics((LogicalJoin &) node, node_ptr);
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-		PropagateStatistics((LogicalSetOperation &) node, node_ptr);
-		break;
+		return PropagateStatistics((LogicalSetOperation &) node, node_ptr);
 	default:
-		PropagateChildren(node, node_ptr);
-		break;
+		return PropagateChildren(node, node_ptr);
 	}
 }
 
-void StatisticsPropagator::PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr) {
-	PropagateStatistics(*node_ptr, &node_ptr);
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr) {
+	return PropagateStatistics(*node_ptr, &node_ptr);
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression &expr, unique_ptr<Expression> *expr_ptr) {

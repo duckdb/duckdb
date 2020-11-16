@@ -210,9 +210,9 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
 	}
 }
 
-void StatisticsPropagator::PropagateStatistics(LogicalFilter &filter, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilter &filter, unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate to the child
-	PropagateStatistics(filter.children[0]);
+	node_stats = PropagateStatistics(filter.children[0]);
 
 	// then propagate to each of the expressions
 	for(idx_t i = 0; i < filter.expressions.size(); i++) {
@@ -227,18 +227,20 @@ void StatisticsPropagator::PropagateStatistics(LogicalFilter &filter, unique_ptr
 			if (filter.expressions.size() == 0) {
 				// all conditions have been erased: remove the entire filter
 				*node_ptr = move(filter.children[0]);
-				return;
+				break;
 			}
 		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
 			ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(*node_ptr);
-			return;
+			return make_unique<NodeStatistics>(0, 0);
 		} else {
 			// cannot prune this filter: propagate statistics from the filter
 			UpdateFilterStatistics(*condition);
 		}
 	}
+	// the max cardinality of a filter is the cardinality of the input (i.e. no tuples get filtered)
+	return move(node_stats);
 }
 
 }

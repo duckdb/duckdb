@@ -104,9 +104,11 @@ void table_scan_dependency(unordered_set<CatalogEntry *> &entries, const Functio
 	entries.insert(bind_data.table);
 }
 
-idx_t table_scan_cardinality(const FunctionData *bind_data_) {
+unique_ptr<NodeStatistics> table_scan_cardinality(ClientContext &context, const FunctionData *bind_data_) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
-	return bind_data.table->storage->info->cardinality;
+	auto &transaction = Transaction::GetTransaction(context);
+	idx_t estimated_cardinality = bind_data.table->storage->info->cardinality + transaction.storage.AddedRows(bind_data.table->storage.get());
+	return make_unique<NodeStatistics>(bind_data.table->storage->info->cardinality, estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
