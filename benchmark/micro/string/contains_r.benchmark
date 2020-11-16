@@ -2,6 +2,9 @@
 # description: Contains word 'r' in the l_comment
 # group: [string]
 
+name Contains ('r')
+group string
+
 require tpch
 
 cache tpch_sf1

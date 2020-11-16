@@ -1,4 +1,14 @@
 /*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ */
+/*
  * $Id: rng64.c,v 1.7 2008/03/21 17:38:39 jms Exp $
  *
  * This software contains proprietary and confidential information of Gradient

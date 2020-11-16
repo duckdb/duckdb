@@ -2,6 +2,9 @@
 # description: Cast HUYGE HUGEINT to string
 # group: [cast]
 
+name Cast VARCHAR -> HUGEINT (Big HUGEINT)
+group cast
+
 load
 CREATE TABLE strings AS SELECT ('1e18'::HUGEINT*i::HUGEINT*i::HUGEINT)::VARCHAR AS s FROM range(0, 10000000, 1) tbl(i);
 

@@ -40,7 +40,7 @@ struct TreeRendererConfig {
 	idx_t MAXIMUM_RENDER_WIDTH = 240;
 	idx_t NODE_RENDER_WIDTH = 29;
 	idx_t MINIMUM_RENDER_WIDTH = 15;
-	idx_t MAX_EXTRA_LINES = 10;
+	idx_t MAX_EXTRA_LINES = 30;
 
 	const char *LTCORNER = "┌";
 	const char *RTCORNER = "┐";

@@ -2,6 +2,9 @@
 # description: Index Join where RHS has high cardinality
 # group: [join]
 
+name High Cardinality Join (Index, Count Only)
+group join
+
 load
 PRAGMA force_index_join;
 CREATE TABLE t1 AS SELECT i as v1, i as v2 from range (0,1000) t(i);

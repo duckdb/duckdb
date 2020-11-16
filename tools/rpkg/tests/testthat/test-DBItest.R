@@ -13,7 +13,6 @@ DBItest::test_all(c(
 
   "data_logical", # casting NULL issue
 
-  "roundtrip_time",
   "roundtrip_field_types", # strange
   "data_64_bit_numeric_warning", # not now
   "data_64_bit_lossless", # not now,

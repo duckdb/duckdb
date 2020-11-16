@@ -3,7 +3,6 @@
 #include "test_helpers.hpp"
 
 #include <atomic>
-#include <random>
 #include <thread>
 
 using namespace duckdb;
