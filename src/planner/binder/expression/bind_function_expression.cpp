@@ -74,7 +74,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, CatalogE
 		result = ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*func, move(children), error,
 		                                            function.is_operator);
 	} else {
-		result = MacroFunction::BindMacroFunction(this->binder, *this, (MacroFunctionCatalogEntry &)*func,
+		result = MacroFunction::BindMacroFunction(context, this->binder, *this, (MacroFunctionCatalogEntry &)*func,
 		                                          move(children), error);
 	}
 	if (!result) {
@@ -90,6 +90,43 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth) {
 	return BindResult(binder.FormatError(expr, UnsupportedUnnestMessage()));
+}
+
+BindResult ExpressionBinder::BindMacro(FunctionExpression &expr, MacroFunctionCatalogEntry &function, vector<unique_ptr<Expression>> arguments) {
+	string error;
+
+    // verify correct number of arguments
+    auto &macro_func = function.function;
+    auto &parameters = macro_func->parameters;
+    if (parameters.size() != arguments.size()) {
+        error = StringUtil::Format(
+            "Macro function '%s(%s)' requires ", function.name,
+            StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
+              return ((ColumnRefExpression &)*p).column_name;
+            }));
+        error += parameters.size() == 1 ? "a single argument" : StringUtil::Format("%i arguments", parameters.size());
+        error += ", but ";
+        error +=
+            arguments.size() == 1 ? "a single argument was" : StringUtil::Format("%i arguments were", arguments.size());
+        error += " provided.";
+        throw BinderException(binder.FormatError(expr, error));
+    }
+
+    // check for arguments with side-effects TODO: to support this, a projection must be pushed
+    for (idx_t i = 0; i < arguments.size(); i++) {
+        if (arguments[i]->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+            auto &bound_func = (BoundFunctionExpression &)*arguments[i];
+            if (bound_func.function.has_side_effects) {
+                error = StringUtil::Format(
+                    "Arguments with side-effects are not supported ('%s' was supplied). As a "
+                    "workaround, try creating a CTE that evaluates the argument with side-effects.",
+                    bound_func.function.name);
+                throw BinderException(binder.FormatError(expr, error));
+            }
+        }
+    }
+
+	// TODO: unfold macro recursive
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {

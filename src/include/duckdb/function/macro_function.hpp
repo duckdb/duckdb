@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/function.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -19,7 +20,7 @@ class MacroFunctionCatalogEntry;
 class MacroFunction {
 public:
 	MacroFunction(unique_ptr<ParsedExpression> expression);
-	static unique_ptr<Expression> BindMacroFunction(Binder &binder, ExpressionBinder &expr_binder,
+	static unique_ptr<Expression> BindMacroFunction(ClientContext &context, Binder &binder, ExpressionBinder &expr_binder,
 	                                                MacroFunctionCatalogEntry &function,
 	                                                vector<unique_ptr<Expression>> arguments, string &error);
 	//! The macro expression

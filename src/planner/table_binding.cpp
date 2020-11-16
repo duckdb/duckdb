@@ -9,6 +9,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+//#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -97,15 +98,15 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
-MacroBinding::MacroBinding(vector<LogicalType> types_, vector<string> names_)
-    : Binding("0_macro_arguments", move(types_), move(names_), -1) {
+MacroBinding::MacroBinding(vector<LogicalType> types_, vector<string> names_, string macro_name_)
+    : Binding("0_macro_parameters", move(types_), move(names_), -1), macro_name(macro_name_) {
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto entry = name_map.find(colref.column_name);
 	if (entry == name_map.end()) {
-		return BindResult(StringUtil::Format("Macro \"%s\" does not have a parameter named \"%s\"", alias.c_str(),
-		                                     colref.column_name.c_str()));
+		return BindResult(StringUtil::Format("Macro \"%s\" does not have a parameter named \"%s\"", macro_name,
+		                                     colref.column_name));
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
@@ -118,7 +119,16 @@ BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	}
 
 	// we are binding an argument when calling the macro
-	return BindResult(arguments[entry->second]->Copy());
+//	return BindResult(arguments[entry->second]->Copy()); TODO
+}
+
+unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {
+    auto entry = name_map.find(colref.column_name);
+    if (entry == name_map.end()) {
+		throw BinderException("Macro \"%s\" does not have a parameter named \"%s\"", macro_name,
+                              colref.column_name);
+	}
+    return arguments[entry->second]->Copy();
 }
 
 } // namespace duckdb

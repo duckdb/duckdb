@@ -90,6 +90,7 @@ protected:
 	virtual BindResult BindFunction(FunctionExpression &expr, CatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
+    virtual BindResult BindMacro(FunctionExpression &expr, MacroFunctionCatalogEntry &function, vector<unique_ptr<Expression>> children);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

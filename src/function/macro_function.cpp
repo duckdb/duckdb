@@ -2,14 +2,37 @@
 
 #include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
 MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {
 }
 
-unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, ExpressionBinder &expr_binder,
+static inline unique_ptr<ParsedExpression> UnfoldMacroRecursive(ClientContext &context, unique_ptr<ParsedExpression> expr, MacroBinding &macro_binding) {
+	switch (expr->GetExpressionClass()) {
+	case ExpressionClass::COLUMN_REF: {
+		auto &colref = (ColumnRefExpression &)*expr;
+		if (colref.table_name == macro_binding.alias && macro_binding.HasMatchingBinding(colref.column_name)) {
+            return macro_binding.ParamToArg(colref);
+		}
+    }
+	case ExpressionClass::FUNCTION: {
+		auto &function = (FunctionExpression &)*expr;
+		QueryErrorContext error_context(binder.root_statement, function.query_location);
+		auto &catalog = Catalog::GetCatalog(context);
+		auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema,
+		                             function.function_name, false, error_context);
+		break;
+	}
+    default:
+		// TODO: loop through children?
+		return expr;
+    }
+}
+
+unique_ptr<Expression> MacroFunction::BindMacroFunction(ClientContext &context, Binder &binder, ExpressionBinder &expr_binder,
                                                         MacroFunctionCatalogEntry &function,
                                                         vector<unique_ptr<Expression>> arguments, string &error) {
 	// verify correct number of arguments
@@ -61,7 +84,7 @@ unique_ptr<Expression> MacroFunction::BindMacroFunction(Binder &binder, Expressi
 		auto &param = (ColumnRefExpression &)*parameters[i];
 		names.push_back(param.column_name);
 	}
-	binder.macro_binding = make_shared<MacroBinding>(types, names);
+	binder.macro_binding = make_shared<MacroBinding>(types, names, function.name);
 	binder.macro_binding->arguments = move(arguments);
 
 	// TODO: we bind arguments at depth = 0, then add them to the macro_binding

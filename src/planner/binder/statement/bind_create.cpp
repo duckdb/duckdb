@@ -77,7 +77,10 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		dummy_types.push_back(LogicalType::SQLNULL);
 		dummy_names.push_back(param.column_name);
 	}
-	macro_binding = make_shared<MacroBinding>(dummy_types, dummy_names);
+	macro_binding = make_shared<MacroBinding>(dummy_types, dummy_names, base.name);
+
+	// bind table name to macro arguments
+	ExpressionBinder::BindTableNames(*this, *base.function->expression);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = base.function->expression->Copy();
