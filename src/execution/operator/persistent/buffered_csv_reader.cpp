@@ -10,6 +10,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/numeric_helper.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -201,8 +202,8 @@ void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header)
 
 // Helper function to generate column names
 static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string prefix = "column") {
-	uint8_t max_digits = total_cols > 10 ? (int)log10((double)total_cols - 1) + 1 : 1;
-	uint8_t digits = col_number >= 10 ? (int)log10((double)col_number) + 1 : 1;
+	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
+	int digits = NumericHelper::UnsignedLength(col_number);
 	string leading_zeros = string("0", max_digits - digits);
 	string value = std::to_string(col_number);
 	return string(prefix + leading_zeros + value);
@@ -261,7 +262,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 		return true;
 	}
 
-	if (end_of_file_reached || sample_chunk_idx + 1 >= static_cast<int64_t>(options.sample_chunks)) {
+	if (end_of_file_reached || sample_chunk_idx + 1 >= options.sample_chunks) {
 		return false;
 	}
 
@@ -540,14 +541,16 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		// init parse chunk and read csv with info candidate
 		InitParseChunk(sql_types.size());
 		ParseCSV(ParserMode::SNIFFING_DATATYPES);
-		for (int64_t row = -1; row < static_cast<int64_t>(parse_chunk.size()); row++) {
+		for (idx_t row_idx = 0; row_idx <= parse_chunk.size(); row_idx++) {
+			bool is_header_row = row_idx == 0;
+			idx_t row = row_idx - 1;
 			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
 					Value dummy_val;
-					if (row == -1) {
+					if (is_header_row) {
 						dummy_val = header_row.GetValue(col, 0);
 					} else {
 						dummy_val = parse_chunk.GetValue(col, row);
@@ -614,7 +617,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			}
 			// reset type detection, because first row could be header,
 			// but only do it if csv has more than one line (including header)
-			if (parse_chunk.size() > 0 && row == -1) {
+			if (parse_chunk.size() > 0 && is_header_row) {
 				info_sql_types_candidates = vector<vector<LogicalType>>(options.num_cols, type_candidates);
 				for (auto &f : format_candidates) {
 					f.second.clear();

@@ -48,26 +48,10 @@ static string ParseString(vector<Value> &set) {
 	return set[0].GetValue<string>();
 }
 
-static idx_t ParseInteger(vector<Value> &set) {
+static int64_t ParseInteger(vector<Value> &set) {
 	if (set.size() != 1) {
 		// no option specified or multiple options specified
 		throw BinderException("Expected a single argument as a integer value");
-	}
-	if (set[0].type().id() == LogicalTypeId::FLOAT || set[0].type().id() == LogicalTypeId::DOUBLE ||
-	    set[0].type().id() == LogicalTypeId::DECIMAL) {
-		throw BinderException("Expected a integer argument!");
-	}
-	return set[0].GetValue<int64_t>();
-}
-
-static int64_t ParseIntegerUnsigned(vector<Value> &set) {
-	if (set.size() != 1) {
-		// no option specified or multiple options specified
-		throw BinderException("Expected a single argument as a integer value");
-	}
-	if (set[0].type().id() == LogicalTypeId::FLOAT || set[0].type().id() == LogicalTypeId::DOUBLE ||
-	    set[0].type().id() == LogicalTypeId::DECIMAL) {
-		throw BinderException("Expected a integer argument!");
 	}
 	return set[0].GetValue<int64_t>();
 }
@@ -221,12 +205,12 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 			// parsed option in base CSV options: continue
 			continue;
 		} else if (loption == "sample_size") {
-			int64_t sample_size = ParseIntegerUnsigned(set);
+			int64_t sample_size = ParseInteger(set);
 			if (sample_size < 1 && sample_size != -1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
 			if (sample_size == -1) {
-				options.sample_chunks = std::numeric_limits<long>::max();
+				options.sample_chunks = std::numeric_limits<uint64_t>::max();
 				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
 			} else if (sample_size <= STANDARD_VECTOR_SIZE) {
 				options.sample_chunk_size = sample_size;
