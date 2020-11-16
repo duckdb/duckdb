@@ -85,6 +85,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "FATAL";
 	case ExceptionType::INTERNAL:
 		return "INTERNAL";
+	case ExceptionType::INVALID_INPUT:
+		return "Invalid Input";
 	default:
 		return "Unknown";
 	}
