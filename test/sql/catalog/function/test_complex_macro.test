@@ -5,37 +5,37 @@
 statement ok
 PRAGMA enable_verification
 
-#statement ok
-#CREATE TABLE integers (a INT)
-#
-#statement ok
-#INSERT INTO integers VALUES (1)
-#
-#statement ok
-#CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
-#
-#query T
-#SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
-#----
-#a
-#
-#query T
-#SELECT IFELSE(1, IFELSE(0,'a','b'), 'c')
-#----
-#b
-#
-#query T
-#SELECT IFELSE(0, IFELSE(1,'a','b'), 'c')
-#----
-#c
-#
-#query T
-#SELECT IFELSE(1, IFELSE(1,a,'b'), 'c') FROM integers
-#----
-#1
-#
-#statement error
-#SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
+statement ok
+CREATE TABLE integers (a INT)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+statement ok
+CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
+
+query T
+SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
+----
+a
+
+query T
+SELECT IFELSE(1, IFELSE(0,'a','b'), 'c')
+----
+b
+
+query T
+SELECT IFELSE(0, IFELSE(1,'a','b'), 'c')
+----
+c
+
+query T
+SELECT IFELSE(1, IFELSE(1,a,'b'), 'c') FROM integers
+----
+1
+
+statement error
+SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
 
 # test FTS extension use case
 statement ok
