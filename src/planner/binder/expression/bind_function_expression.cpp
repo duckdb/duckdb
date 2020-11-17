@@ -90,35 +90,40 @@ BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth) {
 	return BindResult(binder.FormatError(expr, UnsupportedUnnestMessage()));
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr, string &error) {
+unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr) {
 	auto macro_binding = make_unique<MacroBinding>(vector<LogicalType>(), vector<string>(), string());
-	return UnfoldMacroRecursive(move(expr), *macro_binding, error);
+	return UnfoldMacroRecursive(move(expr), *macro_binding);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,
-                                                                    MacroBinding &macro_binding, string &error) {
-	if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+                                                                    MacroBinding &macro_binding) {
+	switch (expr->GetExpressionClass()) {
+	case ExpressionClass::COLUMN_REF: {
 		// if expr is a parameter, replace it with its argument
 		auto &colref = (ColumnRefExpression &)*expr;
-		if (colref.table_name == macro_binding.alias && macro_binding.HasMatchingBinding(colref.column_name)) {
+		if (colref.table_name.empty() && macro_binding.HasMatchingBinding(colref.column_name)) {
 			expr = macro_binding.ParamToArg(colref);
-			return UnfoldMacroRecursive(move(expr), macro_binding, error);
+			return UnfoldMacroRecursive(move(expr), macro_binding);
 		}
 		return expr;
-	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
-		// if expr is a macro function, unfold it
+	}
+	case ExpressionClass::FUNCTION: {
 		auto &function_expr = (FunctionExpression &)*expr;
+		if (function_expr.is_operator)
+			break;
+
+		// if expr is a macro function, unfold it
 		QueryErrorContext error_context(binder.root_statement, function_expr.query_location);
 		auto &catalog = Catalog::GetCatalog(context);
 		auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function_expr.schema,
 		                             function_expr.function_name, false, error_context);
 		if (func->type == CatalogType::MACRO_ENTRY) {
 			auto &macro_func = (MacroFunctionCatalogEntry &)*func;
-			error = MacroFunction::CheckArguments(context, error_context, macro_func, function_expr);
+			string error = MacroFunction::ValidateArguments(context, error_context, macro_func, function_expr);
 			if (!error.empty())
-				return nullptr;
+				throw BinderException(binder.FormatError(*expr, error));
 
-			// create macro_binding to bind parameters to arguments
+			// create macro_binding to bind this macro's parameters to its arguments
 			vector<LogicalType> types;
 			vector<string> names;
 			for (idx_t i = 0; i < macro_func.function->parameters.size(); i++) {
@@ -129,40 +134,44 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 			auto new_macro_binding = make_unique<MacroBinding>(types, names, func->name);
 			new_macro_binding->arguments = move(function_expr.children);
 
-            expr = macro_func.function->expression->Copy();
-			return UnfoldMacroRecursive(move(expr), *new_macro_binding, error);
+			expr = macro_func.function->expression->Copy();
+			return UnfoldMacroRecursive(move(expr), *new_macro_binding);
 		}
-	} else if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		break;
+	}
+	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
 		auto &sqe = (SubqueryExpression &)*expr;
 		if (sqe.subquery->node->type != QueryNodeType::SELECT_NODE) {
 			// TODO: throw an error
 		}
-        auto &sel_node = (SelectNode &) *sqe.subquery->node;
+		auto &sel_node = (SelectNode &)*sqe.subquery->node;
 		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
-			sel_node.select_list[i] = UnfoldMacroRecursive(move(sel_node.select_list[i]), macro_binding, error);
+			sel_node.select_list[i] = UnfoldMacroRecursive(move(sel_node.select_list[i]), macro_binding);
 		}
-        for (idx_t i = 0; i < sel_node.groups.size(); i++) {
-            sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding, error);
-        }
+		for (idx_t i = 0; i < sel_node.groups.size(); i++) {
+			sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding);
+		}
 		if (sel_node.where_clause != nullptr)
-            sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding, error);
+			sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding);
 		if (sel_node.having != nullptr)
-            sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding, error);
+			sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
+		break;
+	}
+	default: // fall through
+		break;
 	}
 	// unfold child expressions
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](ParsedExpression &child) { UnfoldMacroRecursive(move(expr), macro_binding, error); });
-	if (!error.empty())
-		return nullptr;
+	    *expr, [&](unique_ptr<ParsedExpression> child) -> unique_ptr<ParsedExpression> {
+		    return UnfoldMacroRecursive(move(child), macro_binding);
+	    });
 	return expr;
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &expr) {
 	string error;
-	auto unfolded_expr = UnfoldMacroRecursive(expr.Copy(), error);
-	if (!error.empty())
-		throw BinderException(binder.FormatError(expr, error));
+	auto unfolded_expr = UnfoldMacroRecursive(expr.Copy());
 	return BindExpression(*unfolded_expr, 0, true);
 }
 

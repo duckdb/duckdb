@@ -94,9 +94,9 @@ protected:
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
 	virtual BindResult BindMacro(FunctionExpression &expr);
 
-	unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr, string &error);
+	unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr);
 	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,
-	                                                          MacroBinding &macro_binding, string &error);
+	                                                          MacroBinding &macro_binding);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

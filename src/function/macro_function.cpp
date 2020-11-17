@@ -1,5 +1,6 @@
 #include "duckdb/function/macro_function.hpp"
 
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -9,8 +10,8 @@ namespace duckdb {
 MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {
 }
 
-string MacroFunction::CheckArguments(ClientContext &context, QueryErrorContext &error_context,
-                                     MacroFunctionCatalogEntry &macro_func, FunctionExpression &function_expr) {
+string MacroFunction::ValidateArguments(ClientContext &context, QueryErrorContext &error_context,
+                                        MacroFunctionCatalogEntry &macro_func, FunctionExpression &function_expr) {
 	string error;
 	auto &catalog = Catalog::GetCatalog(context);
 	auto &parameters = macro_func.function->parameters;
@@ -30,12 +31,13 @@ string MacroFunction::CheckArguments(ClientContext &context, QueryErrorContext &
 	}
 
 	// check for arguments with side-effects TODO: to support this, a projection must be pushed
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->GetExpressionClass() == ExpressionClass::FUNCTION) {
-			auto func_arg = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function_expr.schema,
-			                                 function_expr.function_name, false, error_context);
-			if (func_arg->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-				auto &scalar_func_arg = (ScalarFunctionCatalogEntry &)*func_arg;
+	for (auto &arg : arguments) {
+		if (arg->GetExpressionClass() == ExpressionClass::FUNCTION) {
+			auto &func_arg = (FunctionExpression &)*arg;
+			auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func_arg.schema,
+                                             func_arg.function_name, false, error_context);
+			if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
+				auto &scalar_func_arg = (ScalarFunctionCatalogEntry &)*func;
 				for (auto sfa : scalar_func_arg.functions) {
 					if (sfa.has_side_effects) {
 						error = StringUtil::Format(
