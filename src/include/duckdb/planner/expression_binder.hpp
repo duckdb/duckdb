@@ -19,7 +19,7 @@ namespace duckdb {
 class Binder;
 class ClientContext;
 class QueryNode;
-//class SelectNode;
+// class SelectNode;
 
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
@@ -99,7 +99,7 @@ protected:
 	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr);
 	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,
 	                                                          MacroBinding &macro_binding);
-    virtual void UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding);
+	virtual void UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

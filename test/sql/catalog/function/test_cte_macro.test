@@ -20,6 +20,19 @@ SELECT parameterized_cte(42)
 42
 
 statement ok
+CREATE MACRO in_with_cte(i) AS i IN (WITH cte AS (SELECT a AS answer FROM integers) SELECT answer FROM cte)
+
+query T
+SELECT in_with_cte(1)
+----
+1
+
+query T
+SELECT in_with_cte(2)
+----
+0
+
+statement ok
 CREATE MACRO plus42(a) AS (WITH cte AS (SELECT 42 AS answer) SELECT answer + a FROM cte)
 
 query T

@@ -1,24 +1,169 @@
-# name: test/sql/catalog/function/test_simple_macro.test
+# name: test/sql/catalog/function/test_complex_macro.test
 # description: Test Complex Macro
 # group: [function]
 
 statement ok
 PRAGMA enable_verification
 
+#statement ok
+#CREATE TABLE integers (a INT)
+#
+#statement ok
+#INSERT INTO integers VALUES (1)
+#
+#statement ok
+#CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
+#
+#query T
+#SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
+#----
+#a
+#
+#query T
+#SELECT IFELSE(1, IFELSE(0,'a','b'), 'c')
+#----
+#b
+#
+#query T
+#SELECT IFELSE(0, IFELSE(1,'a','b'), 'c')
+#----
+#c
+#
+#query T
+#SELECT IFELSE(1, IFELSE(1,a,'b'), 'c') FROM integers
+#----
+#1
+#
+#statement error
+#SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
+
+# test FTS extension use case
 statement ok
-CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
+CREATE TABLE documents(id VARCHAR, body VARCHAR)
 
-query T
-SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
-----
-a
+statement ok
+INSERT INTO documents VALUES ('doc1', ' QUÁCK+QUÁCK+QUÁCK'), ('doc2', ' BÁRK+BÁRK+BÁRK+BÁRK'), ('doc3', ' MÉOW+MÉOW+MÉOW+MÉOW+MÉOW')
 
-query T
-SELECT IFELSE(1, IFELSE(0,'a','b'), 'c')
-----
-b
+statement ok
+CREATE SCHEMA fts_main_documents
 
-query T
-SELECT IFELSE(0, IFELSE(1,'a','b'), 'c')
+statement ok
+CREATE TABLE fts_main_documents.docs AS (
+    SELECT
+        row_number() OVER (PARTITION BY(SELECT NULL)) AS docid,
+        id AS name
+    FROM
+        main.documents
+)
+
+statement ok
+CREATE TABLE fts_main_documents.terms AS (
+    SELECT
+        term,
+        docid,
+        row_number() OVER (PARTITION BY docid) AS pos
+    FROM (
+        SELECT
+            unnest(string_split_regex(regexp_replace(lower(strip_accents(body)), '[^a-z]', ' ', 'g'), '\s+')) AS term,
+            row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
+        FROM main.documents
+    ) AS sq
+    WHERE
+        term != ''
+)
+
+statement ok
+ALTER TABLE fts_main_documents.docs ADD len INT
+
+statement ok
+UPDATE fts_main_documents.docs d
+SET len = (
+    SELECT count(term)
+    FROM fts_main_documents.terms t
+    WHERE t.docid = d.docid
+)
+
+statement ok
+CREATE TABLE fts_main_documents.dict AS
+WITH distinct_terms AS (
+    SELECT DISTINCT term, docid
+    FROM fts_main_documents.terms
+    ORDER BY docid
+)
+SELECT
+    row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
+    term
+FROM
+    distinct_terms
+
+statement ok
+ALTER TABLE fts_main_documents.terms ADD termid INT
+
+statement ok
+UPDATE fts_main_documents.terms t
+SET termid = (
+    SELECT termid
+    FROM fts_main_documents.dict d
+    WHERE t.term = d.term
+)
+
+statement ok
+ALTER TABLE fts_main_documents.terms DROP term
+
+statement ok
+ALTER TABLE fts_main_documents.dict ADD df INT
+
+statement ok
+UPDATE fts_main_documents.dict d
+SET df = (
+    SELECT count(distinct docid)
+    FROM fts_main_documents.terms t
+    WHERE d.termid = t.termid
+    GROUP BY termid
+)
+
+query II
+WITH ppterms AS (SELECT unnest(string_split_regex(regexp_replace(lower(strip_accents('QUÁCK BÁRK')), '[^a-z]', ' ', 'g'), '\s+')) AS term),
+qtermids AS (SELECT termid FROM fts_main_documents.dict AS dict, ppterms WHERE dict.term = ppterms.term),
+qterms AS (SELECT termid, docid FROM fts_main_documents.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
+subscores AS (
+SELECT docs.docid, len, term_tf.termid,
+        tf, df, (log((3 - df + 0.5) / (df + 0.5))* ((tf * (1.2 + 1)/(tf + 1.2 * (1 - 0.75 + 0.75 * (len / 4)))))) AS subscore
+FROM (SELECT termid, docid, COUNT(*) AS tf FROM qterms
+    GROUP BY docid, termid) AS term_tf
+    JOIN (SELECT docid FROM qterms
+        GROUP BY docid) -- HAVING COUNT(DISTINCT termid) = 3)
+        AS cdocs ON term_tf.docid = cdocs.docid
+    JOIN fts_main_documents.docs AS docs ON term_tf.docid = docs.docid
+    JOIN fts_main_documents.dict AS dict ON term_tf.termid = dict.termid)
+SELECT name, score FROM (SELECT docid, sum(subscore) AS score
+    FROM subscores GROUP BY docid) AS scores JOIN fts_main_documents.docs AS docs ON
+    scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
 ----
-c
+doc1	0.443697
+doc2	0.375436
+
+statement ok
+CREATE MACRO fts_match(docname, query_string) AS docname IN (
+WITH ppterms AS (SELECT unnest(string_split_regex(regexp_replace(lower(strip_accents(query_string)), '[^a-z]', ' ', 'g'), '\s+')) AS term),
+qtermids AS (SELECT termid FROM fts_main_documents.dict AS dict, ppterms WHERE dict.term = ppterms.term),
+qterms AS (SELECT termid, docid FROM fts_main_documents.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
+subscores AS (
+SELECT docs.docid, len, term_tf.termid,
+        tf, df, (log((3 - df + 0.5) / (df + 0.5))* ((tf * (1.2 + 1)/(tf + 1.2 * (1 - 0.75 + 0.75 * (len / 4)))))) AS subscore
+FROM (SELECT termid, docid, COUNT(*) AS tf FROM qterms
+    GROUP BY docid, termid) AS term_tf
+    JOIN (SELECT docid FROM qterms
+        GROUP BY docid) -- HAVING COUNT(DISTINCT termid) = 3)
+        AS cdocs ON term_tf.docid = cdocs.docid
+    JOIN fts_main_documents.docs AS docs ON term_tf.docid = docs.docid
+    JOIN fts_main_documents.dict AS dict ON term_tf.termid = dict.termid)
+SELECT name FROM (SELECT docid, sum(subscore) AS score
+    FROM subscores GROUP BY docid) AS scores JOIN fts_main_documents.docs AS docs ON
+    scores.docid = docs.docid ORDER BY score DESC LIMIT 1000)
+
+query II
+SELECT * FROM documents WHERE fts_match(id, 'QUÁCK BÁRK')
+----
+doc1	 QUÁCK+QUÁCK+QUÁCK
+doc2	 BÁRK+BÁRK+BÁRK+BÁRK

@@ -120,8 +120,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 		QueryErrorContext error_context(binder.root_statement, function_expr.query_location);
 		auto &catalog = Catalog::GetCatalog(context);
 		auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function_expr.schema,
-		                             function_expr.function_name, false, error_context);
-		if (func->type == CatalogType::MACRO_ENTRY) {
+		                             function_expr.function_name, true, error_context);
+		if (func != nullptr && func->type == CatalogType::MACRO_ENTRY) {
 			auto &macro_func = (MacroFunctionCatalogEntry &)*func;
 			string error = MacroFunction::ValidateArguments(context, error_context, macro_func, function_expr);
 			if (!error.empty())
@@ -146,7 +146,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
 		auto &sq = ((SubqueryExpression &)*expr).subquery;
-        UnfoldQueryNode(*expr, *sq->node.get(), macro_binding);
+		UnfoldQueryNode(*expr, *sq->node.get(), macro_binding);
 
 		for (auto &kv : sq->cte_map) {
 			UnfoldQueryNode(*expr, *kv.second->query->node.get(), macro_binding);
@@ -165,20 +165,20 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 }
 
 void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding) {
-    if (node.type != QueryNodeType::SELECT_NODE) {
-        throw BinderException(binder.FormatError(expr, "Macro's with non-SELECT sub-queries are not supported."));
-    }
-    auto &sel_node = (SelectNode &) node;
-    for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
-        sel_node.select_list[i] = UnfoldMacroRecursive(move(sel_node.select_list[i]), macro_binding);
-    }
-    for (idx_t i = 0; i < sel_node.groups.size(); i++) {
-        sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding);
-    }
-    if (sel_node.where_clause != nullptr)
-        sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding);
-    if (sel_node.having != nullptr)
-        sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
+	if (node.type != QueryNodeType::SELECT_NODE) {
+		throw BinderException(binder.FormatError(expr, "Macro's with non-SELECT sub-queries are not supported."));
+	}
+	auto &sel_node = (SelectNode &)node;
+	for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
+		sel_node.select_list[i] = UnfoldMacroRecursive(move(sel_node.select_list[i]), macro_binding);
+	}
+	for (idx_t i = 0; i < sel_node.groups.size(); i++) {
+		sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding);
+	}
+	if (sel_node.where_clause != nullptr)
+		sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding);
+	if (sel_node.having != nullptr)
+		sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &expr) {
