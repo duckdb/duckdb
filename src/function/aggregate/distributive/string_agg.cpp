@@ -22,7 +22,7 @@ struct StringAggBaseFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData*, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->dataptr) {
 			nullmask[idx] = true;
 		} else {

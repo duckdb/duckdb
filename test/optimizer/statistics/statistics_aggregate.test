@@ -43,7 +43,6 @@ SELECT i, COUNT(i) FROM integers GROUP BY i ORDER BY i;
 2	1
 3	1
 
-
 statement ok
 INSERT INTO integers VALUES (NULL);
 
@@ -71,6 +70,12 @@ SELECT SUM(i) FROM bigints;
 ----
 6
 
+# avg
+query I
+SELECT AVG(i) FROM bigints;
+----
+2
+
 # sum no longer fits in int64
 statement ok
 INSERT INTO bigints VALUES (9223372036854775806);
@@ -79,6 +84,11 @@ query I
 SELECT SUM(i) FROM bigints;
 ----
 9223372036854775812
+
+query I
+SELECT AVG(i) FROM bigints;
+----
+2305843009213693952
 
 statement ok
 DROP TABLE bigints;
@@ -91,6 +101,12 @@ SELECT SUM(i) FROM bigints;
 ----
 -6
 
+# avg
+query I
+SELECT AVG(i) FROM bigints;
+----
+-2
+
 # sum no longer fits in int64 [negative]
 statement ok
 INSERT INTO bigints VALUES (-9223372036854775806);
@@ -99,3 +115,38 @@ query I
 SELECT SUM(i) FROM bigints;
 ----
 -9223372036854775812
+
+query I
+SELECT AVG(i) FROM bigints;
+----
+-2305843009213693952
+
+# now with decimals
+# sum that fits in int64
+statement ok
+CREATE TABLE decimals AS SELECT i::DECIMAL(18,1) as i FROM (VALUES (1), (2), (3)) tbl(i);
+
+query I
+SELECT SUM(i) FROM decimals;
+----
+6.0
+
+# avg
+query I
+SELECT AVG(i) FROM decimals;
+----
+2.0
+
+# sum no longer fits in int64
+statement ok
+INSERT INTO decimals SELECT 99999999999999999.9 FROM repeat(1, 10)
+
+query I
+SELECT SUM(i) FROM decimals;
+----
+1000000000000000005.0
+
+query I
+SELECT AVG(i) FROM decimals;
+----
+76923076923076923

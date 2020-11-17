@@ -40,7 +40,7 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 #ifndef DUCKDB_ALLOW_UNDEFINED
 		payload_size = Align(payload_size);
 #endif
-		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
+		aggregates.push_back(AggregateObject(binding->function, binding->bind_info.get(), binding->children.size(), payload_size,
 		                                     binding->distinct, binding->return_type.InternalType()));
 	}
 	return aggregates;
@@ -911,7 +911,7 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[group_types.size() + i];
 		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, target, result.size());
+		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
 	}
 	scan_position += this_n;

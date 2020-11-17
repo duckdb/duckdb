@@ -27,7 +27,7 @@ struct BaseCountFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData*, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		target[idx] = *state;
 	}
 };
