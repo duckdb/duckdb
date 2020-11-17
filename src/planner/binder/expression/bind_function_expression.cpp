@@ -11,6 +11,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -179,6 +180,17 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 		sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding);
 	if (sel_node.having != nullptr)
 		sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
+
+	if (sel_node.from_table->type == TableReferenceType::SUBQUERY) {
+        auto &sq_ref = (SubqueryRef &)*sel_node.from_table;
+        UnfoldQueryNode(expr, *sq_ref.subquery->node, macro_binding);
+		for (auto &kv : sq_ref.subquery->cte_map) {
+            UnfoldQueryNode(expr, *kv.second->query->node.get(), macro_binding);
+		}
+	} else if (sel_node.from_table->type == TableReferenceType::TABLE_FUNCTION) {
+        auto &tf_ref = (TableFunctionRef &)*sel_node.from_table;
+        tf_ref.function = UnfoldMacroRecursive(move(tf_ref.function), macro_binding);
+	}
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &expr) {

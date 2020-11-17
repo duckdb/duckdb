@@ -6,6 +6,21 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+CREATE MACRO nested_cte(needle, haystack) AS needle IN (
+    SELECT i FROM (
+        WITH ints AS (
+            SELECT CAST(UNNEST(string_split(haystack,',')) AS INT) AS i
+        )
+        SELECT i FROM ints
+    ) AS sq
+)
+
+query T
+SELECT nested_cte(2, '2,2,2,2')
+----
+1
+
+statement ok
 CREATE TABLE integers (a INT)
 
 statement ok

@@ -19,7 +19,6 @@ namespace duckdb {
 class Binder;
 class ClientContext;
 class QueryNode;
-// class SelectNode;
 
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
