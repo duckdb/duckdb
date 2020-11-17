@@ -18,14 +18,16 @@ namespace duckdb {
 
 class Binder;
 class ClientContext;
-class SelectNode;
+class QueryNode;
+//class SelectNode;
 
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
 class MacroFunctionCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
-class MacroBinding;
+
+struct MacroBinding;
 
 struct BindResult {
 	BindResult(string error) : error(error) {
@@ -94,9 +96,10 @@ protected:
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
 	virtual BindResult BindMacro(FunctionExpression &expr);
 
-	unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr);
+	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr);
 	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,
 	                                                          MacroBinding &macro_binding);
+    virtual void UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

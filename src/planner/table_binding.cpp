@@ -121,7 +121,9 @@ unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colre
 	if (entry == name_map.end()) {
 		throw BinderException("Macro \"%s\" does not have a parameter named \"%s\"", macro_name, colref.column_name);
 	}
-	return arguments[entry->second]->Copy();
+	auto arg = arguments[entry->second]->Copy();
+	arg->alias = colref.alias;
+	return arg;
 }
 
 } // namespace duckdb

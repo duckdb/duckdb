@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -103,9 +104,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 		auto &colref = (ColumnRefExpression &)*expr;
 		if (colref.table_name.empty() && macro_binding.HasMatchingBinding(colref.column_name)) {
 			expr = macro_binding.ParamToArg(colref);
+		}
+		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			return expr;
+		} else {
 			return UnfoldMacroRecursive(move(expr), macro_binding);
 		}
-		return expr;
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &function_expr = (FunctionExpression &)*expr;
@@ -141,21 +145,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 	}
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
-		auto &sqe = (SubqueryExpression &)*expr;
-		if (sqe.subquery->node->type != QueryNodeType::SELECT_NODE) {
-			// TODO: throw an error
+		auto &sq = ((SubqueryExpression &)*expr).subquery;
+        UnfoldQueryNode(*expr, *sq->node.get(), macro_binding);
+
+		for (auto &kv : sq->cte_map) {
+			UnfoldQueryNode(*expr, *kv.second->query->node.get(), macro_binding);
 		}
-		auto &sel_node = (SelectNode &)*sqe.subquery->node;
-		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
-			sel_node.select_list[i] = UnfoldMacroRecursive(move(sel_node.select_list[i]), macro_binding);
-		}
-		for (idx_t i = 0; i < sel_node.groups.size(); i++) {
-			sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding);
-		}
-		if (sel_node.where_clause != nullptr)
-			sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding);
-		if (sel_node.having != nullptr)
-			sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
 		break;
 	}
 	default: // fall through
@@ -167,6 +162,23 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 		    return UnfoldMacroRecursive(move(child), macro_binding);
 	    });
 	return expr;
+}
+
+void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding) {
+    if (node.type != QueryNodeType::SELECT_NODE) {
+        throw BinderException(binder.FormatError(expr, "Macro's with non-SELECT sub-queries are not supported."));
+    }
+    auto &sel_node = (SelectNode &) node;
+    for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
+        sel_node.select_list[i] = UnfoldMacroRecursive(move(sel_node.select_list[i]), macro_binding);
+    }
+    for (idx_t i = 0; i < sel_node.groups.size(); i++) {
+        sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding);
+    }
+    if (sel_node.where_clause != nullptr)
+        sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding);
+    if (sel_node.having != nullptr)
+        sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &expr) {

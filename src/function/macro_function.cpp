@@ -35,13 +35,13 @@ string MacroFunction::ValidateArguments(ClientContext &context, QueryErrorContex
 		if (arg->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto &func_arg = (FunctionExpression &)*arg;
 			auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func_arg.schema,
-                                             func_arg.function_name, false, error_context);
+			                             func_arg.function_name, false, error_context);
 			if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
 				auto &scalar_func_arg = (ScalarFunctionCatalogEntry &)*func;
 				for (auto sfa : scalar_func_arg.functions) {
 					if (sfa.has_side_effects) {
 						error = StringUtil::Format(
-						    "Arguments with side-effects are not supported ('%s' was supplied). As a "
+						    "Arguments with side-effects are not supported ('%s()' was supplied). As a "
 						    "workaround, try creating a CTE that evaluates the argument with side-effects.",
 						    sfa.name);
 						return error;

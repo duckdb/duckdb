@@ -6,6 +6,12 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+CREATE TABLE integers (a INT)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+statement ok
 CREATE MACRO one() AS (SELECT 1);
 
 query T
@@ -34,12 +40,6 @@ CREATE MACRO add(a) AS a + b
 
 statement ok
 CREATE MACRO add(a, b) AS a + b
-
-statement ok
-CREATE TABLE integers (a INT)
-
-statement ok
-INSERT INTO integers VALUES (1)
 
 query T
 SELECT add(a,a) FROM integers
