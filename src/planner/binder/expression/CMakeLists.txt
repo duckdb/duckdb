@@ -9,6 +9,7 @@ add_library_unity(duckdb_bind_expression
                   bind_conjunction_expression.cpp
                   bind_constant_expression.cpp
                   bind_function_expression.cpp
+                  bind_macro_expression.cpp
                   bind_operator_expression.cpp
                   bind_parameter_expression.cpp
                   bind_subquery_expression.cpp
