@@ -1,7 +1,7 @@
-#include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
+#include "duckdb/function/macro_function.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/function/macro_function.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -15,7 +15,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
 	D_ASSERT(stmt);
 
 	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateMacroFunctionInfo>();
+	auto info = make_unique<CreateMacroInfo>();
 
 	auto qname = TransformQualifiedName(stmt->name);
 	info->schema = qname.schema;

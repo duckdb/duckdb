@@ -1,10 +1,10 @@
-#include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
 
-void MacroFunctionCatalogEntry::Serialize(Serializer &serializer) {
+void MacroFunctionEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
     function->expression->Serialize(serializer);
@@ -14,8 +14,8 @@ void MacroFunctionCatalogEntry::Serialize(Serializer &serializer) {
 	}
 }
 
-unique_ptr<CreateMacroFunctionInfo> MacroFunctionCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateMacroFunctionInfo>();
+unique_ptr<CreateMacroInfo> MacroFunctionEntry::Deserialize(Deserializer &source) {
+	auto info = make_unique<CreateMacroInfo>();
 	info->schema = source.Read<string>();
 	info->name = source.Read<string>();
 	info->function = make_unique<MacroFunction>(ParsedExpression::Deserialize(source));

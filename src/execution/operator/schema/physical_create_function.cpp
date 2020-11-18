@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/schema/physical_create_function.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 
 using namespace std;
 

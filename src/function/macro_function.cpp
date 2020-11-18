@@ -1,7 +1,7 @@
 #include "duckdb/function/macro_function.hpp"
 
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
@@ -11,7 +11,7 @@ MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expressi
 }
 
 string MacroFunction::ValidateArguments(ClientContext &context, QueryErrorContext &error_context,
-                                        MacroFunctionCatalogEntry &macro_func, FunctionExpression &function_expr) {
+                                        MacroFunctionEntry &macro_func, FunctionExpression &function_expr) {
 	string error;
 	auto &catalog = Catalog::GetCatalog(context);
 	auto &parameters = macro_func.function->parameters;

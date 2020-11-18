@@ -260,7 +260,7 @@ void ReplayState::ReplaySequenceValue() {
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateMacro() {
-    auto entry = MacroFunctionCatalogEntry::Deserialize(source);
+    auto entry = MacroFunctionEntry::Deserialize(source);
 
     db.catalog->CreateFunction(context, entry.get());
 }

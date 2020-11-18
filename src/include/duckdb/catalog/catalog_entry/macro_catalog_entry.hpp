@@ -8,17 +8,17 @@
 
 #pragma once
 
-#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/function/macro_function.hpp"
-#include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 
 namespace duckdb {
 
 //! A macro function in the catalog
-class MacroFunctionCatalogEntry : public StandardEntry {
+class MacroFunctionEntry : public StandardEntry {
 public:
-	MacroFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroFunctionInfo *info)
+	MacroFunctionEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
 	    : StandardEntry(CatalogType::MACRO_ENTRY, schema, catalog, info->name), function(move(info->function)) {
 	}
 
@@ -26,9 +26,9 @@ public:
 	unique_ptr<MacroFunction> function;
 
 public:
-    //! Serialize the meta information of the MacroFunctionCatalogEntry a serializer
+    //! Serialize the meta information of the MacroFunctionEntry a serializer
     virtual void Serialize(Serializer &serializer);
-    //! Deserializes to a CreateMacroFunctionInfo
-    static unique_ptr<CreateMacroFunctionInfo> Deserialize(Deserializer &source);
+    //! Deserializes to a CreateMacroInfo
+    static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

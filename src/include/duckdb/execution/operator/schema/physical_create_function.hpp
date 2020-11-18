@@ -9,18 +9,18 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 
 namespace duckdb {
 
 //! PhysicalCreateFunction represents a CREATE FUNCTION command
 class PhysicalCreateFunction : public PhysicalOperator {
 public:
-	PhysicalCreateFunction(unique_ptr<CreateMacroFunctionInfo> info)
+	PhysicalCreateFunction(unique_ptr<CreateMacroInfo> info)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_MACRO, {LogicalType::BIGINT}), info(move(info)) {
 	}
 
-	unique_ptr<CreateMacroFunctionInfo> info;
+	unique_ptr<CreateMacroInfo> info;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

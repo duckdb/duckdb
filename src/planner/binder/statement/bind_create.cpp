@@ -2,10 +2,10 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
@@ -14,8 +14,8 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
@@ -62,7 +62,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 }
 
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
-	auto &base = (CreateMacroFunctionInfo &)info;
+	auto &base = (CreateMacroInfo &)info;
 
 	// create macro binding in order to bind the function
 	vector<LogicalType> dummy_types;

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/create_macro_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -22,8 +22,8 @@ struct BoundCreateFunctionInfo {
 	//! The base CreateInfo object
 	unique_ptr<CreateInfo> base;
 
-	CreateMacroFunctionInfo &Base() {
-		return (CreateMacroFunctionInfo &)*base;
+	CreateMacroInfo &Base() {
+		return (CreateMacroInfo &)*base;
 	}
 };
 
