@@ -813,10 +813,7 @@ jobs:
   linux-raspi:
     name: Raspberry Pi Binary
     runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      GEN: ninja
+    #needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
@@ -828,14 +825,18 @@ jobs:
         python-version: '3.7'
 
     - name: Setup
-      run: sudo apt-get install -y build-essential g++-arm-linux-gnueabihf gdb-multiarch ninja-build
+      run: |
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+        sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+        sudo apt update
+        sudo apt install docker-ce
+        sudo systemctl status docker
 
     - name: Build
       run: |
-        export CXX=arm-linux-gnueabihf-g++
-        export CC=arm-linux-gnueabihf-gcc
-        STATIC_LIBCPP=1 make
-
+        export STATIC_LIBCPP=1
+        docker run -it -v .:/build mitchallen/pi-cross-compile
+        file build/release/duckdb
 
     - name: Deploy
       run: |
