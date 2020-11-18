@@ -810,46 +810,40 @@ jobs:
       run: ./scripts/node_build.sh 15
 
 
-  linux-raspi:
-    name: Raspberry Pi Binary
-    runs-on: ubuntu-20.04
-    #needs: linux-debug
+  # linux-raspi:
+  #   name: Raspberry Pi Binary
+  #   runs-on: ubuntu-20.04
+  #   #needs: linux-debug
 
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+  #   steps:
+  #   - uses: actions/checkout@v2
+  #     with:
+  #       fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+  #   - uses: actions/setup-python@v2
+  #     with:
+  #       python-version: '3.7'
 
-    - name: Setup
-      run: |
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-        sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
-        sudo apt-get update
-        sudo apt-get install -y docker-ce
-        sudo systemctl status docker
+  #   - name: Setup
+  #     run: |
+  #       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  #       sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+  #       sudo apt-get update
+  #       sudo apt-get install -y docker-ce
 
-    - name: Configure
-      run: |
-          mkdir -p build/release
-          cd build/release
-          cmake -DSTATIC_LIBCPP=1 -DBUILD_UNITTESTS=0 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_ICU_EXTENSION=1 -DCMAKE_BUILD_TYPE=Release ../..
+  #   - name: Build
+  #     run: |
+  #       export STATIC_LIBCPP=1
+  #       docker run -v `pwd`:/build mitchallen/pi-cross-compile
+  #       file build/release/duckdb
 
-    - name: Build
-      run: |
-        docker run -v `pwd`/build/release:/build mitchallen/pi-cross-compile
-        file build/release/duckdb
+  #   - name: Deploy
+  #     run: |
+  #       zip -j duckdb_cli-arm-linux-gnueabihf.zip build/release/duckdb
+  #       python scripts/asset-upload-gha.py duckdb_cli-arm-linux-gnueabihf.zip
 
-    - name: Deploy
-      run: |
-        zip -j duckdb_cli-arm-linux-gnueabihf.zip build/release/duckdb
-        python scripts/asset-upload-gha.py duckdb_cli-arm-linux-gnueabihf.zip
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-linux
-        path: |
-          duckdb_cli-arm-linux-gnueabihf.zip
+  #   - uses: actions/upload-artifact@v2
+  #     with:
+  #       name: duckdb-binaries-linux
+  #       path: |
+  #         duckdb_cli-arm-linux-gnueabihf.zip
