@@ -835,7 +835,7 @@ jobs:
     - name: Build
       run: |
         export STATIC_LIBCPP=1
-        docker run -v .:/build mitchallen/pi-cross-compile
+        docker run -v `pwd`:/build mitchallen/pi-cross-compile
         file build/release/duckdb
 
     - name: Deploy
