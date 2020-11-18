@@ -9,7 +9,8 @@ using namespace std;
 
 namespace duckdb {
 
-template <int FACTOR> static void epoch_function(DataChunk &input, ExpressionState &state, Vector &result) {
+template<int FACTOR>
+static void epoch_function(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.column_count() == 1);
 
 	string output_buffer;

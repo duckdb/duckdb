@@ -714,7 +714,7 @@ void FileHandle::Truncate(int64_t new_size) {
 
 static bool HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
-		switch (str[i]) {
+		switch(str[i]) {
 		case '*':
 		case '?':
 		case '[':

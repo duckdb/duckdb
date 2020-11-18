@@ -33,7 +33,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		predicates.push_back(condition.comparison);
 		null_values_are_equal.push_back(condition.null_values_are_equal);
 		D_ASSERT(!condition.null_values_are_equal ||
-		         (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
+		       (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
 
 		condition_types.push_back(type);
 		condition_size += type_size;

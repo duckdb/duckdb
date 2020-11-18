@@ -36,19 +36,18 @@ struct IcuBindData : public FunctionData {
 	}
 };
 
-static int32_t icu_get_sort_key(icu::Collator &collator, string_t input, unique_ptr<char[]> &buffer,
-                                int32_t &buffer_size) {
+static int32_t icu_get_sort_key(icu::Collator &collator, string_t input, unique_ptr<char[]> &buffer, int32_t &buffer_size) {
 	int32_t string_size =
-	    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
-	                        (uint8_t *)buffer.get(), buffer_size);
+		collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
+							(uint8_t *)buffer.get(), buffer_size);
 	if (string_size > buffer_size) {
 		// have to resize the buffer
 		buffer_size = string_size;
 		buffer = unique_ptr<char[]>(new char[buffer_size]);
 
-		string_size =
-		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
-		                        (uint8_t *)buffer.get(), buffer_size);
+		string_size = collator.getSortKey(
+			icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
+			(uint8_t *)buffer.get(), buffer_size);
 	}
 	return string_size;
 }
@@ -67,7 +66,7 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 		// convert the sort key to hexadecimal
 		auto str_result = StringVector::EmptyString(result, (string_size - 1) * 2);
 		auto str_data = str_result.GetDataWriteable();
-		for (idx_t i = 0; i < string_size - 1; i++) {
+		for(idx_t i = 0; i < string_size - 1; i++) {
 			uint8_t byte = uint8_t(buffer[i]);
 			assert(byte != 0);
 			str_data[i * 2] = hexa_table[byte / 16];
@@ -91,7 +90,7 @@ static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarF
 }
 
 static unique_ptr<FunctionData> icu_sort_key_bind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+                                                 vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
 	}

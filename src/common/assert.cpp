@@ -10,4 +10,4 @@ void duckdb_assert_internal(bool condition, const char *condition_name, const ch
 	throw InternalException("Assertion triggered in file \"%s\" on line %d: %s", file, linenr, condition_name);
 }
 
-} // namespace duckdb
+}
