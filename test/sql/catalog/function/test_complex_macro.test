@@ -52,6 +52,10 @@ SELECT IFELSE(1, IFELSE(1,a,'b'), 'c') FROM integers
 statement error
 SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
 
+# conflicting bindings
+statement error
+CREATE MACRO f1(x) AS (SELECT MIN(a) + x FROM integers)
+
 # test FTS extension use case
 statement ok
 CREATE TABLE documents(id VARCHAR, body VARCHAR)
