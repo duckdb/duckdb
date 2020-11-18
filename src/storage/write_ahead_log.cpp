@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include <cstring>
 
@@ -74,6 +75,20 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 	writer->WriteString(entry->name);
 	writer->Write<uint64_t>(val.usage_count);
 	writer->Write<int64_t>(val.counter);
+}
+
+//===--------------------------------------------------------------------===//
+// MACRO'S
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateMacro(MacroFunctionCatalogEntry *entry) {
+    writer->Write<WALType>(WALType::CREATE_MACRO);
+    entry->Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDropMacro(MacroFunctionCatalogEntry *entry) {
+    writer->Write<WALType>(WALType::DROP_MACRO);
+    writer->WriteString(entry->schema->name);
+    writer->WriteString(entry->name);
 }
 
 //===--------------------------------------------------------------------===//

@@ -24,5 +24,11 @@ public:
 
 	//! The macro function
 	unique_ptr<MacroFunction> function;
+
+public:
+    //! Serialize the meta information of the MacroFunctionCatalogEntry a serializer
+    virtual void Serialize(Serializer &serializer);
+    //! Deserializes to a CreateMacroFunctionInfo
+    static unique_ptr<CreateMacroFunctionInfo> Deserialize(Deserializer &source);
 };
 } // namespace duckdb
