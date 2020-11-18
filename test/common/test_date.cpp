@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Date parsing works", "[date]") {
+TEST_CASE("Date parsing works", "[date][.]") {
 	REQUIRE(Date::ToString(Date::FromString("1992-01-01")) == "1992-01-01");
 	REQUIRE(Date::ToString(Date::FromString(Date::Format(1992, 1, 1))) == Date::Format(1992, 1, 1));
 	REQUIRE(Date::ToString(Date::FromString(Date::Format(1992, 10, 10))) == Date::Format(1992, 10, 10));
@@ -70,7 +70,7 @@ TEST_CASE("Date parsing works", "[date]") {
 	REQUIRE_THROWS(Date::FromString("1992-10-100"));
 }
 
-TEST_CASE("Time parsing works", "[date]") {
+TEST_CASE("Time parsing works", "[date][.]") {
 	REQUIRE(Time::ToString(Time::FromString("14:42:04")) == "14:42:04");
 
 	for (int hour = 0; hour < 24; hour++) {

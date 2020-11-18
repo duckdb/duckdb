@@ -32,7 +32,7 @@ idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
 			return index;
 		}
 	}
-	throw Exception("Could not find node in column segment tree!");
+	throw InternalException("Could not find node in column segment tree!");
 }
 
 void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {

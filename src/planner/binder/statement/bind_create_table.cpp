@@ -58,13 +58,13 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			// have to resolve columns of the unique constraint
 			unordered_set<idx_t> keys;
 			if (unique.index != INVALID_INDEX) {
-				assert(unique.index < base.columns.size());
+				D_ASSERT(unique.index < base.columns.size());
 				// unique constraint is given by single index
 				keys.insert(unique.index);
 			} else {
 				// unique constraint is given by list of names
 				// have to resolve names
-				assert(unique.columns.size() > 0);
+				D_ASSERT(unique.columns.size() > 0);
 				for (auto &keyname : unique.columns) {
 					auto entry = info.name_map.find(keyname);
 					if (entry == info.name_map.end()) {
@@ -134,7 +134,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;
 		auto &sql_types = query_obj.types;
-		assert(names.size() == sql_types.size());
+		D_ASSERT(names.size() == sql_types.size());
 		for (idx_t i = 0; i < names.size(); i++) {
 			base.columns.push_back(ColumnDefinition(names[i], sql_types[i]));
 		}

@@ -20,7 +20,7 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 
 void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::EXPRESSION_GET: {
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		auto &get = (LogicalExpressionGet &)op;
 		for (auto &expr_list : get.expressions) {
 			for (auto &expr : expr_list) {
@@ -29,30 +29,30 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 		}
 		break;
 	}
-	case LogicalOperatorType::ORDER_BY: {
+	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		auto &order = (LogicalOrder &)op;
 		for (auto &node : order.orders) {
 			VisitExpression(&node.expression);
 		}
 		break;
 	}
-	case LogicalOperatorType::TOP_N: {
+	case LogicalOperatorType::LOGICAL_TOP_N: {
 		auto &order = (LogicalTopN &)op;
 		for (auto &node : order.orders) {
 			VisitExpression(&node.expression);
 		}
 		break;
 	}
-	case LogicalOperatorType::DISTINCT: {
+	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct = (LogicalDistinct &)op;
 		for (auto &target : distinct.distinct_targets) {
 			VisitExpression(&target);
 		}
 		break;
 	}
-	case LogicalOperatorType::DELIM_JOIN:
-	case LogicalOperatorType::COMPARISON_JOIN: {
-		if (op.type == LogicalOperatorType::DELIM_JOIN) {
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			auto &delim_join = (LogicalDelimJoin &)op;
 			for (auto &expr : delim_join.duplicate_eliminated_columns) {
 				VisitExpression(&expr);
@@ -65,12 +65,12 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 		}
 		break;
 	}
-	case LogicalOperatorType::ANY_JOIN: {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = (LogicalAnyJoin &)op;
 		VisitExpression(&join.condition);
 		break;
 	}
-	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = (LogicalAggregate &)op;
 		for (idx_t i = 0; i < aggr.groups.size(); i++) {
 			VisitExpression(&aggr.groups[i]);
@@ -141,7 +141,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 		result = VisitReplace((BoundUnnestExpression &)expr, expression);
 		break;
 	default:
-		assert(0);
+		D_ASSERT(0);
 	}
 	if (result) {
 		*expression = move(result);

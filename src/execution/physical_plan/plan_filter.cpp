@@ -12,11 +12,12 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
-	assert(op.children.size() == 1);
+	D_ASSERT(op.children.size() == 1);
 	unique_ptr<PhysicalOperator> plan = CreatePlan(*op.children[0]);
 	if (op.expressions.size() > 0) {
+		D_ASSERT(plan->types.size() > 0);
 		// create a filter if there is anything to filter
-		auto filter = make_unique<PhysicalFilter>(op.children[0]->types, move(op.expressions));
+		auto filter = make_unique<PhysicalFilter>(plan->types, move(op.expressions));
 		filter->children.push_back(move(plan));
 		plan = move(filter);
 	}

@@ -2,6 +2,9 @@
 # description: Read the lineitem of TPC-H SF0.1 from a CSV file with a unicode delimiter
 # group: [csv]
 
+name Read Lineitem CSV (Unicode Delimiter)
+group csv
+
 require tpch
 
 # create the CSV file

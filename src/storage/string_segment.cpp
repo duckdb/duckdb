@@ -13,7 +13,6 @@ namespace duckdb {
 StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t block)
     : UncompressedSegment(manager, PhysicalType::VARCHAR, row_start) {
 	this->max_vector_count = 0;
-	this->dictionary_offset = 0;
 	// the vector_size is given in the size of the dictionary offsets
 	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + sizeof(nullmask_t);
 	this->string_updates = nullptr;
@@ -23,9 +22,18 @@ StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t
 		// start off with an empty string segment: allocate space for it
 		auto handle = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 		this->block_id = handle->block_id;
+		SetDictionaryOffset(*handle, sizeof(idx_t));
 
 		ExpandStringSegment(handle->node->buffer);
 	}
+}
+
+void StringSegment::SetDictionaryOffset(BufferHandle &handle, idx_t offset) {
+	Store<idx_t>(offset, handle.node->buffer + Storage::BLOCK_SIZE - sizeof(idx_t));
+}
+
+idx_t StringSegment::GetDictionaryOffset(BufferHandle &handle) {
+	return Load<idx_t>(handle.node->buffer + Storage::BLOCK_SIZE - sizeof(idx_t));
 }
 
 StringSegment::~StringSegment() {
@@ -91,8 +99,8 @@ void StringSegment::read_string(string_t *result_data, buffer_handle_set_t &hand
 void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
                            vector<TableFilter> &tableFilter) {
 	auto vector_index = state.vector_index;
-	assert(vector_index < max_vector_count);
-	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+	D_ASSERT(vector_index < max_vector_count);
+	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	auto handle = state.primary_handle.get();
 	state.handles.clear();
@@ -317,7 +325,7 @@ string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t
 
 string_t StringSegment::FetchStringFromDict(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t dict_offset) {
 	// fetch base data
-	assert(dict_offset <= Storage::BLOCK_SIZE);
+	D_ASSERT(dict_offset <= Storage::BLOCK_SIZE);
 	string_location_t location = FetchStringLocation(baseptr, dict_offset);
 	return FetchString(handles, baseptr, location);
 }
@@ -346,7 +354,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 
 	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
 	idx_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
-	assert(vector_index < max_vector_count);
+	D_ASSERT(vector_index < max_vector_count);
 
 	data_ptr_t baseptr;
 
@@ -414,7 +422,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 // Append
 //===--------------------------------------------------------------------===//
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	assert(data.type.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(data.type.InternalType() == PhysicalType::VARCHAR);
 	auto handle = manager.Pin(block_id);
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
@@ -424,7 +432,7 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 			// we are at the maximum vector, check if there is space to increase the maximum vector count
 			// as a heuristic, we only allow another vector to be added if we have at least 32 bytes per string
 			// remaining (32KB out of a 256KB block, or around 12% empty)
-			if (RemainingSpace() >= STANDARD_VECTOR_SIZE * 32) {
+			if (RemainingSpace(*handle) >= STANDARD_VECTOR_SIZE * 32) {
 				// we have enough remaining space to add another vector
 				ExpandStringSegment(handle->node->buffer);
 			} else {
@@ -435,8 +443,8 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 		idx_t append_count = MinValue(STANDARD_VECTOR_SIZE - current_tuple_count, count);
 
 		// now perform the actual append
-		AppendData(stats, handle->node->buffer + vector_size * vector_index, handle->node->buffer + Storage::BLOCK_SIZE,
-		           current_tuple_count, data, offset, append_count);
+		AppendData(*handle, stats, handle->node->buffer + vector_size * vector_index,
+		           handle->node->buffer + Storage::BLOCK_SIZE, current_tuple_count, data, offset, append_count);
 
 		count -= append_count;
 		offset += append_count;
@@ -474,8 +482,14 @@ static void update_min_max_string_segment(string value, char *__restrict min, ch
 	}
 }
 
-void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset,
-                               Vector &source, idx_t offset, idx_t count) {
+idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
+	idx_t used_space = GetDictionaryOffset(handle) + max_vector_count * vector_size;
+	D_ASSERT(Storage::BLOCK_SIZE >= used_space);
+	return Storage::BLOCK_SIZE - used_space;
+}
+
+void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
+                               idx_t target_offset, Vector &source, idx_t offset, idx_t count) {
 	VectorData adata;
 	source.Orrify(count, adata);
 
@@ -495,10 +509,11 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			result_nullmask[target_idx] = true;
 			stats.has_null = true;
 		} else {
-			assert(dictionary_offset < Storage::BLOCK_SIZE);
+			auto dictionary_offset = GetDictionaryOffset(handle);
+			D_ASSERT(dictionary_offset < Storage::BLOCK_SIZE);
 			// non-null value, check if we can fit it within the block
 			idx_t string_length = sdata[source_idx].GetSize();
-			idx_t total_length = string_length + 1 + sizeof(uint16_t);
+			idx_t total_length = string_length + sizeof(uint16_t);
 
 			if (string_length > stats.max_string_length) {
 				stats.max_string_length = string_length;
@@ -509,13 +524,13 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			// to always leave enough room for BIG_STRING_MARKER_SIZE for each of the remaining strings
 			if (total_length > BIG_STRING_MARKER_BASE_SIZE &&
 			    (total_length >= STRING_BLOCK_LIMIT ||
-			     total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace())) {
-				assert(RemainingSpace() >= BIG_STRING_MARKER_SIZE);
+			     total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace(handle))) {
+				D_ASSERT(RemainingSpace(handle) >= BIG_STRING_MARKER_SIZE);
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
 				int32_t offset;
 				//! Update min/max of column segment
-				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
+				update_min_max_string_segment(sdata[source_idx].GetString(), min, max);
 				// write the string into the current string block
 				WriteString(sdata[source_idx], block, offset);
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
@@ -527,26 +542,27 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				stats.has_overflow_strings = true;
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
-				assert(string_length < NumericLimits<uint16_t>::Maximum());
+				D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
 				dictionary_offset += total_length;
 				auto dict_pos = end - dictionary_offset;
 				//! Update min/max of column segment
-				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
+				update_min_max_string_segment(sdata[source_idx].GetString(), min, max);
 				// first write the length as u16
 				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary
-				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
+				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetDataUnsafe(), string_length);
 			}
+			D_ASSERT(RemainingSpace(handle) <= Storage::BLOCK_SIZE);
 			// place the dictionary offset into the set of vectors
-			assert(dictionary_offset <= Storage::BLOCK_SIZE);
+			D_ASSERT(dictionary_offset <= Storage::BLOCK_SIZE);
 			result_data[target_idx] = dictionary_offset;
+			SetDictionaryOffset(handle, dictionary_offset);
 		}
 		remaining_strings--;
 	}
 }
 
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
-	assert(strlen(string.GetData()) == string.GetSize());
 	if (overflow_writer) {
 		// overflow writer is set: write string there
 		overflow_writer->WriteString(string, result_block, result_offset);
@@ -557,7 +573,7 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 }
 
 void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block, int32_t &result_offset) {
-	uint32_t total_length = string.GetSize() + 1 + sizeof(uint32_t);
+	uint32_t total_length = string.GetSize() + sizeof(uint32_t);
 	unique_ptr<BufferHandle> handle;
 	// check if the string fits in the current block
 	if (!head || head->offset + total_length >= head->size) {
@@ -584,12 +600,12 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 	auto ptr = handle->node->buffer + head->offset;
 	Store<uint32_t>(string.GetSize(), ptr);
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.GetData(), string.GetSize() + 1);
+	memcpy(ptr, string.GetDataUnsafe(), string.GetSize());
 	head->offset += total_length;
 }
 
 string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset) {
-	assert(offset < Storage::BLOCK_SIZE);
+	D_ASSERT(offset < Storage::BLOCK_SIZE);
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
 	}
@@ -598,11 +614,11 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 		// pin the initial handle and read the length
 		auto handle = manager.Pin(block);
 		uint32_t length = Load<uint32_t>(handle->node->buffer + offset);
-		uint32_t remaining = length + 1;
+		uint32_t remaining = length;
 		offset += sizeof(uint32_t);
 
 		// allocate a buffer to store the string
-		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + 1 + sizeof(uint32_t));
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + sizeof(uint32_t));
 		auto target_handle = manager.Allocate(alloc_size, true);
 		auto target_ptr = target_handle->node->buffer;
 		// write the length in this block as well
@@ -682,7 +698,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			update_min_max_string_segment(strings[i].GetData(), min, max);
+			update_min_max_string_segment(strings[i].GetString(), min, max);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
@@ -705,7 +721,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			update_min_max_string_segment(strings[i].GetData(), min, max);
+			update_min_max_string_segment(strings[i].GetString(), min, max);
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
@@ -750,13 +766,13 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_c
 	// now we perform a merge of the new ids with the old ids
 	auto merge = [&](idx_t id, idx_t aidx, idx_t bidx, idx_t count) {
 		// new_id and old_id are the same, insert the old data in the UpdateInfo
-		assert(old_data[bidx].IsValid());
+		D_ASSERT(old_data[bidx].IsValid());
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
 		// new_id comes before the old id, insert the base table data into the update info
-		assert(base_data[aidx].IsValid());
+		D_ASSERT(base_data[aidx].IsValid());
 		info_data[count] = base_data[aidx];
 		node->nullmask[id] = base_nullmask[aidx];
 
@@ -764,7 +780,7 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_c
 	};
 	auto pick_old = [&](idx_t id, idx_t bidx, idx_t count) {
 		// old_id comes before new_id, insert the old data
-		assert(old_data[bidx].IsValid());
+		D_ASSERT(old_data[bidx].IsValid());
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
@@ -846,7 +862,7 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	idx_t old_idx = 0;
 	for (idx_t i = 0; i < update_info.count; i++) {
 		if (old_idx >= info->N || update_info.ids[i] != info->tuples[old_idx]) {
-			assert(old_idx >= info->N || update_info.ids[i] < info->tuples[old_idx]);
+			D_ASSERT(old_idx >= info->N || update_info.ids[i] < info->tuples[old_idx]);
 			// this entry is not rolled back: insert entry directly
 			update_info.ids[new_count] = update_info.ids[i];
 			update_info.block_ids[new_count] = update_info.block_ids[i];
@@ -874,6 +890,11 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 		update_info.count = new_count;
 	}
 	CleanupUpdate(info);
+}
+
+void StringSegment::ToTemporary() {
+	UncompressedSegment::ToTemporary();
+	this->max_vector_count = (this->tuple_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 }
 
 } // namespace duckdb

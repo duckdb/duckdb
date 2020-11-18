@@ -14,6 +14,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "parquet-extension.hpp"
 
 #include <random>
@@ -51,7 +52,7 @@ struct TimeConvert {
 
 struct StringConvert {
 	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
-		return py::str(val.GetData());
+		return py::str(val.GetString());
 	}
 };
 
@@ -153,12 +154,31 @@ std::string generate() {
 }
 } // namespace random_string
 
+enum class PandasType : uint8_t {
+	BOOLEAN,
+	TINYINT_NATIVE,
+	TINYINT_OBJECT,
+	SMALLINT_NATIVE,
+	SMALLINT_OBJECT,
+	INTEGER_NATIVE,
+	INTEGER_OBJECT,
+	BIGINT_NATIVE,
+	BIGINT_OBJECT,
+	FLOAT,
+	DOUBLE,
+	TIMESTAMP_NATIVE,
+	TIMESTAMP_OBJECT,
+	VARCHAR
+};
+
 struct PandasScanFunctionData : public TableFunctionData {
-	PandasScanFunctionData(py::handle df, idx_t row_count, vector<LogicalType> sql_types)
-	    : df(df), row_count(row_count), sql_types(sql_types) {
+	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasType> pandas_types_,
+	                       vector<LogicalType> sql_types_)
+	    : df(df), row_count(row_count), pandas_types(move(pandas_types_)), sql_types(move(sql_types_)) {
 	}
 	py::handle df;
 	idx_t row_count;
+	vector<PandasType> pandas_types;
 	vector<LogicalType> sql_types;
 };
 
@@ -195,36 +215,63 @@ struct PandasScanFunction : public TableFunction {
 		if (py::len(df_names) == 0 || py::len(df_types) == 0 || py::len(df_names) != py::len(df_types)) {
 			throw runtime_error("Need a DataFrame with at least one column");
 		}
+		vector<PandasType> pandas_types;
 		for (idx_t col_idx = 0; col_idx < py::len(df_names); col_idx++) {
 			auto col_type = string(py::str(df_types[col_idx]));
 			names.push_back(string(py::str(df_names[col_idx])));
 			LogicalType duckdb_col_type;
+			PandasType pandas_type;
 			if (col_type == "bool") {
 				duckdb_col_type = LogicalType::BOOLEAN;
+				pandas_type = PandasType::BOOLEAN;
 			} else if (col_type == "int8") {
 				duckdb_col_type = LogicalType::TINYINT;
+				pandas_type = PandasType::TINYINT_NATIVE;
+			} else if (col_type == "Int8") {
+				duckdb_col_type = LogicalType::TINYINT;
+				pandas_type = PandasType::TINYINT_OBJECT;
 			} else if (col_type == "int16") {
 				duckdb_col_type = LogicalType::SMALLINT;
+				pandas_type = PandasType::SMALLINT_NATIVE;
+			} else if (col_type == "Int16") {
+				duckdb_col_type = LogicalType::SMALLINT;
+				pandas_type = PandasType::SMALLINT_OBJECT;
 			} else if (col_type == "int32") {
 				duckdb_col_type = LogicalType::INTEGER;
+				pandas_type = PandasType::INTEGER_NATIVE;
+			} else if (col_type == "Int32") {
+				duckdb_col_type = LogicalType::INTEGER;
+				pandas_type = PandasType::INTEGER_OBJECT;
 			} else if (col_type == "int64") {
 				duckdb_col_type = LogicalType::BIGINT;
+				pandas_type = PandasType::BIGINT_NATIVE;
+			} else if (col_type == "Int64") {
+				duckdb_col_type = LogicalType::BIGINT;
+				pandas_type = PandasType::BIGINT_OBJECT;
 			} else if (col_type == "float32") {
 				duckdb_col_type = LogicalType::FLOAT;
+				pandas_type = PandasType::FLOAT;
 			} else if (col_type == "float64") {
 				duckdb_col_type = LogicalType::DOUBLE;
+				pandas_type = PandasType::DOUBLE;
 			} else if (col_type == "datetime64[ns]") {
 				duckdb_col_type = LogicalType::TIMESTAMP;
+				pandas_type = PandasType::TIMESTAMP_NATIVE;
+			} else if (StringUtil::StartsWith(col_type, "datetime64[ns")) {
+				duckdb_col_type = LogicalType::TIMESTAMP;
+				pandas_type = PandasType::TIMESTAMP_OBJECT;
 			} else if (col_type == "object") {
 				// this better be strings
 				duckdb_col_type = LogicalType::VARCHAR;
+				pandas_type = PandasType::VARCHAR;
 			} else {
 				throw runtime_error("unsupported python type " + col_type);
 			}
 			return_types.push_back(duckdb_col_type);
+			pandas_types.push_back(pandas_type);
 		}
 		idx_t row_count = py::len(df.attr("__getitem__")(df_names[0]));
-		return make_unique<PandasScanFunctionData>(df, row_count, return_types);
+		return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_types), return_types);
 	}
 
 	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
@@ -238,13 +285,29 @@ struct PandasScanFunction : public TableFunction {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
 	}
 
+	template <class T>
+	static void scan_pandas_numeric_object(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
+		auto src_ptr = (PyObject **)numpy_col.data();
+		auto tgt_ptr = FlatVector::GetData<T>(out);
+		auto &nullmask = FlatVector::Nullmask(out);
+		for (idx_t i = 0; i < count; i++) {
+			auto obj = src_ptr[offset + i];
+			auto &py_obj = *((py::object *)&obj);
+			if (!py::isinstance<py::int_>(py_obj)) {
+				nullmask[i] = true;
+				continue;
+			}
+			tgt_ptr[i] = py_obj.cast<T>();
+		}
+	}
+
 	template <class T> static bool ValueIsNull(T value) {
 		throw runtime_error("unsupported type for ValueIsNull");
 	}
 
 	template <class T> static void scan_pandas_fp_column(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
-		auto tgt_ptr = (T *)FlatVector::GetData(out);
+		auto tgt_ptr = FlatVector::GetData<T>(out);
 		auto &nullmask = FlatVector::Nullmask(out);
 		for (idx_t i = 0; i < count; i++) {
 			if (ValueIsNull(tgt_ptr[i])) {
@@ -270,33 +333,45 @@ struct PandasScanFunction : public TableFunction {
 		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
 			auto numpy_col = py::array(get_fun(df_names[col_idx]).attr("to_numpy")());
 
-			switch (data.sql_types[col_idx].id()) {
-			case LogicalTypeId::BOOLEAN:
+			switch (data.pandas_types[col_idx]) {
+			case PandasType::BOOLEAN:
 				scan_pandas_column<bool>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case LogicalTypeId::TINYINT:
+			case PandasType::TINYINT_NATIVE:
 				scan_pandas_column<int8_t>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case LogicalTypeId::SMALLINT:
+			case PandasType::SMALLINT_NATIVE:
 				scan_pandas_column<int16_t>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case LogicalTypeId::INTEGER:
+			case PandasType::INTEGER_NATIVE:
 				scan_pandas_column<int32_t>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case LogicalTypeId::BIGINT:
+			case PandasType::BIGINT_NATIVE:
 				scan_pandas_column<int64_t>(numpy_col, this_count, state.position, output.data[col_idx]);
 				break;
-			case LogicalTypeId::FLOAT:
+			case PandasType::TINYINT_OBJECT:
+				scan_pandas_numeric_object<int8_t>(numpy_col, this_count, state.position, output.data[col_idx]);
+				break;
+			case PandasType::SMALLINT_OBJECT:
+				scan_pandas_numeric_object<int16_t>(numpy_col, this_count, state.position, output.data[col_idx]);
+				break;
+			case PandasType::INTEGER_OBJECT:
+				scan_pandas_numeric_object<int32_t>(numpy_col, this_count, state.position, output.data[col_idx]);
+				break;
+			case PandasType::BIGINT_OBJECT:
+				scan_pandas_numeric_object<int64_t>(numpy_col, this_count, state.position, output.data[col_idx]);
+				break;
+			case PandasType::FLOAT:
 				scan_pandas_fp_column<float>((float *)numpy_col.data(), this_count, state.position,
 				                             output.data[col_idx]);
 				break;
-			case LogicalTypeId::DOUBLE:
+			case PandasType::DOUBLE:
 				scan_pandas_fp_column<double>((double *)numpy_col.data(), this_count, state.position,
 				                              output.data[col_idx]);
 				break;
-			case LogicalTypeId::TIMESTAMP: {
+			case PandasType::TIMESTAMP_NATIVE: {
 				auto src_ptr = (int64_t *)numpy_col.data();
-				auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
+				auto tgt_ptr = FlatVector::GetData<timestamp_t>(output.data[col_idx]);
 				auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
@@ -313,15 +388,37 @@ struct PandasScanFunction : public TableFunction {
 					tgt_ptr[row] = Timestamp::FromDatetime(date, time);
 				}
 				break;
-			} break;
-			case LogicalTypeId::VARCHAR: {
+			}
+			case PandasType::TIMESTAMP_OBJECT: {
 				auto src_ptr = (PyObject **)numpy_col.data();
-				auto tgt_ptr = (string_t *)FlatVector::GetData(output.data[col_idx]);
-
+				auto tgt_ptr = FlatVector::GetData<timestamp_t>(output.data[col_idx]);
+				auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
+				auto pandas_mod = py::module::import("pandas");
+				auto pandas_datetime = pandas_mod.attr("Timestamp");
 				for (idx_t row = 0; row < this_count; row++) {
 					auto source_idx = state.position + row;
 					auto val = src_ptr[source_idx];
-
+					auto &py_obj = *((py::object *)&val);
+					if (!py::isinstance(py_obj, pandas_datetime)) {
+						nullmask[row] = true;
+						continue;
+					}
+					// FIXME: consider timezone
+					auto epoch = py_obj.attr("timestamp")();
+					auto seconds = int64_t(epoch.cast<double>());
+					auto seconds_per_day = (int64_t)60 * 60 * 24;
+					date_t date = Date::EpochToDate(seconds);
+					dtime_t time = (dtime_t)(seconds % seconds_per_day) * 1000;
+					tgt_ptr[row] = Timestamp::FromDatetime(date, time);
+				}
+				break;
+			}
+			case PandasType::VARCHAR: {
+				auto src_ptr = (PyObject **)numpy_col.data();
+				auto tgt_ptr = FlatVector::GetData<string_t>(output.data[col_idx]);
+				for (idx_t row = 0; row < this_count; row++) {
+					auto source_idx = state.position + row;
+					auto val = src_ptr[source_idx];
 #if PY_MAJOR_VERSION >= 3
 					if (!PyUnicode_Check(val)) {
 						FlatVector::SetNull(output.data[col_idx], row, true);
@@ -428,7 +525,7 @@ struct DuckDBPyResult {
 				break;
 
 			case LogicalTypeId::TIMESTAMP: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT64);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
 				auto timestamp = val.GetValue<int64_t>();
 				auto date = Timestamp::GetDate(timestamp);
@@ -440,7 +537,7 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::TIME: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
 				int32_t hour, min, sec, msec;
 				auto time = val.GetValue<int32_t>();
@@ -449,7 +546,7 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::DATE: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
 				auto date = val.GetValue<int32_t>();
 				res[col_idx] = PyDate_FromDate(duckdb::Date::ExtractYear(date), duckdb::Date::ExtractMonth(date),
@@ -490,7 +587,7 @@ struct DuckDBPyResult {
 		} else {
 			mres = (MaterializedQueryResult *)result.get();
 		}
-		assert(mres);
+		D_ASSERT(mres);
 
 		py::dict res;
 		for (idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
@@ -626,7 +723,6 @@ struct DuckDBPyResult {
 struct DuckDBPyRelation;
 
 struct DuckDBPyConnection {
-
 	DuckDBPyConnection *executemany(string query, py::object params = py::list()) {
 		execute(query, params, true);
 		return this;
@@ -644,7 +740,21 @@ struct DuckDBPyConnection {
 		}
 		result = nullptr;
 
-		auto prep = connection->Prepare(query);
+		auto statements = connection->ExtractStatements(query);
+		if (statements.size() == 0) {
+			// no statements to execute
+			return this;
+		}
+		// if there are multiple statements, we directly execute the statements besides the last one
+		// we only return the result of the last statement to the user, unless one of the previous statements fails
+		for(idx_t i = 0; i + 1 < statements.size(); i++) {
+			auto res = connection->Query(move(statements[i]));
+			if (!res->success) {
+				throw runtime_error(res->error);
+			}
+		}
+
+		auto prep = connection->Prepare(move(statements.back()));
 		if (!prep->success) {
 			throw runtime_error(prep->error);
 		}
@@ -772,7 +882,7 @@ struct DuckDBPyConnection {
 		}
 
 		static int my_stream_getschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			if (!stream->release) {
 				my_stream->last_error = "stream was released";
@@ -783,7 +893,7 @@ struct DuckDBPyConnection {
 		}
 
 		static int my_stream_getnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			if (!stream->release) {
 				my_stream->last_error = "stream was released";
@@ -809,7 +919,7 @@ struct DuckDBPyConnection {
 			if (!stream->release) {
 				return "stream was released";
 			}
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			return my_stream->last_error.c_str();
 		}
@@ -873,13 +983,18 @@ struct DuckDBPyConnection {
 	void close() {
 		connection = nullptr;
 		database = nullptr;
+		for (auto &cur : cursors) {
+			cur->close();
+		}
+		cursors.clear();
 	}
 
 	// cursor() is stupid
-	unique_ptr<DuckDBPyConnection> cursor() {
-		auto res = make_unique<DuckDBPyConnection>();
+	shared_ptr<DuckDBPyConnection> cursor() {
+		auto res = make_shared<DuckDBPyConnection>();
 		res->database = database;
 		res->connection = make_unique<Connection>(*res->database);
+		cursors.push_back(res);
 		return res;
 	}
 
@@ -917,11 +1032,12 @@ struct DuckDBPyConnection {
 		return result->fetch_arrow_table();
 	}
 
-	static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
-		auto res = make_unique<DuckDBPyConnection>();
+	static shared_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
+		auto res = make_shared<DuckDBPyConnection>();
 		DBConfig config;
-		if (read_only)
+		if (read_only) {
 			config.access_mode = AccessMode::READ_ONLY;
+		}
 		res->database = make_unique<DuckDB>(database, &config);
 		res->database->LoadExtension<ParquetExtension>();
 		res->connection = make_unique<Connection>(*res->database);
@@ -934,10 +1050,6 @@ struct DuckDBPyConnection {
 		context.catalog.CreateTableFunction(context, &info);
 		context.transaction.Commit();
 
-		if (!read_only) {
-			res->connection->Query("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
-		}
-
 		return res;
 	}
 
@@ -945,6 +1057,7 @@ struct DuckDBPyConnection {
 	unique_ptr<Connection> connection;
 	unordered_map<string, py::object> registered_dfs;
 	unique_ptr<DuckDBPyResult> result;
+	vector<shared_ptr<DuckDBPyConnection>> cursors;
 
 	static vector<Value> transform_python_param_list(py::handle params) {
 		vector<Value> args;
@@ -953,6 +1066,8 @@ struct DuckDBPyConnection {
 		auto datetime_date = datetime_mod.attr("date");
 		auto datetime_datetime = datetime_mod.attr("datetime");
 		auto datetime_time = datetime_mod.attr("time");
+		auto decimal_mod = py::module::import("decimal");
+		auto decimal_decimal = decimal_mod.attr("Decimal");
 
 		for (auto &ele : params) {
 			if (ele.is_none()) {
@@ -965,6 +1080,8 @@ struct DuckDBPyConnection {
 				args.push_back(Value::DOUBLE(ele.cast<double>()));
 			} else if (py::isinstance<py::str>(ele)) {
 				args.push_back(Value(ele.cast<string>()));
+			} else if (py::isinstance(ele, decimal_decimal)) {
+				args.push_back(Value(py::str(ele).cast<string>()));
 			} else if (py::isinstance(ele, datetime_datetime)) {
 				auto year = PyDateTime_GET_YEAR(ele.ptr());
 				auto month = PyDateTime_GET_MONTH(ele.ptr());
@@ -993,7 +1110,7 @@ struct DuckDBPyConnection {
 	}
 };
 
-static unique_ptr<DuckDBPyConnection> default_connection_ = nullptr;
+static shared_ptr<DuckDBPyConnection> default_connection_ = nullptr;
 
 static DuckDBPyConnection *default_connection() {
 	if (!default_connection_) {
@@ -1203,14 +1320,65 @@ struct DuckDBPyRelation {
 	shared_ptr<Relation> rel;
 };
 
+enum PySQLTokenType {
+	PySQLTokenIdentifier = 0,
+	PySQLTokenNumericConstant,
+	PySQLTokenStringConstant,
+	PySQLTokenOperator,
+	PySQLTokenKeyword,
+	PySQLTokenComment
+};
+
+static py::object py_tokenize(string query) {
+	auto tokens = Parser::Tokenize(query);
+	py::list result;
+	for(auto &token : tokens) {
+		auto tuple = py::tuple(2);
+		tuple[0] = token.start;
+		switch(token.type) {
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+			tuple[1] = PySQLTokenIdentifier;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+			tuple[1] = PySQLTokenNumericConstant;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+			tuple[1] = PySQLTokenStringConstant;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+			tuple[1] = PySQLTokenOperator;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+			tuple[1] = PySQLTokenKeyword;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+			tuple[1] = PySQLTokenComment;
+			break;
+		}
+		result.append(tuple);
+	}
+	return move(result);
+}
+
 PYBIND11_MODULE(duckdb, m) {
 	m.def("connect", &DuckDBPyConnection::connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
 	      py::arg("database") = ":memory:", py::arg("read_only") = false);
+	m.def("tokenize", py_tokenize, "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
+	      "used for e.g. syntax highlighting",
+		  py::arg("query"));
+    py::enum_<PySQLTokenType>(m, "token_type")
+        .value("identifier", PySQLTokenType::PySQLTokenIdentifier)
+        .value("numeric_const", PySQLTokenType::PySQLTokenNumericConstant)
+        .value("string_const", PySQLTokenType::PySQLTokenStringConstant)
+        .value("operator", PySQLTokenType::PySQLTokenOperator)
+        .value("keyword", PySQLTokenType::PySQLTokenKeyword)
+        .value("comment", PySQLTokenType::PySQLTokenComment)
+        .export_values();
 
 	auto conn_class =
-	    py::class_<DuckDBPyConnection>(m, "DuckDBPyConnection")
+	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection")
 	        .def("cursor", &DuckDBPyConnection::cursor, "Create a duplicate of the current connection")
 	        .def("duplicate", &DuckDBPyConnection::cursor, "Create a duplicate of the current connection")
 	        .def("execute", &DuckDBPyConnection::execute,

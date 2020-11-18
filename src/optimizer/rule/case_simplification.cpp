@@ -18,7 +18,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 	auto root = (BoundCaseExpression *)bindings[0];
 	auto constant_expr = bindings[1];
 	// the constant_expr is a scalar expression that we have to fold
-	assert(constant_expr->IsFoldable());
+	D_ASSERT(constant_expr->IsFoldable());
 
 	// use an ExpressionExecutor to execute the expression
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);

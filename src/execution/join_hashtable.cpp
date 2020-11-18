@@ -19,27 +19,27 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
     : buffer_manager(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
       entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
-		assert(condition.left->return_type == condition.right->return_type);
+		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
 		auto type_size = GetTypeIdSize(type.InternalType());
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
 			// all equality conditions should be at the front
 			// all other conditions at the back
 			// this assert checks that
-			assert(equality_types.size() == condition_types.size());
+			D_ASSERT(equality_types.size() == condition_types.size());
 			equality_types.push_back(type);
 			equality_size += type_size;
 		}
 		predicates.push_back(condition.comparison);
 		null_values_are_equal.push_back(condition.null_values_are_equal);
-		assert(!condition.null_values_are_equal ||
+		D_ASSERT(!condition.null_values_are_equal ||
 		       (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
 
 		condition_types.push_back(type);
 		condition_size += type_size;
 	}
 	// at least one equality is necessary
-	assert(equality_types.size() > 0);
+	D_ASSERT(equality_types.size() > 0);
 
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		build_size += GetTypeIdSize(build_types[i].InternalType());
@@ -48,8 +48,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
 	entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
-	if (join_type == JoinType::OUTER) {
-		// outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
+	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
 		entry_size += sizeof(bool);
 		pointer_offset += sizeof(bool);
@@ -72,7 +72,7 @@ JoinHashTable::~JoinHashTable() {
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 	if (hashes.vector_type == VectorType::CONSTANT_VECTOR) {
-		assert(!ConstantVector::IsNull(hashes));
+		D_ASSERT(!ConstantVector::IsNull(hashes));
 		auto indices = ConstantVector::GetData<hash_t>(hashes);
 		*indices = *indices & bitmask;
 	} else {
@@ -192,7 +192,7 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 			} else if (source[source_idx].IsInlined()) {
 				new_val = source[source_idx];
 			} else {
-				new_val = local_heap.AddString(source[source_idx]);
+				new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
 			}
 			Store<string_t>(new_val, key_locations[i]);
 			key_locations[i] += sizeof(string_t);
@@ -257,8 +257,8 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_
 }
 
 void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
-	assert(!finalized);
-	assert(keys.size() == payload.size());
+	D_ASSERT(!finalized);
+	D_ASSERT(keys.size() == payload.size());
 	if (keys.size() == 0) {
 		return;
 	}
@@ -269,7 +269,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		// Correlated MARK join
 		// for the correlated mark join we need to keep track of COUNT(*) and COUNT(COLUMN) for each of the correlated
 		// columns push into the aggregate hash table
-		assert(info.correlated_counts);
+		D_ASSERT(info.correlated_counts);
 		info.group_chunk.SetCardinality(keys);
 		for (idx_t i = 0; i < info.correlated_types.size(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
@@ -353,22 +353,22 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
 	}
-	if (join_type == JoinType::OUTER) {
-		// for OUTER joins initialize the "found" boolean to false
+	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		initialize_outer_join(added_count, key_locations);
 	}
 	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
-	assert(hashes.type.id() == LogicalTypeId::HASH);
+	D_ASSERT(hashes.type.id() == LogicalTypeId::HASH);
 
 	// use bitmask to get position in array
 	ApplyBitmask(hashes, count);
 
 	hashes.Normalify(count);
 
-	assert(hashes.vector_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes.vector_type == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
@@ -388,7 +388,7 @@ void JoinHashTable::Finalize() {
 	// select a HT that has at least 50% empty space
 	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
-	assert((capacity & (capacity - 1)) == 0);
+	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
 
 	// allocate the HT and initialize it with all-zero entries
@@ -421,12 +421,13 @@ void JoinHashTable::Finalize() {
 		}
 		pinned_handles.push_back(move(handle));
 	}
+
 	finalized = true;
 }
 
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
-	assert(count > 0); // should be handled before
-	assert(finalized);
+	D_ASSERT(count > 0); // should be handled before
+	D_ASSERT(finalized);
 
 	// set up the scan structure
 	auto ss = make_unique<ScanStructure>(*this);
@@ -476,6 +477,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 
 	switch (ht.join_type) {
 	case JoinType::INNER:
+	case JoinType::RIGHT:
 		NextInnerJoin(keys, left, result);
 		break;
 	case JoinType::SEMI:
@@ -737,7 +739,7 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	assert(result.column_count() == left.column_count() + ht.build_types.size());
+	D_ASSERT(result.column_count() == left.column_count() + ht.build_types.size());
 	if (this->count == 0) {
 		// no pointers left to chase
 		return;
@@ -747,8 +749,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
-		if (ht.join_type == JoinType::OUTER) {
-			// outer join: mark join matches as FOUND in the HT
+		if (ht.join_type == JoinType::OUTER || ht.join_type == JoinType::RIGHT) {
+			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
 				auto idx = result_vector.get_index(i);
@@ -766,7 +768,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		idx_t offset = ht.condition_size;
 		for (idx_t i = 0; i < ht.build_types.size(); i++) {
 			auto &vector = result.data[left.column_count() + i];
-			assert(vector.type == ht.build_types[i]);
+			D_ASSERT(vector.type == ht.build_types[i]);
 			GatherResult(vector, result_vector, result_count, offset);
 		}
 		AdvancePointers();
@@ -795,8 +797,8 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 }
 
 template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	assert(left.column_count() == result.column_count());
-	assert(keys.size() == left.size());
+	D_ASSERT(left.column_count() == result.column_count());
+	D_ASSERT(keys.size() == left.size());
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t result_count = 0;
@@ -812,7 +814,7 @@ template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, Da
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
 	} else {
-		assert(result.size() == 0);
+		D_ASSERT(result.size() == 0);
 	}
 }
 
@@ -878,10 +880,10 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 }
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {
-	assert(result.column_count() == input.column_count() + 1);
-	assert(result.data.back().type == LogicalType::BOOLEAN);
+	D_ASSERT(result.column_count() == input.column_count() + 1);
+	D_ASSERT(result.data.back().type == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
-	assert(ht.count > 0);
+	D_ASSERT(ht.count > 0);
 
 	ScanKeyMatches(keys);
 	if (ht.correlated_mark_join_info.correlated_types.size() == 0) {
@@ -890,7 +892,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		auto &info = ht.correlated_mark_join_info;
 		// there are correlated columns
 		// first we fetch the counts from the aggregate hashtable corresponding to these entries
-		assert(keys.column_count() == info.group_chunk.column_count() + 1);
+		D_ASSERT(keys.column_count() == info.group_chunk.column_count() + 1);
 		info.group_chunk.SetCardinality(keys);
 		for (idx_t i = 0; i < info.group_chunk.column_count(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
@@ -933,7 +935,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		auto count = FlatVector::GetData<int64_t>(info.result_chunk.data[1]);
 		// set the entries to either true or false based on whether a match was found
 		for (idx_t i = 0; i < input.size(); i++) {
-			assert(count_star[i] >= count[i]);
+			D_ASSERT(count_star[i] >= count[i]);
 			bool_result[i] = found_match ? found_match[i] : false;
 			if (!bool_result[i] && count_star[i] > count[i]) {
 				// RHS has NULL value and result is false: set to null
@@ -1003,7 +1005,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 		AdvancePointers(no_match_sel, no_match_count);
 	}
 	// reference the columns of the left side from the result
-	assert(input.column_count() > 0);
+	D_ASSERT(input.column_count() > 0);
 	for (idx_t i = 0; i < input.column_count(); i++) {
 		result.data[i].Reference(input.data[i]);
 	}
@@ -1030,7 +1032,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
-	for (; state.block_position < blocks.size(); state.block_position++) {
+	for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
 		auto &block = blocks[state.block_position];
 		auto &handle = pinned_handles[state.block_position];
 		auto baseptr = handle->node->buffer;
@@ -1061,7 +1063,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		idx_t offset = condition_size;
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
-			assert(vector.type == build_types[i]);
+			D_ASSERT(vector.type == build_types[i]);
 			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *)key_locations,
 			                   FlatVector::IncrementalSelectionVector, found_entries, offset);
 		}

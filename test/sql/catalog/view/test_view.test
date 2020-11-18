@@ -23,6 +23,12 @@ SELECT j FROM v1 WHERE j > 41
 ----
 42
 
+# name alias in view
+query I
+SELECT x FROM v1 t1(x) WHERE x > 41
+----
+42
+
 statement ok
 DROP VIEW v1
 

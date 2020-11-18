@@ -3,7 +3,7 @@ add_definitions(-DSQLITE_OMIT_LOAD_EXTENSION=1)
 set(SHELL_SOURCES shell.c)
 if(NOT WIN32)
   add_definitions(-DHAVE_LINENOISE=1)
-  set(SHELL_SOURCES ${SHELL_SOURCES} linenoise.c)
+  set(SHELL_SOURCES ${SHELL_SOURCES} linenoise.cpp)
   include_directories(../../third_party/third_party/utf8proc/include)
 endif()
 

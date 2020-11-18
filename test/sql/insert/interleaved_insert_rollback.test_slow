@@ -1,0 +1,49 @@
+# name: test/sql/insert/interleaved_insert_rollback.test_slow
+# description: Rollback interleaved big insert statements
+# group: [insert]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+INSERT INTO integers SELECT * FROM range(0, 500000)
+
+statement ok con2
+INSERT INTO integers SELECT * FROM range(0, 500000)
+
+query I con1
+SELECT COUNT(*) FROM integers
+----
+500000
+
+query I con2
+SELECT COUNT(*) FROM integers
+----
+500000
+
+statement ok con1
+ROLLBACK
+
+query I con1
+SELECT COUNT(*) FROM integers
+----
+0
+
+query I con2
+SELECT COUNT(*) FROM integers
+----
+500000
+
+statement ok con2
+ROLLBACK
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0

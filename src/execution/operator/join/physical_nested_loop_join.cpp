@@ -37,7 +37,7 @@ static bool HasNullValues(DataChunk &chunk) {
 
 template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
-	assert(left.column_count() == result.column_count());
+	D_ASSERT(left.column_count() == result.column_count());
 	// create the selection vector from the matches that were found
 	idx_t result_count = 0;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -164,14 +164,15 @@ void PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalOperatorState
 	gstate.right_chunks.Append(nlj_state.right_condition);
 }
 
-void PhysicalNestedLoopJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, ClientContext &context,
+                                      unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (NestedLoopJoinGlobalState &)*state;
-	if (join_type == JoinType::OUTER) {
-		// for FULL OUTER JOIN, initialize found_match to false for every tuple
+	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_data.count]);
 		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_data.count);
 	}
-	PhysicalSink::Finalize(context, move(state));
+	PhysicalSink::Finalize(pipeline, context, move(state));
 }
 
 unique_ptr<GlobalOperatorState> PhysicalNestedLoopJoin::GetGlobalState(ClientContext &context) {
@@ -295,9 +296,8 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 			}
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
-				if (join_type == JoinType::OUTER) {
-					// if the LHS is exhausted in a FULL OUTER JOIN, we scan the found_match for any chunks we still
-					// need to output
+				if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+					// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we still need to output
 					ConstructFullOuterJoinResult(gstate.right_found_match.get(), gstate.right_data, chunk,
 					                             gstate.right_outer_position);
 				}
@@ -381,6 +381,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChu
 	case JoinType::LEFT:
 	case JoinType::INNER:
 	case JoinType::OUTER:
+	case JoinType::RIGHT:
 		ResolveComplexJoin(context, chunk, state_);
 		break;
 	default:

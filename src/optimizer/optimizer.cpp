@@ -32,7 +32,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
 		// root not defined in rule
-		assert(rule->root);
+		D_ASSERT(rule->root);
 	}
 #endif
 }
@@ -74,7 +74,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// context.profiler.EndPhase();
 
 	context.profiler.StartPhase("unused_columns");
-	RemoveUnusedColumns unused(context, true);
+	RemoveUnusedColumns unused(binder, context, true);
 	unused.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
@@ -90,7 +90,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.EndPhase();
 
 	// apply simple expression heuristics to get an initial reordering
-	context.profiler.StartPhase("reorder_filter_expressions");
+	context.profiler.StartPhase("reorder_filter");
 	ExpressionHeuristics expression_heuristics(*this);
 	plan = expression_heuristics.Rewrite(move(plan));
 	context.profiler.EndPhase();

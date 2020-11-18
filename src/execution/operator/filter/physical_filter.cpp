@@ -17,7 +17,7 @@ public:
 
 PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list)
     : PhysicalOperator(PhysicalOperatorType::FILTER, move(types)) {
-	assert(select_list.size() > 0);
+	D_ASSERT(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions
 		auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
@@ -57,7 +57,7 @@ unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
 	return make_unique<PhysicalFilterState>(*this, children[0].get(), *expression);
 }
 
-string PhysicalFilter::ExtraRenderInformation() const {
+string PhysicalFilter::ParamsToString() const {
 	return expression->GetName();
 }
 

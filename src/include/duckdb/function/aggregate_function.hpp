@@ -122,25 +122,25 @@ public:
 
 	template <class STATE, class T, class OP>
 	static void UnaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
-		assert(input_count == 1);
+		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
-		assert(input_count == 1);
+		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], state, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
-		assert(input_count == 2);
+		D_ASSERT(input_count == 2);
 		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], states, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
-		assert(input_count == 2);
+		D_ASSERT(input_count == 2);
 		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], state, count);
 	}
 

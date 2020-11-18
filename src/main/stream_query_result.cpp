@@ -21,7 +21,7 @@ string StreamQueryResult::ToString() {
 		result = HeaderToString();
 		result += "[[STREAM RESULT]]";
 	} else {
-		result = "Query Error: " + error + "\n";
+		result = error + "\n";
 	}
 	return result;
 }

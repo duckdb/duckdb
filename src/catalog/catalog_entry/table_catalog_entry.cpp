@@ -21,6 +21,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -78,10 +79,11 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				vector<unique_ptr<Expression>> bound_expressions;
 				idx_t key_nr = 0;
 				for (auto &key : unique.keys) {
-					assert(key < columns.size());
+					D_ASSERT(key < columns.size());
 
-					unbound_expressions.push_back(
-					    make_unique<BoundColumnRefExpression>(columns[key].type, ColumnBinding(0, column_ids.size())));
+					unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
+					    columns[key].name, columns[key].type, ColumnBinding(0, column_ids.size())));
+
 					bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
 					column_ids.push_back(key);
 				}
@@ -98,6 +100,7 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+	D_ASSERT(!internal);
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
@@ -154,7 +157,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 
 		create_info->columns.push_back(move(copy));
 		if (info.name == columns[i].name) {
-			assert(!found);
+			D_ASSERT(!found);
 			create_info->columns[i].name = info.new_name;
 			found = true;
 		}
@@ -217,7 +220,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	create_info->temporary = temporary;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (columns[i].name == info.removed_column) {
-			assert(removed_index == INVALID_INDEX);
+			D_ASSERT(removed_index == INVALID_INDEX);
 			removed_index = i;
 			continue;
 		}
@@ -233,7 +236,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
 	// handle constraints for the new table
-	assert(constraints.size() == bound_constraints.size());
+	D_ASSERT(constraints.size() == bound_constraints.size());
 	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
 		auto &constraint = constraints[constr_idx];
 		auto &bound_constraint = bound_constraints[constr_idx];
@@ -310,7 +313,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 	if (!found) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.name, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -336,7 +339,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->columns.push_back(move(copy));
 	}
 	if (change_idx == INVALID_INDEX) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.name, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -413,12 +416,12 @@ vector<LogicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_i
 void TableCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
-	assert(columns.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(columns.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)columns.size());
 	for (auto &column : columns) {
 		column.Serialize(serializer);
 	}
-	assert(constraints.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(constraints.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)constraints.size());
 	for (auto &constraint : constraints) {
 		constraint->Serialize(serializer);
@@ -427,22 +430,40 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 
 string TableCatalogEntry::ToSQL() {
 	stringstream ss;
-	ss << "CREATE TABLE " << name << "(";
+	ss << "CREATE TABLE " << KeywordHelper::WriteOptionallyQuoted(name) << "(";
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	unordered_set<idx_t> not_null_columns;
-	unordered_set<string> pk_columns;
+	unordered_set<idx_t> unique_columns;
+	unordered_set<idx_t> pk_columns;
+	unordered_set<string> multi_key_pks;
+	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {
 			auto &not_null = (NotNullConstraint &)*constraint;
 			not_null_columns.insert(not_null.index);
 		} else if (constraint->type == ConstraintType::UNIQUE) {
 			auto &pk = (UniqueConstraint &)*constraint;
-			if (pk.is_primary_key) {
-				for (auto &col : pk.columns) {
-					pk_columns.insert(col);
+			vector<string> constraint_columns = pk.columns;
+			if (pk.columns.empty()) {
+				// no columns specified: single column constraint
+				if (pk.is_primary_key) {
+					pk_columns.insert(pk.index);
+				} else {
+					unique_columns.insert(pk.index);
 				}
+			} else {
+				// multi-column constraint, this constraint needs to go at the end after all columns
+				if (pk.is_primary_key) {
+					// multi key pk column: insert set of columns into multi_key_pks
+					for (auto &col : pk.columns) {
+						multi_key_pks.insert(col);
+					}
+				}
+				extra_constraints.push_back(constraint->ToString());
 			}
+		} else {
+			extra_constraints.push_back(constraint->ToString());
 		}
 	}
 
@@ -451,21 +472,31 @@ string TableCatalogEntry::ToSQL() {
 			ss << ", ";
 		}
 		auto &column = columns[i];
-		ss << column.name << " " << column.type.ToString();
-		if (not_null_columns.find(column.oid) != not_null_columns.end() &&
-		    pk_columns.find(column.name) == pk_columns.end()) {
-			// NOT NULL but not a priamry key column
+		ss << KeywordHelper::WriteOptionallyQuoted(column.name) << " " << column.type.ToString();
+		bool not_null = not_null_columns.find(column.oid) != not_null_columns.end();
+		bool is_single_key_pk = pk_columns.find(column.oid) != pk_columns.end();
+		bool is_multi_key_pk = multi_key_pks.find(column.name) != multi_key_pks.end();
+		bool is_unique = unique_columns.find(column.oid) != unique_columns.end();
+		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
+			// NOT NULL but not a primary key column
 			ss << " NOT NULL";
 		}
-	}
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto &constraint = constraints[i];
-		if (constraint->type == ConstraintType::NOT_NULL) {
-			// handled above
-			continue;
+		if (is_single_key_pk) {
+			// single column pk: insert constraint here
+			ss << " PRIMARY KEY";
 		}
+		if (is_unique) {
+			// single column unique: insert constraint here
+			ss << " UNIQUE";
+		}
+		if (column.default_value) {
+			ss << " DEFAULT(" << column.default_value->ToString() << ")";
+		}
+	}
+	// print any extra constraints that still need to be printed
+	for (auto &extra_constraint : extra_constraints) {
 		ss << ", ";
-		ss << constraint->ToString();
+		ss << extra_constraint;
 	}
 
 	ss << ");";

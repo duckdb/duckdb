@@ -3,19 +3,32 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 using namespace std;
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<string> returned_names)
-    : LogicalOperator(LogicalOperatorType::GET), table_index(table_index), function(move(function)),
+    : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(move(function)),
       bind_data(move(bind_data)), returned_types(move(returned_types)), names(move(returned_names)) {
 }
 
+string LogicalGet::GetName() const {
+	return StringUtil::Upper(function.name);
+}
+
 string LogicalGet::ParamsToString() const {
-	return string();
-	// return "(" + table->name + ")";
+	string result;
+	for (auto &filter : tableFilters) {
+		result +=
+		    names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
+		result += "\n";
+	}
+	if (!function.to_string) {
+		return string();
+	}
+	return function.to_string(bind_data.get());
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {

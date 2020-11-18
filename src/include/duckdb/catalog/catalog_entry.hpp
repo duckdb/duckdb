@@ -23,7 +23,8 @@ class ClientContext;
 class CatalogEntry {
 public:
 	CatalogEntry(CatalogType type, Catalog *catalog, string name)
-	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), temporary(false), parent(nullptr) {
+	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), temporary(false), internal(false),
+	      parent(nullptr) {
 	}
 	virtual ~CatalogEntry();
 
@@ -55,6 +56,8 @@ public:
 	bool deleted;
 	//! Whether or not the object is temporary and should not be added to the WAL
 	bool temporary;
+	//! Whether or not the entry is an internal entry (cannot be deleted, not dumped, etc)
+	bool internal;
 	//! Timestamp at which the catalog entry was created
 	transaction_t timestamp;
 	//! Child entry

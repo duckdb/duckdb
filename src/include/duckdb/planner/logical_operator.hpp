@@ -52,6 +52,7 @@ public:
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 
+	virtual string GetName() const;
 	virtual string ParamsToString() const;
 	virtual string ToString(idx_t depth = 0) const;
 	void Print();

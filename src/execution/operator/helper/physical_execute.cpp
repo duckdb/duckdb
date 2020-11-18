@@ -5,7 +5,7 @@ using namespace std;
 namespace duckdb {
 
 void PhysicalExecute::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	assert(plan);
+	D_ASSERT(plan);
 	plan->GetChunk(context, chunk, state_);
 }
 

@@ -28,14 +28,14 @@ if(AMALGAMATION_BUILD)
     add_definitions(/bigobj)
   endif()
 
-  add_library(duckdb SHARED "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
+  add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
   add_library(duckdb_static STATIC
-              "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
+              "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
 
   target_link_libraries(duckdb Threads::Threads)
   target_link_libraries(duckdb_static Threads::Threads)
 
-  install(FILES "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
+  install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
           DESTINATION "${INSTALL_INCLUDE_DIR}")
 
 else()
@@ -76,12 +76,12 @@ else()
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-  install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/duckdb"
+  install(DIRECTORY "${PROJECT_SOURCE_DIR}/src/include/duckdb"
           DESTINATION "${INSTALL_INCLUDE_DIR}"
           FILES_MATCHING
           PATTERN "*.hpp")
-  install(FILES "${CMAKE_SOURCE_DIR}/src/include/duckdb.hpp"
-                "${CMAKE_SOURCE_DIR}/src/include/duckdb.h"
+  install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
+                "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
           DESTINATION "${INSTALL_INCLUDE_DIR}")
 
 endif()
@@ -104,14 +104,14 @@ if(BUILD_PYTHON OR BUILD_R)
   add_custom_target(duckdb_python ALL
                     COMMAND python3 setup.py install --binary-dir=${CMAKE_BINARY_DIR} --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
                     DEPENDS duckdb parquet_extension icu_extension
-                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/pythonpkg
+                    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
                     COMMENT Build Python package)
   endif()
   if (BUILD_R)
     add_custom_target(duckdb_r ALL
                       COMMAND DUCKDB_R_BINDIR=${CMAKE_BINARY_DIR} DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\" DUCKDB_R_LIBS=\"${duckdb_libs}\" R CMD INSTALL .
                       DEPENDS duckdb parquet_extension icu_extension
-                      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/rpkg
+                      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
                       COMMENT Build R package)
   endif()
 endif()

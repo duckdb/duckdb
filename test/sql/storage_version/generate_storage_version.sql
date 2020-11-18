@@ -28,7 +28,7 @@ CREATE TABLE string_values (
     j BLOB
 );
 INSERT INTO string_values
-    VALUES ('hello world', '\xAAFFAA'), (NULL, NULL);
+    VALUES ('hello world', '\xAA\xFF\xAA'), (NULL, NULL);
 CREATE TABLE date_values (
     i date,
     j time,

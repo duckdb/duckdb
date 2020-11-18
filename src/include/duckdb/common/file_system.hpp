@@ -87,6 +87,8 @@ public:
 
 	//! Returns the file size of a file handle, returns -1 on error
 	virtual int64_t GetFileSize(FileHandle &handle);
+	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
+	virtual time_t GetLastModifiedTime(FileHandle &handle);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	virtual void Truncate(FileHandle &handle, int64_t new_size);
@@ -115,9 +117,16 @@ public:
 
 	//! Sets the working directory
 	virtual void SetWorkingDirectory(string path);
+	//! Gets the working directory
+	virtual string GetWorkingDirectory();
+	//! Gets the users home directory
+	virtual string GetHomeDirectory();
 
 	//! Runs a glob on the file system, returning a list of matching files
 	virtual vector<string> Glob(string path);
+
+	//! Returns the system-available memory in bytes
+	virtual idx_t GetAvailableMemory();
 
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location

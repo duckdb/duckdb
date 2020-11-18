@@ -47,7 +47,7 @@ struct ConcatWSFun {
 struct LengthFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 	template <class TA, class TR> static inline TR Length(TA input) {
-		auto input_data = input.GetData();
+		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		for (idx_t i = 0; i < input_length; i++) {
 			if (input_data[i] & 0x80) {
@@ -66,7 +66,7 @@ struct LengthFun {
 
 struct LikeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static bool Glob(const char *s, const char *pattern, const char *escape);
+	static bool Glob(const char *s, idx_t slen, const char *pattern, idx_t plen);
 };
 
 struct LikeEscapeFun {
@@ -78,6 +78,10 @@ struct LpadFun {
 };
 
 struct LeftFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct MD5Fun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -138,9 +142,14 @@ struct TrimFun {
 struct ContainsFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
+	static idx_t Find(const string_t &haystack, const string_t &needle);
 };
 
 struct UnicodeFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct StringSplitFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

@@ -176,11 +176,7 @@ void ReplayState::ReplayDropTable() {
 
 void ReplayState::ReplayAlter() {
 	auto info = AlterInfo::Deserialize(source);
-	if (info->type != AlterType::ALTER_TABLE) {
-		throw Exception("Expected ALTER TABLE!");
-	}
-
-	db.catalog->AlterTable(context, (AlterTableInfo *)info.get());
+	db.catalog->Alter(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -278,7 +274,7 @@ void ReplayState::ReplayDelete() {
 	DataChunk chunk;
 	chunk.Deserialize(source);
 
-	assert(chunk.column_count() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
+	D_ASSERT(chunk.column_count() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
 	row_t row_ids[1];
 	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_ids);
 

@@ -1,0 +1,13 @@
+# name: benchmark/micro/join/hashjoin_lhsarithmetic.benchmark
+# description: Hash Join where LHS performs case operation
+# group: [join]
+
+name Equality Join + Arithmetic (No Index)
+group join
+
+load
+CREATE TABLE t1 AS SELECT i as v1, i as v2 from range (0,10000) t(i);
+CREATE TABLE t2 AS SELECT i as v1, i as v2 from range (0,10000000) t(i);
+
+run
+SELECT CASE WHEN t1.v1 > 50 THEN t1.v1+t1.v2 ELSE t1.v1*t1.v2 END FROM t1 JOIN t2 USING (v1);

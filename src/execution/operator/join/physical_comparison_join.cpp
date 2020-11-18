@@ -23,7 +23,7 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 	}
 }
 
-string PhysicalComparisonJoin::ExtraRenderInformation() const {
+string PhysicalComparisonJoin::ParamsToString() const {
 	string extra_info = JoinTypeToString(join_type) + "\n";
 	for (auto &it : conditions) {
 		string op = ExpressionTypeToOperator(it.comparison);
@@ -38,14 +38,14 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 	if (join_type == JoinType::ANTI) {
 		// anti join with empty hash table, NOP join
 		// return the input
-		assert(input.column_count() == result.column_count());
+		D_ASSERT(input.column_count() == result.column_count());
 		result.Reference(input);
 	} else if (join_type == JoinType::MARK) {
 		// MARK join with empty hash table
-		assert(join_type == JoinType::MARK);
-		assert(result.column_count() == input.column_count() + 1);
+		D_ASSERT(join_type == JoinType::MARK);
+		D_ASSERT(result.column_count() == input.column_count() + 1);
 		auto &result_vector = result.data.back();
-		assert(result_vector.type == LogicalType::BOOLEAN);
+		D_ASSERT(result_vector.type == LogicalType::BOOLEAN);
 		// for every data vector, we just reference the child chunk
 		result.SetCardinality(input);
 		for (idx_t i = 0; i < input.column_count(); i++) {

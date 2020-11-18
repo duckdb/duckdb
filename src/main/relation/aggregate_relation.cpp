@@ -36,7 +36,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 		select->from_table = child->GetTableRef();
 		result = move(select);
 	}
-	assert(result->type == QueryNodeType::SELECT_NODE);
+	D_ASSERT(result->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = (SelectNode &)*result;
 	if (groups.size() > 0) {
 		// explicit groups provided: use standard handling

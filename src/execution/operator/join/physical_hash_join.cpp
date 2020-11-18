@@ -18,7 +18,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	children.push_back(move(left));
 	children.push_back(move(right));
 
-	assert(left_projection_map.size() == 0);
+	D_ASSERT(left_projection_map.size() == 0);
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
@@ -83,8 +83,8 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 				info.correlated_aggregates.push_back(move(aggr));
 				payload_types.push_back(aggregate_functions[i].return_type);
 			}
-			info.correlated_counts =
-			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, correlated_aggregates);
+			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
+			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
 			// FIXME: these can be initialized "empty" (without allocating empty vectors)
 			info.group_chunk.Initialize(delim_types);
@@ -131,11 +131,11 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	sink.hash_table->Finalize();
 
-	PhysicalSink::Finalize(context, move(state));
+	PhysicalSink::Finalize(pipeline, context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -182,8 +182,8 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 				state->cached_chunk.Reset();
 			} else
 #endif
-			    if (join_type == JoinType::OUTER) {
-				// check if we need to scan any unmatched tuples from the RHS for the full outer join
+			    if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+				// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 				sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
 			}
 			return;

@@ -1,0 +1,10 @@
+build-*
+node_modules
+lib/binding
+package-lock.json
+test/support/big.db*
+test/tmp/*
+CMakeLists.txt
+*.o
+build/*
+*.tgz

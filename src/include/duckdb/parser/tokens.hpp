@@ -15,7 +15,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class SQLStatement;
 
-class AlterTableStatement;
+class AlterStatement;
 class CallStatement;
 class CopyStatement;
 class CreateStatement;

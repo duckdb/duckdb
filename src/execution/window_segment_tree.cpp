@@ -42,10 +42,11 @@ Value WindowSegmentTree::AggegateFinal() {
 }
 
 void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) {
-	assert(begin <= end);
+	D_ASSERT(begin <= end);
 	if (begin == end) {
 		return;
 	}
+	inputs.Reset();
 	inputs.SetCardinality(end - begin);
 
 	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
@@ -75,7 +76,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		}
 		aggregate.update(&inputs.data[0], input_count, s, inputs.size());
 	} else {
-		assert(end - begin <= STANDARD_VECTOR_SIZE);
+		D_ASSERT(end - begin <= STANDARD_VECTOR_SIZE);
 		// find out where the states begin
 		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
@@ -90,8 +91,8 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 }
 
 void WindowSegmentTree::ConstructTree() {
-	assert(input_ref);
-	assert(inputs.column_count() > 0);
+	D_ASSERT(input_ref);
+	D_ASSERT(inputs.column_count() > 0);
 
 	// compute space required to store internal nodes of segment tree
 	idx_t internal_nodes = 0;
@@ -124,7 +125,7 @@ void WindowSegmentTree::ConstructTree() {
 }
 
 Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
-	assert(input_ref);
+	D_ASSERT(input_ref);
 
 	// No arguments, so just count
 	if (inputs.column_count() == 0) {

@@ -6,7 +6,7 @@ require vector_size 512
 
 # a CSV file with many strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/large_mixed_data.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/large_mixed_data.csv', SAMPLE_CHUNKS=20);
 
 query ITR
 SELECT linenr, mixed_string, mixed_double FROM test LIMIT 3;
@@ -180,6 +180,26 @@ query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
 INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+
+statement ok
+DROP TABLE test;
+
+# a CSV file containing integer bool value
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/int_bol.csv');
+
+query I
+SELECT i FROM test ORDER BY i;
+----
+1
+2
+3
+4
+
+query TT
+SELECT typeof(i), typeof(b) FROM test LIMIT 1;
+----
+INTEGER	BOOLEAN
 
 statement ok
 DROP TABLE test;

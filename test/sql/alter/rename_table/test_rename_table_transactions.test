@@ -59,3 +59,21 @@ SELECT * FROM tbl2
 999
 100
 
+# we can create "tbl" again
+statement ok con1
+CREATE TABLE tbl(i INTEGER);
+
+# tbl2 is still occupied though
+statement error con1
+CREATE TABLE tbl2(i INTEGER);
+
+# we can drop and re-create the table
+statement ok con1
+DROP TABLE tbl2;
+
+statement ok con1
+CREATE TABLE tbl2(i INTEGER);
+
+# a rename fails now
+statement error con1
+ALTER TABLE tbl RENAME TO tbl2

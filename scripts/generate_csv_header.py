@@ -1,5 +1,6 @@
 # this script generates data for the TPC-H dbgen
 import os
+from python_helpers import open_utf8
 
 def get_csv_text(fpath, add_null_terminator = False):
 	with open(fpath, 'rb') as f:
@@ -48,7 +49,7 @@ const int TPCH_QUERIES_COUNT = 22;
 	result += write_dir(tpch_answers_sf01, "TPCH_ANSWERS_SF0_1")
 	result += write_dir(tpch_answers_sf1, "TPCH_ANSWERS_SF1")
 
-	with open(tpch_header, 'w+') as f:
+	with open_utf8(tpch_header, 'w+') as f:
 		f.write(result)
 
 print(tpch_header)

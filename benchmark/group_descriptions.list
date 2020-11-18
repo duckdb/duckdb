@@ -1,0 +1,47 @@
+[aggregate]
+[Aggregate]
+The aggregate micro benchmark set contains several micro benchmarks that are aimed at measuring raw aggregation performance.
+
+[aggregate][tpch]
+[Aggregate (TPC-H)]
+The benchmarks below run several micro-benchmarks on the TPC-H dataset with scale factor 1 (~1GB of data).
+
+[aggregate][parallel]
+[Aggregate (Parallel)]
+The benchmarks below run several micro-benchmarks involving aggregates using four threads.
+
+[cast]
+[Cast]
+The cast micro benchmark set contains several benchmarks that look at conversion speeds between different data types
+
+[csv]
+[CSV]
+The CSV micro benchmark set contains several benchmarks that are aimed at measuring CSV reading and writing performance.
+
+[index]
+[Index]
+The index benchmark set checks performance of index lookups compared to non-indexed lookups.
+
+[join]
+[Join]
+The join micro benchmark set contains benchmarks that look at the speed of various join queries.
+
+[order]
+[Order]
+The order micro benchmark set contains benchmarks that look at the speed of sorting data using the ORDER BY clause.
+
+[tpch]
+[TPC-H]
+The TPC-H benchmark is an industry standard benchmark geared towards measuring the performance of OLAP systems. It consists of 22 different queries that test different optimizations in the system.
+
+[tpch][sf1]
+[TPC-H (SF1)]
+The benchmarks below run the TPC-H queries with Scale Factor 1 (~1GB of data) using a single-thread.
+
+[tpch][sf1-parallel]
+[TPC-H (SF1, 4T)]
+The benchmarks below run the TPC-H queries with Scale Factor 1 (~1GB of data) using four threads.
+
+[window]
+[Window]
+The window micro benchmark set contains benchmarks that look at the speed of executing window functions.

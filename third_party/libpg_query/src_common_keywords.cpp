@@ -23,6 +23,8 @@
  */
 #include "pg_functions.hpp"
 #include <string.h>
+#include <string>
+#include <memory>
 
 #include "parser/gramparse.hpp"
 
@@ -47,14 +49,13 @@ namespace duckdb_libpgquery {
  */
 const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords) {
 	int len, i;
-	char word[NAMEDATALEN];
 	const PGScanKeyword *low;
 	const PGScanKeyword *high;
 
 	len = strlen(text);
+	auto data = std::unique_ptr<char[]>(new char[len + 1]);
+	auto word = data.get();
 	/* We assume all keywords are shorter than NAMEDATALEN. */
-	if (len >= NAMEDATALEN)
-		return NULL;
 
 	/*
 	 * Apply an ASCII-only downcasing.  We must not use tolower() since it may

@@ -31,7 +31,7 @@ unique_ptr<BufferHandle> BufferManager::Pin(block_id_t block_id, bool can_destro
 
 unique_ptr<BufferHandle> BufferManager::PinBlock(block_id_t block_id) {
 	// this method should only be used to pin blocks that exist in the file
-	assert(block_id < MAXIMUM_BLOCK);
+	D_ASSERT(block_id < MAXIMUM_BLOCK);
 
 	// check if the block is already loaded
 	Block *result_block;
@@ -63,7 +63,7 @@ unique_ptr<BufferHandle> BufferManager::PinBlock(block_id_t block_id) {
 		used_list.Append(move(buffer_entry));
 	} else {
 		auto buffer = entry->second->buffer.get();
-		assert(buffer->type == FileBufferType::BLOCK);
+		D_ASSERT(buffer->type == FileBufferType::BLOCK);
 		result_block = (Block *)buffer;
 		// add one to the reference count
 		AddReference(entry->second);
@@ -85,13 +85,15 @@ void BufferManager::Unpin(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	// first find the block in the set of blocks
 	auto entry = blocks.find(block_id);
-	assert(entry != blocks.end());
+	D_ASSERT(entry != blocks.end());
 
 	auto buffer_entry = entry->second;
 	// then decerase the ref count
-	assert(buffer_entry->ref_count > 0);
+	D_ASSERT(buffer_entry->ref_count > 0);
 	buffer_entry->ref_count--;
 	if (buffer_entry->ref_count == 0) {
+		// no references left: move block out of used list and into lru list
+		auto entry = used_list.Erase(buffer_entry);
 		if (buffer_entry->buffer->type == FileBufferType::MANAGED_BUFFER) {
 			auto managed = (ManagedBuffer *)buffer_entry->buffer.get();
 			if (managed->can_destroy) {
@@ -101,8 +103,6 @@ void BufferManager::Unpin(block_id_t block_id) {
 				return;
 			}
 		}
-		// no references left: move block out of used list and into lru list
-		auto entry = used_list.Erase(buffer_entry);
 		lru.Append(move(entry));
 	}
 }
@@ -117,7 +117,7 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 	if (!entry) {
 		throw Exception("Not enough memory to complete operation!");
 	}
-	assert(entry->ref_count == 0);
+	D_ASSERT(entry->ref_count == 0);
 	// erase this identifier from the set of blocks
 	auto buffer = entry->buffer.get();
 	if (buffer->type == FileBufferType::BLOCK) {
@@ -131,7 +131,7 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 	} else {
 		// managed buffer: cannot return a block here
 		auto managed = (ManagedBuffer *)buffer;
-		assert(!managed->can_destroy);
+		D_ASSERT(!managed->can_destroy);
 
 		// cannot destroy this buffer: write it to disk first so it can be reloaded later
 		WriteTemporaryBuffer(*managed);
@@ -144,7 +144,7 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 }
 
 unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size, bool can_destroy) {
-	assert(alloc_size >= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(alloc_size >= Storage::BLOCK_ALLOC_SIZE);
 
 	lock_guard<mutex> lock(block_lock);
 	// first evict blocks until we have enough memory to store this buffer
@@ -167,7 +167,7 @@ unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size, bool can_dest
 void BufferManager::DestroyBuffer(block_id_t buffer_id, bool can_destroy) {
 	lock_guard<mutex> lock(block_lock);
 
-	assert(buffer_id >= MAXIMUM_BLOCK);
+	D_ASSERT(buffer_id >= MAXIMUM_BLOCK);
 	// this is like unpin, except we just destroy the entry entirely instead of adding it to the LRU list
 	// first find the block in the set of blocks
 	auto entry = blocks.find(buffer_id);
@@ -182,7 +182,7 @@ void BufferManager::DestroyBuffer(block_id_t buffer_id, bool can_destroy) {
 	}
 
 	auto handle = entry->second;
-	assert(handle->ref_count == 0);
+	D_ASSERT(handle->ref_count == 0);
 
 	current_memory -= handle->buffer->AllocSize();
 	blocks.erase(buffer_id);
@@ -199,7 +199,7 @@ void BufferManager::SetLimit(idx_t limit) {
 }
 
 unique_ptr<BufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, bool can_destroy) {
-	assert(buffer_id >= MAXIMUM_BLOCK);
+	D_ASSERT(buffer_id >= MAXIMUM_BLOCK);
 	// check if we have this buffer here
 	auto entry = blocks.find(buffer_id);
 	if (entry == blocks.end()) {
@@ -215,9 +215,9 @@ unique_ptr<BufferHandle> BufferManager::PinBuffer(block_id_t buffer_id, bool can
 	auto buffer = entry->second->buffer.get();
 	AddReference(entry->second);
 	// now return it
-	assert(buffer->type == FileBufferType::MANAGED_BUFFER);
+	D_ASSERT(buffer->type == FileBufferType::MANAGED_BUFFER);
 	auto managed = (ManagedBuffer *)buffer;
-	assert(managed->id == buffer_id);
+	D_ASSERT(managed->id == buffer_id);
 	return make_unique<BufferHandle>(*this, buffer_id, managed);
 }
 
@@ -226,7 +226,7 @@ string BufferManager::GetTemporaryPath(block_id_t id) {
 }
 
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
-	assert(buffer.size + Storage::BLOCK_HEADER_SIZE >= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(buffer.size + Storage::BLOCK_HEADER_SIZE >= Storage::BLOCK_ALLOC_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents

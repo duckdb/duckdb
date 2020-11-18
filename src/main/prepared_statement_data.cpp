@@ -14,7 +14,7 @@ PreparedStatementData::~PreparedStatementData() {
 void PreparedStatementData::Bind(vector<Value> values) {
 	// set parameters
 	if (values.size() != value_map.size()) {
-		throw BinderException("Parameter/argument count mismatch for prepared statement");
+		throw BinderException("Parameter/argument count mismatch for prepared statement. Expected %llu, got %llu", value_map.size(), values.size());
 	}
 	// bind the values
 	for (idx_t i = 0; i < values.size(); i++) {

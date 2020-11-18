@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "benchmark_configuration.hpp"
 
 namespace duckdb {
 
@@ -43,7 +44,7 @@ public:
 	Benchmark(bool register_benchmark, string name, string group);
 
 	//! Initialize the benchmark state
-	virtual unique_ptr<BenchmarkState> Initialize() {
+	virtual unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) {
 		return nullptr;
 	}
 	//! Run the benchmark
@@ -56,6 +57,15 @@ public:
 	virtual void Finalize() {
 	}
 	virtual string GetQuery() {
+		return string();
+	}
+	virtual string DisplayName() {
+		return name;
+	}
+	virtual string Group() {
+		return group;
+	}
+	virtual string Subgroup() {
 		return string();
 	}
 	//! Interrupt the benchmark because of a timeout

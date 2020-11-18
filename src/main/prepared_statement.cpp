@@ -20,7 +20,7 @@ PreparedStatement::PreparedStatement(string error)
 
 PreparedStatement::~PreparedStatement() {
 	if (!is_invalidated && success) {
-		assert(context);
+		D_ASSERT(context);
 		context->RemovePreparedStatement(this);
 	}
 }
@@ -33,7 +33,7 @@ unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool a
 		return make_unique<MaterializedQueryResult>(
 		    "Cannot execute prepared statement: underlying database or connection has been destroyed");
 	}
-	assert(context);
+	D_ASSERT(context);
 	return context->Execute(name, values, allow_stream_result, query);
 }
 

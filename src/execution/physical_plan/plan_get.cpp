@@ -10,7 +10,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
-	assert(op.children.empty());
+	D_ASSERT(op.children.empty());
 
 	// create the table filter map
 	unordered_map<idx_t, vector<TableFilter>> table_filter_umap;
@@ -42,7 +42,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
 		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data), op.column_ids,
-		                                           move(table_filter_umap));
+		                                           op.names, move(table_filter_umap));
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -75,7 +75,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		projection->children.push_back(move(node));
 		return move(projection);
 	} else {
-		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids,
+		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids, op.names,
 		                                      move(table_filter_umap));
 	}
 }

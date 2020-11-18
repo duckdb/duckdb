@@ -9,7 +9,7 @@ using namespace std;
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op) {
 	unique_ptr<PhysicalOperator> plan;
 	if (op.children.size() > 0) {
-		assert(op.children.size() == 1);
+		D_ASSERT(op.children.size() == 1);
 		plan = CreatePlan(*op.children[0]);
 	}
 

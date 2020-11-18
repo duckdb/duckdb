@@ -10,6 +10,7 @@
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
@@ -25,11 +26,11 @@
 namespace duckdb {
 using namespace std;
 
-Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
+Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
-	auto utf_type = Utf8Proc::Analyze(val);
+	auto utf_type = Utf8Proc::Analyze(val.c_str(), val.size());
 	if (utf_type == UnicodeType::INVALID) {
 		throw Exception("String value is not valid UTF8");
 	}
@@ -133,7 +134,7 @@ bool Value::DoubleIsValid(double value) {
 }
 
 Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
-	assert(width <= Decimal::MAX_WIDTH_INT16);
+	D_ASSERT(width <= Decimal::MAX_WIDTH_INT16);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
 	result.value_.smallint = value;
 	result.is_null = false;
@@ -141,7 +142,7 @@ Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
-	assert(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
+	D_ASSERT(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
 	result.value_.integer = value;
 	result.is_null = false;
@@ -171,7 +172,7 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 }
 
 Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
-	assert(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
+	D_ASSERT(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
 	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
 	result.value_.hugeint = value;
 	result.is_null = false;
@@ -266,23 +267,17 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
-Value Value::BLOB(string data, bool must_cast) {
+Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	// hex string identifier: "\\x", must be double '\'
-	// single '\x' is a special char for hex chars in C++,
-	// e.g., '\xAA' will be transformed into the char "ª" (1010 1010),
-	// and Postgres uses double "\\x" for hex -> SELECT E'\\xDEADBEEF';
-	if (must_cast && data.size() >= 2 && data.substr(0, 2) == "\\x") {
-		size_t hex_size = (data.size() - 2) / 2;
-		unique_ptr<char[]> hex_data(new char[hex_size + 1]);
-		string_t hex_str(hex_data.get(), hex_size);
-		CastFromBlob::FromHexToBytes(string_t(data), hex_str);
-		result.str_value = string(hex_str.GetData());
-	} else {
-		// raw string
-		result.str_value = data;
-	}
+	result.str_value = string((const char*) data, len);
+	return result;
+}
+
+Value Value::BLOB(string data) {
+	Value result(LogicalType::BLOB);
+	result.is_null = false;
+	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
 
@@ -356,28 +351,29 @@ template <class T> T Value::GetValueInternal() const {
 	if (is_null) {
 		return NullValue<T>();
 	}
-	switch (type_.InternalType()) {
-	case PhysicalType::BOOL:
+	switch (type_.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return Cast::Operation<bool, T>(value_.boolean);
-	case PhysicalType::INT8:
+	case LogicalTypeId::TINYINT:
 		return Cast::Operation<int8_t, T>(value_.tinyint);
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		return Cast::Operation<int16_t, T>(value_.smallint);
-	case PhysicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		return Cast::Operation<int32_t, T>(value_.integer);
-	case PhysicalType::INT64:
+	case LogicalTypeId::BIGINT:
 		return Cast::Operation<int64_t, T>(value_.bigint);
-	case PhysicalType::INT128:
+	case LogicalTypeId::HUGEINT:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return Cast::Operation<float, T>(value_.float_);
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
-
-	case PhysicalType::VARCHAR:
+	case LogicalTypeId::VARCHAR:
 		return Cast::Operation<string_t, T>(str_value.c_str());
+	case LogicalTypeId::DECIMAL:
+		return CastAs(LogicalType::DOUBLE).GetValueInternal<T>();
 	default:
-		throw NotImplementedException("Unimplemented type for GetValue()");
+		throw NotImplementedException("Unimplemented type \"%s\" for GetValue()", type_.ToString());
 	}
 }
 
@@ -391,9 +387,15 @@ template <> int16_t Value::GetValue() const {
 	return GetValueInternal<int16_t>();
 }
 template <> int32_t Value::GetValue() const {
+	if (type_.id() == LogicalTypeId::DATE || type_.id() == LogicalTypeId::TIME) {
+		return value_.integer;
+	}
 	return GetValueInternal<int32_t>();
 }
 template <> int64_t Value::GetValue() const {
+	if (type_.id() == LogicalTypeId::TIMESTAMP) {
+		return value_.bigint;
+	}
 	return GetValueInternal<int64_t>();
 }
 template <> hugeint_t Value::GetValue() const {
@@ -409,19 +411,19 @@ template <> double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
 template <> uintptr_t Value::GetValue() const {
-	assert(type() == LogicalType::POINTER);
+	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
 }
 Value Value::Numeric(LogicalType type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		assert(value <= NumericLimits<int8_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
 	case LogicalTypeId::SMALLINT:
-		assert(value <= NumericLimits<int16_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int16_t>::Maximum());
 		return Value::SMALLINT((int16_t)value);
 	case LogicalTypeId::INTEGER:
-		assert(value <= NumericLimits<int32_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
 		return Value::INTEGER((int32_t)value);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(value);
@@ -438,10 +440,10 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(value);
 	case LogicalTypeId::DATE:
-		assert(value <= NumericLimits<int32_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
 		return Value::DATE(value);
 	case LogicalTypeId::TIME:
-		assert(value <= NumericLimits<int32_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
 		return Value::TIME(value);
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(value);
@@ -489,7 +491,7 @@ string Value::ToString() const {
 		} else if (internal_type == PhysicalType::INT64) {
 			return Decimal::ToString(value_.bigint, type_.scale());
 		} else {
-			assert(internal_type == PhysicalType::INT128);
+			D_ASSERT(internal_type == PhysicalType::INT128);
 			return Decimal::ToString(value_.hugeint, type_.scale());
 		}
 	}
@@ -503,13 +505,8 @@ string Value::ToString() const {
 		return Interval::ToString(value_.interval);
 	case LogicalTypeId::VARCHAR:
 		return str_value;
-	case LogicalTypeId::BLOB: {
-		unique_ptr<char[]> hex_data(new char[str_value.size() * 2 + 2 + 1]);
-		string_t hex_str(hex_data.get(), str_value.size() * 2 + 2);
-		CastFromBlob::ToHexString(string_t(str_value), hex_str);
-		string result(hex_str.GetData());
-		return result;
-	}
+	case LogicalTypeId::BLOB:
+		return Blob::ToString(string_t(str_value));
 	case LogicalTypeId::POINTER:
 		return to_string(value_.pointer);
 	case LogicalTypeId::HASH:

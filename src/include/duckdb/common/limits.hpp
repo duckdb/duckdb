@@ -37,6 +37,10 @@ template <> struct NumericLimits<hugeint_t> {
 	static hugeint_t Minimum();
 	static hugeint_t Maximum();
 };
+template <> struct NumericLimits<uint8_t> {
+	static uint8_t Minimum();
+	static uint8_t Maximum();
+};
 template <> struct NumericLimits<uint16_t> {
 	static uint16_t Minimum();
 	static uint16_t Maximum();

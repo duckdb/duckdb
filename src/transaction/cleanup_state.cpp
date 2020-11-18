@@ -7,6 +7,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/storage/table/chunk_info.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -23,11 +24,11 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		// destroy the backed up entry: it is no longer required
-		assert(catalog_entry->parent);
+		D_ASSERT(catalog_entry->parent);
 		if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
-			if (!catalog_entry->parent->child->deleted) {
+			if (!catalog_entry->deleted) {
 				// delete the entry from the dependency manager, if it is not deleted yet
-				catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry->parent->child.get());
+				catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
 			}
 			catalog_entry->parent->child = move(catalog_entry->child);
 		}

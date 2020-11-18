@@ -80,7 +80,7 @@ static bool positive_hugeint_is_bit_set(hugeint_t lhs, uint8_t bit_position) {
 }
 
 hugeint_t positive_hugeint_leftshift(hugeint_t lhs, uint32_t amount) {
-	assert(amount > 0 && amount < 64);
+	D_ASSERT(amount > 0 && amount < 64);
 	hugeint_t result;
 	result.lower = lhs.lower << amount;
 	result.upper = (lhs.upper << amount) + (lhs.lower >> (64 - amount));
@@ -88,7 +88,7 @@ hugeint_t positive_hugeint_leftshift(hugeint_t lhs, uint32_t amount) {
 }
 
 hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder) {
-	assert(lhs.upper >= 0);
+	D_ASSERT(lhs.upper >= 0);
 	// DivMod code adapted from:
 	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
 
@@ -227,7 +227,7 @@ hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
 //===--------------------------------------------------------------------===//
 hugeint_t Hugeint::DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
 	// division by zero not allowed
-	assert(!(rhs.upper == 0 && rhs.lower == 0));
+	D_ASSERT(!(rhs.upper == 0 && rhs.lower == 0));
 
 	bool lhs_negative = lhs.upper < 0;
 	bool rhs_negative = rhs.upper < 0;
@@ -402,7 +402,7 @@ template <> bool Hugeint::TryCast(hugeint_t input, double &result) {
 	switch (input.upper) {
 	case -1:
 		// special case for upper = -1 to avoid rounding issues in small negative numbers
-		result = -double(NumericLimits<uint64_t>::Maximum() - input.lower + 1);
+		result = -double(NumericLimits<uint64_t>::Maximum() - input.lower) - 1;
 		break;
 	default:
 		result = double(input.lower) + double(input.upper) * double(NumericLimits<uint64_t>::Maximum());
@@ -530,7 +530,7 @@ hugeint_t hugeint_t::operator>>(const hugeint_t &rhs) const {
 		result.lower = (uint64_t(upper) << (64 - shift)) + (lower >> shift);
 		result.upper = uint64_t(upper) >> shift;
 	} else {
-		assert(shift < 128);
+		D_ASSERT(shift < 128);
 		result.lower = uint64_t(upper) >> (shift - 64);
 		result.upper = 0;
 	}
@@ -556,7 +556,7 @@ hugeint_t hugeint_t::operator<<(const hugeint_t &rhs) const {
 		result.lower = lower << shift;
 		result.upper = upper_shift;
 	} else {
-		assert(shift < 128);
+		D_ASSERT(shift < 128);
 		result.lower = 0;
 		result.upper = (lower << (shift - 64)) & 0x7FFFFFFFFFFFFFFF;
 	}

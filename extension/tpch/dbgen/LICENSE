@@ -1,0 +1,320 @@
+END USER LICENSE AGREEMENT
+VERSION 2.2
+
+READ THE TERMS AND CONDITIONS OF THIS AGREEMENT ("AGREEMENT") CAREFULLY
+BEFORE INSTALLING OR USING THE ACCOMPANYING SOFTWARE. BY INSTALLING OR
+USING THE SOFTWARE OR RELATED DOCUMENTATION, YOU AGREE TO BE BOUND BY
+THE TERMS OF THIS AGREEMENT. IF YOU DO NOT AGREE TO THE TERMS OF THIS
+AGREEMENT, DO NOT INSTALL OR USE THE SOFTWARE. IF YOU ARE ACCESSING THE
+SOFTWARE ON BEHALF OF YOUR ORGANIZATION, YOU REPRESENT AND WARRANT THAT
+YOU HAVE SUFFICIENT AUTHORITY TO BIND YOUR ORGANIZATION TO THIS
+AGREEMENT.
+
+USE AND RE-EXPORT OF THE SOFTWARE IS SUBJECT TO THE UNITED STATES EXPORT
+CONTROL ADMINISTRATION REGULATIONS. THE SOFTWARE MAY NOT BE USED BY
+UNLICENSED PERSONS OR ENTITIES, AND MAY NOT BE RE- EXPORTED TO ANOTHER
+COUNTRY. SEE EXPORT ASSURANCE (CLAUSE 13) OF THIS LICENSE.
+
+This is a legal agreement between you (or, if you are accessing the
+software on behalf of your organization, your organization) ("You" or
+"User") and the Transaction Processing Performance Council ("TPC"). This
+Agreement states the terms and conditions upon which TPC offers to
+license the Software, including, but not limited to, the source code,
+scripts, executable programs, drivers, libraries and data files
+associated with such programs, and modifications thereof (the
+"Software"), and online, electronic or printed documentation
+("Documentation," together with the Software, "Materials").
+
+LICENSE
+
+1. Definitions
+
+"Executive Summary" shall mean a short summary of a TPC Benchmark Result
+that shows the configuration, primary metrics, performance data, and
+pricing details. The exact requirements for the Executive Summary are
+defined in each TPC Benchmark Standard.
+"Full Disclosure Report (FDR)" shall mean a document that describes The
+TPC Benchmark Result in sufficient detail such that the Result could be
+recreated. The exact requirements for the FDR are defined in each TPC
+Benchmark Standard.
+"TPC Benchmark Result (Result)" shall mean a performance test submitted
+to the TPC attested to meet the requirements of a TPC Benchmark Standard
+at the time of submission. A Result is documented by an Executive
+Summary and, if required, a FDR.
+"TPC Benchmark Standard" shall mean a TPC Benchmark Specification and
+any associated code or binaries approved by the TPC. The various TPC
+Benchmark Standards can be found at
+http://www.tpc.org/information/current_specifications.asp.
+"TPC Policies" shall mean the guiding principles for how the TPC
+conducts its operations and business. The current TPC Policies can be
+found at http://www.tpc.org/information/current_specifications.asp.
+
+2. Ownership. The Materials are licensed, not sold, to You for use only
+under the terms of this Agreement. As between You and TPC (and, to the
+extent applicable, its licensors), TPC retains all rights, title and
+interest to and ownership of the Materials and reserves all rights not
+expressly granted to You.
+
+3. License Grant. Subject to Your compliance in all material respects
+with the terms and conditions of this Agreement, TPC grants You a
+restricted, non-exclusive, revocable license to install and use the
+Materials, but only as expressly permitted herein. You may only use the
+Software on computer systems under Your direct control. You may download
+multiple copies of the Materials and make verbatim copies of the
+original of the Software so long as Your use of such copies complies
+with the terms of this Agreement.
+a. Use by Individual. If You are accessing the Materials as an
+individual, only You (as an individual) may access and use the
+Materials.
+b. Use by Organization. If You are accessing the Materials on behalf of
+Your organization, only You and those within Your organization may use
+the Materials. Your organization must identify a contact person to TPC
+and conduct communications with TPC through that contact person.
+
+4. Restrictions. The following restrictions apply to all use of the
+Materials by You.
+a. General: You may not:
+(1) use, copy, print, modify, adapt, create derivative works from,
+market, deliver, rent, lease, sublicense, make, have made, assign,
+pledge, transfer, sell, offer to sell, import, reproduce, distribute,
+publicly perform, publicly display or otherwise grant rights to the
+Materials, or any copy thereof, in whole or in part, except as expressly
+permitted under this Agreement; or
+(2) use the Materials in any way that does not comply with all
+applicable laws and regulations.
+b. Modification: You may modify the Software.
+c. Public Disclosure: You may not publicly disclose any performance
+results produced while using the Software except in the following
+circumstances:
+(1) as part of a TPC Benchmark Result. For purposes of this Agreement, a
+"TPC Benchmark Result" is a performance test submitted to the TPC,
+documented by a Full Disclosure Report and Executive Summary, claiming
+to meet the requirements of an official TPC Benchmark Standard. You
+agree that TPC Benchmark Results may only be published in accordance
+with the TPC Policies. viewable at http: //www.tpc.org
+(2) as part of an academic or research effort that does not imply or
+state a marketing position
+(3) any other use of the Software, provided that any performance results
+must be clearly identified as not being comparable to TPC Benchmark
+Results unless specifically authorized by TPC.
+
+5. License Modification. Requests for modification of this license shall
+be addressed to info@tpc.org. You may not remove or modify this license
+without permission.
+
+6. Copyright. The Materials are owned by TPC and/or its licensors, and
+are protected by United States copyright laws and international treaty
+provisions. You may not remove the copyright notice from the original or
+any copy of the Materials, and You must apply the notice if You extract
+part of the Materials not bearing a notice.
+
+7. Use of Name. You acknowledge and agree that TPC owns all trademark
+and trade name rights in the names, trademarks and logos used by TPC in
+the Materials. User shall preserve any notices regarding such ownership.
+User may only use such names, trademarks and logos in accordance with
+the usage guidelines specified by the TPC Policies.
+
+8. Merger or Integration. Any portion of the Materials merged into or
+integrated with other software or documentation will continue to be
+subject to the terms and conditions of this Agreement.
+
+9. Limited Grants of Sublicense. You may distribute the Software as
+provided or as modified as permitted under clause 4 b. of this
+Agreement, provided You comply with all of the terms of this Agreement
+and the following conditions:
+
+a. If You distribute any portion of the Software in its original form
+You may do so only under this Agreement by including a complete copy of
+this Agreement with Your distribution, and if You distribute the
+Software in modified form, You may only do so under a license that at a
+minimum provides all of the protections and conditions of use contained
+within this Agreement;
+
+b. You must include on each copy of the Software that You distribute the
+following legend in all caps, at the top of the label and license, and
+in a font not less than 12 point and no less prominent than any other
+printing: "THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.";
+
+c. You must retain all copyright, patent, trademark, and attribution
+notices that are present in the Software; and
+
+d. You may not charge a fee for the distribution of this Software,
+including any modifications permitted under clause 4.b.
+
+10. Term and Termination.
+a. Term. The license granted to You is effective until terminated.
+b. Termination.
+(1) By You. You may terminate this Agreement at any time by returning
+the Materials (including any portions or copies thereof) to TPC or
+providing written notice to the TPC that all copies of the Materials
+within Your custody or control have been deleted or destroyed.
+(2) By TPC. In the event You materially fail to comply with any term or
+condition of this Agreement, and You fail to remedy such non-compliance
+within 30 days after the receipt of notice to that effect, then TPC
+shall have the right to terminate this Agreement immediately upon
+written notice at the end of such 30-day period.
+c. Effect of Termination. Termination of this Agreement in accordance
+with this clause 10 will not terminate the rights of end users
+sublicensed by You pursuant to this Agreement. Moreover, upon
+termination and at TPC's written request, You agree to either (1) return
+the Materials (including any portions or copies thereof) to TPC or (2)
+immediately destroy all copies of the Materials within Your custody or
+control and inform the TPC of the destruction of the Materials. Upon
+termination, TPC may also enforce any rights provided by law. The
+provisions of this Agreement that protect the proprietary rights of TPC
+and its Licensors will continue in force after termination.
+
+11. No Warranty; Materials Provided "As Is". TO THE MAXIMUM EXTENT
+PERMITTED BY APPLICABLE LAW, THE MATERIALS ARE PROVIDED "AS IS" AND WITH
+ALL FAULTS, AND TPC (AND ITS LICENSORS) AND THE AUTHORS AND DEVELOPERS
+OF THE MATERIALS HEREBY DISCLAIM ALL WARRANTIES, REPRESENTATIONS AND
+CONDITIONS, EITHER EXPRESS, IMPLIED OR STATUTORY, INCLUDING, BUT NOT
+LIMITED TO, ANY IMPLIED WARRANTIES, DUTIES OR CONDITIONS RELATING TO
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY OR
+COMPLETENESS OF RESPONSES, RESULTS, WORKMANLIKE EFFORT, LACK OF VIRUSES,
+LACK OF NEGLIGENCE, TITLE, QUIET ENJOYMENT, QUIET POSSESSION,
+CORRESPONDENCE TO DESCRIPTION OR NONINFRINGEMENT. USER RECOGNIZES THAT
+THE MATERIALS ARE THE RESULT OF A COOPERATIVE, NON-PROFIT EFFORT AND
+THAT TPC DOES NOT CONDUCT A TYPICAL BUSINESS. USER ACCEPTS THE MATERIALS
+"AS IS" AND WITHOUT ANY WARRANTY, EXPRESS OR IMPLIED.
+
+Without limitation, TPC (and its licensors) do not warrant that the
+functions contained in the Software or Materials will meet Your
+requirements or that the operation of the Software will be
+uninterrupted, error-free or free from malicious code. For purposes of
+this paragraph, "malicious code" means any program code designed to
+contaminate other computer programs or computer data, consume computer
+resources, modify, destroy, record, or transmit data, or in some other
+fashion usurp the normal operation of the computer, computer system, or
+computer network, including viruses, Trojan horses, droppers, worms,
+logic bombs, and the like. TPC (and its licensors) shall not be liable
+for the accuracy of any information provided by TPC or third-party
+technical support personnel, or any damages caused, either directly or
+indirectly, by acts taken or omissions made by You as a result of such
+technical support.
+
+You assume full responsibility for the selection of the Materials to
+achieve Your intended results, and for the installation, use and results
+obtained from the Materials. You also assume the entire risk as it
+applies to the quality and performance of the Materials. Should the
+Materials prove defective, You (and not TPC) assume the entire liability
+of any and all necessary servicing, repair or correction. Some
+countries/states do not allow the exclusion of implied warranties, so
+the above exclusion may not apply to You. TPC (and its licensors)
+further disclaims all warranties of any kind if the Materials were
+customized, repackaged or altered in any way by any party other than TPC
+(or its licensors).
+
+12. Disclaimer of Liability. TPC (and its licensors) assumes no
+liability with respect to the Materials, including liability for
+infringement of intellectual property rights, negligence, or any other
+liability. TPC is not aware of any infringement of copyright or patent
+that may result from its grant of rights to User of the Materials. If
+User receives any notice of infringement, such notice shall be
+immediately communicated to TPC who will have sole discretion to take
+action to evaluate the claim and, if practicable, modify the Materials
+as necessary to avoid infringement. In the event that TPC determines
+that the Materials cannot be modified to avoid such infringement (or any
+other infringement claim communicated to TPC), TPC may terminate this
+Agreement immediately. User shall suspend use of the Materials until
+modifications to avoid claims of infringement have been completed. User
+waives any claim against TPC in the event of such infringement claims by
+others.
+
+13. Export Assurance. Use and re-export of the Materials and related
+technical information is subject to the Export Administration
+Regulations (EAR) of the United States Department of Commerce. User
+hereby agrees that User (a) assumes responsibility for compliance with
+the EAR in its use of the Materials and technical information, and (b)
+will not export, re-export, or otherwise disclose directly or
+indirectly, the Materials, technical data, or any direct product of the
+Materials or technical data in violation of the EAR.
+
+14. Limitation of Remedies And Damages. IN NO EVENT WILL TPC OR ITS
+LICENSORS OR LICENSEE BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL OR
+CONSEQUENTIAL DAMAGES OR FOR ANY LOST PROFITS, LOST SAVINGS, LOST
+REVENUES OR LOST DATA ARISING FROM OR RELATING TO THE MATERIALS OR THIS
+AGREEMENT, EVEN IF TPC OR ITS LICENSORS OR LICENSEE HAVE BEEN ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGES. IN NO EVENT WILL TPC'S OR ITS
+LICENSORS' LIABILITY OR DAMAGES TO YOU OR ANY OTHER PERSON EVER EXCEED
+U.S. ONE HUNDRED DOLLARS (US $100), REGARDLESS OF THE FORM OF THE CLAIM.
+IN NO EVENT WILL LICENSEE'S LIABILITY OR DAMAGES TO TPC OR ANY OTHER
+PERSON EVER EXCEED $1,000,000, REGARDLESS OF THE FORM OF THE CLAIM. Some
+countries/states do not allow the limitation or exclusion of liability
+for incidental or consequential damages, so the above limitation or
+exclusion may not apply to You.
+
+15. U.S. Government Restricted Rights. All Software and related
+documentation are provided with restricted rights. Use, duplication or
+disclosure by the U.S. Government is subject to restrictions as set
+forth in subdivision (b)(3)(ii) of the Rights in Technical Data and
+Computer Software Clause at 252.227-7013. If You are using the Software
+outside of the United States, You will comply with the applicable local
+laws of Your country, U.S. export control law, and the English version
+of this Agreement.
+
+16. Contractor/Manufacturer. The Contractor/Manufacturer for the
+Software is:
+
+Transaction Processing Performance Council
+572B Ruger Street, P.O. Box 29920
+San Francisco, CA 94129
+
+17. General. This Agreement is binding on You as well as Your employees,
+employers, contractors and agents, and on any successors and assignees.
+This Agreement is governed by the laws of the State of California
+(except to the extent federal law governs copyrights and trademarks)
+without respect to any provisions of California law that would cause
+application of the law of another state or country. The parties agree
+that the United Nations Convention on Contracts for the International
+Sale of Goods will not govern this Agreement. This Agreement is the
+entire agreement between us regarding the subject matter hereof and
+supersedes any other understandings or agreements with respect to the
+Materials or the subject matter hereof. If any provision of this
+Agreement is deemed invalid or unenforceable by any court having
+jurisdiction, that particular provision will be deemed modified to the
+extent necessary to make the provision valid and enforceable, and the
+remaining provisions will remain in full force and effect.
+
+SPECIAL PROVISIONS APPLICABLE TO THE EUROPEAN UNION
+
+If You acquired the Materials in the European Union (EU), the following
+provisions also apply to You. If there is any inconsistency between the
+terms of the Software License Agreement set out earlier and the
+following provisions, the following provisions shall take precedence.
+
+1. Distribution. You may sublicense modifications of the Software
+covered in this Agreement if they meet the requirements of clause 9
+above.
+
+2. Limited Warranty. EXCEPT AS STATED EARLIER IN THIS AGREEMENT, AND AS
+PROVIDED UNDER THE HEADING "STATUTORY RIGHTS", THE SOFTWARE IS PROVIDED
+AS-IS WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+INCLUDING, BUT NOT LIMITED TO, ANY IMPLIED WARRANTIES, NONINFRINGEMENT,
+OR CONDITIONS OF MERCHANTABILITY, QUALITY AND FITNESS FOR A PARTICULAR
+PURPOSE.
+
+3. Limitation of Remedy and Damages. THE LIMITATIONS OF REMEDIES AND
+DAMAGES IN THE SOFTWARE LICENSE AGREEMENT SHALL NOT APPLY TO PERSONAL
+INJURY (INCLUDING DEATH) TO ANY PERSON CAUSED BY TPC'S NEGLIGENCE AND
+ARE SUBJECT TO THE PROVISION SET OUT UNDER THE HEADING "STATUTORY
+RIGHTS".
+
+4. Statutory Rights: Irish law provides that certain conditions and
+warranties may be implied in contracts for the sale of goods and in
+contracts for the supply of services. Such conditions and warranties are
+hereby excluded, to the extent such exclusion, in the context of this
+transaction, is lawful under Irish law. Conversely, such conditions and
+warranties, insofar as they may not be lawfully excluded, shall apply.
+Accordingly nothing in this Agreement shall prejudice any rights that
+You may enjoy by virtue of Sections 12, 13, 14 or 15 of the Irish Sale
+of Goods Act 1893 (as amended).
+
+5. General. This Agreement is governed by the laws of the Republic of
+Ireland. The local language version of this agreement shall apply to
+Materials acquired in the EU. This Agreement is the entire agreement
+between us with respect to the subject matter hereof and You agree that
+TPC will not have any liability for any untrue statement or
+representation made by it, its agents or anyone else (whether innocently
+or negligently) upon which You relied upon entering this Agreement,
+unless such untrue statement or representation was made fraudulently.

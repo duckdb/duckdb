@@ -1,0 +1,23 @@
+# name: benchmark/tpch/parquet/parquet_union_all_pushdown_manual.benchmark
+# description: Read parquet files through a union all where we don't use any columns (manual pushdown)
+# group: [parquet]
+
+name Parquet Union All (Manual Pushdown)
+group parquet
+subgroup tpch
+
+require parquet
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.parquet' (FORMAT PARQUET);
+CREATE VIEW p1 AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/lineitem.parquet');
+CREATE VIEW p2 AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/lineitem.parquet');
+
+run
+SELECT COUNT(*) FROM (SELECT l_orderkey FROM p1 UNION ALL SELECT l_orderkey FROM p2) t1
+
+result I
+12002430
+

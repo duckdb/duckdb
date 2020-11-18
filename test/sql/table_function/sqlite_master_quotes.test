@@ -1,0 +1,48 @@
+# name: test/sql/table_function/sqlite_master_quotes.test
+# description: Test correct quotes in sqlite_master
+# group: [table_function]
+
+# simple quotes
+statement ok
+CREATE TABLE "a b c"("d e" INTEGER, f INTEGER);
+
+query IIIII
+SELECT * FROM sqlite_master;
+----
+table	a b c	a b c	0	CREATE TABLE "a b c"("d e" INTEGER, f INTEGER);
+
+statement ok
+DROP TABLE "a b c";
+
+# quoted quotes
+statement ok
+CREATE TABLE "inte""gers"(i INTEGER);
+
+query IIIII
+SELECT * FROM sqlite_master;
+----
+table	inte"gers	inte"gers	0	CREATE TABLE "inte""gers"(i INTEGER);
+
+statement ok
+DROP TABLE "inte""gers"
+
+# multi-column primary key constraint
+statement ok
+CREATE TABLE integers("a b" INTEGER, "c d" INTEGER, PRIMARY KEY("a b", "c d"))
+
+query IIIII
+SELECT * FROM sqlite_master;
+----
+table	integers	integers	0	CREATE TABLE integers("a b" INTEGER, "c d" INTEGER, PRIMARY KEY("a b", "c d"));
+
+statement ok
+DROP TABLE integers
+
+# quote with numbers
+statement ok
+CREATE TABLE "1a"(a1 INTEGER, a2 INTEGER);
+
+query IIIII
+SELECT * FROM sqlite_master;
+----
+table	1a	1a	0	CREATE TABLE "1a"(a1 INTEGER, a2 INTEGER);

@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_string_int.benchmark
+# description: Cast string values to integers
+# group: [cast]
+
+name Cast VARCHAR -> INTEGER
+group cast
+
+load
+CREATE TABLE varchars AS SELECT i::VARCHAR v FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MAX(CAST(v AS INTEGER)) FROM varchars
+
+result I
+9999999

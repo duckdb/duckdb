@@ -37,7 +37,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	auto constant_expr = bindings[1];
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
-	assert(constant_expr->IsFoldable());
+	D_ASSERT(constant_expr->IsFoldable());
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(LogicalType::BOOLEAN);
 	if (constant_value.is_null) {
 		// we can't simplify conjunctions with a constant NULL
@@ -52,7 +52,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 			return RemoveExpression(*conjunction, constant_expr);
 		}
 	} else {
-		assert(conjunction->type == ExpressionType::CONJUNCTION_OR);
+		D_ASSERT(conjunction->type == ExpressionType::CONJUNCTION_OR);
 		if (!constant_value.value_.boolean) {
 			// FALSE in OR, remove the expression from the set
 			return RemoveExpression(*conjunction, constant_expr);

@@ -17,4 +17,13 @@ struct QualifiedName {
 	string name;
 };
 
+struct QualifiedColumnName {
+	QualifiedColumnName(){}
+	QualifiedColumnName(string table_p, string column_p) : table(move(table_p)), column(move(column_p)) {}
+
+	string schema;
+	string table;
+	string column;
+};
+
 } // namespace duckdb

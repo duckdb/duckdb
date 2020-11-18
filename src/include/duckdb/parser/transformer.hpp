@@ -63,10 +63,10 @@ private:
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres T_PGSelectStmt node into a SelectStatement
 	unique_ptr<SelectStatement> TransformSelect(duckdb_libpgquery::PGNode *node, bool isSelect = true);
-	//! Transform a Postgres T_AlterStmt node into a AlterTableStatement
-	unique_ptr<AlterTableStatement> TransformAlter(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres T_AlterStmt node into a AlterStatement
+	unique_ptr<AlterStatement> TransformAlter(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGRenameStmt node into a RenameStatement
-	unique_ptr<AlterTableStatement> TransformRename(duckdb_libpgquery::PGNode *node);
+	unique_ptr<AlterStatement> TransformRename(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGCreateStmt node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateTable(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGCreateStmt node into a CreateStatement
@@ -165,10 +165,10 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
-	string TransformAlias(duckdb_libpgquery::PGAlias *root);
+	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, SelectStatement &select);
-	unique_ptr<QueryNode> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
-	                                            CommonTableExpressionInfo &info);
+	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
+	                                                  CommonTableExpressionInfo &info);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
 

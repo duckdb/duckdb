@@ -47,6 +47,9 @@ endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
 endif
+ifeq (${BUILD_REST}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_REST=1
+endif
 
 clean:
 	rm -rf build
@@ -106,6 +109,12 @@ reldebug:
 	mkdir -p build/reldebug && \
 	cd build/reldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake --build .
+
+relassert:
+	mkdir -p build/relassert && \
+	cd build/relassert && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 amaldebug:

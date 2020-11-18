@@ -25,6 +25,11 @@
 
 namespace duckdb {
 struct IteratorEntry {
+	IteratorEntry() {
+	}
+	IteratorEntry(Node *node, idx_t pos) : node(node), pos(pos) {
+	}
+
 	Node *node = nullptr;
 	idx_t pos = 0;
 };
@@ -34,10 +39,12 @@ struct Iterator {
 	Leaf *node = nullptr;
 	//! The current depth
 	int32_t depth = 0;
-	//! Stack, actually the size is determined at runtime
-	IteratorEntry stack[9];
+	//! Stack, the size is determined at runtime
+	vector<IteratorEntry> stack;
 
 	bool start = false;
+
+	void SetEntry(idx_t depth, IteratorEntry entry);
 };
 
 struct ARTIndexScanState : public IndexScanState {
@@ -47,9 +54,12 @@ struct ARTIndexScanState : public IndexScanState {
 	Value values[2];
 	ExpressionType expressions[2];
 	bool checked;
-	idx_t result_index = 0;
 	vector<row_t> result_ids;
 	Iterator iterator;
+	//! Stores the current leaf
+	Leaf *cur_leaf = nullptr;
+	//! Offset to leaf
+	idx_t result_index = 0;
 };
 
 class ART : public Index {
@@ -85,9 +95,12 @@ public:
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
-
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+
+	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
+	//! Search Equal used for Joins that do not need to fetch data
+	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
 
 private:
 	DataChunk expression_result;
@@ -113,7 +126,6 @@ private:
 	//! Gets next node for range queries
 	bool IteratorNext(Iterator &iter);
 
-	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,

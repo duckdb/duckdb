@@ -1,12 +1,10 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 
 #include <string.h>
 #include <ctype.h>
-#include <unordered_map>
 
 using namespace std;
 
@@ -14,7 +12,7 @@ namespace duckdb {
 
 static string_t repeat_scalar_function(const string_t &str, const int64_t cnt, vector<char> &result) {
 	// Get information about the repeated string
-	const auto input_str = str.GetData();
+	const auto input_str = str.GetDataUnsafe();
 	const auto size_str = str.GetSize();
 
 	//  Reuse the buffer

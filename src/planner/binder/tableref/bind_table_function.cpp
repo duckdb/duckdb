@@ -14,12 +14,13 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
+	QueryErrorContext error_context(root_statement, ref.query_location);
 	auto bind_index = GenerateTableIndex();
 
-	assert(ref.function->type == ExpressionType::FUNCTION);
+	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
 
-	// evalate the input parameters to the function
+	// evaluate the input parameters to the function
 	vector<LogicalType> arguments;
 	vector<Value> parameters;
 	unordered_map<string, Value> named_parameters;
@@ -41,13 +42,13 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		if (!expr->IsFoldable()) {
-			throw BinderException("Named parameter requires a constant parameter");
+			throw BinderException(FormatError(ref, "Table function requires a constant parameter"));
 		}
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (named_parameters.size() > 0) {
-				throw BinderException("Unnamed parameters cannot come after named parameters");
+				throw BinderException(FormatError(ref, "Unnamed parameters cannot come after named parameters"));
 			}
 			arguments.push_back(sql_type);
 			parameters.push_back(move(constant));
@@ -55,22 +56,22 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 			named_parameters[parameter_name] = move(constant);
 		}
 	}
+
 	// fetch the function from the catalog
+	auto &catalog = Catalog::GetCatalog(context);
 	auto function =
-	    Catalog::GetCatalog(context).GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name);
+	    catalog.GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name, false, error_context);
 
 	// select the function based on the input parameters
-	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments);
+	string error;
+	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);
+	if (best_function_idx == INVALID_INDEX) {
+		throw BinderException(FormatError(ref, error));
+	}
 	auto &table_function = function->functions[best_function_idx];
 
 	// now check the named parameters
-	for (auto &kv : named_parameters) {
-		auto entry = table_function.named_parameters.find(kv.first);
-		if (entry == table_function.named_parameters.end()) {
-			throw BinderException("Invalid named parameter \"%s\" for function %s", kv.first, table_function.name);
-		}
-		kv.second = kv.second.CastAs(entry->second);
-	}
+	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
 
 	// cast the parameters to the type of the function
 	for (idx_t i = 0; i < arguments.size(); i++) {
@@ -86,11 +87,16 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	if (table_function.bind) {
 		bind_data = table_function.bind(context, parameters, named_parameters, return_types, return_names);
 	}
-	assert(return_types.size() == return_names.size());
-	assert(return_types.size() > 0);
+	D_ASSERT(return_types.size() == return_names.size());
+	D_ASSERT(return_types.size() > 0);
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < ref.column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = ref.column_name_alias[i];
+	}
+	for (idx_t i = 0; i < return_names.size(); i++) {
+		if (return_names[i].empty()) {
+			return_names[i] = "C" + to_string(i);
+		}
 	}
 	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);
 	// now add the table function to the bind context so its columns can be bound

@@ -37,6 +37,12 @@ public:
 			WriteData((const_data_ptr_t)val.c_str(), val.size());
 		}
 	}
+	void WriteStringLen(const_data_ptr_t val, idx_t len) {
+		Write<uint32_t>((uint32_t)len);
+		if (len > 0) {
+			WriteData(val, len);
+		}
+	}
 
 	template <class T> void WriteList(vector<unique_ptr<T>> &list) {
 		Write<uint32_t>((uint32_t)list.size());

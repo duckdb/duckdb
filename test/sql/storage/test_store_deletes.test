@@ -33,3 +33,38 @@ SELECT a, b FROM test ORDER BY a
 ----
 11	22
 13	22
+
+statement ok
+DELETE FROM test WHERE a=11
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+13	22
+
+statement ok
+INSERT INTO test VALUES (11, 24), (12, 25)
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	24
+12	25
+13	22
+
+statement ok
+DELETE FROM test WHERE a=12
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	24
+13	22
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	24
+13	22

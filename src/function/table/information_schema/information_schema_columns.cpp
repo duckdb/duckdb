@@ -6,7 +6,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
-#include "duckdb/transaction/transaction.hpp"
 
 #include <set>
 
@@ -75,14 +74,13 @@ information_schema_columns_init(ClientContext &context, const FunctionData *bind
 	auto result = make_unique<InformationSchemaColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
-	auto &transaction = Transaction::GetTransaction(context);
-	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
+	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	// check the temp schema as well
-	context.temporary_objects->tables.Scan(transaction, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	context.temporary_objects->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -99,7 +97,7 @@ public:
 	virtual idx_t NumColumns() = 0;
 	virtual const string &ColumnName(idx_t col) = 0;
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
-	virtual const char *ColumnDefault(idx_t col) = 0;
+	virtual const Value ColumnDefault(idx_t col) = 0;
 	virtual bool IsNullable(idx_t col) = 0;
 
 	void WriteColumns(idx_t index, idx_t start_col, idx_t end_col, DataChunk &output);
@@ -128,11 +126,11 @@ public:
 	const LogicalType &ColumnType(idx_t col) {
 		return entry->columns[col].type;
 	}
-	const char *ColumnDefault(idx_t col) {
+	const Value ColumnDefault(idx_t col) {
 		if (entry->columns[col].default_value) {
-			return entry->columns[col].default_value->ToString().c_str();
+			return Value(entry->columns[col].default_value->ToString());
 		}
-		return nullptr;
+		return Value();
 	}
 	bool IsNullable(idx_t col) {
 		return not_null_cols.find(col) == not_null_cols.end();
@@ -160,8 +158,8 @@ public:
 	const LogicalType &ColumnType(idx_t col) {
 		return entry->types[col];
 	}
-	const char *ColumnDefault(idx_t col) {
-		return nullptr;
+	const Value ColumnDefault(idx_t col) {
+		return Value();
 	}
 	bool IsNullable(idx_t col) {
 		return true;

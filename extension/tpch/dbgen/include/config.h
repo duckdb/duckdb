@@ -1,4 +1,14 @@
 /*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ */
+/*
  * this file allows the compilation of DBGEN to be tailored to specific
  * architectures and operating systems. Some options are grouped
  * together to allow easier compilation on a given vendor's hardware.

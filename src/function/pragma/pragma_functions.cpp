@@ -7,25 +7,28 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-
+#include "duckdb/common/enums/output_type.hpp"
 #include <cctype>
 
 namespace duckdb {
 
-static void pragma_enable_profiling_statement(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_profiling_statement(ClientContext &context, FunctionParameters parameters) {
 	context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 	context.profiler.Enable();
 }
 
-static void pragma_enable_profiling_assignment(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_profiling_assignment(ClientContext &context, FunctionParameters parameters) {
 	// this is either enable_profiling = json, or enable_profiling = query_tree
-	string assignment = parameters[0].ToString();
+	string assignment = parameters.values[0].ToString();
 	if (assignment == "json") {
 		context.profiler.automatic_print_format = ProfilerPrintFormat::JSON;
 	} else if (assignment == "query_tree") {
 		context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
+	} else if (assignment == "query_tree_optimizer") {
+		context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
 	} else {
-		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]", assignment);
+		throw ParserException(
+		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", assignment);
 	}
 	context.profiler.Enable();
 }
@@ -40,34 +43,34 @@ void register_enable_profiling(BuiltinFunctions &set) {
 	set.AddFunction("enable_profiling", functions);
 }
 
-static void pragma_disable_profiling(ClientContext &context, vector<Value> parameters) {
+static void pragma_disable_profiling(ClientContext &context, FunctionParameters parameters) {
 	context.profiler.Disable();
 	context.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
 }
 
-static void pragma_profile_output(ClientContext &context, vector<Value> parameters) {
-	context.profiler.save_location = parameters[0].ToString();
+static void pragma_profile_output(ClientContext &context, FunctionParameters parameters) {
+	context.profiler.save_location = parameters.values[0].ToString();
 }
 
 static idx_t ParseMemoryLimit(string arg);
 
-static void pragma_memory_limit(ClientContext &context, vector<Value> parameters) {
-	idx_t new_limit = ParseMemoryLimit(parameters[0].ToString());
+static void pragma_memory_limit(ClientContext &context, FunctionParameters parameters) {
+	idx_t new_limit = ParseMemoryLimit(parameters.values[0].ToString());
 	// set the new limit in the buffer manager
 	context.db.storage->buffer_manager->SetLimit(new_limit);
 }
 
-static void pragma_collation(ClientContext &context, vector<Value> parameters) {
-	auto collation_param = StringUtil::Lower(parameters[0].ToString());
+static void pragma_collation(ClientContext &context, FunctionParameters parameters) {
+	auto collation_param = StringUtil::Lower(parameters.values[0].ToString());
 	// bind the collation to verify that it exists
 	ExpressionBinder::TestCollation(context, collation_param);
 	auto &config = DBConfig::GetConfig(context);
 	config.collation = collation_param;
 }
 
-static void pragma_null_order(ClientContext &context, vector<Value> parameters) {
+static void pragma_null_order(ClientContext &context, FunctionParameters parameters) {
 	auto &config = DBConfig::GetConfig(context);
-	string new_null_order = StringUtil::Lower(parameters[0].ToString());
+	string new_null_order = StringUtil::Lower(parameters.values[0].ToString());
 	if (new_null_order == "nulls first" || new_null_order == "null first" || new_null_order == "first") {
 		config.default_null_order = OrderByNullType::NULLS_FIRST;
 	} else if (new_null_order == "nulls last" || new_null_order == "null last" || new_null_order == "last") {
@@ -78,9 +81,9 @@ static void pragma_null_order(ClientContext &context, vector<Value> parameters) 
 	}
 }
 
-static void pragma_default_order(ClientContext &context, vector<Value> parameters) {
+static void pragma_default_order(ClientContext &context, FunctionParameters parameters) {
 	auto &config = DBConfig::GetConfig(context);
-	string new_order = StringUtil::Lower(parameters[0].ToString());
+	string new_order = StringUtil::Lower(parameters.values[0].ToString());
 	if (new_order == "ascending" || new_order == "asc") {
 		config.default_order_type = OrderType::ASCENDING;
 	} else if (new_order == "descending" || new_order == "desc") {
@@ -90,29 +93,41 @@ static void pragma_default_order(ClientContext &context, vector<Value> parameter
 	}
 }
 
-static void pragma_set_threads(ClientContext &context, vector<Value> parameters) {
-	auto nr_threads = parameters[0].GetValue<int64_t>();
+static void pragma_set_threads(ClientContext &context, FunctionParameters parameters) {
+	auto nr_threads = parameters.values[0].GetValue<int64_t>();
 	TaskScheduler::GetScheduler(context).SetThreads(nr_threads);
 }
 
-static void pragma_enable_verification(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_verification(ClientContext &context, FunctionParameters parameters) {
 	context.query_verification_enabled = true;
 }
 
-static void pragma_disable_verification(ClientContext &context, vector<Value> parameters) {
+static void pragma_disable_verification(ClientContext &context, FunctionParameters parameters) {
 	context.query_verification_enabled = false;
 }
 
-static void pragma_enable_force_parallelism(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_force_parallelism(ClientContext &context, FunctionParameters parameters) {
 	context.force_parallelism = true;
 }
 
-static void pragma_disable_force_parallelism(ClientContext &context, vector<Value> parameters) {
+static void pragma_enable_force_index_join(ClientContext &context, FunctionParameters parameters) {
+	context.force_index_join = true;
+}
+
+static void pragma_disable_force_parallelism(ClientContext &context, FunctionParameters parameters) {
 	context.force_parallelism = false;
 }
 
-static void pragma_log_query_path(ClientContext &context, vector<Value> parameters) {
-	auto str_val = parameters[0].ToString();
+static void pragma_enable_object_cache(ClientContext &context, FunctionParameters parameters){
+	context.object_cache_enable = true;
+}
+
+static void pragma_disable_object_cache(ClientContext &context, FunctionParameters parameters){
+	context.object_cache_enable = false;
+}
+
+static void pragma_log_query_path(ClientContext &context, FunctionParameters parameters) {
+	auto str_val = parameters.values[0].ToString();
 	if (str_val.empty()) {
 		// empty path: clean up query writer
 		context.log_query_writer = nullptr;
@@ -121,15 +136,26 @@ static void pragma_log_query_path(ClientContext &context, vector<Value> paramete
 	}
 }
 
-static void pragma_explain_output(ClientContext &context, vector<Value> parameters) {
-	string val = parameters[0].ToString();
-	if (val == "optimized") {
-		context.explain_output_optimized_only = true;
-	} else if (val == "all") {
-		context.explain_output_optimized_only = true;
+static void pragma_explain_output(ClientContext &context, FunctionParameters parameters) {
+	string val = StringUtil::Lower(parameters.values[0].ToString());
+	if (val == "all") {
+		context.explain_output_type = ExplainOutputType::ALL;
+	} else if (val == "optimized_only") {
+		context.explain_output_type = ExplainOutputType::OPTIMIZED_ONLY;
+	} else if (val == "physical_only") {
+		context.explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	} else {
-		throw ParserException("Expected PRAGMA explain_output={optimized, all}");
+		throw ParserException("Unrecognized output type '%s', expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY",
+		                      val);
 	}
+}
+
+static void pragma_enable_optimizer(ClientContext &context, FunctionParameters parameters) {
+	context.enable_optimizer = true;
+}
+
+static void pragma_disable_optimizer(ClientContext &context, FunctionParameters parameters) {
+	context.enable_optimizer = false;
 }
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
@@ -161,8 +187,16 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("force_parallelism", pragma_enable_force_parallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_parallelism", pragma_disable_force_parallelism));
 
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", pragma_enable_object_cache));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", pragma_disable_object_cache));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", pragma_enable_optimizer));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", pragma_disable_optimizer));
+
 	set.AddFunction(PragmaFunction::PragmaAssignment("log_query_path", pragma_log_query_path, LogicalType::VARCHAR));
 	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", pragma_explain_output, LogicalType::VARCHAR));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", pragma_enable_force_index_join));
 }
 
 idx_t ParseMemoryLimit(string arg) {

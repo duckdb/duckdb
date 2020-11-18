@@ -16,7 +16,7 @@ ColumnBindingResolver::ColumnBindingResolver() {
 }
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::COMPARISON_JOIN || op.type == LogicalOperatorType::DELIM_JOIN) {
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		// special case: comparison join
 		auto &comp_join = (LogicalComparisonJoin &)op;
 		// first get the bindings of the LHS and resolve the LHS expressions
@@ -24,7 +24,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.left);
 		}
-		if (op.type == LogicalOperatorType::DELIM_JOIN) {
+		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			// visit the duplicate eliminated columns on the LHS, if any
 			auto &delim_join = (LogicalDelimJoin &)op;
 			for (auto &expr : delim_join.duplicate_eliminated_columns) {
@@ -39,7 +39,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
 		return;
-	} else if (op.type == LogicalOperatorType::ANY_JOIN) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		// ANY join, this join is different because we evaluate the expression on the bindings of BOTH join sides at
 		// once i.e. we set the bindings first to the bindings of the entire join, and then resolve the expressions of
 		// this operator
@@ -47,14 +47,14 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		bindings = op.GetColumnBindings();
 		VisitOperatorExpressions(op);
 		return;
-	} else if (op.type == LogicalOperatorType::CREATE_INDEX) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_CREATE_INDEX) {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
 		auto &create_index = (LogicalCreateIndex &)op;
 		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.columns.size());
 		VisitOperatorExpressions(op);
 		return;
-	} else if (op.type == LogicalOperatorType::GET) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		//! We first need to update the current set of bindings and then visit operator expressions
 		bindings = op.GetColumnBindings();
 		VisitOperatorExpressions(op);
@@ -71,7 +71,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
                                                            unique_ptr<Expression> *expr_ptr) {
-	assert(expr.depth == 0);
+	D_ASSERT(expr.depth == 0);
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {

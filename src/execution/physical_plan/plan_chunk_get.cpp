@@ -6,8 +6,8 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalChunkGet &op) {
-	assert(op.children.size() == 0);
-	assert(op.collection);
+	D_ASSERT(op.children.size() == 0);
+	D_ASSERT(op.collection);
 
 	// create a PhysicalChunkScan pointing towards the owned collection
 	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);

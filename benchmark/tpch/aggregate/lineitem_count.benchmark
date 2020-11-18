@@ -2,6 +2,10 @@
 # description: Simple COUNT aggregate over lineitem
 # group: [aggregate]
 
+name Lineitem Simple Count
+group aggregate
+subgroup tpch
+
 require tpch
 
 cache tpch_sf1

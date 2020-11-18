@@ -1,12 +1,16 @@
 #include "duckdb/transaction/commit_state.hpp"
+#include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+
+#include "duckdb/storage/table/chunk_info.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -24,14 +28,14 @@ void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 }
 
 void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
-	assert(log);
+	if (entry->temporary || entry->parent->temporary) {
+		return;
+	}
+	D_ASSERT(log);
 	// look at the type of the parent entry
 	auto parent = entry->parent;
 	switch (parent->type) {
 	case CatalogType::TABLE_ENTRY:
-		if (parent->temporary) {
-			return;
-		}
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
@@ -54,7 +58,18 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateSchema((SchemaCatalogEntry *)parent);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		log->WriteCreateView((ViewCatalogEntry *)parent);
+		if (entry->type == CatalogType::VIEW_ENTRY) {
+			// ALTER TABLE statement, read the extra data after the entry
+			auto extra_data_size = Load<idx_t>(dataptr);
+			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
+			// deserialize it
+			BufferedDeserializer source(extra_data, extra_data_size);
+			auto info = AlterInfo::Deserialize(source);
+			// write the alter table in the log
+			log->WriteAlter(*info);
+		} else {
+			log->WriteCreateView((ViewCatalogEntry *)parent);
+		}
 		break;
 	case CatalogType::SEQUENCE_ENTRY:
 		log->WriteCreateSequence((SequenceCatalogEntry *)parent);
@@ -92,7 +107,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 }
 
 void CommitState::WriteDelete(DeleteInfo *info) {
-	assert(log);
+	D_ASSERT(log);
 	// switch to the current table, if necessary
 	SwitchTable(info->table->info.get(), UndoFlags::DELETE_TUPLE);
 
@@ -110,7 +125,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 }
 
 void CommitState::WriteUpdate(UpdateInfo *info) {
-	assert(log);
+	D_ASSERT(log);
 	// switch to the current table, if necessary
 	SwitchTable(&info->column_data->table_info, UndoFlags::UPDATE_TUPLE);
 
@@ -140,13 +155,25 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		assert(catalog_entry->parent);
-		catalog_entry->parent->timestamp = commit_id;
-
+		D_ASSERT(catalog_entry->parent);
+		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, commit_id);
+		if (catalog_entry->name != catalog_entry->parent->name) {
+			catalog_entry->set->UpdateTimestamp(catalog_entry, commit_id);
+		}
 		if (HAS_LOG) {
 			// push the catalog update to the WAL
 			WriteCatalogEntry(catalog_entry, data + sizeof(CatalogEntry *));
 		}
+		break;
+	}
+	case UndoFlags::INSERT_TUPLE: {
+		// append:
+		auto info = (AppendInfo *)data;
+		if (HAS_LOG && !info->table->info->IsTemporary()) {
+			info->table->WriteToLog(*log, info->start_row, info->count);
+		}
+		// mark the tuples as committed
+		info->table->CommitAppend(commit_id, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -180,8 +207,17 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		assert(catalog_entry->parent);
-		catalog_entry->parent->timestamp = transaction_id;
+		D_ASSERT(catalog_entry->parent);
+		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, transaction_id);
+		if (catalog_entry->name != catalog_entry->parent->name) {
+			catalog_entry->set->UpdateTimestamp(catalog_entry, transaction_id);
+		}
+		break;
+	}
+	case UndoFlags::INSERT_TUPLE: {
+		auto info = (AppendInfo *)data;
+		// revert this append
+		info->table->RevertAppend(info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

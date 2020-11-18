@@ -52,8 +52,6 @@ public:
 	StringSegment(BufferManager &manager, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
 	~StringSegment() override;
 
-	//! The current dictionary offset
-	idx_t dictionary_offset;
 	//! The string block holding strings that do not fit in the main block
 	//! FIXME: this should be replaced by a heap that also allows freeing of unused strings
 	unique_ptr<StringBlock> head;
@@ -77,6 +75,8 @@ public:
 	//! Rollback a previous update
 	void RollbackUpdate(UpdateInfo *info) override;
 
+	void ToTemporary() override;
+
 protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
@@ -92,8 +92,8 @@ protected:
 	                         idx_t &approved_tuple_count) override;
 
 private:
-	void AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset, Vector &source,
-	                idx_t offset, idx_t count);
+	void AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
+	                idx_t target_offset, Vector &source, idx_t offset, idx_t count);
 
 	//! Fetch all the strings of a vector from the base table and place their locations in the result vector
 	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, idx_t vector_index, Vector &result, idx_t count);
@@ -129,9 +129,7 @@ private:
 	                     string_location_t string_locations[], nullmask_t original_nullmask);
 
 	//! The amount of bytes remaining to store in the block
-	idx_t RemainingSpace() {
-		return Storage::BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
-	}
+	idx_t RemainingSpace(BufferHandle &handle);
 
 	void read_string(string_t *result_data, buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset,
 	                 idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index);
@@ -196,6 +194,9 @@ private:
 		sel.Initialize(new_sel);
 		approved_tuple_count = result_count;
 	}
+
+	void SetDictionaryOffset(BufferHandle &handle, idx_t offset);
+	idx_t GetDictionaryOffset(BufferHandle &handle);
 
 private:
 	//! The max string size that is allowed within a block. Strings bigger than this will be labeled as a BIG STRING and
