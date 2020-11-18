@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalCreateFunction : public PhysicalOperator {
 public:
 	PhysicalCreateFunction(unique_ptr<CreateMacroFunctionInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_FUNCTION, {LogicalType::BIGINT}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_MACRO, {LogicalType::BIGINT}), info(move(info)) {
 	}
 
 	unique_ptr<CreateMacroFunctionInfo> info;

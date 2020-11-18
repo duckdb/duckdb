@@ -70,7 +70,7 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return "CREATE_TABLE";
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
-		return "CREATE_FUNCTION";
+		return "CREATE_MACRO";
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return "EXPLAIN";
 	case LogicalOperatorType::LOGICAL_EXECUTE:
