@@ -41,7 +41,7 @@ jobs:
   win-release-64:
     name: Windows (64 Bit)
     runs-on: windows-latest
-    needs: linux-debug
+    #needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
@@ -75,6 +75,13 @@ jobs:
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-windows-amd64.zip
+          duckdb_cli-windows-amd64.zip
 
 
   win-release-32:
@@ -113,6 +120,13 @@ jobs:
         zip -j duckdb_cli-windows-i386.zip Release/duckdb.exe
         zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-windows-i386.zip
+          duckdb_cli-windows-i386.zip
 
 
   xcode-release:
@@ -158,6 +172,13 @@ jobs:
         zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-osx-amd64.zip
+          duckdb_cli-osx-amd64.zip
 
 
   xcode-debug:
@@ -233,6 +254,14 @@ jobs:
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-linux-amd64.zip
+          duckdb_cli-linux-amd64.zip
+
+
 
   linux-release-32:
     name: Linux (32 Bit)
@@ -270,6 +299,13 @@ jobs:
         zip -j duckdb_cli-linux-i386.zip build/release/duckdb
         zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-linux-i386.zip 
+          duckdb_cli-linux-i386.zip
 
 
   old-gcc:
