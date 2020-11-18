@@ -7,6 +7,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include <limits>
 
 using namespace std;
 
@@ -47,14 +48,10 @@ static string ParseString(vector<Value> &set) {
 	return set[0].GetValue<string>();
 }
 
-static idx_t ParseInteger(vector<Value> &set) {
+static int64_t ParseInteger(vector<Value> &set) {
 	if (set.size() != 1) {
 		// no option specified or multiple options specified
 		throw BinderException("Expected a single argument as a integer value");
-	}
-	if (set[0].type().id() == LogicalTypeId::FLOAT || set[0].type().id() == LogicalTypeId::DOUBLE ||
-	    set[0].type().id() == LogicalTypeId::DECIMAL) {
-		throw BinderException("Expected a integer argument!");
 	}
 	return set[0].GetValue<int64_t>();
 }
@@ -208,18 +205,33 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 			// parsed option in base CSV options: continue
 			continue;
 		} else if (loption == "sample_size") {
-			options.sample_size = ParseInteger(set);
-			if (options.sample_size > STANDARD_VECTOR_SIZE) {
-				throw BinderException(
-				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
-				    STANDARD_VECTOR_SIZE);
-			} else if (options.sample_size < 1) {
+			int64_t sample_size = ParseInteger(set);
+			if (sample_size < 1 && sample_size != -1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
-		} else if (loption == "num_samples") {
-			options.num_samples = ParseInteger(set);
-			if (options.num_samples < 1) {
-				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
+			if (sample_size == -1) {
+				options.sample_chunks = std::numeric_limits<uint64_t>::max();
+				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
+			} else if (sample_size <= STANDARD_VECTOR_SIZE) {
+				options.sample_chunk_size = sample_size;
+				options.sample_chunks = 1;
+			} else {
+				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
+				options.sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
+			}
+		} else if (loption == "sample_chunk_size") {
+			options.sample_chunk_size = ParseInteger(set);
+			if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {
+				throw BinderException(
+				    "Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+				    STANDARD_VECTOR_SIZE);
+			} else if (options.sample_chunk_size < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
+			}
+		} else if (loption == "sample_chunks") {
+			options.sample_chunks = ParseInteger(set);
+			if (options.sample_chunks < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
 			}
 		} else if (loption == "force_not_null") {
 			options.force_not_null = ParseColumnList(set, expected_names);

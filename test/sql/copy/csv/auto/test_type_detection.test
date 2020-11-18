@@ -6,7 +6,7 @@ require vector_size 512
 
 # a CSV file with many strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/large_mixed_data.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/large_mixed_data.csv', SAMPLE_CHUNKS=20);
 
 query ITR
 SELECT linenr, mixed_string, mixed_double FROM test LIMIT 3;
