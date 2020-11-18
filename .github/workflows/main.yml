@@ -833,7 +833,7 @@ jobs:
         sudo systemctl status docker
 
     - name: Configure
-    - run: |
+      run: |
           mkdir -p build/release
           cd build/release
           cmake -DSTATIC_LIBCPP=1 -DBUILD_UNITTESTS=0 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_ICU_EXTENSION=1 -DCMAKE_BUILD_TYPE=Release ../..
