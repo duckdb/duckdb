@@ -175,7 +175,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: duckdb-binaries-windows
+        name: duckdb-binaries-osx
         path: |
           libduckdb-osx-amd64.zip
           duckdb_cli-osx-amd64.zip
@@ -256,7 +256,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: duckdb-binaries-windows
+        name: duckdb-binaries-linux
         path: |
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
@@ -302,7 +302,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: duckdb-binaries-windows
+        name: duckdb-binaries-linux
         path: |
           libduckdb-linux-i386.zip 
           duckdb_cli-linux-i386.zip
@@ -832,3 +832,15 @@ jobs:
         export CXX=arm-linux-gnueabihf-g++
         export CC=arm-linux-gnueabihf-gcc
         STATIC_LIBCPP=1 make
+
+
+    - name: Deploy
+      run: |
+        zip -j duckdb_cli-arm-linux-gnueabihf.zip build/release/duckdb
+        python scripts/asset-upload-gha.py duckdb_cli-arm-linux-gnueabihf.zip
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-linux
+        path: |
+          duckdb_cli-arm-linux-gnueabihf.zip
