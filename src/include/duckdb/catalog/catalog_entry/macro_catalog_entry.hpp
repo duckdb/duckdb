@@ -16,9 +16,9 @@
 namespace duckdb {
 
 //! A macro function in the catalog
-class MacroFunctionEntry : public StandardEntry {
+class MacroCatalogEntry : public StandardEntry {
 public:
-	MacroFunctionEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
+	MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
 	    : StandardEntry(CatalogType::MACRO_ENTRY, schema, catalog, info->name), function(move(info->function)) {
 	}
 
@@ -26,7 +26,7 @@ public:
 	unique_ptr<MacroFunction> function;
 
 public:
-    //! Serialize the meta information of the MacroFunctionEntry a serializer
+    //! Serialize the meta information of the MacroCatalogEntry a serializer
     virtual void Serialize(Serializer &serializer);
     //! Deserializes to a CreateMacroInfo
     static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);

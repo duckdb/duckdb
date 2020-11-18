@@ -1,6 +1,7 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -260,7 +261,7 @@ void ReplayState::ReplaySequenceValue() {
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateMacro() {
-    auto entry = MacroFunctionEntry::Deserialize(source);
+    auto entry = MacroCatalogEntry::Deserialize(source);
 
     db.catalog->CreateFunction(context, entry.get());
 }

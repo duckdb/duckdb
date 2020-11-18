@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node.hpp"
@@ -41,7 +42,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 		auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function_expr.schema,
 		                             function_expr.function_name, true, error_context);
 		if (func != nullptr && func->type == CatalogType::MACRO_ENTRY) {
-			auto &macro_func = (MacroFunctionEntry &)*func;
+			auto &macro_func = (MacroCatalogEntry &)*func;
 			string error = MacroFunction::ValidateArguments(context, error_context, macro_func, function_expr);
 			if (!error.empty())
 				throw BinderException(binder.FormatError(*expr, error));

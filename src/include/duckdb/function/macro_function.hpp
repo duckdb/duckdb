@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-class MacroFunctionEntry;
+class MacroCatalogEntry;
 
 class MacroFunction {
 public:
@@ -23,7 +23,7 @@ public:
 
 	//! Check whether the supplied arguments are valid
 	static string ValidateArguments(ClientContext &context, QueryErrorContext &error_context,
-	                                MacroFunctionEntry &macro_func, FunctionExpression &function_expr);
+	                                MacroCatalogEntry &macro_func, FunctionExpression &function_expr);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
 	//! The macro parameters

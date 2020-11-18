@@ -23,7 +23,7 @@ class Catalog;
 class DuckDB;
 class SchemaCatalogEntry;
 class SequenceCatalogEntry;
-class MacroFunctionEntry;
+class MacroCatalogEntry;
 class ViewCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
@@ -62,8 +62,8 @@ public:
 	void WriteDropSequence(SequenceCatalogEntry *entry);
 	void WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValue val);
 
-    void WriteCreateMacro(MacroFunctionEntry *entry);
-    void WriteDropMacro(MacroFunctionEntry *entry);
+    void WriteCreateMacro(MacroCatalogEntry *entry);
+    void WriteDropMacro(MacroCatalogEntry *entry);
 
     //! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);

@@ -75,7 +75,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateSequence((SequenceCatalogEntry *)parent);
 		break;
 	case CatalogType::MACRO_ENTRY:
-		log->WriteCreateMacro((MacroFunctionEntry *)parent);
+		log->WriteCreateMacro((MacroCatalogEntry *)parent);
 		break;
 	case CatalogType::DELETED_ENTRY:
 		if (entry->type == CatalogType::TABLE_ENTRY) {
@@ -87,7 +87,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		} else if (entry->type == CatalogType::SEQUENCE_ENTRY) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::MACRO_ENTRY) {
-            log->WriteDropMacro((MacroFunctionEntry *)entry);
+            log->WriteDropMacro((MacroCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
 			// do nothing, we log the query to drop this
 		} else {

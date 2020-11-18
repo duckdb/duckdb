@@ -11,7 +11,7 @@ MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expressi
 }
 
 string MacroFunction::ValidateArguments(ClientContext &context, QueryErrorContext &error_context,
-                                        MacroFunctionEntry &macro_func, FunctionExpression &function_expr) {
+                                        MacroCatalogEntry &macro_func, FunctionExpression &function_expr) {
 	string error;
 	auto &catalog = Catalog::GetCatalog(context);
 	auto &parameters = macro_func.function->parameters;

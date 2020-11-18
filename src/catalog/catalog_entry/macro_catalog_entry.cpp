@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-void MacroFunctionEntry::Serialize(Serializer &serializer) {
+void MacroCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
     function->expression->Serialize(serializer);
@@ -14,7 +14,7 @@ void MacroFunctionEntry::Serialize(Serializer &serializer) {
 	}
 }
 
-unique_ptr<CreateMacroInfo> MacroFunctionEntry::Deserialize(Deserializer &source) {
+unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &source) {
 	auto info = make_unique<CreateMacroInfo>();
 	info->schema = source.Read<string>();
 	info->name = source.Read<string>();

@@ -22,7 +22,7 @@ class QueryNode;
 
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
-class MacroFunctionEntry;
+class MacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
 

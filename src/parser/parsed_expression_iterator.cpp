@@ -10,7 +10,7 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &express
 	EnumerateChildren((ParsedExpression &)expression,
 	                  [&](unique_ptr<ParsedExpression> child) -> unique_ptr<ParsedExpression> {
 		                  callback(*child);
-		                  return move(child);
+		                  return child;
 	                  });
 }
 
