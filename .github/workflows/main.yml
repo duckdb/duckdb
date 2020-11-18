@@ -204,7 +204,7 @@ jobs:
   linux-release-64:
     name: Linux (64 Bit)
     runs-on: ubuntu-16.04
-    needs: linux-debug
+#    needs: linux-debug
 
     env:
       GEN: ninja
@@ -227,7 +227,7 @@ jobs:
       run: sudo apt-get install ninja-build
 
     - name: Build
-      run: make
+      run: STATIC_LIBCPP=1 make
 
     - name: Test
       run: make allunit
@@ -809,3 +809,26 @@ jobs:
     - name: Node 15 
       run: ./scripts/node_build.sh 15
 
+
+  linux-raspi:
+    name: Raspberry Pi Binary
+    runs-on: ubuntu-latest
+#    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup
+      run: |
+        sudo apt-get install build-essential
+        sudo apt-get install g++-arm-linux-gnueabihf
+        sudo apt-get install gdb-multiarch
+        arm-linux-gnueabihf-g++ -v
+
+    - name: Build
+      run: |
+        export CXX=arm-linux-gnueabihf-g++
+        export CC=arm-linux-gnueabihf-gcc
+        STATIC_LIBCPP=1 make
