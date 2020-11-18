@@ -815,17 +815,16 @@ jobs:
     runs-on: ubuntu-latest
 #    needs: linux-debug
 
+    env:
+      GEN: ninja
+
     steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
 
     - name: Setup
-      run: |
-        sudo apt-get install build-essential
-        sudo apt-get install g++-arm-linux-gnueabihf
-        sudo apt-get install gdb-multiarch
-        arm-linux-gnueabihf-g++ -v
+      run: sudo apt-get install -y build-essential g++-arm-linux-gnueabihf gdb-multiarch ninja-build
 
     - name: Build
       run: |
