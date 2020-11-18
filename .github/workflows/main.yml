@@ -828,14 +828,14 @@ jobs:
       run: |
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
         sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
-        sudo apt update
-        sudo apt install docker-ce
+        sudo apt-get update
+        sudo apt-get install -y docker-ce
         sudo systemctl status docker
 
     - name: Build
       run: |
         export STATIC_LIBCPP=1
-        docker run -it -v .:/build mitchallen/pi-cross-compile
+        docker run -v .:/build mitchallen/pi-cross-compile
         file build/release/duckdb
 
     - name: Deploy
