@@ -29,6 +29,9 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(PGNode *node) {
 	case PG_OBJECT_SEQUENCE:
 		info.type = CatalogType::SEQUENCE_ENTRY;
 		break;
+	case PG_OBJECT_FUNCTION:
+        info.type = CatalogType::MACRO_ENTRY;
+		break;
 	default:
 		throw NotImplementedException("Cannot drop this type yet");
 	}

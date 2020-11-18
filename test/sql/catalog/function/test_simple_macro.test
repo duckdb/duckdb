@@ -25,6 +25,9 @@ SELECT one(1)
 statement error
 SELECT one(NULL)
 
+statement ok
+DROP MACRO one;
+
 # FUNCTION alias
 statement ok
 CREATE FUNCTION two() AS (SELECT 2);
@@ -33,6 +36,9 @@ query T
 SELECT two()
 ----
 2
+
+statement ok
+DROP FUNCTION two;
 
 # b cannot be found
 statement error
