@@ -15,7 +15,7 @@ jobs:
 
   linux-debug:
     name: Linux Debug
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     env:
       CC: gcc-10
@@ -265,7 +265,7 @@ jobs:
 
   linux-release-32:
     name: Linux (32 Bit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -310,7 +310,7 @@ jobs:
 
   old-gcc:
     name: GCC 4.8
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -338,7 +338,7 @@ jobs:
 
   release-assert:
     name: Release Assertions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -365,7 +365,7 @@ jobs:
 
   valgrind:
     name: Valgrind
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -391,7 +391,7 @@ jobs:
 
   ubsan:
     name: UBSAN
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -414,7 +414,7 @@ jobs:
 # borked somehow. needs investigation.
 #  codecov:
 #    name: Code Coverage
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-20.04
 #    needs: linux-debug
 #
 #    env:
@@ -441,7 +441,7 @@ jobs:
 
   vector-sizes:
     name: Vector Sizes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -463,7 +463,7 @@ jobs:
 
   sqllogic:
     name: Sqllogic tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -481,7 +481,7 @@ jobs:
 
   expanded:
     name: Expanded
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -505,7 +505,7 @@ jobs:
 
   sqlancer:
     name: SQLancer
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -536,7 +536,7 @@ jobs:
 
   jdbc:
     name: JDBC Compliance
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -564,7 +564,7 @@ jobs:
 
   linux-python3:
     name: Python 3 Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -605,7 +605,7 @@ jobs:
 
   linux-python2:
     name: Python 2 Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -720,7 +720,7 @@ jobs:
 
   rstats:
     name: R Package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     steps:
@@ -759,7 +759,7 @@ jobs:
 
   linux-nodejs:
     name: node.js Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
 
@@ -812,7 +812,7 @@ jobs:
 
   linux-raspi:
     name: Raspberry Pi Binary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
