@@ -144,4 +144,4 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	return move(expr);
 }
 
-} // namespace duckdb
+}

@@ -51,11 +51,13 @@ public:
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
 	                                                              vector<unique_ptr<Expression>> children,
-	                                                              string &error, bool is_operator = false);
+																  string &error,
+	                                                              bool is_operator = false);
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
 	                                                              ScalarFunctionCatalogEntry &function,
 	                                                              vector<unique_ptr<Expression>> children,
-	                                                              string &error, bool is_operator = false);
+																  string &error,
+	                                                              bool is_operator = false);
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, ScalarFunction bound_function,
 	                                                              vector<unique_ptr<Expression>> children,

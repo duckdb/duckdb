@@ -66,14 +66,13 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
-	                                    op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET)) {
+	while (op->children.size() == 1 &&
+	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION && op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
 		}
-		if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
-		    op->type == LogicalOperatorType::LOGICAL_WINDOW) {
+		if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY || op->type == LogicalOperatorType::LOGICAL_WINDOW) {
 			// don't push filters through projection or aggregate and group by
 			JoinOrderOptimizer optimizer;
 			op->children[0] = optimizer.Optimize(move(op->children[0]));
@@ -141,8 +140,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relations.push_back(move(relation));
 		return true;
 	}
-	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	    op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		// inner join or cross product
 		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
@@ -507,9 +505,9 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				auto condition = move(filters[f->filter_index]);
 				// now create the actual join condition
 				D_ASSERT((JoinRelationSet::IsSubset(left.first, f->left_set) &&
-				          JoinRelationSet::IsSubset(right.first, f->right_set)) ||
-				         (JoinRelationSet::IsSubset(left.first, f->right_set) &&
-				          JoinRelationSet::IsSubset(right.first, f->left_set)));
+				        JoinRelationSet::IsSubset(right.first, f->right_set)) ||
+				       (JoinRelationSet::IsSubset(left.first, f->right_set) &&
+				        JoinRelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
 				D_ASSERT(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = (BoundComparisonExpression &)*condition;
@@ -642,8 +640,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	// have to move up through the relations
 	auto op = plan.get();
 	auto parent = plan.get();
-	while (op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT &&
-	       op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	while (op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT && op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		D_ASSERT(op->children.size() == 1);
 		parent = op;
 		op = op->children[0].get();
@@ -658,8 +655,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 // FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	D_ASSERT(filters.size() == 0 &&
-	         relations.size() == 0); // assert that the JoinOrderOptimizer has not been used before
+	D_ASSERT(filters.size() == 0 && relations.size() == 0); // assert that the JoinOrderOptimizer has not been used before
 	LogicalOperator *op = plan.get();
 	// now we optimize the current plan
 	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the

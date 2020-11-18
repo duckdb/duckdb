@@ -68,4 +68,4 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 	return move(result);
 }
 
-} // namespace duckdb
+}

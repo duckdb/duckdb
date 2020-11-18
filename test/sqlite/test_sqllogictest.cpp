@@ -337,11 +337,11 @@ static void print_header(string header) {
 static void print_sql(string sql) {
 	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
 	auto tokens = Parser::Tokenize(sql);
-	for (idx_t i = 0; i < tokens.size(); i++) {
+	for(idx_t i = 0; i < tokens.size(); i++) {
 		auto &token = tokens[i];
-		idx_t next = i + 1 < tokens.size() ? tokens[i + 1].start : sql.size();
+		idx_t next = i  + 1 < tokens.size() ? tokens[i + 1].start : sql.size();
 		// adjust the highlighting based on the type
-		switch (token.type) {
+		switch(token.type) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
@@ -360,7 +360,7 @@ static void print_sql(string sql) {
 		// print the current token
 		std::cerr << sql.substr(token.start, next - token.start);
 		// reset and move to the next token
-		std::cerr << termcolor::reset;
+		std::cerr <<  termcolor::reset;
 	}
 	std::cerr << std::endl;
 }

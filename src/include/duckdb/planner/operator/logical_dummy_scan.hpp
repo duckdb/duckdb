@@ -15,8 +15,7 @@ namespace duckdb {
 //! LogicalDummyScan represents a dummy scan returning a single row
 class LogicalDummyScan : public LogicalOperator {
 public:
-	LogicalDummyScan(idx_t table_index)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {
+	LogicalDummyScan(idx_t table_index) : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {
 	}
 
 	idx_t table_index;

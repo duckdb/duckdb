@@ -18,10 +18,8 @@ struct QualifiedName {
 };
 
 struct QualifiedColumnName {
-	QualifiedColumnName() {
-	}
-	QualifiedColumnName(string table_p, string column_p) : table(move(table_p)), column(move(column_p)) {
-	}
+	QualifiedColumnName(){}
+	QualifiedColumnName(string table_p, string column_p) : table(move(table_p)), column(move(column_p)) {}
 
 	string schema;
 	string table;

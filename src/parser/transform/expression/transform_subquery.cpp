@@ -36,11 +36,11 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 			subquery_expr->comparison_type = OperatorToExpressionType(operator_name);
 		}
 		D_ASSERT(subquery_expr->comparison_type == ExpressionType::COMPARE_EQUAL ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_NOTEQUAL ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		       subquery_expr->comparison_type == ExpressionType::COMPARE_NOTEQUAL ||
+		       subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		       subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		       subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+		       subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
 		if (root->subLinkType == PG_ALL_SUBLINK) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]

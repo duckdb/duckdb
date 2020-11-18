@@ -166,7 +166,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 	}
 	default:
 		D_ASSERT(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
-		         ref.type == TableReferenceType::EMPTY);
+		       ref.type == TableReferenceType::EMPTY);
 		break;
 	}
 }

@@ -14,12 +14,11 @@
 namespace duckdb {
 
 struct AddOperator {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right)
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right)
 #if defined(__has_feature)
-#if __has_feature(__address_sanitizer__)
-	    __attribute__((__no_sanitize__("signed-integer-overflow")))
-#endif
+    #if __has_feature(__address_sanitizer__)
+        __attribute__((__no_sanitize__("signed-integer-overflow")))
+    #endif
 #endif
 	{
 		return left + right;
@@ -86,5 +85,6 @@ template <> interval_t DivideOperator::Operation(interval_t left, int64_t right)
 template <> float ModuloOperator::Operation(float left, float right);
 template <> double ModuloOperator::Operation(double left, double right);
 template <> hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right);
+
 
 } // namespace duckdb

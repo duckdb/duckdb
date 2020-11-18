@@ -14,12 +14,12 @@ static void AddCondition(JoinRef &ref, string left_alias, string right_alias, st
 	auto left_expr = make_unique<ColumnRefExpression>(column_name, left_alias);
 	auto right_expr = make_unique<ColumnRefExpression>(column_name, right_alias);
 	auto comp_expr =
-	    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_expr), move(right_expr));
+		make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_expr), move(right_expr));
 	if (!ref.condition) {
 		ref.condition = move(comp_expr);
 	} else {
-		ref.condition =
-		    make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(ref.condition), move(comp_expr));
+		ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(ref.condition),
+															move(comp_expr));
 	}
 }
 
@@ -38,8 +38,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		// first bind the left hand side and get a list of all the tables and column names
 		unordered_map<string, string> lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
-		for (auto &binding : lhs_binding_list) {
-			for (auto &column_name : binding.second->names) {
+		for(auto &binding : lhs_binding_list) {
+			for(auto &column_name : binding.second->names) {
 				if (left_binder.bind_context.BindingIsHidden(binding.first, column_name)) {
 					continue;
 				}
@@ -92,16 +92,16 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			// gather all left/right candidates
 			string left_candidates, right_candidates;
 			auto &rhs_binding_list = right_binder.bind_context.GetBindingsList();
-			for (auto &binding : lhs_binding_list) {
-				for (auto &column_name : binding.second->names) {
+			for(auto &binding : lhs_binding_list) {
+				for(auto &column_name : binding.second->names) {
 					if (!left_candidates.empty()) {
 						left_candidates += ", ";
 					}
 					left_candidates += binding.first + "." + column_name;
 				}
 			}
-			for (auto &binding : rhs_binding_list) {
-				for (auto &column_name : binding.second->names) {
+			for(auto &binding : rhs_binding_list) {
+				for(auto &column_name : binding.second->names) {
 					if (!right_candidates.empty()) {
 						right_candidates += ", ";
 					}
@@ -131,7 +131,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 				}
 				if (!left_binding.empty()) {
 					string error = "Column name \"" + using_column +
-					               "\" is ambiguous: it exists more than once on left side of join.\nCandidates:";
+									"\" is ambiguous: it exists more than once on left side of join.\nCandidates:";
 					for (auto &binding : left_bindings) {
 						error += "\n\t" + binding + "." + using_column;
 					}
@@ -154,7 +154,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 				}
 				if (!right_binding.empty()) {
 					string error = "Column name \"" + using_column +
-					               "\" is ambiguous: it exists more than once on right side of join.\nCandidates:";
+									"\" is ambiguous: it exists more than once on right side of join.\nCandidates:";
 					for (auto &binding : right_bindings) {
 						error += "\n\t" + binding + "." + using_column;
 					}
