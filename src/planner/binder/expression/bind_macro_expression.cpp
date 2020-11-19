@@ -121,6 +121,10 @@ void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, Mac
 		tf_ref.function = UnfoldMacroRecursive(move(tf_ref.function), macro_binding);
 		break;
 	}
+	case TableReferenceType::BASE_TABLE:
+	case TableReferenceType::EMPTY:
+		// there TableRefs do not need to be unfolded
+        break;
 	default:
         throw NotImplementedException("TableRef type not implemented for macro's!");
 	}
