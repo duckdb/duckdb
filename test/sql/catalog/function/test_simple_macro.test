@@ -108,3 +108,15 @@ CREATE MACRO ifelse(a,b) AS a+b
 # arguments with side effects are not supported
 statement error
 SELECT IFELSE(RANDOM(), 'true', 'false')
+
+# macro in a different schema
+statement ok
+CREATE SCHEMA macros
+
+statement ok
+CREATE MACRO macros.add(a, b) AS a + b
+
+query T
+SELECT macros.add(40,2)
+----
+42
