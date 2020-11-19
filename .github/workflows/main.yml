@@ -82,6 +82,7 @@ jobs:
         path: |
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
+          tools/jdbc/duckdb_jdbc.jar
 
 
   win-release-32:
@@ -127,6 +128,7 @@ jobs:
         path: |
           libduckdb-windows-i386.zip
           duckdb_cli-windows-i386.zip
+          tools/jdbc/duckdb_jdbc.jar
 
 
   xcode-release:
@@ -179,6 +181,7 @@ jobs:
         path: |
           libduckdb-osx-amd64.zip
           duckdb_cli-osx-amd64.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
 
 
   xcode-debug:
@@ -260,17 +263,15 @@ jobs:
         path: |
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
-
-
+          build/release/tools/jdbc/duckdb_jdbc.jar
+          
 
   linux-release-32:
     name: Linux (32 Bit)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-16.04
     needs: linux-debug
 
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
 
     steps:
@@ -283,7 +284,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install ninja-build libc6-dev-i386 g++-10-multilib gcc-10-multilib gcc-multilib g++-multilib lib32readline6-dev
+      run: sudo apt-get install ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
 
     - name: Build
       run: |
@@ -306,7 +307,7 @@ jobs:
         path: |
           libduckdb-linux-i386.zip 
           duckdb_cli-linux-i386.zip
-
+          build/release/tools/jdbc/duckdb_jdbc.jar
 
   old-gcc:
     name: GCC 4.8
