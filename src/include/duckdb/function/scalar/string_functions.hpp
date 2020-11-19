@@ -100,9 +100,7 @@ struct RegexpFun {
 
 struct SubstringFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static string_t substring_ascii_only(Vector &result, const char *input_data, int offset, int length);
-	static string_t substring_scalar_function(Vector &result, string_t input, int offset, int length,
-	                                          unique_ptr<char[]> &output, idx_t &current_len);
+	static string_t substring_scalar_function(Vector &result, string_t input, int32_t offset, int32_t length);
 };
 
 struct PrintfFun {

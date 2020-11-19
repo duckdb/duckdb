@@ -101,7 +101,7 @@ static unique_ptr<BaseStatistics> propagate_numeric_statistics(
 	BoundFunctionExpression &expr,
 	FunctionData *bind_data,
 	vector<unique_ptr<BaseStatistics>> &child_stats) {
-	assert(child_stats.size() == 2);
+	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0] || !child_stats[1]) {
 		return nullptr;
