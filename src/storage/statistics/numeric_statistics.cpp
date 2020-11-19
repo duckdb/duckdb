@@ -91,6 +91,7 @@ void NumericStatistics::Verify(Vector &vector, idx_t count) {
 
 	switch(type.InternalType()) {
 	case PhysicalType::BOOL:
+		break;
 	case PhysicalType::INT8:
 		TemplatedVerify<int8_t>(vector, count);
 		break;
