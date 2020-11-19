@@ -26,7 +26,6 @@ bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *
 struct TableScanOperatorData : public FunctionOperatorData {
 	//! The current position in the scan
 	TableScanState scan_state;
-	TableFilterSet *table_filters;
 	vector<column_t> column_ids;
 };
 
@@ -36,7 +35,6 @@ static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, 
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	result->column_ids = column_ids;
-	result->table_filters = table_filters;
 	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids, table_filters);
 	return move(result);
 }
@@ -56,7 +54,7 @@ static unique_ptr<FunctionOperatorData> table_scan_parallel_init(ClientContext &
                                                                  TableFilterSet *table_filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
-	result->table_filters = table_filters;
+	result->scan_state.table_filters = table_filters;
 	if (!table_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
 		return nullptr;
 	}
