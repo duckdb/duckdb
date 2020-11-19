@@ -890,9 +890,9 @@ struct DataFrameScanFunction : public TableFunction {
 		state.position += this_count;
 	}
 
-	static idx_t dataframe_scan_cardinality(const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> dataframe_scan_cardinality(const FunctionData *bind_data) {
 		auto &data = (DataFrameScanFunctionData &)*bind_data;
-		return data.row_count;
+		return make_unique<NodeStatistics>(data.row_count, data.row_count);
 	}
 };
 
