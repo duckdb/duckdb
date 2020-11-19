@@ -15,7 +15,7 @@ jobs:
 
   linux-debug:
     name: Linux Debug
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     env:
       CC: gcc-10
@@ -76,6 +76,13 @@ jobs:
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-windows-amd64.zip
+          duckdb_cli-windows-amd64.zip
+
 
   win-release-32:
     name: Windows (32 Bit)
@@ -113,6 +120,13 @@ jobs:
         zip -j duckdb_cli-windows-i386.zip Release/duckdb.exe
         zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-windows-i386.zip
+          duckdb_cli-windows-i386.zip
 
 
   xcode-release:
@@ -158,6 +172,13 @@ jobs:
         zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-osx
+        path: |
+          libduckdb-osx-amd64.zip
+          duckdb_cli-osx-amd64.zip
 
 
   xcode-debug:
@@ -206,7 +227,7 @@ jobs:
       run: sudo apt-get install ninja-build
 
     - name: Build
-      run: make
+      run: STATIC_LIBCPP=1 make
 
     - name: Test
       run: make allunit
@@ -233,10 +254,18 @@ jobs:
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-linux
+        path: |
+          libduckdb-linux-amd64.zip
+          duckdb_cli-linux-amd64.zip
+
+
 
   linux-release-32:
     name: Linux (32 Bit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -259,7 +288,7 @@ jobs:
     - name: Build
       run: |
         mkdir -p build/release
-        (cd build/release && cmake -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
       run: build/release/test/unittest "*"
@@ -271,10 +300,17 @@ jobs:
         zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-linux
+        path: |
+          libduckdb-linux-i386.zip 
+          duckdb_cli-linux-i386.zip
+
 
   old-gcc:
     name: GCC 4.8
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     needs: linux-debug
 
     env:
@@ -302,7 +338,7 @@ jobs:
 
   release-assert:
     name: Release Assertions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -329,7 +365,7 @@ jobs:
 
   valgrind:
     name: Valgrind
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -355,7 +391,7 @@ jobs:
 
   ubsan:
     name: UBSAN
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -378,7 +414,7 @@ jobs:
 # borked somehow. needs investigation.
 #  codecov:
 #    name: Code Coverage
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-20.04
 #    needs: linux-debug
 #
 #    env:
@@ -405,7 +441,7 @@ jobs:
 
   vector-sizes:
     name: Vector Sizes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -427,7 +463,7 @@ jobs:
 
   sqllogic:
     name: Sqllogic tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -445,7 +481,7 @@ jobs:
 
   expanded:
     name: Expanded
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -469,7 +505,7 @@ jobs:
 
   sqlancer:
     name: SQLancer
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -500,7 +536,7 @@ jobs:
 
   jdbc:
     name: JDBC Compliance
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     needs: linux-debug
 
     env:
@@ -528,7 +564,7 @@ jobs:
 
   linux-python3:
     name: Python 3 Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -569,7 +605,7 @@ jobs:
 
   linux-python2:
     name: Python 2 Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -684,7 +720,7 @@ jobs:
 
   rstats:
     name: R Package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     steps:
@@ -723,7 +759,7 @@ jobs:
 
   linux-nodejs:
     name: node.js Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
 
@@ -773,3 +809,41 @@ jobs:
     - name: Node 15 
       run: ./scripts/node_build.sh 15
 
+
+  # linux-raspi:
+  #   name: Raspberry Pi Binary
+  #   runs-on: ubuntu-20.04
+  #   #needs: linux-debug
+
+  #   steps:
+  #   - uses: actions/checkout@v2
+  #     with:
+  #       fetch-depth: 0
+
+  #   - uses: actions/setup-python@v2
+  #     with:
+  #       python-version: '3.7'
+
+  #   - name: Setup
+  #     run: |
+  #       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  #       sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+  #       sudo apt-get update
+  #       sudo apt-get install -y docker-ce
+
+  #   - name: Build
+  #     run: |
+  #       export STATIC_LIBCPP=1
+  #       docker run -v `pwd`:/build mitchallen/pi-cross-compile
+  #       file build/release/duckdb
+
+  #   - name: Deploy
+  #     run: |
+  #       zip -j duckdb_cli-arm-linux-gnueabihf.zip build/release/duckdb
+  #       python scripts/asset-upload-gha.py duckdb_cli-arm-linux-gnueabihf.zip
+
+  #   - uses: actions/upload-artifact@v2
+  #     with:
+  #       name: duckdb-binaries-linux
+  #       path: |
+  #         duckdb_cli-arm-linux-gnueabihf.zip
