@@ -26,5 +26,8 @@ protected:
 	void ResolveTypes() override {
 		types = {LogicalType::VARCHAR, LogicalType::VARCHAR};
 	}
+	vector<ColumnBinding> GetColumnBindings() override {
+		return { ColumnBinding(0, 0), ColumnBinding(0, 1) };
+	}
 };
 } // namespace duckdb

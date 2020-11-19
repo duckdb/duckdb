@@ -56,9 +56,9 @@ struct HugeintAdd {
 		// fast path: check if value * count fits into a uint64_t
 		// note that we check if value * VECTOR_SIZE fits in a uint64_t to avoid having to actually do a division
 		// this is still a pretty high number (18014398509481984) so most positive numbers will fit
-		if (input >= 0 && input < (NumericLimits<uint64_t>::Maximum() / STANDARD_VECTOR_SIZE)) {
+		if (input >= 0 && uint64_t(input) < (NumericLimits<uint64_t>::Maximum() / STANDARD_VECTOR_SIZE)) {
 			// if it does just multiply it and add the value
-			uint64_t value = ((uint64_t)*input) * count;
+			uint64_t value = uint64_t(input) * count;
 			AddValue(state.value, value, 1);
 		} else {
 			// if it doesn't fit we have two choices
@@ -69,10 +69,10 @@ struct HugeintAdd {
 			// with a high count we do the hugeint multiplication
 			if (count < 8) {
 				for (idx_t i = 0; i < count; i++) {
-					AddValue(state.value, (uint64_t)*input, *input >= 0);
+					AddValue(state.value, uint64_t(input), input >= 0);
 				}
 			} else {
-				hugeint_t addition = hugeint_t(*input) * count;
+				hugeint_t addition = hugeint_t(input) * count;
 				state.value += addition;
 			}
 		}
@@ -99,7 +99,7 @@ struct BaseSumOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		STATEOP::template AddValues<STATE>(state, count);
-		ADDOP::template AddNumber<STATE, INPUT_TYPE>(*state, *input);
+		ADDOP::template AddConstant<STATE, INPUT_TYPE>(*state, *input, count);
 	}
 
 	static bool IgnoreNull() {

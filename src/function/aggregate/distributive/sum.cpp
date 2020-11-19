@@ -83,7 +83,7 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 unique_ptr<BaseStatistics> sum_propagate_stats(ClientContext &context, BoundAggregateExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats, NodeStatistics *node_stats) {
 	if (child_stats[0] && node_stats && node_stats->has_max_cardinality) {
 		auto &numeric_stats = (NumericStatistics &) *child_stats[0];
-		if (numeric_stats.max.is_null) {
+		if (numeric_stats.min.is_null || numeric_stats.max.is_null) {
 			return nullptr;
 		}
 		auto internal_type = numeric_stats.min.type().InternalType();

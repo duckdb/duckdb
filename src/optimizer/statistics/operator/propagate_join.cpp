@@ -54,6 +54,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// there are multiple conditions: erase this condition
 					join.conditions.erase(join.conditions.begin() + i);
 					i--;
+					continue;
 				} else {
 					// this is the only condition and it is always true: all conditions are true
 					switch(join.join_type) {
@@ -151,7 +152,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			MultiplyCardinalities(node_stats, *child_stats);
 		}
 	}
-	PropagateChildren(join, node_ptr);
 
 	auto join_type = join.join_type;
 	vector<ColumnBinding> left_bindings, right_bindings;

@@ -598,14 +598,19 @@ static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T
                              nullmask_t &undo_nullmask, nullmask_t &base_nullmask, nullmask_t &new_nullmask,
                              idx_t count, sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
+		bool is_null = new_nullmask[i];
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
 		undo_nullmask[base_sel[i]] = base_nullmask[base_sel[i]];
 		// now move the new data in-place into the base table
 		base_data[base_sel[i]] = new_data[i];
-		base_nullmask[base_sel[i]] = new_nullmask[i];
+		base_nullmask[base_sel[i]] = is_null;
 		// update the min max with the new data
-		update_numeric_statistics<T>(stats, new_data[i]);
+		if (is_null) {
+			stats.statistics->has_null = true;
+		} else {
+			update_numeric_statistics<T>(stats, new_data[i]);
+		}
 	}
 }
 

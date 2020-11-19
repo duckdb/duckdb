@@ -43,7 +43,7 @@ public:
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings() {
-		return {};
+		return { ColumnBinding(0, 0) };
 	}
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
 	static vector<LogicalType> MapTypes(vector<LogicalType> types, vector<idx_t> projection_map);
