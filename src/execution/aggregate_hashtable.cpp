@@ -229,7 +229,8 @@ idx_t GroupedAggregateHashTable::MaxCapacity() {
 		max_pages = NumericLimits<uint8_t>::Maximum();
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
-	case HtEntryType::HT_WIDTH_64:
+	default:
+		D_ASSERT(entry_type == HtEntryType::HT_WIDTH_64);
 		max_pages = NumericLimits<uint32_t>::Maximum();
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
