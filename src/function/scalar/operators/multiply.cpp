@@ -5,6 +5,8 @@
 
 #include "duckdb/common/types/hugeint.hpp"
 
+#include <limits>
+
 using namespace std;
 
 namespace duckdb {

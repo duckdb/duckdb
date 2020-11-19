@@ -6,6 +6,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 using namespace std;
 

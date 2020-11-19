@@ -1,6 +1,5 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/storage/statistics/statistics_operations.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {

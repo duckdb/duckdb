@@ -6,6 +6,7 @@
 #include "duckdb/storage/uncompressed_segment.hpp"
 #include "duckdb/storage/table/morsel_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 using namespace std;

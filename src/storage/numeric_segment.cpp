@@ -8,6 +8,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 using namespace std;
 

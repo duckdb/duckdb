@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 using namespace std;
