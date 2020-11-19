@@ -446,7 +446,7 @@ struct PandasScanFunction : public TableFunction {
 		state.position += this_count;
 	}
 
-	static unique_ptr<NodeStatistics> pandas_scan_cardinality(const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> pandas_scan_cardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (PandasScanFunctionData &)*bind_data;
 		return make_unique<NodeStatistics>(data.row_count, data.row_count);
 	}
