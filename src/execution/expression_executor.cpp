@@ -87,6 +87,9 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
 	D_ASSERT(expr.return_type == vector.type);
 	vector.Verify(count);
+	if (expr.stats) {
+		expr.stats->Verify(vector, count);
+	}
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr, ExpressionExecutorState &state) {

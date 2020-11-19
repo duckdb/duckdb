@@ -12,13 +12,18 @@
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
+class BaseStatistics;
+
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {
 public:
 	Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type);
+	~Expression();
 
 	//! The return type of the expression
 	LogicalType return_type;
+	//! Expression statistics (if any)
+	unique_ptr<BaseStatistics> stats;
 
 public:
 	bool IsAggregate() const override;

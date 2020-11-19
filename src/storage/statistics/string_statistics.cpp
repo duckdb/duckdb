@@ -2,6 +2,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -139,6 +140,41 @@ string StringStatistics::ToString() {
 	return StringUtil::Format("String Statistics [Has Null: %s, Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
 	    has_null ? "true" : "false", string((const char*) min, min_len), string((const char*) max, max_len),
 		has_unicode ? "true" : "false", max_string_length);
+}
+
+void StringStatistics::Verify(Vector &vector, idx_t count) {
+	BaseStatistics::Verify(vector, count);
+
+	string_t min_string((const char*) min, MAX_STRING_MINMAX_SIZE);
+	string_t max_string((const char*) max, MAX_STRING_MINMAX_SIZE);
+
+	VectorData vdata;
+	vector.Orrify(count, vdata);
+	auto data = (string_t *) vdata.data;
+	for(idx_t i = 0; i < count; i++) {
+		auto index = vdata.sel->get_index(i);
+		if ((*vdata.nullmask)[index]) {
+			continue;
+		}
+		auto value = data[index];
+		if (value.GetSize() > max_string_length) {
+			throw InternalException("Statistics mismatch: string value exceeds maximum string length.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+		}
+		if (type.id() == LogicalTypeId::VARCHAR && !has_unicode) {
+			auto unicode = Utf8Proc::Analyze(value.GetDataUnsafe(), value.GetSize());
+			if (unicode == UnicodeType::UNICODE) {
+				throw InternalException("Statistics mismatch: string value contains unicode, but statistics says it shouldn't.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+			} else if (unicode == UnicodeType::INVALID) {
+				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString(count));
+			}
+		}
+		if (LessThan::Operation(data[index], min_string)) {
+			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+		}
+		if (GreaterThan::Operation(data[index], max_string)) {
+			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+		}
+	}
 }
 
 }

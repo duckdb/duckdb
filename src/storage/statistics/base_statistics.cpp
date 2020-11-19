@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -69,6 +70,15 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 
 string BaseStatistics::ToString() {
 	return StringUtil::Format("Base Statistics [Has Null: %s]", has_null ? "true" : "false");
+}
+
+void BaseStatistics::Verify(Vector &vector, idx_t count) {
+	D_ASSERT(vector.type == this->type);
+	if (!has_null) {
+		if (VectorOperations::HasNull(vector, count)) {
+			throw InternalException("Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s", vector.ToString(count));
+		}
+	}
 }
 
 }

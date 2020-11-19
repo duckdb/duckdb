@@ -2,6 +2,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -80,8 +81,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
-	return PropagateExpression(*expr, &expr);
-
+	auto stats = PropagateExpression(*expr, &expr);
+	if (context.query_verification_enabled && stats) {
+		expr->stats = stats->Copy();
+	}
+	return stats;
 }
 
 

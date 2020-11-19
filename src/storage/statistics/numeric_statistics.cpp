@@ -1,4 +1,6 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -61,6 +63,58 @@ unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, 
 string NumericStatistics::ToString() {
 	return StringUtil::Format("Numeric Statistics<%s> [Has Null: %s, Min: %s, Max: %s]",
 		type.ToString(), has_null ? "true" : "false", min.ToString(), max.ToString());
+}
+
+template<class T>
+void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
+	VectorData vdata;
+	vector.Orrify(count, vdata);
+
+	auto data = (T*) vdata.data;
+	for(idx_t i = 0; i < count; i++) {
+		auto index = vdata.sel->get_index(i);
+		if ((*vdata.nullmask)[index]) {
+			continue;
+		}
+		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) {
+			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+		}
+		if (!max.is_null && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
+			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+		}
+	}
+
+}
+
+void NumericStatistics::Verify(Vector &vector, idx_t count) {
+	BaseStatistics::Verify(vector, count);
+
+	switch(type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		TemplatedVerify<int8_t>(vector, count);
+		break;
+	case PhysicalType::INT16:
+		TemplatedVerify<int16_t>(vector, count);
+		break;
+	case PhysicalType::INT32:
+		TemplatedVerify<int32_t>(vector, count);
+		break;
+	case PhysicalType::INT64:
+		TemplatedVerify<int64_t>(vector, count);
+		break;
+	case PhysicalType::INT128:
+		TemplatedVerify<hugeint_t>(vector, count);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedVerify<float>(vector, count);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedVerify<double>(vector, count);
+		break;
+	default:
+		throw InternalException("Unsupported type %s for numeric statistics verify", type.ToString());
+	}
 }
 
 }

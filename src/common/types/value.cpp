@@ -511,42 +511,42 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 // GetValueUnsafe
 //===--------------------------------------------------------------------===//
 template <> int8_t& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::INT8);
+	D_ASSERT(type_.InternalType() == PhysicalType::INT8 || type_.InternalType() == PhysicalType::BOOL);
 	return value_.tinyint;
 }
 
 template <> int16_t& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::INT16);
+	D_ASSERT(type_.InternalType() == PhysicalType::INT16);
 	return value_.smallint;
 }
 
 template <> int32_t& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::INT32);
+	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
 	return value_.integer;
 }
 
 template <> int64_t& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::INT64);
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.bigint;
 }
 
 template <> hugeint_t& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::INT128);
+	D_ASSERT(type_.InternalType() == PhysicalType::INT128);
 	return value_.hugeint;
 }
 
 template <> string& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(type_.InternalType() == PhysicalType::VARCHAR);
 	return str_value;
 }
 
 template <> float& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::FLOAT);
+	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
 	return value_.float_;
 }
 
 template <> double& Value::GetValueUnsafe() {
-	assert(type_.InternalType() == PhysicalType::DOUBLE);
+	D_ASSERT(type_.InternalType() == PhysicalType::DOUBLE);
 	return value_.double_;
 }
 

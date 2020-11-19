@@ -16,6 +16,7 @@
 namespace duckdb {
 class Serializer;
 class Deserializer;
+class Vector;
 
 class BaseStatistics {
 public:
@@ -33,6 +34,8 @@ public:
 	virtual unique_ptr<BaseStatistics> Copy();
 	virtual void Serialize(Serializer &serializer);
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
+	//! Verify that a vector does not violate the statistics
+	virtual void Verify(Vector &vector, idx_t count);
 
 	virtual string ToString();
 };

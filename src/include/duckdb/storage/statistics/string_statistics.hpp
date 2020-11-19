@@ -36,6 +36,8 @@ public:
 	unique_ptr<BaseStatistics> Copy() override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
+	void Verify(Vector &vector, idx_t count) override;
+
 	bool CheckZonemap(ExpressionType comparison_type, string value);
 
 	string ToString() override;
