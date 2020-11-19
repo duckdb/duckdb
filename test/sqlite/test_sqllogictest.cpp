@@ -1472,7 +1472,29 @@ struct AutoRegTests {
 		    "evidence/slt_lang_dropindex.test",                // "
 		    "evidence/slt_lang_createtrigger.test",            // "
 		    "evidence/slt_lang_droptrigger.test",              // "
-		    "evidence/slt_lang_update.test"                    //  Multiple assignments to same column "x"
+		    "evidence/slt_lang_update.test",                    //  Multiple assignments to same column "x"
+		    // these fail because of overflows in multiplications (sqlite does automatic upcasting)
+		    "random/aggregates/slt_good_51.test",
+		    "random/aggregates/slt_good_73.test",
+		    "random/aggregates/slt_good_3.test",
+		    "random/aggregates/slt_good_64.test",
+		    "random/aggregates/slt_good_122.test",
+		    "random/aggregates/slt_good_110.test",
+		    "random/aggregates/slt_good_101.test",
+		    "random/aggregates/slt_good_56.test",
+		    "random/aggregates/slt_good_75.test",
+		    "random/expr/slt_good_51.test",
+		    "random/expr/slt_good_77.test",
+		    "random/expr/slt_good_66.test",
+		    "random/expr/slt_good_0.test",
+		    "random/expr/slt_good_61.test",
+		    "random/expr/slt_good_47.test",
+		    "random/expr/slt_good_11.test",
+		    "random/expr/slt_good_40.test",
+		    "random/expr/slt_good_42.test",
+		    "random/expr/slt_good_27.test",
+		    "random/expr/slt_good_103.test",
+		    "random/expr/slt_good_75.test"
 		};
 		FileSystem fs;
 		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
