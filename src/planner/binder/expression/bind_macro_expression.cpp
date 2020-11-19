@@ -122,14 +122,11 @@ void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, Mac
 		break;
 	}
 	default:
-		break;
+        throw NotImplementedException("TableRef type not implemented for macro's!");
 	}
 }
 
 void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding) {
-	if (node.type != QueryNodeType::SELECT_NODE) {
-		throw BinderException(binder.FormatError(expr, "Macro's with non-SELECT sub-queries are not supported."));
-	}
 	switch (node.type) {
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
 		auto &rcte_node = (RecursiveCTENode &)node;
@@ -150,16 +147,7 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 		if (sel_node.having != nullptr)
 			sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
 
-		if (sel_node.from_table->type == TableReferenceType::SUBQUERY) {
-			auto &sq_ref = (SubqueryRef &)*sel_node.from_table;
-			UnfoldQueryNode(expr, *sq_ref.subquery->node, macro_binding);
-			for (auto &kv : sq_ref.subquery->cte_map) {
-				UnfoldQueryNode(expr, *kv.second->query->node.get(), macro_binding);
-			}
-		} else if (sel_node.from_table->type == TableReferenceType::TABLE_FUNCTION) {
-			auto &tf_ref = (TableFunctionRef &)*sel_node.from_table;
-			tf_ref.function = UnfoldMacroRecursive(move(tf_ref.function), macro_binding);
-		}
+		UnfoldTableRef(expr, *sel_node.from_table.get(), macro_binding);
 		break;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
@@ -169,7 +157,7 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 		break;
 	}
 	default:
-		throw BinderException(binder.FormatError(expr, "Unsupported subquery type found in macro."));
+		throw NotImplementedException("QueryNode type not implemented for macro's!");
 	}
 }
 

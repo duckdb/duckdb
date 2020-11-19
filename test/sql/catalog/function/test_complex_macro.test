@@ -5,6 +5,15 @@
 statement ok
 PRAGMA enable_verification
 
+# cte and subquery
+statement ok
+CREATE MACRO cte_sq(a,b) AS (WITH cte AS (SELECT a * 2 AS c) SELECT cte.c + sq.d FROM cte, (SELECT b * 3 AS d) AS sq)
+
+query T
+SELECT cte_sq(3,4)
+----
+18
+
 statement ok
 CREATE MACRO nested_cte(needle, haystack) AS needle IN (
     SELECT i FROM (
