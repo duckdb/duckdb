@@ -33,7 +33,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	case PhysicalType::INTERVAL:
 		return make_unique<BaseStatistics>(type);
 	default:
-		throw InternalException("Unimplemented type for base statistics");
+		return nullptr;
 	}
 }
 
@@ -62,7 +62,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = make_unique<BaseStatistics>(type);
 		break;
 	default:
-		throw InternalException("Unimplemented type for SEGMENT statistics");
+		throw InternalException("Unimplemented type for statistics deserialization");
 	}
 	result->has_null = has_null;
 	return result;
