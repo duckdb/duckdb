@@ -221,8 +221,8 @@ template <class T> void GroupedAggregateHashTable::VerifyInternal() {
 }
 
 idx_t GroupedAggregateHashTable::MaxCapacity() {
-	idx_t max_pages;
-	idx_t max_tuples;
+	idx_t max_pages = 0;
+	idx_t max_tuples = 0;
 
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_32:

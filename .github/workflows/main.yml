@@ -3,16 +3,19 @@ on: [push, pull_request]
 defaults:
   run:
     shell: bash
-    
+
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+  node_pre_gyp_accessKeyId: AKIAVBLKPL2ZW2T7TYFQ
+  node_pre_gyp_secretAccessKey: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
 
   linux-debug:
     name: Linux Debug
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     env:
       CC: gcc-10
@@ -22,6 +25,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build
@@ -40,6 +45,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -69,6 +76,14 @@ jobs:
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-windows-amd64.zip
+          duckdb_cli-windows-amd64.zip
+          tools/jdbc/duckdb_jdbc.jar
+
 
   win-release-32:
     name: Windows (32 Bit)
@@ -77,6 +92,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -105,6 +122,14 @@ jobs:
         zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-windows-i386.zip
+          duckdb_cli-windows-i386.zip
+          tools/jdbc/duckdb_jdbc.jar
+
 
   xcode-release:
     name: OSX Release
@@ -119,6 +144,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -148,6 +175,14 @@ jobs:
         zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-osx
+        path: |
+          libduckdb-osx-amd64.zip
+          duckdb_cli-osx-amd64.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
+
 
   xcode-debug:
     name: OSX Debug
@@ -159,6 +194,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Build
       run: make debug
@@ -174,6 +211,7 @@ jobs:
 
     env:
       GEN: ninja
+      BUILD_BENCHMARK: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_REST: 1
@@ -181,6 +219,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -190,7 +230,7 @@ jobs:
       run: sudo apt-get install ninja-build
 
     - name: Build
-      run: make
+      run: STATIC_LIBCPP=1 make
 
     - name: Test
       run: make allunit
@@ -207,6 +247,7 @@ jobs:
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
         (cd examples/jdbc; make; make maven)
+        build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
 
     - name: Deploy
       run: |
@@ -216,31 +257,39 @@ jobs:
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-linux
+        path: |
+          libduckdb-linux-amd64.zip
+          duckdb_cli-linux-amd64.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
+          
 
   linux-release-32:
     name: Linux (32 Bit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-16.04
     needs: linux-debug
 
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install ninja-build libc6-dev-i386 g++-10-multilib gcc-10-multilib gcc-multilib g++-multilib lib32readline6-dev
+      run: sudo apt-get install ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
 
     - name: Build
       run: |
         mkdir -p build/release
-        (cd build/release && cmake -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
       run: build/release/test/unittest "*"
@@ -252,10 +301,17 @@ jobs:
         zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-linux
+        path: |
+          libduckdb-linux-i386.zip 
+          duckdb_cli-linux-i386.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
 
   old-gcc:
     name: GCC 4.8
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     needs: linux-debug
 
     env:
@@ -264,6 +320,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -281,7 +339,7 @@ jobs:
 
   release-assert:
     name: Release Assertions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -293,6 +351,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build
@@ -306,7 +366,7 @@ jobs:
 
   valgrind:
     name: Valgrind
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -317,6 +377,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build valgrind
@@ -330,7 +392,7 @@ jobs:
 
   ubsan:
     name: UBSAN
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -340,6 +402,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build
@@ -351,7 +415,7 @@ jobs:
 # borked somehow. needs investigation.
 #  codecov:
 #    name: Code Coverage
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-20.04
 #    needs: linux-debug
 #
 #    env:
@@ -378,7 +442,7 @@ jobs:
 
   vector-sizes:
     name: Vector Sizes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -387,6 +451,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -398,7 +464,7 @@ jobs:
 
   sqllogic:
     name: Sqllogic tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -407,6 +473,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Test
       run: make sqlite
@@ -414,7 +482,7 @@ jobs:
 
   expanded:
     name: Expanded
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -426,6 +494,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: sudo apt-get install ninja-build
@@ -436,7 +506,7 @@ jobs:
 
   sqlancer:
     name: SQLancer
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -447,6 +517,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: |
@@ -465,7 +537,7 @@ jobs:
 
   jdbc:
     name: JDBC Compliance
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     needs: linux-debug
 
     env:
@@ -476,6 +548,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install
       run: |
@@ -491,7 +565,7 @@ jobs:
 
   linux-python3:
     name: Python 3 Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -505,6 +579,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -530,7 +606,7 @@ jobs:
 
   linux-python2:
     name: Python 2 Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     env:
@@ -544,6 +620,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -576,6 +654,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -614,6 +694,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -639,11 +721,13 @@ jobs:
 
   rstats:
     name: R Package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
@@ -672,3 +756,95 @@ jobs:
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
+
+
+  linux-nodejs:
+    name: node.js Linux
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup
+      run: ./scripts/node_version.sh upload
+
+    - name: Node 10 
+      run: ./scripts/node_build.sh 10
+
+    - name: Node 12 
+      run: ./scripts/node_build.sh 12
+
+    - name: Node 14 
+      run: ./scripts/node_build.sh 14
+
+    - name: Node 15 
+      run: ./scripts/node_build.sh 15
+
+
+  osx-nodejs:
+    name: node.js OSX
+    runs-on: macos-latest
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup
+      run: ./scripts/node_version.sh
+
+    - name: Node 10 
+      run: ./scripts/node_build.sh 10
+
+    - name: Node 12 
+      run: ./scripts/node_build.sh 12
+
+    - name: Node 14 
+      run: ./scripts/node_build.sh 14
+
+    - name: Node 15 
+      run: ./scripts/node_build.sh 15
+
+
+  # linux-raspi:
+  #   name: Raspberry Pi Binary
+  #   runs-on: ubuntu-20.04
+  #   #needs: linux-debug
+
+  #   steps:
+  #   - uses: actions/checkout@v2
+  #     with:
+  #       fetch-depth: 0
+
+  #   - uses: actions/setup-python@v2
+  #     with:
+  #       python-version: '3.7'
+
+  #   - name: Setup
+  #     run: |
+  #       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  #       sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+  #       sudo apt-get update
+  #       sudo apt-get install -y docker-ce
+
+  #   - name: Build
+  #     run: |
+  #       export STATIC_LIBCPP=1
+  #       docker run -v `pwd`:/build mitchallen/pi-cross-compile
+  #       file build/release/duckdb
+
+  #   - name: Deploy
+  #     run: |
+  #       zip -j duckdb_cli-arm-linux-gnueabihf.zip build/release/duckdb
+  #       python scripts/asset-upload-gha.py duckdb_cli-arm-linux-gnueabihf.zip
+
+  #   - uses: actions/upload-artifact@v2
+  #     with:
+  #       name: duckdb-binaries-linux
+  #       path: |
+  #         duckdb_cli-arm-linux-gnueabihf.zip

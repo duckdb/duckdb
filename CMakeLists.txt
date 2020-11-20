@@ -140,6 +140,7 @@ option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 
+
 if(BUILD_PYTHON
    OR BUILD_R
    OR JDBC_DRIVER)
@@ -301,20 +302,20 @@ function(disable_target_warnings NAME)
 endfunction()
 
 function(add_extension_definitions)
-  include_directories(${CMAKE_SOURCE_DIR}/extension)
+  include_directories(${PROJECT_SOURCE_DIR}/extension)
 
   if(${BUILD_ICU_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/icu/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/icu/include)
     add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
   endif()
 
   if(${BUILD_PARQUET_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/parquet/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/parquet/include)
     add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
   endif()
 
   if(${BUILD_TPCH_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/tpch/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/tpch/include)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
   endif()
 endfunction()

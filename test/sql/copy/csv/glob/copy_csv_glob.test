@@ -7,7 +7,7 @@ CREATE TABLE dates(d DATE);
 
 # simple globbing
 statement ok
-COPY dates FROM 'test/sql/copy/csv/data/glob/a?/*.csv';
+COPY dates FROM 'test/sql/copy/csv/data/glob/a?/*.csv' (AUTO_DETECT 1);
 
 query I
 SELECT * FROM dates ORDER BY 1
