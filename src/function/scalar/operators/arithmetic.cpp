@@ -297,7 +297,7 @@ static unique_ptr<BaseStatistics> negate_bind_statistics(
 	BoundFunctionExpression &expr,
 	FunctionData *bind_data,
 	vector<unique_ptr<BaseStatistics>> &child_stats) {
-	assert(child_stats.size() == 1);
+	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
 		return nullptr;

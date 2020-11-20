@@ -47,7 +47,7 @@ unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source, L
 }
 
 static int string_value_comparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {
-	assert(len <= StringStatistics::MAX_STRING_MINMAX_SIZE);
+	D_ASSERT(len <= StringStatistics::MAX_STRING_MINMAX_SIZE);
 	for(idx_t i = 0; i < len; i++) {
 		if (data[i] < comparison[i]) {
 			return -1;
