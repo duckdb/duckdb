@@ -226,7 +226,8 @@ public:
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, *sdata, rdata, ConstantVector::Nullmask(result), 0);
+			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, *sdata, rdata,
+			                                               ConstantVector::Nullmask(result), 0);
 		} else {
 			D_ASSERT(states.vector_type == VectorType::FLAT_VECTOR);
 			result.vector_type = VectorType::FLAT_VECTOR;
@@ -234,8 +235,8 @@ public:
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 			for (idx_t i = 0; i < count; i++) {
-				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata, FlatVector::Nullmask(result),
-				                                               i);
+				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata,
+				                                               FlatVector::Nullmask(result), i);
 			}
 		}
 	}

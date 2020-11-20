@@ -33,6 +33,7 @@ public:
 	StatisticsPropagator(ClientContext &context);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
+
 private:
 	//! Propagate statistics through an operator
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &root, unique_ptr<LogicalOperator> *node_ptr);
@@ -70,7 +71,8 @@ private:
 
 	//! Add cardinalities together (i.e. new max is stats.max + new_stats.max): used for union
 	void AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);
-	//! Multiply the cardinalities together (i.e. new max cardinality is stats.max * new_stats.max): used for joins/cross products
+	//! Multiply the cardinalities together (i.e. new max cardinality is stats.max * new_stats.max): used for
+	//! joins/cross products
 	void MultiplyCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);
 
 	unique_ptr<BaseStatistics> PropagateExpression(unique_ptr<Expression> &expr);
@@ -90,6 +92,7 @@ private:
 
 	bool ExpressionIsConstant(Expression &expr, Value val);
 	bool ExpressionIsConstantOrNull(Expression &expr, Value val);
+
 private:
 	ClientContext &context;
 	//! The map of ColumnBinding -> statistics for the various nodes

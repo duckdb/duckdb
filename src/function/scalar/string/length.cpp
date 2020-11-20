@@ -31,17 +31,15 @@ struct BitLenOperator {
 	}
 };
 
-static unique_ptr<BaseStatistics> length_propagate_stats(
-	ClientContext &context,
-	BoundFunctionExpression &expr,
-	FunctionData *bind_data,
-	vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> length_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
+                                                         FunctionData *bind_data,
+                                                         vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
 		return nullptr;
 	}
-	auto &sstats = (StringStatistics &) *child_stats[0];
+	auto &sstats = (StringStatistics &)*child_stats[0];
 	if (!sstats.has_unicode) {
 		expr.function.function = ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>;
 	}
@@ -51,7 +49,8 @@ static unique_ptr<BaseStatistics> length_propagate_stats(
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"length", "len"},
 	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator, true>, false, nullptr, nullptr, length_propagate_stats));
+	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator, true>, false,
+	                               nullptr, nullptr, length_propagate_stats));
 	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
 	set.AddFunction(ScalarFunction("bit_length", {LogicalType::VARCHAR}, LogicalType::BIGINT,
@@ -73,7 +72,7 @@ struct UnicodeOperator {
 
 void UnicodeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction unicode("unicode", {LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                               ScalarFunction::UnaryFunction<string_t, int32_t, UnicodeOperator, true>);
+	                       ScalarFunction::UnaryFunction<string_t, int32_t, UnicodeOperator, true>);
 	set.AddFunction(unicode);
 	unicode.name = "ord";
 	set.AddFunction(unicode);

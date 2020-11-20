@@ -27,7 +27,6 @@ template <> date_t AddOperator::Operation(interval_t left, date_t right);
 template <> timestamp_t AddOperator::Operation(timestamp_t left, interval_t right);
 template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t right);
 
-
 struct TryAddOperator {
 	template <class TA, class TB, class TR> static inline bool Operation(TA left, TB right, TR &result) {
 		throw InternalException("Unimplemented type for TryAddOperator");
@@ -43,7 +42,8 @@ struct AddOperatorOverflowCheck {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TryAddOperator::Operation(left, right, result)) {
-			throw OutOfRangeException("Overflow in addition of %s (%d + %d)!", TypeIdToString(GetTypeId<TA>()), left, right);
+			throw OutOfRangeException("Overflow in addition of %s (%d + %d)!", TypeIdToString(GetTypeId<TA>()), left,
+			                          right);
 		}
 		return result;
 	}
@@ -62,7 +62,9 @@ struct DecimalAddOverflowCheck {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TryDecimalAdd::Operation<TA, TB, TR>(left, right, result)) {
-			throw OutOfRangeException("Overflow in addition of DECIMAL(18) (%d + %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+			throw OutOfRangeException("Overflow in addition of DECIMAL(18) (%d + %d). You might want to add an "
+			                          "explicit cast to a bigger decimal.",
+			                          left, right);
 		}
 		return result;
 	}
@@ -77,4 +79,4 @@ struct AddTimeOperator {
 template <> dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right);
 template <> dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right);
 
-}
+} // namespace duckdb

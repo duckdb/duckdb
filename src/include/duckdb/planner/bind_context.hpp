@@ -31,6 +31,7 @@ class BindContext {
 public:
 	//! Keep track of recursive CTE references
 	unordered_map<string, std::shared_ptr<idx_t>> cte_references;
+
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
@@ -51,12 +52,13 @@ public:
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
 	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, string relation_name = "");
-	const vector<std::pair<string, Binding *>>& GetBindingsList() {
+	const vector<std::pair<string, Binding *>> &GetBindingsList() {
 		return bindings_list;
 	}
 
 	//! Adds a base table with the given alias to the BindContext.
-	void AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types, LogicalGet &get);
+	void AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
+	                  LogicalGet &get);
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
 	                      LogicalGet &get);
@@ -81,11 +83,14 @@ public:
 		cte_bindings = bindings;
 	}
 
-	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases specified.
-	static vector<string> AliasColumnNames(string table_name, const vector<string> &names, const vector<string> &column_aliases);
+	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
+	//! specified.
+	static vector<string> AliasColumnNames(string table_name, const vector<string> &names,
+	                                       const vector<string> &column_aliases);
 
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);
+
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be

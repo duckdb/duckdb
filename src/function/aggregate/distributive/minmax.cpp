@@ -80,7 +80,7 @@ struct NumericMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData*, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		nullmask[idx] = !state->isset;
 		target[idx] = state->value;
 	}
@@ -150,7 +150,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData*, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->isset) {
 			nullmask[idx] = true;
 		} else {

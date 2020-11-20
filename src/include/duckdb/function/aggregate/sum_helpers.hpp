@@ -15,13 +15,11 @@
 namespace duckdb {
 
 struct RegularAdd {
-	template<class STATE, class T>
-	static void AddNumber(STATE &state, T input) {
+	template <class STATE, class T> static void AddNumber(STATE &state, T input) {
 		state.value += input;
 	}
 
-	template<class STATE, class T>
-	static void AddConstant(STATE &state, T input, idx_t count) {
+	template <class STATE, class T> static void AddConstant(STATE &state, T input, idx_t count) {
 		state.value += input * count;
 	}
 };
@@ -45,13 +43,11 @@ struct HugeintAdd {
 		}
 	}
 
-	template<class STATE, class T>
-	static void AddNumber(STATE &state, T input) {
+	template <class STATE, class T> static void AddNumber(STATE &state, T input) {
 		AddValue(state.value, uint64_t(input), input >= 0);
 	}
 
-	template<class STATE, class T>
-	static void AddConstant(STATE &state, T input, idx_t count) {
+	template <class STATE, class T> static void AddConstant(STATE &state, T input, idx_t count) {
 		// add a constant X number of times
 		// fast path: check if value * count fits into a uint64_t
 		// note that we check if value * VECTOR_SIZE fits in a uint64_t to avoid having to actually do a division
@@ -79,8 +75,7 @@ struct HugeintAdd {
 	}
 };
 
-template<class STATEOP, class ADDOP>
-struct BaseSumOperation {
+template <class STATEOP, class ADDOP> struct BaseSumOperation {
 	template <class STATE> static void Initialize(STATE *state) {
 		state->value = 0;
 		STATEOP::template Initialize<STATE>(state);
@@ -107,4 +102,4 @@ struct BaseSumOperation {
 	}
 };
 
-}
+} // namespace duckdb

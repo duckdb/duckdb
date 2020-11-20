@@ -31,6 +31,7 @@ public:
 	// Generates either a constant_or_null(child) expression
 	static unique_ptr<Expression> ConstantOrNull(unique_ptr<Expression> child, Value value);
 	static unique_ptr<Expression> ConstantOrNull(vector<unique_ptr<Expression>> children, Value value);
+
 private:
 	//! Apply a set of rules to a specific expression
 	static unique_ptr<Expression> ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,

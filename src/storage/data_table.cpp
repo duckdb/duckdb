@@ -32,7 +32,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 
 	// initialize the table with the existing data from disk, if any
 	if (data && data->table_data[0].size() > 0) {
-		for(idx_t i = 0; i < types.size(); i++) {
+		for (idx_t i = 0; i < types.size(); i++) {
 			columns[i]->statistics = move(data->column_stats[i]);
 		}
 		// first append all the segments to the set of column segments
@@ -398,7 +398,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 				auto tf_idx = state.adaptive_filter->permutation[i];
 				auto col_idx = column_ids[tf_idx];
 				columns[col_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
-										approved_tuple_count, state.table_filters->filters[tf_idx]);
+				                         approved_tuple_count, state.table_filters->filters[tf_idx]);
 			}
 			for (auto &table_filter : state.table_filters->filters) {
 				result.data[table_filter.first].Slice(sel, approved_tuple_count);

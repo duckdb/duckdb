@@ -86,7 +86,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 	// note that we scan one further to check for a potential combining diacritics (e.g. i + diacritic is ï)
 	bool is_ascii = true;
 	idx_t ascii_end = MinValue<idx_t>(end + 1, input_size);
-	for(idx_t i = 0; i < ascii_end; i++) {
+	for (idx_t i = 0; i < ascii_end; i++) {
 		if (input_data[i] & 0x80) {
 			// found a non-ascii character: eek
 			is_ascii = false;
@@ -139,15 +139,16 @@ static void substring_function(DataChunk &args, ExpressionState &state, Vector &
 		auto &length_vector = args.data[2];
 
 		TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
-			input_vector, offset_vector, length_vector, result, args.size(),
-			[&](string_t input_string, int32_t offset, int32_t length) {
-				return SubstringFun::substring_scalar_function(result, input_string, offset, length);
-			});
+		    input_vector, offset_vector, length_vector, result, args.size(),
+		    [&](string_t input_string, int32_t offset, int32_t length) {
+			    return SubstringFun::substring_scalar_function(result, input_string, offset, length);
+		    });
 	} else {
-		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(input_vector, offset_vector, result, args.size(),
-			[&](string_t input_string, int32_t offset) {
-				return SubstringFun::substring_scalar_function(result, input_string, offset, numeric_limits<int32_t>::max());
-			});
+		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
+		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
+			    return SubstringFun::substring_scalar_function(result, input_string, offset,
+			                                                   numeric_limits<int32_t>::max());
+		    });
 	}
 }
 
@@ -158,29 +159,27 @@ static void substring_function_ascii(DataChunk &args, ExpressionState &state, Ve
 		auto &length_vector = args.data[2];
 
 		TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
-			input_vector, offset_vector, length_vector, result, args.size(),
-			[&](string_t input_string, int32_t offset, int32_t length) {
-				return substring_ascii_only(result, input_string, offset, length);
-			});
+		    input_vector, offset_vector, length_vector, result, args.size(),
+		    [&](string_t input_string, int32_t offset, int32_t length) {
+			    return substring_ascii_only(result, input_string, offset, length);
+		    });
 	} else {
-		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(input_vector, offset_vector, result, args.size(),
-			[&](string_t input_string, int32_t offset) {
-				return substring_ascii_only(result, input_string, offset, numeric_limits<int32_t>::max());
-			});
+		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
+		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
+			    return substring_ascii_only(result, input_string, offset, numeric_limits<int32_t>::max());
+		    });
 	}
 }
 
-static unique_ptr<BaseStatistics> substring_propagate_stats(
-	ClientContext &context,
-	BoundFunctionExpression &expr,
-	FunctionData *bind_data,
-	vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> substring_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
+                                                            FunctionData *bind_data,
+                                                            vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
 		return nullptr;
 	}
 	// we only care about the stats of the first child (i.e. the string)
-	auto &sstats = (StringStatistics &) *child_stats[0];
+	auto &sstats = (StringStatistics &)*child_stats[0];
 	if (!sstats.has_unicode) {
 		expr.function.function = substring_function_ascii;
 	}
@@ -190,9 +189,10 @@ static unique_ptr<BaseStatistics> substring_propagate_stats(
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::INTEGER},
-	                               LogicalType::VARCHAR, substring_function, false, nullptr, nullptr, substring_propagate_stats));
-	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER},
-	                               LogicalType::VARCHAR, substring_function, false, nullptr, nullptr, substring_propagate_stats));
+	                                  LogicalType::VARCHAR, substring_function, false, nullptr, nullptr,
+	                                  substring_propagate_stats));
+	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR,
+	                                  substring_function, false, nullptr, nullptr, substring_propagate_stats));
 	set.AddFunction(substr);
 	substr.name = "substr";
 	set.AddFunction(substr);

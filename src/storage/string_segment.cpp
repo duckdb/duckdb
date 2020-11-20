@@ -462,7 +462,7 @@ idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
 }
 
 static inline void update_string_stats(SegmentStatistics &stats, const string_t &new_value) {
-	auto &sstats = (StringStatistics &) *stats.statistics;
+	auto &sstats = (StringStatistics &)*stats.statistics;
 	sstats.Update(new_value);
 }
 

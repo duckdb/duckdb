@@ -1,6 +1,6 @@
 # name: test/optimizer/statistics/statistics_null_comparison.test
 # description: Statistics propagation with comparisons and null values
-# group: [optimizer]
+# group: [statistics]
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM (VALUES (10, 1), (20, 2), (30, NULL)) tbl(i, j);

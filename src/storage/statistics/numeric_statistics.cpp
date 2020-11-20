@@ -9,13 +9,12 @@ NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(move(t
 	max = Value::MinimumValue(type);
 }
 
-NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p) :
-    BaseStatistics(move(type_p)), min(move(min_p)), max(move(max_p)) {
-
+NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p)
+    : BaseStatistics(move(type_p)), min(move(min_p)), max(move(max_p)) {
 }
 
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
-	auto &other = (const NumericStatistics &) other_p;
+	auto &other = (const NumericStatistics &)other_p;
 	has_null = has_null || other.has_null;
 	if (other.min < min) {
 		min = other.min;
@@ -61,35 +60,35 @@ unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, 
 }
 
 string NumericStatistics::ToString() {
-	return StringUtil::Format("Numeric Statistics<%s> [Has Null: %s, Min: %s, Max: %s]",
-		type.ToString(), has_null ? "true" : "false", min.ToString(), max.ToString());
+	return StringUtil::Format("Numeric Statistics<%s> [Has Null: %s, Min: %s, Max: %s]", type.ToString(),
+	                          has_null ? "true" : "false", min.ToString(), max.ToString());
 }
 
-template<class T>
-void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
+template <class T> void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
 	VectorData vdata;
 	vector.Orrify(count, vdata);
 
-	auto data = (T*) vdata.data;
-	for(idx_t i = 0; i < count; i++) {
+	auto data = (T *)vdata.data;
+	for (idx_t i = 0; i < count; i++) {
 		auto index = vdata.sel->get_index(i);
 		if ((*vdata.nullmask)[index]) {
 			continue;
 		}
 		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) {
-			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
+			                        ToString(), vector.ToString(count));
 		}
 		if (!max.is_null && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
-			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
+			                        ToString(), vector.ToString(count));
 		}
 	}
-
 }
 
 void NumericStatistics::Verify(Vector &vector, idx_t count) {
 	BaseStatistics::Verify(vector, count);
 
-	switch(type.InternalType()) {
+	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		break;
 	case PhysicalType::INT8:
@@ -118,4 +117,4 @@ void NumericStatistics::Verify(Vector &vector, idx_t count) {
 	}
 }
 
-}
+} // namespace duckdb

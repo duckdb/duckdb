@@ -8,14 +8,14 @@
 namespace duckdb {
 using namespace std;
 
-template<class T>
-struct avg_state_t {
+template <class T> struct avg_state_t {
 	T value;
 	uint64_t count;
 };
 
 struct AverageDecimalBindData : public FunctionData {
-	AverageDecimalBindData(double scale) : scale(scale) {}
+	AverageDecimalBindData(double scale) : scale(scale) {
+	}
 
 	double scale;
 
@@ -26,17 +26,14 @@ public:
 };
 
 struct AverageSetOperation {
-	template<class STATE>
-	static void Initialize(STATE *state) {
+	template <class STATE> static void Initialize(STATE *state) {
 		state->count = 0;
 	}
-	template<class STATE>
-	static void Combine(STATE source, STATE *target) {
+	template <class STATE> static void Combine(STATE source, STATE *target) {
 		target->count += source.count;
 		target->value += source.value;
 	}
-	template<class STATE>
-	static void AddValues(STATE *state, idx_t count) {
+	template <class STATE> static void AddValues(STATE *state, idx_t count) {
 		state->count += count;
 	}
 };
@@ -44,7 +41,7 @@ struct AverageSetOperation {
 static double GetAverageDivident(uint64_t count, FunctionData *bind_data) {
 	double divident = double(count);
 	if (bind_data) {
-		auto &avg_bind_data = (AverageDecimalBindData &) *bind_data;
+		auto &avg_bind_data = (AverageDecimalBindData &)*bind_data;
 		divident *= avg_bind_data.scale;
 	}
 	return divident;
@@ -52,7 +49,8 @@ static double GetAverageDivident(uint64_t count, FunctionData *bind_data) {
 
 struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	                     idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -64,7 +62,8 @@ struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 
 struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	                     idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -76,7 +75,8 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	                     idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -88,7 +88,7 @@ struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 
 struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData*, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -106,13 +106,15 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 		return AggregateFunction::UnaryAggregate<avg_state_t<int64_t>, int16_t, double, IntegerAverageOperation>(
 		    LogicalType::SMALLINT, LogicalType::DOUBLE);
 	case PhysicalType::INT32: {
-		auto function = AggregateFunction::UnaryAggregate<avg_state_t<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
-		    LogicalType::INTEGER, LogicalType::DOUBLE);
+		auto function =
+		    AggregateFunction::UnaryAggregate<avg_state_t<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
+		        LogicalType::INTEGER, LogicalType::DOUBLE);
 		return function;
 	}
 	case PhysicalType::INT64: {
-		auto function = AggregateFunction::UnaryAggregate<avg_state_t<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
-		    LogicalType::BIGINT, LogicalType::DOUBLE);
+		auto function =
+		    AggregateFunction::UnaryAggregate<avg_state_t<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
+		        LogicalType::BIGINT, LogicalType::DOUBLE);
 		return function;
 	}
 	case PhysicalType::INT128:

@@ -25,7 +25,9 @@ typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_fun
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function,
                                                            vector<unique_ptr<Expression>> &arguments);
-typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, BoundFunctionExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats);
+typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, BoundFunctionExpression &expr,
+                                                            FunctionData *bind_data,
+                                                            vector<unique_ptr<BaseStatistics>> &child_stats);
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
@@ -34,7 +36,7 @@ public:
 	ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
-				   LogicalType varargs = LogicalType::INVALID)
+	               LogicalType varargs = LogicalType::INVALID)
 	    : BaseScalarFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
 	      dependency(dependency), statistics(statistics) {
 	}
@@ -42,8 +44,9 @@ public:
 	ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
-				   LogicalType varargs = LogicalType::INVALID)
-	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, statistics, varargs) {
+	               LogicalType varargs = LogicalType::INVALID)
+	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, statistics,
+	                     varargs) {
 	}
 
 	//! The main scalar function to execute
@@ -57,13 +60,11 @@ public:
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
 	                                                              vector<unique_ptr<Expression>> children,
-																  string &error,
-	                                                              bool is_operator = false);
+	                                                              string &error, bool is_operator = false);
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
 	                                                              ScalarFunctionCatalogEntry &function,
 	                                                              vector<unique_ptr<Expression>> children,
-																  string &error,
-	                                                              bool is_operator = false);
+	                                                              string &error, bool is_operator = false);
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, ScalarFunction bound_function,
 	                                                              vector<unique_ptr<Expression>> children,

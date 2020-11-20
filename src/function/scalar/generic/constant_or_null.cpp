@@ -8,7 +8,8 @@ using namespace std;
 namespace duckdb {
 
 struct ConstantOrNullBindData : public FunctionData {
-	ConstantOrNullBindData(Value val) : value(val) {}
+	ConstantOrNullBindData(Value val) : value(val) {
+	}
 
 	Value value;
 
@@ -22,8 +23,8 @@ static void constant_or_null(DataChunk &args, ExpressionState &state, Vector &re
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ConstantOrNullBindData &)*func_expr.bind_info;
 	result.Reference(info.value);
-	for(idx_t idx = 0; idx < args.column_count(); idx++) {
-		switch(args.data[idx].vector_type) {
+	for (idx_t idx = 0; idx < args.column_count(); idx++) {
+		switch (args.data[idx].vector_type) {
 		case VectorType::FLAT_VECTOR: {
 			auto &input_mask = FlatVector::Nullmask(args.data[idx]);
 			if (input_mask.any()) {
@@ -49,7 +50,7 @@ static void constant_or_null(DataChunk &args, ExpressionState &state, Vector &re
 			if (vdata.nullmask->any()) {
 				result.Normalify(args.size());
 				auto &result_mask = FlatVector::Nullmask(result);
-				for(idx_t i = 0; i < args.size(); i++) {
+				for (idx_t i = 0; i < args.size(); i++) {
 					if ((*vdata.nullmask)[vdata.sel->get_index(i)]) {
 						result_mask[i] = true;
 					}
@@ -74,9 +75,9 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, Value val) 
 		return false;
 	}
 	D_ASSERT(expr.bind_info);
-	auto &bind_data = (ConstantOrNullBindData &) *expr.bind_info;
+	auto &bind_data = (ConstantOrNullBindData &)*expr.bind_info;
 	D_ASSERT(bind_data.value.type() == val.type());
 	return bind_data.value == val;
 }
 
-}
+} // namespace duckdb

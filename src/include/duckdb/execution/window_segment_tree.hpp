@@ -16,7 +16,8 @@ namespace duckdb {
 
 class WindowSegmentTree {
 public:
-	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type, ChunkCollection *input);
+	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
+	                  ChunkCollection *input);
 	Value Compute(idx_t start, idx_t end);
 
 private:

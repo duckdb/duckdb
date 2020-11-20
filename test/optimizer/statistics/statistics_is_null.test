@@ -1,6 +1,6 @@
 # name: test/optimizer/statistics/statistics_is_null.test
 # description: Test filter propagation in IS NULL/IS NOT NULL operands
-# group: [optimizer]
+# group: [statistics]
 
 statement ok
 PRAGMA enable_verification;

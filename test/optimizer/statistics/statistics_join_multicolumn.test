@@ -1,6 +1,6 @@
 # name: test/optimizer/statistics/statistics_join_multicolumn.test
 # description: Statistics propagation through joins on multiple columns
-# group: [optimizer]
+# group: [statistics]
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (10)) tbl(i);

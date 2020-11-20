@@ -28,4 +28,4 @@ struct TableFilterSet {
 	unordered_map<idx_t, vector<TableFilter>> filters;
 };
 
-}
+} // namespace duckdb

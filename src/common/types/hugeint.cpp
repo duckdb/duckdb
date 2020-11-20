@@ -162,7 +162,8 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 	if (__builtin_mul_overflow(left, right, &result_i128)) {
 		return false;
 	}
-	uint64_t upper = uint64_t(result_i128 >> 64);;
+	uint64_t upper = uint64_t(result_i128 >> 64);
+	;
 	if (upper & 0x8000000000000000) {
 		return false;
 	}
@@ -180,26 +181,19 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 	uint64_t products[4][4];
 
 	// multiply each component of the values
-	for(auto x = 0; x < 4; x++) {
-		for(auto y = 0; y < 4; y++) {
+	for (auto x = 0; x < 4; x++) {
+		for (auto y = 0; y < 4; y++) {
 			products[x][y] = top[x] * bottom[y];
 		}
 	}
 
 	// if any of these products are set to a non-zero value, there is always an overflow
-	if (products[0][0] ||
-	    products[0][1] ||
-	    products[0][2] ||
-		products[1][0] ||
-		products[2][0] ||
-		products[1][1]) {
+	if (products[0][0] || products[0][1] || products[0][2] || products[1][0] || products[2][0] || products[1][1]) {
 		return false;
 	}
 	// if the high bits of any of these are set, there is always an overflow
-	if ((products[0][3] & 0xffffffff80000000) ||
-	    (products[1][2] & 0xffffffff80000000) ||
-	    (products[2][1] & 0xffffffff80000000) ||
-	    (products[3][0] & 0xffffffff80000000)) {
+	if ((products[0][3] & 0xffffffff80000000) || (products[1][2] & 0xffffffff80000000) ||
+	    (products[2][1] & 0xffffffff80000000) || (products[3][0] & 0xffffffff80000000)) {
 		return false;
 	}
 

@@ -1,6 +1,6 @@
 # name: test/optimizer/statistics/statistics_setop.test
 # description: Statistics propagation test with set operations
-# group: [optimizer]
+# group: [statistics]
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);

@@ -63,7 +63,7 @@ Value Value::MinimumValue(LogicalType type) {
 		return Value::DOUBLE(NumericLimits<double>::Minimum());
 	case LogicalTypeId::DECIMAL: {
 		Value result;
-		switch(type.InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::INT16:
 			result = Value::MinimumValue(LogicalType::SMALLINT);
 			break;
@@ -113,7 +113,7 @@ Value Value::MaximumValue(LogicalType type) {
 		return Value::DOUBLE(NumericLimits<double>::Maximum());
 	case LogicalTypeId::DECIMAL: {
 		Value result;
-		switch(type.InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::INT16:
 			result = Value::MaximumValue(LogicalType::SMALLINT);
 			break;
@@ -324,7 +324,7 @@ Value Value::LIST(vector<Value> values) {
 Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	result.str_value = string((const char*) data, len);
+	result.str_value = string((const char *)data, len);
 	return result;
 }
 
@@ -510,46 +510,45 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 //===--------------------------------------------------------------------===//
 // GetValueUnsafe
 //===--------------------------------------------------------------------===//
-template <> int8_t& Value::GetValueUnsafe() {
+template <> int8_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT8 || type_.InternalType() == PhysicalType::BOOL);
 	return value_.tinyint;
 }
 
-template <> int16_t& Value::GetValueUnsafe() {
+template <> int16_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT16);
 	return value_.smallint;
 }
 
-template <> int32_t& Value::GetValueUnsafe() {
+template <> int32_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
 	return value_.integer;
 }
 
-template <> int64_t& Value::GetValueUnsafe() {
+template <> int64_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.bigint;
 }
 
-template <> hugeint_t& Value::GetValueUnsafe() {
+template <> hugeint_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT128);
 	return value_.hugeint;
 }
 
-template <> string& Value::GetValueUnsafe() {
+template <> string &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::VARCHAR);
 	return str_value;
 }
 
-template <> float& Value::GetValueUnsafe() {
+template <> float &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
 	return value_.float_;
 }
 
-template <> double& Value::GetValueUnsafe() {
+template <> double &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::DOUBLE);
 	return value_.double_;
 }
-
 
 Value Value::Numeric(LogicalType type, hugeint_t value) {
 	switch (type.id()) {

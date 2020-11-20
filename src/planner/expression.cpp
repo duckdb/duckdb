@@ -13,7 +13,6 @@ Expression::Expression(ExpressionType type, ExpressionClass expression_class, Lo
 }
 
 Expression::~Expression() {
-
 }
 
 bool Expression::IsAggregate() const {

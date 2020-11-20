@@ -16,7 +16,7 @@ struct InstrOperator {
 
 		auto location = ContainsFun::Find(haystack, needle);
 		if (location != INVALID_INDEX) {
-			auto len = (utf8proc_ssize_t) location;
+			auto len = (utf8proc_ssize_t)location;
 			auto str = reinterpret_cast<const utf8proc_uint8_t *>(haystack.GetDataUnsafe());
 			D_ASSERT(len <= (utf8proc_ssize_t)haystack.GetSize());
 			for (++string_position; len > 0; ++string_position) {
@@ -37,18 +37,16 @@ struct InstrAsciiOperator {
 	}
 };
 
-static unique_ptr<BaseStatistics> instr_propagate_stats(
-	ClientContext &context,
-	BoundFunctionExpression &expr,
-	FunctionData *bind_data,
-	vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> instr_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
+                                                        FunctionData *bind_data,
+                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
 		return nullptr;
 	}
 	// for strpos, we only care if the FIRST string has unicode or not
-	auto &sstats = (StringStatistics &) *child_stats[0];
+	auto &sstats = (StringStatistics &)*child_stats[0];
 	if (!sstats.has_unicode) {
 		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrAsciiOperator, true>;
 	}
@@ -56,14 +54,11 @@ static unique_ptr<BaseStatistics> instr_propagate_stats(
 }
 
 void InstrFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction instr("instr",                          // name of the function
-	         {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	         LogicalType::BIGINT,                          // return type
-	         ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>,
-			 false,
-			 nullptr,
-			 nullptr,
-			 instr_propagate_stats);
+	ScalarFunction instr("instr",                                      // name of the function
+	                     {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
+	                     LogicalType::BIGINT,                          // return type
+	                     ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>, false,
+	                     nullptr, nullptr, instr_propagate_stats);
 	set.AddFunction(instr);
 	instr.name = "strpos";
 	set.AddFunction(instr);

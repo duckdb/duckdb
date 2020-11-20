@@ -26,7 +26,7 @@ struct RStrings {
 	SEXP days;
 	SEXP weeks;
 
-	static const RStrings& get() {
+	static const RStrings &get() {
 		// On demand
 		static RStrings strings;
 		return strings;
@@ -36,10 +36,10 @@ private:
 	RStrings() {
 		// allocate strings once
 		SEXP out = Rf_allocVector(STRSXP, 5);
-		SET_STRING_ELT(out, 0, secs  = Rf_mkChar("secs"));
-		SET_STRING_ELT(out, 1, mins  = Rf_mkChar("mins"));
+		SET_STRING_ELT(out, 0, secs = Rf_mkChar("secs"));
+		SET_STRING_ELT(out, 1, mins = Rf_mkChar("mins"));
 		SET_STRING_ELT(out, 2, hours = Rf_mkChar("hours"));
-		SET_STRING_ELT(out, 3, days  = Rf_mkChar("days"));
+		SET_STRING_ELT(out, 3, days = Rf_mkChar("days"));
 		SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
 		R_PreserveObject(out);
 		MARK_NOT_MUTABLE(out);
@@ -105,35 +105,35 @@ struct RTimestampType : public RDoubleType {
 	}
 };
 
-struct RTimeSecondsType : public RDoubleType  {
+struct RTimeSecondsType : public RDoubleType {
 	static timestamp_t Convert(double val) {
 		dtime_t time = (dtime_t)(val * (1000.0));
 		return time;
 	}
 };
 
-struct RTimeMinutesType : public RDoubleType  {
+struct RTimeMinutesType : public RDoubleType {
 	static timestamp_t Convert(double val) {
 		dtime_t time = (dtime_t)(val * (1000.0 * 60));
 		return time;
 	}
 };
 
-struct RTimeHoursType : public RDoubleType  {
+struct RTimeHoursType : public RDoubleType {
 	static timestamp_t Convert(double val) {
 		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60));
 		return time;
 	}
 };
 
-struct RTimeDaysType : public RDoubleType  {
+struct RTimeDaysType : public RDoubleType {
 	static timestamp_t Convert(double val) {
 		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60 * 24));
 		return time;
 	}
 };
 
-struct RTimeWeeksType : public RDoubleType  {
+struct RTimeWeeksType : public RDoubleType {
 	static timestamp_t Convert(double val) {
 		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60 * 24 * 7));
 		return time;
@@ -215,7 +215,21 @@ static SEXP cpp_str_to_strsexp(vector<string> s) {
 	return retsexp;
 }
 
-enum class RType { UNKNOWN, LOGICAL, INTEGER, NUMERIC, STRING, FACTOR, DATE, TIMESTAMP, TIME_SECONDS, TIME_MINUTES, TIME_HOURS, TIME_DAYS, TIME_WEEKS };
+enum class RType {
+	UNKNOWN,
+	LOGICAL,
+	INTEGER,
+	NUMERIC,
+	STRING,
+	FACTOR,
+	DATE,
+	TIMESTAMP,
+	TIME_SECONDS,
+	TIME_MINUTES,
+	TIME_HOURS,
+	TIME_DAYS,
+	TIME_WEEKS
+};
 
 static RType detect_rtype(SEXP v) {
 	if (TYPEOF(v) == REALSXP && Rf_inherits(v, "POSIXct")) {
@@ -803,9 +817,9 @@ struct DataFrameScanFunction : public TableFunction {
 		return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
 	}
 
-	static unique_ptr<FunctionOperatorData>
-	dataframe_scan_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-	                    TableFilterSet *table_filters) {
+	static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
+	                                                            vector<column_t> &column_ids,
+	                                                            TableFilterSet *table_filters) {
 		return make_unique<DataFrameScanState>();
 	}
 
@@ -890,7 +904,8 @@ struct DataFrameScanFunction : public TableFunction {
 		state.position += this_count;
 	}
 
-	static unique_ptr<NodeStatistics> dataframe_scan_cardinality(ClientContext &context, const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> dataframe_scan_cardinality(ClientContext &context,
+	                                                             const FunctionData *bind_data) {
 		auto &data = (DataFrameScanFunctionData &)*bind_data;
 		return make_unique<NodeStatistics>(data.row_count, data.row_count);
 	}

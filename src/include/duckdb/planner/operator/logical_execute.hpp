@@ -29,7 +29,7 @@ protected:
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
 		vector<ColumnBinding> bindings;
-		for(idx_t i = 0; i < types.size(); i++) {
+		for (idx_t i = 0; i < types.size(); i++) {
 			bindings.push_back(ColumnBinding(0, i));
 		}
 		return bindings;

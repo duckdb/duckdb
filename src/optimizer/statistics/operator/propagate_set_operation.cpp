@@ -4,8 +4,8 @@
 namespace duckdb {
 
 void StatisticsPropagator::AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats) {
-	if (!stats->has_estimated_cardinality || !new_stats.has_estimated_cardinality ||
-	    !stats->has_max_cardinality || !new_stats.has_max_cardinality) {
+	if (!stats->has_estimated_cardinality || !new_stats.has_estimated_cardinality || !stats->has_max_cardinality ||
+	    !new_stats.has_max_cardinality) {
 		stats = nullptr;
 		return;
 	}
@@ -23,7 +23,8 @@ void StatisticsPropagator::AddCardinalities(unique_ptr<NodeStatistics> &stats, N
 	}
 }
 
-unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetOperation &setop, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetOperation &setop,
+                                                                     unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate statistics in the child nodes
 	auto left_stats = PropagateStatistics(setop.children[0]);
 	auto right_stats = PropagateStatistics(setop.children[1]);
@@ -34,16 +35,16 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetO
 
 	D_ASSERT(left_bindings.size() == right_bindings.size());
 	D_ASSERT(left_bindings.size() == setop.column_count);
-	for(idx_t i = 0; i < setop.column_count; i++) {
+	for (idx_t i = 0; i < setop.column_count; i++) {
 		// for each column binding, we fetch the statistics from both the lhs and the rhs
-		auto left_entry  = statistics_map.find(left_bindings[i]);
+		auto left_entry = statistics_map.find(left_bindings[i]);
 		auto right_entry = statistics_map.find(right_bindings[i]);
 		if (left_entry == statistics_map.end() || right_entry == statistics_map.end()) {
 			// no statistics on one of the sides: can't propagate stats
 			continue;
 		}
 		unique_ptr<BaseStatistics> new_stats;
-		switch(setop.type) {
+		switch (setop.type) {
 		case LogicalOperatorType::LOGICAL_UNION:
 			// union: merge the stats of the LHS and RHS together
 			new_stats = left_entry->second->Copy();
@@ -74,4 +75,4 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetO
 	return left_stats;
 }
 
-}
+} // namespace duckdb

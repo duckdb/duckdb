@@ -1,6 +1,6 @@
 # name: test/optimizer/statistics/statistics_varchar.test
 # description: Statistics propagation test with varchars
-# group: [optimizer]
+# group: [statistics]
 
 statement ok
 CREATE TABLE varchars AS SELECT * FROM (VALUES ('Mark'), ('Hannes'), ('World')) tbl(v);

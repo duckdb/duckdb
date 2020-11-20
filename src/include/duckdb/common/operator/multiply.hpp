@@ -39,7 +39,8 @@ struct MultiplyOperatorOverflowCheck {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TryMultiplyOperator::Operation(left, right, result)) {
-			throw OutOfRangeException("Overflow in multiplication of %s (%d * %d)!", TypeIdToString(GetTypeId<TA>()), left, right);
+			throw OutOfRangeException("Overflow in multiplication of %s (%d * %d)!", TypeIdToString(GetTypeId<TA>()),
+			                          left, right);
 		}
 		return result;
 	}
@@ -58,7 +59,9 @@ struct DecimalMultiplyOverflowCheck {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TryDecimalMultiply::Operation<TA, TB, TR>(left, right, result)) {
-			throw OutOfRangeException("Overflow in multiplication of DECIMAL(18) (%d * %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+			throw OutOfRangeException("Overflow in multiplication of DECIMAL(18) (%d * %d). You might want to add an "
+			                          "explicit cast to a bigger decimal.",
+			                          left, right);
 		}
 		return result;
 	}
@@ -66,4 +69,4 @@ struct DecimalMultiplyOverflowCheck {
 
 template <> hugeint_t DecimalMultiplyOverflowCheck::Operation(hugeint_t left, hugeint_t right);
 
-}
+} // namespace duckdb

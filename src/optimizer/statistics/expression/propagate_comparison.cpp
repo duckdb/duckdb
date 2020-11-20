@@ -6,9 +6,10 @@
 
 namespace duckdb {
 
-FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &left, BaseStatistics &right, ExpressionType comparison) {
+FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &left, BaseStatistics &right,
+                                                                ExpressionType comparison) {
 	// only handle numerics for now
-	switch(left.type.InternalType()) {
+	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -21,8 +22,8 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto &lstats = (NumericStatistics &) left;
-	auto &rstats = (NumericStatistics &) right;
+	auto &lstats = (NumericStatistics &)left;
+	auto &rstats = (NumericStatistics &)right;
 	if (lstats.min.is_null || lstats.max.is_null || rstats.min.is_null || rstats.max.is_null) {
 		// no stats available: nothing to prune
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -30,7 +31,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	// the result of the propagation depend on whether or not either side has null values
 	// if there are null values present, we cannot say whether or not
 	bool has_null = lstats.has_null || rstats.has_null;
-	switch(comparison) {
+	switch (comparison) {
 	case ExpressionType::COMPARE_EQUAL:
 		// l = r, if l.min > r.max or r.min > l.max equality is not possible
 		if (lstats.min > rstats.max || rstats.min > lstats.max) {
@@ -87,15 +88,16 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	}
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundComparisonExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	auto left_stats  = PropagateExpression(expr.left);
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundComparisonExpression &expr,
+                                                                     unique_ptr<Expression> *expr_ptr) {
+	auto left_stats = PropagateExpression(expr.left);
 	auto right_stats = PropagateExpression(expr.right);
 	if (!left_stats || !right_stats) {
 		return nullptr;
 	}
 	// propagate the statistics of the comparison operator
 	auto propagate_result = PropagateComparison(*left_stats, *right_stats, expr.type);
-	switch(propagate_result) {
+	switch (propagate_result) {
 	case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 		*expr_ptr = make_unique<BoundConstantExpression>(Value::BOOLEAN(true));
 		return PropagateExpression(*expr_ptr);
@@ -122,4 +124,4 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCompar
 	}
 }
 
-}
+} // namespace duckdb

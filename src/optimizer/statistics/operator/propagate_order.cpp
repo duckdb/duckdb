@@ -3,9 +3,10 @@
 
 namespace duckdb {
 
-unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrder &order, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrder &order,
+                                                                     unique_ptr<LogicalOperator> *node_ptr) {
 	// propagate statistics in the child node
 	return PropagateStatistics(order.children[0]);
 }
 
-}
+} // namespace duckdb

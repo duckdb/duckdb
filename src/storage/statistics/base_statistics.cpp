@@ -76,9 +76,11 @@ void BaseStatistics::Verify(Vector &vector, idx_t count) {
 	D_ASSERT(vector.type == this->type);
 	if (!has_null) {
 		if (VectorOperations::HasNull(vector, count)) {
-			throw InternalException("Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s", vector.ToString(count));
+			throw InternalException(
+			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
+			    vector.ToString(count));
 		}
 	}
 }
 
-}
+} // namespace duckdb

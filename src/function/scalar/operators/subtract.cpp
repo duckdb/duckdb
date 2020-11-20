@@ -62,8 +62,7 @@ template <> interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t
 // - [subtract] with overflow check
 //===--------------------------------------------------------------------===//
 struct OverflowCheckedSubtract {
-	template<class SRCTYPE, class UTYPE>
-	static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
+	template <class SRCTYPE, class UTYPE> static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
 		UTYPE uresult = SubtractOperator::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
 		if (uresult < NumericLimits<SRCTYPE>::Minimum() || uresult > NumericLimits<SRCTYPE>::Maximum()) {
 			return false;
@@ -112,7 +111,7 @@ template <> bool TrySubtractOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // subtract decimal with overflow check
 //===--------------------------------------------------------------------===//
-template <> bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t& result) {
+template <> bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t &result) {
 	if (right < 0) {
 		if (999999999999999999 + right < left) {
 			return false;
@@ -126,7 +125,7 @@ template <> bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int6
 	return true;
 }
 
-template <> bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t& result) {
+template <> bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	result = left - right;
 	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
 		return false;
@@ -150,4 +149,4 @@ template <> dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t rig
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
 }
 
-}
+} // namespace duckdb

@@ -37,9 +37,9 @@ public:
 	void Verify(Vector &vector, idx_t count) override;
 
 	string ToString() override;
+
 private:
-	template<class T>
-	void TemplatedVerify(Vector &vector, idx_t count);
+	template <class T> void TemplatedVerify(Vector &vector, idx_t count);
 };
 
-}
+} // namespace duckdb

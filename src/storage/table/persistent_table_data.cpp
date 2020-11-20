@@ -9,6 +9,7 @@ PersistentTableData::PersistentTableData(idx_t column_count) {
 	table_data.resize(column_count);
 }
 
-PersistentTableData::~PersistentTableData() {}
-
+PersistentTableData::~PersistentTableData() {
 }
+
+} // namespace duckdb

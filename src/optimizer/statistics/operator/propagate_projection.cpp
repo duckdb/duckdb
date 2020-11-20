@@ -3,12 +3,13 @@
 
 namespace duckdb {
 
-unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalProjection &proj, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalProjection &proj,
+                                                                     unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate to the child
 	node_stats = PropagateStatistics(proj.children[0]);
 
 	// then propagate to each of the expressions
-	for(idx_t i = 0; i < proj.expressions.size(); i++) {
+	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		auto stats = PropagateExpression(proj.expressions[i]);
 		if (stats) {
 			ColumnBinding binding(proj.table_index, i);
@@ -18,4 +19,4 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalProj
 	return move(node_stats);
 }
 
-}
+} // namespace duckdb

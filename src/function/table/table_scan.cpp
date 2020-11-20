@@ -39,7 +39,8 @@ static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, 
 	return move(result);
 }
 
-static unique_ptr<BaseStatistics> table_scan_statistics(ClientContext &context, const FunctionData *bind_data_, column_t column_id) {
+static unique_ptr<BaseStatistics> table_scan_statistics(ClientContext &context, const FunctionData *bind_data_,
+                                                        column_t column_id) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	auto &transaction = Transaction::GetTransaction(context);
 	if (transaction.storage.Find(bind_data.table->storage.get())) {
@@ -105,7 +106,8 @@ void table_scan_dependency(unordered_set<CatalogEntry *> &entries, const Functio
 unique_ptr<NodeStatistics> table_scan_cardinality(ClientContext &context, const FunctionData *bind_data_) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	auto &transaction = Transaction::GetTransaction(context);
-	idx_t estimated_cardinality = bind_data.table->storage->info->cardinality + transaction.storage.AddedRows(bind_data.table->storage.get());
+	idx_t estimated_cardinality =
+	    bind_data.table->storage->info->cardinality + transaction.storage.AddedRows(bind_data.table->storage.get());
 	return make_unique<NodeStatistics>(bind_data.table->storage->info->cardinality, estimated_cardinality);
 }
 

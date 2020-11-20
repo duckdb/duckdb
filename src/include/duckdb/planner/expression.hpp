@@ -39,7 +39,7 @@ public:
 		if (!BaseExpression::Equals(other)) {
 			return false;
 		}
-		return return_type == ((Expression *) other)->return_type;
+		return return_type == ((Expression *)other)->return_type;
 	}
 
 	static bool Equals(Expression *left, Expression *right) {

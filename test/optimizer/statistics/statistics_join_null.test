@@ -1,6 +1,6 @@
-# name: test/optimizer/statistics/statistics_join.test
+# name: test/optimizer/statistics/statistics_join_null.test
 # description: Statistics propagation test with joins and null values
-# group: [optimizer]
+# group: [statistics]
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (NULL)) tbl(i);

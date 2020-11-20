@@ -31,4 +31,4 @@ public:
 	void Reset();
 };
 
-}
+} // namespace duckdb

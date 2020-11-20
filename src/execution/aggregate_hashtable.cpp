@@ -40,8 +40,8 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 #ifndef DUCKDB_ALLOW_UNDEFINED
 		payload_size = Align(payload_size);
 #endif
-		aggregates.push_back(AggregateObject(binding->function, binding->bind_info.get(), binding->children.size(), payload_size,
-		                                     binding->distinct, binding->return_type.InternalType()));
+		aggregates.push_back(AggregateObject(binding->function, binding->bind_info.get(), binding->children.size(),
+		                                     payload_size, binding->distinct, binding->return_type.InternalType()));
 	}
 	return aggregates;
 }
@@ -486,7 +486,9 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);
 				} else {
-					Store<string_t>(string_heap.AddBlob(string_data[group_idx].GetDataUnsafe(), string_data[group_idx].GetSize()), ptr);
+					Store<string_t>(
+					    string_heap.AddBlob(string_data[group_idx].GetDataUnsafe(), string_data[group_idx].GetSize()),
+					    ptr);
 				}
 
 				pointers[pointer_idx] += type_size;

@@ -41,7 +41,8 @@ struct SubtractOperatorOverflowCheck {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TrySubtractOperator::Operation(left, right, result)) {
-			throw OutOfRangeException("Overflow in subtraction of %s (%d - %d)!", TypeIdToString(GetTypeId<TA>()), left, right);
+			throw OutOfRangeException("Overflow in subtraction of %s (%d - %d)!", TypeIdToString(GetTypeId<TA>()), left,
+			                          right);
 		}
 		return result;
 	}
@@ -60,7 +61,9 @@ struct DecimalSubtractOverflowCheck {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TryDecimalSubtract::Operation<TA, TB, TR>(left, right, result)) {
-			throw OutOfRangeException("Overflow in subtract of DECIMAL(18) (%d - %d). You might want to add an explicit cast to a bigger decimal.", left, right);
+			throw OutOfRangeException("Overflow in subtract of DECIMAL(18) (%d - %d). You might want to add an "
+			                          "explicit cast to a bigger decimal.",
+			                          left, right);
 		}
 		return result;
 	}
@@ -74,4 +77,4 @@ struct SubtractTimeOperator {
 
 template <> dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right);
 
-}
+} // namespace duckdb

@@ -8,7 +8,7 @@
 namespace duckdb {
 
 void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
-	for(idx_t i = 0; i < join.conditions.size(); i++) {
+	for (idx_t i = 0; i < join.conditions.size(); i++) {
 		auto &condition = join.conditions[i];
 		auto stats_left = PropagateExpression(condition.left);
 		auto stats_right = PropagateExpression(condition.right);
@@ -19,11 +19,11 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				continue;
 			}
 			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.comparison);
-			switch(prune_result) {
+			switch (prune_result) {
 			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 				// filter is always false or null, none of the join conditions matter
-				switch(join.join_type) {
+				switch (join.join_type) {
 				case JoinType::SEMI:
 				case JoinType::INNER:
 					// semi or inner join on false; entire node can be pruned
@@ -57,7 +57,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					continue;
 				} else {
 					// this is the only condition and it is always true: all conditions are true
-					switch(join.join_type) {
+					switch (join.join_type) {
 					case JoinType::SEMI:
 						// semi join on true: replace entire join with LHS
 						*node_ptr = move(join.children[0]);
@@ -102,7 +102,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			// skip update when null values are equal (for now?)
 			continue;
 		}
-		switch(join.join_type) {
+		switch (join.join_type) {
 		case JoinType::INNER:
 		case JoinType::SEMI:
 		case JoinType::LEFT:
@@ -122,8 +122,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<
 }
 
 void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats) {
-	if (!stats->has_estimated_cardinality || !new_stats.has_estimated_cardinality ||
-	    !stats->has_max_cardinality || !new_stats.has_max_cardinality) {
+	if (!stats->has_estimated_cardinality || !new_stats.has_estimated_cardinality || !stats->has_max_cardinality ||
+	    !new_stats.has_max_cardinality) {
 		stats = nullptr;
 		return;
 	}
@@ -141,10 +141,11 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 	}
 }
 
-unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin &join,
+                                                                     unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate through the children of the join
 	node_stats = PropagateStatistics(join.children[0]);
-	for(idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
+	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
 		auto child_stats = PropagateStatistics(join.children[child_idx]);
 		if (!child_stats) {
 			node_stats = nullptr;
@@ -163,12 +164,12 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	}
 
 	// then propagate into the join conditions
-	switch(join.type) {
+	switch (join.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		PropagateStatistics((LogicalComparisonJoin &) join, node_ptr);
+		PropagateStatistics((LogicalComparisonJoin &)join, node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		PropagateStatistics((LogicalAnyJoin &) join, node_ptr);
+		PropagateStatistics((LogicalAnyJoin &)join, node_ptr);
 		break;
 	default:
 		break;
@@ -179,7 +180,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	// this requires us to alter the statistics after this point in the query plan
 	if (IsLeftOuterJoin(join_type)) {
 		// left or full outer join: set is_null to true for all rhs statistics
-		for(auto &binding : right_bindings) {
+		for (auto &binding : right_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
 				stats->second->has_null = true;
@@ -188,7 +189,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// right or full outer join: set is_null to true for all lhs statistics
-		for(auto &binding : left_bindings) {
+		for (auto &binding : left_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
 				stats->second->has_null = true;
@@ -198,4 +199,4 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	return move(node_stats);
 }
 
-}
+} // namespace duckdb

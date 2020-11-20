@@ -150,7 +150,8 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 	manager.block_manager.Write(*handle->node, block_id);
 
 	column_stats[col_idx]->Merge(*stats[col_idx]->statistics);
-	stats[col_idx] = make_unique<SegmentStatistics>(table.columns[col_idx].type, GetTypeIdSize(table.columns[col_idx].type.InternalType()));
+	stats[col_idx] = make_unique<SegmentStatistics>(table.columns[col_idx].type,
+	                                                GetTypeIdSize(table.columns[col_idx].type.InternalType()));
 	handle.reset();
 	segments[col_idx] = nullptr;
 }
@@ -180,7 +181,7 @@ void TableDataWriter::VerifyDataPointers() {
 }
 
 void TableDataWriter::WriteDataPointers() {
-	for(auto &stats : column_stats) {
+	for (auto &stats : column_stats) {
 		stats->Serialize(*manager.tabledata_writer);
 	}
 

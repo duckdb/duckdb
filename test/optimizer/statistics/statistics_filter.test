@@ -1,6 +1,6 @@
 # name: test/optimizer/statistics/statistics_filter.test
 # description: Statistics propagation test with filters
-# group: [optimizer]
+# group: [statistics]
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);

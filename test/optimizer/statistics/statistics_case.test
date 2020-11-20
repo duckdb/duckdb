@@ -1,6 +1,6 @@
 # name: test/optimizer/statistics/statistics_case.test
 # description: Test filter propagation in CASE expression
-# group: [optimizer]
+# group: [statistics]
 
 statement ok
 PRAGMA enable_verification;

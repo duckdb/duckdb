@@ -45,8 +45,7 @@ template <> interval_t MultiplyOperator::Operation(int64_t left, interval_t righ
 // * [multiply] with overflow check
 //===--------------------------------------------------------------------===//
 struct OverflowCheckedMultiply {
-	template<class SRCTYPE, class UTYPE>
-	static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
+	template <class SRCTYPE, class UTYPE> static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
 		UTYPE uresult = MultiplyOperator::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
 		if (uresult < NumericLimits<SRCTYPE>::Minimum() || uresult > NumericLimits<SRCTYPE>::Maximum()) {
 			return false;
@@ -128,14 +127,15 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//
-template <> bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t& result) {
-	if (!TryMultiplyOperator::Operation(left, right, result) || result <= -1000000000000000000 || result >= 1000000000000000000) {
+template <> bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t &result) {
+	if (!TryMultiplyOperator::Operation(left, right, result) || result <= -1000000000000000000 ||
+	    result >= 1000000000000000000) {
 		return false;
 	}
 	return true;
 }
 
-template <> bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t& result) {
+template <> bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	result = left * right;
 	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
 		return false;
@@ -146,9 +146,11 @@ template <> bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, 
 template <> hugeint_t DecimalMultiplyOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
 	hugeint_t result;
 	if (!TryDecimalMultiply::Operation(left, right, result)) {
-		throw OutOfRangeException("Overflow in multiplication of DECIMAL(38) (%s * %s). You might want to add an explicit cast to a decimal with a smaller scale.", left.ToString(), right.ToString());
+		throw OutOfRangeException("Overflow in multiplication of DECIMAL(38) (%s * %s). You might want to add an "
+		                          "explicit cast to a decimal with a smaller scale.",
+		                          left.ToString(), right.ToString());
 	}
 	return result;
 }
 
-}
+} // namespace duckdb

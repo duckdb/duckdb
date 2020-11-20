@@ -7,7 +7,7 @@
 namespace duckdb {
 
 StringStatistics::StringStatistics(LogicalType type) : BaseStatistics(type) {
-	for(idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
+	for (idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;
 		max[i] = 0;
 	}
@@ -48,7 +48,7 @@ unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source, L
 
 static int string_value_comparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {
 	D_ASSERT(len <= StringStatistics::MAX_STRING_MINMAX_SIZE);
-	for(idx_t i = 0; i < len; i++) {
+	for (idx_t i = 0; i < len; i++) {
 		if (data[i] < comparison[i]) {
 			return -1;
 		} else if (data[i] > comparison[i]) {
@@ -59,7 +59,7 @@ static int string_value_comparison(const_data_ptr_t data, idx_t len, const_data_
 }
 
 void StringStatistics::Update(const string_t &value) {
-	auto data = (const_data_ptr_t) value.GetDataUnsafe();
+	auto data = (const_data_ptr_t)value.GetDataUnsafe();
 	auto size = value.GetSize();
 
 	//! we can only fit 8 bytes, so we might need to trim our string
@@ -81,7 +81,7 @@ void StringStatistics::Update(const string_t &value) {
 		max_string_length = size;
 	}
 	if (type.id() == LogicalTypeId::VARCHAR && !has_unicode) {
-		auto unicode = Utf8Proc::Analyze((const char*) data, size);
+		auto unicode = Utf8Proc::Analyze((const char *)data, size);
 		if (unicode == UnicodeType::UNICODE) {
 			has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
@@ -91,7 +91,7 @@ void StringStatistics::Update(const string_t &value) {
 }
 
 void StringStatistics::Merge(const BaseStatistics &other_) {
-	auto &other = (const StringStatistics&) other_;
+	auto &other = (const StringStatistics &)other_;
 	if (string_value_comparison(other.min, MAX_STRING_MINMAX_SIZE, min) < 0) {
 		memcpy(min, other.min, MAX_STRING_MINMAX_SIZE);
 	}
@@ -105,7 +105,7 @@ void StringStatistics::Merge(const BaseStatistics &other_) {
 }
 
 bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string constant) {
-	auto data = (const_data_ptr_t) constant.c_str();
+	auto data = (const_data_ptr_t)constant.c_str();
 	auto size = constant.size();
 
 	idx_t value_size = size > MAX_STRING_MINMAX_SIZE ? MAX_STRING_MINMAX_SIZE : size;
@@ -127,54 +127,61 @@ bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string const
 
 string StringStatistics::ToString() {
 	idx_t min_len, max_len;
-	for(min_len = 0; min_len < MAX_STRING_MINMAX_SIZE; min_len++) {
+	for (min_len = 0; min_len < MAX_STRING_MINMAX_SIZE; min_len++) {
 		if (min[min_len] == '\0') {
 			break;
 		}
 	}
-	for(max_len = 0; max_len < MAX_STRING_MINMAX_SIZE; max_len++) {
+	for (max_len = 0; max_len < MAX_STRING_MINMAX_SIZE; max_len++) {
 		if (max[max_len] == '\0') {
 			break;
 		}
 	}
-	return StringUtil::Format("String Statistics [Has Null: %s, Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
-	    has_null ? "true" : "false", string((const char*) min, min_len), string((const char*) max, max_len),
-		has_unicode ? "true" : "false", max_string_length);
+	return StringUtil::Format(
+	    "String Statistics [Has Null: %s, Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
+	    has_null ? "true" : "false", string((const char *)min, min_len), string((const char *)max, max_len),
+	    has_unicode ? "true" : "false", max_string_length);
 }
 
 void StringStatistics::Verify(Vector &vector, idx_t count) {
 	BaseStatistics::Verify(vector, count);
 
-	string_t min_string((const char*) min, MAX_STRING_MINMAX_SIZE);
-	string_t max_string((const char*) max, MAX_STRING_MINMAX_SIZE);
+	string_t min_string((const char *)min, MAX_STRING_MINMAX_SIZE);
+	string_t max_string((const char *)max, MAX_STRING_MINMAX_SIZE);
 
 	VectorData vdata;
 	vector.Orrify(count, vdata);
-	auto data = (string_t *) vdata.data;
-	for(idx_t i = 0; i < count; i++) {
+	auto data = (string_t *)vdata.data;
+	for (idx_t i = 0; i < count; i++) {
 		auto index = vdata.sel->get_index(i);
 		if ((*vdata.nullmask)[index]) {
 			continue;
 		}
 		auto value = data[index];
 		if (value.GetSize() > max_string_length) {
-			throw InternalException("Statistics mismatch: string value exceeds maximum string length.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+			throw InternalException(
+			    "Statistics mismatch: string value exceeds maximum string length.\nStatistics: %s\nVector: %s",
+			    ToString(), vector.ToString(count));
 		}
 		if (type.id() == LogicalTypeId::VARCHAR && !has_unicode) {
 			auto unicode = Utf8Proc::Analyze(value.GetDataUnsafe(), value.GetSize());
 			if (unicode == UnicodeType::UNICODE) {
-				throw InternalException("Statistics mismatch: string value contains unicode, but statistics says it shouldn't.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+				throw InternalException("Statistics mismatch: string value contains unicode, but statistics says it "
+				                        "shouldn't.\nStatistics: %s\nVector: %s",
+				                        ToString(), vector.ToString(count));
 			} else if (unicode == UnicodeType::INVALID) {
 				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString(count));
 			}
 		}
 		if (LessThan::Operation(data[index], min_string)) {
-			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
+			                        ToString(), vector.ToString(count));
 		}
 		if (GreaterThan::Operation(data[index], max_string)) {
-			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s", ToString(), vector.ToString(count));
+			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
+			                        ToString(), vector.ToString(count));
 		}
 	}
 }
 
-}
+} // namespace duckdb

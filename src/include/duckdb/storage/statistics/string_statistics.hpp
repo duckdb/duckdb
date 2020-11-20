@@ -15,6 +15,7 @@ namespace duckdb {
 class StringStatistics : public BaseStatistics {
 public:
 	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
+
 public:
 	StringStatistics(LogicalType type);
 
@@ -43,4 +44,4 @@ public:
 	string ToString() override;
 };
 
-}
+} // namespace duckdb

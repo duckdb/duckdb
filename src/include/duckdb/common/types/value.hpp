@@ -122,7 +122,7 @@ public:
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
-	template<class T> T &GetValueUnsafe() {
+	template <class T> T &GetValueUnsafe() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValueUnsafe");
 	}
 
@@ -248,13 +248,13 @@ template <> float Value::GetValue() const;
 template <> double Value::GetValue() const;
 template <> uintptr_t Value::GetValue() const;
 
-template <> int8_t& Value::GetValueUnsafe();
-template <> int16_t& Value::GetValueUnsafe();
-template <> int32_t& Value::GetValueUnsafe();
-template <> int64_t& Value::GetValueUnsafe();
-template <> hugeint_t& Value::GetValueUnsafe();
-template <> string& Value::GetValueUnsafe();
-template <> float& Value::GetValueUnsafe();
-template <> double& Value::GetValueUnsafe();
+template <> int8_t &Value::GetValueUnsafe();
+template <> int16_t &Value::GetValueUnsafe();
+template <> int32_t &Value::GetValueUnsafe();
+template <> int64_t &Value::GetValueUnsafe();
+template <> hugeint_t &Value::GetValueUnsafe();
+template <> string &Value::GetValueUnsafe();
+template <> float &Value::GetValueUnsafe();
+template <> double &Value::GetValueUnsafe();
 
 } // namespace duckdb

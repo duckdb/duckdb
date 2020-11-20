@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get, unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get,
+                                                                     unique_ptr<LogicalOperator> *node_ptr) {
 	if (get.function.cardinality) {
 		node_stats = get.function.cardinality(context, get.bind_data.get());
 	}
@@ -11,7 +12,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		// no column statistics to get
 		return move(node_stats);
 	}
-	for(idx_t i = 0; i < get.column_ids.size(); i++) {
+	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		auto stats = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
 		if (stats) {
 			ColumnBinding binding(get.table_index, i);
@@ -19,10 +20,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		}
 	}
 	// push table filters into the statistics
-	for(idx_t i = 0; i < get.tableFilters.size(); i++) {
+	for (idx_t i = 0; i < get.tableFilters.size(); i++) {
 		auto &tableFilter = get.tableFilters[i];
 		idx_t column_index;
-		for(column_index = 0; column_index < get.column_ids.size(); column_index++) {
+		for (column_index = 0; column_index < get.column_ids.size(); column_index++) {
 			if (get.column_ids[column_index] == tableFilter.column_index) {
 				break;
 			}
@@ -40,7 +41,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			continue;
 		}
 		auto propagate_result = PropagateComparison(*entry->second, *constant_stats, tableFilter.comparison_type);
-		switch(propagate_result) {
+		switch (propagate_result) {
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 			// filter is always true; it is useless to execute it
 			// erase this condition
@@ -61,4 +62,4 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 	return move(node_stats);
 }
 
-}
+} // namespace duckdb

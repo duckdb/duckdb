@@ -43,7 +43,8 @@ public:
 	};
 
 public:
-	JoinOrderOptimizer(ClientContext &context) : context(context) {}
+	JoinOrderOptimizer(ClientContext &context) : context(context) {
+	}
 
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);

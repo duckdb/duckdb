@@ -5,8 +5,10 @@ namespace duckdb {
 using namespace std;
 
 BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
-                                             unique_ptr<AggregateFunction> aggregate, unique_ptr<FunctionData> bind_info)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)), bind_info(move(bind_info)) {
+                                             unique_ptr<AggregateFunction> aggregate,
+                                             unique_ptr<FunctionData> bind_info)
+    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)),
+      bind_info(move(bind_info)) {
 }
 
 string BoundWindowExpression::ToString() const {

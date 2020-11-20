@@ -101,7 +101,8 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 			// for SEMI or INNER join: empty RHS means empty result
 			return;
 		}
-		D_ASSERT(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI || join_type == JoinType::RIGHT);
+		D_ASSERT(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI ||
+		         join_type == JoinType::RIGHT);
 		// pull a chunk from the LHS
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {

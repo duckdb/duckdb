@@ -53,7 +53,8 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 			return move(root->children[1 - constant_child]);
 		} else if (constant->value == 0) {
 			// multiply by zero: replace with constant or null
-			return ExpressionRewriter::ConstantOrNull(move(root->children[1 - constant_child]), Value::Numeric(root->return_type, 0));
+			return ExpressionRewriter::ConstantOrNull(move(root->children[1 - constant_child]),
+			                                          Value::Numeric(root->return_type, 0));
 		}
 	} else {
 		D_ASSERT(func_name == "/");

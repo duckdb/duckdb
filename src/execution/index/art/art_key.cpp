@@ -41,7 +41,7 @@ uint32_t Key::EncodeFloat(float x) {
 	if (x < -FLT_MAX) {
 		return 0;
 	}
-	buff = Load<uint32_t>((const_data_ptr_t) &x);
+	buff = Load<uint32_t>((const_data_ptr_t)&x);
 	if ((buff & (1u << 31)) == 0) { //! +0 and positive numbers
 		buff |= (1u << 31);
 	} else {          //! negative numbers
@@ -67,7 +67,7 @@ uint64_t Key::EncodeDouble(double x) {
 	if (x < -DBL_MAX) {
 		return 0;
 	}
-	buff = Load<uint64_t>((const_data_ptr_t) &x);
+	buff = Load<uint64_t>((const_data_ptr_t)&x);
 	if (buff < (1ull << 63)) { //! +0 and positive numbers
 		buff += (1ull << 63);
 	} else {          //! negative numbers

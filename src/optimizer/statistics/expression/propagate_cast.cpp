@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics *input_, LogicalType target) {
-	auto &input = (NumericStatistics &) *input_;
+static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics *input_,
+                                                                         LogicalType target) {
+	auto &input = (NumericStatistics &)*input_;
 
 	Value min = input.min, max = input.max;
 	if (!min.TryCastAs(target) || !max.TryCastAs(target)) {
@@ -18,7 +19,7 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 }
 
 static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics *input, LogicalType target) {
-	switch(target.InternalType()) {
+	switch (target.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -33,12 +34,13 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	}
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,
+                                                                     unique_ptr<Expression> *expr_ptr) {
 	auto child_stats = PropagateExpression(cast.child);
 	if (!child_stats) {
 		return nullptr;
 	}
-	switch(cast.child->return_type.InternalType()) {
+	switch (cast.child->return_type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -53,4 +55,4 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	}
 }
 
-}
+} // namespace duckdb

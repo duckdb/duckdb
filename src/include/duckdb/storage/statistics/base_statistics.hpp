@@ -20,13 +20,16 @@ class Vector;
 
 class BaseStatistics {
 public:
-	BaseStatistics(LogicalType type) : type(type), has_null(false) {}
-	virtual ~BaseStatistics() {}
+	BaseStatistics(LogicalType type) : type(type), has_null(false) {
+	}
+	virtual ~BaseStatistics() {
+	}
 
 	//! The type of the logical segment
 	LogicalType type;
 	//! Whether or not the segment can contain NULL values
 	bool has_null;
+
 public:
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
 
@@ -40,4 +43,4 @@ public:
 	virtual string ToString();
 };
 
-}
+} // namespace duckdb

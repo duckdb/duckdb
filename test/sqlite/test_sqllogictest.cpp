@@ -337,11 +337,11 @@ static void print_header(string header) {
 static void print_sql(string sql) {
 	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
 	auto tokens = Parser::Tokenize(sql);
-	for(idx_t i = 0; i < tokens.size(); i++) {
+	for (idx_t i = 0; i < tokens.size(); i++) {
 		auto &token = tokens[i];
-		idx_t next = i  + 1 < tokens.size() ? tokens[i + 1].start : sql.size();
+		idx_t next = i + 1 < tokens.size() ? tokens[i + 1].start : sql.size();
 		// adjust the highlighting based on the type
-		switch(token.type) {
+		switch (token.type) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
@@ -360,7 +360,7 @@ static void print_sql(string sql) {
 		// print the current token
 		std::cerr << sql.substr(token.start, next - token.start);
 		// reset and move to the next token
-		std::cerr <<  termcolor::reset;
+		std::cerr << termcolor::reset;
 	}
 	std::cerr << std::endl;
 }
@@ -1472,30 +1472,17 @@ struct AutoRegTests {
 		    "evidence/slt_lang_dropindex.test",                // "
 		    "evidence/slt_lang_createtrigger.test",            // "
 		    "evidence/slt_lang_droptrigger.test",              // "
-		    "evidence/slt_lang_update.test",                    //  Multiple assignments to same column "x"
+		    "evidence/slt_lang_update.test",                   //  Multiple assignments to same column "x"
 		    // these fail because of overflows in multiplications (sqlite does automatic upcasting)
-		    "random/aggregates/slt_good_51.test",
-		    "random/aggregates/slt_good_73.test",
-		    "random/aggregates/slt_good_3.test",
-		    "random/aggregates/slt_good_64.test",
-		    "random/aggregates/slt_good_122.test",
-		    "random/aggregates/slt_good_110.test",
-		    "random/aggregates/slt_good_101.test",
-		    "random/aggregates/slt_good_56.test",
-		    "random/aggregates/slt_good_75.test",
-		    "random/expr/slt_good_51.test",
-		    "random/expr/slt_good_77.test",
-		    "random/expr/slt_good_66.test",
-		    "random/expr/slt_good_0.test",
-		    "random/expr/slt_good_61.test",
-		    "random/expr/slt_good_47.test",
-		    "random/expr/slt_good_11.test",
-		    "random/expr/slt_good_40.test",
-		    "random/expr/slt_good_42.test",
-		    "random/expr/slt_good_27.test",
-		    "random/expr/slt_good_103.test",
-		    "random/expr/slt_good_75.test"
-		};
+		    "random/aggregates/slt_good_51.test", "random/aggregates/slt_good_73.test",
+		    "random/aggregates/slt_good_3.test", "random/aggregates/slt_good_64.test",
+		    "random/aggregates/slt_good_122.test", "random/aggregates/slt_good_110.test",
+		    "random/aggregates/slt_good_101.test", "random/aggregates/slt_good_56.test",
+		    "random/aggregates/slt_good_75.test", "random/expr/slt_good_51.test", "random/expr/slt_good_77.test",
+		    "random/expr/slt_good_66.test", "random/expr/slt_good_0.test", "random/expr/slt_good_61.test",
+		    "random/expr/slt_good_47.test", "random/expr/slt_good_11.test", "random/expr/slt_good_40.test",
+		    "random/expr/slt_good_42.test", "random/expr/slt_good_27.test", "random/expr/slt_good_103.test",
+		    "random/expr/slt_good_75.test"};
 		FileSystem fs;
 		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 		listFiles(fs, fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test"), [excludes](const string &path) {

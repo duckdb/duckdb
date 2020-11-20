@@ -28,7 +28,10 @@ typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, FunctionData *bind_data, Vector &result, idx_t count);
 //! The type used for propagating statistics in aggregate functions (optional)
-typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr, FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats, NodeStatistics *node_stats);
+typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
+                                                             FunctionData *bind_data,
+                                                             vector<unique_ptr<BaseStatistics>> &child_stats,
+                                                             NodeStatistics *node_stats);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
                                                               vector<unique_ptr<Expression>> &arguments);
@@ -43,7 +46,8 @@ public:
 	AggregateFunction(string name, vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr)
+	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_statistics_t statistics = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
 	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), bind(bind),
 	      destructor(destructor), statistics(statistics) {
@@ -52,7 +56,8 @@ public:
 	AggregateFunction(vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr)
+	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_statistics_t statistics = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
 	                        simple_update, bind, destructor, statistics) {
 	}

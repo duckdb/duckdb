@@ -213,23 +213,23 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	if (tableFilter.size() == 1) {
 		switch (tableFilter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			templated_select_operation<Equals>(sel, result, state.current->type.InternalType(), source_data, source_nullmask,
-			                                   tableFilter[0].constant, approved_tuple_count);
+			templated_select_operation<Equals>(sel, result, state.current->type.InternalType(), source_data,
+			                                   source_nullmask, tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
-			templated_select_operation<LessThan>(sel, result, state.current->type.InternalType(), source_data, source_nullmask,
-			                                     tableFilter[0].constant, approved_tuple_count);
+			templated_select_operation<LessThan>(sel, result, state.current->type.InternalType(), source_data,
+			                                     source_nullmask, tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			templated_select_operation<GreaterThan>(sel, result, state.current->type.InternalType(), source_data, source_nullmask,
-			                                        tableFilter[0].constant, approved_tuple_count);
+			templated_select_operation<GreaterThan>(sel, result, state.current->type.InternalType(), source_data,
+			                                        source_nullmask, tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			templated_select_operation<LessThanEquals>(sel, result, state.current->type.InternalType(), source_data, source_nullmask,
-			                                           tableFilter[0].constant, approved_tuple_count);
+			templated_select_operation<LessThanEquals>(sel, result, state.current->type.InternalType(), source_data,
+			                                           source_nullmask, tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
@@ -243,29 +243,29 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 		}
 	} else {
 		D_ASSERT(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+		         tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
 		D_ASSERT(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		       tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		         tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
 
 		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThan, LessThan>(
-				    sel, result, state.current->type.InternalType(), source_data, source_nullmask, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
 			} else {
 				templated_select_operation_between<GreaterThan, LessThanEquals>(
-				    sel, result, state.current->type.InternalType(), source_data, source_nullmask, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
 			}
 		} else {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThanEquals, LessThan>(
-				    sel, result, state.current->type.InternalType(), source_data, source_nullmask, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
 			} else {
 				templated_select_operation_between<GreaterThanEquals, LessThanEquals>(
-				    sel, result, state.current->type.InternalType(), source_data, source_nullmask, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
 			}
 		}
 	}
@@ -374,7 +374,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	}
 	case PhysicalType::INTERVAL: {
 		templated_assignment<interval_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                             approved_tuple_count);
+		                                 approved_tuple_count);
 		break;
 	}
 	default:
@@ -474,8 +474,7 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-template<class T>
-static inline void update_numeric_statistics_internal(T new_value, T &min, T &max) {
+template <class T> static inline void update_numeric_statistics_internal(T new_value, T &min, T &max) {
 	if (LessThan::Operation(new_value, min)) {
 		min = new_value;
 	}
@@ -484,55 +483,45 @@ static inline void update_numeric_statistics_internal(T new_value, T &min, T &ma
 	}
 }
 
-template<class T>
-static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value);
+template <class T> static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value);
 
-template<>
-inline void update_numeric_statistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
-	auto &nstats = (NumericStatistics &) *stats.statistics;
+template <> inline void update_numeric_statistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
 }
 
-template<>
-inline void update_numeric_statistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
-	auto &nstats = (NumericStatistics &) *stats.statistics;
+template <> inline void update_numeric_statistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
 }
 
-template<>
-inline void update_numeric_statistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
-	auto &nstats = (NumericStatistics &) *stats.statistics;
+template <> inline void update_numeric_statistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
 }
 
-template<>
-inline void update_numeric_statistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
-	auto &nstats = (NumericStatistics &) *stats.statistics;
+template <> inline void update_numeric_statistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
 }
 
-template<>
-inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
-	auto &nstats = (NumericStatistics &) *stats.statistics;
+template <> inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
 }
 
-template<>
-inline void update_numeric_statistics<float>(SegmentStatistics &stats, float new_value) {
-	auto &nstats = (NumericStatistics &) *stats.statistics;
+template <> inline void update_numeric_statistics<float>(SegmentStatistics &stats, float new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
 }
 
-template<>
-inline void update_numeric_statistics<double>(SegmentStatistics &stats, double new_value) {
-	auto &nstats = (NumericStatistics &) *stats.statistics;
+template <> inline void update_numeric_statistics<double>(SegmentStatistics &stats, double new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
 }
 
-template<>
-void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
+template <> void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
 }
-
 
 template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,

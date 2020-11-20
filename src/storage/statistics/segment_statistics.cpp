@@ -27,12 +27,12 @@ bool SegmentStatistics::CheckZonemap(TableFilter &filter) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		return ((NumericStatistics &) *statistics).CheckZonemap(filter.comparison_type, filter.constant);
+		return ((NumericStatistics &)*statistics).CheckZonemap(filter.comparison_type, filter.constant);
 	case PhysicalType::VARCHAR:
-		return ((StringStatistics &) *statistics).CheckZonemap(filter.comparison_type, filter.constant.ToString());
+		return ((StringStatistics &)*statistics).CheckZonemap(filter.comparison_type, filter.constant.ToString());
 	default:
 		return true;
 	}
 }
 
-}
+} // namespace duckdb
