@@ -304,6 +304,9 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		SortCollectionForWindow(wexpr, input, output, sort_collection);
 	}
 
+
+	// TODO we could evaluate those expressions in parallel
+
 	// evaluate inner expressions of window functions, could be more complex
 	ChunkCollection payload_collection;
 	vector<Expression *> exprs;
@@ -525,6 +528,7 @@ unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
 void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
                           DataChunk &input) {
 	auto &lstate = (WindowLocalState &)lstate_;
+	// TODO dont copy here
 	lstate.chunks.Append(input);
 }
 
@@ -532,6 +536,7 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gst
 	auto &gstate = (WindowGlobalState &)gstate_;
 	auto &lstate = (WindowLocalState &)lstate_;
 	lock_guard<mutex> glock(gstate.lock);
+	// TODO dont copy here
 	gstate.chunks.Append(lstate.chunks);
 }
 
@@ -541,6 +546,10 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 
 	ChunkCollection &big_data = gstate.chunks;
 	ChunkCollection &window_results = gstate.window_results;
+
+    if (big_data.count == 0) {
+        return;
+    }
 
 	vector<LogicalType> window_types;
 	for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
