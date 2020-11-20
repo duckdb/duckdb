@@ -155,7 +155,7 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 	if (rhs_negative) {
 		NegateInPlace(rhs);
 	}
-#if (__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
+#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
 	__uint128_t left = __uint128_t(lhs.lower) + (__uint128_t(lhs.upper) << 64);
 	__uint128_t right = __uint128_t(rhs.lower) + (__uint128_t(rhs.upper) << 64);
 	__uint128_t result_i128;
