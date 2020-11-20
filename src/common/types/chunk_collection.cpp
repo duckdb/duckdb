@@ -24,8 +24,34 @@ void ChunkCollection::Verify() {
 
 void ChunkCollection::Append(ChunkCollection &other) {
 	for (auto &chunk : other.chunks) {
-		Append(*chunk.get());
+		Append(*chunk);
 	}
+}
+
+void ChunkCollection::Merge(ChunkCollection &other) {
+	if (other.count == 0) {
+		return;
+	}
+	if (count == 0) {
+		chunks = move(other.chunks);
+		types = move(other.types);
+		count = other.count;
+		return;
+	}
+	unique_ptr<DataChunk> old_back;
+	if (!chunks.empty() && chunks.back()->size() != STANDARD_VECTOR_SIZE) {
+		old_back = move(chunks.back());
+		chunks.pop_back();
+		count -= old_back->size();
+	}
+	for (auto &chunk : other.chunks) {
+		chunks.push_back(move(chunk));
+	}
+	count += other.count;
+	if (old_back) {
+		Append(*old_back);
+	}
+	Verify();
 }
 
 void ChunkCollection::Append(DataChunk &new_chunk) {
