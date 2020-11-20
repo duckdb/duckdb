@@ -118,12 +118,12 @@ static void pragma_disable_force_parallelism(ClientContext &context, FunctionPar
 	context.force_parallelism = false;
 }
 
-static void pragma_enable_object_cache(ClientContext &context, FunctionParameters parameters){
-	context.object_cache_enable = true;
+static void pragma_enable_object_cache(ClientContext &context, FunctionParameters parameters) {
+	context.db.config.object_cache_enable = true;
 }
 
-static void pragma_disable_object_cache(ClientContext &context, FunctionParameters parameters){
-	context.object_cache_enable = false;
+static void pragma_disable_object_cache(ClientContext &context, FunctionParameters parameters) {
+	context.db.config.object_cache_enable = false;
 }
 
 static void pragma_log_query_path(ClientContext &context, FunctionParameters parameters) {
