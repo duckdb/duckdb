@@ -101,6 +101,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::WINDOW:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
 	case PhysicalOperatorType::TABLE_SCAN: {
@@ -183,6 +184,14 @@ void Pipeline::Schedule() {
 	case PhysicalOperatorType::HASH_JOIN: {
 		// schedule build side of the join
 		if (ScheduleOperator(sink->children[1].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
+	case PhysicalOperatorType::WINDOW: {
+		// schedule child op
+		if (ScheduleOperator(sink->children[0].get())) {
 			// all parallel tasks have been scheduled: return
 			return;
 		}
