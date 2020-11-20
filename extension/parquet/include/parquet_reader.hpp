@@ -75,6 +75,8 @@ public:
 	vector<LogicalType> return_types;
 	vector<string> names;
 
+	shared_ptr<ParquetFileMetadataCache> metadata;
+
 public:
 	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read);
 	void ReadChunk(ParquetReaderScanState &state, DataChunk &output);
@@ -82,11 +84,10 @@ public:
 	idx_t NumRows();
 	idx_t NumRowGroups();
 
-	ParquetFileMetadataCache *get_cached_metadata();
-	parquet::format::FileMetaData* get_file_metadata();
+	const parquet::format::FileMetaData *GetFileMetadata();
 
 private:
-	parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	void PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
 	bool PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx);
 	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
