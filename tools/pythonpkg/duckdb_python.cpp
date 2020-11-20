@@ -192,7 +192,7 @@ struct PandasScanState : public FunctionOperatorData {
 struct PandasScanFunction : public TableFunction {
 	PandasScanFunction()
 	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_function, pandas_scan_bind, pandas_scan_init,
-	                    nullptr, nullptr, pandas_scan_cardinality){};
+	                    nullptr, nullptr, nullptr, pandas_scan_cardinality){};
 
 	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                 unordered_map<string, Value> &named_parameters,
@@ -276,7 +276,7 @@ struct PandasScanFunction : public TableFunction {
 
 	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
 	                                                         vector<column_t> &column_ids,
-	                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	                                                         TableFilterSet *table_filters) {
 		return make_unique<PandasScanState>();
 	}
 
@@ -446,9 +446,9 @@ struct PandasScanFunction : public TableFunction {
 		state.position += this_count;
 	}
 
-	static idx_t pandas_scan_cardinality(const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> pandas_scan_cardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (PandasScanFunctionData &)*bind_data;
-		return data.row_count;
+		return make_unique<NodeStatistics>(data.row_count, data.row_count);
 	}
 };
 
@@ -747,7 +747,7 @@ struct DuckDBPyConnection {
 		}
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
-		for(idx_t i = 0; i + 1 < statements.size(); i++) {
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto res = connection->Query(move(statements[i]));
 			if (!res->success) {
 				throw runtime_error(res->error);
@@ -1332,10 +1332,10 @@ enum PySQLTokenType {
 static py::object py_tokenize(string query) {
 	auto tokens = Parser::Tokenize(query);
 	py::list result;
-	for(auto &token : tokens) {
+	for (auto &token : tokens) {
 		auto tuple = py::tuple(2);
 		tuple[0] = token.start;
-		switch(token.type) {
+		switch (token.type) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 			tuple[1] = PySQLTokenIdentifier;
 			break;
@@ -1365,17 +1365,18 @@ PYBIND11_MODULE(duckdb, m) {
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
 	      py::arg("database") = ":memory:", py::arg("read_only") = false);
-	m.def("tokenize", py_tokenize, "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
+	m.def("tokenize", py_tokenize,
+	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
 	      "used for e.g. syntax highlighting",
-		  py::arg("query"));
-    py::enum_<PySQLTokenType>(m, "token_type")
-        .value("identifier", PySQLTokenType::PySQLTokenIdentifier)
-        .value("numeric_const", PySQLTokenType::PySQLTokenNumericConstant)
-        .value("string_const", PySQLTokenType::PySQLTokenStringConstant)
-        .value("operator", PySQLTokenType::PySQLTokenOperator)
-        .value("keyword", PySQLTokenType::PySQLTokenKeyword)
-        .value("comment", PySQLTokenType::PySQLTokenComment)
-        .export_values();
+	      py::arg("query"));
+	py::enum_<PySQLTokenType>(m, "token_type")
+	    .value("identifier", PySQLTokenType::PySQLTokenIdentifier)
+	    .value("numeric_const", PySQLTokenType::PySQLTokenNumericConstant)
+	    .value("string_const", PySQLTokenType::PySQLTokenStringConstant)
+	    .value("operator", PySQLTokenType::PySQLTokenOperator)
+	    .value("keyword", PySQLTokenType::PySQLTokenKeyword)
+	    .value("comment", PySQLTokenType::PySQLTokenComment)
+	    .export_values();
 
 	auto conn_class =
 	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection")

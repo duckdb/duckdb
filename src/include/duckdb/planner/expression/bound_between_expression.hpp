@@ -29,5 +29,13 @@ public:
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<Expression> Copy() override;
+
+public:
+	ExpressionType LowerComparisonType() {
+		return lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
+	}
+	ExpressionType UpperComparisonType() {
+		return upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+	}
 };
 } // namespace duckdb

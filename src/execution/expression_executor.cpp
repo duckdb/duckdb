@@ -1,6 +1,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -87,6 +88,9 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
 	D_ASSERT(expr.return_type == vector.type);
 	vector.Verify(count);
+	if (expr.stats) {
+		expr.stats->Verify(vector, count);
+	}
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr, ExpressionExecutorState &state) {

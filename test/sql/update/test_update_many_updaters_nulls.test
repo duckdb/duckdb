@@ -2,6 +2,21 @@
 # description: Test update behavior with multiple updaters and NULL values
 # group: [update]
 
+statement ok con1
+PRAGMA enable_verification
+
+statement ok con2
+PRAGMA enable_verification
+
+statement ok con3
+PRAGMA enable_verification
+
+statement ok con4
+PRAGMA enable_verification
+
+statement ok con5
+PRAGMA enable_verification
+
 # this test contains five query connections (con1, con2, con3, con4, con5)
 # and one updating connection (updater)
 # create a table, filled with 3 values (1), (2), (3)

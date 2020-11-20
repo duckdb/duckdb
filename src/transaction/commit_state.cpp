@@ -84,7 +84,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		} else if (entry->type == CatalogType::SEQUENCE_ENTRY) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
-			// do nothing, we log the query to drop this
+			// do nothing, prepared statements aren't persisted to disk
 		} else {
 			throw NotImplementedException("Don't know how to drop this type!");
 		}
@@ -98,8 +98,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::COPY_FUNCTION_ENTRY:
 	case CatalogType::PRAGMA_FUNCTION_ENTRY:
 	case CatalogType::COLLATION_ENTRY:
-
-		// do nothing, we log the query to recreate this
+		// do nothing, these entries are not persisted to disk
 		break;
 	default:
 		throw NotImplementedException("UndoBuffer - don't know how to write this entry to the WAL");
@@ -179,7 +178,6 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = (DeleteInfo *)data;
-		info->table->info->cardinality -= info->count;
 		if (HAS_LOG && !info->table->info->IsTemporary()) {
 			WriteDelete(info);
 		}

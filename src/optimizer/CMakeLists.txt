@@ -2,6 +2,7 @@ add_subdirectory(matcher)
 add_subdirectory(join_order)
 add_subdirectory(pushdown)
 add_subdirectory(rule)
+add_subdirectory(statistics)
 
 add_library_unity(
   duckdb_optimizer
@@ -17,6 +18,7 @@ add_library_unity(
   expression_rewriter.cpp
   regex_range_filter.cpp
   remove_unused_columns.cpp
+  statistics_propagator.cpp
   topn_optimizer.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>

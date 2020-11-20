@@ -26,7 +26,7 @@ public:
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_,
                                      unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
-                                     vector<string> names_p, unordered_map<idx_t, vector<TableFilter>> table_filters_p)
+                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
       bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
       table_filters(move(table_filters_p)) {
@@ -48,10 +48,10 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				// parallel scan init
 				state.parallel_state = task_info->second;
 				state.operator_data = function.parallel_init(context.client, bind_data.get(), state.parallel_state,
-				                                             column_ids, table_filters);
+				                                             column_ids, table_filters.get());
 			} else {
 				// sequential scan init
-				state.operator_data = function.init(context.client, bind_data.get(), column_ids, table_filters);
+				state.operator_data = function.init(context.client, bind_data.get(), column_ids, table_filters.get());
 			}
 			if (!state.operator_data) {
 				// no operator data returned: nothing to scan
@@ -107,15 +107,15 @@ string PhysicalTableScan::ParamsToString() const {
 			result += names[column_ids[i]];
 		}
 	}
-	if (table_filters.size() > 0) {
+	if (table_filters) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
-		for (auto &f : table_filters) {
+		for (auto &f : table_filters->filters) {
 			for (auto &filter : f.second) {
 				if (filter.column_index < names.size()) {
 					result += "\n";
 					result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
-							filter.constant.ToString();
+					          filter.constant.ToString();
 				}
 			}
 		}

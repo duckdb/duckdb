@@ -176,7 +176,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
 		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
-		aggregate.function.finalize(state_vector, chunk.data[aggr_idx], 1);
+		aggregate.function.finalize(state_vector, aggregate.bind_info.get(), chunk.data[aggr_idx], 1);
 	}
 	state->finished = true;
 }

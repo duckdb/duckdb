@@ -1,7 +1,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 using namespace std;
 
@@ -27,7 +27,7 @@ struct BaseCountFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		target[idx] = *state;
 	}
 };
@@ -54,12 +54,26 @@ AggregateFunction CountStarFun::GetFunction() {
 	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
 }
 
+unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAggregateExpression &expr,
+                                                 FunctionData *bind_data,
+                                                 vector<unique_ptr<BaseStatistics>> &child_stats,
+                                                 NodeStatistics *node_stats) {
+	if (child_stats[0] && !child_stats[0]->has_null && !expr.distinct) {
+		// count on a column without null values: use count star
+		expr.function = CountStarFun::GetFunction();
+		expr.children.clear();
+	}
+	return nullptr;
+}
+
 void CountFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunction count_function = CountFun::GetFunction();
+	count_function.statistics = count_propagate_stats;
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments
 	count_function.arguments.clear();
+	count_function.statistics = nullptr;
 	count.AddFunction(count_function);
 	set.AddFunction(count);
 }

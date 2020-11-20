@@ -144,6 +144,71 @@ wo
 (empty)
 NULL
 
-# Negative length is invalid
-statement error
-SELECT substr('SQLite substr', 4, -1)
+# negative length
+query T
+SELECT substring(s, 2, -2) FROM strings
+----
+h
+w
+b
+NULL
+
+# negative offset and negative length
+query T
+SELECT substring(s, -2, -2) FROM strings
+----
+el
+or
+(empty)
+NULL
+
+# length 0
+query T
+SELECT substring(s, 2, 0) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+# no length
+query T
+SELECT substring(s, 2) FROM strings
+----
+ello
+orld
+(empty)
+NULL
+
+# very large offset and length
+query T
+SELECT substring(s, 2147483647, 2147483647) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+query T
+SELECT substring(s, 2147483647, -2147483647) FROM strings
+----
+hello
+world
+b
+NULL
+
+query T
+SELECT substring(s, -2147483647, 2147483647) FROM strings
+----
+hello
+world
+b
+NULL
+
+query T
+SELECT substring(s, -2147483647, -2147483647) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL

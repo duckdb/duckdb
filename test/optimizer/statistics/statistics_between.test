@@ -1,0 +1,180 @@
+# name: test/optimizer/statistics/statistics_between.test
+# description: Statistics propagation test with between expression
+# group: [statistics]
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# filter is out of range: no need to execute it
+query II
+EXPLAIN SELECT i=3 FROM integers WHERE i BETWEEN 0 AND 2
+----
+logical_opt	<!REGEX>:.*i=3.*
+
+# filter is in range: need to execute it
+query II
+EXPLAIN SELECT i=1 FROM integers WHERE i BETWEEN 0 AND 2
+----
+logical_opt	<REGEX>:.*i=1.*
+
+# between where lhs is bigger than rhs: we can prune this entirely
+query II
+EXPLAIN SELECT * FROM integers WHERE i BETWEEN 3 AND 2
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# now verify all of the results
+query I
+SELECT i=3 FROM integers WHERE i BETWEEN 0 AND 2;
+----
+0
+0
+
+query I
+SELECT i=1 FROM integers WHERE i BETWEEN 0 AND 2;
+----
+1
+0
+
+query I
+SELECT * FROM integers WHERE i BETWEEN 3 AND 2;
+----
+
+# now test the same with a subquery, where we don't have filter pushdown into the scan
+query II
+EXPLAIN SELECT i=3 FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2
+----
+logical_opt	<!REGEX>:.*i=3.*
+
+query II
+EXPLAIN SELECT i=1 FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2
+----
+logical_opt	<REGEX>:.*i=1.*
+
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 3 AND 2
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# wide between: both are always true, entire filter can be pruned
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 10;
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+# lower clause is always true: between should be converted into i <= 2
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2;
+----
+logical_opt	<REGEX>:.*i<=2.*
+
+# upper clause is always true: between should be converted into i >= 2
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 2 AND 10;
+----
+logical_opt	<REGEX>:.*i>=2.*
+
+# between is always false
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN -1 AND 0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT i BETWEEN -1 AND 0 FROM (SELECT * FROM integers LIMIT 10) integers(i);
+----
+logical_opt	<REGEX>:.*False.*
+
+# verify the results
+query I
+SELECT i=3 FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2;
+----
+0
+0
+
+query I
+SELECT i=1 FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2;
+----
+1
+0
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 3 AND 2;
+----
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 10;
+----
+1
+2
+3
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2;
+----
+1
+2
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 2 AND 10;
+----
+2
+3
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN -1 AND 0;
+----
+
+query I
+SELECT i BETWEEN -1 AND 0 FROM (SELECT * FROM integers LIMIT 10) integers(i);
+----
+0
+0
+0
+
+# now insert a null value
+statement ok
+INSERT INTO integers VALUES (NULL)
+
+# between is always false or null: we can still prune the entire filter
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN -1 AND 0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# however, if used in a select clause, we can only replace it with a constant_or_null clause
+query II
+EXPLAIN SELECT i BETWEEN -1 AND 0 FROM (SELECT * FROM integers LIMIT 10) integers(i);
+----
+logical_opt	<REGEX>:.*constant_or_null.*
+
+# in the case of null values we cannot prune the filter here
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 10;
+----
+logical_opt	<REGEX>:.*FILTER.*
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN -1 AND 0;
+----
+
+query I
+SELECT i BETWEEN -1 AND 0 FROM (SELECT * FROM integers LIMIT 10) integers(i);
+----
+0
+0
+0
+NULL
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 10;
+----
+1
+2
+3

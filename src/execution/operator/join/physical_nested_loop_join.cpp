@@ -281,7 +281,7 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 		}
 		if (state->fetch_next_left) {
 			// we exhausted all chunks on the right: move to the next chunk on the left
-			if (join_type == JoinType::LEFT || join_type == JoinType::OUTER) {
+			if (IsLeftOuterJoin(join_type)) {
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
 				if (state->left_found_match) {
@@ -297,7 +297,8 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
 				if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
-					// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we still need to output
+					// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we
+					// still need to output
 					ConstructFullOuterJoinResult(gstate.right_found_match.get(), gstate.right_data, chunk,
 					                             gstate.right_outer_position);
 				}
