@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -25,7 +26,6 @@ namespace duckdb {
 class ClientContext;
 class ColumnDefinition;
 class DataTable;
-class PersistentTableData;
 class StorageManager;
 class TableCatalogEntry;
 class Transaction;
