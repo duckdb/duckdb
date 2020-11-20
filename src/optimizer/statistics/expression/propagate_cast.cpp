@@ -15,7 +15,7 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 	}
 	auto stats = make_unique<NumericStatistics>(target, move(min), move(max));
 	stats->has_null = input.has_null;
-	return stats;
+	return move(stats);
 }
 
 static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics *input, LogicalType target) {
