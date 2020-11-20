@@ -111,7 +111,7 @@ template <> bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t 
 }
 
 template <> bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
-#if defined(__GNUC__) || defined(__clang__)
+#if (__GNUC__ >= 5) || defined(__clang__)
 	if (__builtin_add_overflow(left, right, &result)) {
 		return false;
 	}
