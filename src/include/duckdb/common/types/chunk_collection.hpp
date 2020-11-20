@@ -43,6 +43,8 @@ public:
 
 	//! Append another ChunkCollection directly to this ChunkCollection
 	void Append(ChunkCollection &other);
+	//! Merge is like Append but messes up the order and destroys the other collection
+	void Merge(ChunkCollection &other);
 
 	void Verify();
 
