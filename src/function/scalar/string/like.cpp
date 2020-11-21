@@ -1,18 +1,32 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-template <char PERCENTAGE, char UNDERSCORE>
+struct StandardCharacterReader {
+	static char Operation(const char *data, idx_t pos) {
+		return data[pos];
+	}
+};
+
+struct ASCIILCaseReader {
+	static char Operation(const char *data, idx_t pos) {
+		return (char) LowerFun::ASCIIToLowerMap[(uint8_t) data[pos]];
+	}
+};
+
+template <char PERCENTAGE, char UNDERSCORE, class READER = StandardCharacterReader>
 bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, idx_t plen, char escape) {
 	idx_t pidx = 0;
 	idx_t sidx = 0;
 	for (; pidx < plen && sidx < slen; pidx++) {
-		char pchar = pdata[pidx];
-		char schar = sdata[sidx];
+		char pchar = READER::Operation(pdata, pidx);
+		char schar = READER::Operation(sdata, sidx);
 		if (pchar == escape) {
 			pidx++;
 			if (pidx == plen) {
@@ -33,7 +47,7 @@ bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, i
 				return true; /* tail is acceptable */
 			}
 			for (; sidx < slen; sidx++) {
-				if (templated_like_operator<PERCENTAGE, UNDERSCORE>(sdata + sidx, slen - sidx, pdata + pidx,
+				if (templated_like_operator<PERCENTAGE, UNDERSCORE, READER>(sdata + sidx, slen - sidx, pdata + pidx,
 				                                                    plen - pidx, escape)) {
 					return true;
 				}
@@ -217,7 +231,6 @@ struct LikeOperator {
 	}
 };
 
-
 struct ILikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
 		auto str_data = str.GetDataUnsafe();
@@ -250,6 +263,18 @@ struct NotILikeOperator {
 	}
 };
 
+struct ILikeOperatorASCII {
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		return templated_like_operator<'%', '_', ASCIILCaseReader>(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
+	}
+};
+
+struct NotILikeOperatorASCII {
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		return !ILikeOperatorASCII::Operation<TA, TB, TR>(str, pattern);
+	}
+};
+
 struct GlobOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
 		return LikeFun::Glob(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize());
@@ -266,6 +291,22 @@ template <typename Func> static void like_escape_function(DataChunk &args, Expre
 	    str, pattern, escape, result, args.size(), Func::template Operation<string_t, string_t, string_t>);
 }
 
+template <class ASCII_OP>
+static unique_ptr<BaseStatistics> ilike_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
+                                                              FunctionData *bind_data,
+                                                              vector<unique_ptr<BaseStatistics>> &child_stats) {
+	D_ASSERT(child_stats.size() >= 1);
+	// can only propagate stats if the children have stats
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &sstats = (StringStatistics &)*child_stats[0];
+	if (!sstats.has_unicode) {
+		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP, true>;
+	}
+	return nullptr;
+}
+
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	// like
 	set.AddFunction(ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
@@ -278,10 +319,12 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator, true>));
 	// ilike
 	set.AddFunction(ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true>,
+								   false, nullptr, nullptr, ilike_propagate_stats<ILikeOperatorASCII>));
 	// not ilike
 	set.AddFunction(ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true>,
+								   false, nullptr, nullptr, ilike_propagate_stats<NotILikeOperatorASCII>));
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
