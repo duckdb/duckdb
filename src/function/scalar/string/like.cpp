@@ -217,9 +217,36 @@ struct LikeOperator {
 	}
 };
 
+
+struct ILikeOperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		auto str_data = str.GetDataUnsafe();
+		auto str_size = str.GetSize();
+		auto pat_data = pattern.GetDataUnsafe();
+		auto pat_size = pattern.GetSize();
+		// lowercase both the str and the pattern
+		idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
+		auto str_ldata = unique_ptr<char[]>(new char[str_llength]);
+		LowerFun::LowerCase(str_data, str_size, str_ldata.get());
+
+		idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
+		auto pat_ldata = unique_ptr<char[]>(new char[pat_llength]);
+		LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
+		string_t str_lcase(str_ldata.get(), str_llength);
+		string_t pat_lcase(pat_ldata.get(), pat_llength);
+		return like_operator(str_lcase, pat_lcase);
+	}
+};
+
 struct NotLikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
 		return !like_operator(str, pattern);
+	}
+};
+
+struct NotILikeOperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		return !ILikeOperator::Operation<TA, TB, TR>(str, pattern);
 	}
 };
 
@@ -240,13 +267,21 @@ template <typename Func> static void like_escape_function(DataChunk &args, Expre
 }
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
+	// like
 	set.AddFunction(ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
+	// not like
 	set.AddFunction(ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeOperator, true>));
-	// glob function
+	// glob
 	set.AddFunction(ScalarFunction("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator, true>));
+	// ilike
+	set.AddFunction(ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true>));
+	// not ilike
+	set.AddFunction(ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true>));
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
