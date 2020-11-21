@@ -188,6 +188,14 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::WINDOW: {
+		// schedule child op
+		if (ScheduleOperator(sink->children[0].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
 	default:
 		break;
 	}

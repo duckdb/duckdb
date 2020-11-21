@@ -13,6 +13,26 @@ using namespace std;
 
 namespace duckdb {
 
+class WindowGlobalState : public GlobalOperatorState {
+public:
+	WindowGlobalState(PhysicalWindow &_op, ClientContext &context) : op(_op) {
+	}
+
+	PhysicalWindow &op;
+	std::mutex lock;
+	ChunkCollection chunks;
+	ChunkCollection window_results;
+};
+
+class WindowLocalState : public LocalSinkState {
+public:
+	WindowLocalState(PhysicalWindow &_op) : op(_op) {
+	}
+
+	PhysicalWindow &op;
+	ChunkCollection chunks;
+};
+
 //! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
 public:
@@ -21,14 +41,12 @@ public:
 	}
 
 	idx_t position;
-	ChunkCollection tuples;
-	ChunkCollection window_results;
 };
 
 // this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types)), select_list(move(select_list)) {
+    : PhysicalSink(type, move(types)), select_list(move(select_list)) {
 }
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {
@@ -286,6 +304,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		SortCollectionForWindow(wexpr, input, output, sort_collection);
 	}
 
+	// TODO we could evaluate those expressions in parallel
+
 	// evaluate inner expressions of window functions, could be more complex
 	ChunkCollection payload_collection;
 	vector<Expression *> exprs;
@@ -471,47 +491,14 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
-	ChunkCollection &big_data = state->tuples;
-	ChunkCollection &window_results = state->window_results;
 
-	// this is a blocking operator, so compute complete result on first invocation
-	if (state->position == 0) {
-		do {
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			big_data.Append(state->child_chunk);
-		} while (state->child_chunk.size() != 0);
+	auto &gstate = (WindowGlobalState &)*sink_state;
 
-		if (big_data.count == 0) {
-			return;
-		}
+	ChunkCollection &big_data = gstate.chunks;
+	ChunkCollection &window_results = gstate.window_results;
 
-		vector<LogicalType> window_types;
-		for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-			window_types.push_back(select_list[expr_idx]->return_type);
-		}
-
-		for (idx_t i = 0; i < big_data.chunks.size(); i++) {
-			DataChunk window_chunk;
-			window_chunk.Initialize(window_types);
-			window_chunk.SetCardinality(big_data.chunks[i]->size());
-			for (idx_t col_idx = 0; col_idx < window_chunk.column_count(); col_idx++) {
-				window_chunk.data[col_idx].vector_type = VectorType::CONSTANT_VECTOR;
-				ConstantVector::SetNull(window_chunk.data[col_idx], true);
-			}
-
-			window_chunk.Verify();
-			window_results.Append(window_chunk);
-		}
-
-		D_ASSERT(window_results.column_count() == select_list.size());
-		idx_t window_output_idx = 0;
-		// we can have multiple window functions
-		for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-			// sort by partition and order clause in window def
-			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-			ComputeWindowExpression(wexpr, big_data, window_results, window_output_idx++);
-		}
+	if (big_data.count == 0) {
+		return;
 	}
 
 	if (state->position >= big_data.count) {
@@ -536,6 +523,78 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
 	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
+}
+
+void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+                          DataChunk &input) {
+	auto &lstate = (WindowLocalState &)lstate_;
+	lstate.chunks.Append(input);
+}
+
+void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gstate_, LocalSinkState &lstate_) {
+	auto &gstate = (WindowGlobalState &)gstate_;
+	auto &lstate = (WindowLocalState &)lstate_;
+	lock_guard<mutex> glock(gstate.lock);
+	gstate.chunks.Merge(lstate.chunks);
+}
+
+void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_) {
+	this->sink_state = move(gstate_);
+	auto &gstate = (WindowGlobalState &)*this->sink_state;
+
+	ChunkCollection &big_data = gstate.chunks;
+	ChunkCollection &window_results = gstate.window_results;
+
+	if (big_data.count == 0) {
+		return;
+	}
+
+	vector<LogicalType> window_types;
+	for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
+		window_types.push_back(select_list[expr_idx]->return_type);
+	}
+
+	for (idx_t i = 0; i < big_data.chunks.size(); i++) {
+		DataChunk window_chunk;
+		window_chunk.Initialize(window_types);
+		window_chunk.SetCardinality(big_data.chunks[i]->size());
+		for (idx_t col_idx = 0; col_idx < window_chunk.column_count(); col_idx++) {
+			window_chunk.data[col_idx].vector_type = VectorType::CONSTANT_VECTOR;
+			ConstantVector::SetNull(window_chunk.data[col_idx], true);
+		}
+
+		window_chunk.Verify();
+		window_results.Append(window_chunk);
+	}
+
+	D_ASSERT(window_results.column_count() == select_list.size());
+	idx_t window_output_idx = 0;
+	// we can have multiple window functions
+	for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
+		D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		// sort by partition and order clause in window def
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
+		ComputeWindowExpression(wexpr, big_data, window_results, window_output_idx++);
+	}
+}
+
+unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {
+	return make_unique<WindowLocalState>(*this);
+}
+
+unique_ptr<GlobalOperatorState> PhysicalWindow::GetGlobalState(ClientContext &context) {
+	return make_unique<WindowGlobalState>(*this, context);
+}
+
+string PhysicalWindow::ParamsToString() const {
+	string result;
+	for (idx_t i = 0; i < select_list.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += select_list[i]->GetName();
+	}
+	return result;
 }
 
 } // namespace duckdb
