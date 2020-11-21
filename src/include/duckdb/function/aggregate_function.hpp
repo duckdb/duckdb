@@ -97,6 +97,14 @@ public:
 	                                                                  bool is_distinct = false);
 
 public:
+	template <class STATE, class RESULT_TYPE, class OP>
+	static AggregateFunction NullaryAggregate(LogicalType return_type) {
+		return AggregateFunction(
+		    {}, return_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+		    AggregateFunction::NullaryScatterUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
+		    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::NullaryUpdate<STATE, OP>);
+	}
+
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction UnaryAggregate(LogicalType input_type, LogicalType return_type) {
 		return AggregateFunction(
@@ -130,6 +138,18 @@ public:
 
 	template <class STATE, class OP> static void StateInitialize(data_ptr_t state) {
 		OP::Initialize((STATE *)state);
+	}
+
+	template <class STATE, class OP>
+	static void NullaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
+		D_ASSERT(input_count == 0);
+		AggregateExecutor::NullaryScatter<STATE, OP>(states, count);
+	}
+
+	template <class STATE, class OP>
+	static void NullaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
+		D_ASSERT(input_count == 0);
+		AggregateExecutor::NullaryUpdate<STATE, OP>(state, count);
 	}
 
 	template <class STATE, class T, class OP>

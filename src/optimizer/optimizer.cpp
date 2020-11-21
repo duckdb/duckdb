@@ -42,7 +42,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	context.profiler.StartPhase("expression_rewriter");
-	rewriter.Apply(*plan);
+	rewriter.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
 	// perform filter pushdown

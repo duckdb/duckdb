@@ -12,16 +12,6 @@ struct BaseCountFunction {
 		*state = 0;
 	}
 
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		*state += 1;
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
-		*state += count;
-	}
-
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
 		*target += source;
 	}
@@ -33,12 +23,26 @@ struct BaseCountFunction {
 };
 
 struct CountStarFunction : public BaseCountFunction {
-	static bool IgnoreNull() {
-		return false;
+	template <class STATE, class OP> static void Operation(STATE *state, idx_t idx) {
+		*state += 1;
+	}
+
+	template <class STATE, class OP> static void ConstantOperation(STATE *state, idx_t count) {
+		*state += count;
 	}
 };
 
 struct CountFunction : public BaseCountFunction {
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		*state += 1;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		*state += count;
+	}
+
 	static bool IgnoreNull() {
 		return true;
 	}
@@ -50,8 +54,7 @@ AggregateFunction CountFun::GetFunction() {
 }
 
 AggregateFunction CountStarFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(
-	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
+	return AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 }
 
 unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAggregateExpression &expr,

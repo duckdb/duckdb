@@ -50,19 +50,13 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expr
 	                                            ConstantOrNull::Bind(value));
 }
 
-void ExpressionRewriter::Apply(LogicalOperator &root) {
-	// first apply the rules to child operators of this node (if any)
-	for (auto &child : root.children) {
-		Apply(*child);
-	}
-	// apply the rules to this node
-	if (root.expressions.size() == 0) {
-		// no expressions to apply rules on: return
-		return;
-	}
-	vector<Rule *> to_apply_rules;
+void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
+	VisitOperatorChildren(op);
+	this->op = &op;
+
+	to_apply_rules.clear();
 	for (auto &rule : rules) {
-		if (rule->logical_root && !rule->logical_root->Match(root.type)) {
+		if (rule->logical_root && !rule->logical_root->Match(op.type)) {
 			// this rule does not apply to this type of LogicalOperator
 			continue;
 		}
@@ -72,20 +66,22 @@ void ExpressionRewriter::Apply(LogicalOperator &root) {
 		// no rules to apply on this node
 		return;
 	}
-	for (idx_t i = 0; i < root.expressions.size(); i++) {
-		bool changes_made;
-		do {
-			changes_made = false;
-			root.expressions[i] =
-			    ExpressionRewriter::ApplyRules(root, to_apply_rules, move(root.expressions[i]), changes_made);
-		} while (changes_made);
-	}
+
+	VisitOperatorExpressions(op);
 
 	// if it is a LogicalFilter, we split up filter conjunctions again
-	if (root.type == LogicalOperatorType::LOGICAL_FILTER) {
-		auto &filter = (LogicalFilter &)root;
+	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+		auto &filter = (LogicalFilter &)op;
 		filter.SplitPredicates();
 	}
+}
+
+void ExpressionRewriter::VisitExpression(unique_ptr<Expression> *expression) {
+	bool changes_made;
+	do {
+		changes_made = false;
+		*expression = ExpressionRewriter::ApplyRules(*op, to_apply_rules, move(*expression), changes_made);
+	} while (changes_made);
 }
 
 } // namespace duckdb

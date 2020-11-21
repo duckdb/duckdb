@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 2.8.12)
 cmake_policy(SET CMP0026 NEW)
 cmake_policy(SET CMP0051 NEW)
 # if(APPLE) # needs to be before project() SET(CMAKE_CXX_FLAGS -stdlib=libc++)
