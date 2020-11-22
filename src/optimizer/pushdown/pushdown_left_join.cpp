@@ -39,7 +39,7 @@ static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, un
 	// attempt to flatten the expression by running the expression rewriter on it
 	auto filter = make_unique<LogicalFilter>();
 	filter->expressions.push_back(move(copy));
-	rewriter.Apply(*filter);
+	rewriter.VisitOperator(*filter);
 
 	// check if all expressions are foldable
 	for (idx_t i = 0; i < filter->expressions.size(); i++) {

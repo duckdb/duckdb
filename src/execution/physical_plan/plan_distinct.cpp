@@ -3,7 +3,6 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 
@@ -62,6 +61,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 			requires_projection = true;
 		}
 	}
+
+	child = ExtractAggregateExpressions(move(child), aggregates, groups);
 
 	// we add a physical hash aggregation in the plan to select the distinct groups
 	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, move(aggregates), move(groups),

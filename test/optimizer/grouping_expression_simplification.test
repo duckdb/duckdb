@@ -1,0 +1,17 @@
+# name: test/optimizer/grouping_expression_simplification.test
+# description: Make sure expressions are optimized in the groups too
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(t timestamp);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query I nosort year
+EXPLAIN SELECT COUNT(*) FROM test GROUP BY EXTRACT(year from t)
+----
+
+query I nosort year
+EXPLAIN SELECT COUNT(*) FROM test GROUP BY YEAR(t)
+----

@@ -17,6 +17,22 @@ struct FunctionData;
 
 class AggregateExecutor {
 private:
+	template <class STATE_TYPE, class OP>
+	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			OP::template Operation<STATE_TYPE, OP>(states[i], i);
+		}
+	}
+
+	template <class STATE_TYPE, class OP>
+	static inline void NullaryScatterLoop(STATE_TYPE **__restrict states, const SelectionVector &ssel, idx_t count) {
+
+		for (idx_t i = 0; i < count; i++) {
+			auto sidx = ssel.get_index(i);
+			OP::template Operation<STATE_TYPE, OP>(states[sidx], sidx);
+		}
+	}
+
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatLoop(INPUT_TYPE *__restrict idata, STATE_TYPE **__restrict states, nullmask_t &nullmask,
 	                                 idx_t count) {
@@ -131,6 +147,24 @@ private:
 	}
 
 public:
+	template <class STATE_TYPE, class OP> static void NullaryScatter(Vector &states, idx_t count) {
+		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
+			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
+			OP::template ConstantOperation<STATE_TYPE, OP>(*sdata, count);
+		} else if (states.vector_type == VectorType::FLAT_VECTOR) {
+			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			NullaryFlatLoop<STATE_TYPE, OP>(sdata, count);
+		} else {
+			VectorData sdata;
+			states.Orrify(count, sdata);
+			NullaryScatterLoop<STATE_TYPE, OP>((STATE_TYPE **)sdata.data, *sdata.sel, count);
+		}
+	}
+
+	template <class STATE_TYPE, class OP> static void NullaryUpdate(data_ptr_t state, idx_t count) {
+		OP::template ConstantOperation<STATE_TYPE, OP>((STATE_TYPE *)state, count);
+	}
+
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void UnaryScatter(Vector &input, Vector &states, idx_t count) {
 		if (input.vector_type == VectorType::CONSTANT_VECTOR && states.vector_type == VectorType::CONSTANT_VECTOR) {

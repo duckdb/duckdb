@@ -1,4 +1,4 @@
-# name: test/sql/function/string/test_string_split.test
+# name: test/sql/function/string/test_string_split.test_slow
 # description: String split test
 # group: [string]
 

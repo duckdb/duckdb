@@ -1,4 +1,4 @@
-# name: test/sql/types/string/test_scan_big_varchar.test
+# name: test/sql/types/string/test_scan_big_varchar.test_slow
 # description: Test scanning many big varchar strings with limited memory
 # group: [string]
 

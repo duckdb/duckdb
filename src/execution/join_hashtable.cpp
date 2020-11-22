@@ -275,9 +275,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
 		info.payload_chunk.SetCardinality(keys);
-		for (idx_t i = 0; i < 2; i++) {
-			info.payload_chunk.data[i].Reference(keys.data[info.correlated_types.size()]);
-		}
+		info.payload_chunk.data[0].Reference(keys.data[info.correlated_types.size()]);
 		info.correlated_counts->AddChunk(info.group_chunk, info.payload_chunk);
 	}
 
