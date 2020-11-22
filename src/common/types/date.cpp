@@ -118,7 +118,6 @@ static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &re
 	return false;
 }
 
-// FIXME actually interpret length here
 bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool strict) {
 
 	pos = 0;
@@ -281,10 +280,23 @@ date_t Date::EpochToDate(int64_t epoch) {
 int64_t Date::Epoch(date_t date) {
 	return ((int64_t)date - EPOCH_DATE) * SECONDS_PER_DAY;
 }
-int32_t Date::ExtractYear(date_t date) {
-	int32_t out_year, out_month, out_day;
-	Date::Convert(date, out_year, out_month, out_day);
-	return out_year;
+int32_t Date::ExtractYear(date_t n) {
+	int32_t year = n / 365;
+	int32_t day = (n - year * 365) - leapyears(year >= 0 ? year - 1 : year);
+	if (n < 0) {
+		year--;
+		while (day >= 0) {
+			year++;
+			day -= YEARDAYS(year);
+		}
+		day = YEARDAYS(year) + day;
+	} else {
+		while (day < 0) {
+			year--;
+			day += YEARDAYS(year);
+		}
+	}
+	return (year <= 0) ? year - 1 : year;
 }
 
 int32_t Date::ExtractMonth(date_t date) {
