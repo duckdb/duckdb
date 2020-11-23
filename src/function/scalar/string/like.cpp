@@ -182,7 +182,7 @@ private:
 static unique_ptr<FunctionData> like_bind_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
-	if (arguments[1]->IsScalar()) {
+	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 		return LikeMatcher::CreateLikeMatcher(pattern_str.ToString());
 	}

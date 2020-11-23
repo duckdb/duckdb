@@ -114,7 +114,7 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(ClientContext &
 	RE2::Options options;
 	options.set_log_errors(false);
 	if (arguments.size() == 3) {
-		if (!arguments[2]->IsScalar()) {
+		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Regex options field must be a constant");
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[2]);
@@ -123,7 +123,7 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(ClientContext &
 		}
 	}
 
-	if (arguments[1]->IsScalar()) {
+	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 		if (!pattern_str.is_null && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
 			auto re = make_unique<RE2>(pattern_str.str_value, options);
@@ -172,7 +172,7 @@ static unique_ptr<FunctionData> regexp_replace_bind_function(ClientContext &cont
 	auto data = make_unique<RegexpReplaceBindData>();
 	data->options.set_log_errors(false);
 	if (arguments.size() == 4) {
-		if (!arguments[3]->IsScalar()) {
+		if (!arguments[3]->IsFoldable()) {
 			throw InvalidInputException("Regex options field must be a constant");
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[3]);
