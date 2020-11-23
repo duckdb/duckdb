@@ -150,6 +150,7 @@ struct ContainsFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 	static idx_t Find(const string_t &haystack, const string_t &needle);
+	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size);
 };
 
 struct UnicodeFun {

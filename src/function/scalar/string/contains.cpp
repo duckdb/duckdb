@@ -98,15 +98,8 @@ idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const 
 	}
 }
 
-idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
-	auto haystack      = (const unsigned char*) haystack_s.GetDataUnsafe();
-	auto haystack_size = haystack_s.GetSize();
-	auto needle        = (const unsigned char*) needle_s.GetDataUnsafe();
-	auto needle_size   = needle_s.GetSize();
-	if (needle_size == 0) {
-		// empty needle: always true
-		return 0;
-	}
+idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size) {
+	D_ASSERT(needle_size > 0);
 	// start off by performing a memchr to find the first character of the
 	auto location = memchr(haystack, needle[0], haystack_size);
 	if (location == nullptr) {
@@ -136,6 +129,18 @@ idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
 	default:
 		return ContainsGeneric(haystack, haystack_size, needle, needle_size, base_offset);
 	}
+}
+
+idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
+	auto haystack      = (const unsigned char*) haystack_s.GetDataUnsafe();
+	auto haystack_size = haystack_s.GetSize();
+	auto needle        = (const unsigned char*) needle_s.GetDataUnsafe();
+	auto needle_size   = needle_s.GetSize();
+	if (needle_size == 0) {
+		// empty needle: always true
+		return 0;
+	}
+	return ContainsFun::Find(haystack, haystack_size, needle, needle_size);
 }
 
 struct ContainsOperator {
