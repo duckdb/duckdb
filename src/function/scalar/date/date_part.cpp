@@ -26,7 +26,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	} else if (specifier == "microseconds" || specifier == "microsecond") {
 		return DatePartSpecifier::MICROSECONDS;
 	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" ||
-	           specifier == "msecs") {
+			   specifier == "msecs") {
 		return DatePartSpecifier::MILLISECONDS;
 	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
 		return DatePartSpecifier::SECOND;
@@ -55,6 +55,15 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	} else {
 		throw ConversionException("extract specifier \"%s\" not recognized", specifier);
 	}
+}
+
+template <class T>
+static void year_operator(DataChunk &args, ExpressionState &state, Vector &result) {
+	int32_t last_year = 0;
+	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
+		[&](T input) {
+			return Date::ExtractYear(input, &last_year);
+		});
 }
 
 struct YearOperator {
@@ -283,13 +292,18 @@ struct DatePartOperator {
 	}
 };
 
-template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, string name) {
+void AddGenericDatePartOperator(BuiltinFunctions &set, string name, scalar_function_t date_func, scalar_function_t ts_func) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<date_t, int64_t, OP>));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT,
-	                                        ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
+		ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, date_func));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, ts_func));
 	set.AddFunction(operator_set);
+}
+
+template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, string name) {
+	AddGenericDatePartOperator(set, name,
+		ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
+		ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>);
 }
 
 struct LastDayOperator {
@@ -321,7 +335,7 @@ struct DayNameOperator {
 
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
-	AddDatePartOperator<YearOperator>(set, "year");
+	AddGenericDatePartOperator(set, "year", year_operator<date_t>, year_operator<timestamp_t>);
 	AddDatePartOperator<MonthOperator>(set, "month");
 	AddDatePartOperator<DayOperator>(set, "day");
 	AddDatePartOperator<DecadeOperator>(set, "decade");
@@ -350,36 +364,36 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	//  register the last_day function
 	ScalarFunctionSet last_day("last_day");
 	last_day.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE,
-	                                    ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator, true>));
+										ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator, true>));
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
-	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator, true>));
+										ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator, true>));
 	set.AddFunction(last_day);
 
 	//  register the monthname function
 	ScalarFunctionSet monthname("monthname");
 	monthname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-	                                     ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator, true>));
+										 ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator, true>));
 	monthname.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                   ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator, true>));
+		ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
+					   ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator, true>));
 	set.AddFunction(monthname);
 
 	//  register the dayname function
 	ScalarFunctionSet dayname("dayname");
 	dayname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-	                                   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator, true>));
+									   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator, true>));
 	dayname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator, true>));
+									   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator, true>));
 	set.AddFunction(dayname);
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator, true>));
+		ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
+					   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator, true>));
 	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator, true>));
+		ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
+					   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator, true>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);
