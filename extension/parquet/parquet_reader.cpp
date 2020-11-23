@@ -654,10 +654,8 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 			// strings we directly fill a string heap that we can use for the vectors later
 			col_data.string_collection = make_unique<ChunkCollection>();
 
-			// we hand-roll a chunk collection to avoid copying strings
 			auto append_chunk = make_unique<DataChunk>();
 			vector<LogicalType> types = {return_types[col_idx]};
-			col_data.string_collection->types = types;
 			append_chunk->Initialize(types);
 
 			for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
@@ -665,10 +663,7 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 				col_data.payload.available(str_len);
 
 				if (append_chunk->size() == STANDARD_VECTOR_SIZE) {
-					col_data.string_collection->count += append_chunk->size();
-					col_data.string_collection->chunks.push_back(move(append_chunk));
-					append_chunk = make_unique<DataChunk>();
-					append_chunk->Initialize(types);
+					col_data.string_collection->Append(*append_chunk);
 				}
 
 				VerifyString(return_types[col_idx].id(), col_data.payload.ptr, str_len);
@@ -680,8 +675,7 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 			}
 			// FLUSH last chunk!
 			if (append_chunk->size() > 0) {
-				col_data.string_collection->count += append_chunk->size();
-				col_data.string_collection->chunks.push_back(move(append_chunk));
+				col_data.string_collection->Append(*append_chunk);
 			}
 			col_data.string_collection->Verify();
 		} break;
@@ -803,7 +797,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 			return;
 		}
 
-		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
+		for (idx_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
 			auto file_col_idx = state.column_ids[out_col_idx];
 
 			// this is a special case where we are not interested in the actual contents of the file
@@ -825,7 +819,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 
 	auto file_meta_data = GetFileMetadata();
 
-	for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
+	for (idx_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
 		auto file_col_idx = state.column_ids[out_col_idx];
 		if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			Value constant_42 = Value::BIGINT(42);
@@ -900,7 +894,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 					}
 
 					// the strings can be anywhere in the collection so just reference it all
-					for (auto &chunk : col_data.string_collection->chunks) {
+					for (auto &chunk : col_data.string_collection->Chunks()) {
 						StringVector::AddHeapReference(output.data[out_col_idx], chunk->data[0]);
 					}
 
@@ -908,11 +902,11 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 					for (idx_t i = 0; i < current_batch_size; i++) {
 						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 							auto offset = col_data.offset_buf.read<uint32_t>();
-							if (offset >= col_data.string_collection->count) {
+							if (offset >= col_data.string_collection->Count()) {
 								throw FormatException("string dictionary offset out of bounds");
 							}
-							auto &chunk = col_data.string_collection->chunks[offset / STANDARD_VECTOR_SIZE];
-							auto &vec = chunk->data[0];
+							auto &chunk = col_data.string_collection->GetChunk(offset / STANDARD_VECTOR_SIZE);
+							auto &vec = chunk.data[0];
 
 							out_data_ptr[i + output_offset] =
 							    FlatVector::GetData<string_t>(vec)[offset % STANDARD_VECTOR_SIZE];

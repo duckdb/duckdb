@@ -64,7 +64,7 @@ idx_t MergeJoinSimple::Perform(MergeInfo &l, MergeInfo &r, ExpressionType compar
 	auto &left = (ScalarMergeInfo &)l;
 	auto &right = (ChunkMergeInfo &)r;
 	D_ASSERT(left.type == right.type);
-	if (left.order.count == 0 || right.data_chunks.count == 0) {
+	if (left.order.count == 0 || right.data_chunks.Count() == 0) {
 		return 0;
 	}
 	return perform_merge_join<MergeJoinSimple, ScalarMergeInfo, ChunkMergeInfo>(left, right, comparison_type);

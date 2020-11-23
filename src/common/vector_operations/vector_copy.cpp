@@ -154,7 +154,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 			}
 			auto &source_child = ListVector::GetEntry(source);
 			auto &target_child = ListVector::GetEntry(target);
-			idx_t old_target_child_len = target_child.count;
+			idx_t old_target_child_len = target_child.Count();
 
 			// append to list itself
 			target_child.Append(source_child);

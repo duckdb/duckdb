@@ -330,7 +330,7 @@ struct PandasScanFunction : public TableFunction {
 		auto get_fun = data.df.attr("__getitem__");
 
 		output.SetCardinality(this_count);
-		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 			auto numpy_col = py::array(get_fun(df_names[col_idx]).attr("to_numpy")());
 
 			switch (data.pandas_types[col_idx]) {

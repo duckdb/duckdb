@@ -79,7 +79,7 @@ public:
 		if (entry == table_storage.end()) {
 			return 0;
 		}
-		return entry->second->collection.count - entry->second->deleted_rows;
+		return entry->second->collection.Count() - entry->second->deleted_rows;
 	}
 
 	void AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value);

@@ -111,7 +111,7 @@ struct UnsafeAppender {
 	}
 
 	void EndRow() {
-		assert(col == chunk.column_count());
+		assert(col == chunk.ColumnCount());
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			Flush();
@@ -127,7 +127,7 @@ struct UnsafeAppender {
 	}
 
 	template <class T> void AppendValue(T value) {
-		assert(col < chunk.column_count());
+		assert(col < chunk.ColumnCount());
 		FlatVector::GetData<T>(chunk.data[col])[chunk.size()] = value;
 		col++;
 	}

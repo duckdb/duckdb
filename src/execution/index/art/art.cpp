@@ -142,7 +142,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
-	for (idx_t i = 1; i < input.column_count(); i++) {
+	for (idx_t i = 1; i < input.ColumnCount(); i++) {
 		// for each of the remaining columns, concatenate
 		switch (input.data[i].type.InternalType()) {
 		case PhysicalType::BOOL:

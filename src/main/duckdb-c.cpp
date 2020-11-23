@@ -72,7 +72,7 @@ void duckdb_disconnect(duckdb_connection *connection) {
 template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	idx_t row = 0;
 	auto target = (T *)out->columns[col].data;
-	for (auto &chunk : source.chunks) {
+	for (auto &chunk : source.Chunks()) {
 		auto source = FlatVector::GetData<T>(chunk->data[col]);
 		auto &nullmask = FlatVector::Nullmask(chunk->data[col]);
 
@@ -100,7 +100,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// copy the data
 	// first write the meta data
 	out->column_count = result->types.size();
-	out->row_count = result->collection.count;
+	out->row_count = result->collection.Count();
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) {
 		return DuckDBError;
@@ -125,7 +125,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	for (idx_t col = 0; col < out->column_count; col++) {
 		// first set the nullmask
 		idx_t row = 0;
-		for (auto &chunk : result->collection.chunks) {
+		for (auto &chunk : result->collection.Chunks()) {
 			for (idx_t k = 0; k < chunk->size(); k++) {
 				out->columns[col].nullmask[row++] = FlatVector::IsNull(chunk->data[col], k);
 			}
@@ -156,7 +156,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::VARCHAR: {
 			idx_t row = 0;
 			auto target = (const char **)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -174,7 +174,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::DATE: {
 			idx_t row = 0;
 			auto target = (duckdb_date *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<date_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -192,7 +192,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::TIME: {
 			idx_t row = 0;
 			auto target = (duckdb_time *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<dtime_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -211,7 +211,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::TIMESTAMP: {
 			idx_t row = 0;
 			auto target = (duckdb_timestamp *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<timestamp_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -241,7 +241,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::HUGEINT: {
 			idx_t row = 0;
 			auto target = (duckdb_hugeint *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<hugeint_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -256,7 +256,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::INTERVAL: {
 			idx_t row = 0;
 			auto target = (duckdb_interval *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<interval_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {

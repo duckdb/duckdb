@@ -578,9 +578,9 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		if (chunk->size() == 0) {
 			break;
 		}
-		D_ASSERT(chunk->column_count() == ncols);
-		D_ASSERT(chunk->column_count() == Rf_length(retlist));
-		for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
+		D_ASSERT(chunk->ColumnCount() == ncols);
+		D_ASSERT(chunk->ColumnCount() == Rf_length(retlist));
+		for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
 			SEXP dest = VECTOR_ELT(retlist, col_idx);
 			switch (result->types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
@@ -834,7 +834,7 @@ struct DataFrameScanFunction : public TableFunction {
 		output.SetCardinality(this_count);
 
 		// TODO this is quite similar to append, unify!
-		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 			auto &v = output.data[col_idx];
 			SEXP coldata = VECTOR_ELT(data.df, col_idx);
 

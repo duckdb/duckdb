@@ -328,9 +328,9 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 		return string();
 	}
 	// compare the column count
-	if ((int64_t)state.result->column_count() != result_column_count) {
+	if ((int64_t)state.result->ColumnCount() != result_column_count) {
 		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s",
-		                          (int64_t)result_column_count, (int64_t)state.result->column_count(),
+		                          (int64_t)result_column_count, (int64_t)state.result->ColumnCount(),
 		                          state.result->ToString());
 	}
 	// compare row count

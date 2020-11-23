@@ -45,7 +45,7 @@ public:
 	idx_t size() const {
 		return count;
 	}
-	idx_t column_count() const {
+	idx_t ColumnCount() const {
 		return data.size();
 	}
 	void SetCardinality(idx_t count) {
