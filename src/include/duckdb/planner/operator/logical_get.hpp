@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,7 @@ public:
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 
-	idx_t EstimateCardinality() override;
+	idx_t EstimateCardinality(ClientContext &context) override;
 
 protected:
 	void ResolveTypes() override;

@@ -5,6 +5,17 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+CREATE TABLE integers (a INT)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+query T
+SELECT (SELECT i1.a + a FROM integers) FROM integers i1
+----
+2
+
 # cte and subquery
 statement ok
 CREATE MACRO cte_sq(a,b) AS (WITH cte AS (SELECT a * 2 AS c) SELECT cte.c + sq.d FROM cte, (SELECT b * 3 AS d) AS sq)
@@ -28,12 +39,6 @@ query T
 SELECT nested_cte(2, '2,2,2,2')
 ----
 1
-
-statement ok
-CREATE TABLE integers (a INT)
-
-statement ok
-INSERT INTO integers VALUES (1)
 
 statement ok
 CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
@@ -64,6 +69,27 @@ SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
 # conflicting bindings
 statement error
 CREATE MACRO f1(x) AS (SELECT MIN(a) + x FROM integers)
+
+# more nested stuff
+statement ok
+CREATE MACRO add(a, b) AS a + b
+
+statement ok
+CREATE MACRO double_add(a, b, c) AS add(add(a, b), c)
+
+statement ok
+INSERT INTO integers VALUES (41)
+
+#query T
+#SELECT add((SELECT MIN(a) FROM integers), (SELECT MAX(a) FROM integers))
+#----
+#42
+
+query T
+SELECT (SELECT add(i1.a, a) FROM integers) FROM integers i1
+----
+42
+82
 
 # test FTS extension use case
 statement ok

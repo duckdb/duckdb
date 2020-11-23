@@ -763,7 +763,7 @@ struct DataFrameScanState : public FunctionOperatorData {
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
 	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_function, dataframe_scan_bind,
-	                    dataframe_scan_init, nullptr, nullptr, dataframe_scan_cardinality){};
+	                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality){};
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,
@@ -816,9 +816,9 @@ struct DataFrameScanFunction : public TableFunction {
 		return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
 	}
 
-	static unique_ptr<FunctionOperatorData>
-	dataframe_scan_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-	                    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
+	                                                            vector<column_t> &column_ids,
+	                                                            TableFilterSet *table_filters) {
 		return make_unique<DataFrameScanState>();
 	}
 
@@ -903,9 +903,10 @@ struct DataFrameScanFunction : public TableFunction {
 		state.position += this_count;
 	}
 
-	static idx_t dataframe_scan_cardinality(const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> dataframe_scan_cardinality(ClientContext &context,
+	                                                             const FunctionData *bind_data) {
 		auto &data = (DataFrameScanFunctionData &)*bind_data;
-		return data.row_count;
+		return make_unique<NodeStatistics>(data.row_count, data.row_count);
 	}
 };
 

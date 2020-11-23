@@ -37,47 +37,101 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	str_value = val;
 }
 
-Value Value::MinimumValue(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::BOOL:
+Value Value::MinimumValue(LogicalType type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(false);
-	case PhysicalType::INT8:
+	case LogicalTypeId::TINYINT:
 		return Value::TINYINT(NumericLimits<int8_t>::Minimum());
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(NumericLimits<int16_t>::Minimum());
-	case PhysicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		return Value::INTEGER(NumericLimits<int32_t>::Minimum());
-	case PhysicalType::INT64:
+	case LogicalTypeId::DATE:
+		return Value::DATE(NumericLimits<int32_t>::Minimum());
+	case LogicalTypeId::TIME:
+		return Value::TIME(NumericLimits<int32_t>::Minimum());
+	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
-	case PhysicalType::INT128:
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(NumericLimits<int64_t>::Minimum());
+	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return Value::DOUBLE(NumericLimits<double>::Minimum());
+	case LogicalTypeId::DECIMAL: {
+		Value result;
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			result = Value::MinimumValue(LogicalType::SMALLINT);
+			break;
+		case PhysicalType::INT32:
+			result = Value::MinimumValue(LogicalType::INTEGER);
+			break;
+		case PhysicalType::INT64:
+			result = Value::MinimumValue(LogicalType::BIGINT);
+			break;
+		case PhysicalType::INT128:
+			result = Value::MinimumValue(LogicalType::HUGEINT);
+			break;
+		default:
+			throw InternalException("Unknown decimal type");
+		}
+		result.type_ = type;
+		return result;
+	}
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
 }
 
-Value Value::MaximumValue(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::BOOL:
-		return Value::BOOLEAN(true);
-	case PhysicalType::INT8:
+Value Value::MaximumValue(LogicalType type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return Value::BOOLEAN(false);
+	case LogicalTypeId::TINYINT:
 		return Value::TINYINT(NumericLimits<int8_t>::Maximum());
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(NumericLimits<int16_t>::Maximum());
-	case PhysicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		return Value::INTEGER(NumericLimits<int32_t>::Maximum());
-	case PhysicalType::INT64:
+	case LogicalTypeId::DATE:
+		return Value::DATE(NumericLimits<int32_t>::Maximum());
+	case LogicalTypeId::TIME:
+		return Value::TIME(NumericLimits<int32_t>::Maximum());
+	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
-	case PhysicalType::INT128:
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(NumericLimits<int64_t>::Maximum());
+	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return Value::DOUBLE(NumericLimits<double>::Maximum());
+	case LogicalTypeId::DECIMAL: {
+		Value result;
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			result = Value::MaximumValue(LogicalType::SMALLINT);
+			break;
+		case PhysicalType::INT32:
+			result = Value::MaximumValue(LogicalType::INTEGER);
+			break;
+		case PhysicalType::INT64:
+			result = Value::MaximumValue(LogicalType::BIGINT);
+			break;
+		case PhysicalType::INT128:
+			result = Value::MaximumValue(LogicalType::HUGEINT);
+			break;
+		default:
+			throw InternalException("Unknown decimal type");
+		}
+		result.type_ = type;
+		return result;
+	}
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
@@ -270,7 +324,7 @@ Value Value::LIST(vector<Value> values) {
 Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	result.str_value = string((const char*) data, len);
+	result.str_value = string((const char *)data, len);
 	return result;
 }
 
@@ -344,6 +398,7 @@ template <> Value Value::CreateValue(double value) {
 template <> Value Value::CreateValue(Value value) {
 	return value;
 }
+
 //===--------------------------------------------------------------------===//
 // GetValue
 //===--------------------------------------------------------------------===//
@@ -450,6 +505,49 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// GetValueUnsafe
+//===--------------------------------------------------------------------===//
+template <> int8_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT8 || type_.InternalType() == PhysicalType::BOOL);
+	return value_.tinyint;
+}
+
+template <> int16_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT16);
+	return value_.smallint;
+}
+
+template <> int32_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
+	return value_.integer;
+}
+
+template <> int64_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.bigint;
+}
+
+template <> hugeint_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT128);
+	return value_.hugeint;
+}
+
+template <> string &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::VARCHAR);
+	return str_value;
+}
+
+template <> float &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
+	return value_.float_;
+}
+
+template <> double &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::DOUBLE);
+	return value_.double_;
 }
 
 Value Value::Numeric(LogicalType type, hugeint_t value) {
@@ -665,7 +763,7 @@ void Value::Serialize(Serializer &serializer) {
 			serializer.Write<hugeint_t>(value_.hugeint);
 			break;
 		case PhysicalType::FLOAT:
-			serializer.Write<double>(value_.float_);
+			serializer.Write<float>(value_.float_);
 			break;
 		case PhysicalType::DOUBLE:
 			serializer.Write<double>(value_.double_);

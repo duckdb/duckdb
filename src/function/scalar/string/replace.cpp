@@ -53,8 +53,9 @@ static string_t replace_scalar_function(const string_t &haystack, const string_t
 		size_haystack -= string_position;
 
 		//  Stop when we have read the entire haystack
-		if (size_haystack == 0)
+		if (size_haystack == 0) {
 			break;
+		}
 
 		//  Replace the matching characters
 		result.insert(result.end(), input_thread, input_thread + size_thread);

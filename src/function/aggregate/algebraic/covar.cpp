@@ -71,7 +71,7 @@ struct CovarOperation {
 
 struct CovarPopOperation : public CovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -82,7 +82,7 @@ struct CovarPopOperation : public CovarOperation {
 
 struct CovarSampOperation : public CovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if ((state->count) < 2) {
 			nullmask[idx] = true;
 		} else {

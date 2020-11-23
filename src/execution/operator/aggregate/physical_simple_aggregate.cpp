@@ -81,12 +81,11 @@ public:
 					payload_types.push_back(aggr.children[i]->return_type);
 					child_executor.AddExpression(*aggr.children[i]);
 				}
-			} else {
-				// COUNT(*)
-				payload_types.push_back(LogicalType::BIGINT);
 			}
 		}
-		payload_chunk.Initialize(payload_types);
+		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
+			payload_chunk.Initialize(payload_types);
+		}
 	}
 
 	//! The local aggregate state
@@ -124,11 +123,10 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 				payload_expr_idx++;
 				payload_cnt++;
 			}
-		} else {
-			payload_cnt++;
 		}
+
 		// perform the actual aggregation
-		aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt,
+		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], payload_cnt,
 		                                 sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
 		payload_idx += payload_cnt;
 	}
@@ -176,7 +174,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
 		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
-		aggregate.function.finalize(state_vector, chunk.data[aggr_idx], 1);
+		aggregate.function.finalize(state_vector, aggregate.bind_info.get(), chunk.data[aggr_idx], 1);
 	}
 	state->finished = true;
 }

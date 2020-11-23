@@ -30,7 +30,7 @@ static unique_ptr<FunctionData> pragma_database_list_bind(ClientContext &context
 
 unique_ptr<FunctionOperatorData> pragma_database_list_init(ClientContext &context, const FunctionData *bind_data,
                                                            vector<column_t> &column_ids,
-                                                           unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                           TableFilterSet *table_filters) {
 	return make_unique<PragmaDatabaseListData>();
 }
 

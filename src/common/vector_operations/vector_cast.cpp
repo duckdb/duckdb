@@ -107,7 +107,8 @@ void decimal_scale_up_loop(Vector &source, Vector &result, idx_t count) {
 		auto limit = POWERS_SOURCE::PowersOfTen[target_width];
 		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
-				throw OutOfRangeException("Casting to %s failed", result.type.ToString());
+				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
+				                          Decimal::ToString(input, source.type.scale()), result.type.ToString());
 			}
 			return Cast::Operation<SOURCE, DEST>(input) * multiply_factor;
 		});
@@ -129,7 +130,8 @@ void decimal_scale_down_loop(Vector &source, Vector &result, idx_t count) {
 		auto limit = POWERS_SOURCE::PowersOfTen[target_width];
 		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
-				throw OutOfRangeException("Casting to %s failed", result.type.ToString());
+				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
+				                          Decimal::ToString(input, source.type.scale()), result.type.ToString());
 			}
 			return Cast::Operation<SOURCE, DEST>(input / divide_factor);
 		});

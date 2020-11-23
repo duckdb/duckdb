@@ -74,7 +74,7 @@ static void list_combine(Vector &state, Vector &combined, idx_t count) {
 	}
 }
 
-static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
+static void list_finalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (list_agg_state_t **)sdata.data;

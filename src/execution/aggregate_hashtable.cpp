@@ -40,8 +40,8 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 #ifndef DUCKDB_ALLOW_UNDEFINED
 		payload_size = Align(payload_size);
 #endif
-		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
-		                                     binding->distinct, binding->return_type.InternalType()));
+		aggregates.push_back(AggregateObject(binding->function, binding->bind_info.get(), binding->children.size(),
+		                                     payload_size, binding->distinct, binding->return_type.InternalType()));
 	}
 	return aggregates;
 }
@@ -121,11 +121,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 			}
 			distinct_hashes[i] = make_unique<GroupedAggregateHashTable>(buffer_manager, distinct_group_types);
 		}
-		if (aggr.child_count) {
-			payload_idx += aggr.child_count;
-		} else {
-			payload_idx += 1;
-		}
+		payload_idx += aggr.child_count;
 	}
 	addresses.Initialize(LogicalType::POINTER);
 }
@@ -229,7 +225,8 @@ idx_t GroupedAggregateHashTable::MaxCapacity() {
 		max_pages = NumericLimits<uint8_t>::Maximum();
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
-	case HtEntryType::HT_WIDTH_64:
+	default:
+		D_ASSERT(entry_type == HtEntryType::HT_WIDTH_64);
 		max_pages = NumericLimits<uint32_t>::Maximum();
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
@@ -331,11 +328,9 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	idx_t payload_idx = 0;
 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		D_ASSERT(payload.column_count() > payload_idx);
-
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
-		auto input_count = MaxValue((idx_t)1, (idx_t)aggr.child_count);
+		auto input_count = (idx_t)aggr.child_count;
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(group_types);
@@ -371,10 +366,12 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 				distinct_addresses.Verify(new_group_count);
 
-				aggr.function.update(&payload.data[payload_idx], input_count, distinct_addresses, new_group_count);
+				aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
+				                     distinct_addresses, new_group_count);
 			}
 		} else {
-			aggr.function.update(&payload.data[payload_idx], input_count, addresses, payload.size());
+			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
+			                     payload.size());
 		}
 
 		// move to the next aggregate
@@ -485,7 +482,9 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);
 				} else {
-					Store<string_t>(string_heap.AddBlob(string_data[group_idx].GetDataUnsafe(), string_data[group_idx].GetSize()), ptr);
+					Store<string_t>(
+					    string_heap.AddBlob(string_data[group_idx].GetDataUnsafe(), string_data[group_idx].GetSize()),
+					    ptr);
 				}
 
 				pointers[pointer_idx] += type_size;
@@ -911,7 +910,7 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[group_types.size() + i];
 		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, target, result.size());
+		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
 	}
 	scan_position += this_n;

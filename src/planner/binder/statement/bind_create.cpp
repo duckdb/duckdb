@@ -72,8 +72,9 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			throw BinderException("Invalid parameter \"%s\"", base.function->parameters[i]->ToString());
 
 		auto param = (ColumnRefExpression &)*base.function->parameters[i];
-		if (!param.table_name.empty())
+		if (!param.table_name.empty()) {
 			throw BinderException("Invalid parameter \"%s\"", param.ToString());
+		}
 		dummy_types.push_back(LogicalType::SQLNULL);
 		dummy_names.push_back(param.column_name);
 	}
@@ -85,8 +86,9 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	// bind it to verify the function was defined correctly
 	ExpressionBinder binder(*this, context);
 	string error = binder.Bind(&expression, 0, false);
-	if (!error.empty())
+	if (!error.empty()) {
 		throw BinderException(error);
+	}
 	macro_binding.reset();
 
 	return BindSchema(info);

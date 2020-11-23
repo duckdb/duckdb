@@ -1,0 +1,106 @@
+# name: test/optimizer/statistics/statistics_is_null.test
+# description: Test filter propagation in IS NULL/IS NOT NULL operands
+# group: [statistics]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM (VALUES (4), (5), (NULL)) tbl(i);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# we can statically determine IS NULL/IS NOT NULL are false, if there are no null values for this column
+query II
+EXPLAIN SELECT i IS NULL FROM integers;
+----
+logical_opt	<!REGEX>:.*IS_NULL.*
+
+query II
+EXPLAIN SELECT i IS NOT NULL FROM integers;
+----
+logical_opt	<!REGEX>:.*IS_NOT_NULL.*
+
+# if there are null values, however, we have to execute the operator
+query II
+EXPLAIN SELECT i IS NULL FROM integers2;
+----
+logical_opt	<REGEX>:.*IS_NULL.*
+
+query II
+EXPLAIN SELECT i IS NOT NULL FROM integers2;
+----
+logical_opt	<REGEX>:.*IS_NOT_NULL.*
+
+# filters remove null values, so even if the base column contains null values, we don't need to check IS NULL here
+query II
+EXPLAIN SELECT i IS NULL FROM integers2 WHERE i>0;
+----
+logical_opt	<!REGEX>:.*IS_NULL.*
+
+# left/right/full outer joins can introduce nulls, even if the base tables do not contain them
+query II
+EXPLAIN SELECT i2.i IS NULL FROM integers i1 LEFT JOIN integers i2 ON (false);
+----
+logical_opt	<REGEX>:.*IS_NULL.*
+
+query II
+EXPLAIN SELECT i1.i IS NULL FROM integers i1 FULL OUTER JOIN integers i2 ON (false);
+----
+logical_opt	<REGEX>:.*IS_NULL.*
+
+# verify that all these queries produce the correct results
+query I
+SELECT i IS NULL FROM integers;
+----
+0
+0
+0
+
+query I
+SELECT i IS NOT NULL FROM integers;
+----
+1
+1
+1
+
+query I
+SELECT i IS NULL FROM integers2;
+----
+0
+0
+1
+
+query I
+SELECT i IS NOT NULL FROM integers2;
+----
+1
+1
+0
+
+query I
+SELECT i IS NULL FROM integers2 WHERE i>0;
+----
+0
+0
+
+query I
+SELECT i2.i IS NULL FROM integers i1 LEFT JOIN integers i2 ON (false);
+----
+1
+1
+1
+
+query I
+SELECT i1.i IS NULL FROM integers i1 FULL OUTER JOIN integers i2 ON (false) ORDER BY i1.i;
+----
+1
+1
+1
+0
+0
+0

@@ -12,6 +12,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
@@ -41,7 +42,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	context.profiler.StartPhase("expression_rewriter");
-	rewriter.Apply(*plan);
+	rewriter.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
 	// perform filter pushdown
@@ -63,7 +64,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	context.profiler.StartPhase("join_order");
-	JoinOrderOptimizer optimizer;
+	JoinOrderOptimizer optimizer(context);
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
 
@@ -93,6 +94,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("reorder_filter");
 	ExpressionHeuristics expression_heuristics(*this);
 	plan = expression_heuristics.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
+	// perform statistics propagation
+	context.profiler.StartPhase("statistics_propagation");
+	StatisticsPropagator propagator(context);
+	propagator.PropagateStatistics(plan);
 	context.profiler.EndPhase();
 
 	return plan;

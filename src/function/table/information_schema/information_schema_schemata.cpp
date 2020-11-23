@@ -45,9 +45,9 @@ static unique_ptr<FunctionData> information_schema_schemata_bind(ClientContext &
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData>
-information_schema_schemata_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-                                 unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> information_schema_schemata_init(ClientContext &context, const FunctionData *bind_data,
+                                                                  vector<column_t> &column_ids,
+                                                                  TableFilterSet *table_filters) {
 	auto result = make_unique<InformationSchemaSchemataData>();
 
 	// scan all the schemas and collect them

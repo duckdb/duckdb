@@ -73,12 +73,6 @@ public:
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
-	//! Wether or not object cache is used
-	bool object_cache_enable = false;
-
-	//! Object Cache
-	unordered_map<string, unique_ptr<ObjectCache>> cache;
-
 public:
 	Transaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();

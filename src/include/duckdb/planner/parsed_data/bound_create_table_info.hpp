@@ -11,8 +11,8 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -36,7 +36,7 @@ struct BoundCreateTableInfo {
 	//! Dependents of the table (in e.g. default values)
 	unordered_set<CatalogEntry *> dependencies;
 	//! The existing table data on disk (if any)
-	unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data;
+	unique_ptr<PersistentTableData> data;
 	//! CREATE TABLE from QUERY
 	unique_ptr<LogicalOperator> query;
 

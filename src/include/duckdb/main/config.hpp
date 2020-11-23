@@ -48,6 +48,8 @@ public:
 	OrderByNullType default_null_order = OrderByNullType::NULLS_FIRST;
 	//! enable COPY and related commands
 	bool enable_copy = true;
+	//! Wether or not object cache is used
+	bool object_cache_enable = false;
 
 public:
 	static DBConfig &GetConfig(ClientContext &context);

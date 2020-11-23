@@ -33,8 +33,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &function_expr = (FunctionExpression &)*expr;
-		if (function_expr.is_operator)
+		if (function_expr.is_operator) {
 			break;
+		}
 
 		// if expr is a macro function, unfold it
 		QueryErrorContext error_context(binder.root_statement, function_expr.query_location);
@@ -44,8 +45,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 		if (func != nullptr && func->type == CatalogType::MACRO_ENTRY) {
 			auto &macro_func = (MacroCatalogEntry &)*func;
 			string error = MacroFunction::ValidateArguments(context, error_context, macro_func, function_expr);
-			if (!error.empty())
+			if (!error.empty()) {
 				throw BinderException(binder.FormatError(*expr, error));
+			}
 
 			// create macro_binding to bind this macro's parameters to its arguments
 			vector<LogicalType> types;
@@ -146,10 +148,12 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 		for (idx_t i = 0; i < sel_node.groups.size(); i++) {
 			sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding);
 		}
-		if (sel_node.where_clause != nullptr)
+		if (sel_node.where_clause != nullptr) {
 			sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding);
-		if (sel_node.having != nullptr)
+		}
+		if (sel_node.having != nullptr) {
 			sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
+		}
 
 		UnfoldTableRef(expr, *sel_node.from_table.get(), macro_binding);
 		break;

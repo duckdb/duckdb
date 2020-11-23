@@ -60,8 +60,7 @@ static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, v
 }
 
 unique_ptr<FunctionOperatorData> pragma_table_info_init(ClientContext &context, const FunctionData *bind_data,
-                                                        vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                        vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	return make_unique<PragmaTableOperatorData>();
 }
 
@@ -70,17 +69,17 @@ static void check_constraints(TableCatalogEntry *table, idx_t oid, bool &out_not
 	out_pk = false;
 	// check all constraints
 	// FIXME: this is pretty inefficient, it probably doesn't matter
-	for(auto &constraint : table->bound_constraints) {
-		switch(constraint->type) {
+	for (auto &constraint : table->bound_constraints) {
+		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (BoundNotNullConstraint &) *constraint;
+			auto &not_null = (BoundNotNullConstraint &)*constraint;
 			if (not_null.index == oid) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (BoundUniqueConstraint &) *constraint;
+			auto &unique = (BoundUniqueConstraint &)*constraint;
 			if (unique.is_primary_key && unique.keys.find(oid) != unique.keys.end()) {
 				out_pk = true;
 			}

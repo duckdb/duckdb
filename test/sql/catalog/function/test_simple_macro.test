@@ -120,3 +120,28 @@ query T
 SELECT macros.add(40,2)
 ----
 42
+
+# conflicting parameter names in macro definition
+statement error
+CREATE MACRO conflict(i, i) AS i + 1
+
+# aggregation macro's
+statement ok
+CREATE MACRO myavg(x) AS SUM(x) / COUNT(x)
+
+statement ok
+INSERT INTO integers VALUES (21), (41);
+
+query T
+SELECT myavg(i) FROM integers
+----
+21
+
+statement ok
+CREATE MACRO weird_avg(x) AS (MIN(x) + MAX(x)) / COUNT(x)
+
+# this one is also 21 because there's only 2 integers in there
+query T
+SELECT weird_avg(i) FROM integers
+----
+14
