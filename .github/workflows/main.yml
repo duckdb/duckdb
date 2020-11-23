@@ -314,7 +314,7 @@ jobs:
   linux-rpi:
     name: Linux (Raspberry Pi)
     runs-on: ubuntu-20.04
-  #  needs: linux-debug
+    needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
