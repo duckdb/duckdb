@@ -11,10 +11,25 @@ CREATE TABLE integers (a INT)
 statement ok
 INSERT INTO integers VALUES (1)
 
+
+
+
 query T
 SELECT (SELECT i1.a + a FROM integers) FROM integers i1
 ----
 2
+
+statement ok
+CREATE MACRO add(a, b) AS a + b
+
+query T
+SELECT (SELECT add(i1.a, a) FROM integers) FROM integers i1
+----
+2
+
+
+
+
 
 # cte and subquery
 statement ok
@@ -33,7 +48,7 @@ CREATE MACRO nested_cte(needle, haystack) AS needle IN (
         )
         SELECT i FROM ints
     ) AS sq
-)
+)add
 
 query T
 SELECT nested_cte(2, '2,2,2,2')
