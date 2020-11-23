@@ -51,6 +51,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 	case ExpressionClass::CONSTANT:
 		return BindExpression((ConstantExpression &)expr_ref, depth);
 	case ExpressionClass::FUNCTION:
+		// binding function expression has extra parameter needed for macro's
 		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
 	case ExpressionClass::OPERATOR:
 		return BindExpression((OperatorExpression &)expr_ref, depth);

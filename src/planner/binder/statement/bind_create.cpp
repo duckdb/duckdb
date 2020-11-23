@@ -9,7 +9,10 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
@@ -64,6 +67,10 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
 
+    if (base.function->expression->HasParameter()) {
+        throw BinderException("Macro's do not support parameter expressions!");
+	}
+
 	// create macro binding in order to bind the function
 	vector<LogicalType> dummy_types;
 	vector<string> dummy_names;
@@ -84,8 +91,12 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto expression = base.function->expression->Copy();
 
 	// bind it to verify the function was defined correctly
-	ExpressionBinder binder(*this, context);
-	string error = binder.Bind(&expression, 0, false);
+	string error;
+    auto sel_node = make_unique<BoundSelectNode>();
+    auto group_info = make_unique<BoundGroupInformation>();
+    SelectBinder binder(*this, context, *sel_node, *group_info);
+    error = binder.Bind(&expression, 0, false);
+
 	if (!error.empty()) {
 		throw BinderException(error);
 	}

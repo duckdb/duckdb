@@ -65,6 +65,15 @@ SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
 statement error
 CREATE MACRO f1(x) AS (SELECT MIN(a) + x FROM integers)
 
+# macro in GROUP BY
+statement ok
+CREATE MACRO mod_two(k) AS k%2
+
+query II
+SELECT mod_two(a), SUM(a) FROM integers GROUP BY mod_two(a)
+----
+1	1
+
 # more nested stuff
 statement ok
 CREATE MACRO add(a, b) AS a + b
@@ -75,16 +84,38 @@ CREATE MACRO double_add(a, b, c) AS add(add(a, b), c)
 statement ok
 INSERT INTO integers VALUES (41)
 
+# subquery within macro parameters
 query T
 SELECT add((SELECT MIN(a) FROM integers), (SELECT MAX(a) FROM integers))
 ----
 42
 
+# macros within a correlated subquery
 query T
 SELECT (SELECT add(i1.a, a) FROM integers) FROM integers i1
 ----
 42
 82
+
+# macro with window function
+statement ok
+CREATE TABLE grouped (grp INT, val INT)
+
+statement ok
+INSERT INTO grouped VALUES (1, 10), (1, 10), (1, 10),  (1, 10), (1, 2), (2, 14), (2, 14), (2, 14)
+
+statement ok
+CREATE MACRO mywindow(k,v) AS SUM(v) OVER (PARTITION BY k)
+
+query II
+SELECT DISTINCT grp, mywindow(grp, val) FROM grouped;
+----
+1	42
+2	42
+
+# prepared statement
+statement error
+CREATE MACRO prep(x) AS ?+1
 
 # test FTS extension use case
 statement ok

@@ -28,7 +28,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			return expr;
 		} else {
-			return UnfoldMacroRecursive(move(expr), macro_binding);
+			// arguments supplied to the macro cannot contain refer to parameter of this same macro (infinite recursion)
+			// therefore, we do not call the function with the current MacroBinding
+			return UnfoldMacroRecursive(move(expr));
 		}
 	}
 	case ExpressionClass::FUNCTION: {
@@ -125,10 +127,10 @@ void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, Mac
 	}
 	case TableReferenceType::BASE_TABLE:
 	case TableReferenceType::EMPTY:
-		// there TableRefs do not need to be unfolded
-        break;
+		// these TableRefs do not need to be unfolded
+		break;
 	default:
-        throw NotImplementedException("TableRef type not implemented for macro's!");
+		throw NotImplementedException("TableRef type not implemented for macro's!");
 	}
 }
 
@@ -171,10 +173,10 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, idx_t depth, unique_ptr<ParsedExpression> *expr) {
 	// unfold and replace the original macro expression
-    *expr = UnfoldMacroRecursive(function.Copy());
+	*expr = UnfoldMacroRecursive(function.Copy());
 
 	// bind the unfolded macro
-    return BindExpression(expr, depth);
+	return BindExpression(expr, depth);
 }
 
 } // namespace duckdb
