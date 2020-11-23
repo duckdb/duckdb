@@ -7,10 +7,16 @@ import subprocess
 import shutil
 import platform
 
-
 from setuptools import setup, Extension
 from setuptools.command.sdist import sdist
 import distutils.spawn
+
+def open_utf8(fpath, flags):
+    import sys
+    if sys.version_info[0] < 3:
+        return open(fpath, flags)
+    else:
+        return open(fpath, flags, encoding="utf8")
 
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
@@ -91,11 +97,11 @@ if len(existing_duckdb_dir) == 0:
         header_files = amalgamation.list_includes_files(duckdb_includes)
 
         # write the source list, include list and git hash to separate files
-        with open('sources.list', 'w+') as f:
+        with open_utf8('sources.list', 'w+') as f:
             for source_file in duckdb_sources:
                 f.write(source_file + "\n")
 
-        with open('includes.list', 'w+') as f:
+        with open_utf8('includes.list', 'w+') as f:
             for include_file in duckdb_includes:
                 f.write(include_file + '\n')
 
@@ -103,10 +109,10 @@ if len(existing_duckdb_dir) == 0:
     else:
         # if amalgamation does not exist, we are in a package distribution
         # read the include files, source list and include files from the supplied lists
-        with open('sources.list', 'r') as f:
+        with open_utf8('sources.list', 'r') as f:
             duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
 
-        with open('includes.list', 'r') as f:
+        with open_utf8('includes.list', 'r') as f:
             duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
 
     source_files += duckdb_sources
@@ -183,7 +189,7 @@ setup(
     data_files = data_files,
     packages=['duckdb_query_graph'],
     include_package_data=True,
-    setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.4'],
+    setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
     tests_require=['pytest'],
     classifiers = [

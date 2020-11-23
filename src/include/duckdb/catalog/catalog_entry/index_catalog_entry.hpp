@@ -20,13 +20,15 @@ class Index;
 class IndexCatalogEntry : public StandardEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
-	    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr) {
-	}
+	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
 	~IndexCatalogEntry();
 
 	Index *index;
 	shared_ptr<DataTableInfo> info;
+	string sql;
+
+public:
+	string ToSQL() override;
 };
 
 } // namespace duckdb

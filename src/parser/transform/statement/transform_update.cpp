@@ -7,12 +7,14 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
 	auto stmt = reinterpret_cast<PGUpdateStmt *>(node);
-	assert(stmt);
+	D_ASSERT(stmt);
 
 	auto result = make_unique<UpdateStatement>();
 
 	result->table = TransformRangeVar(stmt->relation);
-	result->condition = TransformExpression(stmt->whereClause);
+	if (stmt->fromClause) {
+		result->from_table = TransformFrom(stmt->fromClause);
+	}
 
 	auto root = stmt->targetList;
 	for (auto cell = root->head; cell != NULL; cell = cell->next) {
@@ -20,6 +22,8 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
 		result->columns.push_back(target->name);
 		result->expressions.push_back(TransformExpression(target->val));
 	}
+
+	result->condition = TransformExpression(stmt->whereClause);
 	return result;
 }
 

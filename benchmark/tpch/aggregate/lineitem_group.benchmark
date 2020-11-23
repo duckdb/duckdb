@@ -2,6 +2,10 @@
 # description: Grouped aggregate over lineitem (grouped by an integer column)
 # group: [aggregate]
 
+name Lineitem Group By Integer
+group aggregate
+subgroup tpch
+
 require tpch
 
 cache tpch_sf1

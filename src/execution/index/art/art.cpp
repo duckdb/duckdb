@@ -176,8 +176,8 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
-	assert(row_ids.type.InternalType() == ROW_TYPE);
-	assert(logical_types[0] == input.data[0].type);
+	D_ASSERT(row_ids.type.InternalType() == ROW_TYPE);
+	D_ASSERT(logical_types[0] == input.data[0].type);
 
 	// generate the keys for the given input
 	vector<unique_ptr<Key>> keys;
@@ -377,7 +377,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != INVALID_INDEX) {
 		auto child = node->GetChild(pos);
-		assert(child);
+		D_ASSERT(child);
 
 		unique_ptr<Node> &child_ref = *child;
 		if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, depth)) {
@@ -399,7 +399,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 // Point Query
 //===--------------------------------------------------------------------===//
 static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
-	assert(type == value.type().InternalType());
+	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
 		return Key::CreateKey<bool>(value.value_.boolean, art.is_little_endian);
@@ -439,6 +439,16 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 	return true;
 }
 
+void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
+	//! We need to look for a leaf
+	auto key = CreateKey(*this, types[0], equal_value);
+	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
+	if (!leaf) {
+		return;
+	}
+	result_size = leaf->num_elements;
+}
+
 Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 	auto node_val = node.get();
 
@@ -467,7 +477,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 			return nullptr;
 		}
 		node_val = node_val->GetChild(pos)->get();
-		assert(node_val);
+		D_ASSERT(node_val);
 
 		depth++;
 	}
@@ -483,7 +493,7 @@ bool ART::IteratorScan(ARTIndexScanState *state, Iterator *it, Key *bound, idx_t
 	bool has_next;
 	do {
 		if (HAS_BOUND) {
-			assert(bound);
+			D_ASSERT(bound);
 			if (INCLUSIVE) {
 				if (*it->node->value > *bound) {
 					break;
@@ -742,7 +752,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
                vector<row_t> &result_ids) {
 	auto state = (ARTIndexScanState *)&table_state;
 
-	assert(state->values[0].type().InternalType() == types[0]);
+	D_ASSERT(state->values[0].type().InternalType() == types[0]);
 
 	vector<row_t> row_ids;
 	bool success = true;
@@ -771,7 +781,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	} else {
 		lock_guard<mutex> l(lock);
 		// two predicates
-		assert(state->values[1].type().InternalType() == types[0]);
+		D_ASSERT(state->values[1].type().InternalType() == types[0]);
 		bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 		bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
 		success = SearchCloseRange(state, left_inclusive, right_inclusive, max_count, row_ids);
@@ -779,7 +789,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	if (!success) {
 		return false;
 	}
-	if (row_ids.size() == 0) {
+	if (row_ids.empty()) {
 		return true;
 	}
 	// sort the row ids

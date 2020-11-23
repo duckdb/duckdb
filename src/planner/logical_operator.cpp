@@ -2,19 +2,23 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 
 namespace duckdb {
 using namespace std;
 
-string LogicalOperator::ParamsToString() const {
-	string result = "";
-	if (expressions.size() > 0) {
-		result += "[";
-		result += StringUtil::Join(expressions, expressions.size(), ", ",
-		                           [](const unique_ptr<Expression> &expression) { return expression->GetName(); });
-		result += "]";
-	}
+string LogicalOperator::GetName() const {
+	return LogicalOperatorToString(type);
+}
 
+string LogicalOperator::ParamsToString() const {
+	string result;
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += expressions[i]->GetName();
+	}
 	return result;
 }
 
@@ -30,6 +34,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 	}
 	// now resolve the types for this operator
 	ResolveTypes();
+	D_ASSERT(types.size() == GetColumnBindings().size());
 }
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
@@ -65,17 +70,8 @@ vector<ColumnBinding> LogicalOperator::MapBindings(vector<ColumnBinding> binding
 }
 
 string LogicalOperator::ToString(idx_t depth) const {
-	string result = LogicalOperatorToString(type);
-	result += ParamsToString();
-	if (children.size() > 0) {
-		for (idx_t i = 0; i < children.size(); i++) {
-			result += "\n" + string(depth * 4, ' ');
-			auto &child = children[i];
-			result += child->ToString(depth + 1);
-		}
-		result += "";
-	}
-	return result;
+	TreeRenderer renderer;
+	return renderer.ToString(*this);
 }
 
 void LogicalOperator::Print() {

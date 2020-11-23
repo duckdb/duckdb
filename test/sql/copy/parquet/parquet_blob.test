@@ -1,0 +1,15 @@
+# name: test/sql/copy/parquet/parquet_blob.test
+# description: Test parquet file with blob content
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query III
+select * from parquet_scan('test/sql/copy/parquet/data/blob.parquet')
+----
+1	\x04\x00	str1
+2	\x04\x00\x80	str2
+3	\x03\xFF\x00\xFF	str3

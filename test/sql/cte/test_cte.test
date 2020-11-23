@@ -17,7 +17,17 @@ with cte1 as (Select i as j from a) select * from cte1;
 42
 
 query I
+with cte1 as (Select i as j from a) select x from cte1 t1(x);
+----
+42
+
+query I
 with cte1(xxx) as (Select i as j from a) select xxx from cte1;
+----
+42
+
+query I
+with cte1(xxx) as (Select i as j from a) select x from cte1 t1(x);
 ----
 42
 
@@ -54,4 +64,34 @@ query I
 with cte1 as (Select i as j from a) select * from cte1 where j = (select max(j) from cte1 as cte2);
 ----
 42
+
+# multi-column name alias
+query II
+with cte1(x, y) as (select 42 a, 84 b) select zzz, y from cte1 t1(zzz);
+----
+42	84
+
+# use a CTE in a view definition
+statement ok
+create view va AS (with cte as (Select i as j from a) select * from cte);
+
+query I
+select * from va
+----
+42
+
+# nested CTE views that re-use CTE aliases
+query I
+with cte AS (SELECT * FROM va) SELECT * FROM cte;
+----
+42
+
+# multiple ctes in a view definition
+statement ok
+create view vb AS (with cte1 as (Select i as j from a), cte2 as (select ref.j+1 as k from cte1 as ref) select * from cte2);
+
+query I
+select * from vb
+----
+43
 

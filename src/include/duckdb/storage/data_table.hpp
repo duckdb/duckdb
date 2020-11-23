@@ -16,8 +16,8 @@
 #include "duckdb/storage/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
-#include "duckdb/storage/table/version_manager.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -29,8 +29,7 @@ class DataTable;
 class StorageManager;
 class TableCatalogEntry;
 class Transaction;
-
-typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
+class WriteAheadLog;
 
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
@@ -52,8 +51,7 @@ struct DataTableInfo {
 };
 
 struct ParallelTableScanState {
-	idx_t persistent_row_idx;
-	idx_t transient_row_idx;
+	idx_t current_row;
 	bool transaction_local_data;
 };
 
@@ -61,7 +59,8 @@ struct ParallelTableScanState {
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types, persistent_data_t data);
+	DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types,
+	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
@@ -78,22 +77,21 @@ public:
 
 public:
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
-	                    unordered_map<idx_t, vector<TableFilter>> *table_filter = nullptr);
+	                    TableFilterSet *table_filter = nullptr);
 	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
-	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
+	                    TableFilterSet *table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context);
 	void InitializeParallelScan(ParallelTableScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
-	                      const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters);
+	                      const vector<column_t> &column_ids);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
 	//! elements were returned.
 	//! Returns true if all pushed down filters were executed during data fetching
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
-	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids);
 
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
@@ -111,12 +109,19 @@ public:
 	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
 
 	//! Begin appending structs to this table, obtaining necessary locks, etc
-	void InitializeAppend(TableAppendState &state);
+	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
 	//! Append a chunk to the table using the AppendState obtained from BeginAppend
-	void Append(Transaction &transaction, transaction_t commit_id, DataChunk &chunk, TableAppendState &state);
+	void Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state);
+	//! Commit the append
+	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
+	//! Write a segment of the table to the WAL
+	void WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count);
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
-	void RevertAppend(TableAppendState &state);
+	void RevertAppend(idx_t start_row, idx_t count);
+	void RevertAppendInternal(idx_t start_row, idx_t count);
+
+	void ScanTableSegment(idx_t start_row, idx_t count, std::function<void(DataChunk &chunk)> function);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded
@@ -132,6 +137,8 @@ public:
 		this->is_root = true;
 	}
 
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
@@ -139,14 +146,12 @@ private:
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);
-	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
-	                  idx_t &current_row);
+	                              TableFilterSet *table_filters, idx_t start_row, idx_t end_row);
+	bool CheckZonemap(TableScanState &state, TableFilterSet *table_filters, idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
-	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row, idx_t base_row,
-	                   VersionManager &manager, unordered_map<idx_t, vector<TableFilter>> &table_filters);
+	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row);
 	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-	                     idx_t &current_row, idx_t max_row, idx_t base_row);
+	                     idx_t &current_row, idx_t max_row);
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
 	//! the amount of rows to use and places the row_ids in the result_rows array.
@@ -159,10 +164,10 @@ private:
 private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;
-	//! The version manager of the persistent segments of the tree
-	shared_ptr<VersionManager> persistent_manager;
-	//! The version manager of the transient segments of the tree
-	shared_ptr<VersionManager> transient_manager;
+	//! The segment tree holding the persistent versions
+	shared_ptr<SegmentTree> versions;
+	//! The number of rows in the table
+	idx_t total_rows;
 	//! The physical columns of the table
 	vector<shared_ptr<ColumnData>> columns;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version

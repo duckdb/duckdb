@@ -8,25 +8,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
-namespace duckdb {
-using namespace std;
-
 #include <cstdio>
-
-FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return *context.db.config.file_system;
-}
-
-static void AssertValidFileFlags(uint8_t flags) {
-	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
-	// cannot combine Read and CREATE/Append flags
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
-	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
-	// cannot combine CREATE and CREATE_NEW flags
-	assert(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
-}
+#include <cstdint>
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -35,7 +18,43 @@ static void AssertValidFileFlags(uint8_t flags) {
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#else
+#include <string>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 
+#ifdef __MINGW32__
+// need to manually define this for mingw
+extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
+#endif
+
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+#undef FILE_CREATE // woo mingw
+#endif
+
+namespace duckdb {
+using namespace std;
+
+FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
+	return *context.db.config.file_system;
+}
+
+static void AssertValidFileFlags(uint8_t flags) {
+	// cannot combine Read and Write flags
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
+	// cannot combine Read and CREATE/Append flags
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+	// cannot combine CREATE and CREATE_NEW flags
+	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+}
+
+#ifndef _WIN32
 // somehow sometimes this is missing
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
@@ -74,7 +93,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags = O_RDONLY;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::FILE_FLAGS_WRITE);
+		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
 		open_flags = O_RDWR | O_CLOEXEC;
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			open_flags |= O_CREAT;
@@ -159,6 +178,15 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 		return -1;
 	}
 	return s.st_size;
+}
+
+time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		return -1;
+	}
+	return s.st_mtime;
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -315,6 +343,15 @@ void FileSystem::SetWorkingDirectory(string path) {
 	}
 }
 
+idx_t FileSystem::GetAvailableMemory() {
+	errno = 0;
+	idx_t max_memory = MinValue<idx_t>(sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE), UINTPTR_MAX);
+	if (errno != 0) {
+		throw IOException("Could not fetch available system memory!");
+	}
+	return max_memory;
+}
+
 string FileSystem::GetWorkingDirectory() {
 	auto buffer = unique_ptr<char[]>(new char[PATH_MAX]);
 	char *ret = getcwd(buffer.get(), PATH_MAX);
@@ -324,17 +361,6 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get());
 }
 #else
-
-#include <string>
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
-#undef CreateDirectory
-#undef MoveFile
-#undef RemoveDirectory
-#undef FILE_CREATE // woo mingw
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string GetLastErrorAsString() {
@@ -385,7 +411,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		share_mode = FILE_SHARE_READ;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::FILE_FLAGS_WRITE);
+		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
@@ -453,6 +479,33 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 		return -1;
 	}
 	return result.QuadPart;
+}
+
+time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
+	FILETIME last_write;
+	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
+		return -1;
+	}
+
+	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
+	ULARGE_INTEGER ul;
+	ul.LowPart = last_write.dwLowDateTime;
+	ul.HighPart = last_write.dwHighDateTime;
+	int64_t fileTime64 = ul.QuadPart;
+
+	// fileTime64 contains a 64-bit value representing the number of
+	// 100-nanosecond intervals since January 1, 1601 (UTC).
+	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
+
+
+	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
+	const auto WINDOWS_TICK = 10000000;
+	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
+	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+	return result;
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -588,6 +641,14 @@ void FileSystem::SetWorkingDirectory(string path) {
 	}
 }
 
+idx_t FileSystem::GetAvailableMemory() {
+	ULONGLONG available_memory_kb;
+	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
+		throw IOException("Could not fetch available system memory!");
+	}
+	return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
+}
+
 string FileSystem::GetWorkingDirectory() {
 	idx_t count = GetCurrentDirectory(0, nullptr);
 	if (count == 0) {
@@ -601,6 +662,14 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get(), ret);
 }
 #endif
+
+string FileSystem::GetHomeDirectory() {
+	const char *homedir = getenv("HOME");
+	if (!homedir) {
+		return string();
+	}
+	return homedir;
+}
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	// seek to the location
@@ -645,8 +714,13 @@ void FileHandle::Truncate(int64_t new_size) {
 
 static bool HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
-		if (str[i] == '*' || str[i] == '?') {
+		switch(str[i]) {
+		case '*':
+		case '?':
+		case '[':
 			return true;
+		default:
+			break;
 		}
 	}
 	return false;
@@ -658,7 +732,7 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 		if (is_directory != match_directory) {
 			return;
 		}
-		if (LikeFun::Glob(fname.c_str(), glob.c_str(), nullptr)) {
+		if (LikeFun::Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
 			if (join_path) {
 				result.push_back(fs.JoinPath(path, fname));
 			} else {
@@ -688,9 +762,14 @@ vector<string> FileSystem::Glob(string path) {
 		if (path[i] == '\\' || path[i] == '/') {
 			if (i == last_pos) {
 				// empty: skip this position
+				last_pos = i + 1;
 				continue;
 			}
-			splits.push_back(path.substr(last_pos, i - last_pos));
+			if (splits.empty()) {
+				splits.push_back(path.substr(0, i));
+			} else {
+				splits.push_back(path.substr(last_pos, i - last_pos));
+			}
 			last_pos = i + 1;
 		}
 	}
@@ -703,6 +782,13 @@ vector<string> FileSystem::Glob(string path) {
 	} else if (StringUtil::Contains(splits[0], ":")) {
 		// first split has a colon -  windows absolute path
 		absolute_path = true;
+	} else if (splits[0] == "~") {
+		// starts with home directory
+		auto home_directory = GetHomeDirectory();
+		if (!home_directory.empty()) {
+			absolute_path = true;
+			splits[0] = home_directory;
+		}
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {
@@ -711,17 +797,29 @@ vector<string> FileSystem::Glob(string path) {
 	}
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
+		bool has_glob = HasGlob(splits[i]);
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern
 		vector<string> result;
-		if (previous_directories.empty()) {
-			// no previous directories: list in the current path
-			GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+		if (!has_glob) {
+			// no glob, just append as-is
+			if (previous_directories.empty()) {
+				result.push_back(splits[i]);
+			} else {
+				for (auto &prev_directory : previous_directories) {
+					result.push_back(JoinPath(prev_directory, splits[i]));
+				}
+			}
 		} else {
-			// previous directories
-			// we iterate over each of the previous directories, and apply the glob of the current directory
-			for (auto &prev_directory : previous_directories) {
-				GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+			if (previous_directories.empty()) {
+				// no previous directories: list in the current path
+				GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+			} else {
+				// previous directories
+				// we iterate over each of the previous directories, and apply the glob of the current directory
+				for (auto &prev_directory : previous_directories) {
+					GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+				}
 			}
 		}
 		if (is_last_chunk || result.size() == 0) {
@@ -729,7 +827,7 @@ vector<string> FileSystem::Glob(string path) {
 		}
 		previous_directories = move(result);
 	}
-	throw InternalException("Eeek");
+	return vector<string>();
 }
 
 } // namespace duckdb

@@ -1,0 +1,66 @@
+# name: benchmark/trainbenchmark/poslength.benchmark
+# description: The Train Benchmark's PosLength query
+# group: [trainbenchmark]
+
+load benchmark/trainbenchmark/load.sql
+
+run
+SELECT
+	id AS segment,
+	length AS length
+FROM Segment
+WHERE length <= 0;
+
+result II
+9	-58
+14	-333
+16	-437
+59	-515
+65	-210
+79	-178
+85	-731
+86	-540
+102	-427
+118	-816
+131	-513
+138	-992
+140	-713
+186	-189
+200	-21
+224	-611
+230	-393
+237	-617
+239	-618
+248	-701
+274	-300
+288	-695
+293	-997
+294	-340
+318	-296
+343	-794
+362	-577
+369	-608
+394	-331
+398	-516
+418	-512
+419	-456
+423	-268
+426	-818
+439	-367
+454	-73
+462	-158
+473	-92
+483	-641
+549	-40
+586	-93
+605	-825
+607	-747
+612	-902
+639	-856
+651	-133
+657	-637
+678	-223
+686	-902
+707	-161
+726	-498
+729	-681

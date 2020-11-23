@@ -1,0 +1,150 @@
+# name: test/sql/error/incorrect_sql.test
+# description: Test various incorrect SQL strings
+# group: [error]
+
+# typo
+statement error
+SELEC 42;
+
+statement error
+SELEC 42, 'thisisareallylongstringloremipsumblablathisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablal';
+
+statement error
+SELEC 42, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
+
+# unrecognized column
+statement error
+SELECT '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆', x, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
+
+# unrecognized scalar function
+statement error
+SELECT FUNFUNFUN();
+
+statement error
+CREATE VIEW v1
+AS SELECT FUNFUNFUN();
+
+# unrecognized aggregate parameters
+statement error
+SELECT SUM(42, 84, 11, 'hello')
+
+# no matching function
+statement error
+SELECT cos(0, 1, 2, 3);
+
+# unrecognized table function
+statement error
+SELECT * FROM RANG();
+
+# unknown named parameters
+statement error
+SELECT * FROM RANGE(1, hello=3);
+
+statement error
+SELECT * FROM READ_CSV('x', hello=3);
+
+# multiple where clauses
+statement error
+SELECT 42 WHERE 1=1 WHERE 1=0;
+
+# multiple statements without semi colon
+statement error
+SELECT 42
+SELECT 42;
+
+# multiple statements, but error is only in second statement
+statement error
+SELECT 42; SELEC 42;
+
+# non-existent table
+statement error
+SELECT * FROM integers2;
+
+# non-existent schema
+statement error
+SELECT * FROM bla.integers2;
+
+# non-existent table in view
+statement error
+CREATE VIEW v1 AS SELECT * FROM integers2;
+
+# non-existent table in long single-line query
+statement error
+with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9;
+
+statement error
+with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9 where x=3 order by x+1+1+1+1+1+1+1+1+1+1+1;
+
+# non-existent table in multi-line query (Q1)
+statement error
+SELECT
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) AS sum_qty,
+    sum(l_extendedprice) AS sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+    avg(l_quantity) AS avg_qty,
+    avg(l_extendedprice) AS avg_price,
+    avg(l_discount) AS avg_disc,
+    count(*) AS count_order
+FROM
+    lineitem
+WHERE
+    l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    l_returnflag,
+    l_linestatus
+ORDER BY
+    l_returnflag,
+    l_linestatus;
+
+# now with unicode
+# short unicode error
+statement error
+select 🦆🍞 from 🦆🍞;
+
+# long unicode error
+statement error
+with 🍞🍞 as (select 'bread' as 🍞), 🦆🦆 as (select ref.🍞 as "🍞" from 🍞🍞 as ref) SELECT * FROM integers9 where x LIKE '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆' order by x+1+1+1+1+1+1+1+1+1+1+1;
+
+statement ok
+CREATE TABLE integers(integ INTEGER);
+
+statement ok
+CREATE TABLE strings(str VARCHAR);
+
+statement ok
+CREATE TABLE chickens(feather INTEGER, beak INTEGER);
+
+# non-existent table, with several tables available
+statement error
+SELECT * FROM integres;
+
+# non-existent column
+statement error
+SELECT feathe FROM chickens;
+
+# non-existent column, with multiple tables
+statement error
+SELECT feathe FROM chickens, integers, strings;
+
+statement error
+SELECT st FROM chickens, integers, strings;
+
+statement error
+SELECT chicken.feather FROM chickens
+
+# table-qualified non-existent column
+statement error
+SELECT chicken.st FROM chickens, integers, strings;
+
+# now with unicode
+statement ok
+CREATE TABLE 🦆🍞(🦆🦆🦆 INTEGER, 🍞🍞🍞 INTEGER);
+
+statement error
+SELECT 🦆.🦆🦆🦆 FROM 🦆🍞
+
+statement error
+SELECT 🦆🦆 FROM 🦆🍞, chickens

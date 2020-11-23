@@ -24,6 +24,7 @@ using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
 using parquet::format::CompressionCodec;
+using parquet::format::ConvertedType;
 using parquet::format::Encoding;
 using parquet::format::FieldRepetitionType;
 using parquet::format::FileMetaData;
@@ -78,6 +79,16 @@ static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
 		return Type::INT96;
 	default:
 		throw NotImplementedException(duckdb_type.ToString());
+	}
+}
+
+static bool duckdb_type_to_converted_type(LogicalType duckdb_type, ConvertedType::type &result) {
+	switch (duckdb_type.id()) {
+	case LogicalTypeId::VARCHAR:
+		result = ConvertedType::UTF8;
+		return true;
+	default:
+		return false;
 	}
 }
 
@@ -141,6 +152,8 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalTy
 		schema_element.__isset.type = true;
 		schema_element.__isset.repetition_type = true;
 		schema_element.name = column_names[i];
+		schema_element.__isset.converted_type =
+		    duckdb_type_to_converted_type(sql_types[i], schema_element.converted_type);
 	}
 }
 
@@ -277,17 +290,17 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				}
 				break;
 			}
+			case LogicalTypeId::BLOB:
 			case LogicalTypeId::VARCHAR: {
 				auto *ptr = FlatVector::GetData<string_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
 					if (!nullmask[r]) {
 						temp_writer.Write<uint32_t>(ptr[r].GetSize());
-						temp_writer.WriteData((const_data_ptr_t)ptr[r].GetData(), ptr[r].GetSize());
+						temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
 					}
 				}
 				break;
 			}
-				// TODO date blob etc.
 			default:
 				throw NotImplementedException((sql_types[i].ToString()));
 			}

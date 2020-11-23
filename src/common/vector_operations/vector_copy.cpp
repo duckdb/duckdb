@@ -26,9 +26,9 @@ static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &ta
 
 void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
-	assert(source_offset <= source_count);
-	assert(target.vector_type == VectorType::FLAT_VECTOR);
-	assert(source.type == target.type);
+	D_ASSERT(source_offset <= source_count);
+	D_ASSERT(target.vector_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(source.type == target.type);
 	switch (source.vector_type) {
 	case VectorType::DICTIONARY_VECTOR: {
 		// dictionary vector: merge selection vectors
@@ -56,7 +56,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 
 	idx_t copy_count = source_count - source_offset;
-	assert(target_offset + copy_count <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(target_offset + copy_count <= STANDARD_VECTOR_SIZE);
 	if (copy_count == 0) {
 		return;
 	}
@@ -89,6 +89,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case PhysicalType::INT32:
 		TemplatedCopy<int32_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
+	case PhysicalType::HASH:
 	case PhysicalType::INT64:
 		TemplatedCopy<int64_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
@@ -124,14 +125,14 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 			// target already has entries: append to them
 			auto &source_children = StructVector::GetEntries(source);
 			auto &target_children = StructVector::GetEntries(target);
-			assert(source_children.size() == target_children.size());
+			D_ASSERT(source_children.size() == target_children.size());
 			for (idx_t i = 0; i < source_children.size(); i++) {
-				assert(target_children[i].first == target_children[i].first);
+				D_ASSERT(target_children[i].first == target_children[i].first);
 				VectorOperations::Copy(*source_children[i].second, *target_children[i].second, sel, source_count,
 				                       source_offset, target_offset);
 			}
 		} else {
-			assert(target_offset == 0);
+			D_ASSERT(target_offset == 0);
 			// target has no entries: create new entries for the target
 			auto &source_children = StructVector::GetEntries(source);
 			for (auto &child : source_children) {
@@ -144,7 +145,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		break;
 	}
 	case PhysicalType::LIST: {
-		assert(target.type.InternalType() == PhysicalType::LIST);
+		D_ASSERT(target.type.InternalType() == PhysicalType::LIST);
 		if (ListVector::HasEntry(source)) {
 			// if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {
@@ -172,7 +173,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for copy!");
+		throw NotImplementedException("Unimplemented type '%s' for copy!", TypeIdToString(source.type.InternalType()));
 	}
 }
 

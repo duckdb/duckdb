@@ -7,8 +7,8 @@ using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &op) {
 	// first visit the child nodes
-	assert(op.children.size() == 2);
-	assert(op.condition);
+	D_ASSERT(op.children.size() == 2);
+	D_ASSERT(op.condition);
 
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);

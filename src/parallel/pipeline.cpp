@@ -31,8 +31,8 @@ public:
 	}
 };
 
-Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0),
+Pipeline::Pipeline(Executor &executor_, ProducerToken &token_)
+    : executor(executor_), token(token_), finished_tasks(0), total_tasks(0), finished_dependencies(0), finished(false),
       recursive_cte(nullptr) {
 }
 
@@ -72,17 +72,19 @@ void Pipeline::Execute(TaskContext &task) {
 }
 
 void Pipeline::FinishTask() {
-	assert(finished_tasks < total_tasks);
+	D_ASSERT(finished_tasks < total_tasks);
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
 		try {
-			sink->Finalize(executor.context, move(sink_state));
+			sink->Finalize(*this, executor.context, move(sink_state));
 		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {
 			executor.PushError("Unknown exception in Finalize!");
 		}
-		Finish();
+		if (current_finished == total_tasks) {
+			Finish();
+		}
 	}
 }
 
@@ -109,8 +111,8 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 			// table function cannot be parallelized
 			return false;
 		}
-		assert(get.function.init_parallel_state);
-		assert(get.function.parallel_state_next);
+		D_ASSERT(get.function.init_parallel_state);
+		D_ASSERT(get.function.parallel_state_next);
 		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
 		if (max_threads > executor.context.db.NumberOfThreads()) {
 			max_threads = executor.context.db.NumberOfThreads();
@@ -143,14 +145,14 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 void Pipeline::Reset(ClientContext &context) {
 	sink_state = sink->GetGlobalState(context);
 	finished_tasks = 0;
-	total_tasks = 1;
+	total_tasks = 0;
 	finished = false;
 }
 
 void Pipeline::Schedule() {
-	assert(finished_tasks == 0);
-	assert(total_tasks == 0);
-	assert(finished_dependencies == dependencies.size());
+	D_ASSERT(finished_tasks == 0);
+	D_ASSERT(total_tasks == 0);
+	D_ASSERT(finished_dependencies == dependencies.size());
 	// check if we can parallelize this task based on the sink
 	switch (sink->type) {
 	case PhysicalOperatorType::SIMPLE_AGGREGATE: {
@@ -186,6 +188,14 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::WINDOW: {
+		// schedule child op
+		if (ScheduleOperator(sink->children[0].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -207,7 +217,7 @@ void Pipeline::CompleteDependency() {
 }
 
 void Pipeline::Finish() {
-	assert(!finished);
+	D_ASSERT(!finished);
 	finished = true;
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
 	for (auto &parent : parents) {

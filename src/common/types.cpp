@@ -80,8 +80,6 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 		return PhysicalType::VARCHAR;
-	case LogicalTypeId::VARBINARY:
-		return PhysicalType::VARBINARY;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
 	case LogicalTypeId::STRUCT:
@@ -119,7 +117,6 @@ const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
 const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
 
 const LogicalType LogicalType::VARCHAR = LogicalType(LogicalTypeId::VARCHAR);
-const LogicalType LogicalType::VARBINARY = LogicalType(LogicalTypeId::VARBINARY);
 
 const LogicalType LogicalType::BLOB = LogicalType(LogicalTypeId::BLOB);
 const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
@@ -170,14 +167,14 @@ string TypeIdToString(PhysicalType type) {
 		return "DOUBLE";
 	case PhysicalType::VARCHAR:
 		return "VARCHAR";
-	case PhysicalType::VARBINARY:
-		return "VARBINARY";
 	case PhysicalType::INTERVAL:
 		return "INTERVAL";
 	case PhysicalType::STRUCT:
 		return "STRUCT<?>";
 	case PhysicalType::LIST:
 		return "LIST<?>";
+	case PhysicalType::INVALID:
+		return "INVALID";
 	default:
 		throw ConversionException("Invalid PhysicalType %d", type);
 	}
@@ -213,8 +210,6 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return 16; // offset + len
-	case PhysicalType::VARBINARY:
-		return sizeof(blob_t);
 	default:
 		throw ConversionException("Invalid PhysicalType %d", type);
 	}
@@ -293,8 +288,6 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "VARCHAR";
 	case LogicalTypeId::BLOB:
 		return "BLOB";
-	case LogicalTypeId::VARBINARY:
-		return "VARBINARY";
 	case LogicalTypeId::CHAR:
 		return "CHAR";
 	case LogicalTypeId::INTERVAL:
@@ -361,7 +354,7 @@ LogicalType TransformStringToLogicalType(string str) {
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
 	           lower_str == "char") {
 		return LogicalType::VARCHAR;
-	} else if (lower_str == "bytea" || lower_str == "blob") {
+	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
 		return LogicalType::BLOB;
 	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
 		return LogicalType::BIGINT;
@@ -379,8 +372,6 @@ LogicalType TransformStringToLogicalType(string str) {
 		return LogicalType::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
 		return LogicalType::TINYINT;
-	} else if (lower_str == "varbinary") {
-		return LogicalType(LogicalTypeId::VARBINARY);
 	} else if (lower_str == "date") {
 		return LogicalType::DATE;
 	} else if (lower_str == "time") {
@@ -423,7 +414,7 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-bool LogicalType::GetDecimalProperties(int &width, int &scale) const {
+bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
 		width = 0;
@@ -591,8 +582,8 @@ LogicalType LogicalType::MaxLogicalType(LogicalType left, LogicalType right) {
 void LogicalType::Verify() const {
 #ifdef DEBUG
 	if (id_ == LogicalTypeId::DECIMAL) {
-		assert(width_ >= 1 && width_ <= Decimal::MAX_WIDTH_DECIMAL);
-		assert(scale_ >= 0 && scale_ <= width_);
+		D_ASSERT(width_ >= 1 && width_ <= Decimal::MAX_WIDTH_DECIMAL);
+		D_ASSERT(scale_ >= 0 && scale_ <= width_);
 	}
 #endif
 }

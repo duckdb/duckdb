@@ -7,6 +7,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 
+#include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 
@@ -38,7 +39,7 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, i
 	}
 }
 
-void Transaction::PushDelete(DataTable *table, ChunkInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
+void Transaction::PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
 	auto delete_info =
 	    (DeleteInfo *)undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;
@@ -46,6 +47,13 @@ void Transaction::PushDelete(DataTable *table, ChunkInfo *vinfo, row_t rows[], i
 	delete_info->count = count;
 	delete_info->base_row = base_row;
 	memcpy(delete_info->rows, rows, sizeof(row_t) * count);
+}
+
+void Transaction::PushAppend(DataTable *table, idx_t start_row, idx_t row_count) {
+	auto append_info = (AppendInfo *)undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
+	append_info->table = table;
+	append_info->start_row = start_row;
+	append_info->count = row_count;
 }
 
 UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
@@ -71,8 +79,8 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 	bool changes_made = undo_buffer.ChangesMade() || storage.ChangesMade() || sequence_usage.size() > 0;
 	try {
 		// commit the undo buffer
-		undo_buffer.Commit(iterator_state, log, commit_id);
 		storage.Commit(commit_state, *this, log, commit_id);
+		undo_buffer.Commit(iterator_state, log, commit_id);
 		if (log) {
 			// commit any sequences that were used to the WAL
 			for (auto &entry : sequence_usage) {
@@ -86,7 +94,6 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 		return string();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
-		storage.RevertCommit(commit_state);
 		if (log && changes_made) {
 			// remove any entries written into the WAL by truncating it
 			log->Truncate(initial_wal_size);

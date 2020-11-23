@@ -6,7 +6,6 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
@@ -32,11 +31,10 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// gather a list of all the tables
-	auto &transaction = Transaction::GetTransaction(context);
 	vector<TableCatalogEntry *> tables;
-	Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
+	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(transaction, [&](CatalogEntry *entry) {
+		schema->tables.Scan(context, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back((TableCatalogEntry *)entry);
 			}
@@ -73,7 +71,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
 			auto copy_union = make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
-			                                                   move(bound_statement.plan), LogicalOperatorType::UNION);
+			                                                   move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
 			child_operator = move(copy_union);
 		} else {
 			child_operator = move(bound_statement.plan);

@@ -22,7 +22,7 @@ unique_ptr<SelectStatement> SelectStatement::Copy() {
 
 void SelectStatement::Serialize(Serializer &serializer) {
 	// with clauses
-	assert(cte_map.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(cte_map.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)cte_map.size());
 	for (auto &cte : cte_map) {
 		serializer.WriteString(cte.first);
@@ -39,7 +39,7 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 		auto name = source.Read<string>();
 		auto info = make_unique<CommonTableExpressionInfo>();
 		source.ReadStringVector(info->aliases);
-		info->query = QueryNode::Deserialize(source);
+		info->query = SelectStatement::Deserialize(source);
 		result->cte_map[name] = move(info);
 	}
 	result->node = QueryNode::Deserialize(source);

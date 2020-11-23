@@ -6,6 +6,7 @@
 #include "duckdb.hpp"
 
 #include <cstring>
+#include <cassert>
 
 #ifdef _WIN32
 #define strdup _strdup
@@ -85,7 +86,7 @@ template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, i
 }
 
 static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_result *out) {
-	assert(result);
+	D_ASSERT(result);
 	if (!out) {
 		// no result to write to, only return the status
 		return result->success ? DuckDBSuccess : DuckDBError;
@@ -159,7 +160,11 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
-						target[row] = strdup(source[k].GetData());
+						target[row] = (char *)malloc(source[k].GetSize() + 1);
+						assert(target[row]);
+						memcpy((void *)target[row], source[k].GetDataUnsafe(), source[k].GetSize());
+						auto write_arr = (char *)target[row];
+						write_arr[source[k].GetSize()] = '\0';
 					}
 					row++;
 				}
@@ -266,7 +271,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		}
 		default:
 			// unsupported type for C API
-			assert(0);
+			D_ASSERT(0);
 			return DuckDBError;
 		}
 	}
@@ -400,7 +405,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 	auto result = wrapper->statement->Execute(wrapper->values, false);
-	assert(result->type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	auto mat_res = (MaterializedQueryResult *)result.get();
 	return duckdb_translate_result(mat_res, out_result);
 }
@@ -479,13 +484,13 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(duckdb_interval);
 	default:
 		// unsupported type
-		assert(0);
+		D_ASSERT(0);
 		return sizeof(const char *);
 	}
 }
 
 template <class T> T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
-	assert(row < result->row_count);
+	D_ASSERT(row < result->row_count);
 	return ((T *)result->columns[col].data)[row];
 }
 
@@ -546,7 +551,7 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
 	default:
 		// invalid type for C to C++ conversion
-		assert(0);
+		D_ASSERT(0);
 		return Value();
 	}
 }

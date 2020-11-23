@@ -1,0 +1,16 @@
+# name: test/issues/rigger/big_sum_cast_bug.test
+# description: SQLancer bug that detected an error in casting of the result of a sum to double
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT SUM(-9223372036854775808)::DOUBLE AS agg0 FROM (VALUES (0), (1)) t1;
+----
+-18446744073709551616
+
+query I
+SELECT SUM(-9223372036854775808) AS agg0 FROM (VALUES (0), (1)) t1;
+----
+-18446744073709551616

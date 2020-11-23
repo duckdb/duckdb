@@ -56,7 +56,7 @@ class Binder {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	Binder(ClientContext &context, Binder *parent = nullptr);
+	Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
@@ -73,12 +73,15 @@ public:
 	bool read_only;
 	//! Whether or not the statement requires a valid transaction to run
 	bool requires_valid_transaction = true;
+	//! The alias for the currently processing subquery, if it exists
+	string alias;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);
 	BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
+	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
@@ -90,7 +93,7 @@ public:
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo *cte);
 	//! Find a common table expression by name; returns nullptr if none exists
-	CommonTableExpressionInfo *FindCTE(const string &name);
+	CommonTableExpressionInfo *FindCTE(const string &name, bool skip = false);
 
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();
@@ -104,6 +107,10 @@ public:
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(CorrelatedColumnInfo info);
 
+	string FormatError(ParsedExpression &expr_context, string message);
+	string FormatError(TableRef &ref_context, string message);
+	string FormatError(idx_t query_location, string message);
+
 private:
 	//! The parent binder (if any)
 	Binder *parent;
@@ -115,6 +122,10 @@ private:
 	bool has_unplanned_subqueries = false;
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
+	//! Whether CTEs should reference the parent binder (if it exists)
+	bool inherit_ctes = true;
+	//! The root statement of the query that is currently being parsed
+	SQLStatement *root_statement = nullptr;
 
 private:
 	//! Bind the default values of the columns of a table
@@ -177,6 +188,8 @@ private:
 
 	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
+	void BindNamedParameters(unordered_map<string, LogicalType> &types, unordered_map<string, Value> &values,
+	                         QueryErrorContext &error_context, string &func_name);
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
 	unique_ptr<Expression> BindFilter(unique_ptr<ParsedExpression> condition);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);

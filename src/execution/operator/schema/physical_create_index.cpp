@@ -15,7 +15,7 @@ void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk 
 	}
 
 	auto &schema = *table.schema;
-	auto index_entry = (IndexCatalogEntry *)schema.CreateIndex(context.client, info.get());
+	auto index_entry = (IndexCatalogEntry *)schema.CreateIndex(context.client, info.get(), &table);
 	if (!index_entry) {
 		// index already exists, but error ignored because of IF NOT EXISTS
 		return;
@@ -28,7 +28,7 @@ void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk 
 		break;
 	}
 	default:
-		assert(0);
+		D_ASSERT(0);
 		throw NotImplementedException("Unimplemented index type");
 	}
 	index_entry->index = index.get();

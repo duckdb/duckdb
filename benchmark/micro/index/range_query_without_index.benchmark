@@ -2,6 +2,9 @@
 # description: Range query without index
 # group: [index]
 
+name Range Query (No Index)
+group index
+
 load
 CREATE TABLE integers AS SELECT i, i + 2 AS j FROM range(0, 100000000) t(i);
 

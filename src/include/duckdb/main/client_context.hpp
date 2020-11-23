@@ -17,6 +17,8 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/common/enums/output_type.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 #include <random>
 
@@ -62,11 +64,12 @@ public:
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
 	bool force_parallelism = false;
-	//! Output only the logical_opt explain output, used for optimization verification
-	bool explain_output_optimized_only = false;
+	//! Force index join independent of table cardinality, used for testing
+	bool force_index_join = false;
 	//! The writer used to log queries (if logging is enabled)
 	unique_ptr<BufferedFileWriter> log_query_writer;
-
+	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
+	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
@@ -86,6 +89,7 @@ public:
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT
 	//! statement.
 	unique_ptr<QueryResult> Query(string query, bool allow_stream_result);
+	unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, bool allow_stream_result);
 	//! Fetch a query from the current result set (if any)
 	unique_ptr<DataChunk> Fetch();
 	//! Cleanup the result set (if any).
@@ -107,6 +111,9 @@ public:
 
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
+	//! Directly prepare a SQL statement
+	unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
+
 	//! Execute a prepared statement with the given name and set of parameters
 	unique_ptr<QueryResult> Execute(string name, vector<Value> &values, bool allow_stream_result = true,
 	                                string query = string());
@@ -120,7 +127,7 @@ public:
 	void RegisterFunction(CreateFunctionInfo *info);
 
 	//! Parse statements from a query
-	vector<unique_ptr<SQLStatement>> ParseStatements(string query, idx_t *n_prepared_parameters = nullptr);
+	vector<unique_ptr<SQLStatement>> ParseStatements(string query);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -154,6 +161,8 @@ private:
 	//! Call CreatePreparedStatement() and ExecutePreparedStatement() without any bound values
 	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
 	                                             bool allow_stream_result);
+	unique_ptr<PreparedStatement> PrepareInternal(unique_ptr<SQLStatement> statement);
+	void LogQueryInternal(string query);
 
 private:
 	idx_t prepare_count = 0;

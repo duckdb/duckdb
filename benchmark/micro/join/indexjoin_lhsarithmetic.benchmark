@@ -1,0 +1,15 @@
+# name: benchmark/micro/join/indexjoin_lhsarithmetic.benchmark
+# description: Index Join where LHS performs case operation
+# group: [join]
+
+name Equality Join + Arithmetic (Index)
+group join
+
+load
+PRAGMA force_index_join;
+CREATE TABLE t1 AS SELECT i as v1, i as v2 from range (0,10000) t(i);
+CREATE TABLE t2 AS SELECT i as v1, i as v2 from range (0,10000000) t(i);
+CREATE INDEX i_index ON t2(v1)
+
+run
+SELECT CASE WHEN t1.v1 > 50 THEN t1.v1+t1.v2 ELSE t1.v1*t1.v2 END FROM t1 JOIN t2 USING (v1);

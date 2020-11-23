@@ -10,8 +10,8 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<AlterStatement> Transformer::TransformAlter(PGNode *node) {
 	auto stmt = reinterpret_cast<PGAlterTableStmt *>(node);
-	assert(stmt);
-	assert(stmt->relation);
+	D_ASSERT(stmt);
+	D_ASSERT(stmt->relation);
 
 	auto result = make_unique<AlterStatement>();
 

@@ -2,6 +2,9 @@
 # description: ART Integer Type: BIGINT
 # group: [art]
 
+statement ok
+PRAGMA force_index_join
+
 # BEGIN TYPE BIGINT
 statement ok
 CREATE TABLE integers(i BIGINT)

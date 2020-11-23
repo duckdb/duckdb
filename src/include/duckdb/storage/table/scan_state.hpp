@@ -18,8 +18,10 @@
 namespace duckdb {
 class LocalTableStorage;
 class Index;
+class MorselInfo;
 class PersistentSegment;
 class TransientSegment;
+struct TableFilterSet;
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
@@ -55,22 +57,33 @@ struct ColumnFetchState {
 };
 
 struct LocalScanState {
-	LocalTableStorage *storage = nullptr;
+	~LocalScanState();
+
+	void SetStorage(LocalTableStorage *storage);
+	LocalTableStorage *GetStorage() {
+		return storage;
+	}
 
 	idx_t chunk_index;
 	idx_t max_index;
 	idx_t last_chunk_count;
+	TableFilterSet *table_filters;
+
+private:
+	LocalTableStorage *storage = nullptr;
 };
 
 class TableScanState {
 public:
 	TableScanState(){};
-	idx_t current_persistent_row, max_persistent_row;
-	idx_t current_transient_row, max_transient_row;
+	idx_t current_row, max_row;
+	idx_t base_row;
 	unique_ptr<ColumnScanState[]> column_scans;
 	idx_t column_count;
+	TableFilterSet *table_filters = nullptr;
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	LocalScanState local_state;
+	MorselInfo *version_info;
 
 	//! Move to the next vector
 	void NextVector();
@@ -80,6 +93,7 @@ class CreateIndexScanState : public TableScanState {
 public:
 	vector<unique_ptr<StorageLockKey>> locks;
 	std::unique_lock<std::mutex> append_lock;
+	std::unique_lock<std::mutex> delete_lock;
 };
 
 } // namespace duckdb

@@ -1,0 +1,194 @@
+# name: test/sql/alter/rename_table/test_rename_table_collision.test
+# description: Test RENAME TABLE multiple transactions with rename after drop
+# group: [rename_table]
+
+statement ok con1
+CREATE TABLE t1(i INTEGER);
+
+statement ok con1
+INSERT INTO t1 VALUES (1), (2), (3);
+
+statement ok con2
+CREATE TABLE t2(i VARCHAR);
+
+statement ok con2
+INSERT INTO t2 VALUES (4), (5), (6);
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DROP TABLE t2;
+
+statement ok con2
+ALTER TABLE t1 RENAME TO t2;
+
+query I con2
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+query I con1
+SELECT i FROM t1 ORDER BY i;
+----
+1
+2
+3
+
+query I con1
+SELECT i FROM t2 ORDER BY i;
+----
+4
+5
+6
+
+statement ok con2
+COMMIT
+
+query I con1
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+statement error con1
+SELECT * FROM t1
+
+
+# Now we're going to do a rollback instead of a commit
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+ALTER TABLE t2 RENAME TO t3;
+
+statement error con1
+SELECT i FROM t3 ORDER BY i
+
+statement error con2
+SELECT i FROM t2 ORDER BY i
+
+query I con2
+SELECT i FROM t3 ORDER BY i
+----
+1
+2
+3
+
+statement ok con2
+DROP TABLE t3;
+
+query I con1
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+statement ok con2
+CREATE TABLE t2 (i integer)
+
+statement ok con2
+INSERT INTO t2 VALUES (7), (8), (9)
+
+query I con2
+SELECT i FROM t2 ORDER BY i
+----
+7
+8
+9
+
+statement ok con2
+ROLLBACK
+
+query I con1
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+query I con2
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+# alter/create collision
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE t2 RENAME TO t3
+
+statement error con2
+CREATE TABLE t3 (i INTEGER)
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+# alter/alter collision
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+ALTER TABLE t2 RENAME TO t3
+
+statement error con1
+ALTER TABLE t2 RENAME TO t4
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+# create some additional reference tables
+# for testing, outside of any transaction
+
+statement ok con1
+CREATE TABLE e1 (i INTEGER)
+
+statement ok con2
+CREATE TABLE e2 (i INTEGER)
+
+# crossing drops/renames
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+DROP TABLE e2
+
+statement ok con2
+DROP TABLE e1
+
+statement error con1
+ALTER TABLE e1 RENAME TO e2
+
+statement error con2
+ALTER TABLE e2 RENAME TO e1
+
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK

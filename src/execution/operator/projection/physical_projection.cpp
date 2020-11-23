@@ -10,7 +10,7 @@ class PhysicalProjectionState : public PhysicalOperatorState {
 public:
 	PhysicalProjectionState(PhysicalOperator &op, PhysicalOperator *child, vector<unique_ptr<Expression>> &expressions)
 	    : PhysicalOperatorState(op, child), executor(expressions) {
-		assert(child);
+		D_ASSERT(child);
 	}
 
 	ExpressionExecutor executor;
@@ -32,7 +32,7 @@ unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
 	return make_unique<PhysicalProjectionState>(*this, children[0].get(), select_list);
 }
 
-string PhysicalProjection::ExtraRenderInformation() const {
+string PhysicalProjection::ParamsToString() const {
 	string extra_info;
 	for (auto &expr : select_list) {
 		extra_info += expr->GetName() + "\n";

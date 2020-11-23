@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 2.8.12)
 cmake_policy(SET CMP0026 NEW)
 cmake_policy(SET CMP0051 NEW)
 # if(APPLE) # needs to be before project() SET(CMAKE_CXX_FLAGS -stdlib=libc++)
@@ -131,10 +131,19 @@ option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
+option(BUILD_REST "Build the DuckDB REST server" FALSE)
+option(
+  ASSERT_EXCEPTION
+  "Throw an exception on an assert failing, instead of triggering a sigabort"
+  TRUE)
+option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 
-if(BUILD_PYTHON OR BUILD_R OR JDBC_DRIVER)
+
+if(BUILD_PYTHON
+   OR BUILD_R
+   OR JDBC_DRIVER)
   set(BUILD_ICU_EXTENSION TRUE)
   set(BUILD_PARQUET_EXTENSION TRUE)
 endif()
@@ -145,6 +154,15 @@ endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
+endif()
+
+if(!ASSERT_EXCEPTION)
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -DDUCKDB_USE_STANDARD_ASSERT")
+endif()
+
+if(FORCE_ASSERT)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
 endif()
 
 if(NOT MSVC)
@@ -284,20 +302,20 @@ function(disable_target_warnings NAME)
 endfunction()
 
 function(add_extension_definitions)
-  include_directories(${CMAKE_SOURCE_DIR}/extension)
+  include_directories(${PROJECT_SOURCE_DIR}/extension)
 
   if(${BUILD_ICU_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/icu/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/icu/include)
     add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
   endif()
 
   if(${BUILD_PARQUET_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/parquet/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/parquet/include)
     add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
   endif()
 
   if(${BUILD_TPCH_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/tpch/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/tpch/include)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
   endif()
 endfunction()

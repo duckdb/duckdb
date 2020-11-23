@@ -18,6 +18,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	this->types = info->types;
 	this->temporary = info->temporary;
 	this->sql = info->sql;
+	this->internal = info->internal;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
@@ -26,6 +27,9 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+	if (internal) {
+		throw CatalogException("Cannot use ALTER VIEW to alter a system view");
+	}
 	if (info->type != AlterType::ALTER_VIEW) {
 		throw CatalogException("Can only modify view with ALTER VIEW statement");
 	}
@@ -43,11 +47,12 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 }
 
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
+	D_ASSERT(!internal);
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	serializer.WriteString(sql);
 	query->Serialize(serializer);
-	assert(aliases.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(aliases.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)aliases.size());
 	for (auto &alias : aliases) {
 		serializer.WriteString(alias);
@@ -63,7 +68,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	info->schema = source.Read<string>();
 	info->view_name = source.Read<string>();
 	info->sql = source.Read<string>();
-	info->query = QueryNode::Deserialize(source);
+	info->query = SelectStatement::Deserialize(source);
 	auto alias_count = source.Read<uint32_t>();
 	for (uint32_t i = 0; i < alias_count; i++) {
 		info->aliases.push_back(source.Read<string>());
@@ -83,6 +88,7 @@ string ViewCatalogEntry::ToSQL() {
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
+	D_ASSERT(!internal);
 	auto create_info = make_unique<CreateViewInfo>(schema->name, name);
 	create_info->query = query->Copy();
 	for (idx_t i = 0; i < aliases.size(); i++) {

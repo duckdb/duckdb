@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/storage/checkpoint_manager.hpp"
-#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 class UncompressedSegment;
+class BaseStatistics;
 class SegmentStatistics;
 
 //! The table data writer is responsible for writing the data of a table to the block manager
@@ -21,7 +21,7 @@ public:
 	TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table);
 	~TableDataWriter();
 
-	void WriteTableData(Transaction &transaction);
+	void WriteTableData(ClientContext &context);
 
 private:
 	void AppendData(Transaction &transaction, idx_t col_idx, Vector &data, idx_t count);
@@ -38,6 +38,7 @@ private:
 
 	vector<unique_ptr<UncompressedSegment>> segments;
 	vector<unique_ptr<SegmentStatistics>> stats;
+	vector<unique_ptr<BaseStatistics>> column_stats;
 
 	vector<vector<DataPointer>> data_pointers;
 };

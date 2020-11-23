@@ -2,6 +2,9 @@
 # description: ART Integer Type: tinyint
 # group: [art]
 
+statement ok
+PRAGMA force_index_join
+
 # BEGIN TYPE tinyint
 statement ok
 CREATE TABLE integers(i tinyint)

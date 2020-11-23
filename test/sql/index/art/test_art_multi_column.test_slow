@@ -2,6 +2,9 @@
 # description: Test ART index on table with multiple columns
 # group: [art]
 
+statement ok
+PRAGMA force_index_join
+
 # create a table
 statement ok con1
 CREATE TABLE integers(i INTEGER, j INTEGER)

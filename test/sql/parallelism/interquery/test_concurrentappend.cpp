@@ -3,7 +3,6 @@
 #include "test_helpers.hpp"
 
 #include <atomic>
-#include <random>
 #include <thread>
 
 using namespace duckdb;
@@ -28,7 +27,7 @@ TEST_CASE("Sequential append", "[interquery][.]") {
 
 	for (size_t i = 0; i < CONCURRENT_APPEND_THREAD_COUNT; i++) {
 		result = connections[i]->Query("SELECT COUNT(*) FROM integers");
-		assert(result->collection.count > 0);
+		D_ASSERT(result->collection.count > 0);
 		Value count = result->collection.chunks[0]->GetValue(0, 0);
 		REQUIRE(count == 0);
 		for (size_t j = 0; j < CONCURRENT_APPEND_INSERT_ELEMENTS; j++) {
@@ -96,7 +95,8 @@ TEST_CASE("Concurrent append", "[interquery][.]") {
 	}
 
 	result = con.Query("SELECT COUNT(*), SUM(i) FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(CONCURRENT_APPEND_THREAD_COUNT * CONCURRENT_APPEND_INSERT_ELEMENTS)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(3 * CONCURRENT_APPEND_THREAD_COUNT * CONCURRENT_APPEND_INSERT_ELEMENTS)}));
+	REQUIRE(
+	    CHECK_COLUMN(result, 0, {Value::BIGINT(CONCURRENT_APPEND_THREAD_COUNT * CONCURRENT_APPEND_INSERT_ELEMENTS)}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::BIGINT(3 * CONCURRENT_APPEND_THREAD_COUNT * CONCURRENT_APPEND_INSERT_ELEMENTS)}));
 }
-

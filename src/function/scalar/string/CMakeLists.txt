@@ -6,6 +6,7 @@ add_library_unity(
   concat.cpp
   length.cpp
   like.cpp
+  md5.cpp
   nfc_normalize.cpp
   printf.cpp
   regexp.cpp
@@ -19,7 +20,8 @@ add_library_unity(
   suffix.cpp
   trim.cpp
   left_right.cpp
-  contains.cpp)
+  contains.cpp
+  string_split.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
     PARENT_SCOPE)

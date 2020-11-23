@@ -1,0 +1,45 @@
+# name: test/optimizer/statistics/statistics_join_multicolumn.test
+# description: Statistics propagation through joins on multiple columns
+# group: [statistics]
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (10)) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM (VALUES (2, 5), (3, 6), (4, 7)) tbl(i, j);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+PRAGMA enable_verification
+
+# inner join
+# integers.i has [1, 10] as min max
+# integers2.i is [2, 4], integers2.j [5, 7]
+# we compare integers.i = integers2.i AND integers.i = integers2.j
+# these sets are disjoint, so we get an empty result
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i=i2.j);
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i>i2.j);
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# when we do i1.i < i2.j, the sets are no longer disjoint, because the set [2, 4] is smaller than the set [5, 7]
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i<i2.j);
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i=i2.j);
+----
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i<i2.j);
+----
+2

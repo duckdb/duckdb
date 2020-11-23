@@ -1,0 +1,72 @@
+# name: test/optimizer/statistics/statistics_null_comparison.test
+# description: Statistics propagation with comparisons and null values
+# group: [statistics]
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (10, 1), (20, 2), (30, NULL)) tbl(i, j);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM (VALUES (1), (2), (NULL)) tbl(i);
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# this is statically false, but there are null values NOT in a filter, so we can't optimize it away
+# instead the comparison is replaced by a CONSTANT OR NULL
+query II
+EXPLAIN SELECT i=j FROM integers ORDER BY i;
+----
+logical_opt	<REGEX>:.*constant_or_null.*
+
+# if we put the same expression in a where clause, however, we CAN prune it
+query II
+EXPLAIN SELECT * FROM integers WHERE i=j ORDER BY i;
+----
+logical_opt	<!REGEX>:.*constant_or_null.*
+
+# this is statically true, but there are null values, so we can't optimize it away
+query II
+EXPLAIN SELECT i>j FROM integers ORDER BY i;
+----
+logical_opt	<REGEX>:.*constant_or_null.*
+
+# if we put it in the where clause, we STILL can't prune it
+query II
+EXPLAIN SELECT * FROM integers WHERE i>j ORDER BY i;
+----
+logical_opt	<REGEX>:.*constant_or_null.*
+
+# now verify that the results are correct
+query I
+SELECT i=j FROM integers ORDER BY i;
+----
+0
+0
+NULL
+
+query II
+SELECT * FROM integers WHERE i=j ORDER BY i;
+----
+
+query I
+SELECT j=i FROM integers ORDER BY i;
+----
+0
+0
+NULL
+
+query I
+SELECT i>j FROM integers ORDER BY i;
+----
+1
+1
+NULL
+
+query II
+SELECT * FROM integers WHERE i>j ORDER BY i;
+----
+10	1
+20	2

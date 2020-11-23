@@ -18,7 +18,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	children.push_back(move(left));
 	children.push_back(move(right));
 
-	assert(left_projection_map.size() == 0);
+	D_ASSERT(left_projection_map.size() == 0);
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
@@ -73,18 +73,27 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			auto &info = state->hash_table->correlated_mark_join_info;
 
 			vector<LogicalType> payload_types;
-			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
-			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
-				vector<unique_ptr<Expression>> children;
-				auto aggr =
-				    AggregateFunction::BindAggregateFunction(context, aggregate_functions[i], move(children), false);
-				correlated_aggregates.push_back(&*aggr);
-				info.correlated_aggregates.push_back(move(aggr));
-				payload_types.push_back(aggregate_functions[i].return_type);
-			}
-			info.correlated_counts =
-			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, correlated_aggregates);
+			unique_ptr<BoundAggregateExpression> aggr;
+
+			// jury-rigging the GroupedAggregateHashTable
+			// we need a count_star and a count to get counts with and without NULLs
+			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, false);
+			correlated_aggregates.push_back(&*aggr);
+			payload_types.push_back(aggr->return_type);
+			info.correlated_aggregates.push_back(move(aggr));
+
+			auto count_fun = CountFun::GetFunction();
+			vector<unique_ptr<Expression>> children;
+			// this is a dummy but we need it to make the hash table understand whats going on
+			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
+			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), false);
+			correlated_aggregates.push_back(&*aggr);
+			payload_types.push_back(aggr->return_type);
+			info.correlated_aggregates.push_back(move(aggr));
+
+			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
+			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
 			// FIXME: these can be initialized "empty" (without allocating empty vectors)
 			info.group_chunk.Initialize(delim_types);
@@ -131,11 +140,11 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	sink.hash_table->Finalize();
 
-	PhysicalSink::Finalize(context, move(state));
+	PhysicalSink::Finalize(pipeline, context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -182,8 +191,8 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 				state->cached_chunk.Reset();
 			} else
 #endif
-			    if (join_type == JoinType::OUTER) {
-				// check if we need to scan any unmatched tuples from the RHS for the full outer join
+			    if (IsRightOuterJoin(join_type)) {
+				// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 				sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
 			}
 			return;

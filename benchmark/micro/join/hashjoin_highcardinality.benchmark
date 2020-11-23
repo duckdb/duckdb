@@ -1,0 +1,20 @@
+# name: benchmark/micro/join/hashjoin_highcardinality.benchmark
+# description: Hash Join where RHS has high cardinality
+# group: [join]
+
+name High Cardinality Join (No Index, Count Only)
+group join
+
+load
+CREATE TABLE t1 AS SELECT i as v1, i as v2 from range (0,1000) t(i);
+CREATE TABLE t2 AS SELECT i as v1, i as v2 from range (0,10000000) t(i);
+
+run
+SELECT t1.v2,t2.v2,count(*) from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2  limit 5
+
+result III
+0	0	1
+1	1	1
+2	2	1
+3	3	1
+4	4	1

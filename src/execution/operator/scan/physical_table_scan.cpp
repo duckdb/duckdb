@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 #include "duckdb/parallel/task_context.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace std;
 
@@ -24,10 +25,11 @@ public:
 };
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_,
-                                     unique_ptr<FunctionData> bind_data_, vector<column_t> column_ids,
-                                     unordered_map<idx_t, vector<TableFilter>> table_filters)
+                                     unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
+                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
-      bind_data(move(bind_data_)), column_ids(move(column_ids)), table_filters(move(table_filters)) {
+      bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
+      table_filters(move(table_filters_p)) {
 }
 
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -46,10 +48,10 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				// parallel scan init
 				state.parallel_state = task_info->second;
 				state.operator_data = function.parallel_init(context.client, bind_data.get(), state.parallel_state,
-				                                             column_ids, table_filters);
+				                                             column_ids, table_filters.get());
 			} else {
 				// sequential scan init
-				state.operator_data = function.init(context.client, bind_data.get(), column_ids, table_filters);
+				state.operator_data = function.init(context.client, bind_data.get(), column_ids, table_filters.get());
 			}
 			if (!state.operator_data) {
 				// no operator data returned: nothing to scan
@@ -69,7 +71,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 		do {
 			function.function(context.client, bind_data.get(), state.operator_data.get(), chunk);
 			if (chunk.size() == 0) {
-				assert(function.parallel_state_next);
+				D_ASSERT(function.parallel_state_next);
 				if (function.parallel_state_next(context.client, bind_data.get(), state.operator_data.get(),
 				                                 state.parallel_state)) {
 					continue;
@@ -81,17 +83,44 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			}
 		} while (true);
 	}
-	assert(chunk.size() == 0);
+	D_ASSERT(chunk.size() == 0);
 	if (function.cleanup) {
 		function.cleanup(context.client, bind_data.get(), state.operator_data.get());
 	}
 }
 
-string PhysicalTableScan::ToString(idx_t depth) const {
+string PhysicalTableScan::GetName() const {
+	return StringUtil::Upper(function.name);
+}
+
+string PhysicalTableScan::ParamsToString() const {
+	string result;
 	if (function.to_string) {
-		return string(depth * 4, ' ') + function.to_string(bind_data.get());
+		result = function.to_string(bind_data.get());
+		result += "\n[INFOSEPARATOR]\n";
 	}
-	return PhysicalOperator::ToString(depth);
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		if (column_ids[i] < names.size()) {
+			if (i > 0) {
+				result += "\n";
+			}
+			result += names[column_ids[i]];
+		}
+	}
+	if (table_filters) {
+		result += "\n[INFOSEPARATOR]\n";
+		result += "Filters: ";
+		for (auto &f : table_filters->filters) {
+			for (auto &filter : f.second) {
+				if (filter.column_index < names.size()) {
+					result += "\n";
+					result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
+					          filter.constant.ToString();
+				}
+			}
+		}
+	}
+	return result;
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {

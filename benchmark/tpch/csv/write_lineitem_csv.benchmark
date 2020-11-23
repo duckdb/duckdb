@@ -2,6 +2,9 @@
 # description: Write the lineitem of TPC-H SF0.1 to a CSV file
 # group: [csv]
 
+name Write Lineitem CSV
+group csv
+
 require tpch
 
 load

@@ -2,6 +2,10 @@
 # description: Simple COUNT aggregate over lineitem
 # group: [aggregate]
 
+name Q1 Integer Keys
+group aggregate
+subgroup tpch
+
 require tpch
 
 load

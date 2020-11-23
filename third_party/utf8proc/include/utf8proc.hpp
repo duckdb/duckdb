@@ -627,7 +627,7 @@ UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u_input, int 
 UTF8PROC_DLLEXPORT bool utf8proc_codepoint_to_utf8(int cp, int &sz, char *c);
 UTF8PROC_DLLEXPORT int utf8proc_codepoint_length(int cp);
 UTF8PROC_DLLEXPORT size_t utf8proc_next_grapheme(const char *s, size_t len, size_t cpos);
-UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_remove_accents(const utf8proc_uint8_t *str);
+UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_remove_accents(const utf8proc_uint8_t *str, utf8proc_ssize_t len);
 template<class T>
 void utf8proc_grapheme_callback(const char *s, size_t len, T &&fun) {
 	int sz;
@@ -681,7 +681,7 @@ UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_totitle(utf8proc_int32_t c);
  * @note
  * If you want to check for particular types of non-printable characters,
  * (analogous to `isprint` or `iscntrl`), use @ref utf8proc_category. */
-UTF8PROC_DLLEXPORT int utf8proc_charwidth(utf8proc_int32_t codepoint);
+    UTF8PROC_DLLEXPORT int utf8proc_charwidth(utf8proc_int32_t codepoint);
 
 /**
  * Return the Unicode category for the codepoint (one of the
@@ -738,18 +738,18 @@ UTF8PROC_DLLEXPORT utf8proc_ssize_t utf8proc_map_custom(
  */
 /** @{ */
 /** NFD normalization (@ref UTF8PROC_DECOMPOSE). */
-UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFD(const utf8proc_uint8_t *str);
+UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFD(const utf8proc_uint8_t *str, utf8proc_ssize_t len);
 /** NFC normalization (@ref UTF8PROC_COMPOSE). */
-UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFC(const utf8proc_uint8_t *str);
+UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFC(const utf8proc_uint8_t *str, utf8proc_ssize_t len);
 /** NFKD normalization (@ref UTF8PROC_DECOMPOSE and @ref UTF8PROC_COMPAT). */
-UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKD(const utf8proc_uint8_t *str);
+UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKD(const utf8proc_uint8_t *str, utf8proc_ssize_t len);
 /** NFKC normalization (@ref UTF8PROC_COMPOSE and @ref UTF8PROC_COMPAT). */
-UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKC(const utf8proc_uint8_t *str);
+UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKC(const utf8proc_uint8_t *str, utf8proc_ssize_t len);
 /**
  * NFKC_Casefold normalization (@ref UTF8PROC_COMPOSE and @ref UTF8PROC_COMPAT
  * and @ref UTF8PROC_CASEFOLD and @ref UTF8PROC_IGNORE).
  **/
-UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKC_Casefold(const utf8proc_uint8_t *str);
+UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKC_Casefold(const utf8proc_uint8_t *str, utf8proc_ssize_t len);
 /** @} */
 
 //#ifdef __cplusplus

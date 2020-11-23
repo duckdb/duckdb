@@ -3,11 +3,11 @@
 namespace duckdb {
 using namespace std;
 
-LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperatorType::ANY_JOIN) {
+LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperatorType::LOGICAL_ANY_JOIN) {
 }
 
 string LogicalAnyJoin::ParamsToString() const {
-	return "[" + condition->ToString() + "]";
+	return condition->ToString();
 }
 
 } // namespace duckdb

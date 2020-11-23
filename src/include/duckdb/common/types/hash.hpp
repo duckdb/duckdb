@@ -18,12 +18,13 @@ struct string_t;
 // efficient hash function that maximizes the avalanche effect and minimizes
 // bias
 // see: https://nullprogram.com/blog/2018/07/31/
-inline hash_t murmurhash32(uint32_t x) {
-	return x * UINT32_C(0x85ebca6b);
-}
 
 inline hash_t murmurhash64(uint64_t x) {
 	return x * UINT64_C(0xbf58476d1ce4e5b9);
+}
+
+inline hash_t murmurhash32(uint32_t x) {
+	return murmurhash64(x);
 }
 
 template <class T> hash_t Hash(T value) {

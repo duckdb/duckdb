@@ -1,0 +1,46 @@
+{
+  "name": "duckdb",
+  "main": "./lib/duckdb.js",
+  "version": "0.2.2-999",
+  "description": "DuckDB node.js API",
+  "gypfile": true,
+  "dependencies": {
+    "aws-sdk": "^2.790.0",
+    "bindings": "*",
+    "mocha": "^8.1.3",
+    "node-addon-api": "*",
+    "node-gyp": "^7.1.2",
+    "node-pre-gyp": "^0.15.0"
+  },
+  "binary": {
+    "module_name": "duckdb",
+    "module_path": "./lib/binding/",
+    "host": "https://duckdb-node.s3.amazonaws.com"
+  },
+  "scripts": {
+    "install": "node-pre-gyp install --fallback-to-build",
+    "pretest": "node test/support/createdb.js",
+    "test": "mocha -R spec --timeout 480000",
+    "pack": "node-pre-gyp package"
+  },
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cwida/duckdb.git"
+  },
+  "keywords": [
+    "database",
+    "sql",
+    "duckdb"
+  ],
+  "author": "Hannes Mühleisen",
+  "license": "MPL-2.0",
+  "bugs": {
+    "url": "https://github.com/cwida/duckdb/issues"
+  },
+  "homepage": "https://www.duckdb.org"
+}

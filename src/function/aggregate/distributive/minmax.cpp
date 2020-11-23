@@ -50,7 +50,7 @@ struct MinMaxBase {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
-		assert(!nullmask[0]);
+		D_ASSERT(!nullmask[0]);
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
 			state->isset = true;
@@ -80,7 +80,7 @@ struct NumericMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		nullmask[idx] = !state->isset;
 		target[idx] = state->value;
 	}
@@ -131,7 +131,7 @@ struct MaxOperation : public NumericMinMaxBase {
 struct StringMinMaxBase : public MinMaxBase {
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->isset && !state->value.IsInlined()) {
-			delete[] state->value.GetData();
+			delete[] state->value.GetDataUnsafe();
 		}
 	}
 
@@ -143,14 +143,14 @@ struct StringMinMaxBase : public MinMaxBase {
 			// non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
 			auto ptr = new char[len + 1];
-			memcpy(ptr, input.GetData(), len + 1);
+			memcpy(ptr, input.GetDataUnsafe(), len + 1);
 
 			state->value = string_t(ptr, len);
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->isset) {
 			nullmask[idx] = true;
 		} else {
@@ -192,7 +192,7 @@ template <class OP>
 unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateFunction &function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	switch(decimal_type.InternalType()) {
+	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
 		function = GetUnaryAggregate<OP>(LogicalType::SMALLINT);
 		break;

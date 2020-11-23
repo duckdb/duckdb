@@ -12,8 +12,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
                                                              unordered_set<idx_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	auto &comp_join = (LogicalComparisonJoin &)*op;
-	assert(join.join_type == JoinType::MARK);
-	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::DELIM_JOIN);
+	D_ASSERT(join.join_type == JoinType::MARK);
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
@@ -32,7 +32,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 		} else if (side == JoinSide::RIGHT) {
 			// there can only be at most one filter referencing the marker
 #ifndef NDEBUG
-			assert(!found_mark_reference);
+			D_ASSERT(!found_mark_reference);
 			found_mark_reference = true;
 #endif
 			// this filter references the marker

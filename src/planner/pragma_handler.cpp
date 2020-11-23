@@ -63,10 +63,15 @@ void PragmaHandler::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 string PragmaHandler::HandlePragma(PragmaInfo &info) {
 	auto entry =
 	    Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
-	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, info);
+	string error;
+	idx_t bound_idx = Function::BindFunction(entry->name, entry->functions, info, error);
+	if (bound_idx == INVALID_INDEX) {
+		throw BinderException(error);
+	}
 	auto &bound_function = entry->functions[bound_idx];
 	if (bound_function.query) {
-		return bound_function.query(context, info.parameters);
+		FunctionParameters parameters{info.parameters, info.named_parameters};
+		return bound_function.query(context, parameters);
 	}
 	return string();
 }

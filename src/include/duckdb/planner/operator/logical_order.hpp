@@ -17,10 +17,21 @@ namespace duckdb {
 class LogicalOrder : public LogicalOperator {
 public:
 	LogicalOrder(vector<BoundOrderByNode> orders)
-	    : LogicalOperator(LogicalOperatorType::ORDER_BY), orders(move(orders)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(move(orders)) {
 	}
 
 	vector<BoundOrderByNode> orders;
+
+	string ParamsToString() const override {
+		string result;
+		for (idx_t i = 0; i < orders.size(); i++) {
+			if (i > 0) {
+				result += "\n";
+			}
+			result += orders[i].expression->GetName();
+		}
+		return result;
+	}
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

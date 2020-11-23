@@ -33,9 +33,25 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	return result;
 }
 
+vector<string> BindContext::GetSimilarBindings(const string &column_name) {
+	vector<pair<string, idx_t>> scores;
+	for (auto &kv : bindings) {
+		auto binding = kv.second.get();
+		for (auto &name : binding->names) {
+			idx_t distance = StringUtil::LevenshteinDistance(name, column_name);
+			scores.push_back(make_pair(binding->alias + "." + name, distance));
+		}
+	}
+	return StringUtil::TopNStrings(scores);
+}
+
+void BindContext::HideBinding(const string &binding_name, const string &column_name) {
+	hidden_columns.insert(QualifiedColumnName(binding_name, column_name));
+}
+
 bool BindContext::BindingIsHidden(const string &binding_name, const string &column_name) {
-	string total_binding = binding_name + "." + column_name;
-	return hidden_columns.find(total_binding) != hidden_columns.end();
+	QualifiedColumnName qcolumn(binding_name, column_name);
+	return hidden_columns.find(qcolumn) != hidden_columns.end();
 }
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
@@ -57,18 +73,43 @@ Binding *BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
+Binding *BindContext::GetBinding(const string &name, string &out_error) {
+	auto match = bindings.find(name);
+	if (match == bindings.end()) {
+		// alias not found in this BindContext
+		vector<string> candidates;
+		for (auto &kv : bindings) {
+			candidates.push_back(kv.first);
+		}
+		string candidate_str =
+		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
+		out_error = StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str);
+		return nullptr;
+	}
+	return match->second.get();
+}
+
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.table_name.empty()) {
 		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name));
 	}
 
-	auto match = bindings.find(colref.table_name);
-	if (match == bindings.end()) {
-		// alias not found in this BindContext
-		return BindResult(StringUtil::Format("Referenced table \"%s\" not found!", colref.table_name));
+	string error;
+	auto binding = GetBinding(colref.table_name, error);
+	if (!binding) {
+		return BindResult(error);
 	}
-	auto binding = match->second.get();
 	return binding->Bind(colref, depth);
+}
+
+void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding) {
+	for (auto &column_name : binding->names) {
+		D_ASSERT(!column_name.empty());
+		if (BindingIsHidden(binding->alias, column_name)) {
+			continue;
+		}
+		new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+	}
 }
 
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
@@ -80,16 +121,15 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 		// we have to bind the tables and subqueries in order of table_index
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
-			binding->GenerateAllColumnExpressions(*this, new_select_list);
+			GenerateAllColumnExpressions(new_select_list, binding);
 		}
 	} else { // SELECT tbl.* case
-		auto match = bindings.find(relation_name);
-		if (match == bindings.end()) {
-			// alias not found in this BindContext
-			throw BinderException("SELECT table.* expression but can't find table");
+		string error;
+		auto binding = GetBinding(relation_name, error);
+		if (!binding) {
+			throw BinderException(error);
 		}
-		auto binding = match->second.get();
-		binding->GenerateAllColumnExpressions(*this, new_select_list);
+		GenerateAllColumnExpressions(new_select_list, binding);
 	}
 }
 
@@ -102,8 +142,8 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
-                               unordered_map<string, column_t> name_map, LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), move(name_map), get, index));
+                               LogicalGet &get) {
+	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
@@ -111,20 +151,25 @@ void BindContext::AddTableFunction(idx_t index, const string &alias, vector<stri
 	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index));
 }
 
-void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
-	vector<string> names;
-	if (ref.column_name_alias.size() > subquery.names.size()) {
-		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias,
-		                      subquery.names.size(), ref.column_name_alias.size());
+vector<string> BindContext::AliasColumnNames(string table_name, const vector<string> &names, const vector<string> &column_aliases) {
+	vector<string> result;
+	if (column_aliases.size() > names.size()) {
+		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
+		                      names.size(), column_aliases.size());
 	}
-	// use any provided aliases from the subquery
-	for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
-		names.push_back(ref.column_name_alias[i]);
+	// use any provided column aliases first
+	for (idx_t i = 0; i < column_aliases.size(); i++) {
+		result.push_back(column_aliases[i]);
 	}
 	// if not enough aliases were provided, use the default names for remaining columns
-	for (idx_t i = ref.column_name_alias.size(); i < subquery.names.size(); i++) {
-		names.push_back(subquery.names[i]);
+	for (idx_t i = column_aliases.size(); i < names.size(); i++) {
+		result.push_back(names[i]);
 	}
+	return result;
+}
+
+void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
@@ -140,6 +185,21 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string>
 	}
 	cte_bindings[alias] = move(binding);
 	cte_references[alias] = std::make_shared<idx_t>(0);
+}
+
+void BindContext::AddContext(BindContext other) {
+	for(auto &binding : other.bindings) {
+		if (bindings.find(binding.first) != bindings.end()) {
+			throw BinderException("Duplicate alias \"%s\" in query!", binding.first);
+		}
+		bindings[binding.first] = move(binding.second);
+	}
+	for(auto &binding : other.bindings_list) {
+		bindings_list.push_back(move(binding));
+	}
+	for(auto &hidden_column : other.hidden_columns) {
+		hidden_columns.insert(hidden_column);
+	}
 }
 
 } // namespace duckdb

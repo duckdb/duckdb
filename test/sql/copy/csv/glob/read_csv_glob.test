@@ -96,11 +96,27 @@ SELECT COUNT(*) FROM glob('test\sql\copy\csv\data\glob\*\*.csv')
 ----
 5
 
+# consecutive slashes are ignored
+query I
+SELECT COUNT(*) FROM glob('test//sql////copy//csv/////data///glob///*//////*.csv')
+----
+5
+
 # nothing matches the glob
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1) ORDER BY 1
 
 query I
 SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/a*a.csv')
+----
+0
+
+query I
+select count(*) from glob('/rewoiarwiouw3rajkawrasdf790273489*.csv') limit 10;
+----
+0
+
+query I
+select count(*) from glob('~/rewoiarwiouw3rajkawrasdf790273489*.py') limit 10;
 ----
 0

@@ -17,7 +17,7 @@ class LogicalCreateIndex : public LogicalOperator {
 public:
 	LogicalCreateIndex(TableCatalogEntry &table, vector<column_t> column_ids,
 	                   vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info)
-	    : LogicalOperator(LogicalOperatorType::CREATE_INDEX), table(table), column_ids(column_ids),
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_INDEX), table(table), column_ids(column_ids),
 	      info(std::move(info)) {
 		for (auto &expr : expressions) {
 			this->unbound_expressions.push_back(expr->Copy());

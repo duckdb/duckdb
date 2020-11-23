@@ -22,7 +22,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
                                      vector<PhysicalOperator *> delim_scans)
     : PhysicalSink(PhysicalOperatorType::DELIM_JOIN, move(types)), join(move(original_join)),
       delim_scans(move(delim_scans)) {
-	assert(join->children.size() == 2);
+	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
 	children.push_back(move(join->children[0]));
@@ -36,11 +36,11 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 class DelimJoinGlobalState : public GlobalOperatorState {
 public:
 	DelimJoinGlobalState(PhysicalDelimJoin *delim_join) {
-		assert(delim_join->delim_scans.size() > 0);
+		D_ASSERT(delim_join->delim_scans.size() > 0);
 		// for any duplicate eliminated scans in the RHS, point them to the duplicate eliminated chunk that we create
 		// here
 		for (auto op : delim_join->delim_scans) {
-			assert(op->type == PhysicalOperatorType::DELIM_SCAN);
+			D_ASSERT(op->type == PhysicalOperatorType::DELIM_SCAN);
 			auto scan = (PhysicalChunkScan *)op;
 			scan->collection = &delim_data;
 		}
@@ -71,10 +71,10 @@ void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalOperatorState &sta
 	distinct->Sink(context, *state.distinct_state, lstate, input);
 }
 
-void PhysicalDelimJoin::Finalize(ClientContext &client, unique_ptr<GlobalOperatorState> state) {
+void PhysicalDelimJoin::Finalize(Pipeline &pipeline, ClientContext &client, unique_ptr<GlobalOperatorState> state) {
 	auto &dstate = (DelimJoinGlobalState &)*state;
 	// finalize the distinct HT
-	distinct->Finalize(client, move(dstate.distinct_state));
+	distinct->FinalizeImmediate(client, move(dstate.distinct_state));
 	// materialize the distinct collection
 	DataChunk delim_chunk;
 	distinct->InitializeChunk(delim_chunk);
@@ -89,7 +89,12 @@ void PhysicalDelimJoin::Finalize(ClientContext &client, unique_ptr<GlobalOperato
 		}
 		dstate.delim_data.Append(delim_chunk);
 	}
-	PhysicalSink::Finalize(client, move(state));
+	PhysicalSink::Finalize(pipeline, client, move(state));
+}
+
+void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+	auto &dstate = (DelimJoinGlobalState &)state;
+	distinct->Combine(context, *dstate.distinct_state, lstate);
 }
 
 void PhysicalDelimJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -106,8 +111,8 @@ unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState() {
 	return make_unique<PhysicalDelimJoinState>(*this, children[0].get());
 }
 
-string PhysicalDelimJoin::ExtraRenderInformation() const {
-	return join->ExtraRenderInformation();
+string PhysicalDelimJoin::ParamsToString() const {
+	return join->ParamsToString();
 }
 
 } // namespace duckdb

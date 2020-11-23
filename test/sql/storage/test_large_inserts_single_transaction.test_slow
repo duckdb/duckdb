@@ -1,0 +1,37 @@
+# name: test/sql/storage/test_large_inserts_single_transaction.test_slow
+# description: Test large inserts in a single transaction
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/test_large_inserts.db
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test SELECT a, b FROM (VALUES (11, 22), (13, 22), (12, 21)) tbl1(a,b), repeat(0, 100000) tbl2(c)
+
+statement ok
+COMMIT
+
+statement ok
+DELETE FROM test WHERE a=12
+
+query III
+SELECT SUM(a), SUM(b), COUNT(*) FROM test
+----
+2400000
+4400000
+200000
+
+restart
+
+query III
+SELECT SUM(a), SUM(b), COUNT(*) FROM test
+----
+2400000
+4400000
+200000

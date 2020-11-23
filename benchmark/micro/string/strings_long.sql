@@ -1,0 +1,2 @@
+CREATE TEMPORARY TABLE strings_temp AS SELECT ((i * 9582398353) % 1000)::VARCHAR AS s1, ((i * 847892347987) % 1000)::VARCHAR AS s2 FROM range(0, 10000000) tbl(i);
+CREATE TABLE strings AS SELECT repeat(s1, 5) AS s1, repeat(s2, 5) AS s2 FROM strings_temp;

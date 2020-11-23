@@ -7,8 +7,9 @@
 namespace duckdb {
 using namespace std;
 
-ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info)
-    : table_info(table_info), manager(manager), persistent_rows(0) {
+ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
+    : table_info(table_info), type(move(type)), manager(manager), column_idx(column_idx), persistent_rows(0) {
+	statistics = BaseStatistics::CreateEmpty(type);
 }
 
 void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
@@ -67,8 +68,9 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 }
 
 void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
-	if (state.vector_index == 0) {
+	if (!state.initialized) {
 		state.current->InitializeScan(state);
+		state.initialized = true;
 	}
 	// perform a scan of this segment
 	state.current->IndexScan(state, result);
@@ -105,13 +107,20 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-		// cannot append to persistent segment, add a transient one
-		AppendTransientSegment(persistent_rows);
-		state.current = (TransientSegment *)data.GetLastSegment();
+		// cannot append to persistent segment, convert the last segment into a transient segment
+		auto transient = make_unique<TransientSegment>((PersistentSegment &)*segment);
+		state.current = (TransientSegment *)transient.get();
+		data.nodes.back().node = (SegmentBase *)transient.get();
+		if (data.root_node.get() == segment) {
+			data.root_node = move(transient);
+		} else {
+			D_ASSERT(data.nodes.size() >= 2);
+			data.nodes[data.nodes.size() - 2].node->next = move(transient);
+		}
 	} else {
 		state.current = (TransientSegment *)segment;
 	}
-	assert(state.current->segment_type == ColumnSegmentType::TRANSIENT);
+	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
 }
 
@@ -120,6 +129,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vector, offset, count);
+		statistics->Merge(*state.current->stats.statistics);
 		if (copied_elements == count) {
 			// finished copying everything
 			break;
@@ -139,11 +149,17 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 
 void ColumnData::RevertAppend(row_t start_row) {
 	lock_guard<mutex> tree_lock(data.node_lock);
+	// check if this row is in the segment tree at all
+	if (idx_t(start_row) >= data.nodes.back().row_start + data.nodes.back().node->count) {
+		// the start row is equal to the final portion of the column data: nothing was ever appended here
+		D_ASSERT(idx_t(start_row) == data.nodes.back().row_start + data.nodes.back().node->count);
+		return;
+	}
 	// find the segment index that the current row belongs to
 	idx_t segment_index = data.GetSegmentIndex(start_row);
 	auto segment = data.nodes[segment_index].node;
 	auto &transient = (TransientSegment &)*segment;
-	assert(transient.segment_type == ColumnSegmentType::TRANSIENT);
+	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
 
 	// remove any segments AFTER this segment: they should be deleted entirely
 	if (segment_index < data.nodes.size() - 1) {
@@ -159,6 +175,7 @@ void ColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_i
 	auto segment = (ColumnSegment *)data.GetSegment(first_id);
 	// now perform the update within the segment
 	segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids), count);
+	statistics->Merge(*segment->stats.statistics);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -178,7 +195,7 @@ void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(manager, type.InternalType(), start_row);
+	auto new_segment = make_unique<TransientSegment>(manager, type, start_row);
 	data.AppendSegment(move(new_segment));
 }
 

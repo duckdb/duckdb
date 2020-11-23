@@ -14,7 +14,7 @@ namespace duckdb {
 template <bool LTRIM, bool RTRIM>
 static void unary_trim_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
-		const auto data = input.GetData();
+		const auto data = input.GetDataUnsafe();
 		const auto size = input.GetSize();
 
 		utf8proc_int32_t codepoint;
@@ -25,7 +25,7 @@ static void unary_trim_function(DataChunk &args, ExpressionState &state, Vector 
 		if (LTRIM) {
 			while (begin < size) {
 				const auto bytes = utf8proc_iterate(str + begin, size - begin, &codepoint);
-				assert(bytes > 0);
+				D_ASSERT(bytes > 0);
 				if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 					break;
 				}
@@ -39,7 +39,7 @@ static void unary_trim_function(DataChunk &args, ExpressionState &state, Vector 
 			end = begin;
 			for (auto next = begin; next < size;) {
 				const auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
-				assert(bytes > 0);
+				D_ASSERT(bytes > 0);
 				next += bytes;
 				if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 					end = next;
@@ -51,7 +51,7 @@ static void unary_trim_function(DataChunk &args, ExpressionState &state, Vector 
 
 		// Copy the trimmed string
 		auto target = StringVector::EmptyString(result, end - begin);
-		auto output = target.GetData();
+		auto output = target.GetDataWriteable();
 		memcpy(output, data + begin, end - begin);
 
 		target.Finalize();
@@ -60,7 +60,7 @@ static void unary_trim_function(DataChunk &args, ExpressionState &state, Vector 
 }
 
 static void get_ignored_codepoints(string_t ignored, unordered_set<utf8proc_int32_t> &ignored_codepoints) {
-	const auto dataptr = (utf8proc_uint8_t *)ignored.GetData();
+	const auto dataptr = (utf8proc_uint8_t *)ignored.GetDataUnsafe();
 	const auto size = ignored.GetSize();
 	idx_t pos = 0;
 	while (pos < size) {
@@ -74,7 +74,7 @@ template <bool LTRIM, bool RTRIM>
 static void binary_trim_function(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t, true>(
 	    input.data[0], input.data[1], result, input.size(), [&](string_t input, string_t ignored) {
-		    const auto data = input.GetData();
+		    const auto data = input.GetDataUnsafe();
 		    const auto size = input.GetSize();
 
 		    unordered_set<utf8proc_int32_t> ignored_codepoints;
@@ -101,7 +101,7 @@ static void binary_trim_function(DataChunk &input, ExpressionState &state, Vecto
 			    end = begin;
 			    for (auto next = begin; next < size;) {
 				    const auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
-				    assert(bytes > 0);
+				    D_ASSERT(bytes > 0);
 				    next += bytes;
 				    if (ignored_codepoints.find(codepoint) == ignored_codepoints.end()) {
 					    end = next;
@@ -113,7 +113,7 @@ static void binary_trim_function(DataChunk &input, ExpressionState &state, Vecto
 
 		    // Copy the trimmed string
 		    auto target = StringVector::EmptyString(result, end - begin);
-		    auto output = target.GetData();
+		    auto output = target.GetDataWriteable();
 		    memcpy(output, data + begin, end - begin);
 
 		    target.Finalize();

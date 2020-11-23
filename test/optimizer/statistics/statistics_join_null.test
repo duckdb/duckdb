@@ -1,0 +1,79 @@
+# name: test/optimizer/statistics/statistics_join_null.test
+# description: Statistics propagation test with joins and null values
+# group: [statistics]
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (NULL)) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM (VALUES (4), (5), (NULL)) tbl(i);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# inner join
+# join cannot match: prune result
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i=i2.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# join is guaranteed to match... except there are null values!
+# we CANNOT convert to a cross product
+# (well... we could, if we would push a x IS NOT NULL filter on both sides)
+# (but that is for another day)
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i<i2.i ORDER BY 1;
+----
+logical_opt	<!REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i<=i2.i ORDER BY 1;
+----
+logical_opt	<!REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i>i1.i ORDER BY 1;
+----
+logical_opt	<!REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i>=i1.i ORDER BY 1;
+----
+logical_opt	<!REGEX>:.*CROSS_PRODUCT.*
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i=i2.i ORDER BY 1;
+----
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i<i2.i ORDER BY 1;
+----
+1
+1
+2
+2
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i<=i2.i ORDER BY 1;
+----
+1
+1
+2
+2
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i>i1.i ORDER BY 1;
+----
+1
+1
+2
+2
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i>=i1.i ORDER BY 1;
+----
+1
+1
+2
+2

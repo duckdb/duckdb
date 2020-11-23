@@ -1,0 +1,47 @@
+# name: test/optimizer/statistics/statistics_case.test
+# description: Test filter propagation in CASE expression
+# group: [statistics]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+
+# "i" does not contain null values, so we can statically determine this will not be null
+query II
+EXPLAIN SELECT * FROM integers WHERE (CASE WHEN i=2 THEN i+1 ELSE i+2 END) IS NULL;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# we can't here, because one of the children of the case has null
+query II
+EXPLAIN SELECT * FROM integers WHERE (CASE WHEN i=2 THEN i+1 ELSE NULL END) IS NULL;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# now check overflow testing
+# this gives an overflow on the RHS
+statement error
+SELECT 123::TINYINT + (CASE WHEN i=2 THEN (i+1)::TINYINT ELSE (i+2)::TINYINT END) FROM integers;
+
+# this does not
+query I
+SELECT 122::TINYINT + (CASE WHEN i=2 THEN (i+1)::TINYINT ELSE (i+2)::TINYINT END) FROM integers;
+----
+125
+125
+127
+
+query I
+SELECT * FROM integers WHERE (CASE WHEN i=2 THEN i+1 ELSE i+2 END) IS NULL;
+----
+
+query I
+SELECT * FROM integers WHERE (CASE WHEN i=2 THEN i+1 ELSE NULL END) IS NULL;
+----
+1
+3

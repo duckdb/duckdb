@@ -8,7 +8,7 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
-	assert(op.children.size() == 2);
+	D_ASSERT(op.children.size() == 2);
 
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
@@ -18,12 +18,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	}
 
 	switch (op.type) {
-	case LogicalOperatorType::UNION:
+	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
 		return make_unique<PhysicalUnion>(op.types, move(left), move(right));
 	default: {
 		// EXCEPT/INTERSECT
-		assert(op.type == LogicalOperatorType::EXCEPT || op.type == LogicalOperatorType::INTERSECT);
+		D_ASSERT(op.type == LogicalOperatorType::LOGICAL_EXCEPT || op.type == LogicalOperatorType::LOGICAL_INTERSECT);
 		auto &types = left->GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
@@ -37,7 +37,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		}
 		// EXCEPT is ANTI join
 		// INTERSECT is SEMI join
-		JoinType join_type = op.type == LogicalOperatorType::EXCEPT ? JoinType::ANTI : JoinType::SEMI;
+		JoinType join_type = op.type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
 		return make_unique<PhysicalHashJoin>(op, move(left), move(right), move(conditions), join_type);
 	}
 	}

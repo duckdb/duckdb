@@ -12,8 +12,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundParameterEx
 
 void ExpressionExecutor::Execute(BoundParameterExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	assert(expr.value);
-	assert(expr.value->type() == expr.return_type);
+	D_ASSERT(expr.value);
+	D_ASSERT(expr.value->type() == expr.return_type);
 	result.Reference(*expr.value);
 }
 

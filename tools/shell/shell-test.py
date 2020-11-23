@@ -2,6 +2,7 @@ import sys
 import subprocess
 import tempfile
 import os
+import shutil
 
 if len(sys.argv) < 2:
      raise Exception('need shell binary as parameter')
@@ -41,7 +42,13 @@ def tf():
 test('select \'asdf\' as a;', out='asdf')
 
 # test pragma
-test("CREATE TABLE t0(c0 INT);PRAGMA table_info('t0');", out='0|c0|INTEGER|false||false')
+test("""
+.mode csv
+.headers off
+.sep |
+CREATE TABLE t0(c0 INT);
+PRAGMA table_info('t0');
+""", out='0|c0|INTEGER|false||false')
 
 datafile = tf()
 print("42\n84",  file=open(datafile, 'w'))
@@ -66,6 +73,14 @@ SELECT CAST(i AS INTEGER) FROM a;
 test('.auth ON', err='sqlite3_set_authorizer')
 test('.auth OFF', err='sqlite3_set_authorizer')
 test('.backup %s' % tf(), err='sqlite3_backup_init')
+
+# test newline in value
+test('''select 'hello
+world' as a;''', out='hello\\nworld')
+
+# test newline in column name
+test('''select 42 as "hello
+world";''', out='hello\\nworld')
 
 test('''
 .bail on
@@ -96,7 +111,7 @@ DROP TABLE a;
 ''')
 
 # maybe at some point we can do something meaningful here
-test('.dbinfo', err='unable to read database header')
+# test('.dbinfo', err='unable to read database header')
 
 test('''
 .echo on
@@ -124,7 +139,7 @@ test("select 'yo' where 'abc' like 'a%c';", out='yo')
 
 test("select regexp_matches('abc','abc')", out='true')
 
-test('.help', 'Show this message')
+test('.help', 'Show help text for PATTERN')
 
 test('.load %s' % tf(), err="Error")
 
@@ -142,10 +157,6 @@ test('.limit length 42', err='sqlite3_limit')
 
 # ???
 test('.lint fkey-indexes')
-
-# this should probably be fixed, sqlite generates an internal query that duckdb does not like
-test('.indexes', err='indexes not supported')
-
 
 test('.timeout', err='sqlite3_busy_timeout')
 
@@ -188,22 +199,23 @@ CREATE TABLE csda (i INTEGER);
 .tables %da
 ''', out="asda  csda")
 
-test('.indexes',  err="indexes not supported")
+test('.indexes',  out="")
 
 test('''
 CREATE TABLE a (i INTEGER);
 CREATE INDEX a_idx ON a(i);
-.indexes a_%
-''',  err="indexes not supported")
+.indexes a%
+''',  out="a_idx")
 
 # this does not seem to output anything
 test('.sha3sum')
 
 
 test('''
+.mode csv
 .separator XX
 SELECT 42,43;
-''', out="XX")
+''', out="42XX43")
 
 test('''
 .timer on
@@ -219,11 +231,12 @@ test('.trace %s\n; SELECT 42;' % tf(), err='sqlite3_trace_v2')
 
 outfile = tf()
 test('''
+.mode csv
 .output %s
 SELECT 42;
 ''' % outfile)
-outstr = open(outfile,'r').read()
-if '42' not in outstr:
+outstr = open(outfile,'rb').read()
+if b'42' not in outstr:
      raise Exception('.output test failed')
 
 
@@ -232,10 +245,9 @@ test('''
 .once %s
 SELECT 43;
 ''' % outfile)
-outstr = open(outfile,'r').read()
-if '43' not in outstr:
+outstr = open(outfile,'rb').read()
+if b'43' not in outstr:
      raise Exception('.once test failed')
-
 
 # This somehow does not log nor fail. works for me.
 test('''
@@ -323,15 +335,12 @@ PRAGMA enable_profiling
 test('''
 PRAGMA enable_profiling;
 SELECT 42;
-''', out="42", err="<<Query Profiling Information>>")
+''', out="42", err="Query Profiling Information")
 
-# not working for now, probably for the better
+test('.system echo 42', out="42")
+test('.shell echo 42', out="42")
 
-# test('.system echo 42', out="42")
-# test('.shell echo 42', out="42")
-
-# this fails because strlike and db_config are missing
-
+# this fails because db_config is missing
 # test('''
 # .eqp full
 # SELECT 42;
@@ -340,7 +349,6 @@ SELECT 42;
 # this fails because the sqlite printf accepts %w for table names
 
 # test('''
-# CREATE VIEW sqlite_master AS SELECT * FROM sqlite_master(); -- hack!
 # CREATE TABLE a (I INTEGER);
 # INSERT INTO a VALUES (42);
 # .clone %s
@@ -348,19 +356,71 @@ SELECT 42;
 
 
 
-# fails because view pragma_database_list does not exist
-
 test('.databases', out='main:')
 
+# .dump test
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump
+''', 'CREATE TABLE a(i INTEGER)')
 
-# fails
+# .dump a specific table
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump a
+''', 'CREATE TABLE a(i INTEGER);')
+
+# .dump LIKE
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump a%
+''', 'CREATE TABLE a(i INTEGER);')
+
+# more types, tables and views
+test('''
+CREATE TABLE a (d DATE, k FLOAT, t TIMESTAMP);
+CREATE TABLE b (c INTEGER);
+.changes off
+INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());
+INSERT INTO b SELECT * FROM range(0,10);
+.dump
+''', 'CREATE TABLE a(d DATE, k FLOAT, t TIMESTAMP);')
+
+# import/export database
+target_dir = 'duckdb_shell_test_export_dir'
+try:
+     shutil.rmtree(target_dir)
+except:
+     pass
+test('''
+.mode csv
+.changes off
+CREATE TABLE integers(i INTEGER);
+CREATE TABLE integers2(i INTEGER);
+INSERT INTO integers SELECT * FROM range(100);
+INSERT INTO integers2 VALUES (1), (3), (99);
+EXPORT DATABASE '%s';
+DROP TABLE integers;
+DROP TABLE integers2;
+IMPORT DATABASE '%s';
+SELECT SUM(i)*MAX(i) FROM integers JOIN integers2 USING (i);
+''' % (target_dir, target_dir), '10197')
+
+shutil.rmtree(target_dir)
+
+# dump blobs: FIXME
 # test('''
-# CREATE TABLE a (I INTEGER);
+# CREATE TABLE a (b BLOB);
 # .changes off
-# INSERT INTO a VALUES (42);
-# .dump a
-# ''')
-
+# INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());
+# .dump
+# ''', 'COMMIT')
 
 
 # printf %q

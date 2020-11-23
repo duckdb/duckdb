@@ -8,9 +8,10 @@
 namespace duckdb {
 using namespace std;
 
-WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, LogicalType result_type, ChunkCollection *input)
-    : aggregate(aggregate), state(aggregate.state_size()), statep(LogicalTypeId::POINTER), result_type(result_type),
-      input_ref(input) {
+WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
+                                     ChunkCollection *input)
+    : aggregate(aggregate), bind_info(bind_info), state(aggregate.state_size()), statep(LogicalTypeId::POINTER),
+      result_type(result_type), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
@@ -36,13 +37,13 @@ Value WindowSegmentTree::AggegateFinal() {
 	Vector result(result_type);
 	result.vector_type = VectorType::CONSTANT_VECTOR;
 	ConstantVector::SetNull(result, false);
-	aggregate.finalize(statev, result, 1);
+	aggregate.finalize(statev, bind_info, result, 1);
 
 	return result.GetValue(0);
 }
 
 void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) {
-	assert(begin <= end);
+	D_ASSERT(begin <= end);
 	if (begin == end) {
 		return;
 	}
@@ -76,7 +77,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		}
 		aggregate.update(&inputs.data[0], input_count, s, inputs.size());
 	} else {
-		assert(end - begin <= STANDARD_VECTOR_SIZE);
+		D_ASSERT(end - begin <= STANDARD_VECTOR_SIZE);
 		// find out where the states begin
 		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
@@ -91,8 +92,8 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 }
 
 void WindowSegmentTree::ConstructTree() {
-	assert(input_ref);
-	assert(inputs.column_count() > 0);
+	D_ASSERT(input_ref);
+	D_ASSERT(inputs.column_count() > 0);
 
 	// compute space required to store internal nodes of segment tree
 	idx_t internal_nodes = 0;
@@ -125,7 +126,7 @@ void WindowSegmentTree::ConstructTree() {
 }
 
 Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
-	assert(input_ref);
+	D_ASSERT(input_ref);
 
 	// No arguments, so just count
 	if (inputs.column_count() == 0) {

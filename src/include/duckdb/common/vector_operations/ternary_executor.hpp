@@ -119,7 +119,7 @@ private:
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
 			    *cdata.sel, *adata.nullmask, *bdata.nullmask, *cdata.nullmask, true_sel, false_sel);
 		} else {
-			assert(false_sel);
+			D_ASSERT(false_sel);
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, false, true>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
 			    *cdata.sel, *adata.nullmask, *bdata.nullmask, *cdata.nullmask, true_sel, false_sel);

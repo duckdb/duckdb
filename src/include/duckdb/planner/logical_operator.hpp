@@ -43,7 +43,7 @@ public:
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings() {
-		return {};
+		return {ColumnBinding(0, 0)};
 	}
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
 	static vector<LogicalType> MapTypes(vector<LogicalType> types, vector<idx_t> projection_map);
@@ -52,6 +52,7 @@ public:
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 
+	virtual string GetName() const;
 	virtual string ParamsToString() const;
 	virtual string ToString(idx_t depth = 0) const;
 	void Print();
@@ -60,11 +61,11 @@ public:
 		children.push_back(move(child));
 	}
 
-	virtual idx_t EstimateCardinality() {
+	virtual idx_t EstimateCardinality(ClientContext &context) {
 		// simple estimator, just take the max of the children
 		idx_t max_cardinality = 0;
 		for (auto &child : children) {
-			max_cardinality = MaxValue(child->EstimateCardinality(), max_cardinality);
+			max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);
 		}
 		return max_cardinality;
 	}

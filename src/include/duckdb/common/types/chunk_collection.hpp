@@ -43,6 +43,8 @@ public:
 
 	//! Append another ChunkCollection directly to this ChunkCollection
 	void Append(ChunkCollection &other);
+	//! Merge is like Append but messes up the order and destroys the other collection
+	void Merge(ChunkCollection &other);
 
 	void Verify();
 
@@ -76,7 +78,7 @@ public:
 	//! Locates the chunk that belongs to the specific index
 	idx_t LocateChunk(idx_t index) {
 		idx_t result = index / STANDARD_VECTOR_SIZE;
-		assert(result < chunks.size());
+		D_ASSERT(result < chunks.size());
 		return result;
 	}
 

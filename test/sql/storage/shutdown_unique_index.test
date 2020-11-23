@@ -1,0 +1,69 @@
+# name: test/sql/storage/shutdown_unique_index.test
+# description: UNIQUE INDEX after shutdown
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/shutdown_unique_index.db
+
+statement ok
+CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22);
+
+query II
+SELECT * FROM test ORDER BY a
+----
+11	22
+13	22
+
+restart
+
+query II
+SELECT * FROM test ORDER BY a
+----
+11	22
+13	22
+
+statement error
+INSERT INTO test VALUES (11, 24)
+
+statement ok
+INSERT INTO test VALUES (12, 24)
+
+statement error
+INSERT INTO test VALUES (12, 24)
+
+query II
+SELECT * FROM test ORDER BY a
+----
+11	22
+12	24
+13	22
+
+query II
+SELECT * FROM test WHERE a=12
+----
+12	24
+
+restart
+
+statement error
+INSERT INTO test VALUES (11, 24)
+
+statement error
+INSERT INTO test VALUES (12, 24)
+
+query II
+SELECT * FROM test ORDER BY a
+----
+11	22
+12	24
+13	22
+
+query II
+SELECT * FROM test WHERE a=12
+----
+12	24
+
+

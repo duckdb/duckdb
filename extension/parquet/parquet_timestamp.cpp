@@ -18,11 +18,7 @@ int64_t impala_timestamp_to_nanoseconds(const Int96 &impala_timestamp) {
 
 timestamp_t impala_timestamp_to_timestamp_t(const Int96 &raw_ts) {
 	auto impala_ns = impala_timestamp_to_nanoseconds(raw_ts);
-	auto ms = impala_ns / 1000000; // nanoseconds
-	auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
-	date_t date = Date::EpochToDate(ms / 1000);
-	dtime_t time = (dtime_t)(ms % ms_per_day);
-	return Timestamp::FromDatetime(date, time);
+	return Timestamp::FromEpochMs(impala_ns / 1000000);
 }
 
 Int96 timestamp_t_to_impala_timestamp(timestamp_t &ts) {

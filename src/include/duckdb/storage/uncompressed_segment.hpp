@@ -86,12 +86,12 @@ public:
 
 	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
 	//! temporary in-memory one
-	void ToTemporary();
+	virtual void ToTemporary();
 
 	//! Get the amount of tuples in a vector
 	idx_t GetVectorCount(idx_t vector_index) {
-		assert(vector_index < max_vector_count);
-		assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+		D_ASSERT(vector_index < max_vector_count);
+		D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 		return MinValue<idx_t>(STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
 	}
 

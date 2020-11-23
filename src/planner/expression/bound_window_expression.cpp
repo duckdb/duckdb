@@ -5,8 +5,10 @@ namespace duckdb {
 using namespace std;
 
 BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
-                                             unique_ptr<AggregateFunction> aggregate)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)) {
+                                             unique_ptr<AggregateFunction> aggregate,
+                                             unique_ptr<FunctionData> bind_info)
+    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)),
+      bind_info(move(bind_info)) {
 }
 
 string BoundWindowExpression::ToString() const {
@@ -65,11 +67,14 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() {
-	auto new_window = make_unique<BoundWindowExpression>(type, return_type, nullptr);
+	auto new_window = make_unique<BoundWindowExpression>(type, return_type, nullptr, nullptr);
 	new_window->CopyProperties(*this);
 
 	if (aggregate) {
 		new_window->aggregate = make_unique<AggregateFunction>(*aggregate);
+	}
+	if (bind_info) {
+		new_window->bind_info = bind_info->Copy();
 	}
 	for (auto &child : children) {
 		new_window->children.push_back(child->Copy());

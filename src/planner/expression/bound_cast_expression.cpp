@@ -5,12 +5,13 @@
 namespace duckdb {
 using namespace std;
 
-BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type)), child(move(child)) {
+BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p)
+    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type_p)),
+      child(move(child_p)) {
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, LogicalType target_type) {
-	assert(expr);
+	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
 		parameter.return_type = target_type;

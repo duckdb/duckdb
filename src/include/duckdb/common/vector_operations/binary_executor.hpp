@@ -270,7 +270,7 @@ public:
 			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL, true, false>(
 			    ldata, rdata, sel, count, nullmask, true_sel, false_sel);
 		} else {
-			assert(false_sel);
+			D_ASSERT(false_sel);
 			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL, false, true>(
 			    ldata, rdata, sel, count, nullmask, true_sel, false_sel);
 		}
@@ -356,7 +356,7 @@ public:
 			return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP, NO_NULL, true, false>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lnullmask, rnullmask, true_sel, false_sel);
 		} else {
-			assert(false_sel);
+			D_ASSERT(false_sel);
 			return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP, NO_NULL, false, true>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lnullmask, rnullmask, true_sel, false_sel);
 		}

@@ -14,6 +14,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "resizable_buffer.hpp"
 
+#include "parquet_file_metadata_cache.hpp"
 #include "parquet_types.h"
 
 #include <exception>
@@ -64,7 +65,8 @@ struct ParquetReaderScanState {
 
 class ParquetReader {
 public:
-	ParquetReader(ClientContext &context, string file_name, vector<LogicalType> expected_types);
+	ParquetReader(ClientContext &context, string file_name, vector<LogicalType> expected_types,
+	              string initial_filename = string());
 	ParquetReader(ClientContext &context, string file_name) : ParquetReader(context, file_name, vector<LogicalType>()) {
 	}
 	~ParquetReader();
@@ -73,6 +75,8 @@ public:
 	vector<LogicalType> return_types;
 	vector<string> names;
 
+	shared_ptr<ParquetFileMetadataCache> metadata;
+
 public:
 	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read);
 	void ReadChunk(ParquetReaderScanState &state, DataChunk &output);
@@ -80,10 +84,13 @@ public:
 	idx_t NumRows();
 	idx_t NumRowGroups();
 
+	const parquet::format::FileMetaData *GetFileMetadata();
+
 private:
-	parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	void PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
 	bool PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx);
+	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 
 	template <typename... Args> std::runtime_error FormatException(const string fmt_str, Args... params) {
 		return std::runtime_error("Failed to read Parquet file \"" + file_name +
@@ -101,7 +108,6 @@ private:
 	static constexpr unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
 
 	ClientContext &context;
-	parquet::format::FileMetaData file_meta_data;
 };
 
 } // namespace duckdb

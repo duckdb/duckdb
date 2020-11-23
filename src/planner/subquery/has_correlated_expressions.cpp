@@ -23,7 +23,7 @@ unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpr
 		return nullptr;
 	}
 	// correlated column reference
-	assert(expr.depth == 1);
+	D_ASSERT(expr.depth == 1);
 	has_correlated_expressions = true;
 	return nullptr;
 }

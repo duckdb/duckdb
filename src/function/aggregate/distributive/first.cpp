@@ -48,7 +48,7 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set || IsNullValue<T>(state->value)) {
 			nullmask[idx] = true;
 		} else {
@@ -71,7 +71,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 					// non-inlined string, need to allocate space for it
 					auto len = input[idx].GetSize();
 					auto ptr = new char[len + 1];
-					memcpy(ptr, input[idx].GetData(), len + 1);
+					memcpy(ptr, input[idx].GetDataUnsafe(), len + 1);
 
 					state->value = string_t(ptr, len);
 				}
@@ -85,7 +85,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set || IsNullValue<T>(state->value)) {
 			nullmask[idx] = true;
 		} else {
@@ -95,7 +95,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->is_set && !state->value.IsInlined()) {
-			delete[] state->value.GetData();
+			delete[] state->value.GetDataUnsafe();
 		}
 	}
 };
@@ -105,7 +105,7 @@ template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalTy
 }
 
 AggregateFunction GetDecimalFirstFunction(LogicalType type) {
-	assert(type.id() == LogicalTypeId::DECIMAL);
+	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	switch (type.InternalType()) {
 	case PhysicalType::INT16:
 		return FirstFun::GetFunction(LogicalType::SMALLINT);

@@ -51,3 +51,13 @@ DROP INDEX i_index
 statement ok
 DROP INDEX IF EXISTS i_index
 
+# create the index again
+statement ok
+CREATE INDEX i_index ON integers(i);
+
+# dropping the table also drops the index
+statement ok
+DROP TABLE integers;
+
+statement error
+DROP INDEX i_index

@@ -6,6 +6,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/object_cache.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
 using namespace std;
@@ -44,6 +45,8 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) {
 	transaction_manager = make_unique<TransactionManager>(*storage);
 	scheduler = make_unique<TaskScheduler>();
 	connection_manager = make_unique<ConnectionManager>();
+	object_cache = make_unique<ObjectCache>();
+
 	// initialize the database
 	storage->Initialize();
 }
@@ -68,6 +71,11 @@ void DuckDB::Configure(DBConfig &new_config) {
 		config.file_system = move(new_config.file_system);
 	} else {
 		config.file_system = make_unique<FileSystem>();
+	}
+	if (config.maximum_memory == (idx_t)-1) {
+		config.maximum_memory = config.file_system->GetAvailableMemory() * 8 / 10;
+	} else {
+		config.maximum_memory = new_config.maximum_memory;
 	}
 	config.checkpoint_only = new_config.checkpoint_only;
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;

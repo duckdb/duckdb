@@ -5,7 +5,7 @@ namespace duckdb {
 using namespace std;
 
 LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
-    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, move(select_list)), group_index(group_index),
+    : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, move(select_list)), group_index(group_index),
       aggregate_index(aggregate_index) {
 }
 
@@ -31,14 +31,19 @@ vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 }
 
 string LogicalAggregate::ParamsToString() const {
-	string result = LogicalOperator::ParamsToString();
-	if (groups.size() > 0) {
-		result += "[";
-		result += StringUtil::Join(groups, groups.size(), ", ",
-		                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
-		result += "]";
+	string result;
+	for (idx_t i = 0; i < groups.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += groups[i]->GetName();
 	}
-
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		if (i > 0 || groups.size() > 0) {
+			result += "\n";
+		}
+		result += expressions[i]->GetName();
+	}
 	return result;
 }
 
