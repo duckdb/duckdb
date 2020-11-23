@@ -40,3 +40,23 @@ statement ok
 DROP MACRO plus1
 
 endloop
+
+# create a macro without deleting it this time
+statement ok
+CREATE MACRO plus2(a) AS a+2
+
+loop i 0 2
+
+query T
+SELECT plus2(3)
+----
+5
+
+restart
+
+query T
+SELECT plus2(4)
+----
+6
+
+endloop

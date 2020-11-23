@@ -101,20 +101,24 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 	// then, we fetch the tables/views/sequences information
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
-	vector<MacroCatalogEntry *> macros;
 	schema.tables.Scan(context, [&](CatalogEntry *entry) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			tables.push_back((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
 			views.push_back((ViewCatalogEntry *)entry);
-        } else if (entry->type == CatalogType::MACRO_ENTRY) {
-            macros.push_back((MacroCatalogEntry *)entry);
         } else {
 			throw NotImplementedException("Catalog type for entries");
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
 	schema.sequences.Scan(context, [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
+
+    vector<MacroCatalogEntry *> macros;
+	schema.functions.Scan(context, [&](CatalogEntry *entry) {
+        if (entry->type == CatalogType::MACRO_ENTRY) {
+            macros.push_back((MacroCatalogEntry *)entry);
+        }
+    });
 
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
