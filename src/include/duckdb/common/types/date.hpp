@@ -60,6 +60,9 @@ public:
 
 	//! Extract year of a date entry
 	static int32_t ExtractYear(date_t date);
+	//! Extract year of a date entry, but optimized to first try the last year found
+	static int32_t ExtractYear(date_t date, int32_t *last_year);
+	static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
 	//! Extract month of a date entry
 	static int32_t ExtractMonth(date_t date);
 	//! Extract day of a date entry
