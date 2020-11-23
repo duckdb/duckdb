@@ -68,12 +68,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
 
-	// then we extract common subexpressions inside the different operators
-	// context.profiler.StartPhase("common_subexpressions");
-	// CommonSubExpressionOptimizer cse_optimizer;
-	// cse_optimizer.VisitOperator(*plan);
-	// context.profiler.EndPhase();
-
 	context.profiler.StartPhase("unused_columns");
 	RemoveUnusedColumns unused(binder, context, true);
 	unused.VisitOperator(*plan);
@@ -100,6 +94,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("statistics_propagation");
 	StatisticsPropagator propagator(context);
 	propagator.PropagateStatistics(plan);
+	context.profiler.EndPhase();
+
+	// then we extract common subexpressions inside the different operators
+	context.profiler.StartPhase("common_subexpressions");
+	CommonSubExpressionOptimizer cse_optimizer(binder);
+	cse_optimizer.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
 	return plan;

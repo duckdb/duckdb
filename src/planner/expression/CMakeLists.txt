@@ -14,7 +14,6 @@ add_library_unity(duckdb_planner_expression
                   bound_reference_expression.cpp
                   bound_subquery_expression.cpp
                   bound_unnest_expression.cpp
-                  bound_window_expression.cpp
-                  common_subexpression.cpp)
+                  bound_window_expression.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
                      $<TARGET_OBJECTS:duckdb_planner_expression> PARENT_SCOPE)
