@@ -70,8 +70,7 @@ public:
 	LogicalType target_type;
 
 protected:
-//    virtual BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false);
-	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
+	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression = false);
 
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
@@ -80,7 +79,7 @@ protected:
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, FunctionExpression &expr, idx_t depth);
+	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(StarExpression &expr, idx_t depth);
@@ -94,7 +93,7 @@ protected:
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
-	virtual BindResult BindMacro(unique_ptr<ParsedExpression> *expr_ptr, FunctionExpression &expr, idx_t depth);
+	virtual BindResult BindMacro(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
 
 	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr);
 	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,

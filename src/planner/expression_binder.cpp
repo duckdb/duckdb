@@ -51,7 +51,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 	case ExpressionClass::CONSTANT:
 		return BindExpression((ConstantExpression &)expr_ref, depth);
 	case ExpressionClass::FUNCTION:
-		return BindExpression(expr, (FunctionExpression &)expr_ref, depth);
+		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
 	case ExpressionClass::OPERATOR:
 		return BindExpression((OperatorExpression &)expr_ref, depth);
 	case ExpressionClass::SUBQUERY:

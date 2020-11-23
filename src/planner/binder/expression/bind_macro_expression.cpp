@@ -169,26 +169,12 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 	}
 }
 
-BindResult ExpressionBinder::BindMacro(unique_ptr<ParsedExpression> *expr, FunctionExpression &function, idx_t depth) {
-	// unfold the macro expression
-    auto alias = expr->get()->alias;
-	auto unfolded_expr = UnfoldMacroRecursive(function.Copy());
+BindResult ExpressionBinder::BindMacro(FunctionExpression &function, idx_t depth, unique_ptr<ParsedExpression> *expr) {
+	// unfold and replace the original macro expression
+    *expr = UnfoldMacroRecursive(function.Copy());
 
 	// bind the unfolded macro
-    BindResult result = BindExpression(&unfolded_expr, depth);
-    if (result.HasError()) {
-        return result.error;
-    } else {
-        // successfully bound: replace the node with a BoundExpression
-        *expr = make_unique<BoundExpression>(move(result.expression), move(unfolded_expr));
-        auto be = (BoundExpression *)expr->get();
-        D_ASSERT(be);
-        be->alias = alias;
-        if (!alias.empty()) {
-            be->expr->alias = alias;
-        }
-        return result;
-    }
+    return BindExpression(expr, depth);
 }
 
 } // namespace duckdb

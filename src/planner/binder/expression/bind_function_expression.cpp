@@ -11,7 +11,7 @@
 namespace duckdb {
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, FunctionExpression &function, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr) {
 	// lookup the function in the catalog
 	QueryErrorContext error_context(binder.root_statement, function.query_location);
 
@@ -30,7 +30,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 	case CatalogType::MACRO_ENTRY:
 		// macro function
-		return BindMacro(expr, function, depth);
+		return BindMacro(function, depth, expr_ptr);
 	default:
 		// aggregate function
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
