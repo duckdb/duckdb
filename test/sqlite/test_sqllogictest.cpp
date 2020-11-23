@@ -1074,13 +1074,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			int bMatch;
 			/* The "skipif" and "onlyif" modifiers allow skipping or using
 			** statement or query record for a particular database engine.
-			** In this way, SQL features implmented by a majority of the
+			** In this way, SQL features implemented by a majority of the
 			** engines can be tested without causing spurious errors for
 			** engines that don't support it.
 			**
-			** Once this record is encountered, an the current selected
+			** Once this record is encountered, and the current selected
 			** db interface matches the db engine specified in the record,
-			** the we skip this rest of this record for "skipif" or for
+			** then we skip this rest of this record for "skipif". For
 			** "onlyif" we skip the record if the record does not match.
 			*/
 			bMatch = stricmp(sScript.azToken[1], zDbEngine) == 0;
