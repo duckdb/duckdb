@@ -332,7 +332,7 @@ jobs:
     - name: Build
       run: |
         export TOOLCHAIN=`pwd`/rpi-tools
-        mdkir -p build/release
+        mkdir -p build/release
         cd build/release
         cmake -DBUILD_TPCH_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
         cmake --build .
