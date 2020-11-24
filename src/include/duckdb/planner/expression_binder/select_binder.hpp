@@ -37,7 +37,8 @@ public:
 	}
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression = false) override;
+	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+	                          bool root_expression = false) override;
 
 	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth) override;
 

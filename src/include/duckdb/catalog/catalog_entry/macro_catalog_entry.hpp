@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/catalog_entry/macro_function_catalog_entry.hpp
+// duckdb/catalog/catalog_entry/macro_catalog_entry.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -26,9 +26,9 @@ public:
 	unique_ptr<MacroFunction> function;
 
 public:
-    //! Serialize the meta information of the MacroCatalogEntry a serializer
-    virtual void Serialize(Serializer &serializer);
-    //! Deserializes to a CreateMacroInfo
-    static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
+	//! Serialize the meta information of the MacroCatalogEntry a serializer
+	virtual void Serialize(Serializer &serializer);
+	//! Deserializes to a CreateMacroInfo
+	static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

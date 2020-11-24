@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/create_macro_function_info.hpp
+// duckdb/parser/parsed_data/create_macro_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//

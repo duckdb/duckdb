@@ -173,7 +173,7 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 				// macro parameters get priority
 				colref.table_name = binder.macro_binding->alias;
 			} else {
-                colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
+				colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
 			}
 		}
 		binder.bind_context.BindColumn(colref, 0);

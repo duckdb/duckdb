@@ -25,9 +25,9 @@ void ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr, 
 			expr = macro_binding.ParamToArg(colref);
 		}
 		if (expr->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
-            // arguments supplied to the macro cannot contain refer to parameter of this same macro (infinite recursion)
-            // therefore, we do not call the function with the current MacroBinding
-            UnfoldMacroRecursive(expr);
+			// arguments supplied to the macro cannot contain refer to parameter of this same macro (infinite recursion)
+			// therefore, we do not call the function with the current MacroBinding
+			UnfoldMacroRecursive(expr);
 		}
 		return;
 	}

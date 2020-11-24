@@ -8,7 +8,7 @@ ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string cl
 }
 
 BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-    auto &expr = **expr_ptr;
+	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
 		return BindResult(clause + " cannot contain column names");

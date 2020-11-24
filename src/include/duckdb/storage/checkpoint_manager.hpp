@@ -61,13 +61,13 @@ private:
 	void WriteTable(ClientContext &context, TableCatalogEntry &table);
 	void WriteView(ViewCatalogEntry &table);
 	void WriteSequence(SequenceCatalogEntry &table);
-    void WriteMacro(MacroCatalogEntry &table);
+	void WriteMacro(MacroCatalogEntry &table);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
 	void ReadView(ClientContext &context, MetaBlockReader &reader);
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
-    void ReadMacro(ClientContext &context, MetaBlockReader &reader);
+	void ReadMacro(ClientContext &context, MetaBlockReader &reader);
 };
 
 } // namespace duckdb

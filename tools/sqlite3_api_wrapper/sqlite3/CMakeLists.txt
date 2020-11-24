@@ -1,4 +1,3 @@
-
 # this directory contains some of the original code from SQLite
 # mainly helper functions that we don't really care about replacing ourselves
 

@@ -83,14 +83,14 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 // MACRO'S
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMacro(MacroCatalogEntry *entry) {
-    writer->Write<WALType>(WALType::CREATE_MACRO);
-    entry->Serialize(*writer);
+	writer->Write<WALType>(WALType::CREATE_MACRO);
+	entry->Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
-    writer->Write<WALType>(WALType::DROP_MACRO);
-    writer->WriteString(entry->schema->name);
-    writer->WriteString(entry->name);
+	writer->Write<WALType>(WALType::DROP_MACRO);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
 }
 
 //===--------------------------------------------------------------------===//

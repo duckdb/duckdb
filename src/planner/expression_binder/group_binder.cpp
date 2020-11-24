@@ -15,7 +15,7 @@ GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &nod
 }
 
 BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-    auto &expr = **expr_ptr;
+	auto &expr = **expr_ptr;
 	if (root_expression && depth == 0) {
 		switch (expr.expression_class) {
 		case ExpressionClass::COLUMN_REF:

@@ -14,7 +14,7 @@ AlterBinder::AlterBinder(Binder &binder, ClientContext &context, string table, v
 }
 
 BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-    auto &expr = **expr_ptr;
+	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in alter statement");

@@ -79,9 +79,9 @@ private:
 	unique_ptr<CreateStatement> TransformCreateView(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGIndexStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateIndex(duckdb_libpgquery::PGNode *node);
-    //! Transform a Postgres T_PGCreateFunctionStmt node into CreateStatement
-    unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGNode *node);
-    //! Transform a Postgres T_PGDropStmt node into a Drop[Table,Schema]Statement
+	//! Transform a Postgres T_PGCreateFunctionStmt node into CreateStatement
+	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres T_PGDropStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDrop(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGInsertStmt node into a InsertStatement
 	unique_ptr<InsertStatement> TransformInsert(duckdb_libpgquery::PGNode *node);

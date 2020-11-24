@@ -8,7 +8,7 @@ WhereBinder::WhereBinder(Binder &binder, ClientContext &context) : ExpressionBin
 }
 
 BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-    auto &expr = **expr_ptr;
+	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindResult("WHERE clause cannot contain DEFAULT clause");

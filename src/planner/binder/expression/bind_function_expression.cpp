@@ -11,7 +11,8 @@
 namespace duckdb {
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr) {
+BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
+                                            unique_ptr<ParsedExpression> *expr_ptr) {
 	// lookup the function in the catalog
 	QueryErrorContext error_context(binder.root_statement, function.query_location);
 

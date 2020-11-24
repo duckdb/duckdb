@@ -62,10 +62,10 @@ public:
 	void WriteDropSequence(SequenceCatalogEntry *entry);
 	void WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValue val);
 
-    void WriteCreateMacro(MacroCatalogEntry *entry);
-    void WriteDropMacro(MacroCatalogEntry *entry);
+	void WriteCreateMacro(MacroCatalogEntry *entry);
+	void WriteDropMacro(MacroCatalogEntry *entry);
 
-    //! Sets the table used for subsequent insert/delete/update commands
+	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);
 
 	void WriteAlter(AlterInfo &info);

@@ -106,19 +106,19 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 			tables.push_back((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
 			views.push_back((ViewCatalogEntry *)entry);
-        } else {
+		} else {
 			throw NotImplementedException("Catalog type for entries");
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
 	schema.sequences.Scan(context, [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
 
-    vector<MacroCatalogEntry *> macros;
+	vector<MacroCatalogEntry *> macros;
 	schema.functions.Scan(context, [&](CatalogEntry *entry) {
-        if (entry->type == CatalogType::MACRO_ENTRY) {
-            macros.push_back((MacroCatalogEntry *)entry);
-        }
-    });
+		if (entry->type == CatalogType::MACRO_ENTRY) {
+			macros.push_back((MacroCatalogEntry *)entry);
+		}
+	});
 
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
@@ -136,10 +136,10 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 		WriteView(*view);
 	}
 	// finally write the macro's
-    metadata_writer->Write<uint32_t>(macros.size());
-    for (auto &macro : macros) {
-        WriteMacro(*macro);
-    }
+	metadata_writer->Write<uint32_t>(macros.size());
+	for (auto &macro : macros) {
+		WriteMacro(*macro);
+	}
 }
 
 void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &reader) {
@@ -165,10 +165,10 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 		ReadView(context, reader);
 	}
 	// finally read the macro's
-    uint32_t macro_count = reader.Read<uint32_t>();
-    for (uint32_t i = 0; i < macro_count; i++) {
-        ReadMacro(context, reader);
-    }
+	uint32_t macro_count = reader.Read<uint32_t>();
+	for (uint32_t i = 0; i < macro_count; i++) {
+		ReadMacro(context, reader);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -201,13 +201,13 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 // Macro's
 //===--------------------------------------------------------------------===//
 void CheckpointManager::WriteMacro(MacroCatalogEntry &macro) {
-    macro.Serialize(*metadata_writer);
+	macro.Serialize(*metadata_writer);
 }
 
 void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-    auto info = MacroCatalogEntry::Deserialize(reader);
+	auto info = MacroCatalogEntry::Deserialize(reader);
 
-    database.catalog->CreateFunction(context, info.get());
+	database.catalog->CreateFunction(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//

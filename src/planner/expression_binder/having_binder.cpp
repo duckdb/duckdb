@@ -14,7 +14,7 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 }
 
 BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-    auto &expr = **expr_ptr;
+	auto &expr = **expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != INVALID_INDEX) {

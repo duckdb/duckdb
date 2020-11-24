@@ -48,8 +48,8 @@ private:
 	void ReplayDropSequence();
 	void ReplaySequenceValue();
 
-    void ReplayCreateMacro();
-    void ReplayDropMacro();
+	void ReplayCreateMacro();
+	void ReplayDropMacro();
 
 	void ReplayUseTable();
 	void ReplayInsert();
@@ -261,18 +261,18 @@ void ReplayState::ReplaySequenceValue() {
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateMacro() {
-    auto entry = MacroCatalogEntry::Deserialize(source);
+	auto entry = MacroCatalogEntry::Deserialize(source);
 
-    db.catalog->CreateFunction(context, entry.get());
+	db.catalog->CreateFunction(context, entry.get());
 }
 
 void ReplayState::ReplayDropMacro() {
-    DropInfo info;
-    info.type = CatalogType::MACRO_ENTRY;
-    info.schema = source.Read<string>();
-    info.name = source.Read<string>();
+	DropInfo info;
+	info.type = CatalogType::MACRO_ENTRY;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
 
-    db.catalog->DropEntry(context, &info);
+	db.catalog->DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//
