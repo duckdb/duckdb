@@ -38,7 +38,7 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 	if (!result->success) {
 		throw runtime_error(result->error);
 	}
-	for (size_t i = 0; i < result->collection.count; i++) {
+	for (size_t i = 0; i < result->collection.Count(); i++) {
 		auto type = result->collection.GetValue(0, i).str_value;
 		auto name = result->collection.GetValue(2, i).str_value;
 		bool view = type == "view";
@@ -58,7 +58,7 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 		if (!result->success) {
 			throw runtime_error(result->error);
 		}
-		for (size_t i = 0; i < result->collection.count; i++) {
+		for (size_t i = 0; i < result->collection.Count(); i++) {
 			auto name = result->collection.GetValue(1, i).str_value;
 			auto type = result->collection.GetValue(2, i).str_value;
 			column c(name, sqltype::get(type));

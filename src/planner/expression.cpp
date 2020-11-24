@@ -37,6 +37,16 @@ bool Expression::IsScalar() const {
 	return is_scalar;
 }
 
+bool Expression::HasSideEffects() const {
+	bool has_side_effects = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (child.HasSideEffects()) {
+			has_side_effects = true;
+		}
+	});
+	return has_side_effects;
+}
+
 bool Expression::IsFoldable() const {
 	bool is_foldable = true;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
