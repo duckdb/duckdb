@@ -140,7 +140,6 @@ SELECT myavg(a) FROM integers
 statement ok
 CREATE MACRO weird_avg(x) AS (MIN(x) + MAX(x)) / COUNT(x)
 
-# this one is also 21 because there's only 2 integers in there
 query T
 SELECT weird_avg(a) FROM integers
 ----
