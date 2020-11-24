@@ -313,7 +313,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	// dummy
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 
-	D_ASSERT(groups.column_count() == group_types.size());
+	D_ASSERT(groups.ColumnCount() == group_types.size());
 #ifdef DEBUG
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		D_ASSERT(groups.GetTypes()[i] == group_types[i]);
@@ -385,8 +385,8 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 	groups.Verify();
-	D_ASSERT(groups.column_count() == group_types.size());
-	for (idx_t i = 0; i < result.column_count(); i++) {
+	D_ASSERT(groups.ColumnCount() == group_types.size());
+	for (idx_t i = 0; i < result.ColumnCount(); i++) {
 		D_ASSERT(result.data[i].type == payload_types[i]);
 	}
 	result.SetCardinality(groups);
@@ -399,7 +399,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	FindOrCreateGroups(groups, addresses);
 	// now fetch the aggregates
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		D_ASSERT(result.column_count() > aggr_idx);
+		D_ASSERT(result.ColumnCount() > aggr_idx);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx], groups.size());
 	}
@@ -437,7 +437,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 	if (count == 0) {
 		return;
 	}
-	for (idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
+	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
 		auto &data = groups.data[grp_idx];
 		auto &gdata = group_data[grp_idx];
 
@@ -545,7 +545,7 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 
 static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
                           SelectionVector &sel, idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
-	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
+	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
 		auto &data = groups.data[group_idx];
 		auto &gdata = group_data[group_idx];
 		auto type_size = GetTypeIdSize(data.type.InternalType());
@@ -600,7 +600,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	}
 
 	D_ASSERT(capacity - entries >= groups.size());
-	D_ASSERT(groups.column_count() == group_types.size());
+	D_ASSERT(groups.ColumnCount() == group_types.size());
 	// we need to be able to fit at least one vector of data
 	D_ASSERT(capacity - entries >= groups.size());
 	D_ASSERT(group_hashes.type == LogicalType::HASH);
@@ -634,8 +634,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	idx_t remaining_entries = groups.size();
 
 	// orrify all the groups
-	auto group_data = unique_ptr<VectorData[]>(new VectorData[groups.column_count()]);
-	for (idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
+	auto group_data = unique_ptr<VectorData[]>(new VectorData[groups.ColumnCount()]);
+	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
 		groups.data[grp_idx].Orrify(groups.size(), group_data[grp_idx]);
 	}
 
@@ -765,7 +765,7 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 	DataChunk groups;
 	groups.Initialize(group_types);
 	groups.SetCardinality(count);
-	for (idx_t i = 0; i < groups.column_count(); i++) {
+	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		auto &column = groups.data[i];
 		VectorOperations::Gather::Set(source_addresses, column, count);
 	}

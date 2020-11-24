@@ -46,7 +46,7 @@ struct ChunkMergeInfo : public MergeInfo {
 	bool found_match[STANDARD_VECTOR_SIZE];
 
 	ChunkMergeInfo(ChunkCollection &data_chunks, vector<MergeOrder> &order_info)
-	    : MergeInfo(MergeInfoType::CHUNK_MERGE_INFO, data_chunks.types[0]), data_chunks(data_chunks),
+	    : MergeInfo(MergeInfoType::CHUNK_MERGE_INFO, data_chunks.Types()[0]), data_chunks(data_chunks),
 	      order_info(order_info) {
 		memset(found_match, 0, sizeof(found_match));
 	}

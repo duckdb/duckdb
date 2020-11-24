@@ -20,8 +20,8 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 	statep.Reference(ptr_val);
 	statep.Normalify(STANDARD_VECTOR_SIZE);
 
-	if (input_ref && input_ref->column_count() > 0) {
-		inputs.Initialize(input_ref->types);
+	if (input_ref && input_ref->ColumnCount() > 0) {
+		inputs.Initialize(input_ref->Types());
 		if (aggregate.combine) {
 			ConstructTree();
 		}
@@ -54,9 +54,9 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	Vector s;
 	s.Slice(statep, 0);
 	if (l_idx == 0) {
-		const auto input_count = input_ref->column_count();
+		const auto input_count = input_ref->ColumnCount();
 		if (start_in_vector + inputs.size() < STANDARD_VECTOR_SIZE) {
-			auto &chunk = input_ref->GetChunk(begin);
+			auto &chunk = input_ref->GetChunkForRow(begin);
 			for (idx_t i = 0; i < input_count; ++i) {
 				auto &v = inputs.data[i];
 				auto &vec = chunk.data[i];
@@ -65,8 +65,8 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 			}
 		} else {
 			// we cannot just slice the individual vector!
-			auto &chunk_a = input_ref->GetChunk(begin);
-			auto &chunk_b = input_ref->GetChunk(end);
+			auto &chunk_a = input_ref->GetChunkForRow(begin);
+			auto &chunk_b = input_ref->GetChunkForRow(end);
 			idx_t chunk_a_count = chunk_a.size() - start_in_vector;
 			idx_t chunk_b_count = inputs.size() - chunk_a_count;
 			for (idx_t i = 0; i < input_count; ++i) {
@@ -93,11 +93,11 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 
 void WindowSegmentTree::ConstructTree() {
 	D_ASSERT(input_ref);
-	D_ASSERT(inputs.column_count() > 0);
+	D_ASSERT(inputs.ColumnCount() > 0);
 
 	// compute space required to store internal nodes of segment tree
 	idx_t internal_nodes = 0;
-	idx_t level_nodes = input_ref->count;
+	idx_t level_nodes = input_ref->Count();
 	do {
 		level_nodes = (idx_t)ceil((double)level_nodes / TREE_FANOUT);
 		internal_nodes += level_nodes;
@@ -109,7 +109,7 @@ void WindowSegmentTree::ConstructTree() {
 	idx_t level_current = 0;
 	// level 0 is data itself
 	idx_t level_size;
-	while ((level_size = (level_current == 0 ? input_ref->count
+	while ((level_size = (level_current == 0 ? input_ref->Count()
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			AggregateInit();
@@ -129,7 +129,7 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 	D_ASSERT(input_ref);
 
 	// No arguments, so just count
-	if (inputs.column_count() == 0) {
+	if (inputs.ColumnCount() == 0) {
 		return Value::Numeric(result_type, end - begin);
 	}
 

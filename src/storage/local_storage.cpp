@@ -19,15 +19,15 @@ LocalTableStorage::~LocalTableStorage() {
 }
 
 void LocalTableStorage::InitializeScan(LocalScanState &state, TableFilterSet *table_filters) {
-	if (collection.chunks.size() == 0) {
+	if (collection.ChunkCount() == 0) {
 		// nothing to scan
 		return;
 	}
 	state.SetStorage(this);
 
 	state.chunk_index = 0;
-	state.max_index = collection.chunks.size() - 1;
-	state.last_chunk_count = collection.chunks.back()->size();
+	state.max_index = collection.ChunkCount() - 1;
+	state.last_chunk_count = collection.Chunks().back()->size();
 	state.table_filters = table_filters;
 }
 
@@ -47,8 +47,7 @@ void LocalScanState::SetStorage(LocalTableStorage *new_storage) {
 }
 
 void LocalTableStorage::Clear() {
-	collection.chunks.clear();
-	collection.count = 0;
+	collection.Reset();
 	deleted_entries.clear();
 	indexes.clear();
 	deleted_rows = 0;
@@ -84,7 +83,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		result.Reset();
 		return;
 	}
-	auto &chunk = *storage->collection.chunks[state.chunk_index];
+	auto &chunk = storage->collection.GetChunk(state.chunk_index);
 	idx_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
 	idx_t count = chunk_count;
 
@@ -164,7 +163,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	}
 	// append to unique indices (if any)
 	if (storage->indexes.size() > 0) {
-		idx_t base_id = MAX_ROW_ID + storage->collection.count;
+		idx_t base_id = MAX_ROW_ID + storage->collection.Count();
 
 		// first generate the vector of row identifiers
 		Vector row_ids(LOGICAL_ROW_TYPE);
@@ -179,7 +178,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	}
 	//! Append to the chunk
 	storage->collection.Append(chunk);
-	if (storage->active_scans == 0 && storage->collection.count >= MorselInfo::MORSEL_SIZE) {
+	if (storage->active_scans == 0 && storage->collection.Count() >= MorselInfo::MORSEL_SIZE) {
 		// flush to base storage
 		Flush(*table, *storage);
 	}
@@ -202,7 +201,7 @@ void LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
 	idx_t chunk_idx = GetChunk(row_ids);
-	D_ASSERT(chunk_idx < storage->collection.chunks.size());
+	D_ASSERT(chunk_idx < storage->collection.ChunkCount());
 
 	// get a pointer to the deleted entries for this chunk
 	bool *deleted;
@@ -279,12 +278,12 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &c
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
 	idx_t chunk_idx = GetChunk(row_ids);
-	D_ASSERT(chunk_idx < storage->collection.chunks.size());
+	D_ASSERT(chunk_idx < storage->collection.ChunkCount());
 
 	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 
 	// now perform the actual update
-	auto &chunk = *storage->collection.chunks[chunk_idx];
+	auto &chunk = storage->collection.GetChunk(chunk_idx);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = column_ids[i];
 		update_chunk(chunk.data[col_idx], data.data[i], row_ids, data.size(), base_index);
@@ -316,10 +315,10 @@ template <class T> bool LocalStorage::ScanTableStorage(DataTable &table, LocalTa
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
-	if (storage.collection.count <= storage.deleted_rows) {
+	if (storage.collection.Count() <= storage.deleted_rows) {
 		return;
 	}
-	idx_t append_count = storage.collection.count - storage.deleted_rows;
+	idx_t append_count = storage.collection.Count() - storage.deleted_rows;
 	TableAppendState append_state;
 	table.InitializeAppend(transaction, append_state, append_count);
 
@@ -387,17 +386,17 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 		executor.AddExpression(*default_value);
 	}
 
-	new_storage->collection.types.push_back(new_column_type);
-	for (idx_t chunk_idx = 0; chunk_idx < new_storage->collection.chunks.size(); chunk_idx++) {
-		auto &chunk = new_storage->collection.chunks[chunk_idx];
+	new_storage->collection.Types().push_back(new_column_type);
+	for (idx_t chunk_idx = 0; chunk_idx < new_storage->collection.ChunkCount(); chunk_idx++) {
+		auto &chunk = new_storage->collection.GetChunk(chunk_idx);
 		Vector result(new_column_type);
 		if (default_value) {
-			dummy_chunk.SetCardinality(chunk->size());
+			dummy_chunk.SetCardinality(chunk.size());
 			executor.ExecuteExpression(dummy_chunk, result);
 		} else {
 			FlatVector::Nullmask(result).set();
 		}
-		chunk->data.push_back(move(result));
+		chunk.data.push_back(move(result));
 	}
 
 	table_storage.erase(entry);

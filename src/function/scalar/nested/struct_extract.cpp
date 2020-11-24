@@ -25,7 +25,7 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
 	// this should be guaranteed by the binder
-	D_ASSERT(args.column_count() == 1);
+	D_ASSERT(args.ColumnCount() == 1);
 	auto &vec = args.data[0];
 
 	vec.Verify(args.size());

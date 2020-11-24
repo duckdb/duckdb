@@ -266,6 +266,7 @@ jobs:
           build/release/tools/jdbc/duckdb_jdbc.jar
           
 
+
   linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-16.04
@@ -308,6 +309,50 @@ jobs:
           libduckdb-linux-i386.zip 
           duckdb_cli-linux-i386.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
+
+
+  linux-rpi:
+    name: Linux (Raspberry Pi)
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: |
+        sudo apt-get install ninja-build
+        git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
+
+    - name: Build
+      run: |
+        export TOOLCHAIN=`pwd`/rpi-tools
+        mkdir -p build/release
+        cd build/release
+        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
+        cmake --build .
+        file duckdb
+
+    - name: Deploy
+      run: |
+        python scripts/amalgamation.py
+        zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
+        zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+        python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-rpi
+        path: |
+          libduckdb-linux-rpi.zip
+          duckdb_cli-linux-rpi.zip
+
 
   old-gcc:
     name: GCC 4.8
@@ -809,42 +854,3 @@ jobs:
 
     - name: Node 15 
       run: ./scripts/node_build.sh 15
-
-
-  # linux-raspi:
-  #   name: Raspberry Pi Binary
-  #   runs-on: ubuntu-20.04
-  #   #needs: linux-debug
-
-  #   steps:
-  #   - uses: actions/checkout@v2
-  #     with:
-  #       fetch-depth: 0
-
-  #   - uses: actions/setup-python@v2
-  #     with:
-  #       python-version: '3.7'
-
-  #   - name: Setup
-  #     run: |
-  #       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-  #       sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
-  #       sudo apt-get update
-  #       sudo apt-get install -y docker-ce
-
-  #   - name: Build
-  #     run: |
-  #       export STATIC_LIBCPP=1
-  #       docker run -v `pwd`:/build mitchallen/pi-cross-compile
-  #       file build/release/duckdb
-
-  #   - name: Deploy
-  #     run: |
-  #       zip -j duckdb_cli-arm-linux-gnueabihf.zip build/release/duckdb
-  #       python scripts/asset-upload-gha.py duckdb_cli-arm-linux-gnueabihf.zip
-
-  #   - uses: actions/upload-artifact@v2
-  #     with:
-  #       name: duckdb-binaries-linux
-  #       path: |
-  #         duckdb_cli-arm-linux-gnueabihf.zip

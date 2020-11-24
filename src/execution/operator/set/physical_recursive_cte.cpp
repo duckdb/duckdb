@@ -76,14 +76,9 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 				break;
 			}
 
-			working_table->count = 0;
-			working_table->chunks.clear();
-
-			working_table->count = intermediate_table.count;
-			working_table->chunks = move(intermediate_table.chunks);
-
-			intermediate_table.count = 0;
-			intermediate_table.chunks.clear();
+			working_table->Reset();
+			working_table->Merge(intermediate_table);
+			intermediate_table.Reset();
 
 			ExecuteRecursivePipelines(context);
 			state->bottom_state = children[1]->GetOperatorState();

@@ -51,14 +51,14 @@ void PhysicalInsert::Sink(ExecutionContext &context, GlobalOperatorState &state,
 				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[i]);
 			} else {
 				// get value from child chunk
-				D_ASSERT((idx_t)column_index_map[i] < chunk.column_count());
+				D_ASSERT((idx_t)column_index_map[i] < chunk.ColumnCount());
 				D_ASSERT(istate.insert_chunk.data[i].type == chunk.data[column_index_map[i]].type);
 				istate.insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
 			}
 		}
 	} else {
 		// no columns specified, just append directly
-		for (idx_t i = 0; i < istate.insert_chunk.column_count(); i++) {
+		for (idx_t i = 0; i < istate.insert_chunk.ColumnCount(); i++) {
 			D_ASSERT(istate.insert_chunk.data[i].type == chunk.data[i].type);
 			istate.insert_chunk.data[i].Reference(chunk.data[i]);
 		}

@@ -543,7 +543,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		for (idx_t row_idx = 0; row_idx <= parse_chunk.size(); row_idx++) {
 			bool is_header_row = row_idx == 0;
 			idx_t row = row_idx - 1;
-			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
+			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
@@ -628,7 +628,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 
 		idx_t varchar_cols = 0;
-		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
+		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 			auto &col_type_candidates = info_sql_types_candidates[col];
 			// check number of varchar columns
 			const auto &col_type = col_type_candidates.back();
@@ -638,7 +638,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
-		if (varchar_cols < min_varchar_cols && parse_chunk.column_count() > (best_num_cols * 0.7)) {
+		if (varchar_cols < min_varchar_cols && parse_chunk.ColumnCount() > (best_num_cols * 0.7)) {
 			// we have a new best_options candidate
 			best_options = info_candidate;
 			min_varchar_cols = varchar_cols;
@@ -708,7 +708,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 	} else {
 		options.header = false;
-		idx_t total_columns = parse_chunk.column_count();
+		idx_t total_columns = parse_chunk.ColumnCount();
 		for (idx_t col = 0; col < total_columns; col++) {
 			string column_name = GenerateColumnName(total_columns, col);
 			col_names.push_back(column_name);
@@ -747,7 +747,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			} catch (const InvalidInputException &e) {
 				continue;
 			}
-			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
+			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 				vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
@@ -785,7 +785,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			}
 
 			if (!jumping_samples) {
-				if ((sample_chunk_idx) * options.sample_chunk_size <= options.buffer_size) {
+				if ((sample_chunk_idx)*options.sample_chunk_size <= options.buffer_size) {
 					// cache parse chunk
 					// create a new chunk and fill it with the remainder
 					auto chunk = make_unique<DataChunk>();

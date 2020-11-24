@@ -21,7 +21,7 @@ struct RandomBindData : public FunctionData {
 };
 
 static void random_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.column_count() == 0);
+	D_ASSERT(args.ColumnCount() == 0);
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RandomBindData &)*func_expr.bind_info;
 

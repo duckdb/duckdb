@@ -159,14 +159,14 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 		return;
 	}
 
-	if ((idx_t)data.current_chunk_root.n_children != output.column_count()) {
+	if ((idx_t)data.current_chunk_root.n_children != output.ColumnCount()) {
 		throw InvalidInputException("arrow_scan: array column count mismatch");
 	}
 
 	output.SetCardinality(
 	    std::min((int64_t)STANDARD_VECTOR_SIZE, (int64_t)(data.current_chunk_root.length - data.chunk_offset)));
 
-	for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &array = *data.current_chunk_root.children[col_idx];
 		if (!array.release) {
 			throw InvalidInputException("arrow_scan: released array passed");
