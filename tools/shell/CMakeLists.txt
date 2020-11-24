@@ -9,14 +9,13 @@ endif()
 
 option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)
 
-
 include_directories(include)
 include_directories(../sqlite3_api_wrapper/include)
 add_executable(shell ${SHELL_SOURCES})
 target_link_libraries(shell sqlite3_api_wrapper_static Threads::Threads)
-if (STATIC_LIBCPP)
-	message("Statically linking CLI")
-	target_link_libraries(shell -static-libstdc++ -static-libgcc)
+if(STATIC_LIBCPP)
+  message("Statically linking CLI")
+  target_link_libraries(shell -static-libstdc++ -static-libgcc)
 endif()
 
 if(NOT AMALGAMATION_BUILD AND NOT WIN32)

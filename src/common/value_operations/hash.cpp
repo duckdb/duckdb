@@ -35,14 +35,14 @@ hash_t ValueOperations::Hash(const Value &op) {
 		return duckdb::Hash(op.str_value.c_str());
 	case PhysicalType::LIST: {
 		hash_t hash = 0;
-		for(auto &entry : op.list_value) {
+		for (auto &entry : op.list_value) {
 			hash ^= ValueOperations::Hash(entry);
 		}
 		return hash;
 	}
 	case PhysicalType::STRUCT: {
 		hash_t hash = 0;
-		for(auto &entry : op.struct_value) {
+		for (auto &entry : op.struct_value) {
 			hash ^= ValueOperations::Hash(entry.second);
 		}
 		return hash;

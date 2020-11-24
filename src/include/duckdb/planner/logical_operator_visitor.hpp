@@ -22,8 +22,8 @@ public:
 	virtual void VisitOperator(LogicalOperator &op);
 	virtual void VisitExpression(unique_ptr<Expression> *expression);
 
-
 	static void EnumerateExpressions(LogicalOperator &op, std::function<void(unique_ptr<Expression> *child)> callback);
+
 protected:
 	//! Automatically calls the Visit method for LogicalOperator children of the current operator. Can be overloaded to
 	//! change this behavior.

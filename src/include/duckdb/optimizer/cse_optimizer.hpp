@@ -20,12 +20,12 @@ struct CSEReplacementState;
 //! if there are any, it pushes a projection under the operator that resolves these expressions
 class CommonSubExpressionOptimizer : public LogicalOperatorVisitor {
 public:
-	CommonSubExpressionOptimizer(Binder &binder)
-	    : binder(binder) {
+	CommonSubExpressionOptimizer(Binder &binder) : binder(binder) {
 	}
 
 public:
 	void VisitOperator(LogicalOperator &op) override;
+
 private:
 	//! First iteration: count how many times each expression occurs
 	void CountExpressions(Expression &expr, CSEReplacementState &state);
@@ -34,6 +34,7 @@ private:
 
 	//! Main method to extract common subexpressions
 	void ExtractCommonSubExpresions(LogicalOperator &op);
+
 private:
 	Binder &binder;
 };

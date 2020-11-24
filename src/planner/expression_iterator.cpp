@@ -10,19 +10,14 @@ namespace duckdb {
 using namespace std;
 
 void ExpressionIterator::EnumerateChildren(const Expression &expr, function<void(const Expression &child)> callback) {
-	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> &child) {
-		callback(*child);
-	});
+	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> &child) { callback(*child); });
 }
 
 void ExpressionIterator::EnumerateChildren(Expression &expr, std::function<void(Expression &child)> callback) {
-	EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
-		callback(*child);
-	});
+	EnumerateChildren(expr, [&](unique_ptr<Expression> &child) { callback(*child); });
 }
 
-void ExpressionIterator::EnumerateChildren(Expression &expr,
-                                           function<void(unique_ptr<Expression> &child)> callback) {
+void ExpressionIterator::EnumerateChildren(Expression &expr, function<void(unique_ptr<Expression> &child)> callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = (BoundAggregateExpression &)expr;
@@ -128,9 +123,8 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 		return;
 	}
 	callback(*expr);
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		EnumerateExpression(child, callback);
-	});
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> &child) { EnumerateExpression(child, callback); });
 }
 
 void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
@@ -156,7 +150,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 	}
 	default:
 		D_ASSERT(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
-		       ref.type == TableReferenceType::EMPTY);
+		         ref.type == TableReferenceType::EMPTY);
 		break;
 	}
 }

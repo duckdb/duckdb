@@ -19,9 +19,8 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 		// replace the binding with a copy to the expression at the referenced index
 		return proj.groups[colref.binding.column_index]->Copy();
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		child = ReplaceGroupBindings(proj, move(child));
-	});
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceGroupBindings(proj, move(child)); });
 	return expr;
 }
 

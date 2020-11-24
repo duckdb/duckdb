@@ -48,9 +48,8 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 		auto &bound_colref = (BoundColumnRefExpression &)*expr;
 		return make_unique<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &expr) {
-		expr = BindExpression(move(expr));
-	});
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> &expr) { expr = BindExpression(move(expr)); });
 	return expr;
 }
 

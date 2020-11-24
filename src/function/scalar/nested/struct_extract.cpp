@@ -19,7 +19,7 @@ struct StructExtractBindData : public FunctionData {
 		return make_unique<StructExtractBindData>(key, index, type);
 	}
 	bool Equals(FunctionData &other_p) override {
-		auto &other = (StructExtractBindData&) other_p;
+		auto &other = (StructExtractBindData &)other_p;
 		return key == other.key && index == other.index && type == other.type;
 	}
 };

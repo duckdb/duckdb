@@ -18,7 +18,8 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 	}
 }
 
-void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op, std::function<void(unique_ptr<Expression> *child)> callback) {
+void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
+                                                  std::function<void(unique_ptr<Expression> *child)> callback) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		auto &get = (LogicalExpressionGet &)op;
@@ -86,9 +87,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op, std::func
 }
 
 void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) {
-		VisitExpression(child);
-	});
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) { VisitExpression(child); });
 }
 
 void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression) {
@@ -155,9 +154,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 }
 
 void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
-	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) {
-		VisitExpression(&expr);
-	});
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { VisitExpression(&expr); });
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,

@@ -15,7 +15,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		try {
 			LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
 			return templated_boolean_operation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
-		} catch(...) {
+		} catch (...) {
 			return false;
 		}
 	}
