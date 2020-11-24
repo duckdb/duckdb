@@ -1,0 +1,17 @@
+# name: test/sql/aggregate/aggregates/test_median.test
+# description: Test AVG operator
+# group: [aggregates]
+
+mode output_result
+
+statement ok
+CREATE TABLE doubles(d double);
+
+statement ok
+INSERT INTO doubles VALUES (1), (2), (3)
+
+query R
+SELECT median(d) FROM doubles
+----
+6
+

@@ -35,6 +35,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
 	RegisterNestedAggregates();
+	RegisterHolisticAggregates();
 
 	RegisterDateFunctions();
 	RegisterGenericFunctions();
@@ -121,7 +122,7 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 
 hash_t BaseScalarFunction::Hash() const {
 	hash_t hash = return_type.Hash();
-	for(auto &arg : arguments) {
+	for (auto &arg : arguments) {
 		duckdb::CombineHash(hash, arg.Hash());
 	}
 	return hash;
