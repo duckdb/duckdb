@@ -22,3 +22,8 @@ SELECT g, median(d) FROM doubles group by g order by g;
 2
 2
 7
+
+query R
+SELECT median(range::double) FROM range(100000);
+----
+50000
