@@ -11,13 +11,12 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr) {
+void ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr) {
 	auto macro_binding = make_unique<MacroBinding>(vector<LogicalType>(), vector<string>(), string());
-	return UnfoldMacroRecursive(move(expr), *macro_binding);
+	UnfoldMacroRecursive(expr, *macro_binding);
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,
-                                                                    MacroBinding &macro_binding) {
+void ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr, MacroBinding &macro_binding) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
 		// if expr is a parameter, replace it with its argument
@@ -25,13 +24,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 		if (colref.table_name.empty() && macro_binding.HasMatchingBinding(colref.column_name)) {
 			expr = macro_binding.ParamToArg(colref);
 		}
-		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-			return expr;
-		} else {
-			// arguments supplied to the macro cannot contain refer to parameter of this same macro (infinite recursion)
-			// therefore, we do not call the function with the current MacroBinding
-			return UnfoldMacroRecursive(move(expr));
+		if (expr->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+            // arguments supplied to the macro cannot contain refer to parameter of this same macro (infinite recursion)
+            // therefore, we do not call the function with the current MacroBinding
+            UnfoldMacroRecursive(expr);
 		}
+		return;
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &function_expr = (FunctionExpression &)*expr;
@@ -63,7 +61,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 			new_macro_binding->arguments = move(function_expr.children);
 
 			expr = macro_func.function->expression->Copy();
-			return UnfoldMacroRecursive(move(expr), *new_macro_binding);
+			UnfoldMacroRecursive(expr, *new_macro_binding);
 		}
 		break;
 	}
@@ -82,10 +80,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::UnfoldMacroRecursive(unique_ptr<P
 	}
 	// unfold child expressions
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> child) -> unique_ptr<ParsedExpression> {
-		    return UnfoldMacroRecursive(move(child), macro_binding);
-	    });
-	return expr;
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { UnfoldMacroRecursive(child, macro_binding); });
 }
 
 void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, MacroBinding &macro_binding) {
@@ -100,7 +95,7 @@ void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, Mac
 		auto &el_ref = (ExpressionListRef &)ref;
 		for (idx_t i = 0; i < el_ref.values.size(); i++) {
 			for (idx_t j = 0; j < el_ref.values[i].size(); j++) {
-				el_ref.values[i][j] = UnfoldMacroRecursive(move(el_ref.values[i][j]), macro_binding);
+				UnfoldMacroRecursive(el_ref.values[i][j], macro_binding);
 			}
 		}
 		break;
@@ -109,7 +104,7 @@ void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, Mac
 		auto &j_ref = (JoinRef &)ref;
 		UnfoldTableRef(expr, *j_ref.left, macro_binding);
 		UnfoldTableRef(expr, *j_ref.right, macro_binding);
-		j_ref.condition = UnfoldMacroRecursive(move(j_ref.condition), macro_binding);
+		UnfoldMacroRecursive(j_ref.condition, macro_binding);
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
@@ -122,7 +117,7 @@ void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, Mac
 	}
 	case TableReferenceType::TABLE_FUNCTION: {
 		auto &tf_ref = (TableFunctionRef &)ref;
-		tf_ref.function = UnfoldMacroRecursive(move(tf_ref.function), macro_binding);
+		UnfoldMacroRecursive(tf_ref.function, macro_binding);
 		break;
 	}
 	case TableReferenceType::BASE_TABLE:
@@ -145,16 +140,16 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 	case QueryNodeType::SELECT_NODE: {
 		auto &sel_node = (SelectNode &)node;
 		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
-			sel_node.select_list[i] = UnfoldMacroRecursive(move(sel_node.select_list[i]), macro_binding);
+			UnfoldMacroRecursive(sel_node.select_list[i], macro_binding);
 		}
 		for (idx_t i = 0; i < sel_node.groups.size(); i++) {
-			sel_node.groups[i] = UnfoldMacroRecursive(move(sel_node.groups[i]), macro_binding);
+			UnfoldMacroRecursive(sel_node.groups[i], macro_binding);
 		}
 		if (sel_node.where_clause != nullptr) {
-			sel_node.where_clause = UnfoldMacroRecursive(move(sel_node.where_clause), macro_binding);
+			UnfoldMacroRecursive(sel_node.where_clause, macro_binding);
 		}
 		if (sel_node.having != nullptr) {
-			sel_node.having = UnfoldMacroRecursive(move(sel_node.having), macro_binding);
+			UnfoldMacroRecursive(sel_node.having, macro_binding);
 		}
 
 		UnfoldTableRef(expr, *sel_node.from_table.get(), macro_binding);
@@ -173,7 +168,8 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, idx_t depth, unique_ptr<ParsedExpression> *expr) {
 	// unfold and replace the original macro expression
-	*expr = UnfoldMacroRecursive(function.Copy());
+	//	auto unfolded_expr = function.Copy();
+	UnfoldMacroRecursive(*expr);
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

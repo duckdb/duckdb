@@ -70,7 +70,8 @@ public:
 	LogicalType target_type;
 
 protected:
-	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression = false);
+	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+	                                  bool root_expression = false);
 
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
@@ -95,9 +96,8 @@ protected:
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
 	virtual BindResult BindMacro(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
 
-	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr);
-	virtual unique_ptr<ParsedExpression> UnfoldMacroRecursive(unique_ptr<ParsedExpression> expr,
-	                                                          MacroBinding &macro_binding);
+	virtual void UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr);
+	virtual void UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr, MacroBinding &macro_binding);
 	virtual void UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding);
 	virtual void UnfoldTableRef(ParsedExpression &expr, TableRef &ref, MacroBinding &macro_binding);
 
