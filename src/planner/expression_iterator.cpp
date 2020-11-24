@@ -10,111 +10,97 @@ namespace duckdb {
 using namespace std;
 
 void ExpressionIterator::EnumerateChildren(const Expression &expr, function<void(const Expression &child)> callback) {
-	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		callback(*child);
-		return child;
-	});
+	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> &child) { callback(*child); });
 }
 
 void ExpressionIterator::EnumerateChildren(Expression &expr, std::function<void(Expression &child)> callback) {
-	EnumerateChildren(expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		callback(*child);
-		return child;
-	});
+	EnumerateChildren(expr, [&](unique_ptr<Expression> &child) { callback(*child); });
 }
 
-void ExpressionIterator::EnumerateChildren(Expression &expr,
-                                           function<unique_ptr<Expression>(unique_ptr<Expression> child)> callback) {
+void ExpressionIterator::EnumerateChildren(Expression &expr, function<void(unique_ptr<Expression> &child)> callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = (BoundAggregateExpression &)expr;
 		for (auto &child : aggr_expr.children) {
-			child = callback(move(child));
+			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_BETWEEN: {
 		auto &between_expr = (BoundBetweenExpression &)expr;
-		between_expr.input = callback(move(between_expr.input));
-		between_expr.lower = callback(move(between_expr.lower));
-		between_expr.upper = callback(move(between_expr.upper));
+		callback(between_expr.input);
+		callback(between_expr.lower);
+		callback(between_expr.upper);
 		break;
 	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = (BoundCaseExpression &)expr;
-		case_expr.check = callback(move(case_expr.check));
-		case_expr.result_if_true = callback(move(case_expr.result_if_true));
-		case_expr.result_if_false = callback(move(case_expr.result_if_false));
+		callback(case_expr.check);
+		callback(case_expr.result_if_true);
+		callback(case_expr.result_if_false);
 		break;
 	}
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = (BoundCastExpression &)expr;
-		cast_expr.child = callback(move(cast_expr.child));
+		callback(cast_expr.child);
 		break;
 	}
 	case ExpressionClass::BOUND_COMPARISON: {
 		auto &comp_expr = (BoundComparisonExpression &)expr;
-		comp_expr.left = callback(move(comp_expr.left));
-		comp_expr.right = callback(move(comp_expr.right));
+		callback(comp_expr.left);
+		callback(comp_expr.right);
 		break;
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = (BoundConjunctionExpression &)expr;
 		for (auto &child : conj_expr.children) {
-			child = callback(move(child));
+			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func_expr = (BoundFunctionExpression &)expr;
 		for (auto &child : func_expr.children) {
-			child = callback(move(child));
+			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op_expr = (BoundOperatorExpression &)expr;
 		for (auto &child : op_expr.children) {
-			child = callback(move(child));
+			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_SUBQUERY: {
 		auto &subquery_expr = (BoundSubqueryExpression &)expr;
 		if (subquery_expr.child) {
-			subquery_expr.child = callback(move(subquery_expr.child));
+			callback(subquery_expr.child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_WINDOW: {
 		auto &window_expr = (BoundWindowExpression &)expr;
 		for (auto &partition : window_expr.partitions) {
-			partition = callback(move(partition));
+			callback(partition);
 		}
 		for (auto &order : window_expr.orders) {
-			order.expression = callback(move(order.expression));
+			callback(order.expression);
 		}
 		for (auto &child : window_expr.children) {
-			child = callback(move(child));
+			callback(child);
 		}
 		if (window_expr.offset_expr) {
-			window_expr.offset_expr = callback(move(window_expr.offset_expr));
+			callback(window_expr.offset_expr);
 		}
 		if (window_expr.default_expr) {
-			window_expr.default_expr = callback(move(window_expr.default_expr));
+			callback(window_expr.default_expr);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_UNNEST: {
 		auto &unnest_expr = (BoundUnnestExpression &)expr;
-		unnest_expr.child = callback(move(unnest_expr.child));
-		break;
-	}
-	case ExpressionClass::COMMON_SUBEXPRESSION: {
-		auto &cse_expr = (CommonSubExpression &)expr;
-		if (cse_expr.owned_child) {
-			cse_expr.owned_child = callback(move(cse_expr.owned_child));
-		}
+		callback(unnest_expr.child);
 		break;
 	}
 	case ExpressionClass::BOUND_COLUMN_REF:
@@ -137,10 +123,8 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 		return;
 	}
 	callback(*expr);
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		EnumerateExpression(child, callback);
-		return child;
-	});
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> &child) { EnumerateExpression(child, callback); });
 }
 
 void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,

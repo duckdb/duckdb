@@ -14,6 +14,10 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
       function(bound_function), children(move(arguments)), bind_info(move(bind_info)), is_operator(is_operator) {
 }
 
+bool BoundFunctionExpression::HasSideEffects() const {
+	return function.has_side_effects ? true : Expression::HasSideEffects();
+}
+
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
 	return function.has_side_effects ? false : Expression::IsFoldable();
@@ -47,6 +51,9 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}
+	}
+	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+		return false;
 	}
 	return true;
 }

@@ -18,6 +18,10 @@ struct StructExtractBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override {
 		return make_unique<StructExtractBindData>(key, index, type);
 	}
+	bool Equals(FunctionData &other_p) override {
+		auto &other = (StructExtractBindData &)other_p;
+		return key == other.key && index == other.index && type == other.type;
+	}
 };
 
 static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -25,7 +29,6 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
 	// this should be guaranteed by the binder
-	D_ASSERT(args.ColumnCount() == 1);
 	auto &vec = args.data[0];
 
 	vec.Verify(args.size());
@@ -93,7 +96,6 @@ static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, Scal
 	}
 
 	bound_function.return_type = return_type;
-	arguments.pop_back();
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 

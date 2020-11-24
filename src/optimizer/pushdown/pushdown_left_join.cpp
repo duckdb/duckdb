@@ -24,9 +24,8 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr,
 		}
 		return expr;
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		return ReplaceColRefWithNull(move(child), right_bindings);
-	});
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceColRefWithNull(move(child), right_bindings); });
 	return expr;
 }
 

@@ -57,7 +57,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return left.list_value == right.list_value;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type");
+		throw InternalException("Unimplemented type for value comparison");
 	}
 }
 
