@@ -33,8 +33,8 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 	}
 	// no changes could be made to this node
 	// recursively run on the children of this node
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		return ExpressionRewriter::ApplyRules(op, rules, move(child), changes_made);
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+		child = ExpressionRewriter::ApplyRules(op, rules, move(child), changes_made);
 	});
 	return expr;
 }

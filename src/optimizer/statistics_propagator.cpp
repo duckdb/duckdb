@@ -75,9 +75,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 	default:
 		break;
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> child) {
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
 		PropagateExpression(child);
-		return child;
 	});
 	return nullptr;
 }

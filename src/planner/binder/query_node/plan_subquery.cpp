@@ -322,9 +322,8 @@ void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<Logical
 	auto &expr = **expr_ptr;
 
 	// first visit the children of the node, if any
-	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) {
 		PlanSubqueries(&expr, root);
-		return expr;
 	});
 
 	// check if this is a subquery node

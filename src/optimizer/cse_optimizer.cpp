@@ -29,12 +29,13 @@ struct CSEReplacementState {
 	column_binding_map_t<idx_t> column_map;
 	//! The set of expressions of the resulting projection
 	vector<unique_ptr<Expression>> expressions;
+	//! We avoid destroying expressions that
+	vector<unique_ptr<Expression>> cached_expressions;
 };
 
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		ExtractCommonSubExpresions(op);
@@ -55,7 +56,7 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	default:
 		break;
 	}
-	if (expr.expression_class != ExpressionClass::BOUND_AGGREGATE) {
+	if (expr.expression_class != ExpressionClass::BOUND_AGGREGATE && !expr.HasSideEffects()) {
 		// we can't move aggregates to a projection, so we only consider the children of the aggregate
 		auto node = state.expression_count.find(&expr);
 		if (node == state.expression_count.end()) {
@@ -101,6 +102,9 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
 				state.expressions.push_back(move(*expr_ptr));
+			} else {
+				// the expression already exists
+				state.cached_expressions.push_back(move(*expr_ptr));
 			}
 			// replace the original expression with a bound column ref
 			*expr_ptr = make_unique<BoundColumnRefExpression>(alias, type, ColumnBinding(state.projection_index, node.column_index));
@@ -109,9 +113,8 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	}
 	// this expression only occurs once, we can't perform CSE elimination
 	// look into the children to see if we can replace them
-	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
 		PerformCSEReplacement(&child, state);
-		return child;
 	});
 }
 
