@@ -29,8 +29,6 @@ struct CSEReplacementState {
 	column_binding_map_t<idx_t> column_map;
 	//! The set of expressions of the resulting projection
 	vector<unique_ptr<Expression>> expressions;
-	//! We avoid destroying expressions that
-	vector<unique_ptr<Expression>> cached_expressions;
 };
 
 
@@ -96,15 +94,12 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection
 			// check if it has already been pushed into the projection
-			auto alias = expr.alias.empty() ? expr.GetName() : expr.alias;
+			auto alias = expr.alias;
 			auto type = expr.return_type;
 			if (node.column_index == INVALID_INDEX) {
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
 				state.expressions.push_back(move(*expr_ptr));
-			} else {
-				// the expression already exists
-				state.cached_expressions.push_back(move(*expr_ptr));
 			}
 			// replace the original expression with a bound column ref
 			*expr_ptr = make_unique<BoundColumnRefExpression>(alias, type, ColumnBinding(state.projection_index, node.column_index));

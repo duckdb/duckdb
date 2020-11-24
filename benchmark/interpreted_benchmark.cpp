@@ -182,7 +182,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 					auto result_splits = StringUtil::Split(line, "|");
 					if (result_column_count < 0) {
 						result_column_count = result_splits.size();
-					} else if (result_column_count != result_splits.size()) {
+					} else if (idx_t(result_column_count) != result_splits.size()) {
 						throw std::runtime_error("error in file " + splits[1] + ", inconsistent amount of rows in CSV");
 					}
 					result_values.push_back(move(result_splits));

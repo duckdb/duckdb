@@ -39,6 +39,18 @@ struct FunctionData {
 	virtual unique_ptr<FunctionData> Copy() {
 		return make_unique<FunctionData>();
 	};
+	virtual bool Equals(FunctionData &other) {
+		return true;
+	}
+	static bool Equals(FunctionData *left, FunctionData *right) {
+		if (left == right) {
+			return true;
+		}
+		if (!left || !right) {
+			return false;
+		}
+		return left->Equals(*right);
+	}
 };
 
 struct TableFunctionData : public FunctionData {

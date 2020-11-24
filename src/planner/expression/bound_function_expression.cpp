@@ -52,6 +52,9 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 			return false;
 		}
 	}
+	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+		return false;
+	}
 	return true;
 }
 
