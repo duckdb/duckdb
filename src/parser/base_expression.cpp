@@ -10,11 +10,7 @@ void BaseExpression::Print() {
 }
 
 string BaseExpression::GetName() const {
-	if (alias.empty()) {
-		return ToString();
-	} else {
-		return alias + " -> " + ToString();
-	}
+	return !alias.empty() ? alias : ToString();
 }
 
 bool BaseExpression::Equals(const BaseExpression *other) const {

@@ -50,3 +50,23 @@ query IIIII
 SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
 ----
 4	4	6	3	2
+
+statement ok
+CREATE TABLE groups(grp INTEGER, aggr1 INTEGER, aggr2 INTEGER, aggr3 INTEGER)
+
+statement ok
+INSERT INTO groups VALUES (1, 1, 2, 3), (1, 2, 4, 6), (2, 1, 2, 3),  (2, 3, 6, 9);
+
+query III
+SELECT
+    sum(aggr1)::DOUBLE / count(aggr1)::DOUBLE AS avg_qty,
+    sum(aggr2)::DOUBLE / count(aggr2)::DOUBLE AS avg_price,
+    sum(aggr3)::DOUBLE / count(aggr3)::DOUBLE AS avg_disc
+FROM
+    groups
+GROUP BY
+    grp
+ORDER BY grp;
+----
+1.5	3	4.5
+2	4	6

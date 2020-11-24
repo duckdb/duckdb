@@ -10,7 +10,6 @@ using namespace std;
 
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
-	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		ExtractCommonAggregates((LogicalAggregate &) op);
