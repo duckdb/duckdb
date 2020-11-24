@@ -22,11 +22,20 @@ struct ReverseFun {
 };
 
 struct LowerFun {
+	static uint8_t ASCIIToLowerMap[];
+
+	//! Returns the length of the result string obtained from lowercasing the given input (in bytes)
+	static idx_t LowerLength(const char *input_data, idx_t input_length);
+	//! Lowercases the string to the target output location, result_data must have space for at least LowerLength bytes
+	static void LowerCase(const char *input_data, idx_t input_length, char *result_data);
+
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct UpperFun {
+	static uint8_t ASCIIToUpperMap[];
+
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -141,6 +150,7 @@ struct ContainsFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 	static idx_t Find(const string_t &haystack, const string_t &needle);
+	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size);
 };
 
 struct UnicodeFun {

@@ -13,7 +13,7 @@ using namespace std;
 
 namespace duckdb {
 
-static uint8_t ascii_to_upper_map[] = {
+uint8_t UpperFun::ASCIIToUpperMap[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
     22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
     44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,
@@ -26,7 +26,7 @@ static uint8_t ascii_to_upper_map[] = {
     198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219,
     220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
     242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254};
-static uint8_t ascii_to_lower_map[] = {
+uint8_t LowerFun::ASCIIToLowerMap[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
     22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
     44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  97,
@@ -46,15 +46,14 @@ template <bool IS_UPPER> static string_t strcase_ascii(Vector &result, const cha
 	auto result_data = result_str.GetDataWriteable();
 	for (idx_t i = 0; i < input_length; i++) {
 		result_data[i] =
-		    IS_UPPER ? ascii_to_upper_map[uint8_t(input_data[i])] : ascii_to_lower_map[uint8_t(input_data[i])];
+		    IS_UPPER ? UpperFun::ASCIIToUpperMap[uint8_t(input_data[i])] : LowerFun::ASCIIToLowerMap[uint8_t(input_data[i])];
 	}
 	result_str.Finalize();
 	return result_str;
 }
 
-template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const char *input_data, idx_t input_length) {
-	// first figure out the output length
-	// optimization: if only ascii then input_length = output_length
+template<bool IS_UPPER>
+static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 	idx_t output_length = 0;
 	for (idx_t i = 0; i < input_length;) {
 		if (input_data[i] & 0x80) {
@@ -72,9 +71,11 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 			i++;
 		}
 	}
-	auto result_str = StringVector::EmptyString(result, output_length);
-	auto result_data = result_str.GetDataWriteable();
+	return output_length;
+}
 
+template<bool IS_UPPER>
+static void CaseConvert(const char *input_data, idx_t input_length, char *result_data) {
 	for (idx_t i = 0; i < input_length;) {
 		if (input_data[i] & 0x80) {
 			// non-ascii character
@@ -89,11 +90,28 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 		} else {
 			// ascii
 			*result_data =
-			    IS_UPPER ? ascii_to_upper_map[uint8_t(input_data[i])] : ascii_to_lower_map[uint8_t(input_data[i])];
+			    IS_UPPER ? UpperFun::ASCIIToUpperMap[uint8_t(input_data[i])] : LowerFun::ASCIIToLowerMap[uint8_t(input_data[i])];
 			result_data++;
 			i++;
 		}
 	}
+}
+
+idx_t LowerFun::LowerLength(const char *input_data, idx_t input_length) {
+	return GetResultLength<false>(input_data, input_length);
+}
+
+void LowerFun::LowerCase(const char *input_data, idx_t input_length, char *result_data) {
+	CaseConvert<false>(input_data, input_length, result_data);
+}
+
+template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const char *input_data, idx_t input_length) {
+	// first figure out the output length
+	idx_t output_length = GetResultLength<IS_UPPER>(input_data, input_length);
+	auto result_str = StringVector::EmptyString(result, output_length);
+	auto result_data = result_str.GetDataWriteable();
+
+	CaseConvert<IS_UPPER>(input_data, input_length, result_data);
 	result_str.Finalize();
 	return result_str;
 }

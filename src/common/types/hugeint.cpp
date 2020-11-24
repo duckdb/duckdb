@@ -163,7 +163,6 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 		return false;
 	}
 	uint64_t upper = uint64_t(result_i128 >> 64);
-	;
 	if (upper & 0x8000000000000000) {
 		return false;
 	}
