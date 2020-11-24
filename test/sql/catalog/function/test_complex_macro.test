@@ -97,22 +97,6 @@ SELECT (SELECT add(i1.a, a) FROM integers) FROM integers i1
 42
 82
 
-# macro with window function
-statement ok
-CREATE TABLE grouped (grp INT, val INT)
-
-statement ok
-INSERT INTO grouped VALUES (1, 10), (1, 10), (1, 10),  (1, 10), (1, 2), (2, 14), (2, 14), (2, 14)
-
-statement ok
-CREATE MACRO mywindow(k,v) AS SUM(v) OVER (PARTITION BY k)
-
-query II
-SELECT DISTINCT grp, mywindow(grp, val) FROM grouped;
-----
-1	42
-2	42
-
 # prepared statement
 statement error
 CREATE MACRO prep(x) AS ?+1
@@ -247,3 +231,17 @@ SELECT * FROM documents WHERE fts_match(id, 'QUÁCK BÁRK')
 ----
 doc1	 QUÁCK+QUÁCK+QUÁCK
 doc2	 BÁRK+BÁRK+BÁRK+BÁRK
+
+# macro with window function
+require vector_size 512
+
+statement ok
+CREATE MACRO mywindow(k,v) AS SUM(v) OVER (PARTITION BY k)
+
+query II
+WITH grouped AS (SELECT mod(range, 3) AS grp, range AS val FROM RANGE(500))
+SELECT DISTINCT grp, mywindow(grp, val) FROM grouped
+----
+0	41583
+1	41750
+2	41417
