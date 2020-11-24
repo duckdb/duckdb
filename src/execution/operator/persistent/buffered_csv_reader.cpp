@@ -259,6 +259,9 @@ bool BufferedCSVReader::JumpToNextSample() {
 	// get bytes contained in the previously read chunk
 	idx_t remaining_bytes_in_buffer = buffer_size - start;
 	bytes_in_chunk -= remaining_bytes_in_buffer;
+	if (remaining_bytes_in_buffer == 0) {
+		return false;
+	}
 
 	// assess if it makes sense to jump, based on size of the first chunk relative to size of the entire file
 	if (sample_chunk_idx == 0) {

@@ -74,23 +74,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	unused.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
-	context.profiler.StartPhase("column_lifetime");
-	ColumnLifetimeAnalyzer column_lifetime(true);
-	column_lifetime.VisitOperator(*plan);
-	context.profiler.EndPhase();
-
-	// transform ORDER BY + LIMIT to TopN
-	context.profiler.StartPhase("top_n");
-	TopN topn;
-	plan = topn.Optimize(move(plan));
-	context.profiler.EndPhase();
-
-	// apply simple expression heuristics to get an initial reordering
-	context.profiler.StartPhase("reorder_filter");
-	ExpressionHeuristics expression_heuristics(*this);
-	plan = expression_heuristics.Rewrite(move(plan));
-	context.profiler.EndPhase();
-
 	// perform statistics propagation
 	context.profiler.StartPhase("statistics_propagation");
 	StatisticsPropagator propagator(context);
@@ -106,6 +89,23 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("common_aggregate");
 	CommonAggregateOptimizer common_aggregate;
 	common_aggregate.VisitOperator(*plan);
+	context.profiler.EndPhase();
+
+	context.profiler.StartPhase("column_lifetime");
+	ColumnLifetimeAnalyzer column_lifetime(true);
+	column_lifetime.VisitOperator(*plan);
+	context.profiler.EndPhase();
+
+	// transform ORDER BY + LIMIT to TopN
+	context.profiler.StartPhase("top_n");
+	TopN topn;
+	plan = topn.Optimize(move(plan));
+	context.profiler.EndPhase();
+
+	// apply simple expression heuristics to get an initial reordering
+	context.profiler.StartPhase("reorder_filter");
+	ExpressionHeuristics expression_heuristics(*this);
+	plan = expression_heuristics.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
 	return plan;
