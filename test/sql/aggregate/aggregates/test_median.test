@@ -5,13 +5,20 @@
 mode output_result
 
 statement ok
-CREATE TABLE doubles(d double);
+CREATE TABLE doubles(d double, g integer);
 
 statement ok
-INSERT INTO doubles VALUES (1), (2), (3)
+INSERT INTO doubles VALUES (1, 1), (2, 1), (3, 1), (NULL, 1), (NULL, 1), (NULL, 1), (5, 2), (6, 2), (7, 2), (8, 2)
 
 query R
-SELECT median(d) FROM doubles
+SELECT median(d) FROM doubles where g = 1;
 ----
-6
+2
 
+query IR
+SELECT g, median(d) FROM doubles group by g order by g;
+----
+1
+2
+2
+7
