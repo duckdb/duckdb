@@ -127,7 +127,7 @@ public:
 		return Function::CallToString(name, arguments);
 	}
 
-	bool HasVarArgs() {
+	bool HasVarArgs() const {
 		return varargs.id() != LogicalTypeId::INVALID;
 	}
 };
@@ -174,6 +174,8 @@ public:
 	bool has_side_effects;
 
 public:
+	hash_t Hash() const;
+
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children);
 

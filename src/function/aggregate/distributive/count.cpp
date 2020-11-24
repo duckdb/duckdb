@@ -64,6 +64,7 @@ unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAg
 	if (child_stats[0] && !child_stats[0]->has_null && !expr.distinct) {
 		// count on a column without null values: use count star
 		expr.function = CountStarFun::GetFunction();
+		expr.function.name = "count_star";
 		expr.children.clear();
 	}
 	return nullptr;
