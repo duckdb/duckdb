@@ -189,7 +189,7 @@ unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
 		}
 	}
 	if (left_projection_map.empty()) {
-		for (column_t i = 0; i < state->child_chunk.column_count(); i++) {
+		for (column_t i = 0; i < state->child_chunk.ColumnCount(); i++) {
 			left_projection_map.push_back(i);
 		}
 	}

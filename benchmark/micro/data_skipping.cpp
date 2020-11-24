@@ -31,7 +31,7 @@ virtual std::string VerifyResult(QueryResult *result) {
 		return result->error;
 	}
 	auto &materialized = (MaterializedQueryResult &)*result;
-	if (materialized.collection.count != 1) {
+	if (materialized.collection.Count() != 1) {
 		return "Incorrect amount of rows in result";
 	}
 	if (result->names.size() != 1) {

@@ -70,11 +70,11 @@ template <> double IntegralConvert::convert_value(hugeint_t val) {
 
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static py::array fetch_column(string numpy_type, ChunkCollection &collection, idx_t column) {
-	auto out = py::array(py::dtype(numpy_type), collection.count);
+	auto out = py::array(py::dtype(numpy_type), collection.Count());
 	auto out_ptr = (NUMPY_T *)out.mutable_data();
 
 	idx_t out_offset = 0;
-	for (auto &data_chunk : collection.chunks) {
+	for (auto &data_chunk : collection.Chunks()) {
 		auto &src = data_chunk->data[column];
 		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
 		auto &nullmask = FlatVector::Nullmask(src);
@@ -96,7 +96,7 @@ template <class T> static py::array fetch_column_regular(string numpy_type, Chun
 template <class DUCKDB_T>
 static void decimal_convert_internal(ChunkCollection &collection, idx_t column, double *out_ptr, double division) {
 	idx_t out_offset = 0;
-	for (auto &data_chunk : collection.chunks) {
+	for (auto &data_chunk : collection.Chunks()) {
 		auto &src = data_chunk->data[column];
 		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
 		auto &nullmask = FlatVector::Nullmask(src);
@@ -112,7 +112,7 @@ static void decimal_convert_internal(ChunkCollection &collection, idx_t column, 
 
 static py::array fetch_column_decimal(string numpy_type, ChunkCollection &collection, idx_t column,
                                       LogicalType &decimal_type) {
-	auto out = py::array(py::dtype(numpy_type), collection.count);
+	auto out = py::array(py::dtype(numpy_type), collection.Count());
 	auto out_ptr = (double *)out.mutable_data();
 
 	auto dec_scale = decimal_type.scale();
@@ -330,7 +330,7 @@ struct PandasScanFunction : public TableFunction {
 		auto get_fun = data.df.attr("__getitem__");
 
 		output.SetCardinality(this_count);
-		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 			auto numpy_col = py::array(get_fun(df_names[col_idx]).attr("to_numpy")());
 
 			switch (data.pandas_types[col_idx]) {
@@ -644,10 +644,10 @@ struct DuckDBPyResult {
 			}
 
 			// convert the nullmask
-			auto nullmask = py::array(py::dtype("bool"), mres->collection.count);
+			auto nullmask = py::array(py::dtype("bool"), mres->collection.Count());
 			auto nullmask_ptr = (bool *)nullmask.mutable_data();
 			idx_t out_offset = 0;
-			for (auto &data_chunk : mres->collection.chunks) {
+			for (auto &data_chunk : mres->collection.Chunks()) {
 				auto &src_nm = FlatVector::Nullmask(data_chunk->data[col_idx]);
 				for (idx_t i = 0; i < data_chunk->size(); i++) {
 					nullmask_ptr[i + out_offset] = src_nm[i];
@@ -768,7 +768,7 @@ struct DuckDBPyConnection {
 			params_set = params;
 		}
 
-		for (const auto &single_query_params : params_set) {
+		for (pybind11::handle single_query_params : params_set) {
 			if (prep->n_param != py::len(single_query_params)) {
 				throw runtime_error("Prepared statments needs " + to_string(prep->n_param) + " parameters, " +
 				                    to_string(py::len(single_query_params)) + " given");
@@ -1069,7 +1069,7 @@ struct DuckDBPyConnection {
 		auto decimal_mod = py::module::import("decimal");
 		auto decimal_decimal = decimal_mod.attr("Decimal");
 
-		for (auto &ele : params) {
+		for (pybind11::handle ele : params) {
 			if (ele.is_none()) {
 				args.push_back(Value());
 			} else if (py::isinstance<py::bool_>(ele)) {

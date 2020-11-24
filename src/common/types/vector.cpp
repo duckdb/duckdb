@@ -242,7 +242,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		}
 		auto &child_cc = ListVector::GetEntry(*this);
 		// TODO optimization: in-place update if fits
-		auto offset = child_cc.count;
+		auto offset = child_cc.Count();
 		if (val.list_value.size() > 0) {
 			idx_t append_idx = 0;
 			while (append_idx < val.list_value.size()) {
@@ -344,7 +344,7 @@ Value Vector::GetValue(idx_t index) const {
 	}
 	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
-		return Value::BLOB((const_data_ptr_t) str.GetDataUnsafe(), str.GetSize());
+		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
 	case LogicalTypeId::STRUCT: {
 		Value ret(type);
@@ -777,7 +777,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify();
 				auto le = ConstantVector::GetData<list_entry_t>(*this);
-				D_ASSERT(le->offset + le->length <= ListVector::GetEntry(*this).count);
+				D_ASSERT(le->offset + le->length <= ListVector::GetEntry(*this).Count());
 			}
 		} else if (vector_type == VectorType::FLAT_VECTOR) {
 			if (ListVector::HasEntry(*this)) {
@@ -788,7 +788,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
 				if (!nullmask[idx]) {
-					D_ASSERT(le.offset + le.length <= ListVector::GetEntry(*this).count);
+					D_ASSERT(le.offset + le.length <= ListVector::GetEntry(*this).Count());
 				}
 			}
 		}

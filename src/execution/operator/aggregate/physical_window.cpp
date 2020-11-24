@@ -94,11 +94,11 @@ static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCo
 		executor.AddExpression(*exprs[expr_idx]);
 	}
 
-	for (idx_t i = 0; i < input.chunks.size(); i++) {
+	for (idx_t i = 0; i < input.ChunkCount(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
 
-		executor.Execute(*input.chunks[i], chunk);
+		executor.Execute(input.GetChunk(i), chunk);
 
 		chunk.Verify();
 		output.Append(chunk);
@@ -141,19 +141,19 @@ static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollectio
 	D_ASSERT(sort_types.size() > 0);
 
 	// create a chunkcollection for the results of the expressions in the window definitions
-	for (idx_t i = 0; i < input.chunks.size(); i++) {
+	for (idx_t i = 0; i < input.ChunkCount(); i++) {
 		DataChunk sort_chunk;
 		sort_chunk.Initialize(sort_types);
 
-		executor.Execute(*input.chunks[i], sort_chunk);
+		executor.Execute(input.GetChunk(i), sort_chunk);
 
 		sort_chunk.Verify();
 		sort_collection.Append(sort_chunk);
 	}
 
-	D_ASSERT(input.count == sort_collection.count);
+	D_ASSERT(input.Count() == sort_collection.Count());
 
-	auto sorted_vector = unique_ptr<idx_t[]>(new idx_t[input.count]);
+	auto sorted_vector = unique_ptr<idx_t[]>(new idx_t[input.Count()]);
 	sort_collection.Sort(orders, null_order_types, sorted_vector.get());
 
 	input.Reorder(sorted_vector.get());
@@ -182,7 +182,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
                                    idx_t row_idx, ChunkCollection &boundary_start_collection,
                                    ChunkCollection &boundary_end_collection, WindowBoundariesState &bounds) {
 
-	if (input.column_count() > 0) {
+	if (input.ColumnCount() > 0) {
 		vector<Value> row_cur = input.GetRow(row_idx);
 		idx_t sort_col_count = wexpr->partitions.size() + wexpr->orders.size();
 
@@ -199,7 +199,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 
 			// find end of partition
 			bounds.partition_end =
-			    BinarySearchRightmost(input, row_cur, bounds.partition_start, input.count, wexpr->partitions.size()) +
+			    BinarySearchRightmost(input, row_cur, bounds.partition_start, input.Count(), wexpr->partitions.size()) +
 			    1;
 
 		} else if (!bounds.is_peer) {
@@ -234,14 +234,14 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 		D_ASSERT(0); // disallowed
 		break;
 	case WindowBoundary::EXPR_PRECEDING: {
-		D_ASSERT(boundary_start_collection.column_count() > 0);
+		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
 		    (int64_t)row_idx -
 		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
-		D_ASSERT(boundary_start_collection.column_count() > 0);
+		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
 		    row_idx +
 		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
@@ -266,13 +266,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING:
-		D_ASSERT(boundary_end_collection.column_count() > 0);
+		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
 		bounds.window_end =
 		    (int64_t)row_idx -
 		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
-		D_ASSERT(boundary_end_collection.column_count() > 0);
+		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
 		bounds.window_end =
 		    row_idx +
 		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
@@ -357,9 +357,9 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	}
 
 	// this is the main loop, go through all sorted rows and compute window function result
-	for (idx_t row_idx = 0; row_idx < input.count; row_idx++) {
+	for (idx_t row_idx = 0; row_idx < input.Count(); row_idx++) {
 		// special case, OVER (), aggregate over everything
-		UpdateWindowBoundaries(wexpr, sort_collection, input.count, row_idx, boundary_start_collection,
+		UpdateWindowBoundaries(wexpr, sort_collection, input.Count(), row_idx, boundary_start_collection,
 		                       boundary_end_collection, bounds);
 		if (WindowNeedsRank(wexpr)) {
 			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
@@ -412,7 +412,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 		case ExpressionType::WINDOW_NTILE: {
-			if (payload_collection.column_count() != 1) {
+			if (payload_collection.ColumnCount() != 1) {
 				throw Exception("NTILE needs a parameter");
 			}
 			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
@@ -497,25 +497,25 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	ChunkCollection &big_data = gstate.chunks;
 	ChunkCollection &window_results = gstate.window_results;
 
-	if (big_data.count == 0) {
+	if (big_data.Count() == 0) {
 		return;
 	}
 
-	if (state->position >= big_data.count) {
+	if (state->position >= big_data.Count()) {
 		return;
 	}
 
 	// just return what was computed before, appending the result cols of the window expressions at the end
-	auto &proj_ch = big_data.GetChunk(state->position);
-	auto &wind_ch = window_results.GetChunk(state->position);
+	auto &proj_ch = big_data.GetChunkForRow(state->position);
+	auto &wind_ch = window_results.GetChunkForRow(state->position);
 
 	idx_t out_idx = 0;
 	D_ASSERT(proj_ch.size() == wind_ch.size());
 	chunk.SetCardinality(proj_ch);
-	for (idx_t col_idx = 0; col_idx < proj_ch.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < proj_ch.ColumnCount(); col_idx++) {
 		chunk.data[out_idx++].Reference(proj_ch.data[col_idx]);
 	}
-	for (idx_t col_idx = 0; col_idx < wind_ch.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < wind_ch.ColumnCount(); col_idx++) {
 		chunk.data[out_idx++].Reference(wind_ch.data[col_idx]);
 	}
 	state->position += STANDARD_VECTOR_SIZE;
@@ -545,7 +545,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	ChunkCollection &big_data = gstate.chunks;
 	ChunkCollection &window_results = gstate.window_results;
 
-	if (big_data.count == 0) {
+	if (big_data.Count() == 0) {
 		return;
 	}
 
@@ -554,11 +554,11 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 		window_types.push_back(select_list[expr_idx]->return_type);
 	}
 
-	for (idx_t i = 0; i < big_data.chunks.size(); i++) {
+	for (idx_t i = 0; i < big_data.ChunkCount(); i++) {
 		DataChunk window_chunk;
 		window_chunk.Initialize(window_types);
-		window_chunk.SetCardinality(big_data.chunks[i]->size());
-		for (idx_t col_idx = 0; col_idx < window_chunk.column_count(); col_idx++) {
+		window_chunk.SetCardinality(big_data.GetChunk(i).size());
+		for (idx_t col_idx = 0; col_idx < window_chunk.ColumnCount(); col_idx++) {
 			window_chunk.data[col_idx].vector_type = VectorType::CONSTANT_VECTOR;
 			ConstantVector::SetNull(window_chunk.data[col_idx], true);
 		}
@@ -567,7 +567,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 		window_results.Append(window_chunk);
 	}
 
-	D_ASSERT(window_results.column_count() == select_list.size());
+	D_ASSERT(window_results.ColumnCount() == select_list.size());
 	idx_t window_output_idx = 0;
 	// we can have multiple window functions
 	for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {

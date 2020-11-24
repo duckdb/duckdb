@@ -453,7 +453,7 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 	// first cast the columns of the chunk to varchar
 	auto &cast_chunk = local_data.cast_chunk;
 	cast_chunk.SetCardinality(input);
-	for (idx_t col_idx = 0; col_idx < input.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// VARCHAR, just create a reference
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
@@ -468,7 +468,7 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 	// now loop over the vectors and output the values
 	for (idx_t row_idx = 0; row_idx < cast_chunk.size(); row_idx++) {
 		// write values
-		for (idx_t col_idx = 0; col_idx < cast_chunk.column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
 				writer.WriteBufferData(options.delimiter);
 			}

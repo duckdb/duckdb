@@ -15,7 +15,7 @@ public:
 		success = (duckdb_query(connection, query.c_str(), &result) == DuckDBSuccess);
 	}
 
-	idx_t column_count() {
+	idx_t ColumnCount() {
 		return result.column_count;
 	}
 
@@ -146,7 +146,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar value
 	result = tester.Query("SELECT CAST(42 AS BIGINT)");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 	REQUIRE(!result->IsNull(0, 0));
@@ -154,7 +154,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar NULL
 	result = tester.Query("SELECT NULL");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
 	REQUIRE(result->IsNull(0, 0));
@@ -162,7 +162,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar string
 	result = tester.Query("SELECT 'hello'");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<string>(0, 0) == "hello");
 	REQUIRE(!result->IsNull(0, 0));

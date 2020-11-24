@@ -87,20 +87,20 @@ static void list_finalize(Vector &state_vector, FunctionData *, Vector &result, 
 		auto state = states[sdata.sel->get_index(i)];
 		D_ASSERT(state->cc);
 		auto &state_cc = *state->cc;
-		D_ASSERT(state_cc.types.size() == 1);
-		list_struct_data[i].length = state_cc.count;
+		D_ASSERT(state_cc.Types().size() == 1);
+		list_struct_data[i].length = state_cc.Count();
 		list_struct_data[i].offset = total_len;
-		total_len += state_cc.count;
+		total_len += state_cc.Count();
 	}
 
 	auto list_child = make_unique<ChunkCollection>();
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		auto &state_cc = *state->cc;
-		D_ASSERT(state_cc.chunks[0]->column_count() == 1);
+		D_ASSERT(state_cc.GetChunk(0).ColumnCount() == 1);
 		list_child->Append(state_cc);
 	}
-	D_ASSERT(list_child->count == total_len);
+	D_ASSERT(list_child->Count() == total_len);
 	ListVector::SetEntry(result, move(list_child));
 }
 
