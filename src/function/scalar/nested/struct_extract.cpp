@@ -29,7 +29,6 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
 	// this should be guaranteed by the binder
-	D_ASSERT(args.column_count() == 1);
 	auto &vec = args.data[0];
 
 	vec.Verify(args.size());
@@ -97,7 +96,6 @@ static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, Scal
 	}
 
 	bound_function.return_type = return_type;
-	arguments.pop_back();
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
