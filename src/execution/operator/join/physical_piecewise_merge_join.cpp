@@ -99,13 +99,13 @@ static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
 void PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, ClientContext &context,
                                           unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (MergeJoinGlobalState &)*state;
-	if (gstate.right_conditions.chunks.size() > 0) {
+	if (gstate.right_conditions.ChunkCount() > 0) {
 		// now order all the chunks
-		gstate.right_orders.resize(gstate.right_conditions.chunks.size());
-		for (idx_t i = 0; i < gstate.right_conditions.chunks.size(); i++) {
-			auto &chunk_to_order = *gstate.right_conditions.chunks[i];
-			D_ASSERT(chunk_to_order.column_count() == 1);
-			for (idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
+		gstate.right_orders.resize(gstate.right_conditions.ChunkCount());
+		for (idx_t i = 0; i < gstate.right_conditions.ChunkCount(); i++) {
+			auto &chunk_to_order = gstate.right_conditions.GetChunk(i);
+			D_ASSERT(chunk_to_order.ColumnCount() == 1);
+			for (idx_t col_idx = 0; col_idx < chunk_to_order.ColumnCount(); col_idx++) {
 				OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), gstate.right_orders[i]);
 				if (gstate.right_orders[i].count < chunk_to_order.size()) {
 					// the amount of entries in the order vector is smaller than the amount of entries in the vector
@@ -118,8 +118,8 @@ void PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, ClientContext &con
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
-		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);
-		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.count);
+		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.Count()]);
+		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.Count());
 	}
 	PhysicalSink::Finalize(pipeline, context, move(state));
 }
@@ -242,8 +242,8 @@ void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 			state->fetch_next_left = false;
 		}
 
-		auto &right_chunk = *gstate.right_chunks.chunks[state->right_chunk_index];
-		auto &right_condition_chunk = *gstate.right_conditions.chunks[state->right_chunk_index];
+		auto &right_chunk = gstate.right_chunks.GetChunk(state->right_chunk_index);
+		auto &right_condition_chunk = gstate.right_conditions.GetChunk(state->right_chunk_index);
 		auto &right_orders = gstate.right_orders[state->right_chunk_index];
 
 		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
@@ -256,7 +256,7 @@ void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 			state->left_position = 0;
 			state->right_position = 0;
 			state->right_chunk_index++;
-			if (state->right_chunk_index >= gstate.right_chunks.chunks.size()) {
+			if (state->right_chunk_index >= gstate.right_chunks.ChunkCount()) {
 				state->fetch_next_left = true;
 			}
 		} else {
@@ -274,7 +274,7 @@ void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 			}
 			// found matches: output them
 			chunk.Slice(state->child_chunk, left_info.result, result_count);
-			chunk.Slice(right_chunk, right_info.result, result_count, state->child_chunk.column_count());
+			chunk.Slice(right_chunk, right_info.result, result_count, state->child_chunk.ColumnCount());
 		}
 	} while (chunk.size() == 0);
 }
@@ -284,7 +284,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ExecutionContext &context, Dat
 	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 
-	if (gstate.right_chunks.count == 0) {
+	if (gstate.right_chunks.Count() == 0) {
 		// empty RHS: construct empty result
 		if (join_type == JoinType::SEMI || join_type == JoinType::INNER) {
 			return;

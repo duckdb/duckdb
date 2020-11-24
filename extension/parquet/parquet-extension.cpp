@@ -253,7 +253,7 @@ void parquet_write_sink(ClientContext &context, FunctionData &bind_data, GlobalF
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer->Append(input);
-	if (local_state.buffer->count > 100000) {
+	if (local_state.buffer->Count() > 100000) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
 		global_state.writer->Flush(*local_state.buffer);
 		// and reset the buffer

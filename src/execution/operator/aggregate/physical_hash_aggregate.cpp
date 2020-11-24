@@ -148,7 +148,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 
 	group_chunk.Verify();
 	aggregate_input_chunk.Verify();
-	D_ASSERT(aggregate_input_chunk.column_count() == 0 || group_chunk.size() == aggregate_input_chunk.size());
+	D_ASSERT(aggregate_input_chunk.ColumnCount() == 0 || group_chunk.size() == aggregate_input_chunk.size());
 
 	// if we have non-combinable aggregates (e.g. string_agg) or any distinct aggregates we cannot keep parallel hash
 	// tables
@@ -359,10 +359,10 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (gstate.is_empty && is_implicit_aggr) {
-		D_ASSERT(chunk.column_count() == aggregates.size());
+		D_ASSERT(chunk.ColumnCount() == aggregates.size());
 		// for each column in the aggregates, set to initial state
 		chunk.SetCardinality(1);
-		for (idx_t i = 0; i < chunk.column_count(); i++) {
+		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 			D_ASSERT(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
@@ -401,12 +401,12 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 	// compute the final projection list
 	idx_t chunk_index = 0;
 	chunk.SetCardinality(elements_found);
-	if (group_types.size() + aggregates.size() == chunk.column_count()) {
+	if (group_types.size() + aggregates.size() == chunk.ColumnCount()) {
 		for (idx_t col_idx = 0; col_idx < group_types.size(); col_idx++) {
 			chunk.data[chunk_index++].Reference(state.scan_chunk.data[col_idx]);
 		}
 	} else {
-		D_ASSERT(aggregates.size() == chunk.column_count());
+		D_ASSERT(aggregates.size() == chunk.ColumnCount());
 	}
 
 	for (idx_t col_idx = 0; col_idx < aggregates.size(); col_idx++) {

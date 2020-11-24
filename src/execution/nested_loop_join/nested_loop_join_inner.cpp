@@ -148,7 +148,7 @@ idx_t nested_loop_join_inner(Vector &left, Vector &right, idx_t left_size, idx_t
 idx_t NestedLoopJoinInner::Perform(idx_t &lpos, idx_t &rpos, DataChunk &left_conditions, DataChunk &right_conditions,
                                    SelectionVector &lvector, SelectionVector &rvector,
                                    vector<JoinCondition> &conditions) {
-	D_ASSERT(left_conditions.column_count() == right_conditions.column_count());
+	D_ASSERT(left_conditions.ColumnCount() == right_conditions.ColumnCount());
 	if (lpos >= left_conditions.size() || rpos >= right_conditions.size()) {
 		return 0;
 	}

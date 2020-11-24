@@ -72,7 +72,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		types = new_chunk.GetTypes();
 	} else {
 		// the types of the new chunk should match the types of the previous one
-		D_ASSERT(types.size() == new_chunk.column_count());
+		D_ASSERT(types.size() == new_chunk.ColumnCount());
 		auto new_types = new_chunk.GetTypes();
 		for (idx_t i = 0; i < types.size(); i++) {
 			if (new_types[i] != types[i]) {
@@ -194,14 +194,14 @@ static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, vect
 	idx_t vector_idx_left = left % STANDARD_VECTOR_SIZE;
 	idx_t vector_idx_right = right % STANDARD_VECTOR_SIZE;
 
-	auto &left_chunk = sort_by->chunks[chunk_idx_left];
-	auto &right_chunk = sort_by->chunks[chunk_idx_right];
+	auto &left_chunk = sort_by->GetChunk(chunk_idx_left);
+	auto &right_chunk = sort_by->GetChunk(chunk_idx_right);
 
 	for (idx_t col_idx = 0; col_idx < desc.size(); col_idx++) {
 		auto order_type = desc[col_idx];
 
-		Vector &left_vec = left_chunk->data[col_idx];
-		Vector &right_vec = right_chunk->data[col_idx];
+		auto &left_vec = left_chunk.data[col_idx];
+		auto &right_vec = right_chunk.data[col_idx];
 
 		D_ASSERT(left_vec.vector_type == VectorType::FLAT_VECTOR);
 		D_ASSERT(right_vec.vector_type == VectorType::FLAT_VECTOR);
@@ -222,9 +222,9 @@ static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &d
                                   vector<OrderByNullType> &null_order, idx_t *result) {
 	// select pivot
 	int64_t pivot = 0;
-	int64_t low = 0, high = sort_by->count - 1;
+	int64_t low = 0, high = sort_by->Count() - 1;
 	// now insert elements
-	for (idx_t i = 1; i < sort_by->count; i++) {
+	for (idx_t i = 1; i < sort_by->Count(); i++) {
 		if (compare_tuple(sort_by, desc, null_order, i, pivot) <= 0) {
 			result[low++] = i;
 		} else {
@@ -340,11 +340,11 @@ void ChunkCollection::Reorder(idx_t order_org[]) {
 	// adapted from https://stackoverflow.com/a/7366196/2652376
 
 	auto val_buf = vector<Value>();
-	val_buf.resize(column_count());
+	val_buf.resize(ColumnCount());
 
 	idx_t j, k;
 	for (idx_t i = 0; i < count; i++) {
-		for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 			val_buf[col_idx] = GetValue(col_idx, i);
 		}
 		j = i;
@@ -354,12 +354,12 @@ void ChunkCollection::Reorder(idx_t order_org[]) {
 			if (k == i) {
 				break;
 			}
-			for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+			for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 				SetValue(col_idx, j, GetValue(col_idx, k));
 			}
 			j = k;
 		}
-		for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 			SetValue(col_idx, j, val_buf[col_idx]);
 		}
 	}
@@ -374,8 +374,8 @@ static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, idx
 		idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
 		idx_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
 
-		auto &src_chunk = src_coll->chunks[chunk_idx_src];
-		Vector &src_vec = src_chunk->data[col_idx];
+		auto &src_chunk = src_coll->GetChunk(chunk_idx_src);
+		Vector &src_vec = src_chunk.data[col_idx];
 		auto source_data = FlatVector::GetData<TYPE>(src_vec);
 		auto target_data = FlatVector::GetData<TYPE>(tgt_vec);
 
@@ -393,7 +393,7 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 	D_ASSERT(target.GetTypes() == types);
 
 	target.SetCardinality(remaining_data);
-	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 		switch (types[col_idx].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
@@ -453,9 +453,9 @@ Value ChunkCollection::GetValue(idx_t column, idx_t index) {
 
 vector<Value> ChunkCollection::GetRow(idx_t index) {
 	vector<Value> values;
-	values.resize(column_count());
+	values.resize(ColumnCount());
 
-	for (idx_t p_idx = 0; p_idx < column_count(); p_idx++) {
+	for (idx_t p_idx = 0; p_idx < ColumnCount(); p_idx++) {
 		values[p_idx] = GetValue(p_idx, index);
 	}
 	return values;
@@ -473,7 +473,7 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	if (count != other.count) {
 		return false;
 	}
-	if (column_count() != other.column_count()) {
+	if (ColumnCount() != other.ColumnCount()) {
 		return false;
 	}
 	if (types != other.types) {
@@ -481,7 +481,7 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	}
 	// if count is equal amount of chunks should be equal
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 			auto lvalue = GetValue(col_idx, row_idx);
 			auto rvalue = other.GetValue(col_idx, row_idx);
 			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
@@ -530,7 +530,7 @@ static void _heap_create(ChunkCollection *input, vector<OrderType> &desc, vector
 	}
 
 	// Run through all the rows.
-	for (idx_t i = heap_size; i < input->count; i++) {
+	for (idx_t i = heap_size; i < input->Count(); i++) {
 		if (compare_tuple(input, desc, null_order, i, heap[0]) <= 0) {
 			heap[0] = i;
 			_heapify(input, desc, null_order, heap, heap_size, 0);
@@ -558,7 +558,7 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 	D_ASSERT(target.GetTypes() == types);
 
 	target.SetCardinality(remaining_data);
-	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 		switch (types[col_idx].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:

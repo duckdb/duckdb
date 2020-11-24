@@ -549,7 +549,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	if (chunk.size() == 0) {
 		return;
 	}
-	if (chunk.column_count() != table.columns.size()) {
+	if (chunk.ColumnCount() != table.columns.size()) {
 		throw CatalogException("Mismatch in column count for append");
 	}
 	if (!is_root) {
@@ -616,7 +616,7 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 
 void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state) {
 	D_ASSERT(is_root);
-	D_ASSERT(chunk.column_count() == types.size());
+	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
 	// append the physical data to each of the entries
@@ -1042,7 +1042,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 		executor.Execute(intermediate, result);
 
 		// insert into the index
-		if (!index->Insert(lock, result, intermediate.data[intermediate.column_count() - 1])) {
+		if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
 			throw ConstraintException("Cant create unique index, table contains duplicate data on indexed column(s)");
 		}
 	}

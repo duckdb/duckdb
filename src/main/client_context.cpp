@@ -229,7 +229,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 			break;
 		}
 #ifdef DEBUG
-		for (idx_t i = 0; i < chunk->column_count(); i++) {
+		for (idx_t i = 0; i < chunk->ColumnCount(); i++) {
 			if (statement.types[i].id() == LogicalTypeId::VARCHAR) {
 				chunk->data[i].UTFVerify(chunk->size());
 			}
@@ -276,7 +276,8 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLState
 		throw Exception(result->error);
 	}
 	auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
-	auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared, n_param);
+	auto prepared_object =
+	    make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared, n_param);
 	prepared_statement_objects.insert(prepared_object.get());
 	return prepared_object;
 }
@@ -290,7 +291,6 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
-
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {

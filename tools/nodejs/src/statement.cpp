@@ -117,7 +117,7 @@ static duckdb::Value bind_parameter(const Napi::Value source) {
 static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names, duckdb::DataChunk &chunk) {
 	Napi::EscapableHandleScope scope(env);
 	std::vector<Napi::String> node_names;
-	assert(names.size() == chunk.column_count());
+	assert(names.size() == chunk.ColumnCount());
 	for (auto &name : names) {
 		node_names.push_back(Napi::String::New(env, name));
 	}
@@ -126,7 +126,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 	for (duckdb::idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
 		Napi::Object row_result = Napi::Object::New(env);
 
-		for (duckdb::idx_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
+		for (duckdb::idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 			Napi::Value value;
 
 			auto dval = chunk.GetValue(col_idx, row_idx);

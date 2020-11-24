@@ -26,15 +26,18 @@ public:
 	ChunkCollection() : count(0) {
 	}
 
-	//! The total amount of elements in the collection
-	idx_t count;
-	//! The set of data chunks in the collection
-	vector<unique_ptr<DataChunk>> chunks;
-	//! The types of the ChunkCollection
-	vector<LogicalType> types;
+	//! The amount of columns in the ChunkCollection
+	vector<LogicalType> &Types() {
+		return types;
+	}
+
+	//! The amount of rows in the ChunkCollection
+	const idx_t &Count() {
+		return count;
+	}
 
 	//! The amount of columns in the ChunkCollection
-	idx_t column_count() {
+	idx_t ColumnCount() {
 		return types.size();
 	}
 
@@ -43,6 +46,7 @@ public:
 
 	//! Append another ChunkCollection directly to this ChunkCollection
 	void Append(ChunkCollection &other);
+
 	//! Merge is like Append but messes up the order and destroys the other collection
 	void Merge(ChunkCollection &other);
 
@@ -62,8 +66,38 @@ public:
 	void Print();
 
 	//! Gets a reference to the chunk at the given index
-	DataChunk &GetChunk(idx_t index) {
-		return *chunks[LocateChunk(index)];
+	DataChunk &GetChunkForRow(idx_t row_index) {
+		return *chunks[LocateChunk(row_index)];
+	}
+
+	//! Gets a reference to the chunk at the given index
+	DataChunk &GetChunk(idx_t chunk_index) {
+		D_ASSERT(chunk_index < chunks.size());
+		return *chunks[chunk_index];
+	}
+
+	const vector<unique_ptr<DataChunk>> &Chunks() {
+		return chunks;
+	}
+
+	idx_t ChunkCount() {
+		return chunks.size();
+	}
+
+	void Reset() {
+		count = 0;
+		chunks.clear();
+		types.clear();
+	}
+
+	unique_ptr<DataChunk> Fetch() {
+		if (ChunkCount() == 0) {
+			return make_unique<DataChunk>();
+		}
+
+		auto res = move(chunks[0]);
+		chunks.erase(chunks.begin() + 0);
+		return res;
 	}
 
 	void Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]);
@@ -84,5 +118,13 @@ public:
 
 	void Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[], idx_t heap_size);
 	idx_t MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size);
+
+private:
+	//! The total amount of elements in the collection
+	idx_t count;
+	//! The set of data chunks in the collection
+	vector<unique_ptr<DataChunk>> chunks;
+	//! The types of the ChunkCollection
+	vector<LogicalType> types;
 };
 } // namespace duckdb
