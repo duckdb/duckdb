@@ -67,16 +67,17 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
 
-    if (base.function->expression->HasParameter()) {
-        throw BinderException("Macro's do not support parameter expressions!");
+	if (base.function->expression->HasParameter()) {
+		throw BinderException("Macro's do not support parameter expressions!");
 	}
 
 	// create macro binding in order to bind the function
 	vector<LogicalType> dummy_types;
 	vector<string> dummy_names;
 	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
-		if (base.function->parameters[i]->expression_class != ExpressionClass::COLUMN_REF)
+		if (base.function->parameters[i]->expression_class != ExpressionClass::COLUMN_REF) {
 			throw BinderException("Invalid parameter \"%s\"", base.function->parameters[i]->ToString());
+		}
 
 		auto param = (ColumnRefExpression &)*base.function->parameters[i];
 		if (!param.table_name.empty()) {
@@ -92,10 +93,10 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// bind it to verify the function was defined correctly
 	string error;
-    auto sel_node = make_unique<BoundSelectNode>();
-    auto group_info = make_unique<BoundGroupInformation>();
-    SelectBinder binder(*this, context, *sel_node, *group_info);
-    error = binder.Bind(&expression, 0, false);
+	auto sel_node = make_unique<BoundSelectNode>();
+	auto group_info = make_unique<BoundGroupInformation>();
+	SelectBinder binder(*this, context, *sel_node, *group_info);
+	error = binder.Bind(&expression, 0, false);
 
 	if (!error.empty()) {
 		throw BinderException(error);
