@@ -77,7 +77,7 @@ public:
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
-	shared_ptr<MacroBinding> macro_binding = nullptr;
+	MacroBinding *macro_binding = nullptr;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);

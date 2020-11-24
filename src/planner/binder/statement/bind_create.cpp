@@ -86,7 +86,8 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		dummy_types.push_back(LogicalType::SQLNULL);
 		dummy_names.push_back(param.column_name);
 	}
-	macro_binding = make_shared<MacroBinding>(dummy_types, dummy_names, base.name);
+	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
+	macro_binding = this_macro_binding.get();
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = base.function->expression->Copy();
@@ -101,7 +102,6 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	if (!error.empty()) {
 		throw BinderException(error);
 	}
-	macro_binding.reset();
 
 	return BindSchema(info);
 }
