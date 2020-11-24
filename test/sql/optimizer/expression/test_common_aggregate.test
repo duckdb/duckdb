@@ -1,0 +1,52 @@
+# name: test/sql/optimizer/expression/test_common_aggregate.test
+# description: Test common aggregate
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3)
+
+statement ok
+PRAGMA explain_output = 'OPTIMIZED_ONLY';
+
+# all of these are identical, i.e. this gets folded into a single count aggregate
+query II
+EXPLAIN SELECT COUNT(*), COUNT(), COUNT(i) FROM integers;
+----
+logical_opt	<!REGEX>:.*AGGREGATE.*count.*count.*
+
+query III
+SELECT COUNT(*), COUNT(), COUNT(i) FROM integers;
+----
+3	3	3
+
+# again, here there is only a single count and a single sum
+query II
+EXPLAIN SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
+----
+logical_opt	<!REGEX>:.*AGGREGATE.*count.*count.*
+
+query IIIII
+SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
+----
+3	3	6	3	2
+
+# however, once we add a null value COUNT(i) is no longer equal to COUNT(*)
+statement ok
+INSERT INTO integers VALUES (NULL)
+
+# now there are two counts!
+query II
+EXPLAIN SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
+----
+logical_opt	<REGEX>:.*AGGREGATE.*count.*count.*
+
+query IIIII
+SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
+----
+4	4	6	3	2
