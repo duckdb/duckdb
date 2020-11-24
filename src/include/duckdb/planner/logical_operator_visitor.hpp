@@ -12,6 +12,8 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 
+#include <functional>
+
 namespace duckdb {
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
