@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
+#include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -100,6 +101,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("common_subexpressions");
 	CommonSubExpressionOptimizer cse_optimizer(binder);
 	cse_optimizer.VisitOperator(*plan);
+	context.profiler.EndPhase();
+
+	context.profiler.StartPhase("common_aggregate");
+	CommonAggregateOptimizer common_aggregate;
+	common_aggregate.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
 	return plan;

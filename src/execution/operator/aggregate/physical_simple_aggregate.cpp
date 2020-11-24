@@ -179,4 +179,15 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 	state->finished = true;
 }
 
+string PhysicalSimpleAggregate::ParamsToString() const {
+	string result;
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += aggregates[i]->GetName();
+	}
+	return result;
+}
+
 } // namespace duckdb
