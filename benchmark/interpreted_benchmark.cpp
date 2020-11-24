@@ -334,9 +334,9 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 		                          state.result->ToString());
 	}
 	// compare row count
-	if (state.result->collection.count != result_values.size()) {
+	if (state.result->collection.Count() != result_values.size()) {
 		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
-		                          (int64_t)state.result->collection.count, (int64_t)result_values.size(),
+		                          (int64_t)state.result->collection.Count(), (int64_t)result_values.size(),
 		                          state.result->ToString());
 	}
 	// compare values

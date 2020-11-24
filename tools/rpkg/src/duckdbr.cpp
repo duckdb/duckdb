@@ -532,7 +532,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		return Rf_ScalarReal(0); // no need for protection because no allocation can happen afterwards
 	}
 
-	uint64_t nrows = result->collection.count;
+	uint64_t nrows = result->collection.Count();
 	SEXP retlist = PROTECT(NEW_LIST(ncols));
 	SET_NAMES(retlist, cpp_str_to_strsexp(result->names));
 
@@ -579,7 +579,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			break;
 		}
 		D_ASSERT(chunk->ColumnCount() == ncols);
-		D_ASSERT(chunk->ColumnCount() == Rf_length(retlist));
+		D_ASSERT(chunk->ColumnCount() == (idx_t)Rf_length(retlist));
 		for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
 			SEXP dest = VECTOR_ELT(retlist, col_idx);
 			switch (result->types[col_idx].id()) {
