@@ -9,6 +9,14 @@ void BaseExpression::Print() {
 	Printer::Print(ToString());
 }
 
+string BaseExpression::GetName() const {
+	if (alias.empty()) {
+		return ToString();
+	} else {
+		return alias + " -> " + ToString();
+	}
+}
+
 bool BaseExpression::Equals(const BaseExpression *other) const {
 	if (!other) {
 		return false;
