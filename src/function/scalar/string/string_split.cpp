@@ -145,6 +145,7 @@ protected:
 void string_split(const char *input, StringSplitIterator &iter, ChunkCollection &result) {
 	DataChunk append_chunk;
 	vector<LogicalType> types = {LogicalType::VARCHAR};
+	append_chunk.Initialize(types);
 
 	// special case: empty string
 	if (iter.size == 0) {
@@ -160,6 +161,7 @@ void string_split(const char *input, StringSplitIterator &iter, ChunkCollection 
 	while (iter.HasNext()) {
 		if (append_chunk.size() == STANDARD_VECTOR_SIZE) {
 			result.Append(append_chunk);
+			append_chunk.SetCardinality(0);
 		}
 
 		idx_t start = iter.Start();
@@ -218,6 +220,8 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 
 	auto list_child = make_unique<ChunkCollection>();
 	vector<LogicalType> types = {LogicalType::VARCHAR};
+	DataChunk append_chunk;
+	append_chunk.Initialize(types);
 
 	size_t total_len = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
@@ -232,11 +236,9 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 			// special case: delimiter is NULL
 			split_input = make_unique<ChunkCollection>();
 
-			DataChunk append_chunk;
 			FlatVector::GetData<string_t>(append_chunk.data[0])[append_chunk.size()] =
 			    StringVector::AddString(append_chunk.data[0], input);
-			append_chunk.SetCardinality(append_chunk.size() + 1);
-
+			append_chunk.SetCardinality(1);
 			split_input->Append(append_chunk);
 		} else {
 			string_t delim = delims[delim_data.sel->get_index(i)];
