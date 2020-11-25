@@ -79,7 +79,7 @@ template <class T> struct MedianOperation {
 
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->v) {
-			delete state->v;
+			delete[] state->v;
 		}
 	}
 
