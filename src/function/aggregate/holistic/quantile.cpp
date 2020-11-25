@@ -24,7 +24,7 @@ struct QuantileBindData : public FunctionData {
 	float quantile;
 };
 
-template <class T> struct MedianOperation {
+template <class T> struct QuantileOperation {
 	template <class STATE> static void Initialize(STATE *state) {
 		state->v = nullptr;
 		state->len = 0;
@@ -107,35 +107,31 @@ template <class T> struct MedianOperation {
 	}
 };
 
-AggregateFunction GetQuantileAggregate(PhysicalType type) {
+AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
 
-	case PhysicalType::INT8:
-		return AggregateFunction::UnaryAggregate<median_state_t, int8_t, int8_t, MedianOperation<int8_t>>(
-		    LogicalType::TINYINT, LogicalType::TINYINT);
-
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregate<median_state_t, int16_t, int16_t, MedianOperation<int16_t>>(
+		return AggregateFunction::UnaryAggregate<median_state_t, int16_t, int16_t, QuantileOperation<int16_t>>(
 		    LogicalType::SMALLINT, LogicalType::SMALLINT);
 
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregate<median_state_t, int32_t, int32_t, MedianOperation<int32_t>>(
+		return AggregateFunction::UnaryAggregate<median_state_t, int32_t, int32_t, QuantileOperation<int32_t>>(
 		    LogicalType::INTEGER, LogicalType::INTEGER);
 
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregate<median_state_t, int64_t, int64_t, MedianOperation<int64_t>>(
+		return AggregateFunction::UnaryAggregate<median_state_t, int64_t, int64_t, QuantileOperation<int64_t>>(
 		    LogicalType::BIGINT, LogicalType::BIGINT);
 
 	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregate<median_state_t, hugeint_t, hugeint_t, MedianOperation<hugeint_t>>(
+		return AggregateFunction::UnaryAggregate<median_state_t, hugeint_t, hugeint_t, QuantileOperation<hugeint_t>>(
 		    LogicalType::HUGEINT, LogicalType::HUGEINT);
 
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregate<median_state_t, float, float, MedianOperation<float>>(
+		return AggregateFunction::UnaryAggregate<median_state_t, float, float, QuantileOperation<float>>(
 		    LogicalType::FLOAT, LogicalType::FLOAT);
 
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregate<median_state_t, double, double, MedianOperation<double>>(
+		return AggregateFunction::UnaryAggregate<median_state_t, double, double, QuantileOperation<double>>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
 
 	default:
@@ -145,9 +141,16 @@ AggregateFunction GetQuantileAggregate(PhysicalType type) {
 
 unique_ptr<FunctionData> bind_median(ClientContext &context, AggregateFunction &function,
                                      vector<unique_ptr<Expression>> &arguments) {
-	function = GetQuantileAggregate(arguments[0]->return_type.InternalType());
-	function.name = "median";
 	return make_unique<QuantileBindData>(0.5);
+}
+
+unique_ptr<FunctionData> bind_median_decimal(ClientContext &context, AggregateFunction &function,
+                                             vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = bind_median(context, function, arguments);
+
+	function = GetQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function.name = "median";
+	return bind_data;
 }
 
 unique_ptr<FunctionData> bind_quantile(ClientContext &context, AggregateFunction &function,
@@ -161,21 +164,56 @@ unique_ptr<FunctionData> bind_quantile(ClientContext &context, AggregateFunction
 	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
 	}
-	function = GetQuantileAggregate(arguments[0]->return_type.InternalType());
-	function.name = "quantile";
+	// remove the quantile argument so we can use the unary aggregate
+	arguments.pop_back();
 	return make_unique<QuantileBindData>(quantile);
+}
+
+unique_ptr<FunctionData> bind_quantile_decimal(ClientContext &context, AggregateFunction &function,
+                                               vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = bind_quantile(context, function, arguments);
+	function = GetQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function.name = "quantile";
+	return bind_data;
+}
+
+AggregateFunction GetMedianAggregate(PhysicalType type) {
+	auto fun = GetQuantileAggregateFunction(type);
+	fun.bind = bind_median;
+	return fun;
+}
+
+AggregateFunction GetQuantileAggregate(PhysicalType type) {
+	auto fun = GetQuantileAggregateFunction(type);
+	fun.bind = bind_quantile;
+	// temporarily push an argument so we can bind the actual quantile
+	fun.arguments.push_back(LogicalType::FLOAT);
+	return fun;
 }
 
 void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 
 	AggregateFunctionSet median("median");
-	median.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
-	                                     nullptr, nullptr, bind_median));
+	median.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr,
+	                                     nullptr, nullptr, nullptr, bind_median_decimal));
+	median.AddFunction(GetMedianAggregate(PhysicalType::INT16));
+	median.AddFunction(GetMedianAggregate(PhysicalType::INT32));
+	median.AddFunction(GetMedianAggregate(PhysicalType::INT64));
+	median.AddFunction(GetMedianAggregate(PhysicalType::INT128));
+	median.AddFunction(GetMedianAggregate(PhysicalType::DOUBLE));
+
 	set.AddFunction(median);
 
 	AggregateFunctionSet quantile("quantile");
-	quantile.AddFunction(AggregateFunction({LogicalType::ANY, LogicalType::FLOAT}, LogicalType::ANY, nullptr, nullptr,
-	                                       nullptr, nullptr, nullptr, nullptr, bind_quantile));
+	quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL, nullptr,
+	                                       nullptr, nullptr, nullptr, nullptr, nullptr, bind_quantile_decimal));
+
+	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT16));
+	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT32));
+	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT64));
+	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT128));
+	quantile.AddFunction(GetQuantileAggregate(PhysicalType::DOUBLE));
+
 	set.AddFunction(quantile);
 }
 
