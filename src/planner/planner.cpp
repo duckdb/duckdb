@@ -50,10 +50,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto value = make_unique<Value>(expr->return_type);
 		expr->value = value.get();
 		// check if the parameter number has been used before
-		if (value_map.find(expr->parameter_nr) != value_map.end()) {
-			throw BinderException("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
+		if (value_map.find(expr->parameter_nr) == value_map.end()) {
+            value_map[expr->parameter_nr] = vector<unique_ptr<Value>>();
 		}
-		value_map[expr->parameter_nr] = move(value);
+        value_map[expr->parameter_nr].push_back(move(value));
 	}
 }
 
