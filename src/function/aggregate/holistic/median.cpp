@@ -1,7 +1,5 @@
 #include "duckdb/function/aggregate/holistic_functions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/types/decimal.hpp"
+#include <algoritm>
 
 using namespace std;
 
@@ -20,9 +18,12 @@ struct MedianFunction {
 		state->pos = 0;
 	}
 
+	// TODO
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
 		throw NotImplementedException("COMBINE not implemented for MEDIAN");
 	}
+
+	// TODO simple update
 
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->v) {
@@ -32,65 +33,56 @@ struct MedianFunction {
 	static bool IgnoreNull() {
 		return true;
 	}
-};
 
-static void median_update(Vector inputs[], idx_t input_count, Vector &state_vector, idx_t count) {
-	D_ASSERT(input_count == 1);
-
-	// TODO why do we need to orrify state vector again?
-	VectorData sdata;
-	state_vector.Orrify(count, sdata);
-
-	VectorData idata;
-	inputs[0].Orrify(count, idata);
-
-	auto states = (median_state_t **)sdata.data;
-	for (idx_t i = 0; i < count; i++) {
-		if (idata.nullmask && (*idata.nullmask)[i]) {
-			continue;
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
 		}
-		auto val = ((double *)idata.data)[idata.sel->get_index(i)];
+	}
 
-		auto state = states[sdata.sel->get_index(i)];
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
+		if (nullmask[idx]) {
+			return;
+		}
 		if (state->pos == state->len) {
 			median_state_t old_state;
 			old_state.pos = 0;
 			if (state->pos > 0) {
 				old_state = *state;
 			}
-			state->len = state->len == 0 ? 10 : state->len * 2;
+			// growing conservatively here since we could be running this on many small groups
+			state->len = state->len == 0 ? 1 : state->len * 2;
 			state->v = new double[state->len];
 			if (old_state.pos > 0) {
 				memcpy(state->v, old_state.v, old_state.pos * sizeof(double));
-				delete old_state.v;
+				Destroy(&old_state);
 			}
 		}
-		state->v[state->pos++] = val;
-	}
-}
-
-static void median_finalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
-	VectorData sdata;
-	state_vector.Orrify(count, sdata);
-	auto states = (median_state_t **)sdata.data;
-
-	result.Initialize(LogicalType::DOUBLE);
-	auto result_ptr = FlatVector::GetData<double>(result);
-
-	for (idx_t i = 0; i < count; i++) {
-		auto state = states[sdata.sel->get_index(i)];
 		D_ASSERT(state->v);
-
-		std::nth_element(state->v, state->v + (state->pos / 2), state->v + state->pos);
-		result_ptr[i] = state->v[state->pos / 2];
+		state->v[state->pos++] = data[idx];
 	}
-}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (state->pos == 0) {
+			nullmask[idx] = true;
+			return;
+		}
+		std::nth_element(state->v, state->v + (state->pos / 2), state->v + state->pos);
+		target[idx] = state->v[state->pos / 2];
+	}
+};
 
 void MedianFun::RegisterFunction(BuiltinFunctions &set) {
-	auto median = AggregateFunction(
-	    "median", {LogicalType::DOUBLE}, LogicalType::DOUBLE, AggregateFunction::StateSize<median_state_t>,
-	    AggregateFunction::StateInitialize<median_state_t, MedianFunction>, median_update, nullptr, median_finalize,
-	    nullptr, nullptr, AggregateFunction::StateDestroy<median_state_t, MedianFunction>);
+	auto median = AggregateFunction("median", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                                AggregateFunction::StateSize<median_state_t>,
+	                                AggregateFunction::StateInitialize<median_state_t, MedianFunction>,
+	                                AggregateFunction::UnaryScatterUpdate<median_state_t, double, MedianFunction>,
+	                                AggregateFunction::StateCombine<median_state_t, MedianFunction>,
+	                                AggregateFunction::StateFinalize<median_state_t, double, MedianFunction>, nullptr,
+	                                nullptr, AggregateFunction::StateDestroy<median_state_t, MedianFunction>);
 	set.AddFunction(median);
 }
 
