@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include <algorithm>
+#include <stdlib.h>
 
 using namespace std;
 
@@ -35,18 +36,11 @@ template <class T> struct QuantileOperation {
 		if (new_len <= state->len) {
 			return;
 		}
-		median_state_t old_state;
-		old_state.pos = 0;
-		if (state->pos > 0) {
-			old_state = *state;
+		state->v = (data_ptr_t)realloc(state->v, new_len * sizeof(T));
+		if (!state->v) {
+			throw InternalException("Memory allocation failure");
 		}
-		// growing conservatively here since we could be running this on many small groups
 		state->len = new_len;
-		state->v = (data_ptr_t) new T[state->len];
-		if (old_state.pos > 0) {
-			memcpy(state->v, old_state.v, old_state.pos * sizeof(T));
-			Destroy(&old_state);
-		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -62,6 +56,7 @@ template <class T> struct QuantileOperation {
 			return;
 		}
 		if (state->pos == state->len) {
+			// growing conservatively here since we could be running this on many small groups
 			resize_state(state, state->len == 0 ? 1 : state->len * 2);
 		}
 		D_ASSERT(state->v);
