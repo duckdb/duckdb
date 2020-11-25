@@ -155,8 +155,9 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 			auto has_entry_target = group_is_set[i];
 			if (has_entry_target) {
 				// both source and target have an entry: need to combine
-				source_addresses_ptr[combine_count++] = source_ptr;
-				target_addresses_ptr[combine_count++] = target_ptr;
+				source_addresses_ptr[combine_count] = source_ptr;
+				target_addresses_ptr[combine_count] = target_ptr;
+				combine_count++;
 				if (combine_count == STANDARD_VECTOR_SIZE) {
 					Combine(source_addresses, target_addresses, combine_count);
 					combine_count = 0;
