@@ -28,6 +28,7 @@ class ViewCatalogEntry;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
+struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 
 struct CorrelatedColumnInfo {
@@ -75,6 +76,8 @@ public:
 	bool requires_valid_transaction = true;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
+	//! Macro parameter bindings (if any)
+	MacroBinding *macro_binding = nullptr;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);
@@ -83,6 +86,7 @@ public:
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
+	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);

@@ -1,0 +1,291 @@
+# name: test/sql/catalog/function/test_complex_macro.test
+# description: Test Complex Macro
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers (a INT)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+# cte and subquery
+statement ok
+CREATE MACRO cte_sq(a,b) AS (WITH cte AS (SELECT a * 2 AS c) SELECT cte.c + sq.d FROM cte, (SELECT b * 3 AS d) AS sq)
+
+query T
+SELECT cte_sq(3,4)
+----
+18
+
+statement ok
+CREATE MACRO nested_cte(needle, haystack) AS needle IN (
+    SELECT i FROM (
+        WITH ints AS (
+            SELECT CAST(UNNEST(string_split(haystack,',')) AS INT) AS i
+        )
+        SELECT i FROM ints
+    ) AS sq
+)
+
+query T
+SELECT nested_cte(2, '2,2,2,2')
+----
+1
+
+statement ok
+CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
+
+query T
+SELECT IFELSE(1, IFELSE(1,'a','b'), 'c')
+----
+a
+
+query T
+SELECT IFELSE(1, IFELSE(0,'a','b'), 'c')
+----
+b
+
+query T
+SELECT IFELSE(0, IFELSE(1,'a','b'), 'c')
+----
+c
+
+query T
+SELECT IFELSE(1, IFELSE(1,a,'b'), 'c') FROM integers
+----
+1
+
+statement error
+SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
+
+# conflicting bindings
+statement error
+CREATE MACRO f1(x) AS (SELECT MIN(a) + x FROM integers)
+
+# macro in GROUP BY
+statement ok
+CREATE MACRO mod_two(k) AS k%2
+
+query II
+SELECT mod_two(a), SUM(a) FROM integers GROUP BY mod_two(a)
+----
+1	1
+
+# more nested stuff
+statement ok
+CREATE MACRO add(a, b) AS a + b
+
+statement ok
+CREATE MACRO double_add(a, b, c) AS add(add(a, b), c)
+
+query T
+SELECT double_add(1, 2, 3)
+----
+6
+
+statement ok
+CREATE MACRO triple_add1(a, b, c, d) AS add(add(a, b), add(c, d))
+
+query T
+SELECT triple_add1(1, 2, 3, 4)
+----
+10
+
+statement ok
+CREATE MACRO triple_add2(a, b, c, d) as add(add(add(a, b), c), d)
+
+query T
+SELECT triple_add2(1, 2, 3, 4)
+----
+10
+
+# subquery within macro parameters
+statement ok
+INSERT INTO integers VALUES (41)
+
+query T
+SELECT add((SELECT MIN(a) FROM integers), (SELECT MAX(a) FROM integers))
+----
+42
+
+# macros within a correlated subquery
+query T
+SELECT (SELECT add(i1.a, a) FROM integers) FROM integers i1
+----
+42
+82
+
+# parameter expression
+statement error
+CREATE MACRO prep(x) AS ?+1
+
+# prepared statements
+statement ok
+CREATE MACRO add_one(a) AS a + 1
+
+statement ok
+PREPARE v1 AS SELECT add_one(?::INTEGER)
+
+query T
+EXECUTE v1(1)
+----
+2
+
+statement ok
+CREATE MACRO my_square(a) AS a * a
+
+statement ok
+PREPARE v2 AS SELECT my_square(?::INTEGER)
+
+query T
+EXECUTE v2(3)
+----
+9
+
+# test FTS extension use case
+statement ok
+CREATE TABLE documents(id VARCHAR, body VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('doc1', ' QUÁCK+QUÁCK+QUÁCK'), ('doc2', ' BÁRK+BÁRK+BÁRK+BÁRK'), ('doc3', ' MÉOW+MÉOW+MÉOW+MÉOW+MÉOW')
+
+statement ok
+CREATE SCHEMA fts_main_documents
+
+statement ok
+CREATE TABLE fts_main_documents.docs AS (
+    SELECT
+        row_number() OVER (PARTITION BY(SELECT NULL)) AS docid,
+        id AS name
+    FROM
+        main.documents
+)
+
+statement ok
+CREATE TABLE fts_main_documents.terms AS (
+    SELECT
+        term,
+        docid,
+        row_number() OVER (PARTITION BY docid) AS pos
+    FROM (
+        SELECT
+            unnest(string_split_regex(regexp_replace(lower(strip_accents(body)), '[^a-z]', ' ', 'g'), '\s+')) AS term,
+            row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
+        FROM main.documents
+    ) AS sq
+    WHERE
+        term != ''
+)
+
+statement ok
+ALTER TABLE fts_main_documents.docs ADD len INT
+
+statement ok
+UPDATE fts_main_documents.docs d
+SET len = (
+    SELECT count(term)
+    FROM fts_main_documents.terms t
+    WHERE t.docid = d.docid
+)
+
+statement ok
+CREATE TABLE fts_main_documents.dict AS
+WITH distinct_terms AS (
+    SELECT DISTINCT term, docid
+    FROM fts_main_documents.terms
+    ORDER BY docid
+)
+SELECT
+    row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
+    term
+FROM
+    distinct_terms
+
+statement ok
+ALTER TABLE fts_main_documents.terms ADD termid INT
+
+statement ok
+UPDATE fts_main_documents.terms t
+SET termid = (
+    SELECT termid
+    FROM fts_main_documents.dict d
+    WHERE t.term = d.term
+)
+
+statement ok
+ALTER TABLE fts_main_documents.terms DROP term
+
+statement ok
+ALTER TABLE fts_main_documents.dict ADD df INT
+
+statement ok
+UPDATE fts_main_documents.dict d
+SET df = (
+    SELECT count(distinct docid)
+    FROM fts_main_documents.terms t
+    WHERE d.termid = t.termid
+    GROUP BY termid
+)
+
+query II
+WITH ppterms AS (SELECT unnest(string_split_regex(regexp_replace(lower(strip_accents('QUÁCK BÁRK')), '[^a-z]', ' ', 'g'), '\s+')) AS term),
+qtermids AS (SELECT termid FROM fts_main_documents.dict AS dict, ppterms WHERE dict.term = ppterms.term),
+qterms AS (SELECT termid, docid FROM fts_main_documents.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
+subscores AS (
+SELECT docs.docid, len, term_tf.termid,
+        tf, df, (log((3 - df + 0.5) / (df + 0.5))* ((tf * (1.2 + 1)/(tf + 1.2 * (1 - 0.75 + 0.75 * (len / 4)))))) AS subscore
+FROM (SELECT termid, docid, COUNT(*) AS tf FROM qterms
+    GROUP BY docid, termid) AS term_tf
+    JOIN (SELECT docid FROM qterms
+        GROUP BY docid) -- HAVING COUNT(DISTINCT termid) = 3)
+        AS cdocs ON term_tf.docid = cdocs.docid
+    JOIN fts_main_documents.docs AS docs ON term_tf.docid = docs.docid
+    JOIN fts_main_documents.dict AS dict ON term_tf.termid = dict.termid)
+SELECT name, score FROM (SELECT docid, sum(subscore) AS score
+    FROM subscores GROUP BY docid) AS scores JOIN fts_main_documents.docs AS docs ON
+    scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
+----
+doc1	0.443697
+doc2	0.375436
+
+statement ok
+CREATE MACRO fts_match(docname, query_string) AS docname IN (
+WITH ppterms AS (SELECT unnest(string_split_regex(regexp_replace(lower(strip_accents(query_string)), '[^a-z]', ' ', 'g'), '\s+')) AS term),
+qtermids AS (SELECT termid FROM fts_main_documents.dict AS dict, ppterms WHERE dict.term = ppterms.term),
+qterms AS (SELECT termid, docid FROM fts_main_documents.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
+subscores AS (
+SELECT docs.docid, len, term_tf.termid,
+        tf, df, (log((3 - df + 0.5) / (df + 0.5))* ((tf * (1.2 + 1)/(tf + 1.2 * (1 - 0.75 + 0.75 * (len / 4)))))) AS subscore
+FROM (SELECT termid, docid, COUNT(*) AS tf FROM qterms
+    GROUP BY docid, termid) AS term_tf
+    JOIN (SELECT docid FROM qterms
+        GROUP BY docid) -- HAVING COUNT(DISTINCT termid) = 3)
+        AS cdocs ON term_tf.docid = cdocs.docid
+    JOIN fts_main_documents.docs AS docs ON term_tf.docid = docs.docid
+    JOIN fts_main_documents.dict AS dict ON term_tf.termid = dict.termid)
+SELECT name FROM (SELECT docid, sum(subscore) AS score
+    FROM subscores GROUP BY docid) AS scores JOIN fts_main_documents.docs AS docs ON
+    scores.docid = docs.docid ORDER BY score DESC LIMIT 1000)
+
+query II
+SELECT * FROM documents WHERE fts_match(id, 'QUÁCK BÁRK')
+----
+doc1	 QUÁCK+QUÁCK+QUÁCK
+doc2	 BÁRK+BÁRK+BÁRK+BÁRK
+
+# macro with window function
+require vector_size 512
+
+statement ok
+CREATE MACRO mywindow(k,v) AS SUM(v) OVER (PARTITION BY k)
+
+query II
+WITH grouped AS (SELECT mod(range, 3) AS grp, range AS val FROM RANGE(500))
+SELECT DISTINCT grp, mywindow(grp, val) FROM grouped
+----
+0	41583
+1	41750
+2	41417

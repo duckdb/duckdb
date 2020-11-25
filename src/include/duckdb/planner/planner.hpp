@@ -27,7 +27,7 @@ public:
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
 	vector<LogicalType> types;
-	unordered_map<idx_t, unique_ptr<Value>> value_map;
+	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
 
 	Binder binder;
 	ClientContext &context;

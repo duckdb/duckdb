@@ -1,18 +1,25 @@
-#include "duckdb/parser/statement/create_statement.hpp"
-#include "duckdb/planner/operator/logical_create.hpp"
-#include "duckdb/planner/operator/logical_create_table.hpp"
-#include "duckdb/planner/operator/logical_create_index.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/index_binder.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/operator/logical_create.hpp"
+#include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/operator/logical_create_table.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -57,6 +64,48 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
+SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
+	auto &base = (CreateMacroInfo &)info;
+
+	if (base.function->expression->HasParameter()) {
+		throw BinderException("Parameter expressions within macro's are not supported!");
+	}
+
+	// create macro binding in order to bind the function
+	vector<LogicalType> dummy_types;
+	vector<string> dummy_names;
+	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
+		if (base.function->parameters[i]->expression_class != ExpressionClass::COLUMN_REF) {
+			throw BinderException("Invalid parameter \"%s\"", base.function->parameters[i]->ToString());
+		}
+
+		auto param = (ColumnRefExpression &)*base.function->parameters[i];
+		if (!param.table_name.empty()) {
+			throw BinderException("Invalid parameter \"%s\"", param.ToString());
+		}
+		dummy_types.push_back(LogicalType::SQLNULL);
+		dummy_names.push_back(param.column_name);
+	}
+	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
+	macro_binding = this_macro_binding.get();
+
+	// create a copy of the expression because we do not want to alter the original
+	auto expression = base.function->expression->Copy();
+
+	// bind it to verify the function was defined correctly
+	string error;
+	auto sel_node = make_unique<BoundSelectNode>();
+	auto group_info = make_unique<BoundGroupInformation>();
+	SelectBinder binder(*this, context, *sel_node, *group_info);
+	error = binder.Bind(&expression, 0, false);
+
+	if (!error.empty()) {
+		throw BinderException(error);
+	}
+
+	return BindSchema(info);
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -79,6 +128,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
+		break;
+	}
+	case CatalogType::MACRO_ENTRY: {
+		auto schema = BindCreateFunctionInfo(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
