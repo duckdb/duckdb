@@ -110,7 +110,6 @@ template <class T> struct QuantileOperation {
 
 AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
-
 	case PhysicalType::INT16:
 		return AggregateFunction::UnaryAggregate<quantile_state_t, int16_t, int16_t, QuantileOperation<int16_t>>(
 		    LogicalType::SMALLINT, LogicalType::SMALLINT);
@@ -193,7 +192,6 @@ AggregateFunction GetQuantileAggregate(PhysicalType type) {
 }
 
 void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
-
 	AggregateFunctionSet median("median");
 	median.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr,
 	                                     nullptr, nullptr, nullptr, bind_median_decimal));
