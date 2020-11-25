@@ -125,5 +125,12 @@ endloop
 statement ok
 CREATE MACRO add(a, b) AS a + b
 
-statement error
-SELECT add(i + nextval('seq1'), 5) FROM integers
+statement ok
+CREATE SEQUENCE seqq
+
+# TODO: uncomment when macro parameters are pushed as a projection
+#query T
+#SELECT add(i + nextval('seqq'), 5) FROM integers
+#----
+#48
+#48

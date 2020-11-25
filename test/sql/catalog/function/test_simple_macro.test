@@ -105,9 +105,11 @@ CREATE MACRO IFELSE(a,b) AS a+b
 statement error
 CREATE MACRO ifelse(a,b) AS a+b
 
-# arguments with side effects are not supported
-statement error
-SELECT IFELSE(RANDOM(), 'true', 'false')
+# TODO: uncomment when macro parameters are pushed as a projection
+#query T
+#SELECT IFELSE(1, 'random', RANDOM())
+#----
+#random
 
 # macro in a different schema
 statement ok
@@ -132,18 +134,20 @@ CREATE MACRO myavg(x) AS SUM(x) / COUNT(x)
 statement ok
 INSERT INTO integers VALUES (21), (41);
 
-query T
-SELECT myavg(a) FROM integers
-----
-21
+# TODO: uncomment when macro parameters are pushed as a projection
+#query T
+#SELECT myavg(a) FROM integers
+#----
+#21
 
 statement ok
 CREATE MACRO weird_avg(x) AS (MIN(x) + MAX(x)) / COUNT(x)
 
-query T
-SELECT weird_avg(a) FROM integers
-----
-14
+# TODO: uncomment when macro parameters are pushed as a projection
+#query T
+#SELECT weird_avg(a) FROM integers
+#----
+#14
 
 statement error
 CREATE MACRO star() AS *

@@ -81,10 +81,31 @@ CREATE MACRO add(a, b) AS a + b
 statement ok
 CREATE MACRO double_add(a, b, c) AS add(add(a, b), c)
 
+query T
+SELECT double_add(1, 2, 3)
+----
+6
+
+statement ok
+CREATE MACRO triple_add1(a, b, c, d) AS add(add(a, b), add(c, d))
+
+query T
+SELECT triple_add1(1, 2, 3, 4)
+----
+10
+
+statement ok
+CREATE MACRO triple_add2(a, b, c, d) as add(add(add(a, b), c), d)
+
+query T
+SELECT triple_add2(1, 2, 3, 4)
+----
+10
+
+# subquery within macro parameters
 statement ok
 INSERT INTO integers VALUES (41)
 
-# subquery within macro parameters
 query T
 SELECT add((SELECT MIN(a) FROM integers), (SELECT MAX(a) FROM integers))
 ----
@@ -97,9 +118,32 @@ SELECT (SELECT add(i1.a, a) FROM integers) FROM integers i1
 42
 82
 
-# prepared statement
+# parameter expression
 statement error
 CREATE MACRO prep(x) AS ?+1
+
+# prepared statements
+statement ok
+CREATE MACRO add_one(a) AS a + 1
+
+statement ok
+PREPARE v1 AS SELECT add_one(?::INTEGER)
+
+query T
+EXECUTE v1(1)
+----
+2
+
+statement ok
+CREATE MACRO my_square(a) AS a * a
+
+statement ok
+PREPARE v2 AS SELECT my_square(?::INTEGER)
+
+query T
+EXECUTE v2(3)
+----
+9
 
 # test FTS extension use case
 statement ok
