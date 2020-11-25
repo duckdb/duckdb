@@ -31,11 +31,6 @@ void PreparedStatementData::Bind(vector<Value> values) {
 			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
 			    values[i].type().ToString().c_str(), it->second[0]->type().ToString().c_str());
 		}
-		//		for (idx_t j = 0; j < it->second.size(); j++) {
-		//            auto &target = it->second[j];
-		//			*target = values[i];
-		//		}
-
 		for (auto &target : it->second) {
 			*target = values[i];
 		}
