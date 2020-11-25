@@ -33,7 +33,7 @@ string BoundFunctionExpression::ToString() const {
 
 hash_t BoundFunctionExpression::Hash() const {
 	hash_t result = Expression::Hash();
-	return CombineHash(result, duckdb::Hash(function.name.c_str()));
+	return CombineHash(result, function.Hash());
 }
 
 bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
