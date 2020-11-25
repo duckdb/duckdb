@@ -11,20 +11,15 @@
 
 namespace duckdb {
 
-// void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr) {
-//	auto macro_binding = make_unique<MacroBinding>(vector<LogicalType>(), vector<string>(), string());
-//	ReplaceMacroParametersRecursive(expr, *macro_binding);
-//}
-
 void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
 		// if expr is a parameter, replace it with its argument
 		auto &colref = (ColumnRefExpression &)*expr;
-		if (colref.table_name.empty() && binder.macro_binding->HasMatchingBinding(colref.column_name)) {
-			expr = binder.macro_binding->ParamToArg(colref);
+		if (colref.table_name.empty() && macro_binding->HasMatchingBinding(colref.column_name)) {
+			expr = macro_binding->ParamToArg(colref);
 		}
-		break;
+		return;
 	}
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
@@ -167,16 +162,13 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalo
 		auto &param = (ColumnRefExpression &)*macro_func->function->parameters[i];
 		names.push_back(param.column_name);
 	}
-	auto macro_binding = make_unique<MacroBinding>(types, names, macro_func->name);
-	macro_binding->arguments = move(function.children);
-	binder.macro_binding = macro_binding.get();
+	auto new_macro_binding = make_unique<MacroBinding>(types, names, macro_func->name);
+	new_macro_binding->arguments = move(function.children);
+	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression, and replace params
 	*expr = macro_func->function->expression->Copy();
 	ReplaceMacroParametersRecursive(*expr);
-
-	// reset the binder's macro binding before binding the unfolded expression
-	binder.macro_binding = nullptr;
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

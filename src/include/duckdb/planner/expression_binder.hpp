@@ -108,6 +108,7 @@ protected:
 	Binder &binder;
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
+	MacroBinding *macro_binding;
 	bool bound_columns = false;
 };
 
