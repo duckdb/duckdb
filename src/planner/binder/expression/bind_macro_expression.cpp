@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-//void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr) {
+// void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr) {
 //	auto macro_binding = make_unique<MacroBinding>(vector<LogicalType>(), vector<string>(), string());
 //	ReplaceMacroParametersRecursive(expr, *macro_binding);
 //}
@@ -128,21 +128,21 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(ParsedExpression &expr, Q
 }
 
 void ExpressionBinder::CheckForSideEffects(FunctionExpression &function, idx_t depth, string &error) {
-    for (idx_t i = 0; i < function.children.size(); i++) {
-        auto arg_copy = function.children[i]->Copy();
-        BindChild(arg_copy, depth, error);
-        if (!error.empty()) {
-            return;
-        }
-        auto &bound_expr = (BoundExpression &)*arg_copy;
-        if (bound_expr.expr->HasSideEffects()) {
-            QueryErrorContext error_context(binder.root_statement, function.query_location);
-            error = StringUtil::Format("Arguments with side-effects are not supported ('%s()' was supplied). As a "
-                                       "workaround, try creating a CTE that evaluates the argument with side-effects.",
-                                       arg_copy->ToString());
-            return;
-        }
-    }
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		auto arg_copy = function.children[i]->Copy();
+		BindChild(arg_copy, depth, error);
+		if (!error.empty()) {
+			return;
+		}
+		auto &bound_expr = (BoundExpression &)*arg_copy;
+		if (bound_expr.expr->HasSideEffects()) {
+			QueryErrorContext error_context(binder.root_statement, function.query_location);
+			error = StringUtil::Format("Arguments with side-effects are not supported ('%s()' was supplied). As a "
+			                           "workaround, try creating a CTE that evaluates the argument with side-effects.",
+			                           arg_copy->ToString());
+			return;
+		}
+	}
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalogEntry *macro_func, idx_t depth,
@@ -154,10 +154,10 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalo
 	}
 
 	// check for arguments with side-effects TODO: to support this, a projection must be pushed
-//    CheckForSideEffects(function, depth, error);
-//    if (!error.empty()) {
-//        return BindResult(error);
-//    }
+	//    CheckForSideEffects(function, depth, error);
+	//    if (!error.empty()) {
+	//        return BindResult(error);
+	//    }
 
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types;

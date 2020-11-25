@@ -18,7 +18,7 @@ string BoundAggregateExpression::ToString() const {
 		result += "DISTINCT ";
 	}
 	result += StringUtil::Join(children, children.size(), ", ",
-	                 [](const unique_ptr<Expression> &child) { return child->ToString(); });
+	                           [](const unique_ptr<Expression> &child) { return child->ToString(); });
 	result += ")";
 	return result;
 }
