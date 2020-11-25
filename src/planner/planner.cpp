@@ -51,10 +51,16 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		expr->value = value.get();
 		// check if the parameter number has been used before
 		if (value_map.find(expr->parameter_nr) == value_map.end()) {
+			// not used before, create vector
 			value_map[expr->parameter_nr] = vector<unique_ptr<Value>>();
+		} else if (value_map[expr->parameter_nr].back()->type() != value->type()) {
+			// used before, but types are inconsistent
+            throw BinderException("Inconsistent types found for parameter with index %llu", expr->parameter_nr);
 		}
-		value_map[expr->parameter_nr].push_back(move(value));
+        value_map[expr->parameter_nr].push_back(move(value));
 	}
+
+
 }
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
