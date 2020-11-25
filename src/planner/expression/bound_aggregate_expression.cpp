@@ -18,7 +18,7 @@ string BoundAggregateExpression::ToString() const {
 		result += "DISTINCT ";
 	}
 	result += StringUtil::Join(children, children.size(), ", ",
-	                 [](const unique_ptr<Expression> &child) { return child->ToString(); });
+	                           [](const unique_ptr<Expression> &child) { return child->ToString(); });
 	result += ")";
 	return result;
 }
@@ -48,6 +48,9 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}
+	}
+	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+		return false;
 	}
 	return true;
 }

@@ -3,12 +3,13 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include <algorithm>
 #include <stdlib.h>
+#include <cmath>
 
 using namespace std;
 
 namespace duckdb {
 
-struct median_state_t {
+struct quantile_state_t {
 	data_ptr_t v;
 	idx_t len;
 	idx_t pos;
@@ -22,6 +23,11 @@ struct QuantileBindData : public FunctionData {
 		return make_unique<QuantileBindData>(quantile);
 	}
 
+	bool Equals(FunctionData &other_p) override {
+		auto &other = (QuantileBindData &)other_p;
+		return quantile == other.quantile;
+	}
+
 	float quantile;
 };
 
@@ -32,7 +38,7 @@ template <class T> struct QuantileOperation {
 		state->pos = 0;
 	}
 
-	static void resize_state(median_state_t *state, idx_t new_len) {
+	static void resize_state(quantile_state_t *state, idx_t new_len) {
 		if (new_len <= state->len) {
 			return;
 		}
@@ -106,27 +112,27 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
 
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregate<median_state_t, int16_t, int16_t, QuantileOperation<int16_t>>(
+		return AggregateFunction::UnaryAggregate<quantile_state_t, int16_t, int16_t, QuantileOperation<int16_t>>(
 		    LogicalType::SMALLINT, LogicalType::SMALLINT);
 
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregate<median_state_t, int32_t, int32_t, QuantileOperation<int32_t>>(
+		return AggregateFunction::UnaryAggregate<quantile_state_t, int32_t, int32_t, QuantileOperation<int32_t>>(
 		    LogicalType::INTEGER, LogicalType::INTEGER);
 
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregate<median_state_t, int64_t, int64_t, QuantileOperation<int64_t>>(
+		return AggregateFunction::UnaryAggregate<quantile_state_t, int64_t, int64_t, QuantileOperation<int64_t>>(
 		    LogicalType::BIGINT, LogicalType::BIGINT);
 
 	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregate<median_state_t, hugeint_t, hugeint_t, QuantileOperation<hugeint_t>>(
+		return AggregateFunction::UnaryAggregate<quantile_state_t, hugeint_t, hugeint_t, QuantileOperation<hugeint_t>>(
 		    LogicalType::HUGEINT, LogicalType::HUGEINT);
 
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregate<median_state_t, float, float, QuantileOperation<float>>(
+		return AggregateFunction::UnaryAggregate<quantile_state_t, float, float, QuantileOperation<float>>(
 		    LogicalType::FLOAT, LogicalType::FLOAT);
 
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregate<median_state_t, double, double, QuantileOperation<double>>(
+		return AggregateFunction::UnaryAggregate<quantile_state_t, double, double, QuantileOperation<double>>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
 
 	default:
