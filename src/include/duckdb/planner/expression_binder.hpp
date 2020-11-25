@@ -94,12 +94,13 @@ protected:
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
-	virtual BindResult BindMacro(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
+	virtual BindResult BindMacro(FunctionExpression &expr, MacroCatalogEntry *macro, idx_t depth,
+	                             unique_ptr<ParsedExpression> *expr_ptr);
 
-	virtual void UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr);
-	virtual void UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr, MacroBinding &macro_binding);
-	virtual void UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding);
-	virtual void UnfoldTableRef(ParsedExpression &expr, TableRef &ref, MacroBinding &macro_binding);
+	virtual void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
+	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node);
+	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref);
+    virtual void CheckForSideEffects(FunctionExpression &function, idx_t depth, string &error);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

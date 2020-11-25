@@ -10,10 +10,8 @@ namespace duckdb {
 MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {
 }
 
-string MacroFunction::ValidateArguments(ClientContext &context, QueryErrorContext &error_context,
-                                        MacroCatalogEntry &macro_func, FunctionExpression &function_expr) {
+string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr) {
 	string error;
-	auto &catalog = Catalog::GetCatalog(context);
 	auto &parameters = macro_func.function->parameters;
 	auto &arguments = function_expr.children;
 	if (parameters.size() != arguments.size()) {
@@ -27,28 +25,6 @@ string MacroFunction::ValidateArguments(ClientContext &context, QueryErrorContex
 		error +=
 		    arguments.size() == 1 ? "a single argument was" : StringUtil::Format("%i arguments were", arguments.size());
 		error += " provided.";
-		return error;
-	}
-
-	// check for arguments with side-effects TODO: to support this, a projection must be pushed
-	for (auto &arg : arguments) {
-		if (arg->GetExpressionClass() == ExpressionClass::FUNCTION) {
-			auto &func_arg = (FunctionExpression &)*arg;
-			auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func_arg.schema,
-			                             func_arg.function_name, false, error_context);
-			if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-				auto &scalar_func_arg = (ScalarFunctionCatalogEntry &)*func;
-				for (auto sfa : scalar_func_arg.functions) {
-					if (sfa.has_side_effects) {
-						error = StringUtil::Format(
-						    "Arguments with side-effects are not supported ('%s()' was supplied). As a "
-						    "workaround, try creating a CTE that evaluates the argument with side-effects.",
-						    sfa.name);
-						return error;
-					}
-				}
-			}
-		}
 	}
 	return error;
 }

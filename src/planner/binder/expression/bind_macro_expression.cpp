@@ -11,67 +11,28 @@
 
 namespace duckdb {
 
-void ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr) {
-	auto macro_binding = make_unique<MacroBinding>(vector<LogicalType>(), vector<string>(), string());
-	UnfoldMacroRecursive(expr, *macro_binding);
-}
+//void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr) {
+//	auto macro_binding = make_unique<MacroBinding>(vector<LogicalType>(), vector<string>(), string());
+//	ReplaceMacroParametersRecursive(expr, *macro_binding);
+//}
 
-void ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr, MacroBinding &macro_binding) {
+void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
 		// if expr is a parameter, replace it with its argument
 		auto &colref = (ColumnRefExpression &)*expr;
-		if (colref.table_name.empty() && macro_binding.HasMatchingBinding(colref.column_name)) {
-			expr = macro_binding.ParamToArg(colref);
-		}
-		if (expr->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
-			// arguments supplied to the macro cannot contain refer to parameter of this same macro (infinite recursion)
-			// therefore, we do not call the function with the current MacroBinding
-			UnfoldMacroRecursive(expr);
-		}
-		return;
-	}
-	case ExpressionClass::FUNCTION: {
-		auto &function_expr = (FunctionExpression &)*expr;
-		if (function_expr.is_operator) {
-			break;
-		}
-
-		// if expr is a macro function, unfold it
-		QueryErrorContext error_context(binder.root_statement, function_expr.query_location);
-		auto &catalog = Catalog::GetCatalog(context);
-		auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function_expr.schema,
-		                             function_expr.function_name, true, error_context);
-		if (func != nullptr && func->type == CatalogType::MACRO_ENTRY) {
-			auto &macro_func = (MacroCatalogEntry &)*func;
-			string error = MacroFunction::ValidateArguments(context, error_context, macro_func, function_expr);
-			if (!error.empty()) {
-				throw BinderException(binder.FormatError(*expr, error));
-			}
-
-			// create macro_binding to bind this macro's parameters to its arguments
-			vector<LogicalType> types;
-			vector<string> names;
-			for (idx_t i = 0; i < macro_func.function->parameters.size(); i++) {
-				types.push_back(LogicalType::SQLNULL);
-				auto &param = (ColumnRefExpression &)*macro_func.function->parameters[i];
-				names.push_back(param.column_name);
-			}
-			auto new_macro_binding = make_unique<MacroBinding>(types, names, func->name);
-			new_macro_binding->arguments = move(function_expr.children);
-
-			expr = macro_func.function->expression->Copy();
-			UnfoldMacroRecursive(expr, *new_macro_binding);
+		if (colref.table_name.empty() && binder.macro_binding->HasMatchingBinding(colref.column_name)) {
+			expr = binder.macro_binding->ParamToArg(colref);
 		}
 		break;
 	}
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
 		auto &sq = ((SubqueryExpression &)*expr).subquery;
-		UnfoldQueryNode(*expr, *sq->node.get(), macro_binding);
+		ReplaceMacroParametersRecursive(*expr, *sq->node.get());
 
 		for (auto &kv : sq->cte_map) {
-			UnfoldQueryNode(*expr, *kv.second->query->node.get(), macro_binding);
+			ReplaceMacroParametersRecursive(*expr, *kv.second->query->node.get());
 		}
 		break;
 	}
@@ -80,44 +41,44 @@ void ExpressionBinder::UnfoldMacroRecursive(unique_ptr<ParsedExpression> &expr, 
 	}
 	// unfold child expressions
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { UnfoldMacroRecursive(child, macro_binding); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
 }
 
-void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, MacroBinding &macro_binding) {
+void ExpressionBinder::ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::CROSS_PRODUCT: {
 		auto &cp_ref = (CrossProductRef &)ref;
-		UnfoldTableRef(expr, *cp_ref.left, macro_binding);
-		UnfoldTableRef(expr, *cp_ref.right, macro_binding);
+		ReplaceMacroParametersRecursive(expr, *cp_ref.left);
+		ReplaceMacroParametersRecursive(expr, *cp_ref.right);
 		break;
 	}
 	case TableReferenceType::EXPRESSION_LIST: {
 		auto &el_ref = (ExpressionListRef &)ref;
 		for (idx_t i = 0; i < el_ref.values.size(); i++) {
 			for (idx_t j = 0; j < el_ref.values[i].size(); j++) {
-				UnfoldMacroRecursive(el_ref.values[i][j], macro_binding);
+				ReplaceMacroParametersRecursive(el_ref.values[i][j]);
 			}
 		}
 		break;
 	}
 	case TableReferenceType::JOIN: {
 		auto &j_ref = (JoinRef &)ref;
-		UnfoldTableRef(expr, *j_ref.left, macro_binding);
-		UnfoldTableRef(expr, *j_ref.right, macro_binding);
-		UnfoldMacroRecursive(j_ref.condition, macro_binding);
+		ReplaceMacroParametersRecursive(expr, *j_ref.left);
+		ReplaceMacroParametersRecursive(expr, *j_ref.right);
+		ReplaceMacroParametersRecursive(j_ref.condition);
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
 		auto &sq_ref = (SubqueryRef &)ref;
-		UnfoldQueryNode(expr, *sq_ref.subquery->node, macro_binding);
+		ReplaceMacroParametersRecursive(expr, *sq_ref.subquery->node);
 		for (auto &kv : sq_ref.subquery->cte_map) {
-			UnfoldQueryNode(expr, *kv.second->query->node.get(), macro_binding);
+			ReplaceMacroParametersRecursive(expr, *kv.second->query->node.get());
 		}
 		break;
 	}
 	case TableReferenceType::TABLE_FUNCTION: {
 		auto &tf_ref = (TableFunctionRef &)ref;
-		UnfoldMacroRecursive(tf_ref.function, macro_binding);
+		ReplaceMacroParametersRecursive(tf_ref.function);
 		break;
 	}
 	case TableReferenceType::BASE_TABLE:
@@ -129,36 +90,36 @@ void ExpressionBinder::UnfoldTableRef(ParsedExpression &expr, TableRef &ref, Mac
 	}
 }
 
-void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, MacroBinding &macro_binding) {
+void ExpressionBinder::ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
 		auto &rcte_node = (RecursiveCTENode &)node;
-		UnfoldQueryNode(expr, *rcte_node.left, macro_binding);
-		UnfoldQueryNode(expr, *rcte_node.right, macro_binding);
+		ReplaceMacroParametersRecursive(expr, *rcte_node.left);
+		ReplaceMacroParametersRecursive(expr, *rcte_node.right);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {
 		auto &sel_node = (SelectNode &)node;
 		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
-			UnfoldMacroRecursive(sel_node.select_list[i], macro_binding);
+			ReplaceMacroParametersRecursive(sel_node.select_list[i]);
 		}
 		for (idx_t i = 0; i < sel_node.groups.size(); i++) {
-			UnfoldMacroRecursive(sel_node.groups[i], macro_binding);
+			ReplaceMacroParametersRecursive(sel_node.groups[i]);
 		}
 		if (sel_node.where_clause != nullptr) {
-			UnfoldMacroRecursive(sel_node.where_clause, macro_binding);
+			ReplaceMacroParametersRecursive(sel_node.where_clause);
 		}
 		if (sel_node.having != nullptr) {
-			UnfoldMacroRecursive(sel_node.having, macro_binding);
+			ReplaceMacroParametersRecursive(sel_node.having);
 		}
 
-		UnfoldTableRef(expr, *sel_node.from_table.get(), macro_binding);
+		ReplaceMacroParametersRecursive(expr, *sel_node.from_table.get());
 		break;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &setop_node = (SetOperationNode &)node;
-		UnfoldQueryNode(expr, *setop_node.left, macro_binding);
-		UnfoldQueryNode(expr, *setop_node.right, macro_binding);
+		ReplaceMacroParametersRecursive(expr, *setop_node.left);
+		ReplaceMacroParametersRecursive(expr, *setop_node.right);
 		break;
 	}
 	default:
@@ -166,10 +127,56 @@ void ExpressionBinder::UnfoldQueryNode(ParsedExpression &expr, QueryNode &node, 
 	}
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &function, idx_t depth, unique_ptr<ParsedExpression> *expr) {
-	// unfold and replace the original macro expression
-	//	auto unfolded_expr = function.Copy();
-	UnfoldMacroRecursive(*expr);
+void ExpressionBinder::CheckForSideEffects(FunctionExpression &function, idx_t depth, string &error) {
+    for (idx_t i = 0; i < function.children.size(); i++) {
+        auto arg_copy = function.children[i]->Copy();
+        BindChild(arg_copy, depth, error);
+        if (!error.empty()) {
+            return;
+        }
+        auto &bound_expr = (BoundExpression &)*arg_copy;
+        if (bound_expr.expr->HasSideEffects()) {
+            QueryErrorContext error_context(binder.root_statement, function.query_location);
+            error = StringUtil::Format("Arguments with side-effects are not supported ('%s()' was supplied). As a "
+                                       "workaround, try creating a CTE that evaluates the argument with side-effects.",
+                                       arg_copy->ToString());
+            return;
+        }
+    }
+}
+
+BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalogEntry *macro_func, idx_t depth,
+                                       unique_ptr<ParsedExpression> *expr) {
+	// validate the arguments
+	string error = MacroFunction::ValidateArguments(*macro_func, function);
+	if (!error.empty()) {
+		return BindResult(binder.FormatError(*expr->get(), error));
+	}
+
+	// check for arguments with side-effects TODO: to support this, a projection must be pushed
+//    CheckForSideEffects(function, depth, error);
+//    if (!error.empty()) {
+//        return BindResult(error);
+//    }
+
+	// create a MacroBinding to bind this macro's parameters to its arguments
+	vector<LogicalType> types;
+	vector<string> names;
+	for (idx_t i = 0; i < macro_func->function->parameters.size(); i++) {
+		types.push_back(LogicalType::SQLNULL);
+		auto &param = (ColumnRefExpression &)*macro_func->function->parameters[i];
+		names.push_back(param.column_name);
+	}
+	auto macro_binding = make_unique<MacroBinding>(types, names, macro_func->name);
+	macro_binding->arguments = move(function.children);
+	binder.macro_binding = macro_binding.get();
+
+	// replace current expression with stored macro expression, and replace params
+	*expr = macro_func->function->expression->Copy();
+	ReplaceMacroParametersRecursive(*expr);
+
+	// reset the binder's macro binding before binding the unfolded expression
+	binder.macro_binding = nullptr;
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

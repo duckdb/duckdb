@@ -22,8 +22,7 @@ public:
 	MacroFunction(unique_ptr<ParsedExpression> expression);
 
 	//! Check whether the supplied arguments are valid
-	static string ValidateArguments(ClientContext &context, QueryErrorContext &error_context,
-	                                MacroCatalogEntry &macro_func, FunctionExpression &function_expr);
+	static string ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
 	//! The macro parameters
