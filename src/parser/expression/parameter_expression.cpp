@@ -17,6 +17,7 @@ string ParameterExpression::ToString() const {
 
 unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 	auto copy = make_unique<ParameterExpression>();
+	copy->parameter_nr = parameter_nr;
 	copy->CopyProperties(*this);
 	return move(copy);
 }
