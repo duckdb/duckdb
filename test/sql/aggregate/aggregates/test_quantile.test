@@ -1,0 +1,62 @@
+# name: test/sql/aggregate/aggregates/test_quantile.test
+# description: Test MEDIAN operator
+# group: [aggregates]
+
+statement ok
+create table quantile as select range r, random() from range(10000) order by 2;
+
+query R
+SELECT median(r) FROM quantile
+----
+4999
+
+query R
+SELECT median(r::float) FROM quantile
+----
+4999
+
+query R
+SELECT median(r::double) FROM quantile
+----
+4999
+
+query R
+SELECT median(r::tinyint) FROM quantile where r < 100
+----
+49
+
+query R
+SELECT median(r::smallint) FROM quantile
+----
+4999
+
+query R
+SELECT median(r::integer) FROM quantile
+----
+4999
+
+query R
+SELECT median(r::bigint) FROM quantile
+----
+4999
+
+query R
+SELECT median(r::hugeint) FROM quantile
+----
+4999
+
+
+query R
+SELECT quantile(r, 0.5) FROM quantile
+----
+4999
+
+query R
+SELECT quantile(r, 1.0) FROM quantile
+----
+9999
+
+query R
+SELECT quantile(r, 0.0) FROM quantile
+----
+0

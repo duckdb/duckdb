@@ -5,7 +5,7 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterHolisticAggregates() {
-	Register<MedianFun>();
+	Register<QuantileFun>();
 }
 
 } // namespace duckdb

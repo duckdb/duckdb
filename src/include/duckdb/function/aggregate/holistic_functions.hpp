@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-struct MedianFun {
+struct QuantileFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
