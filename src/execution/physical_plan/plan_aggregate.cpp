@@ -7,6 +7,7 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/aggregate/physical_perfect_hash_aggregate.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -67,23 +68,26 @@ bool CanUsePerfectHashAggregate(LogicalAggregate &op, vector<idx_t> &bits_per_gr
 			// we have a min and a max value for the stats: use that to figure out how many bits we have
 			// we add two here, one for the NULL value, and one to make the computation one-indexed
 			// (e.g. if min and max are the same, we still need one entry in total)
-			idx_t range = 2;
+			int64_t range;
 			switch(group_type.InternalType()) {
 			case PhysicalType::INT8:
-				range += nstats.max.GetValueUnsafe<int8_t>() - nstats.min.GetValueUnsafe<int8_t>();
+				range = int64_t(nstats.max.GetValueUnsafe<int8_t>()) - int64_t(nstats.min.GetValueUnsafe<int8_t>());
 				break;
 			case PhysicalType::INT16:
-				range += nstats.max.GetValueUnsafe<int16_t>() - nstats.min.GetValueUnsafe<int16_t>();
+				range = int64_t(nstats.max.GetValueUnsafe<int16_t>()) - int64_t(nstats.min.GetValueUnsafe<int16_t>());
 				break;
 			case PhysicalType::INT32:
-				range += nstats.max.GetValueUnsafe<int32_t>() - nstats.min.GetValueUnsafe<int32_t>();
+				range = int64_t(nstats.max.GetValueUnsafe<int32_t>()) - int64_t(nstats.min.GetValueUnsafe<int32_t>());
 				break;
 			case PhysicalType::INT64:
-				range += nstats.max.GetValueUnsafe<int64_t>() - nstats.min.GetValueUnsafe<int64_t>();
+				if (!TrySubtractOperator::Operation(nstats.max.GetValueUnsafe<int64_t>(), nstats.min.GetValueUnsafe<int64_t>(), range)) {
+					return false;
+				}
 				break;
 			default:
 				throw InternalException("Unsupported type for perfect hash (should be caught before)");
 			}
+			range += 2;
 			// figure out how many bits we need
 			required_bits = RequiredBitsForValue(range);
 		}
