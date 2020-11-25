@@ -75,7 +75,7 @@ template <class T> struct QuantileOperation {
 			return;
 		}
 		resize_state(target, target->pos + source.pos);
-		memcpy(target->v + target->pos, source.v, source.pos);
+		memcpy(target->v + target->pos * sizeof(T), source.v, source.pos * sizeof(T));
 		target->pos += source.pos;
 	}
 

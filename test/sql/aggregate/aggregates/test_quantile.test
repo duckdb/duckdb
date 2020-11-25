@@ -118,7 +118,6 @@ SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
 8999
 
 
-
 statement error
 SELECT quantile(r, -0.1) FROM quantile
 
@@ -136,3 +135,17 @@ SELECT quantile(r) FROM quantile
 
 statement error
 SELECT quantile(r, 0.1, 0.2) FROM quantile
+
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+query III
+SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
+----
+999
+4999
+8999
