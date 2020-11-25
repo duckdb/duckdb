@@ -171,6 +171,8 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 		target_ptr += tuple_size;
 	}
 	Combine(source_addresses, target_addresses, combine_count);
+	// disable finalizers in the other HT
+	other.total_groups = 0;
 }
 
 template<class T>
@@ -250,18 +252,6 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	result.SetCardinality(entry_count);
 }
 
-template <class FUNC> void PerfectAggregateHashTable::PayloadApply(FUNC fun) {
-	// iterate over all occupied slots of the hash table
-	data_ptr_t payload_ptr = data;
-	for(idx_t i = 0; i < total_groups; i++) {
-		bool has_entry = Load<bool>(payload_ptr + payload_width);
-		if (has_entry) {
-			fun(payload_ptr, i);
-		}
-		payload_ptr += tuple_size;
-	}
-}
-
 void PerfectAggregateHashTable::Destroy() {
 	// check if there is any destructor to call
 	bool has_destructor = false;
@@ -279,13 +269,18 @@ void PerfectAggregateHashTable::Destroy() {
 	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
 	idx_t count = 0;
 
-	PayloadApply([&](data_ptr_t ptr, idx_t grp_index) {
-		data_pointers[count++] = ptr;
-		if (count == STANDARD_VECTOR_SIZE) {
-			CallDestructors(state_vector, count);
-			count = 0;
+	// iterate over all occupied slots of the hash table
+	data_ptr_t payload_ptr = data;
+	for(idx_t i = 0; i < total_groups; i++) {
+		if (group_is_set[i]) {
+			data_pointers[count++] = payload_ptr;
+			if (count == STANDARD_VECTOR_SIZE) {
+				CallDestructors(state_vector, count);
+				count = 0;
+			}
 		}
-	});
+		payload_ptr += tuple_size;
+	}
 	CallDestructors(state_vector, count);
 }
 

@@ -54,9 +54,6 @@ private:
 	void Combine(Vector &source_addresses, Vector &target_addresses, idx_t combine_count);
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)
 	void Destroy();
-
-	//! Iterate over the payload of the perfect HT
-	template <class FUNC> void PayloadApply(FUNC fun);
 };
 
 } // namespace duckdb
