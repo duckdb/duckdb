@@ -41,7 +41,6 @@ bool CanUsePerfectHashAggregate(LogicalAggregate &op, vector<idx_t> &bits_per_gr
 			// we only support simple integer types for perfect hashing
 			return false;
 		}
-		idx_t required_bits;
 		// check if the group has stats available
 		auto &group_type = group->return_type;
 		if (!stats) {
@@ -49,12 +48,10 @@ bool CanUsePerfectHashAggregate(LogicalAggregate &op, vector<idx_t> &bits_per_gr
 			// for small types we can just set the stats to [type_min, type_max]
 			switch(group_type.InternalType()) {
 			case PhysicalType::INT8:
-				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type), Value::MinimumValue(group_type));
-				required_bits = 8;
+				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type), Value::MaximumValue(group_type));
 				break;
 			case PhysicalType::INT16:
-				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type), Value::MinimumValue(group_type));
-				required_bits = 16;
+				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type), Value::MaximumValue(group_type));
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing
@@ -64,33 +61,35 @@ bool CanUsePerfectHashAggregate(LogicalAggregate &op, vector<idx_t> &bits_per_gr
 			stats->has_null = true;
 		}
 		auto &nstats = (NumericStatistics &) *stats;
-		if (!nstats.min.is_null && !nstats.max.is_null) {
-			// we have a min and a max value for the stats: use that to figure out how many bits we have
-			// we add two here, one for the NULL value, and one to make the computation one-indexed
-			// (e.g. if min and max are the same, we still need one entry in total)
-			int64_t range;
-			switch(group_type.InternalType()) {
-			case PhysicalType::INT8:
-				range = int64_t(nstats.max.GetValueUnsafe<int8_t>()) - int64_t(nstats.min.GetValueUnsafe<int8_t>());
-				break;
-			case PhysicalType::INT16:
-				range = int64_t(nstats.max.GetValueUnsafe<int16_t>()) - int64_t(nstats.min.GetValueUnsafe<int16_t>());
-				break;
-			case PhysicalType::INT32:
-				range = int64_t(nstats.max.GetValueUnsafe<int32_t>()) - int64_t(nstats.min.GetValueUnsafe<int32_t>());
-				break;
-			case PhysicalType::INT64:
-				if (!TrySubtractOperator::Operation(nstats.max.GetValueUnsafe<int64_t>(), nstats.min.GetValueUnsafe<int64_t>(), range)) {
-					return false;
-				}
-				break;
-			default:
-				throw InternalException("Unsupported type for perfect hash (should be caught before)");
-			}
-			range += 2;
-			// figure out how many bits we need
-			required_bits = RequiredBitsForValue(range);
+
+		if (nstats.min.is_null || nstats.max.is_null) {
+			return false;
 		}
+		// we have a min and a max value for the stats: use that to figure out how many bits we have
+		// we add two here, one for the NULL value, and one to make the computation one-indexed
+		// (e.g. if min and max are the same, we still need one entry in total)
+		int64_t range;
+		switch(group_type.InternalType()) {
+		case PhysicalType::INT8:
+			range = int64_t(nstats.max.GetValueUnsafe<int8_t>()) - int64_t(nstats.min.GetValueUnsafe<int8_t>());
+			break;
+		case PhysicalType::INT16:
+			range = int64_t(nstats.max.GetValueUnsafe<int16_t>()) - int64_t(nstats.min.GetValueUnsafe<int16_t>());
+			break;
+		case PhysicalType::INT32:
+			range = int64_t(nstats.max.GetValueUnsafe<int32_t>()) - int64_t(nstats.min.GetValueUnsafe<int32_t>());
+			break;
+		case PhysicalType::INT64:
+			if (!TrySubtractOperator::Operation(nstats.max.GetValueUnsafe<int64_t>(), nstats.min.GetValueUnsafe<int64_t>(), range)) {
+				return false;
+			}
+			break;
+		default:
+			throw InternalException("Unsupported type for perfect hash (should be caught before)");
+		}
+		range += 2;
+		// figure out how many bits we need
+		idx_t required_bits = RequiredBitsForValue(range);
 		bits_per_group.push_back(required_bits);
 		perfect_hash_bits += required_bits;
 	}
