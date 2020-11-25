@@ -3,6 +3,9 @@
 # group: [aggregates]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
 
 query I
