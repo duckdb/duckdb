@@ -1,8 +1,6 @@
 # name: test/sql/aggregate/aggregates/test_median.test
-# description: Test AVG operator
+# description: Test MEDIAN operator
 # group: [aggregates]
-
-mode output_result
 
 statement ok
 CREATE TABLE doubles(d double, g integer);
@@ -25,5 +23,30 @@ SELECT g, median(d) FROM doubles group by g order by g;
 
 query R
 SELECT median(range::double) FROM range(100000);
+----
+50000
+
+query R
+SELECT median(range::tinyint) FROM range(100);
+----
+50
+
+query R
+SELECT median(range::smallint) FROM range(10000);
+----
+5000
+
+query R
+SELECT median(range::integer) FROM range(100000);
+----
+50000
+
+query R
+SELECT median(range::bigint) FROM range(100000);
+----
+50000
+
+query R
+SELECT median(range::hugeint) FROM range(100000);
 ----
 50000

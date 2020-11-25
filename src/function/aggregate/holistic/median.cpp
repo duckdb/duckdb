@@ -6,12 +6,12 @@ using namespace std;
 namespace duckdb {
 
 struct median_state_t {
-	double *v;
+	data_ptr_t v;
 	idx_t len;
 	idx_t pos;
 };
 
-struct MedianOperation {
+template <class T> struct MedianOperation {
 	template <class STATE> static void Initialize(STATE *state) {
 		state->v = nullptr;
 		state->len = 0;
@@ -29,9 +29,9 @@ struct MedianOperation {
 		}
 		// growing conservatively here since we could be running this on many small groups
 		state->len = new_len;
-		state->v = new double[state->len];
+		state->v = (data_ptr_t) new T[state->len];
 		if (old_state.pos > 0) {
-			memcpy(state->v, old_state.v, old_state.pos * sizeof(double));
+			memcpy(state->v, old_state.v, old_state.pos * sizeof(T));
 			Destroy(&old_state);
 		}
 	}
@@ -52,7 +52,7 @@ struct MedianOperation {
 			resize_state(state, state->len == 0 ? 1 : state->len * 2);
 		}
 		D_ASSERT(state->v);
-		state->v[state->pos++] = data[idx];
+		((T *)state->v)[state->pos++] = data[idx];
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
@@ -65,15 +65,16 @@ struct MedianOperation {
 		target->pos += source.pos;
 	}
 
-	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	template <class TARGET_TYPE, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, TARGET_TYPE *target, nullmask_t &nullmask,
+	                     idx_t idx) {
 		if (state->pos == 0) {
 			nullmask[idx] = true;
 			return;
 		}
 		D_ASSERT(state->v);
 		std::nth_element(state->v, state->v + (state->pos / 2), state->v + state->pos);
-		target[idx] = state->v[state->pos / 2];
+		target[idx] = ((T *)state->v)[state->pos / 2];
 	}
 
 	template <class STATE> static void Destroy(STATE *state) {
@@ -90,8 +91,27 @@ struct MedianOperation {
 void MedianFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet median("median");
 
-	median.AddFunction(AggregateFunction::UnaryAggregate<median_state_t, double, double, MedianOperation>(
+	median.AddFunction(AggregateFunction::UnaryAggregate<median_state_t, float, float, MedianOperation<float>>(
+	    LogicalType::FLOAT, LogicalType::FLOAT));
+
+	median.AddFunction(AggregateFunction::UnaryAggregate<median_state_t, double, double, MedianOperation<double>>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+
+	median.AddFunction(AggregateFunction::UnaryAggregate<median_state_t, int8_t, int8_t, MedianOperation<int8_t>>(
+	    LogicalType::TINYINT, LogicalType::TINYINT));
+
+	median.AddFunction(AggregateFunction::UnaryAggregate<median_state_t, int16_t, int16_t, MedianOperation<int16_t>>(
+	    LogicalType::SMALLINT, LogicalType::SMALLINT));
+
+	median.AddFunction(AggregateFunction::UnaryAggregate<median_state_t, int32_t, int32_t, MedianOperation<int32_t>>(
+	    LogicalType::INTEGER, LogicalType::INTEGER));
+
+	median.AddFunction(AggregateFunction::UnaryAggregate<median_state_t, int64_t, int64_t, MedianOperation<int64_t>>(
+	    LogicalType::BIGINT, LogicalType::BIGINT));
+
+	median.AddFunction(
+	    AggregateFunction::UnaryAggregate<median_state_t, hugeint_t, hugeint_t, MedianOperation<hugeint_t>>(
+	        LogicalType::HUGEINT, LogicalType::HUGEINT));
 
 	set.AddFunction(median);
 }
