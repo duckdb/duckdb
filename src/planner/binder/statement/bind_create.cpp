@@ -68,7 +68,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
 
 	if (base.function->expression->HasParameter()) {
-		throw BinderException("Macro's do not support parameter expressions!");
+		throw BinderException("Parameter expressions within macro's are not supported!");
 	}
 
 	// create macro binding in order to bind the function
