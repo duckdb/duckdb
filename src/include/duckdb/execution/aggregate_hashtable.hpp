@@ -8,35 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/planner/expression.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/function/aggregate_function.hpp"
-
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/execution/base_aggregate_hashtable.hpp"
 
 namespace duckdb {
-class BoundAggregateExpression;
-class BufferManager;
 class BufferHandle;
-
-struct AggregateObject {
-	AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count, idx_t payload_size,
-	                bool distinct, PhysicalType return_type)
-	    : function(move(function)), bind_data(bind_data), child_count(child_count), payload_size(payload_size),
-	      distinct(distinct), return_type(return_type) {
-	}
-
-	AggregateFunction function;
-	FunctionData *bind_data;
-	idx_t child_count;
-	idx_t payload_size;
-	bool distinct;
-	PhysicalType return_type;
-
-	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
-};
 
 //! GroupedAggregateHashTable is a linear probing HT that is used for computing
 //! aggregates
@@ -62,7 +37,6 @@ struct AggregateObject {
 // [GROUPS] is the group data, could be multiple values, fixed size, strings are elsewhere
 // [PADDING] is gunk data to align payload properly
 // [PAYLOAD] is the payload (i.e. the aggregate states)
-
 struct aggr_ht_entry_64 {
 	uint16_t salt;
 	uint16_t page_offset;
@@ -77,7 +51,7 @@ struct aggr_ht_entry_32 {
 
 enum HtEntryType { HT_WIDTH_32, HT_WIDTH_64 };
 
-class GroupedAggregateHashTable {
+class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates,
@@ -130,24 +104,12 @@ public:
 	constexpr static uint8_t HASH_WIDTH = sizeof(hash_t);
 
 private:
-	BufferManager &buffer_manager;
-	//! The aggregates to be computed
-	vector<AggregateObject> aggregates;
-	//! The types of the group columns stored in the hashtable
-	vector<LogicalType> group_types;
-	//! The types of the payload columns stored in the hashtable
-	vector<LogicalType> payload_types;
-	//! The size of the groups in bytes
-	idx_t group_width;
-	//! some optional padding to align payload
-	idx_t group_padding;
-	//! The size of the payload (aggregations) in bytes
-	idx_t payload_width;
-
 	HtEntryType entry_type;
+
 
 	//! The total tuple size
 	idx_t tuple_size;
+	//! The amount of tuples that fit in a single block
 	idx_t tuples_per_block;
 	//! The capacity of the HT. This can be increased using
 	//! GroupedAggregateHashTable::Resize
@@ -167,8 +129,6 @@ private:
 	idx_t hash_prefix_shift;
 	idx_t payload_page_offset;
 
-	//! The empty payload data
-	unique_ptr<data_t[]> empty_payload_data;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
 
@@ -192,7 +152,6 @@ private:
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
 	void Destroy();
-	void CallDestructors(Vector &state_vector, idx_t count);
 	void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
 	                   const SelectionVector &sel, idx_t count);
 

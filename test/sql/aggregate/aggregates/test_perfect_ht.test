@@ -1,0 +1,20 @@
+# name: test/sql/aggregate/aggregates/test_perfect_ht.test
+# description: Test aggregates that can trigger a perfect HT
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timeseries(year INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
+
+query IIII
+SELECT year, SUM(val), COUNT(val), COUNT(*) FROM timeseries GROUP BY year ORDER BY year;
+----
+NULL	1	1	1
+1996	30	2	3
+1997	12	1	1
+2001	30	1	1

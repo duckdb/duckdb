@@ -89,6 +89,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		case PhysicalOperatorType::HASH_GROUP_BY:
 		case PhysicalOperatorType::DISTINCT:
 		case PhysicalOperatorType::SIMPLE_AGGREGATE:
+		case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
 		case PhysicalOperatorType::WINDOW:
 		case PhysicalOperatorType::ORDER_BY:
 		case PhysicalOperatorType::TOP_N:
@@ -120,7 +121,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			break;
 		}
 		default:
-			throw NotImplementedException("Unimplemented sink type!");
+			throw InternalException("Unimplemented sink type!");
 		}
 		// recurse into the pipeline child
 		BuildPipelines(pipeline->child, pipeline.get());
