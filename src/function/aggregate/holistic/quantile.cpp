@@ -158,7 +158,7 @@ unique_ptr<FunctionData> bind_quantile(ClientContext &context, AggregateFunction
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	auto quantile = quantile_val.GetValue<float>();
 
-	if (quantile < 0 || quantile > 1) {
+	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
 	}
 	function = GetQuantileAggregate(arguments[0]->return_type.InternalType());
