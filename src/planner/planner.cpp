@@ -51,9 +51,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		expr->value = value.get();
 		// check if the parameter number has been used before
 		if (value_map.find(expr->parameter_nr) == value_map.end()) {
-            value_map[expr->parameter_nr] = vector<unique_ptr<Value>>();
+			value_map[expr->parameter_nr] = vector<unique_ptr<Value>>();
 		}
-        value_map[expr->parameter_nr].push_back(move(value));
+		value_map[expr->parameter_nr].push_back(move(value));
 	}
 }
 
