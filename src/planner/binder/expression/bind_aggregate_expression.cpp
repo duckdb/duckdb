@@ -58,8 +58,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
-
 	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children), aggr.distinct);
+
 	auto return_type = aggregate->return_type;
 
 	// check for all the aggregates if this aggregate already exists
