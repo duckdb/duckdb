@@ -46,10 +46,6 @@ struct AggregateState {
 		other.aggregates = move(aggregates);
 		other.destructors = move(destructors);
 	}
-	void Clear() {
-		aggregates.clear();
-		destructors.clear();
-	}
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;

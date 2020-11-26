@@ -71,13 +71,12 @@ struct FirstFunctionString : public FirstFunctionBase {
 			} else {
 				// non-inlined string, need to allocate space for it
 				auto len = value.GetSize();
-				auto ptr = new char[len + 1];
-				memcpy(ptr, value.GetDataUnsafe(), len + 1);
+				auto ptr = new char[len];
+				memcpy(ptr, value.GetDataUnsafe(), len);
 
 				state->value = string_t(ptr, len);
 			}
 		}
-
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -108,7 +107,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE> static void Destroy(STATE *state) {
-		if (state->is_set && !state->value.IsInlined()) {
+		if (state->is_set && !state->is_null && !state->value.IsInlined()) {
 			delete[] state->value.GetDataUnsafe();
 		}
 	}
