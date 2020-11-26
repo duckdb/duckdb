@@ -77,7 +77,6 @@ template <class T> struct QuantileOperation {
 		resize_state(target, target->pos + source.pos);
 		memcpy(target->v + target->pos * sizeof(T), source.v, source.pos * sizeof(T));
 		target->pos += source.pos;
-		Destroy(&source);
 	}
 
 	template <class TARGET_TYPE, class STATE>
@@ -94,7 +93,6 @@ template <class T> struct QuantileOperation {
 		auto v_t = (T *)state->v;
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		target[idx] = v_t[offset];
-        Destroy(state);
     }
 
 	template <class STATE> static void Destroy(STATE *state) {
