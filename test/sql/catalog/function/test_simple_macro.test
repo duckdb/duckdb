@@ -1,0 +1,153 @@
+# name: test/sql/catalog/function/test_simple_macro.test
+# description: Test Simple Macro
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers (a INT)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+statement ok
+CREATE MACRO one() AS (SELECT 1);
+
+query T
+SELECT one()
+----
+1
+
+statement error
+SELECT one(1)
+
+statement error
+SELECT one(NULL)
+
+statement ok
+DROP MACRO one;
+
+# FUNCTION alias
+statement ok
+CREATE FUNCTION two() AS (SELECT 2);
+
+query T
+SELECT two()
+----
+2
+
+statement ok
+DROP FUNCTION two;
+
+# b cannot be found
+statement error
+CREATE MACRO add(a) AS a + b
+
+statement ok
+CREATE MACRO add(a, b) AS a + b
+
+query T
+SELECT add(a,a) FROM integers
+----
+2
+
+statement ok
+CREATE TABLE floats (b FLOAT)
+
+statement ok
+INSERT INTO floats VALUES (0.5)
+
+query T
+SELECT add(a,2) + add(3,b) FROM integers, floats
+----
+6.5
+
+# cannot create function with same name as a ScalarFunction
+statement error
+CREATE MACRO string_split(a,b) AS a + b
+
+statement ok
+CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
+
+query T
+SELECT IFELSE(1,'true','false')
+----
+true
+
+query T
+SELECT ifelse(1,'true','false')
+----
+true
+
+query T
+SELECT IFELSE(0,'true','false')
+----
+false
+
+# incorrect number of arguments
+statement error
+SELECT IFELSE();
+
+statement error
+SELECT IFELSE(1);
+
+statement error
+SELECT IFELSE(1, 2);
+
+statement error
+SELECT IFELSE(1, 2, 3, 4);
+
+# no duplicate macro function names
+statement error
+CREATE MACRO IFELSE(a,b) AS a+b
+
+statement error
+CREATE MACRO ifelse(a,b) AS a+b
+
+# TODO: uncomment when macro parameters are pushed as a projection
+#query T
+#SELECT IFELSE(1, 'random', RANDOM())
+#----
+#random
+
+# macro in a different schema
+statement ok
+CREATE SCHEMA macros
+
+statement ok
+CREATE MACRO macros.add(a, b) AS a + b
+
+query T
+SELECT macros.add(40,2)
+----
+42
+
+# conflicting parameter names in macro definition
+statement error
+CREATE MACRO conflict(i, i) AS i + 1
+
+# aggregation macro's
+statement ok
+CREATE MACRO myavg(x) AS SUM(x) / COUNT(x)
+
+statement ok
+INSERT INTO integers VALUES (21), (41);
+
+# TODO: uncomment when macro parameters are pushed as a projection
+#query T
+#SELECT myavg(a) FROM integers
+#----
+#21
+
+statement ok
+CREATE MACRO weird_avg(x) AS (MIN(x) + MAX(x)) / COUNT(x)
+
+# TODO: uncomment when macro parameters are pushed as a projection
+#query T
+#SELECT weird_avg(a) FROM integers
+#----
+#14
+
+statement error
+CREATE MACRO star() AS *

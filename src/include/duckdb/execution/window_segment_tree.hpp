@@ -18,6 +18,8 @@ class WindowSegmentTree {
 public:
 	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
 	                  ChunkCollection *input);
+	~WindowSegmentTree();
+
 	Value Compute(idx_t start, idx_t end);
 
 private:
@@ -26,15 +28,29 @@ private:
 	void AggregateInit();
 	Value AggegateFinal();
 
+	//! The aggregate that the window function is computed over
 	AggregateFunction aggregate;
+	//! The bind info of the aggregate
 	FunctionData *bind_info;
-	vector<data_t> state;
-	DataChunk inputs;
-	Vector statep;
+	//! The result type of the window function
 	LogicalType result_type;
+
+	//! Data pointer that contains a single state, used for intermediate window segment aggregation
+	vector<data_t> state;
+	//! Input data chunk, used for intermediate window segment aggregation
+	DataChunk inputs;
+	//! A vector of pointers to "state", used for intermediate window segment aggregation
+	Vector statep;
+
+	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	unique_ptr<data_t[]> levels_flat_native;
+	//! For each level, the starting location in the levels_flat_native array
 	vector<idx_t> levels_flat_start;
 
+	//! The total number of internal nodes of the tree, stored in levels_flat_native
+	idx_t internal_nodes;
+
+	//! The (sorted) input chunk collection on which the tree is built
 	ChunkCollection *input_ref;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE

@@ -74,6 +74,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::SEQUENCE_ENTRY:
 		log->WriteCreateSequence((SequenceCatalogEntry *)parent);
 		break;
+	case CatalogType::MACRO_ENTRY:
+		log->WriteCreateMacro((MacroCatalogEntry *)parent);
+		break;
 	case CatalogType::DELETED_ENTRY:
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			log->WriteDropTable((TableCatalogEntry *)entry);
@@ -83,6 +86,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropView((ViewCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::SEQUENCE_ENTRY) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::MACRO_ENTRY) {
+			log->WriteDropMacro((MacroCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
 			// do nothing, prepared statements aren't persisted to disk
 		} else {

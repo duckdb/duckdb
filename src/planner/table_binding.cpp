@@ -97,4 +97,32 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
+MacroBinding::MacroBinding(vector<LogicalType> types_, vector<string> names_, string macro_name_)
+    : Binding("0_macro_parameters", move(types_), move(names_), -1), macro_name(macro_name_) {
+}
+
+BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
+	auto entry = name_map.find(colref.column_name);
+	if (entry == name_map.end()) {
+		return BindResult(
+		    StringUtil::Format("Macro \"%s\" does not have a parameter named \"%s\"", macro_name, colref.column_name));
+	}
+	ColumnBinding binding;
+	binding.table_index = index;
+	binding.column_index = entry->second;
+
+	// we are binding a parameter to create the macro, no arguments are supplied
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), LogicalType::SQLNULL, binding, depth));
+}
+
+unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {
+	auto entry = name_map.find(colref.column_name);
+	if (entry == name_map.end()) {
+		throw BinderException("Macro \"%s\" does not have a parameter named \"%s\"", macro_name, colref.column_name);
+	}
+	auto arg = arguments[entry->second]->Copy();
+	arg->alias = colref.alias;
+	return arg;
+}
+
 } // namespace duckdb

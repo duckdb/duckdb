@@ -22,6 +22,11 @@ namespace duckdb {
 static int64_t BindConstant(Binder &binder, ClientContext &context, string clause, unique_ptr<ParsedExpression> &expr) {
 	ConstantBinder constant_binder(binder, context, clause);
 	auto bound_expr = constant_binder.Bind(expr);
+	if (!bound_expr->IsFoldable()) {
+		throw BinderException(
+		    "cannot use the expression \"%s\" in a %s, the expression has side-effects and is not foldable",
+		    bound_expr->ToString(), clause);
+	}
 	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr).CastAs(LogicalType::BIGINT);
 	int64_t limit_value = value.GetValue<int64_t>();
 	if (limit_value < 0) {

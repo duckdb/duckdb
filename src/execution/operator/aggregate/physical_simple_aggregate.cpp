@@ -46,10 +46,6 @@ struct AggregateState {
 		other.aggregates = move(aggregates);
 		other.destructors = move(destructors);
 	}
-	void Clear() {
-		aggregates.clear();
-		destructors.clear();
-	}
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;
@@ -151,7 +147,6 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 
 			aggregate.function.combine(source_state, dest_state, 1);
 		}
-		source.state.Clear();
 	} else {
 		// complex aggregates: this is necessarily a non-parallel aggregate
 		// simply move over the source state into the global state
@@ -177,6 +172,17 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 		aggregate.function.finalize(state_vector, aggregate.bind_info.get(), chunk.data[aggr_idx], 1);
 	}
 	state->finished = true;
+}
+
+string PhysicalSimpleAggregate::ParamsToString() const {
+	string result;
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		if (i > 0) {
+			result += "\n";
+		}
+		result += aggregates[i]->GetName();
+	}
+	return result;
 }
 
 } // namespace duckdb

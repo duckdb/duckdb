@@ -30,7 +30,7 @@ static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
-	       op->type == LogicalOperatorType::LOGICAL_INTERSECT);
+	         op->type == LogicalOperatorType::LOGICAL_INTERSECT);
 	auto &setop = (LogicalSetOperation &)*op;
 
 	D_ASSERT(op->children.size() == 2);

@@ -71,7 +71,8 @@ public:
 	                                                              bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {
-		return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency;
+		return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency &&
+		       statistics == rhs.statistics;
 	}
 	bool operator!=(const ScalarFunction &rhs) const {
 		return !(*this == rhs);
