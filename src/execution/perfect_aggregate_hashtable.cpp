@@ -172,8 +172,6 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 		target_ptr += tuple_size;
 	}
 	Combine(source_addresses, target_addresses, combine_count);
-	// disable finalizers in the other HT
-	other.total_groups = 0;
 }
 
 template<class T>
