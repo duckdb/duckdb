@@ -14,12 +14,12 @@ namespace duckdb {
 using namespace std;
 
 static uint32_t RequiredBitsForValue(uint32_t n) {
-	n |= (n >> 1);
-	n |= (n >> 2);
-	n |= (n >> 4);
-	n |= (n >> 8);
-	n |= (n >> 16);
-	return n - (n >> 1);
+	idx_t required_bits = 0;
+	while(n > 0) {
+		n >>= 1;
+		required_bits++;
+	}
+	return required_bits;
 }
 
 static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate &op, vector<idx_t> &bits_per_group) {
