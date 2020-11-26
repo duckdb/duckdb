@@ -70,6 +70,9 @@ template <class T> struct QuantileOperation {
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (source.pos == 0) {
+			return;
+		}
 		resize_state(target, target->pos + source.pos);
 		memcpy(target->v + target->pos * sizeof(T), source.v, source.pos * sizeof(T));
 		target->pos += source.pos;
