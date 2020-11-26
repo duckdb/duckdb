@@ -74,17 +74,19 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	// create macro binding in order to bind the function
 	vector<LogicalType> dummy_types;
 	vector<string> dummy_names;
+	// positional parameters
 	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
-		if (base.function->parameters[i]->expression_class != ExpressionClass::COLUMN_REF) {
-			throw BinderException("Invalid parameter \"%s\"", base.function->parameters[i]->ToString());
-		}
-
 		auto param = (ColumnRefExpression &)*base.function->parameters[i];
 		if (!param.table_name.empty()) {
-			throw BinderException("Invalid parameter \"%s\"", param.ToString());
+			throw BinderException("Invalid parameter name '%s'", param.ToString());
 		}
 		dummy_types.push_back(LogicalType::SQLNULL);
 		dummy_names.push_back(param.column_name);
+	}
+	// default parameters
+	for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {
+		dummy_types.push_back(LogicalType::SQLNULL);
+		dummy_names.push_back(it->first);
 	}
 	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
