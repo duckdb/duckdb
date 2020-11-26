@@ -106,7 +106,6 @@ struct StringAggSingleFunction : public StringAggBaseFunction {
 			return;
 		}
 		PerformOperation(target, string_t(source.dataptr, source.size));
-		Destroy(&source);
 	}
 };
 

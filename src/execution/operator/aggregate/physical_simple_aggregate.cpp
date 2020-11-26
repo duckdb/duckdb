@@ -151,7 +151,6 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 
 			aggregate.function.combine(source_state, dest_state, 1);
 		}
-		source.state.Clear();
 	} else {
 		// complex aggregates: this is necessarily a non-parallel aggregate
 		// simply move over the source state into the global state

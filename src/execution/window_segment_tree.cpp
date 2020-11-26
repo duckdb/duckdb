@@ -10,12 +10,11 @@ using namespace std;
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
                                      ChunkCollection *input)
-    : aggregate(aggregate), bind_info(bind_info), state(aggregate.state_size()), statep(LogicalTypeId::POINTER),
-      result_type(result_type), input_ref(input) {
+    : aggregate(aggregate), bind_info(bind_info), result_type(result_type),
+      state(aggregate.state_size()), internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
-
 	Value ptr_val = Value::POINTER((idx_t)state.data());
 	statep.Reference(ptr_val);
 	statep.Normalify(STANDARD_VECTOR_SIZE);
@@ -25,6 +24,27 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 		if (aggregate.combine) {
 			ConstructTree();
 		}
+	}
+}
+
+WindowSegmentTree::~WindowSegmentTree() {
+	if (!aggregate.destructor) {
+		// nothing to destroy
+		return;
+	}
+	// call the destructor for all the intermediate states
+	uint64_t address_data[STANDARD_VECTOR_SIZE];
+	Vector addresses(LogicalType::POINTER, (data_ptr_t) address_data);
+	idx_t count = 0;
+	for(idx_t i = 0; i < internal_nodes; i++) {
+		address_data[count++] = uint64_t(levels_flat_native.get() + i * state.size());
+		if (count == STANDARD_VECTOR_SIZE) {
+			aggregate.destructor(addresses, count);
+			count = 0;
+		}
+	}
+	if (count > 0) {
+		aggregate.destructor(addresses, count);
 	}
 }
 
@@ -39,6 +59,9 @@ Value WindowSegmentTree::AggegateFinal() {
 	ConstantVector::SetNull(result, false);
 	aggregate.finalize(statev, bind_info, result, 1);
 
+	if (aggregate.destructor) {
+		aggregate.destructor(statev, 1);
+	}
 	return result.GetValue(0);
 }
 
@@ -50,9 +73,9 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	inputs.Reset();
 	inputs.SetCardinality(end - begin);
 
-	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	Vector s;
 	s.Slice(statep, 0);
+	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	if (l_idx == 0) {
 		const auto input_count = input_ref->ColumnCount();
 		if (start_in_vector + inputs.size() < STANDARD_VECTOR_SIZE) {
@@ -96,10 +119,10 @@ void WindowSegmentTree::ConstructTree() {
 	D_ASSERT(inputs.ColumnCount() > 0);
 
 	// compute space required to store internal nodes of segment tree
-	idx_t internal_nodes = 0;
+	internal_nodes = 0;
 	idx_t level_nodes = input_ref->Count();
 	do {
-		level_nodes = (idx_t)ceil((double)level_nodes / TREE_FANOUT);
+		level_nodes = (level_nodes + (TREE_FANOUT - 1)) / TREE_FANOUT;
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
 	levels_flat_native = unique_ptr<data_t[]>(new data_t[internal_nodes * state.size()]);
@@ -109,9 +132,11 @@ void WindowSegmentTree::ConstructTree() {
 	idx_t level_current = 0;
 	// level 0 is data itself
 	idx_t level_size;
+	// iterate over the levels of the segment tree
 	while ((level_size = (level_current == 0 ? input_ref->Count()
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
+			// compute the aggregate for this entry in the segment tree
 			AggregateInit();
 			WindowSegmentValue(level_current, pos, min(level_size, pos + TREE_FANOUT));
 
@@ -138,6 +163,9 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 	// Aggregate everything at once if we can't combine states
 	if (!aggregate.combine) {
 		WindowSegmentValue(0, begin, end);
+		if (end - begin >= STANDARD_VECTOR_SIZE) {
+			throw InternalException("Cannot compute window aggregation: bounds are too large for non-combinable aggregate");
+		}
 		return AggegateFinal();
 	}
 
