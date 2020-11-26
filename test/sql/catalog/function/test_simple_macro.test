@@ -181,35 +181,6 @@ CREATE MACRO wrong_order(a, b=3, c)
 statement error
 CREATE MACRO wrong_order(a=3, b)
 
-statement ok
-CREATE MACRO select_plus_floats(a, f=b) AS (SELECT a + f FROM floats)
-
-query T
-SELECT (select_plus_floats(5))
-----
-5.5
-
-query T
-SELECT (select_plus_floats(5, f=0.7))
-----
-5.7
-
-# wrong default arguments cannot be detected at macro creation time ('c' is not a column of 'floats')
-statement ok
-CREATE MACRO select_plus_floats_wrong(a, f=c) AS (SELECT a + f FROM floats)
-
-# it errors when the macro is called obviously
+# only constant default values are allowed
 statement error
-SELECT select_plus_floats_wrong(5)
-
-statement ok
-CREATE TABLE table_with_c (c INT)
-
-statement ok
-INSERT INTO table_with_c VALUES (10)
-
-# however, if we add a correlated subquery that provides a 'c' column, it works (confusing edge case)
-query T
-SELECT select_plus_floats_wrong(5) FROM table_with_c
-----
-15
+CREATE MACRO select_plus_floats(a, f=b) AS (SELECT a + f FROM floats)
