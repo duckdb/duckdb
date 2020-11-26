@@ -1,0 +1,21 @@
+# name: test/sql/types/list/array_agg.test
+# description: Test lists with aggregations
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+select min(i::varchar), max(i::varchar) from range(10) tbl(i);
+----
+0	9
+
+query II
+select min(list_value(i)), max(list_value(i)) from range(10) tbl(i);
+----
+[0]	[9]
+
+query I
+select string_agg(list_value(i), ',') from range(10) tbl(i);
+----
+[0],[1],[2],[3],[4],[5],[6],[7],[8],[9]

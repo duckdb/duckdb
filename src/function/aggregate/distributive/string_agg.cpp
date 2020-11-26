@@ -46,7 +46,7 @@ struct StringAggBaseFunction {
 			// first iteration: allocate space for the string and copy it into the state
 			state->alloc_size = MaxValue<idx_t>(8, NextPowerOfTwo(str_size));
 			state->dataptr = new char[state->alloc_size];
-			state->size = str_size - 1;
+			state->size = str_size;
 			memcpy(state->dataptr, str, str_size);
 		} else {
 			// subsequent iteration: first check if we have space to place the string and separator
@@ -66,16 +66,16 @@ struct StringAggBaseFunction {
 			state->size += sep_size;
 			// copy the string
 			memcpy(state->dataptr + state->size, str, str_size);
-			state->size += str_size - 1;
+			state->size += str_size;
 		}
 	}
 
 	static inline void PerformOperation(string_agg_state_t *state, string_t str, string_t sep) {
-		PerformOperation(state, str.GetDataUnsafe(), sep.GetDataUnsafe(), str.GetSize() + 1, sep.GetSize());
+		PerformOperation(state, str.GetDataUnsafe(), sep.GetDataUnsafe(), str.GetSize(), sep.GetSize());
 	}
 
 	static inline void PerformOperation(string_agg_state_t *state, string_t str) {
-		PerformOperation(state, str.GetDataUnsafe(), ",", str.GetSize() + 1, 1);
+		PerformOperation(state, str.GetDataUnsafe(), ",", str.GetSize(), 1);
 	}
 };
 
