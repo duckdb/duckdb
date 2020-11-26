@@ -16,7 +16,7 @@ namespace duckdb {
 class LogicalLimit : public LogicalOperator {
 public:
 	LogicalLimit(int64_t limit, int64_t offset)
-	    : LogicalOperator(LogicalOperatorType::LIMIT), limit(limit), offset(offset) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit(limit), offset(offset) {
 	}
 
 	//! The maximum amount of elements to emit

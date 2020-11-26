@@ -7,7 +7,8 @@ ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string cl
     : ExpressionBinder(binder, context), clause(clause) {
 }
 
-BindResult ConstantBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
+BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
 		return BindResult(clause + " cannot contain column names");
@@ -18,7 +19,7 @@ BindResult ConstantBinder::BindExpression(ParsedExpression &expr, idx_t depth, b
 	case ExpressionClass::WINDOW:
 		return BindResult(clause + " cannot contain window functions!");
 	default:
-		return ExpressionBinder::BindExpression(expr, depth);
+		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
 }
 

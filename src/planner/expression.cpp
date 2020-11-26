@@ -3,12 +3,16 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 using namespace std;
 
 Expression::Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type)
     : BaseExpression(type, expression_class), return_type(move(return_type)) {
+}
+
+Expression::~Expression() {
 }
 
 bool Expression::IsAggregate() const {
@@ -31,6 +35,16 @@ bool Expression::IsScalar() const {
 		}
 	});
 	return is_scalar;
+}
+
+bool Expression::HasSideEffects() const {
+	bool has_side_effects = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (child.HasSideEffects()) {
+			has_side_effects = true;
+		}
+	});
+	return has_side_effects;
 }
 
 bool Expression::IsFoldable() const {

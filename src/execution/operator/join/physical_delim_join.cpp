@@ -22,7 +22,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
                                      vector<PhysicalOperator *> delim_scans)
     : PhysicalSink(PhysicalOperatorType::DELIM_JOIN, move(types)), join(move(original_join)),
       delim_scans(move(delim_scans)) {
-	assert(join->children.size() == 2);
+	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
 	children.push_back(move(join->children[0]));
@@ -36,11 +36,11 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 class DelimJoinGlobalState : public GlobalOperatorState {
 public:
 	DelimJoinGlobalState(PhysicalDelimJoin *delim_join) {
-		assert(delim_join->delim_scans.size() > 0);
+		D_ASSERT(delim_join->delim_scans.size() > 0);
 		// for any duplicate eliminated scans in the RHS, point them to the duplicate eliminated chunk that we create
 		// here
 		for (auto op : delim_join->delim_scans) {
-			assert(op->type == PhysicalOperatorType::DELIM_SCAN);
+			D_ASSERT(op->type == PhysicalOperatorType::DELIM_SCAN);
 			auto scan = (PhysicalChunkScan *)op;
 			scan->collection = &delim_data;
 		}

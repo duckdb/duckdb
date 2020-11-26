@@ -26,11 +26,11 @@ public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromString(string str, bool strict = false);
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
-	static date_t FromCString(const char *str, bool strict = false);
+	static date_t FromCString(const char *str, idx_t len, bool strict = false);
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	static string ToString(date_t date);
 	//! Try to convert text in a buffer to a date; returns true if parsing was successful
-	static bool TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool strict = false);
+	static bool TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool strict = false);
 
 	//! Create a string "YYYY-MM-DD" from a specified (year, month, day)
 	//! combination
@@ -60,6 +60,9 @@ public:
 
 	//! Extract year of a date entry
 	static int32_t ExtractYear(date_t date);
+	//! Extract year of a date entry, but optimized to first try the last year found
+	static int32_t ExtractYear(date_t date, int32_t *last_year);
+	static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
 	//! Extract month of a date entry
 	static int32_t ExtractMonth(date_t date);
 	//! Extract day of a date entry

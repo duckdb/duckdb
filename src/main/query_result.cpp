@@ -12,7 +12,7 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
                          vector<string> names)
     : type(type), statement_type(statement_type), types(move(types)), names(move(names)), success(true) {
-	assert(types.size() == names.size());
+	D_ASSERT(types.size() == names.size());
 }
 
 QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(error) {
@@ -45,8 +45,8 @@ bool QueryResult::Equals(QueryResult &other) {
 		if (lchunk->size() != rchunk->size()) {
 			return false;
 		}
-		assert(lchunk->column_count() == rchunk->column_count());
-		for (idx_t col = 0; col < rchunk->column_count(); col++) {
+		D_ASSERT(lchunk->ColumnCount() == rchunk->ColumnCount());
+		for (idx_t col = 0; col < rchunk->ColumnCount(); col++) {
 			for (idx_t row = 0; row < rchunk->size(); row++) {
 				auto lvalue = lchunk->GetValue(col, row);
 				auto rvalue = rchunk->GetValue(col, row);
@@ -92,24 +92,24 @@ static void release_duckdb_arrow_schema(ArrowSchema *schema) {
 }
 
 void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
-	assert(out_schema);
+	D_ASSERT(out_schema);
 
 	auto root_holder = new DuckDBArrowSchemaHolder();
 
-	root_holder->children = unique_ptr<ArrowSchema *[]>(new ArrowSchema *[column_count()]);
+	root_holder->children = unique_ptr<ArrowSchema *[]>(new ArrowSchema *[ColumnCount()]);
 	out_schema->private_data = root_holder;
 	out_schema->release = release_duckdb_arrow_schema;
 
 	out_schema->children = root_holder->children.get();
 
 	out_schema->format = "+s"; // struct apparently
-	out_schema->n_children = column_count();
+	out_schema->n_children = ColumnCount();
 	out_schema->flags = 0;
 	out_schema->metadata = nullptr;
 	out_schema->name = "duckdb_query_result";
 	out_schema->dictionary = nullptr;
 
-	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 		auto holder = new DuckDBArrowSchemaHolder();
 		auto &child = holder->schema;
 		child.private_data = holder;

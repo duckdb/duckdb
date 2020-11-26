@@ -99,7 +99,6 @@ template class std::unique_ptr<BoundParameterExpression>;
 template class std::unique_ptr<BoundReferenceExpression>;
 template class std::unique_ptr<BoundSubqueryExpression>;
 template class std::unique_ptr<BoundWindowExpression>;
-template class std::unique_ptr<CommonSubExpression>;
 
 template class std::unique_ptr<CatalogEntry>;
 template class std::unique_ptr<BindContext>;

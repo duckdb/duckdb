@@ -242,14 +242,14 @@ public:
 			idx_t result_idx = sel->get_index(i);
 			idx_t lidx = LEFT_CONSTANT ? 0 : i;
 			idx_t ridx = RIGHT_CONSTANT ? 0 : i;
-			if ((NO_NULL || !nullmask[i]) && OP::Operation(ldata[lidx], rdata[ridx])) {
-				if (HAS_TRUE_SEL) {
-					true_sel->set_index(true_count++, result_idx);
-				}
-			} else {
-				if (HAS_FALSE_SEL) {
-					false_sel->set_index(false_count++, result_idx);
-				}
+			bool comparison_result = (NO_NULL || !nullmask[i]) && OP::Operation(ldata[lidx], rdata[ridx]);
+			if (HAS_TRUE_SEL) {
+				true_sel->set_index(true_count, result_idx);
+				true_count += comparison_result;
+			}
+			if (HAS_FALSE_SEL) {
+				false_sel->set_index(false_count, result_idx);
+				false_count += !comparison_result;
 			}
 		}
 		if (HAS_TRUE_SEL) {
@@ -270,7 +270,7 @@ public:
 			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL, true, false>(
 			    ldata, rdata, sel, count, nullmask, true_sel, false_sel);
 		} else {
-			assert(false_sel);
+			D_ASSERT(false_sel);
 			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL, false, true>(
 			    ldata, rdata, sel, count, nullmask, true_sel, false_sel);
 		}
@@ -356,7 +356,7 @@ public:
 			return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP, NO_NULL, true, false>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lnullmask, rnullmask, true_sel, false_sel);
 		} else {
-			assert(false_sel);
+			D_ASSERT(false_sel);
 			return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP, NO_NULL, false, true>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lnullmask, rnullmask, true_sel, false_sel);
 		}

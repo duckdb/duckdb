@@ -141,8 +141,8 @@ template <typename TYPE> static void udf_unary_function(DataChunk &input, Expres
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetData();
-			memcpy(target_data, ldata[i].GetData(), input_length);
+			auto target_data = target.GetDataWriteable();
+			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}
@@ -180,8 +180,8 @@ template <typename TYPE> static void udf_binary_function(DataChunk &input, Expre
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetData();
-			memcpy(target_data, ldata[i].GetData(), input_length);
+			auto target_data = target.GetDataWriteable();
+			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}
@@ -219,8 +219,8 @@ template <typename TYPE> static void udf_ternary_function(DataChunk &input, Expr
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetData();
-			memcpy(target_data, ldata[i].GetData(), input_length);
+			auto target_data = target.GetDataWriteable();
+			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}
@@ -263,7 +263,7 @@ static void udf_several_constant_input(DataChunk &input, ExpressionState &state,
 template <typename TYPE> static void udf_max_constant(DataChunk &args, ExpressionState &state, Vector &result) {
 	TYPE max = 0;
 	result.vector_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		auto &input = args.data[col_idx];
 		if (ConstantVector::IsNull(input)) {
 			// constant null, skip
@@ -282,7 +282,7 @@ template <typename TYPE> static void udf_max_constant(DataChunk &args, Expressio
  * Vectorized MAX function with varargs and input columns
  */
 template <typename TYPE> static void udf_max_flat(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(TypeIsNumeric(GetTypeId<TYPE>()));
+	D_ASSERT(TypeIsNumeric(GetTypeId<TYPE>()));
 
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<TYPE>(result);
@@ -290,9 +290,9 @@ template <typename TYPE> static void udf_max_flat(DataChunk &args, ExpressionSta
 	// Initialize the result vector with the minimum value from TYPE.
 	memset(result_data, std::numeric_limits<TYPE>::min(), args.size() * sizeof(TYPE));
 
-	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		auto &input = args.data[col_idx];
-		assert((GetTypeId<TYPE>()) == input.type.InternalType());
+		D_ASSERT((GetTypeId<TYPE>()) == input.type.InternalType());
 		auto input_data = FlatVector::GetData<TYPE>(input);
 		for (idx_t i = 0; i < args.size(); ++i) {
 			if (result_data[i] < input_data[i]) {
@@ -334,7 +334,8 @@ struct UDFAverageFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	                     idx_t idx) {
 		if (!Value::DoubleIsValid(state->sum)) {
 			throw OutOfRangeException("AVG is out of range!");
 		} else if (state->count == 0) {
@@ -414,7 +415,8 @@ struct UDFCovarOperation {
 
 struct UDFCovarPopOperation : public UDFCovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	                     idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -454,7 +456,7 @@ struct UDFSum {
 
 	template <class STATE_TYPE, class INPUT_TYPE>
 	static void Update(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
-		assert(input_count == 1);
+		D_ASSERT(input_count == 1);
 
 		if (inputs[0].vector_type == VectorType::CONSTANT_VECTOR && states.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(inputs[0])) {
@@ -489,7 +491,7 @@ struct UDFSum {
 
 	template <class STATE_TYPE, class INPUT_TYPE>
 	static void SimpleUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
-		assert(input_count == 1);
+		D_ASSERT(input_count == 1);
 		switch (inputs[0].vector_type) {
 		case VectorType::CONSTANT_VECTOR: {
 			if (ConstantVector::IsNull(inputs[0])) {
@@ -524,7 +526,7 @@ struct UDFSum {
 	}
 
 	template <class STATE_TYPE> static void Combine(Vector &source, Vector &target, idx_t count) {
-		assert(source.type.id() == LogicalTypeId::POINTER && target.type.id() == LogicalTypeId::POINTER);
+		D_ASSERT(source.type.id() == LogicalTypeId::POINTER && target.type.id() == LogicalTypeId::POINTER);
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 		// OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i]);
@@ -543,7 +545,8 @@ struct UDFSum {
 		}
 	}
 
-	template <class STATE_TYPE, class RESULT_TYPE> static void Finalize(Vector &states, Vector &result, idx_t count) {
+	template <class STATE_TYPE, class RESULT_TYPE>
+	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
 		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
 			result.vector_type = VectorType::CONSTANT_VECTOR;
 
@@ -551,7 +554,7 @@ struct UDFSum {
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 			UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, *sdata, rdata, ConstantVector::Nullmask(result), 0);
 		} else {
-			assert(states.vector_type == VectorType::FLAT_VECTOR);
+			D_ASSERT(states.vector_type == VectorType::FLAT_VECTOR);
 			result.vector_type = VectorType::FLAT_VECTOR;
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);

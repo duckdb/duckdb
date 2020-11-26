@@ -22,13 +22,14 @@ class BufferManager;
 class BufferHandle;
 
 struct AggregateObject {
-	AggregateObject(AggregateFunction function, idx_t child_count, idx_t payload_size, bool distinct,
-	                PhysicalType return_type)
-	    : function(move(function)), child_count(child_count), payload_size(payload_size), distinct(distinct),
-	      return_type(return_type) {
+	AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count, idx_t payload_size,
+	                bool distinct, PhysicalType return_type)
+	    : function(move(function)), bind_data(bind_data), child_count(child_count), payload_size(payload_size),
+	      distinct(distinct), return_type(return_type) {
 	}
 
 	AggregateFunction function;
+	FunctionData *bind_data;
 	idx_t child_count;
 	idx_t payload_size;
 	bool distinct;

@@ -79,6 +79,8 @@ private:
 	unique_ptr<CreateStatement> TransformCreateView(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGIndexStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateIndex(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres T_PGCreateFunctionStmt node into CreateStatement
+	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGDropStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDrop(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres T_PGInsertStmt node into a InsertStatement
@@ -167,8 +169,8 @@ private:
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, SelectStatement &select);
-	unique_ptr<QueryNode> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
-	                                            CommonTableExpressionInfo &info);
+	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
+	                                                  CommonTableExpressionInfo &info);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
 

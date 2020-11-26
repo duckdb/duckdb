@@ -23,7 +23,7 @@ struct Cast {
 
 struct TryCast {
 	template <class SRC, class DST> static inline bool Operation(SRC input, DST &target, bool strict = false) {
-		target = Cast::Operation(input);
+		target = Cast::Operation<SRC, DST>(input);
 		return true;
 	}
 };
@@ -398,9 +398,6 @@ struct CastFromBlob {
 	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
 		throw duckdb::NotImplementedException("Cast from blob could not be performed!");
 	}
-
-	static void ToHexString(duckdb::string_t input, duckdb::string_t &output);
-	static void FromHexToBytes(duckdb::string_t input, duckdb::string_t &output);
 };
 template <> duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
 

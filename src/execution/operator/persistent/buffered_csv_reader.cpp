@@ -10,6 +10,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/numeric_helper.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -25,26 +26,13 @@ static char is_newline(char c) {
 	return c == '\n' || c == '\r';
 }
 
-// Helper function to generate column names
-static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string prefix = "column") {
-	uint8_t max_digits = total_cols > 10 ? (int)log10((double)total_cols - 1) + 1 : 1;
-	uint8_t digits = col_number >= 10 ? (int)log10((double)col_number) + 1 : 1;
-	string leading_zeros = string("0", max_digits - digits);
-	string value = std::to_string(col_number);
-	return string(prefix + leading_zeros + value);
-}
-
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
 	return std::to_string(linenr + 1) + estimated;
 }
 
-static bool is_digit(char c) {
-	return std::isdigit(c);
-}
-
 static bool StartsWithNumericDate(string &separator, const string_t &value) {
-	auto begin = value.GetData();
+	auto begin = value.GetDataUnsafe();
 	auto end = begin + value.GetSize();
 
 	//	StrpTimeFormat::Parse will skip whitespace, so we can too
@@ -54,26 +42,26 @@ static bool StartsWithNumericDate(string &separator, const string_t &value) {
 	}
 
 	//	first numeric field must start immediately
-	if (!std::isdigit(*field1)) {
+	if (!StringUtil::CharacterIsDigit(*field1)) {
 		return false;
 	}
-	auto literal1 = std::find_if_not(field1, end, is_digit);
+	auto literal1 = std::find_if_not(field1, end, StringUtil::CharacterIsDigit);
 	if (literal1 == end) {
 		return false;
 	}
 
 	//	second numeric field must exist
-	auto field2 = std::find_if(literal1, end, is_digit);
+	auto field2 = std::find_if(literal1, end, StringUtil::CharacterIsDigit);
 	if (field2 == end) {
 		return false;
 	}
-	auto literal2 = std::find_if_not(field2, end, is_digit);
+	auto literal2 = std::find_if_not(field2, end, StringUtil::CharacterIsDigit);
 	if (literal2 == end) {
 		return false;
 	}
 
 	//	third numeric field must exist
-	auto field3 = std::find_if(literal2, end, is_digit);
+	auto field3 = std::find_if(literal2, end, StringUtil::CharacterIsDigit);
 	if (field3 == end) {
 		return false;
 	}
@@ -155,30 +143,22 @@ BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options, vector<Lo
 void BufferedCSVReader::Initialize(vector<LogicalType> requested_types) {
 	if (options.auto_detect) {
 		sql_types = SniffCSV(requested_types);
+		if (cached_chunks.size() == 0) {
+			JumpToBeginning(options.skip_rows, options.header);
+		}
 	} else {
 		sql_types = requested_types;
+		JumpToBeginning(options.skip_rows, options.header);
 	}
 
 	PrepareComplexParser();
 	InitParseChunk(sql_types.size());
-	SkipHeader(options.skip_rows, options.header);
 }
 
 void BufferedCSVReader::PrepareComplexParser() {
 	delimiter_search = TextSearchShiftArray(options.delimiter);
 	escape_search = TextSearchShiftArray(options.escape);
 	quote_search = TextSearchShiftArray(options.quote);
-}
-
-void BufferedCSVReader::ConfigureSampling() {
-	if (options.sample_size > STANDARD_VECTOR_SIZE) {
-		throw InvalidInputException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)",
-		                            options.sample_size, STANDARD_VECTOR_SIZE);
-	} else if (options.sample_size < 1) {
-		throw InvalidInputException("Chunk size cannot be smaller than 1.");
-	}
-	SAMPLE_CHUNK_SIZE = options.sample_size;
-	MAX_SAMPLE_CHUNKS = options.num_samples;
 }
 
 unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
@@ -205,7 +185,7 @@ unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedC
 	return result;
 }
 
-void BufferedCSVReader::SkipHeader(idx_t skip_rows, bool skip_header) {
+void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
 	for (idx_t i = 0; i < skip_rows; i++) {
 		// ignore skip rows
 		string read_line;
@@ -215,10 +195,18 @@ void BufferedCSVReader::SkipHeader(idx_t skip_rows, bool skip_header) {
 
 	if (skip_header) {
 		// ignore the first line as a header line
-		string read_line;
-		getline(*source, read_line);
-		linenr++;
+		InitParseChunk(sql_types.size());
+		ParseCSV(ParserMode::PARSING_HEADER);
 	}
+}
+
+// Helper function to generate column names
+static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string prefix = "column") {
+	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
+	int digits = NumericHelper::UnsignedLength(col_number);
+	string leading_zeros = string("0", max_digits - digits);
+	string value = std::to_string(col_number);
+	return string(prefix + leading_zeros + value);
 }
 
 void BufferedCSVReader::ResetBuffer() {
@@ -245,18 +233,14 @@ void BufferedCSVReader::ResetStream() {
 	jumping_samples = false;
 }
 
-void BufferedCSVReader::ResetParseChunk() {
-	bytes_in_chunk = 0;
-	parse_chunk.Reset();
-}
-
 void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
+	bytes_in_chunk = 0;
+
 	// adapt not null info
 	if (options.force_not_null.size() != num_cols) {
 		options.force_not_null.resize(num_cols, false);
 	}
 
-	// destroy previous chunk
 	parse_chunk.Destroy();
 
 	// initialize the parse_chunk with a set of VARCHAR types
@@ -264,43 +248,50 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 	parse_chunk.Initialize(varchar_types);
 }
 
-void BufferedCSVReader::JumpToBeginning(idx_t skip_rows, bool skip_header) {
+void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
 	ResetBuffer();
 	ResetStream();
-	ResetParseChunk();
-	SkipHeader(skip_rows, skip_header);
+	SkipRowsAndReadHeader(skip_rows, skip_header);
+	sample_chunk_idx = 0;
 }
 
 bool BufferedCSVReader::JumpToNextSample() {
-	if (end_of_file_reached || sample_chunk_idx >= MAX_SAMPLE_CHUNKS) {
-		return false;
-	}
-
-	// adjust the value of bytes_in_chunk, based on current state of the buffer
+	// get bytes contained in the previously read chunk
 	idx_t remaining_bytes_in_buffer = buffer_size - start;
 	bytes_in_chunk -= remaining_bytes_in_buffer;
-
-	// update average bytes per line
-	double bytes_per_line = bytes_in_chunk / (double)SAMPLE_CHUNK_SIZE;
-	bytes_per_line_avg = ((bytes_per_line_avg * sample_chunk_idx) + bytes_per_line) / (sample_chunk_idx + 1);
+	if (remaining_bytes_in_buffer == 0) {
+		return false;
+	}
 
 	// assess if it makes sense to jump, based on size of the first chunk relative to size of the entire file
 	if (sample_chunk_idx == 0) {
 		idx_t bytes_first_chunk = bytes_in_chunk;
 		double chunks_fit = (file_size / (double)bytes_first_chunk);
-		jumping_samples = chunks_fit >= (MAX_SAMPLE_CHUNKS - 1);
+		jumping_samples = chunks_fit >= options.sample_chunks;
+
+		// jump back to the beginning
+		JumpToBeginning(options.skip_rows, options.header);
+		sample_chunk_idx++;
+		return true;
+	}
+
+	if (end_of_file_reached || sample_chunk_idx >= options.sample_chunks) {
+		return false;
 	}
 
 	// if we deal with any other sources than plaintext files, jumping_samples can be tricky. In that case
 	// we just read x continuous chunks from the stream TODO: make jumps possible for zipfiles.
 	if (!plain_file_source || !jumping_samples) {
 		sample_chunk_idx++;
-		ResetParseChunk();
 		return true;
 	}
 
+	// update average bytes per line
+	double bytes_per_line = bytes_in_chunk / (double)options.sample_chunk_size;
+	bytes_per_line_avg = ((bytes_per_line_avg * (sample_chunk_idx)) + bytes_per_line) / (sample_chunk_idx + 1);
+
 	// if none of the previous conditions were met, we can jump
-	idx_t partition_size = (idx_t)round(file_size / (double)MAX_SAMPLE_CHUNKS);
+	idx_t partition_size = (idx_t)round(file_size / (double)options.sample_chunks);
 
 	// calculate offset to end of the current partition
 	int64_t offset = partition_size - bytes_in_chunk - remaining_bytes_in_buffer;
@@ -325,9 +316,8 @@ bool BufferedCSVReader::JumpToNextSample() {
 		linenr_estimated = true;
 	}
 
-	// reset buffers and internal positions
+	// reset buffers and parse chunk
 	ResetBuffer();
-	ResetParseChunk();
 
 	// seek beginning of next line
 	// FIXME: if this jump ends up in a quoted linebreak, we will have a problem
@@ -411,15 +401,17 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			return requested_types;
 		}
 	}
-	ConfigureSampling();
-	PrepareCandidateSets();
 
+	// #######
+	// ### dialect detection
+	// #######
+
+	PrepareCandidateSets();
 	BufferedCSVReaderOptions original_options = options;
 	vector<BufferedCSVReaderOptions> info_candidates;
 	idx_t best_consistent_rows = 0;
 	idx_t best_num_cols = 0;
 
-	JumpToBeginning(0, false);
 	for (QuoteRule quoterule : quoterule_candidates) {
 		vector<string> quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
@@ -434,8 +426,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					options = sniff_info;
 					PrepareComplexParser();
 
-					ResetBuffer();
-					ResetStream();
+					JumpToBeginning();
 					sniffed_column_counts.clear();
 					try {
 						ParseCSV(ParserMode::SNIFFING_DIALECT);
@@ -493,26 +484,23 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 	}
 
-	// if not dialect candidate was found, then file was most likely empty and we default to RFC-4180 dialect
+	// if not dialect candidate was found, then file was most likely empty and we throw an exception
 	if (info_candidates.size() < 1) {
-		if (requested_types.size() == 0) {
-			// no types requested and no types/names could be deduced: default to a single varchar column
-			col_names.push_back("col0");
-			requested_types.push_back(LogicalType::VARCHAR);
-		}
-
-		// back to normal
-		options = original_options;
-		JumpToBeginning(0, false);
-		return requested_types;
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    options.file_path);
 	}
 
+	// #######
+	// ### type detection (initial)
+	// #######
 	// type candidates, ordered by descending specificity (~ from high to low)
 	vector<LogicalType> type_candidates = {
 	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
 	    LogicalType::DATE,    LogicalType::TIME,
 	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN, LogicalType::SQLNULL};
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
+	    LogicalType::SQLNULL};
 
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
@@ -527,6 +515,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 	idx_t min_varchar_cols = best_num_cols + 1;
 	vector<vector<LogicalType>> best_sql_types_candidates;
 	std::map<LogicalTypeId, vector<string>> best_format_candidates;
+	DataChunk best_header_row;
+
 	for (const auto &t : format_template_candidates) {
 		best_format_candidates[t.first].clear();
 	}
@@ -543,18 +533,30 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		// set all sql_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		sql_types.clear();
 		sql_types.assign(options.num_cols, LogicalType::VARCHAR);
-		InitParseChunk(sql_types.size());
 
-		// detect types in first chunk
-		JumpToBeginning(options.skip_rows, false);
+		// jump to beginning and skip potential header
+		JumpToBeginning(options.skip_rows, true);
+		DataChunk header_row;
+		header_row.Initialize(sql_types);
+		parse_chunk.Copy(header_row);
+
+		// init parse chunk and read csv with info candidate
+		InitParseChunk(sql_types.size());
 		ParseCSV(ParserMode::SNIFFING_DATATYPES);
-		for (idx_t row = 0; row < parse_chunk.size(); row++) {
-			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
+		for (idx_t row_idx = 0; row_idx <= parse_chunk.size(); row_idx++) {
+			bool is_header_row = row_idx == 0;
+			idx_t row = row_idx - 1;
+			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
-					auto dummy_val = parse_chunk.GetValue(col, row);
+					Value dummy_val;
+					if (is_header_row) {
+						dummy_val = header_row.GetValue(col, 0);
+					} else {
+						dummy_val = parse_chunk.GetValue(col, row);
+					}
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
 					if (has_format_candidates.count(sql_type.id()) && !original_options.has_format[sql_type.id()] &&
@@ -615,9 +617,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					}
 				}
 			}
-			// reset type detection for second row, because first row could be header,
-			// but only do it if csv has more than one line
-			if (parse_chunk.size() > 1 && row == 0) {
+			// reset type detection, because first row could be header,
+			// but only do it if csv has more than one line (including header)
+			if (parse_chunk.size() > 0 && is_header_row) {
 				info_sql_types_candidates = vector<vector<LogicalType>>(options.num_cols, type_candidates);
 				for (auto &f : format_candidates) {
 					f.second.clear();
@@ -629,7 +631,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 
 		idx_t varchar_cols = 0;
-		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
+		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 			auto &col_type_candidates = info_sql_types_candidates[col];
 			// check number of varchar columns
 			const auto &col_type = col_type_candidates.back();
@@ -639,12 +641,16 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
-		if (varchar_cols < min_varchar_cols && parse_chunk.column_count() > (best_num_cols * 0.7)) {
+		if (varchar_cols < min_varchar_cols && parse_chunk.ColumnCount() > (best_num_cols * 0.7)) {
 			// we have a new best_options candidate
 			best_options = info_candidate;
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
+			best_header_row.Destroy();
+			auto header_row_types = header_row.GetTypes();
+			best_header_row.Initialize(header_row_types);
+			header_row.Copy(best_header_row);
 		}
 	}
 
@@ -655,10 +661,70 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		}
 	}
 
+	// #######
+	// ### header detection
+	// #######
+
+	// information for header detection
+	bool first_row_consistent = true;
+	bool first_row_nulls = false;
+
+	// check if header row is all null and/or consistent with detected column data types
+	first_row_nulls = true;
+	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
+		auto dummy_val = best_header_row.GetValue(col, 0);
+		// try cast as SQLNULL
+		try {
+			dummy_val.CastAs(LogicalType::SQLNULL, true);
+		} catch (const Exception &e) {
+			first_row_nulls = false;
+		}
+		// try cast to sql_type of column
+		const auto &sql_type = best_sql_types_candidates[col].back();
+		if (!TryCastValue(dummy_val, sql_type)) {
+			first_row_consistent = false;
+		}
+	}
+
+	// update parser info, and read, generate & set col_names based on previous findings
+	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
+		options.header = true;
+		vector<string> t_col_names;
+		for (idx_t col = 0; col < options.num_cols; col++) {
+			const auto &val = best_header_row.GetValue(col, 0);
+			string col_name = val.ToString();
+			if (col_name.empty() || val.is_null) {
+				col_name = GenerateColumnName(options.num_cols, col);
+			}
+			// We'll keep column names as they appear in the file, no canonicalization
+			// col_name = StringUtil::Lower(col_name);
+			t_col_names.push_back(col_name);
+		}
+		for (idx_t col = 0; col < t_col_names.size(); col++) {
+			string col_name = t_col_names[col];
+			idx_t exists_n_times = std::count(t_col_names.begin(), t_col_names.end(), col_name);
+			idx_t exists_n_times_before = std::count(t_col_names.begin(), t_col_names.begin() + col, col_name);
+			if (exists_n_times > 1) {
+				col_name = GenerateColumnName(exists_n_times, exists_n_times_before, col_name + "_");
+			}
+			col_names.push_back(col_name);
+		}
+	} else {
+		options.header = false;
+		idx_t total_columns = parse_chunk.ColumnCount();
+		for (idx_t col = 0; col < total_columns; col++) {
+			string column_name = GenerateColumnName(total_columns, col);
+			col_names.push_back(column_name);
+		}
+	}
+
+	// #######
+	// ### type detection (refining)
+	// #######
+
 	// sql_types and parse_chunk have to be in line with new info
 	sql_types.clear();
 	sql_types.assign(options.num_cols, LogicalType::VARCHAR);
-	InitParseChunk(sql_types.size());
 
 	vector<LogicalType> detected_types;
 
@@ -671,16 +737,20 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 		} else {
 			detected_types = requested_types;
 		}
+	} else if (options.all_varchar) {
+		// return all types varchar
+		detected_types = sql_types;
 	} else {
 		// jump through the rest of the file and continue to refine the sql type guess
 		while (JumpToNextSample()) {
+			InitParseChunk(sql_types.size());
 			// if jump ends up a bad line, we just skip this chunk
 			try {
 				ParseCSV(ParserMode::SNIFFING_DATATYPES);
 			} catch (const InvalidInputException &e) {
 				continue;
 			}
-			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
+			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 				vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
@@ -716,10 +786,22 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					}
 				}
 			}
+
+			if (!jumping_samples) {
+				if ((sample_chunk_idx)*options.sample_chunk_size <= options.buffer_size) {
+					// cache parse chunk
+					// create a new chunk and fill it with the remainder
+					auto chunk = make_unique<DataChunk>();
+					auto parse_chunk_types = parse_chunk.GetTypes();
+					chunk->Initialize(parse_chunk_types);
+					chunk->Reference(parse_chunk);
+					cached_chunks.push(move(chunk));
+				}
+			}
 		}
 
 		// set sql types
-		for (auto & best_sql_types_candidate : best_sql_types_candidates) {
+		for (auto &best_sql_types_candidate : best_sql_types_candidates) {
 			LogicalType d_type = best_sql_types_candidate.back();
 			if (best_sql_types_candidate.size() == type_candidates.size()) {
 				d_type = LogicalType::VARCHAR;
@@ -727,76 +809,6 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			detected_types.push_back(d_type);
 		}
 	}
-
-	// if all rows are of type string, we will currently make the assumption there is no header.
-	// TODO: Do some kind of string-distance based constistency metric between first row and others
-	/*bool all_types_string = true;
-	for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-	    const auto &col_type = best_sql_types_candidates[col].back();
-	    all_types_string &= (col_type == SQLType::VARCHAR);
-	}*/
-
-	// information for header detection
-	bool first_row_consistent = true;
-	bool first_row_nulls = false;
-
-	// parse first row again with knowledge from the rest of the file to check
-	// whether first row is consistent with the others or not.
-	JumpToBeginning(options.skip_rows, false);
-	ParseCSV(ParserMode::SNIFFING_DATATYPES);
-	if (parse_chunk.size() > 1) {
-		first_row_nulls = true;
-
-		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-			auto dummy_val = parse_chunk.GetValue(col, 0);
-			// try cast as SQLNULL
-			try {
-				dummy_val.CastAs(LogicalType::SQLNULL, true);
-			} catch (const Exception &e) {
-				first_row_nulls = false;
-			}
-			// try cast to sql_type of column
-			const auto &sql_type = detected_types[col];
-			if (!TryCastValue(dummy_val, sql_type)) {
-				first_row_consistent = false;
-			}
-		}
-	}
-
-	// update parser info, and read, generate & set col_names based on previous findings
-	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
-		options.header = true;
-		vector<string> t_col_names;
-		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-			const auto &val = parse_chunk.GetValue(col, 0);
-			string col_name = val.ToString();
-			if (col_name.empty() || val.is_null) {
-				col_name = GenerateColumnName(parse_chunk.column_count(), col);
-			}
-			// We'll keep column names as they appear in the file, no canonicalization
-			// col_name = StringUtil::Lower(col_name);
-			t_col_names.push_back(col_name);
-		}
-		for (idx_t col = 0; col < t_col_names.size(); col++) {
-			string col_name = t_col_names[col];
-			idx_t exists_n_times = std::count(t_col_names.begin(), t_col_names.end(), col_name);
-			idx_t exists_n_times_before = std::count(t_col_names.begin(), t_col_names.begin() + col, col_name);
-			if (exists_n_times > 1) {
-				col_name = GenerateColumnName(exists_n_times, exists_n_times_before, col_name + "_");
-			}
-			col_names.push_back(col_name);
-		}
-	} else {
-		options.header = false;
-		idx_t total_columns = parse_chunk.column_count();
-		for (idx_t col = 0; col < total_columns; col++) {
-			string column_name = GenerateColumnName(total_columns, col);
-			col_names.push_back(column_name);
-		}
-	}
-
-	// back to normal
-	JumpToBeginning(0, false);
 
 	return detected_types;
 }
@@ -1234,7 +1246,16 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 }
 
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
-	cached_buffers.clear();
+	// if no auto-detect or auto-detect with jumping samples, we have nothing cached and start from the beginning
+	if (cached_chunks.empty()) {
+		cached_buffers.clear();
+	} else {
+		auto &chunk = cached_chunks.front();
+		parse_chunk.Reference(*chunk);
+		cached_chunks.pop();
+		Flush(insert_chunk);
+		return;
+	}
 
 	ParseCSV(ParserMode::PARSING, insert_chunk);
 }
@@ -1314,14 +1335,18 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	if (mode == ParserMode::SNIFFING_DIALECT) {
 		sniffed_column_counts.push_back(column);
 
-		if (sniffed_column_counts.size() == SAMPLE_CHUNK_SIZE) {
+		if (sniffed_column_counts.size() == options.sample_chunk_size) {
 			return true;
 		}
 	} else {
 		parse_chunk.SetCardinality(parse_chunk.size() + 1);
 	}
 
-	if (mode == ParserMode::SNIFFING_DATATYPES && parse_chunk.size() == SAMPLE_CHUNK_SIZE) {
+	if (mode == ParserMode::PARSING_HEADER) {
+		return true;
+	}
+
+	if (mode == ParserMode::SNIFFING_DATATYPES && parse_chunk.size() == options.sample_chunk_size) {
 		return true;
 	}
 
@@ -1348,47 +1373,55 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			for (idx_t i = 0; i < parse_chunk.size(); i++) {
 				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
 					auto s = parse_data[i];
-					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
+					auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
 					if (utf_type == UnicodeType::INVALID) {
-						throw InvalidInputException(
-						    "Error in file \"%s\" between line %d and %d: file is not valid UTF8. (%s)",
-						    options.file_path, linenr - parse_chunk.size(), linenr, options.toString());
+						string col_name = std::to_string(col_idx);
+						if (col_idx < col_names.size()) {
+							col_name = "\"" + col_names[col_idx] + "\"";
+						}
+						throw InvalidInputException("Error in file \"%s\" between line %llu and %llu in column \"%s\": "
+						                            "file is not valid UTF8. Parser options: %s",
+						                            options.file_path, linenr - parse_chunk.size(), linenr, col_name,
+						                            options.toString());
 					}
 				}
 			}
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
-		} else if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
-			try {
-				// use the date format to cast the chunk
-				UnaryExecutor::Execute<string_t, date_t, true>(
-				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
-				    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
-			} catch (const Exception &e) {
-				throw InvalidInputException("Error in file \"%s\" between line %llu and %llu: %s. (%s)",
-				                            options.file_path, linenr - parse_chunk.size(), linenr, e.what(),
-				                            options.toString());
-			}
-		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-		           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
-			try {
-				// use the date format to cast the chunk
-				UnaryExecutor::Execute<string_t, timestamp_t, true>(
-				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
-					    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
-				    });
-			} catch (const Exception &e) {
-				throw InvalidInputException("Error in file \"%s\" between line %llu and %llu: %s. (%s)",
-				                            options.file_path, linenr - parse_chunk.size(), linenr, e.what(),
-				                            options.toString());
-			}
 		} else {
 			try {
-				// target type is not varchar: perform a cast
-				VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
+				if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
+					// use the date format to cast the chunk
+					UnaryExecutor::Execute<string_t, date_t, true>(
+					    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
+					    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
+				} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+				           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+					// use the date format to cast the chunk
+					UnaryExecutor::Execute<string_t, timestamp_t, true>(
+					    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
+						    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
+					    });
+				} else {
+					// target type is not varchar: perform a cast
+					VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
+				}
 			} catch (const Exception &e) {
-				throw InvalidInputException("Error in file \"%s\" between line %llu and %llu: %s. (%s)",
-				                            options.file_path, linenr - parse_chunk.size(), linenr, e.what(),
-				                            options.toString());
+				string col_name = std::to_string(col_idx);
+				if (col_idx < col_names.size()) {
+					col_name = "\"" + col_names[col_idx] + "\"";
+				}
+
+				if (options.auto_detect) {
+					throw InvalidInputException(
+					    "%s in column %s, between line %llu and %llu. Parser "
+					    "options: %s. Consider either increasing the sample size (using SAMPLE_SIZE=X) "
+					    "or skipping column conversion (ALL_VARCHAR=1)",
+					    e.what(), col_name, linenr - parse_chunk.size() + 1, linenr, options.toString());
+				} else {
+					throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
+					                            e.what(), linenr - parse_chunk.size(), linenr, col_name,
+					                            options.toString());
+				}
 			}
 		}
 	}

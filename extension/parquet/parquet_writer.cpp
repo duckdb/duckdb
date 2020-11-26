@@ -24,6 +24,7 @@ using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
 using parquet::format::CompressionCodec;
+using parquet::format::ConvertedType;
 using parquet::format::Encoding;
 using parquet::format::FieldRepetitionType;
 using parquet::format::FileMetaData;
@@ -78,6 +79,16 @@ static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
 		return Type::INT96;
 	default:
 		throw NotImplementedException(duckdb_type.ToString());
+	}
+}
+
+static bool duckdb_type_to_converted_type(LogicalType duckdb_type, ConvertedType::type &result) {
+	switch (duckdb_type.id()) {
+	case LogicalTypeId::VARCHAR:
+		result = ConvertedType::UTF8;
+		return true;
+	default:
+		return false;
 	}
 }
 
@@ -141,11 +152,13 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalTy
 		schema_element.__isset.type = true;
 		schema_element.__isset.repetition_type = true;
 		schema_element.name = column_names[i];
+		schema_element.__isset.converted_type =
+		    duckdb_type_to_converted_type(sql_types[i], schema_element.converted_type);
 	}
 }
 
 void ParquetWriter::Flush(ChunkCollection &buffer) {
-	if (buffer.count == 0) {
+	if (buffer.Count() == 0) {
 		return;
 	}
 	std::lock_guard<std::mutex> glock(lock);
@@ -155,10 +168,10 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	row_group.num_rows = 0;
 	row_group.file_offset = writer->GetTotalWritten();
 	row_group.__isset.file_offset = true;
-	row_group.columns.resize(buffer.column_count());
+	row_group.columns.resize(buffer.ColumnCount());
 
 	// iterate over each of the columns of the chunk collection and write them
-	for (idx_t i = 0; i < buffer.column_count(); i++) {
+	for (idx_t i = 0; i < buffer.ColumnCount(); i++) {
 		// we start off by writing everything into a temporary buffer
 		// this is necessary to (1) know the total written size, and (2) to compress it with snappy afterwards
 		BufferedSerializer temp_writer;
@@ -170,7 +183,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		hdr.type = PageType::DATA_PAGE;
 		hdr.__isset.data_page_header = true;
 
-		hdr.data_page_header.num_values = buffer.count;
+		hdr.data_page_header.num_values = buffer.Count();
 		hdr.data_page_header.encoding = Encoding::PLAIN;
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::BIT_PACKED;
@@ -183,7 +196,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		// we always bit pack everything
 
 		// first figure out how many bytes we need (1 byte per 8 rows, rounded up)
-		auto define_byte_count = (buffer.count + 7) / 8;
+		auto define_byte_count = (buffer.Count() + 7) / 8;
 		// we need to set up the count as a varint, plus an added marker for the RLE scheme
 		// for this marker we shift the count left 1 and set low bit to 1 to indicate bit packed literals
 		uint32_t define_header = (define_byte_count << 1) | 1;
@@ -193,7 +206,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		temp_writer.Write<uint32_t>(define_size);
 		VarintEncode(define_header, temp_writer);
 
-		for (auto &chunk : buffer.chunks) {
+		for (auto &chunk : buffer.Chunks()) {
 			auto defined = FlatVector::Nullmask(chunk->data[i]);
 			// flip the nullmask to go from nulls -> defines
 			defined.flip();
@@ -203,7 +216,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		}
 
 		// now write the actual payload: we write this as PLAIN values (for now? possibly for ever?)
-		for (auto &chunk : buffer.chunks) {
+		for (auto &chunk : buffer.Chunks()) {
 			auto &input = *chunk;
 			auto &input_column = input.data[i];
 			auto &nullmask = FlatVector::Nullmask(input_column);
@@ -277,17 +290,17 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				}
 				break;
 			}
+			case LogicalTypeId::BLOB:
 			case LogicalTypeId::VARCHAR: {
 				auto *ptr = FlatVector::GetData<string_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
 					if (!nullmask[r]) {
 						temp_writer.Write<uint32_t>(ptr[r].GetSize());
-						temp_writer.WriteData((const_data_ptr_t)ptr[r].GetData(), ptr[r].GetSize());
+						temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
 					}
 				}
 				break;
 			}
-				// TODO date blob etc.
 			default:
 				throw NotImplementedException((sql_types[i].ToString()));
 			}
@@ -314,14 +327,14 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		column_chunk.meta_data.total_compressed_size = writer->GetTotalWritten() - start_offset;
 		column_chunk.meta_data.codec = CompressionCodec::SNAPPY;
 		column_chunk.meta_data.path_in_schema.push_back(file_meta_data.schema[i + 1].name);
-		column_chunk.meta_data.num_values = buffer.count;
+		column_chunk.meta_data.num_values = buffer.Count();
 		column_chunk.meta_data.type = file_meta_data.schema[i + 1].type;
 	}
-	row_group.num_rows += buffer.count;
+	row_group.num_rows += buffer.Count();
 
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
-	file_meta_data.num_rows += buffer.count;
+	file_meta_data.num_rows += buffer.Count();
 }
 
 void ParquetWriter::Finalize() {

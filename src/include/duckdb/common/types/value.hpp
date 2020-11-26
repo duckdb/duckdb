@@ -54,9 +54,9 @@ public:
 	}
 
 	//! Create the lowest possible value of a given type (numeric only)
-	static Value MinimumValue(PhysicalType type);
+	static Value MinimumValue(LogicalType type);
 	//! Create the highest possible value of a given type (numeric only)
-	static Value MaximumValue(PhysicalType type);
+	static Value MaximumValue(LogicalType type);
 	//! Create a Numeric value of the specified type with the specified value
 	static Value Numeric(LogicalType type, int64_t value);
 	static Value Numeric(LogicalType type, hugeint_t value);
@@ -109,14 +109,21 @@ public:
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
 
-	//! Create a blob Value from a specified value
-	static Value BLOB(string data, bool must_cast = true);
+	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
+	static Value BLOB(const_data_ptr_t data, idx_t len);
+	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
+	static Value BLOB(string data);
 
 	template <class T> T GetValue() const {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
 	template <class T> static Value CreateValue(T value) {
 		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
+	}
+	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
+	// type of the value. Only use this if you know what you are doing.
+	template <class T> T &GetValueUnsafe() {
+		throw NotImplementedException("Unimplemented template type for Value::GetValueUnsafe");
 	}
 
 	//! Return a copy of this value
@@ -241,5 +248,13 @@ template <> float Value::GetValue() const;
 template <> double Value::GetValue() const;
 template <> uintptr_t Value::GetValue() const;
 
+template <> int8_t &Value::GetValueUnsafe();
+template <> int16_t &Value::GetValueUnsafe();
+template <> int32_t &Value::GetValueUnsafe();
+template <> int64_t &Value::GetValueUnsafe();
+template <> hugeint_t &Value::GetValueUnsafe();
+template <> string &Value::GetValueUnsafe();
+template <> float &Value::GetValueUnsafe();
+template <> double &Value::GetValueUnsafe();
 
 } // namespace duckdb

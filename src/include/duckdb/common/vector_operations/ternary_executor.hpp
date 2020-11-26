@@ -88,15 +88,15 @@ private:
 			auto aidx = asel.get_index(i);
 			auto bidx = bsel.get_index(i);
 			auto cidx = csel.get_index(i);
-			if ((NO_NULL || (!anullmask[aidx] && !bnullmask[bidx] && !cnullmask[cidx])) &&
-			    OP::Operation(adata[aidx], bdata[bidx], cdata[cidx])) {
-				if (HAS_TRUE_SEL) {
-					true_sel->set_index(true_count++, result_idx);
-				}
-			} else {
-				if (HAS_FALSE_SEL) {
-					false_sel->set_index(false_count++, result_idx);
-				}
+			bool comparison_result = (NO_NULL || (!anullmask[aidx] && !bnullmask[bidx] && !cnullmask[cidx])) &&
+			    OP::Operation(adata[aidx], bdata[bidx], cdata[cidx]);
+			if (HAS_TRUE_SEL) {
+				true_sel->set_index(true_count, result_idx);
+				true_count += comparison_result;
+			}
+			if (HAS_FALSE_SEL) {
+				false_sel->set_index(false_count, result_idx);
+				false_count += !comparison_result;
 			}
 		}
 		if (HAS_TRUE_SEL) {
@@ -119,7 +119,7 @@ private:
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
 			    *cdata.sel, *adata.nullmask, *bdata.nullmask, *cdata.nullmask, true_sel, false_sel);
 		} else {
-			assert(false_sel);
+			D_ASSERT(false_sel);
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, false, true>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
 			    *cdata.sel, *adata.nullmask, *bdata.nullmask, *cdata.nullmask, true_sel, false_sel);

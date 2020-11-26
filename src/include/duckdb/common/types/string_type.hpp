@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/assert.hpp"
 #include <cstring>
-#include <cassert>
 
 namespace duckdb {
 
@@ -29,7 +29,7 @@ public:
 	}
 	string_t(const char *data, uint32_t len) {
 		value.inlined.length = len;
-		assert(data || GetSize() == 0);
+		D_ASSERT(data || GetSize() == 0);
 		if (IsInlined()) {
 			// zero initialize the prefix first
 			// this makes sure that strings with length smaller than 4 still have an equal prefix
@@ -43,7 +43,6 @@ public:
 			 follows it with 8 more chars to use for the string value.
 			 */
 			memcpy(value.inlined.inlined, data, GetSize());
-			value.inlined.inlined[GetSize()] = '\0';
 		} else {
 			// large string: store pointer
 			memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
@@ -56,15 +55,16 @@ public:
 	}
 
 	bool IsInlined() const {
-		return GetSize() < INLINE_LENGTH;
+		return GetSize() <= INLINE_LENGTH;
 	}
 
-	char *GetData() {
-		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
-	}
-
-	const char *GetData() const {
+	//! this is unsafe since the string will not be terminated at the end
+	const char *GetDataUnsafe() const {
 		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
+	}
+
+	char *GetDataWriteable() const {
+		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
 	}
 
 	const char *GetPrefix() const {
@@ -76,14 +76,13 @@ public:
 	}
 
 	string GetString() const {
-		return string(GetData(), GetSize());
+		return string(GetDataUnsafe(), GetSize());
 	}
 
 	void Finalize() {
 		// set trailing NULL byte
-		auto dataptr = (char *)GetData();
-		dataptr[GetSize()] = '\0';
-		if (GetSize() < INLINE_LENGTH) {
+		auto dataptr = (char *)GetDataUnsafe();
+		if (GetSize() <= INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
 			for (idx_t i = GetSize(); i < PREFIX_LENGTH; i++) {
 				value.inlined.inlined[i] = '\0';
@@ -95,6 +94,7 @@ public:
 	}
 
 	void Verify();
+	void VerifyNull();
 
 private:
 	union {

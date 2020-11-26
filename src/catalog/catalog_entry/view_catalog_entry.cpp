@@ -47,12 +47,12 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 }
 
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
-	assert(!internal);
+	D_ASSERT(!internal);
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	serializer.WriteString(sql);
 	query->Serialize(serializer);
-	assert(aliases.size() <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(aliases.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)aliases.size());
 	for (auto &alias : aliases) {
 		serializer.WriteString(alias);
@@ -88,7 +88,7 @@ string ViewCatalogEntry::ToSQL() {
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
-	assert(!internal);
+	D_ASSERT(!internal);
 	auto create_info = make_unique<CreateViewInfo>(schema->name, name);
 	create_info->query = query->Copy();
 	for (idx_t i = 0; i < aliases.size(); i++) {

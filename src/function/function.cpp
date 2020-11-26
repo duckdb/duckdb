@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -118,6 +119,14 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 	catalog.CreateCopyFunction(context, &info);
 }
 
+hash_t BaseScalarFunction::Hash() const {
+	hash_t hash = return_type.Hash();
+	for (auto &arg : arguments) {
+		duckdb::CombineHash(hash, arg.Hash());
+	}
+	return hash;
+}
+
 string Function::CallToString(string name, vector<LogicalType> arguments) {
 	string result = name + "(";
 	result += StringUtil::Join(arguments, arguments.size(), ", ",
@@ -125,7 +134,14 @@ string Function::CallToString(string name, vector<LogicalType> arguments) {
 	return result + ")";
 }
 
-string TableFunction::ToString() {
+string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
+	string result = CallToString(name, arguments);
+	result += " -> " + return_type.ToString();
+	return result;
+}
+
+string Function::CallToString(string name, vector<LogicalType> arguments,
+                              unordered_map<string, LogicalType> named_parameters) {
 	vector<string> input_arguments;
 	for (auto &arg : arguments) {
 		input_arguments.push_back(arg.ToString());
@@ -134,12 +150,6 @@ string TableFunction::ToString() {
 		input_arguments.push_back(StringUtil::Format("%s : %s", kv.first, kv.second.ToString()));
 	}
 	return StringUtil::Format("%s(%s)", name, StringUtil::Join(input_arguments, ", "));
-}
-
-string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
-	string result = CallToString(name, arguments);
-	result += " -> " + return_type.ToString();
-	return result;
 }
 
 static int64_t BindVarArgsFunctionCost(SimpleFunction &func, vector<LogicalType> &arguments) {
@@ -194,7 +204,8 @@ static int64_t BindFunctionCost(SimpleFunction &func, vector<LogicalType> &argum
 }
 
 template <class T>
-static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector<LogicalType> &arguments, string &error) {
+static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector<LogicalType> &arguments,
+                                       string &error) {
 	idx_t best_function = INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> conflicting_functions;
@@ -227,9 +238,10 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 			auto &f = functions[conf];
 			candidate_str += "\t" + f.ToString() + "\n";
 		}
-		error = StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
-		                      "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
-		                      call_str, candidate_str);
+		error =
+		    StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
+		                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
+		                       call_str, candidate_str);
 		return INVALID_INDEX;
 	}
 	if (best_function == INVALID_INDEX) {
@@ -240,22 +252,25 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 			candidate_str += "\t" + f.ToString() + "\n";
 		}
 		error = StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
-		                      "explicit type casts.\n\tCandidate functions:\n%s",
-		                      call_str, candidate_str);
+		                           "explicit type casts.\n\tCandidate functions:\n%s",
+		                           call_str, candidate_str);
 		return INVALID_INDEX;
 	}
 	return best_function;
 }
 
-idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
+                             string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
+                             string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
+                             string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
@@ -286,8 +301,8 @@ vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>
 	return types;
 }
 
-idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions,
-                             vector<unique_ptr<Expression>> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments,
+                             string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types, error);
 }
@@ -298,7 +313,8 @@ idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions,
 	return Function::BindFunction(name, functions, types, error);
 }
 
-idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments, string &error) {
+idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments,
+                             string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types, error);
 }
@@ -317,20 +333,18 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, string schema,
                                                                        string name,
                                                                        vector<unique_ptr<Expression>> children,
-																	   string &error,
-                                                                       bool is_operator) {
+                                                                       string &error, bool is_operator) {
 	// bind the function
 	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
-	assert(function && function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, move(children),
-	                                          error, is_operator);
+	D_ASSERT(function && function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
+	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, move(children), error,
+	                                          is_operator);
 }
 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
                                                                        ScalarFunctionCatalogEntry &func,
                                                                        vector<unique_ptr<Expression>> children,
-																	   string &error,
-                                                                       bool is_operator) {
+                                                                       string &error, bool is_operator) {
 	// bind the function
 	idx_t best_function = Function::BindFunction(func.name, func.functions, children, error);
 	if (best_function == INVALID_INDEX) {

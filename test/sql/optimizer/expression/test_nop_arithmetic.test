@@ -105,6 +105,12 @@ SELECT a * 0 FROM test
 NULL
 NULL
 
+query I
+SELECT rowid * 0 FROM test
+----
+0
+0
+
 # 0 / NULL = NULL
 query I
 SELECT 0 / a FROM test
@@ -112,3 +118,8 @@ SELECT 0 / a FROM test
 NULL
 NULL
 
+query I
+SELECT 0 / rowid FROM test
+----
+NULL
+0

@@ -40,8 +40,8 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 #ifndef DUCKDB_ALLOW_UNDEFINED
 		payload_size = Align(payload_size);
 #endif
-		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
-		                                     binding->distinct, binding->return_type.InternalType()));
+		aggregates.push_back(AggregateObject(binding->function, binding->bind_info.get(), binding->children.size(),
+		                                     payload_size, binding->distinct, binding->return_type.InternalType()));
 	}
 	return aggregates;
 }
@@ -61,7 +61,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		payload_width += aggregates[i].payload_size;
 #ifndef DUCKDB_ALLOW_UNDEFINED
-		assert(aggregates[i].payload_size == Align(aggregates[i].payload_size));
+		D_ASSERT(aggregates[i].payload_size == Align(aggregates[i].payload_size));
 #endif
 	}
 	empty_payload_data = unique_ptr<data_t[]>(new data_t[payload_width]);
@@ -73,7 +73,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		pointer += aggr.payload_size;
 	}
 
-	assert(group_width > 0);
+	D_ASSERT(group_width > 0);
 
 #ifndef DUCKDB_ALLOW_UNDEFINED
 	auto aligned_group_width = Align(group_width);
@@ -87,7 +87,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	tuple_size = Align(tuple_size);
 #endif
 
-	assert(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 	tuples_per_block = Storage::BLOCK_ALLOC_SIZE / tuple_size;
 	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true);
 	hashes_hdl_ptr = hashes_hdl->Ptr();
@@ -121,11 +121,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 			}
 			distinct_hashes[i] = make_unique<GroupedAggregateHashTable>(buffer_manager, distinct_group_types);
 		}
-		if (aggr.child_count) {
-			payload_idx += aggr.child_count;
-		} else {
-			payload_idx += 1;
-		}
+		payload_idx += aggr.child_count;
 	}
 	addresses.Initialize(LogicalType::POINTER);
 }
@@ -152,7 +148,7 @@ template <class FUNC> void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
 		apply_entries -= this_entries;
 		page_nr++;
 	}
-	assert(apply_entries == 0);
+	D_ASSERT(apply_entries == 0);
 }
 
 void GroupedAggregateHashTable::NewBlock() {
@@ -204,32 +200,33 @@ void GroupedAggregateHashTable::Destroy() {
 
 template <class T> void GroupedAggregateHashTable::VerifyInternal() {
 	auto hashes_ptr = (T *)hashes_hdl_ptr;
-	assert(payload_hds.size() == payload_hds_ptrs.size());
+	D_ASSERT(payload_hds.size() == payload_hds_ptrs.size());
 	idx_t count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		if (hashes_ptr[i].page_nr > 0) {
-			assert(hashes_ptr[i].page_offset < tuples_per_block);
-			assert(hashes_ptr[i].page_nr <= payload_hds.size());
+			D_ASSERT(hashes_ptr[i].page_offset < tuples_per_block);
+			D_ASSERT(hashes_ptr[i].page_nr <= payload_hds.size());
 			auto ptr = payload_hds_ptrs[hashes_ptr[i].page_nr - 1] + ((hashes_ptr[i].page_offset) * tuple_size);
 			auto hash = Load<hash_t>(ptr);
-			assert((hashes_ptr[i].salt) == (hash >> hash_prefix_shift));
+			D_ASSERT((hashes_ptr[i].salt) == (hash >> hash_prefix_shift));
 
 			count++;
 		}
 	}
-	assert(count == entries);
+	D_ASSERT(count == entries);
 }
 
 idx_t GroupedAggregateHashTable::MaxCapacity() {
-	idx_t max_pages;
-	idx_t max_tuples;
+	idx_t max_pages = 0;
+	idx_t max_tuples = 0;
 
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_32:
 		max_pages = NumericLimits<uint8_t>::Maximum();
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
-	case HtEntryType::HT_WIDTH_64:
+	default:
+		D_ASSERT(entry_type == HtEntryType::HT_WIDTH_64);
 		max_pages = NumericLimits<uint32_t>::Maximum();
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
@@ -254,7 +251,7 @@ void GroupedAggregateHashTable::Verify() {
 template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 
-	assert(!is_finalized);
+	D_ASSERT(!is_finalized);
 
 	if (size <= capacity) {
 		throw InternalException("Cannot downsize a hash table!");
@@ -264,7 +261,7 @@ template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 	}
 
 	// size needs to be a power of 2
-	assert((size & (size - 1)) == 0);
+	D_ASSERT((size & (size - 1)) == 0);
 	bitmask = size - 1;
 
 	auto byte_size = size * sizeof(T);
@@ -280,7 +277,7 @@ template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 
 	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
 		auto hash = Load<hash_t>(ptr);
-		assert((hash & bitmask) == (hash % capacity));
+		D_ASSERT((hash & bitmask) == (hash % capacity));
 		auto entry_idx = (idx_t)hash & bitmask;
 		while (hashes_arr[entry_idx].page_nr > 0) {
 			entry_idx++;
@@ -289,8 +286,8 @@ template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 			}
 		}
 
-		assert(!hashes_arr[entry_idx].page_nr);
-		assert(hash >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
+		D_ASSERT(!hashes_arr[entry_idx].page_nr);
+		D_ASSERT(hash >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
 
 		hashes_arr[entry_idx].salt = hash >> hash_prefix_shift;
 		hashes_arr[entry_idx].page_nr = page_nr + 1;
@@ -308,10 +305,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload)
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
-
-	assert(!is_finalized);
-
-	assert(capacity - entries > groups.size());
+	D_ASSERT(!is_finalized);
 
 	if (groups.size() == 0) {
 		return 0;
@@ -319,10 +313,10 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	// dummy
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 
-	assert(groups.column_count() == group_types.size());
+	D_ASSERT(groups.ColumnCount() == group_types.size());
 #ifdef DEBUG
 	for (idx_t i = 0; i < group_types.size(); i++) {
-		assert(groups.GetTypes()[i] == group_types[i]);
+		D_ASSERT(groups.GetTypes()[i] == group_types[i]);
 	}
 #endif
 
@@ -334,11 +328,9 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	idx_t payload_idx = 0;
 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		assert(payload.column_count() > payload_idx);
-
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
-		auto input_count = MaxValue((idx_t)1, (idx_t)aggr.child_count);
+		auto input_count = (idx_t)aggr.child_count;
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(group_types);
@@ -374,10 +366,12 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 				distinct_addresses.Verify(new_group_count);
 
-				aggr.function.update(&payload.data[payload_idx], input_count, distinct_addresses, new_group_count);
+				aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
+				                     distinct_addresses, new_group_count);
 			}
 		} else {
-			aggr.function.update(&payload.data[payload_idx], input_count, addresses, payload.size());
+			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
+			                     payload.size());
 		}
 
 		// move to the next aggregate
@@ -391,9 +385,9 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 	groups.Verify();
-	assert(groups.column_count() == group_types.size());
-	for (idx_t i = 0; i < result.column_count(); i++) {
-		assert(result.data[i].type == payload_types[i]);
+	D_ASSERT(groups.ColumnCount() == group_types.size());
+	for (idx_t i = 0; i < result.ColumnCount(); i++) {
+		D_ASSERT(result.data[i].type == payload_types[i]);
 	}
 	result.SetCardinality(groups);
 	if (groups.size() == 0) {
@@ -405,7 +399,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	FindOrCreateGroups(groups, addresses);
 	// now fetch the aggregates
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		assert(result.column_count() > aggr_idx);
+		D_ASSERT(result.ColumnCount() > aggr_idx);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx], groups.size());
 	}
@@ -443,7 +437,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 	if (count == 0) {
 		return;
 	}
-	for (idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
+	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
 		auto &data = groups.data[grp_idx];
 		auto &gdata = group_data[grp_idx];
 
@@ -488,7 +482,9 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);
 				} else {
-					Store<string_t>(string_heap.AddString(string_data[group_idx]), ptr);
+					Store<string_t>(
+					    string_heap.AddBlob(string_data[group_idx].GetDataUnsafe(), string_data[group_idx].GetSize()),
+					    ptr);
 				}
 
 				pointers[pointer_idx] += type_size;
@@ -549,7 +545,7 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 
 static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
                           SelectionVector &sel, idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
-	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
+	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
 		auto &data = groups.data[group_idx];
 		auto &gdata = group_data[group_idx];
 		auto type_size = GetTypeIdSize(data.type.InternalType());
@@ -592,7 +588,7 @@ template <class T>
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
                                                             SelectionVector &new_groups_out) {
 
-	assert(!is_finalized);
+	D_ASSERT(!is_finalized);
 
 	if (entries + groups.size() > MaxCapacity()) {
 		throw InternalException("Hash table capacity reached");
@@ -603,30 +599,31 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		Resize<T>(capacity * 2);
 	}
 
-	assert(groups.column_count() == group_types.size());
+	D_ASSERT(capacity - entries >= groups.size());
+	D_ASSERT(groups.ColumnCount() == group_types.size());
 	// we need to be able to fit at least one vector of data
-	assert(capacity - entries >= groups.size());
-	assert(group_hashes.type == LogicalType::HASH);
+	D_ASSERT(capacity - entries >= groups.size());
+	D_ASSERT(group_hashes.type == LogicalType::HASH);
 
 	group_hashes.Normalify(groups.size());
 	const auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
 
-	assert(ht_offsets.vector_type == VectorType::FLAT_VECTOR);
-	assert(ht_offsets.type == LogicalType::BIGINT);
+	D_ASSERT(ht_offsets.vector_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(ht_offsets.type == LogicalType::BIGINT);
 
-	assert(addresses.type == LogicalType::POINTER);
+	D_ASSERT(addresses.type == LogicalType::POINTER);
 	addresses.Normalify(groups.size());
 	const auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// now compute the entry in the table based on the hash using a modulo
 	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
-		assert((element & bitmask) == (element % capacity));
+		D_ASSERT((element & bitmask) == (element % capacity));
 		return (element & bitmask);
 	});
 	const auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
 
 	// precompute the hash salts for faster comparison below
-	assert(hash_salts.type == LogicalType::SMALLINT);
+	D_ASSERT(hash_salts.type == LogicalType::SMALLINT);
 	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
 	                                         [&](hash_t element) { return (element >> hash_prefix_shift); });
 	const auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
@@ -637,8 +634,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	idx_t remaining_entries = groups.size();
 
 	// orrify all the groups
-	auto group_data = unique_ptr<VectorData[]>(new VectorData[groups.column_count()]);
-	for (idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
+	auto group_data = unique_ptr<VectorData[]>(new VectorData[groups.ColumnCount()]);
+	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
 		groups.data[grp_idx].Orrify(groups.size(), group_data[grp_idx]);
 	}
 
@@ -662,19 +659,19 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 				// copy the group hash to the payload for use in resize
 				memcpy(entry_payload_ptr, &group_hashes_ptr[index], HASH_WIDTH);
-				assert((*(hash_t *)entry_payload_ptr) == group_hashes_ptr[index]);
+				D_ASSERT((*(hash_t *)entry_payload_ptr) == group_hashes_ptr[index]);
 
 				// initialize the payload info for the column
 				memcpy(entry_payload_ptr + HASH_WIDTH + group_width, empty_payload_data.get(), payload_width);
 
-				assert(group_hashes_ptr[index] >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
-				assert(payload_page_offset < tuples_per_block);
-				assert(payload_hds.size() < NumericLimits<uint32_t>::Maximum());
-				assert(payload_page_offset + 1 < NumericLimits<uint16_t>::Maximum());
+				D_ASSERT(group_hashes_ptr[index] >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
+				D_ASSERT(payload_page_offset < tuples_per_block);
+				D_ASSERT(payload_hds.size() < NumericLimits<uint32_t>::Maximum());
+				D_ASSERT(payload_page_offset + 1 < NumericLimits<uint16_t>::Maximum());
 
 				ht_entry_ptr->salt = group_hashes_ptr[index] >> hash_prefix_shift;
 
-				assert(((*(hash_t *)entry_payload_ptr) >> hash_prefix_shift) == ht_entry_ptr->salt);
+				D_ASSERT(((*(hash_t *)entry_payload_ptr) >> hash_prefix_shift) == ht_entry_ptr->salt);
 
 				// page numbers start at one so we can use 0 as empty flag
 				// GetPtr undoes this
@@ -762,13 +759,13 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &a
 }
 
 void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &source_hashes, idx_t count) {
-	assert(source_addresses.type == LogicalType::POINTER);
-	assert(source_hashes.type == LogicalType::HASH);
+	D_ASSERT(source_addresses.type == LogicalType::POINTER);
+	D_ASSERT(source_hashes.type == LogicalType::HASH);
 
 	DataChunk groups;
 	groups.Initialize(group_types);
 	groups.SetCardinality(count);
-	for (idx_t i = 0; i < groups.column_count(); i++) {
+	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		auto &column = groups.data[i];
 		VectorOperations::Gather::Set(source_addresses, column, count);
 	}
@@ -783,7 +780,7 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 
 	for (auto &aggr : aggregates) {
 		// for any entries for which a group was found, update the aggregate
-		assert(aggr.function.combine);
+		D_ASSERT(aggr.function.combine);
 		aggr.function.combine(source_addresses, group_addresses, count);
 		VectorOperations::AddInPlace(source_addresses, aggr.payload_size, count);
 		VectorOperations::AddInPlace(group_addresses, aggr.payload_size, count);
@@ -792,12 +789,12 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 
-	assert(!is_finalized);
+	D_ASSERT(!is_finalized);
 
-	assert(other.payload_width == payload_width);
-	assert(other.group_width == group_width);
-	assert(other.tuple_size == tuple_size);
-	assert(other.tuples_per_block == tuples_per_block);
+	D_ASSERT(other.payload_width == payload_width);
+	D_ASSERT(other.group_width == group_width);
+	D_ASSERT(other.tuple_size == tuple_size);
+	D_ASSERT(other.tuples_per_block == tuples_per_block);
 
 	if (other.entries == 0) {
 		return;
@@ -842,14 +839,14 @@ struct PartitionInfo {
 
 void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &partition_hts, hash_t mask,
                                           idx_t shift) {
-	assert(partition_hts.size() > 1);
+	D_ASSERT(partition_hts.size() > 1);
 	vector<PartitionInfo> partition_info(partition_hts.size());
 
 	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
 		auto hash = Load<hash_t>(ptr);
 
 		idx_t partition = (hash & mask) >> shift;
-		assert(partition < partition_hts.size());
+		D_ASSERT(partition < partition_hts.size());
 
 		auto &info = partition_info[partition];
 
@@ -857,7 +854,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 		info.addresses_ptr[info.group_count] = ptr + HASH_WIDTH;
 		info.group_count++;
 		if (info.group_count == STANDARD_VECTOR_SIZE) {
-			assert(partition_hts[partition]);
+			D_ASSERT(partition_hts[partition]);
 			partition_hts[partition]->FlushMove(info.addresses, info.hashes, info.group_count);
 			info.group_count = 0;
 		}
@@ -873,7 +870,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 		partition_entry->Verify();
 		total_count += partition_entry->Size();
 	}
-	assert(total_count == entries);
+	D_ASSERT(total_count == entries);
 	// mark the ht as empty so finalizers are not run
 	entries = 0;
 }
@@ -889,7 +886,7 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 
 	auto chunk_idx = scan_position / tuples_per_block;
 	auto chunk_offset = (scan_position % tuples_per_block) * tuple_size;
-	assert(chunk_offset + tuple_size <= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(chunk_offset + tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 
 	auto read_ptr = payload_hds_ptrs[chunk_idx++];
 	for (idx_t i = 0; i < this_n; i++) {
@@ -913,7 +910,7 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[group_types.size() + i];
 		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, target, result.size());
+		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
 	}
 	scan_position += this_n;
@@ -921,7 +918,7 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 }
 
 void GroupedAggregateHashTable::Finalize() {
-	assert(!is_finalized);
+	D_ASSERT(!is_finalized);
 
 	// early release hashes, not needed for partition/scan
 	hashes_hdl.reset();

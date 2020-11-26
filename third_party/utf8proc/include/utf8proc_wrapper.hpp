@@ -11,21 +11,10 @@ enum class UnicodeType {INVALID, ASCII, UNICODE};
 
 class Utf8Proc {
 public:
-	static UnicodeType Analyze(const char* s) {
-		return Analyze(s, std::strlen(s));
-	}
-
-	static UnicodeType Analyze(std::string s) {
-		return Analyze(s.c_str(), s.size());
-	}
-
+	//! Distinguishes ASCII, Valid UTF8 and Invalid UTF8 strings
 	static UnicodeType Analyze(const char *s, size_t len);
-
-
-	static std::string Normalize(std::string s);
-
-	static char* Normalize(const char* s);
-
+	//! Performs UTF NFC normalization of string, return value needs to be free'd
+	static char* Normalize(const char* s, size_t len);
 	//! Returns whether or not the UTF8 string is valid
 	static bool IsValid(const char *s, size_t len);
 	//! Returns the position (in bytes) of the next grapheme cluster

@@ -20,7 +20,7 @@ class PhysicalIndexJoinOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalIndexJoinOperatorState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right)
 	    : PhysicalOperatorState(op, left) {
-		assert(left && right);
+		D_ASSERT(left && right);
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 			rhs_rows.emplace_back();
 			result_sizes.emplace_back();
@@ -189,7 +189,7 @@ unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
 		}
 	}
 	if (left_projection_map.empty()) {
-		for (column_t i = 0; i < state->child_chunk.column_count(); i++) {
+		for (column_t i = 0; i < state->child_chunk.ColumnCount(); i++) {
 			left_projection_map.push_back(i);
 		}
 	}

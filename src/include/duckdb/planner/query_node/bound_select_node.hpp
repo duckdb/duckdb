@@ -44,6 +44,8 @@ public:
 
 	//! Group index used by the LogicalAggregate (only used if HasAggregation is true)
 	idx_t group_index;
+	//! Table index for the projection child of the group op
+	idx_t group_projection_index;
 	//! Aggregate index used by the LogicalAggregate (only used if HasAggregation is true)
 	idx_t aggregate_index;
 	//! Aggregate functions to compute (only used if HasAggregation is true)

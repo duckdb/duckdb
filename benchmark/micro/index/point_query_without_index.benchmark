@@ -2,6 +2,9 @@
 # description: Point query without index on randomly ordered data
 # group: [index]
 
+name Point Query (No Index, Random Data)
+group index
+
 load
 CREATE TABLE integers AS SELECT (i * 9876983769044 % 100000000) AS i, i + 2 AS j FROM range(0, 100000000) t(i);
 

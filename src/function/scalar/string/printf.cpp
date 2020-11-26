@@ -56,7 +56,7 @@ template <class FORMAT_FUN, class ctx>
 static void printf_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &format_string = args.data[0];
 	result.vector_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t i = 0; i < args.column_count(); i++) {
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		switch (args.data[i].vector_type) {
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(args.data[i])) {
@@ -86,11 +86,13 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 
 		// first fetch the format string
 		auto fmt_idx = format_string.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
-		auto format_string = format_data[fmt_idx].GetData();
+		auto format_string = format_data[fmt_idx].GetString();
 
 		// now gather all the format arguments
 		std::vector<duckdb_fmt::basic_format_arg<ctx>> format_args;
-		for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
+		std::vector<unique_ptr<data_t[]>> string_args;
+
+		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 			auto &col = args.data[col_idx];
 			idx_t arg_idx = col.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
 			switch (col.type.id()) {
@@ -131,7 +133,9 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 			}
 			case LogicalTypeId::VARCHAR: {
 				auto arg_data = FlatVector::GetData<string_t>(col);
-				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx].GetData()));
+				auto string_view =
+				    duckdb_fmt::basic_string_view<char>(arg_data[arg_idx].GetDataUnsafe(), arg_data[arg_idx].GetSize());
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(string_view));
 				break;
 			}
 			default:
@@ -139,7 +143,7 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 			}
 		}
 		// finally actually perform the format
-		string dynamic_result = FORMAT_FUN::template OP<ctx>(format_string, format_args);
+		string dynamic_result = FORMAT_FUN::template OP<ctx>(format_string.c_str(), format_args);
 		result_data[idx] = StringVector::AddString(result, dynamic_result);
 	}
 }

@@ -4,9 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
 
-#include <iomanip>
 #include <cstring>
-#include <iostream>
 #include <sstream>
 #include <cctype>
 
@@ -46,10 +44,10 @@ static void number_to_time(dtime_t n, int32_t &hour, int32_t &min, int32_t &sec,
 }
 
 // TODO this is duplicated in date.cpp
-static bool ParseDoubleDigit2(const char *buf, idx_t &pos, int32_t &result) {
-	if (std::isdigit((unsigned char)buf[pos])) {
+static bool ParseDoubleDigit2(const char *buf, idx_t len, idx_t &pos, int32_t &result) {
+	if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 		result = buf[pos++] - '0';
-		if (std::isdigit((unsigned char)buf[pos])) {
+		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 			result = (buf[pos++] - '0') + result * 10;
 		}
 		return true;
@@ -57,24 +55,37 @@ static bool ParseDoubleDigit2(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool strict) {
+bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
 	int32_t hour = -1, min = -1, sec = -1, msec = -1;
 	pos = 0;
+
+	if (len == 0) {
+		return false;
+	}
+
 	int sep;
 
 	// skip leading spaces
-	while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
 	}
 
-	if (!std::isdigit((unsigned char)buf[pos])) {
+	if (pos >= len) {
 		return false;
 	}
 
-	if (!ParseDoubleDigit2(buf, pos, hour)) {
+	if (!StringUtil::CharacterIsDigit(buf[pos])) {
+		return false;
+	}
+
+	if (!ParseDoubleDigit2(buf, len, pos, hour)) {
 		return false;
 	}
 	if (hour < 0 || hour > 24) {
+		return false;
+	}
+
+	if (pos >= len) {
 		return false;
 	}
 
@@ -85,10 +96,14 @@ bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool str
 		return false;
 	}
 
-	if (!ParseDoubleDigit2(buf, pos, min)) {
+	if (!ParseDoubleDigit2(buf, len, pos, min)) {
 		return false;
 	}
 	if (min < 0 || min > 60) {
+		return false;
+	}
+
+	if (pos >= len) {
 		return false;
 	}
 
@@ -96,7 +111,7 @@ bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool str
 		return false;
 	}
 
-	if (!ParseDoubleDigit2(buf, pos, sec)) {
+	if (!ParseDoubleDigit2(buf, len, pos, sec)) {
 		return false;
 	}
 	if (sec < 0 || sec > 60) {
@@ -104,10 +119,9 @@ bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool str
 	}
 
 	msec = 0;
-	sep = buf[pos++];
-	if (sep == '.') { // we expect some milliseconds
+	if (pos < len && buf[pos++] == '.') { // we expect some milliseconds
 		uint8_t mult = 100;
-		for (; std::isdigit((unsigned char)buf[pos]); pos++, mult /= 10) {
+		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
 			if (mult > 0) {
 				msec += (buf[pos] - '0') * mult;
 			}
@@ -117,11 +131,11 @@ bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool str
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
-		while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}
 		// check position. if end was not reached, non-space chars remaining
-		if (pos < strlen(buf)) {
+		if (pos < len) {
 			return false;
 		}
 	}
@@ -130,23 +144,23 @@ bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool str
 	return true;
 }
 
-dtime_t Time::FromCString(const char *buf, bool strict) {
+dtime_t Time::FromCString(const char *buf, idx_t len, bool strict) {
 	dtime_t result;
 	idx_t pos;
-	if (!TryConvertTime(buf, pos, result, strict)) {
+	if (!TryConvertTime(buf, len, pos, result, strict)) {
 		// last chance, check if we can parse as timestamp
 		if (!strict) {
 			return Timestamp::GetTime(Timestamp::FromString(buf));
 		}
 		throw ConversionException("time field value out of range: \"%s\", "
 		                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
-		                          buf);
+		                          string(buf, len));
 	}
 	return result;
 }
 
 dtime_t Time::FromString(string str, bool strict) {
-	return Time::FromCString(str.c_str(), strict);
+	return Time::FromCString(str.c_str(), str.size(), strict);
 }
 
 string Time::ToString(dtime_t time) {

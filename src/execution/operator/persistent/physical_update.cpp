@@ -55,14 +55,14 @@ void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state,
 
 	// update data in the base table
 	// the row ids are given to us as the last column of the child chunk
-	auto &row_ids = chunk.data[chunk.column_count() - 1];
+	auto &row_ids = chunk.data[chunk.ColumnCount() - 1];
 	update_chunk.SetCardinality(chunk);
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 			// default expression, set to the default value of the column
 			ustate.default_executor.ExecuteExpression(columns[i], update_chunk.data[i]);
 		} else {
-			assert(expressions[i]->type == ExpressionType::BOUND_REF);
+			D_ASSERT(expressions[i]->type == ExpressionType::BOUND_REF);
 			// index into child chunk
 			auto &binding = (BoundReferenceExpression &)*expressions[i];
 			update_chunk.data[i].Reference(chunk.data[binding.index]);

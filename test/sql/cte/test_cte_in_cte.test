@@ -1,0 +1,58 @@
+# name: test/sql/cte/test_cte_in_cte.test
+# description: Test Nested Common Table Expressions (CTE)
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a(i integer);
+
+statement ok
+insert into a values (42);
+
+query I
+with cte1 as (Select i as j from a) select * from cte1;
+----
+42
+
+query I
+with cte1 as (with b as (Select i as j from a) Select j from b) select x from cte1 t1(x);
+----
+42
+
+query I
+with cte1(xxx) as (with ncte(yyy) as (Select i as j from a) Select yyy from ncte) select xxx from cte1;
+----
+42
+
+query II
+with cte1 as (with b as (Select i as j from a) select j from b), cte2 as (with c as (select ref.j+1 as k from cte1 as ref) select k from c) select * from cte1 , cte2;
+----
+42	43
+
+# duplicate CTE alias
+statement error
+with cte1 as (select 42), cte1 as (select 42) select * FROM cte1;
+
+# refer to CTE in subquery tableref
+query I
+with cte1 as (Select i as j from a) select * from (with cte2 as (select max(j) as j from cte1) select * from cte2) f
+----
+42
+
+# refer to CTE in subquery expression
+query I
+with cte1 as (Select i as j from a) select * from cte1 where j = (with cte2 as (select max(j) as j from cte1) select j from cte2);
+----
+42
+
+# refer to same-named CTE in a subquery expression
+query I
+with cte as (Select i as j from a) select * from cte where j = (with cte as (select max(j) as j from cte) select j from cte);
+----
+42
+
+# self-refer to non-existent cte
+statement error
+with cte as (select * from cte) select * from cte

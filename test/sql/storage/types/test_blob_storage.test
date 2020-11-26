@@ -10,7 +10,7 @@ statement ok
 CREATE TABLE blobs (b BLOB);
 
 statement ok
-INSERT INTO blobs VALUES('a'), ('\xAA'), ('\xAAFFAA'),  (''), (NULL), ('\x55AAFF55AAFF55AAFF01'), ('\x55AAFF55AAFF55AAFF01')
+INSERT INTO blobs VALUES('a'), ('\xAA'), ('\xAA\xFF\xAA'),  (''), (NULL), ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01'), ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01')
 
 # reload the database from disk a few times, and check that the data is still there
 loop i 0 2
@@ -20,12 +20,12 @@ restart
 query I
 SELECT * FROM blobs
 ----
-\x61
+a
 \xAA
-\xAAFFAA
-\x
+\xAA\xFF\xAA
+(empty)
 NULL
-\x55AAFF55AAFF55AAFF01
-\x55AAFF55AAFF55AAFF01
+U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
+U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
 
 endloop

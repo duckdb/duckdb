@@ -16,76 +16,77 @@ namespace duckdb {
 // Logical Operator Types
 //===--------------------------------------------------------------------===//
 enum class LogicalOperatorType : uint8_t {
-	INVALID = 0,
-	PROJECTION = 1,
-	FILTER = 2,
-	AGGREGATE_AND_GROUP_BY = 3,
-	WINDOW = 4,
-	UNNEST = 5,
-	LIMIT = 6,
-	ORDER_BY = 7,
-	TOP_N = 8,
-	COPY_TO_FILE = 10,
-	DISTINCT = 11,
+	LOGICAL_INVALID = 0,
+	LOGICAL_PROJECTION = 1,
+	LOGICAL_FILTER = 2,
+	LOGICAL_AGGREGATE_AND_GROUP_BY = 3,
+	LOGICAL_WINDOW = 4,
+	LOGICAL_UNNEST = 5,
+	LOGICAL_LIMIT = 6,
+	LOGICAL_ORDER_BY = 7,
+	LOGICAL_TOP_N = 8,
+	LOGICAL_COPY_TO_FILE = 10,
+	LOGICAL_DISTINCT = 11,
 
 	// -----------------------------
 	// Data sources
 	// -----------------------------
-	GET = 25,
-	CHUNK_GET = 26,
-	DELIM_GET = 27,
-	EXPRESSION_GET = 28,
-	DUMMY_SCAN = 29,
-	EMPTY_RESULT = 30,
-	CTE_REF = 31,
+	LOGICAL_GET = 25,
+	LOGICAL_CHUNK_GET = 26,
+	LOGICAL_DELIM_GET = 27,
+	LOGICAL_EXPRESSION_GET = 28,
+	LOGICAL_DUMMY_SCAN = 29,
+	LOGICAL_EMPTY_RESULT = 30,
+	LOGICAL_CTE_REF = 31,
 	// -----------------------------
 	// Joins
 	// -----------------------------
-	JOIN = 50,
-	DELIM_JOIN = 51,
-	COMPARISON_JOIN = 52,
-	ANY_JOIN = 53,
-	CROSS_PRODUCT = 54,
+	LOGICAL_JOIN = 50,
+	LOGICAL_DELIM_JOIN = 51,
+	LOGICAL_COMPARISON_JOIN = 52,
+	LOGICAL_ANY_JOIN = 53,
+	LOGICAL_CROSS_PRODUCT = 54,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
-	UNION = 75,
-	EXCEPT = 76,
-	INTERSECT = 77,
-	RECURSIVE_CTE = 78,
+	LOGICAL_UNION = 75,
+	LOGICAL_EXCEPT = 76,
+	LOGICAL_INTERSECT = 77,
+	LOGICAL_RECURSIVE_CTE = 78,
 
 	// -----------------------------
 	// Updates
 	// -----------------------------
-	INSERT = 100,
-	DELETE = 101,
-	UPDATE = 102,
+	LOGICAL_INSERT = 100,
+	LOGICAL_DELETE = 101,
+	LOGICAL_UPDATE = 102,
 
 	// -----------------------------
 	// Schema
 	// -----------------------------
-	ALTER = 125,
-	CREATE_TABLE = 126,
-	CREATE_INDEX = 127,
-	CREATE_SEQUENCE = 128,
-	CREATE_VIEW = 129,
-	CREATE_SCHEMA = 130,
-	DROP = 131,
-	PRAGMA = 132,
-	TRANSACTION = 133,
+	LOGICAL_ALTER = 125,
+	LOGICAL_CREATE_TABLE = 126,
+	LOGICAL_CREATE_INDEX = 127,
+	LOGICAL_CREATE_SEQUENCE = 128,
+	LOGICAL_CREATE_VIEW = 129,
+	LOGICAL_CREATE_SCHEMA = 130,
+	LOGICAL_CREATE_MACRO = 131,
+	LOGICAL_DROP = 132,
+	LOGICAL_PRAGMA = 133,
+	LOGICAL_TRANSACTION = 134,
 
 	// -----------------------------
 	// Explain
 	// -----------------------------
-	EXPLAIN = 150,
+	LOGICAL_EXPLAIN = 150,
 
 	// -----------------------------
 	// Helpers
 	// -----------------------------
-	PREPARE = 175,
-	EXECUTE = 176,
-	EXPORT = 177,
-	VACUUM = 178
+	LOGICAL_PREPARE = 175,
+	LOGICAL_EXECUTE = 176,
+	LOGICAL_EXPORT = 177,
+	LOGICAL_VACUUM = 178
 };
 
 string LogicalOperatorToString(LogicalOperatorType type);

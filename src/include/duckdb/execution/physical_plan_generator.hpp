@@ -78,6 +78,10 @@ protected:
 	unique_ptr<PhysicalOperator> CreateDistinctOn(unique_ptr<PhysicalOperator> child,
 	                                              vector<unique_ptr<Expression>> distinct_targets);
 
+	unique_ptr<PhysicalOperator> ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,
+	                                                         vector<unique_ptr<Expression>> &expressions,
+	                                                         vector<unique_ptr<Expression>> &groups);
+
 private:
 	ClientContext &context;
 };

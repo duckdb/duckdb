@@ -6,14 +6,15 @@ using namespace std;
 IndexBinder::IndexBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult IndexBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
+BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = **expr_ptr;
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in index expressions");
 	case ExpressionClass::SUBQUERY:
 		return BindResult("cannot use subquery in index expressions");
 	default:
-		return ExpressionBinder::BindExpression(expr, depth);
+		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
 }
 

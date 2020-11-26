@@ -15,7 +15,8 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
 }
 
-BindResult SelectBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
+BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = **expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != INVALID_INDEX) {
@@ -27,7 +28,7 @@ BindResult SelectBinder::BindExpression(ParsedExpression &expr, idx_t depth, boo
 	case ExpressionClass::WINDOW:
 		return BindWindow((WindowExpression &)expr, depth);
 	default:
-		return ExpressionBinder::BindExpression(expr, depth);
+		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
 }
 
@@ -51,8 +52,8 @@ idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	}
 #ifdef DEBUG
 	for (auto entry : info.map) {
-		assert(!entry.first->Equals(&expr));
-		assert(!expr.Equals(entry.first));
+		D_ASSERT(!entry.first->Equals(&expr));
+		D_ASSERT(!expr.Equals(entry.first));
 	}
 #endif
 	return INVALID_INDEX;

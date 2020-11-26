@@ -9,30 +9,19 @@ DBItest::test_all(c(
   "send_query_stale_warning", # wontfix
   "send_statement_stale_warning", # wontfix
 
-  "send_query_immediate", # ???
-  "get_query_immediate", # ???
-  "send_statement_immediate", # ???
-  "execute_immediate", # ???
-
   if (packageVersion("DBItest") < "1.7.0.9004") "roundtrip_timestamp", # broken test
 
   "data_logical", # casting NULL issue
 
-  "roundtrip_time",
-  "roundtrip_mixed",
   "roundtrip_field_types", # strange
   "data_64_bit_numeric_warning", # not now
   "data_64_bit_lossless", # not now,
   "roundtrip_64_bit_character",
 
   # new tests skipped after DBI upgrade
-  "connect_format",
   "connect_bigint_integer",
   "connect_bigint_character",
   "connect_bigint_integer64",
-  "create_table_overwrite",
-  "append_table_return",
-  "append_table_append_incompatible",
   "append_roundtrip_keywords",
   "append_roundtrip_quotes",
   "append_roundtrip_integer",

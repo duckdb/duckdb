@@ -23,6 +23,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		break;
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
+	case CatalogType::MACRO_ENTRY:
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::TABLE_ENTRY: {
 		auto entry = (StandardEntry *)Catalog::GetCatalog(context).GetEntry(context, stmt.info->type, stmt.info->schema,
@@ -40,7 +41,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");
 	}
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::DROP, move(stmt.info));
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	return result;

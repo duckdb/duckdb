@@ -2,7 +2,7 @@
 # description: Test copy statement with unicode delimiter/quote/escape
 # group: [csv]
 
-# create three tables for testing
+# create tables for testing
 statement ok
 CREATE TABLE test_unicode_1 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));
 
@@ -56,13 +56,6 @@ query TT
 SELECT * FROM test_unicode_4;
 ----
 2 values hashing to 0bafca4292fa123d931621a1fff765a1
-
-# quote and escape must not be empty
-statement error
-COPY test_unicode_1 FROM 'test/sql/copy/csv/data/test/multi_char.csv' (DELIMITER '🦆', QUOTE '');
-
-statement error
-COPY test_unicode_1 FROM 'test/sql/copy/csv/data/test/multi_char.csv' (DELIMITER '🦆', ESCAPE '');
 
 # test same string for delimiter and quote
 statement error

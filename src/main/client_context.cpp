@@ -53,7 +53,7 @@ void ClientContext::Cleanup() {
 			transaction.Rollback();
 		}
 	}
-	assert(prepared_statements);
+	D_ASSERT(prepared_statements);
 	db.transaction_manager->AddCatalogSet(*this, move(prepared_statements));
 	// invalidate any prepared statements
 	for (auto &statement : prepared_statement_objects) {
@@ -165,7 +165,7 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	profiler.StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
-	assert(planner.plan);
+	D_ASSERT(planner.plan);
 	profiler.EndPhase();
 
 	auto plan = move(planner.plan);
@@ -180,7 +180,7 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 		profiler.StartPhase("optimizer");
 		Optimizer optimizer(planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
-		assert(plan);
+		D_ASSERT(plan);
 		profiler.EndPhase();
 	}
 
@@ -214,7 +214,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	executor.Initialize(move(statement.plan));
 
 	auto types = executor.GetTypes();
-	assert(types == statement.types);
+	D_ASSERT(types == statement.types);
 
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
@@ -229,7 +229,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 			break;
 		}
 #ifdef DEBUG
-		for (idx_t i = 0; i < chunk->column_count(); i++) {
+		for (idx_t i = 0; i < chunk->ColumnCount(); i++) {
 			if (statement.types[i].id() == LogicalTypeId::VARCHAR) {
 				chunk->data[i].UTFVerify(chunk->size());
 			}
@@ -249,18 +249,48 @@ void ClientContext::InitialCleanup() {
 	interrupted = false;
 }
 
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query, idx_t *n_prepared_statements) {
+vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query) {
 	Parser parser;
 	parser.ParseQuery(query);
-
-	if (n_prepared_statements) {
-		*n_prepared_statements = parser.n_prepared_parameters;
-	}
 
 	PragmaHandler handler(*this);
 	handler.HandlePragmaStatements(parser.statements);
 
 	return move(parser.statements);
+}
+
+unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLStatement> statement) {
+	auto n_param = statement->n_param;
+
+	// now write the prepared statement data into the catalog
+	string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
+	prepare_count++;
+	// create a prepare statement out of the underlying statement
+	auto prepare = make_unique<PrepareStatement>();
+	prepare->name = prepare_name;
+	prepare->statement = move(statement);
+
+	// now perform the actual PREPARE query
+	auto result = RunStatement(query, move(prepare), false);
+	if (!result->success) {
+		throw Exception(result->error);
+	}
+	auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
+	auto prepared_object =
+	    make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared, n_param);
+	prepared_statement_objects.insert(prepared_object.get());
+	return prepared_object;
+}
+
+unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
+	lock_guard<mutex> client_guard(context_lock);
+	// prepare the query
+	try {
+		InitialCleanup();
+		return PrepareInternal(move(statement));
+	} catch (Exception &ex) {
+		return make_unique<PreparedStatement>(ex.what());
+	}
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
@@ -270,32 +300,14 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 		InitialCleanup();
 
 		// first parse the query
-		idx_t n_prepared_parameters;
-		auto statements = ParseStatements(query, &n_prepared_parameters);
+		auto statements = ParseStatements(query);
 		if (statements.size() == 0) {
 			throw Exception("No statement to prepare!");
 		}
 		if (statements.size() > 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
-		// now write the prepared statement data into the catalog
-		string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
-		prepare_count++;
-		// create a prepare statement out of the underlying statement
-		auto prepare = make_unique<PrepareStatement>();
-		prepare->name = prepare_name;
-		prepare->statement = move(statements[0]);
-
-		// now perform the actual PREPARE query
-		auto result = RunStatement(query, move(prepare), false);
-		if (!result->success) {
-			throw Exception(result->error);
-		}
-		auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
-		auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared,
-		                                                      n_prepared_parameters);
-		prepared_statement_objects.insert(prepared_object.get());
-		return prepared_object;
+		return PrepareInternal(move(statements[0]));
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
@@ -388,7 +400,7 @@ unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_
 	}
 	if (!result->success) {
 		// initial failures should always be reported as MaterializedResult
-		assert(result->type != QueryResultType::STREAM_RESULT);
+		D_ASSERT(result->type != QueryResultType::STREAM_RESULT);
 		// query failed: abort now
 		FinalizeQuery(false);
 		return result;
@@ -432,14 +444,31 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
+void ClientContext::LogQueryInternal(string query) {
+	if (!log_query_writer) {
+		return;
+	}
+	// log query path is set: log the query
+	log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
+	log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+	log_query_writer->Flush();
+}
+
+unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (log_query_writer) {
-		// log query path is set: log the query
-		log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
-		log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
-		log_query_writer->Flush();
+		LogQueryInternal(statement->query.substr(statement->stmt_location, statement->stmt_length));
 	}
+
+	vector<unique_ptr<SQLStatement>> statements;
+	statements.push_back(move(statement));
+
+	return RunStatements(query, statements, allow_stream_result);
+}
+
+unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
+	lock_guard<mutex> client_guard(context_lock);
+	LogQueryInternal(query);
 
 	vector<unique_ptr<SQLStatement>> statements;
 	try {
@@ -499,7 +528,7 @@ void ClientContext::Invalidate() {
 }
 
 string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
-	assert(statement->type == StatementType::SELECT_STATEMENT);
+	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// aggressive query verification
 
 	// the purpose of this function is to test correctness of otherwise hard to test features:
@@ -520,26 +549,26 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	BufferedDeserializer source(serializer);
 	auto deserialized_stmt = SelectStatement::Deserialize(source);
 	// all the statements should be equal
-	assert(copied_stmt->Equals(statement.get()));
-	assert(deserialized_stmt->Equals(statement.get()));
-	assert(copied_stmt->Equals(deserialized_stmt.get()));
+	D_ASSERT(copied_stmt->Equals(statement.get()));
+	D_ASSERT(deserialized_stmt->Equals(statement.get()));
+	D_ASSERT(copied_stmt->Equals(deserialized_stmt.get()));
 
 	// now perform checking on the expressions
 #ifdef DEBUG
 	auto &orig_expr_list = select_stmt->node->GetSelectList();
 	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
 	auto &cp_expr_list = copied_stmt->node->GetSelectList();
-	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
+	D_ASSERT(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (idx_t i = 0; i < orig_expr_list.size(); i++) {
 		// run the ToString, to verify that it doesn't crash
 		orig_expr_list[i]->ToString();
 		// check that the expressions are equivalent
-		assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
-		assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
-		assert(de_expr_list[i]->Equals(cp_expr_list[i].get()));
+		D_ASSERT(orig_expr_list[i]->Equals(de_expr_list[i].get()));
+		D_ASSERT(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
+		D_ASSERT(de_expr_list[i]->Equals(cp_expr_list[i].get()));
 		// check that the hashes are equivalent too
-		assert(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
-		assert(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
+		D_ASSERT(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
+		D_ASSERT(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
 	}
 	// now perform additional checking within the expressions
 	for (idx_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
@@ -548,7 +577,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 			auto hash2 = orig_expr_list[inner_idx]->Hash();
 			if (hash != hash2) {
 				// if the hashes are not equivalent, the expressions should not be equivalent
-				assert(!orig_expr_list[outer_idx]->Equals(orig_expr_list[inner_idx].get()));
+				D_ASSERT(!orig_expr_list[outer_idx]->Equals(orig_expr_list[inner_idx].get()));
 			}
 		}
 	}
@@ -727,7 +756,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 		// bind the expressions
 		Binder binder(*this);
 		auto result = relation.Bind(binder);
-		assert(result.names.size() == result.types.size());
+		D_ASSERT(result.names.size() == result.types.size());
 		for (idx_t i = 0; i < result.names.size(); i++) {
 			result_columns.push_back(ColumnDefinition(result.names[i], result.types[i]));
 		}

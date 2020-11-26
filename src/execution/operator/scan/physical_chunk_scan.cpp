@@ -15,15 +15,15 @@ public:
 
 void PhysicalChunkScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalChunkScanState *)state_;
-	assert(collection);
-	if (collection->count == 0) {
+	D_ASSERT(collection);
+	if (collection->Count() == 0) {
 		return;
 	}
-	assert(chunk.GetTypes() == collection->types);
-	if (state->chunk_index >= collection->chunks.size()) {
+	D_ASSERT(chunk.GetTypes() == collection->Types());
+	if (state->chunk_index >= collection->ChunkCount()) {
 		return;
 	}
-	auto &collection_chunk = *collection->chunks[state->chunk_index];
+	auto &collection_chunk = collection->GetChunk(state->chunk_index);
 	chunk.Reference(collection_chunk);
 	state->chunk_index++;
 }

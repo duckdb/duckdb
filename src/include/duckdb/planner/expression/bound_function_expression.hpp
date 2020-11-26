@@ -31,6 +31,7 @@ public:
 	bool is_operator;
 
 public:
+	bool HasSideEffects() const override;
 	bool IsFoldable() const override;
 	string ToString() const override;
 

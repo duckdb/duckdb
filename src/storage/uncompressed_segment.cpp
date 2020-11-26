@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -73,7 +74,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t 
 void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction,
                                  Vector &update, row_t *ids, idx_t count, row_t offset) {
 	// can only perform in-place updates on temporary blocks
-	assert(block_id >= MAXIMUM_BLOCK);
+	D_ASSERT(block_id >= MAXIMUM_BLOCK);
 
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
@@ -81,7 +82,7 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 #ifdef DEBUG
 	// verify that the ids are sorted and there are no duplicates
 	for (idx_t i = 1; i < count; i++) {
-		assert(ids[i] > ids[i - 1]);
+		D_ASSERT(ids[i] > ids[i - 1]);
 	}
 #endif
 
@@ -99,8 +100,8 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 	idx_t vector_index = (first_id - offset) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = offset + vector_index * STANDARD_VECTOR_SIZE;
 
-	assert(first_id >= offset);
-	assert(vector_index < max_vector_count);
+	D_ASSERT(first_id >= offset);
+	D_ASSERT(vector_index < max_vector_count);
 
 	// first check the version chain
 	UpdateInfo *node = nullptr;
@@ -129,7 +130,7 @@ UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Trans
 	// set up the tuple ids
 	node->N = count;
 	for (idx_t i = 0; i < count; i++) {
-		assert((idx_t)ids[i] >= vector_offset && (idx_t)ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
+		D_ASSERT((idx_t)ids[i] >= vector_offset && (idx_t)ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
 		node->tuples[i] = ids[i] - vector_offset;
 	};
 	return node;

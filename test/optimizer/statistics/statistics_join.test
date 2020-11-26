@@ -1,0 +1,190 @@
+# name: test/optimizer/statistics/statistics_join.test
+# description: Statistics propagation test with joins
+# group: [statistics]
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM (VALUES (4), (5), (6)) tbl(i);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# inner join
+# join cannot match
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i=i2.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i>i2.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i>=i2.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i<i1.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i<=i1.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# join is guaranteed to match
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i<i2.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i<=i2.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i>i1.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+
+query II
+EXPLAIN SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i>=i1.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+
+# left join
+# join cannot match
+# note that the result is not actually empty here; only the RHS is set to the empty result
+query II
+EXPLAIN SELECT i1.i FROM integers i1 LEFT JOIN integers2 i2 ON i1.i=i2.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# left join with guaranteed match: same as inner join
+query II
+EXPLAIN SELECT i1.i FROM integers i1 LEFT JOIN integers2 i2 ON i1.i<i2.i ORDER BY 1;
+----
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+
+# semi join
+# join cannot match: replaced with empty result
+query II
+explain select * from integers where i > any(select * from integers2) order by 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# join is guaranteed to match: entire join is stripped away
+query II
+explain select * from integers where i < any(select * from integers2) order by 1;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i=i2.i ORDER BY 1;
+----
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i>i2.i ORDER BY 1;
+----
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i>=i2.i ORDER BY 1;
+----
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i<i1.i ORDER BY 1;
+----
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i<=i1.i ORDER BY 1;
+----
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i<i2.i ORDER BY 1;
+----
+1
+1
+1
+2
+2
+2
+3
+3
+3
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i1.i<=i2.i ORDER BY 1;
+----
+1
+1
+1
+2
+2
+2
+3
+3
+3
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i>i1.i ORDER BY 1;
+----
+1
+1
+1
+2
+2
+2
+3
+3
+3
+
+query I
+SELECT i1.i FROM integers i1 JOIN integers2 i2 ON i2.i>=i1.i ORDER BY 1;
+----
+1
+1
+1
+2
+2
+2
+3
+3
+3
+
+query I
+SELECT i1.i FROM integers i1 LEFT JOIN integers2 i2 ON i1.i=i2.i ORDER BY 1;
+----
+1
+2
+3
+
+query I
+SELECT i1.i FROM integers i1 LEFT JOIN integers2 i2 ON i1.i<i2.i ORDER BY 1;
+----
+1
+1
+1
+2
+2
+2
+3
+3
+3
+
+query I
+select * from integers where i > any(select * from integers2) order by 1;
+----
+
+query I
+select * from integers where i < any(select * from integers2) order by 1;
+----
+1
+2
+3

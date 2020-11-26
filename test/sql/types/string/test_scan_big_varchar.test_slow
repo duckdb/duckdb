@@ -1,0 +1,152 @@
+# name: test/sql/types/string/test_scan_big_varchar.test_slow
+# description: Test scanning many big varchar strings with limited memory
+# group: [string]
+
+statement error
+PRAGMA memory_limit=100000000
+
+statement ok
+CREATE TABLE test (a VARCHAR);
+
+# create a big varchar (10K characters)
+statement ok
+INSERT INTO test VALUES ('aaaaaaaaaa')
+
+# sizes: 10, 100, 1000, 10000
+statement ok
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)
+
+statement ok
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)
+
+statement ok
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)
+
+# now create a second table, we only insert the big varchar string in there
+statement ok
+CREATE TABLE bigtable (a VARCHAR);
+
+statement ok
+INSERT INTO bigtable SELECT a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)
+
+# verify that the append worked
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+1	1	10000	10000.000000
+
+# we create a total of 16K entries in the big table
+# the total size of this table is 16K*10K = 160MB
+# we then scan the table at every step, as our buffer pool is limited to 100MB not all strings fit in memory
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+2	2	10000	20000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+4	4	10000	40000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+8	8	10000	80000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+16	16	10000	160000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+32	32	10000	320000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+64	64	10000	640000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+128	128	10000	1280000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+256	256	10000	2560000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+512	512	10000	5120000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+1024	1024	10000	10240000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+2048	2048	10000	20480000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+4096	4096	10000	40960000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+8192	8192	10000	81920000.000000
+
+statement ok
+INSERT INTO bigtable SELECT * FROM bigtable
+
+query IIIR
+SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable
+----
+16384	16384	10000	163840000.000000
+

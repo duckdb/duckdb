@@ -6,6 +6,7 @@
 #include "duckdb.hpp"
 
 #include <cstring>
+#include <cassert>
 
 #ifdef _WIN32
 #define strdup _strdup
@@ -71,7 +72,7 @@ void duckdb_disconnect(duckdb_connection *connection) {
 template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	idx_t row = 0;
 	auto target = (T *)out->columns[col].data;
-	for (auto &chunk : source.chunks) {
+	for (auto &chunk : source.Chunks()) {
 		auto source = FlatVector::GetData<T>(chunk->data[col]);
 		auto &nullmask = FlatVector::Nullmask(chunk->data[col]);
 
@@ -85,7 +86,7 @@ template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, i
 }
 
 static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_result *out) {
-	assert(result);
+	D_ASSERT(result);
 	if (!out) {
 		// no result to write to, only return the status
 		return result->success ? DuckDBSuccess : DuckDBError;
@@ -99,7 +100,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// copy the data
 	// first write the meta data
 	out->column_count = result->types.size();
-	out->row_count = result->collection.count;
+	out->row_count = result->collection.Count();
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) {
 		return DuckDBError;
@@ -124,7 +125,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	for (idx_t col = 0; col < out->column_count; col++) {
 		// first set the nullmask
 		idx_t row = 0;
-		for (auto &chunk : result->collection.chunks) {
+		for (auto &chunk : result->collection.Chunks()) {
 			for (idx_t k = 0; k < chunk->size(); k++) {
 				out->columns[col].nullmask[row++] = FlatVector::IsNull(chunk->data[col], k);
 			}
@@ -155,11 +156,15 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::VARCHAR: {
 			idx_t row = 0;
 			auto target = (const char **)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
-						target[row] = strdup(source[k].GetData());
+						target[row] = (char *)malloc(source[k].GetSize() + 1);
+						assert(target[row]);
+						memcpy((void *)target[row], source[k].GetDataUnsafe(), source[k].GetSize());
+						auto write_arr = (char *)target[row];
+						write_arr[source[k].GetSize()] = '\0';
 					}
 					row++;
 				}
@@ -169,7 +174,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::DATE: {
 			idx_t row = 0;
 			auto target = (duckdb_date *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<date_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -187,7 +192,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::TIME: {
 			idx_t row = 0;
 			auto target = (duckdb_time *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<dtime_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -206,7 +211,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::TIMESTAMP: {
 			idx_t row = 0;
 			auto target = (duckdb_timestamp *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<timestamp_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -236,7 +241,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::HUGEINT: {
 			idx_t row = 0;
 			auto target = (duckdb_hugeint *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<hugeint_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -251,7 +256,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::INTERVAL: {
 			idx_t row = 0;
 			auto target = (duckdb_interval *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<interval_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -266,7 +271,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		}
 		default:
 			// unsupported type for C API
-			assert(0);
+			D_ASSERT(0);
 			return DuckDBError;
 		}
 	}
@@ -400,7 +405,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 	auto result = wrapper->statement->Execute(wrapper->values, false);
-	assert(result->type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	auto mat_res = (MaterializedQueryResult *)result.get();
 	return duckdb_translate_result(mat_res, out_result);
 }
@@ -479,13 +484,13 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(duckdb_interval);
 	default:
 		// unsupported type
-		assert(0);
+		D_ASSERT(0);
 		return sizeof(const char *);
 	}
 }
 
 template <class T> T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
-	assert(row < result->row_count);
+	D_ASSERT(row < result->row_count);
 	return ((T *)result->columns[col].data)[row];
 }
 
@@ -546,7 +551,7 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
 	default:
 		// invalid type for C to C++ conversion
-		assert(0);
+		D_ASSERT(0);
 		return Value();
 	}
 }

@@ -205,11 +205,11 @@ When done, free XXH state space if it was allocated dynamically.
 *  Utils
 ****************************/
 #if !(defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L))   /* ! C99 */
-#  define restrict   /* disable restrict */
+#  define __restrict   /* disable restrict */
 #endif
 
-XXH_PUBLIC_API void XXH32_copyState(XXH32_state_t* restrict dst_state, const XXH32_state_t* restrict src_state);
-XXH_PUBLIC_API void XXH64_copyState(XXH64_state_t* restrict dst_state, const XXH64_state_t* restrict src_state);
+XXH_PUBLIC_API void XXH32_copyState(XXH32_state_t* __restrict dst_state, const XXH32_state_t* __restrict src_state);
+XXH_PUBLIC_API void XXH64_copyState(XXH64_state_t* __restrict dst_state, const XXH64_state_t* __restrict src_state);
 
 
 /* **************************

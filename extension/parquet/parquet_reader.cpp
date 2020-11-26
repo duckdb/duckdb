@@ -1,11 +1,14 @@
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
+#include "parquet_file_metadata_cache.hpp"
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -13,6 +16,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
@@ -24,6 +28,8 @@
 #include "utf8proc_wrapper.hpp"
 
 #include <sstream>
+#include <cassert>
+#include <chrono>
 
 namespace duckdb {
 
@@ -34,6 +40,7 @@ using namespace apache::thrift::transport;
 using namespace duckdb_miniz;
 
 using parquet::format::CompressionCodec;
+using parquet::format::ConvertedType;
 using parquet::format::Encoding;
 using parquet::format::FieldRepetitionType;
 using parquet::format::FileMetaData;
@@ -41,7 +48,6 @@ using parquet::format::PageHeader;
 using parquet::format::PageType;
 using parquet::format::RowGroup;
 using parquet::format::Type;
-using parquet::format::ConvertedType;
 
 // adapted from arrow parquet reader
 class RleBpDecoder {
@@ -162,7 +168,7 @@ private:
 	static const uint8_t BITPACK_DLEN;
 
 	template <typename T> uint32_t BitUnpack(T *dest, uint32_t count) {
-		assert(bit_width_ < 32);
+		D_ASSERT(bit_width_ < 32);
 
 		// auto source = buffer;
 		auto mask = BITPACK_MASKS[bit_width_];
@@ -203,7 +209,25 @@ template <class T> static void thrift_unpack(const uint8_t *buf, uint32_t *len, 
 	*len = *len - bytes_left;
 }
 
-ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types)
+static unique_ptr<parquet::format::FileMetaData> read_metadata(duckdb::FileSystem &fs, duckdb::FileHandle *handle,
+                                                               uint32_t footer_len, uint64_t file_size) {
+	auto metadata = make_unique<parquet::format::FileMetaData>();
+	// read footer into buffer and de-thrift
+	ResizeableBuffer buf;
+	buf.resize(footer_len);
+	fs.Read(*handle, buf.ptr, footer_len, file_size - (footer_len + 8));
+	thrift_unpack((const uint8_t *)buf.ptr, &footer_len, metadata.get());
+	return metadata;
+}
+
+static shared_ptr<ParquetFileMetadataCache> load_metadata(duckdb::FileSystem &fs, duckdb::FileHandle *handle,
+                                                          uint32_t footer_len, uint64_t file_size) {
+	return make_shared<ParquetFileMetadataCache>(read_metadata(fs, handle, footer_len, file_size),
+	                                             chrono::system_clock::to_time_t(chrono::system_clock::now()));
+}
+
+ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types,
+                             string initial_filename)
     : file_name(move(file_name_)), context(context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 
@@ -239,20 +263,29 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		throw FormatException("Footer length %d is too big for the file of size %d", footer_len, file_size);
 	}
 
-	// read footer into buffer and de-thrift
-	buf.resize(footer_len);
-	fs.Read(*handle, buf.ptr, footer_len, file_size - (footer_len + 8));
+	// If object cached is disabled
+	// or if this file has cached metadata
+	// or if the cached version already expired
+	if (!context.db.config.object_cache_enable) {
+		metadata = load_metadata(fs, handle.get(), footer_len, file_size);
+	} else {
+		metadata = dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
+		if (!metadata || (fs.GetLastModifiedTime(*handle) >= metadata->read_time)) {
+			metadata = load_metadata(fs, handle.get(), footer_len, file_size);
+			context.db.object_cache->Put(file_name, dynamic_pointer_cast<ObjectCacheEntry>(metadata));
+		}
+	}
 
-	thrift_unpack((const uint8_t *)buf.ptr, &footer_len, &file_meta_data);
+	auto file_meta_data = GetFileMetadata();
 
-	if (file_meta_data.__isset.encryption_algorithm) {
+	if (file_meta_data->__isset.encryption_algorithm) {
 		throw FormatException("Encrypted Parquet files are not supported");
 	}
 	// check if we like this schema
-	if (file_meta_data.schema.size() < 2) {
+	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one column in the file");
 	}
-	if (file_meta_data.schema[0].num_children != (int32_t)(file_meta_data.schema.size() - 1)) {
+	if (file_meta_data->schema[0].num_children != (int32_t)(file_meta_data->schema.size() - 1)) {
 		throw FormatException("Only flat tables are supported (no nesting)");
 	}
 
@@ -260,8 +293,8 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	bool has_expected_types = expected_types.size() > 0;
 
 	// skip the first column its the root and otherwise useless
-	for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size(); col_idx++) {
-		auto &s_ele = file_meta_data.schema[col_idx];
+	for (uint64_t col_idx = 1; col_idx < file_meta_data->schema.size(); col_idx++) {
+		auto &s_ele = file_meta_data->schema[col_idx];
 		if (!s_ele.__isset.type || s_ele.num_children > 0) {
 			throw FormatException("Only flat tables are supported (no nesting)");
 		}
@@ -280,14 +313,18 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 			type = LogicalType::INTEGER;
 			break;
 		case Type::INT64:
-			switch(s_ele.converted_type) {
-			case ConvertedType::TIMESTAMP_MICROS:
-			case ConvertedType::TIMESTAMP_MILLIS:
-				type = LogicalType::TIMESTAMP;
-				break;
-			default:
+			if (s_ele.__isset.converted_type) {
+				switch (s_ele.converted_type) {
+				case ConvertedType::TIMESTAMP_MICROS:
+				case ConvertedType::TIMESTAMP_MILLIS:
+					type = LogicalType::TIMESTAMP;
+					break;
+				default:
+					type = LogicalType::BIGINT;
+					break;
+				}
+			} else {
 				type = LogicalType::BIGINT;
-				break;
 			}
 			break;
 		case Type::INT96: // always a timestamp?
@@ -302,15 +339,34 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 			//			case parquet::format::Type::FIXED_LEN_BYTE_ARRAY: {
 			// TODO some decimals yuck
 		case Type::BYTE_ARRAY:
-			type = LogicalType::VARCHAR;
+			if (s_ele.__isset.converted_type) {
+				switch (s_ele.converted_type) {
+				case ConvertedType::UTF8:
+					type = LogicalType::VARCHAR;
+					break;
+				default:
+					type = LogicalType::BLOB;
+					break;
+				}
+			} else {
+				type = LogicalType::BLOB;
+			}
 			break;
 		default:
 			throw FormatException("Unsupported type");
 		}
 		if (has_expected_types) {
 			if (return_types[col_idx - 1] != type) {
-				throw FormatException("PARQUET file contains type %s, could not auto cast to type %s", type.ToString(),
-				                      return_types[col_idx - 1].ToString());
+				if (initial_filename.empty()) {
+					throw FormatException("column \"%s\" in parquet file is of type %s, could not auto cast to "
+					                      "expected type %s for this column",
+					                      s_ele.name, type.ToString(), return_types[col_idx - 1].ToString());
+				} else {
+					throw FormatException("schema mismatch in Parquet glob: column \"%s\" in parquet file is of type "
+					                      "%s, but in the original file \"%s\" this column is of type \"%s\"",
+					                      s_ele.name, type.ToString(), initial_filename,
+					                      return_types[col_idx - 1].ToString());
+				}
 			}
 		} else {
 			names.push_back(s_ele.name);
@@ -322,21 +378,26 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 ParquetReader::~ParquetReader() {
 }
 
+const parquet::format::FileMetaData *ParquetReader::GetFileMetadata() {
+	D_ASSERT(metadata);
+	D_ASSERT(metadata->metadata);
+	return metadata->metadata.get();
+}
+
 ParquetReaderColumnData::~ParquetReaderColumnData() {
 }
 
 struct ValueIsValid {
-	template<class T>
-	static bool Operation(T value) {
+	template <class T> static bool Operation(T value) {
 		return true;
 	}
 };
 
-template<> bool ValueIsValid::Operation(float value) {
+template <> bool ValueIsValid::Operation(float value) {
 	return Value::FloatIsValid(value);
 }
 
-template<> bool ValueIsValid::Operation(double value) {
+template <> bool ValueIsValid::Operation(double value) {
 	return Value::DoubleIsValid(value);
 }
 
@@ -380,24 +441,24 @@ void ParquetReader::fill_from_plain(ParquetReaderColumnData &col_data, idx_t cou
 	}
 }
 
-template<class T, timestamp_t (*FUNC)(const T &input)>
+template <class T, timestamp_t (*FUNC)(const T &input)>
 static void fill_timestamp_plain(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
 	for (idx_t i = 0; i < count; i++) {
 		if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 			auto value = col_data.payload.read<T>();
-			((timestamp_t *)FlatVector::GetData(target))[i + target_offset] =
-				FUNC(value);
+			((timestamp_t *)FlatVector::GetData(target))[i + target_offset] = FUNC(value);
 		} else {
 			FlatVector::SetNull(target, i + target_offset, true);
 		}
 	}
 }
 
-RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
-	assert(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
-	assert(state.group_idx_list[state.current_group] >= 0 &&
-	       state.group_idx_list[state.current_group] < file_meta_data.row_groups.size());
-	return file_meta_data.row_groups[state.group_idx_list[state.current_group]];
+const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
+	auto file_meta_data = GetFileMetadata();
+	D_ASSERT(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
+	D_ASSERT(state.group_idx_list[state.current_group] >= 0 &&
+	         state.group_idx_list[state.current_group] < file_meta_data->row_groups.size());
+	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
 }
 
 timestamp_t arrow_timestamp_micros_to_timestamp(const int64_t &raw_ts) {
@@ -407,7 +468,7 @@ timestamp_t arrow_timestamp_ms_to_timestamp(const int64_t &raw_ts) {
 	return Timestamp::FromEpochMs(raw_ts);
 }
 
-template<class T, timestamp_t (*FUNC)(const T &input)>
+template <class T, timestamp_t (*FUNC)(const T &input)>
 static void fill_timestamp_dict(ParquetReaderColumnData &col_data) {
 	// immediately convert timestamps to duckdb format, potentially fewer conversions
 	for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
@@ -416,9 +477,21 @@ static void fill_timestamp_dict(ParquetReaderColumnData &col_data) {
 	}
 }
 
+void ParquetReader::VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len) {
+	if (id != LogicalTypeId::VARCHAR) {
+		return;
+	}
+	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
+	// technically Parquet should guarantee this, but reality is often disappointing
+	auto utf_type = Utf8Proc::Analyze(str_data, str_len);
+	if (utf_type == UnicodeType::INVALID) {
+		throw FormatException("Invalid string encoding found in Parquet file: value is not valid UTF8!");
+	}
+}
+
 bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx) {
 	auto &col_data = *state.column_data[col_idx];
-	auto &s_ele = file_meta_data.schema[col_idx + 1];
+	auto &s_ele = GetFileMetadata()->schema[col_idx + 1];
 	auto &chunk = GetGroup(state).columns[col_idx];
 
 	// clean up a bit to avoid nasty surprises
@@ -501,8 +574,9 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	}
 	case CompressionCodec::ZSTD: {
 		col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
-		auto res = duckdb_zstd::ZSTD_decompress(col_data.decompressed_buf.ptr, page_hdr.uncompressed_page_size, col_data.buf.ptr, page_hdr.compressed_page_size);
-		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t) page_hdr.uncompressed_page_size) {
+		auto res = duckdb_zstd::ZSTD_decompress(col_data.decompressed_buf.ptr, page_hdr.uncompressed_page_size,
+		                                        col_data.buf.ptr, page_hdr.compressed_page_size);
+		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)page_hdr.uncompressed_page_size) {
 			throw FormatException("ZSTD Decompression failure");
 		}
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
@@ -511,7 +585,8 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	default: {
 		std::stringstream codec_name;
 		codec_name << chunk.meta_data.codec;
-		throw FormatException("Unsupported compression codec \"" + codec_name.str() + "\". Supported options are uncompressed, gzip or snappy");
+		throw FormatException("Unsupported compression codec \"" + codec_name.str() +
+		                      "\". Supported options are uncompressed, gzip or snappy");
 	}
 	}
 	col_data.buf.inc(page_hdr.compressed_page_size);
@@ -552,10 +627,10 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 			break;
 		case LogicalTypeId::TIMESTAMP:
 			col_data.payload.available(dict_byte_size);
-			switch(s_ele.type) {
+			switch (s_ele.type) {
 			case Type::INT64:
 				// arrow timestamp
-				switch(s_ele.converted_type) {
+				switch (s_ele.converted_type) {
 				case ConvertedType::TIMESTAMP_MICROS:
 					fill_timestamp_dict<int64_t, arrow_timestamp_micros_to_timestamp>(col_data);
 					break;
@@ -574,14 +649,13 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 				throw InternalException("Unsupported type for timestamp");
 			}
 			break;
+		case LogicalTypeId::BLOB:
 		case LogicalTypeId::VARCHAR: {
 			// strings we directly fill a string heap that we can use for the vectors later
 			col_data.string_collection = make_unique<ChunkCollection>();
 
-			// we hand-roll a chunk collection to avoid copying strings
 			auto append_chunk = make_unique<DataChunk>();
-			vector<LogicalType> types = {LogicalType::VARCHAR};
-			col_data.string_collection->types = types;
+			vector<LogicalType> types = {return_types[col_idx]};
 			append_chunk->Initialize(types);
 
 			for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
@@ -589,26 +663,19 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 				col_data.payload.available(str_len);
 
 				if (append_chunk->size() == STANDARD_VECTOR_SIZE) {
-					col_data.string_collection->count += append_chunk->size();
-					col_data.string_collection->chunks.push_back(move(append_chunk));
-					append_chunk = make_unique<DataChunk>();
-					append_chunk->Initialize(types);
+					col_data.string_collection->Append(*append_chunk);
 				}
 
-				auto utf_type = Utf8Proc::Analyze(col_data.payload.ptr, str_len);
-				if (utf_type == UnicodeType::INVALID) {
-					throw FormatException("invalid string encoding");
-				}
+				VerifyString(return_types[col_idx].id(), col_data.payload.ptr, str_len);
 				FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-				    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
+				    StringVector::AddStringOrBlob(append_chunk->data[0], string_t(col_data.payload.ptr, str_len));
 
 				append_chunk->SetCardinality(append_chunk->size() + 1);
 				col_data.payload.inc(str_len);
 			}
 			// FLUSH last chunk!
 			if (append_chunk->size() > 0) {
-				col_data.string_collection->count += append_chunk->size();
-				col_data.string_collection->chunks.push_back(move(append_chunk));
+				col_data.string_collection->Append(*append_chunk);
 			}
 			col_data.string_collection->Verify();
 		} break;
@@ -633,7 +700,8 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 				// read length of define payload, always
 				uint32_t def_length = col_data.payload.read<uint32_t>();
 				col_data.payload.available(def_length);
-				col_data.defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
+				col_data.defined_decoder =
+				    make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
 				col_data.payload.inc(def_length);
 			} break;
 			default:
@@ -687,7 +755,7 @@ void ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 
 	state.column_data[col_idx]->has_nulls =
-	             file_meta_data.schema[col_idx + 1].repetition_type == FieldRepetitionType::OPTIONAL;
+	    GetFileMetadata()->schema[col_idx + 1].repetition_type == FieldRepetitionType::OPTIONAL;
 
 	// read entire chunk into RAM
 	state.column_data[col_idx]->buf.resize(chunk_len);
@@ -695,11 +763,11 @@ void ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 }
 
 idx_t ParquetReader::NumRows() {
-	return file_meta_data.num_rows;
+	return GetFileMetadata()->num_rows;
 }
 
 idx_t ParquetReader::NumRowGroups() {
-	return file_meta_data.row_groups.size();
+	return GetFileMetadata()->row_groups.size();
 }
 
 void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> column_ids,
@@ -729,7 +797,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 			return;
 		}
 
-		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
+		for (idx_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
 			auto file_col_idx = state.column_ids[out_col_idx];
 
 			// this is a special case where we are not interested in the actual contents of the file
@@ -749,14 +817,16 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 		return;
 	}
 
-	for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
+	auto file_meta_data = GetFileMetadata();
+
+	for (idx_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
 		auto file_col_idx = state.column_ids[out_col_idx];
 		if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			Value constant_42 = Value::BIGINT(42);
 			output.data[out_col_idx].Reference(constant_42);
 			continue;
 		}
-		auto &s_ele = file_meta_data.schema[file_col_idx + 1];
+		auto &s_ele = file_meta_data->schema[file_col_idx + 1];
 		auto &col_data = *state.column_data[file_col_idx];
 
 		// we might need to read multiple pages to fill the data chunk
@@ -774,7 +844,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 			auto current_batch_size =
 			    MinValue<idx_t>(col_data.page_value_count - col_data.page_offset, output.size() - output_offset);
 
-			assert(current_batch_size > 0);
+			D_ASSERT(current_batch_size > 0);
 
 			if (col_data.has_nulls) {
 				col_data.defined_buf.resize(current_batch_size);
@@ -817,13 +887,14 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 				case LogicalTypeId::TIMESTAMP:
 					fill_from_dict<timestamp_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
+				case LogicalTypeId::BLOB:
 				case LogicalTypeId::VARCHAR: {
 					if (!col_data.string_collection) {
 						throw FormatException("Did not see a dictionary for strings. Corrupt file?");
 					}
 
 					// the strings can be anywhere in the collection so just reference it all
-					for (auto &chunk : col_data.string_collection->chunks) {
+					for (auto &chunk : col_data.string_collection->Chunks()) {
 						StringVector::AddHeapReference(output.data[out_col_idx], chunk->data[0]);
 					}
 
@@ -831,11 +902,11 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 					for (idx_t i = 0; i < current_batch_size; i++) {
 						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 							auto offset = col_data.offset_buf.read<uint32_t>();
-							if (offset >= col_data.string_collection->count) {
+							if (offset >= col_data.string_collection->Count()) {
 								throw FormatException("string dictionary offset out of bounds");
 							}
-							auto &chunk = col_data.string_collection->chunks[offset / STANDARD_VECTOR_SIZE];
-							auto &vec = chunk->data[0];
+							auto &chunk = col_data.string_collection->GetChunk(offset / STANDARD_VECTOR_SIZE);
+							auto &vec = chunk.data[0];
 
 							out_data_ptr[i + output_offset] =
 							    FlatVector::GetData<string_t>(vec)[offset % STANDARD_VECTOR_SIZE];
@@ -851,7 +922,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 				break;
 			}
 			case Encoding::PLAIN:
-				assert(col_data.payload.ptr);
+				D_ASSERT(col_data.payload.ptr);
 				switch (return_types[file_col_idx].id()) {
 				case LogicalTypeId::BOOLEAN: {
 					// bit packed this
@@ -884,15 +955,17 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 					fill_from_plain<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 					break;
 				case LogicalTypeId::TIMESTAMP:
-					switch(s_ele.type) {
+					switch (s_ele.type) {
 					case Type::INT64:
 						// arrow timestamp
-						switch(s_ele.converted_type) {
+						switch (s_ele.converted_type) {
 						case ConvertedType::TIMESTAMP_MICROS:
-							fill_timestamp_plain<int64_t, arrow_timestamp_micros_to_timestamp>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
+							fill_timestamp_plain<int64_t, arrow_timestamp_micros_to_timestamp>(
+							    col_data, current_batch_size, output.data[out_col_idx], output_offset);
 							break;
 						case ConvertedType::TIMESTAMP_MILLIS:
-							fill_timestamp_plain<int64_t, arrow_timestamp_ms_to_timestamp>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
+							fill_timestamp_plain<int64_t, arrow_timestamp_ms_to_timestamp>(
+							    col_data, current_batch_size, output.data[out_col_idx], output_offset);
 							break;
 						default:
 							throw InternalException("Unsupported converted type for timestamp");
@@ -900,19 +973,23 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 						break;
 					case Type::INT96:
 						// impala timestamp
-						fill_timestamp_plain<Int96, impala_timestamp_to_timestamp_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
+						fill_timestamp_plain<Int96, impala_timestamp_to_timestamp_t>(
+						    col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
 					default:
 						throw InternalException("Unsupported type for timestamp");
 					}
 					break;
+				case LogicalTypeId::BLOB:
 				case LogicalTypeId::VARCHAR: {
 					for (idx_t i = 0; i < current_batch_size; i++) {
 						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
 							uint32_t str_len = col_data.payload.read<uint32_t>();
 							col_data.payload.available(str_len);
+							VerifyString(return_types[file_col_idx].id(), col_data.payload.ptr, str_len);
 							FlatVector::GetData<string_t>(output.data[out_col_idx])[i + output_offset] =
-							    StringVector::AddString(output.data[out_col_idx], col_data.payload.ptr, str_len);
+							    StringVector::AddStringOrBlob(output.data[out_col_idx],
+							                                  string_t(col_data.payload.ptr, str_len));
 							col_data.payload.inc(str_len);
 						} else {
 							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);

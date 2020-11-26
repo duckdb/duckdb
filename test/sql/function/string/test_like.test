@@ -12,6 +12,11 @@ SELECT 'aaa' LIKE 'bbb'
 0
 
 query T
+SELECT 'aaa' LIKE 'abab'
+----
+0
+
+query T
 SELECT 'aaa' LIKE 'aaa'
 ----
 1
@@ -67,9 +72,194 @@ SELECT 'ababac' LIKE '%abac'
 1
 
 query T
+SELECT 'ababac' LIKE '%%%abac'
+----
+1
+
+query T
+SELECT 'ababac' LIKE 'abab%%%%%'
+----
+1
+
+query T
+SELECT 'ababac' LIKE '%%%a%%%b%%a%b%%%%%a%c%%'
+----
+1
+
+query T
+SELECT 'ababac' LIKE '%%%a%%%b%%a%b%%%%%a%d%%'
+----
+0
+
+query T
 SELECT 'ababac' NOT LIKE '%abac'
 ----
 0
+
+query T
+SELECT 'aabbccc' LIKE '%aa%bb%cc'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE ''
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE '%'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra elephant tiger horse'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra elephant tiger horse%'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE '%zebra elephant tiger horse%'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE '%zebra elephant tiger horse blabla'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra elephant tiger horse blabla%'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra%'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE '%horse'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra%elephant%horse'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra%elephant%tiger%horse'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE '%zebra%elephant%tiger%horse'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra%elephant%tiger%horse%'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE '%zebra%elephant%tiger%horse%'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE '%%zebra %%%ele%phan%t t%ig%er% horse%'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra%tiger%horse'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' LIKE 'zebra%tiger%elephant%horse'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE ''
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE '%'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE 'zebra'
+----
+1
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE 'zebra elephant tiger horse'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE 'zebra%'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE '%horse'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE 'zebra%elephant%horse'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE 'zebra%elephant%tiger%horse'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE '%zebra%elephant%tiger%horse'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE 'zebra%elephant%tiger%horse%'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE '%zebra%elephant%tiger%horse%'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE '%%zebra %%%ele%phan%t t%ig%er% horse%'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE 'zebra%tiger%horse'
+----
+0
+
+query T
+SELECT 'zebra elephant tiger horse' NOT LIKE 'zebra%tiger%elephant%horse'
+----
+1
 
 # like with table
 statement ok

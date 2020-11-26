@@ -2,6 +2,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/pragma_handler.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -10,6 +11,7 @@
 #include <time.h>
 #include <string>
 #include <chrono>
+#include <cassert>
 
 #include "extension_helper.hpp"
 
@@ -132,21 +134,34 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		*pzTail = zSql + query.size();
 	}
 	try {
-		// extract the statements from the SQL query
-		auto statements = db->con->ExtractStatements(query);
-		if (statements.size() == 0) {
-			// no statements to prepare!
+		Parser parser;
+		parser.ParseQuery(query);
+		if (parser.statements.size() == 0) {
 			return SQLITE_OK;
 		}
+		// extract the remainder
+		idx_t next_location = parser.statements[0]->stmt_location + parser.statements[0]->stmt_length;
+		bool set_remainder = next_location < query.size();
 
 		// extract the first statement
-		auto statement = statements[0].get();
-		// extract the remainder
-		bool set_remainder = statement->stmt_location + statement->stmt_length < query.size();
-		query = query.substr(statement->stmt_location, statement->stmt_length);
+		vector<unique_ptr<SQLStatement>> statements;
+		statements.push_back(move(parser.statements[0]));
+
+		PragmaHandler handler(*db->con->context);
+		handler.HandlePragmaStatements(statements);
+
+		// if there are multiple statements here, we are dealing with an import database statement
+		// we directly execute all statements besides the final one
+		for(idx_t i = 0; i + 1 < statements.size(); i++) {
+			auto res = db->con->Query(move(statements[i]));
+			if (!res->success) {
+				db->last_error = res->error;
+				return SQLITE_ERROR;
+			}
+		}
 
 		// now prepare the query
-		auto prepared = db->con->Prepare(query);
+		auto prepared = db->con->Prepare(move(statements.back()));
 		if (!prepared->success) {
 			// failed to prepare: set the error message
 			db->last_error = prepared->error;
@@ -166,7 +181,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		// extract the remainder of the query and assign it to the pzTail
 		if (pzTail && set_remainder) {
-			*pzTail = zSql + query.size() + 1;
+			*pzTail = zSql + next_location + 1;
 		}
 
 		*ppStmt = stmt.release();

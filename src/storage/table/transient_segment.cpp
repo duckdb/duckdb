@@ -10,12 +10,12 @@
 namespace duckdb {
 using namespace std;
 
-TransientSegment::TransientSegment(BufferManager &manager, PhysicalType type, idx_t start)
+TransientSegment::TransientSegment(BufferManager &manager, LogicalType type, idx_t start)
     : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {
-	if (type == PhysicalType::VARCHAR) {
+	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(manager, start);
 	} else {
-		data = make_unique<NumericSegment>(manager, type, start);
+		data = make_unique<NumericSegment>(manager, type.InternalType(), start);
 	}
 }
 
@@ -27,7 +27,7 @@ TransientSegment::TransientSegment(PersistentSegment &segment)
 	data = move(segment.data);
 	stats = move(segment.stats);
 	count = segment.count;
-	assert(!segment.next);
+	D_ASSERT(!segment.next);
 }
 
 void TransientSegment::InitializeScan(ColumnScanState &state) {

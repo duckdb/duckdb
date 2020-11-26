@@ -774,6 +774,7 @@ joined_table:
 					n->rarg = $4;
 					n->usingClause = NIL;
 					n->quals = NULL;
+					n->location = @2;
 					$$ = n;
 				}
 			| table_ref join_type JOIN table_ref join_qual
@@ -787,6 +788,7 @@ joined_table:
 						n->usingClause = (PGList *) $5; /* USING clause */
 					else
 						n->quals = $5; /* ON clause */
+					n->location = @2;
 					$$ = n;
 				}
 			| table_ref JOIN table_ref join_qual
@@ -801,6 +803,7 @@ joined_table:
 						n->usingClause = (PGList *) $4; /* USING clause */
 					else
 						n->quals = $4; /* ON clause */
+					n->location = @2;
 					$$ = n;
 				}
 			| table_ref NATURAL join_type JOIN table_ref
@@ -812,6 +815,7 @@ joined_table:
 					n->rarg = $5;
 					n->usingClause = NIL; /* figure out which columns later... */
 					n->quals = NULL; /* fill later */
+					n->location = @2;
 					$$ = n;
 				}
 			| table_ref NATURAL JOIN table_ref
@@ -824,6 +828,7 @@ joined_table:
 					n->rarg = $4;
 					n->usingClause = NIL; /* figure out which columns later... */
 					n->quals = NULL; /* fill later */
+					n->location = @2;
 					$$ = n;
 				}
 		;

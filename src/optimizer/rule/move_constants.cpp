@@ -61,7 +61,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			comparison->type = FlipComparisionExpression(comparison->type);
 		}
 	} else {
-		assert(op_type == "*");
+		D_ASSERT(op_type == "*");
 		// [x * 2 COMP 10] OR [2 * x COMP 10]
 		// order does not matter in multiplication:
 		// change right side to 10/2 (outer_constant / inner_constant)

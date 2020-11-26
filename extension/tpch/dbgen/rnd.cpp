@@ -1,4 +1,13 @@
 /*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ *//*
  * RANDOM.C -- Implements Park & Miller's "Minimum Standard" RNG
  *
  * (Reference:  CACM, Oct 1988, pp 1192-1201)

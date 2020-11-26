@@ -33,10 +33,10 @@ thisisalongstring
 
 # blob
 query I
-SELECT * FROM repeat(blob 'hello', 2)
+SELECT * FROM repeat(blob '\x00\x00hello', 2)
 ----
-\x68656C6C6F
-\x68656C6C6F
+\x00\x00hello
+\x00\x00hello
 
 # many values
 query I

@@ -45,7 +45,7 @@ template <> hash_t Hash(const char *str) {
 }
 
 template <> hash_t Hash(string_t val) {
-	return Hash(val.GetData(), val.GetSize());
+	return Hash(val.GetDataUnsafe(), val.GetSize());
 }
 
 template <> hash_t Hash(char *val) {

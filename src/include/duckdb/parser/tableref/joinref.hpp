@@ -18,7 +18,7 @@ namespace duckdb {
 //! Represents a JOIN between two expressions
 class JoinRef : public TableRef {
 public:
-	JoinRef() : TableRef(TableReferenceType::JOIN) {
+	JoinRef() : TableRef(TableReferenceType::JOIN), is_natural(false) {
 	}
 
 	//! The left hand side of the join
@@ -29,6 +29,8 @@ public:
 	unique_ptr<ParsedExpression> condition;
 	//! The join type
 	JoinType type;
+	//! Natural join
+	bool is_natural;
 	//! The set of USING columns (if any)
 	vector<string> using_columns;
 

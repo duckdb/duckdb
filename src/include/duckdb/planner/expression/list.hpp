@@ -14,4 +14,3 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/expression/common_subexpression.hpp"

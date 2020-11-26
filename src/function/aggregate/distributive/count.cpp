@@ -1,7 +1,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 using namespace std;
 
@@ -12,6 +12,27 @@ struct BaseCountFunction {
 		*state = 0;
 	}
 
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		*target += source;
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		target[idx] = *state;
+	}
+};
+
+struct CountStarFunction : public BaseCountFunction {
+	template <class STATE, class OP> static void Operation(STATE *state, idx_t idx) {
+		*state += 1;
+	}
+
+	template <class STATE, class OP> static void ConstantOperation(STATE *state, idx_t count) {
+		*state += count;
+	}
+};
+
+struct CountFunction : public BaseCountFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		*state += 1;
@@ -22,23 +43,6 @@ struct BaseCountFunction {
 		*state += count;
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-		*target += source;
-	}
-
-	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		target[idx] = *state;
-	}
-};
-
-struct CountStarFunction : public BaseCountFunction {
-	static bool IgnoreNull() {
-		return false;
-	}
-};
-
-struct CountFunction : public BaseCountFunction {
 	static bool IgnoreNull() {
 		return true;
 	}
@@ -50,16 +54,30 @@ AggregateFunction CountFun::GetFunction() {
 }
 
 AggregateFunction CountStarFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(
-	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
+	return AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
+}
+
+unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAggregateExpression &expr,
+                                                 FunctionData *bind_data,
+                                                 vector<unique_ptr<BaseStatistics>> &child_stats,
+                                                 NodeStatistics *node_stats) {
+	if (child_stats[0] && !child_stats[0]->has_null && !expr.distinct) {
+		// count on a column without null values: use count star
+		expr.function = CountStarFun::GetFunction();
+		expr.function.name = "count_star";
+		expr.children.clear();
+	}
+	return nullptr;
 }
 
 void CountFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunction count_function = CountFun::GetFunction();
+	count_function.statistics = count_propagate_stats;
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments
 	count_function.arguments.clear();
+	count_function.statistics = nullptr;
 	count.AddFunction(count_function);
 	set.AddFunction(count);
 }

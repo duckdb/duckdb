@@ -57,7 +57,7 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	bool Equals(QueryResult &other);
 
-	idx_t column_count() {
+	idx_t ColumnCount() {
 		return types.size();
 	}
 
@@ -112,7 +112,7 @@ private:
 			return *this;
 		}
 		bool operator!=(const QueryResultIterator &other) const {
-			return result->iterator_chunk && result->iterator_chunk->column_count() > 0;
+			return result->iterator_chunk && result->iterator_chunk->ColumnCount() > 0;
 		}
 		const QueryResultRow &operator*() const {
 			return current_row;

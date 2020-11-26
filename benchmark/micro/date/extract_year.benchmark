@@ -1,0 +1,15 @@
+# name: benchmark/micro/date/extract_year.benchmark
+# description: EXTRACT(year from date)
+# group: [date]
+
+name Extract Year
+group date
+
+load
+CREATE TABLE dates AS SELECT DATE '1992-01-01' + concat(i % 10000, ' days')::interval AS d FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(EXTRACT(YEAR FROM d)) FROM dates
+
+result I
+1992

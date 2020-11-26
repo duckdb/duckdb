@@ -43,7 +43,7 @@ UndoChunk::~UndoChunk() {
 
 data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
 	len = AlignLength(len);
-	assert(sizeof(UndoFlags) + sizeof(len) == 8);
+	D_ASSERT(sizeof(UndoFlags) + sizeof(len) == 8);
 	Store<UndoFlags>(type, data.get() + current_position);
 	current_position += sizeof(UndoFlags);
 	Store<uint32_t>(len, data.get() + current_position);
@@ -55,7 +55,7 @@ data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
 }
 
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
-	assert(len <= NumericLimits<uint32_t>::Maximum());
+	D_ASSERT(len <= NumericLimits<uint32_t>::Maximum());
 	idx_t needed_space = AlignLength(len + UNDO_ENTRY_HEADER_SIZE);
 	if (head->current_position + needed_space >= head->maximum_size) {
 		auto new_chunk =

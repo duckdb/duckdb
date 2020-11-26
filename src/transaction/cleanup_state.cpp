@@ -24,7 +24,7 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		// destroy the backed up entry: it is no longer required
-		assert(catalog_entry->parent);
+		D_ASSERT(catalog_entry->parent);
 		if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
 			if (!catalog_entry->deleted) {
 				// delete the entry from the dependency manager, if it is not deleted yet
@@ -58,6 +58,7 @@ void CleanupState::CleanupUpdate(UpdateInfo *info) {
 
 void CleanupState::CleanupDelete(DeleteInfo *info) {
 	auto version_table = info->table;
+	version_table->info->cardinality -= info->count;
 	if (version_table->info->indexes.size() == 0) {
 		// this table has no indexes: no cleanup to be done
 		return;

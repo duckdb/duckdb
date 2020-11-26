@@ -67,7 +67,7 @@ public:
 		return make_unique<DuckDBBenchmarkState>(GetDatabasePath());
 	}
 
-	unique_ptr<BenchmarkState> Initialize() override {
+	unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override {
 		auto state = CreateBenchmarkState();
 		Load(state.get());
 		return move(state);

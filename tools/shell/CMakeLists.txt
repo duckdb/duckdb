@@ -7,10 +7,17 @@ if(NOT WIN32)
   include_directories(../../third_party/third_party/utf8proc/include)
 endif()
 
+option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)
+
 include_directories(include)
 include_directories(../sqlite3_api_wrapper/include)
 add_executable(shell ${SHELL_SOURCES})
-target_link_libraries(shell sqlite3_api_wrapper_static Threads::Threads)
+target_link_libraries(shell sqlite3_api_wrapper_static Threads::Threads
+                      ${DUCKDB_EXTRA_LINK_FLAGS})
+if(STATIC_LIBCPP)
+  message("Statically linking CLI")
+  target_link_libraries(shell -static-libstdc++ -static-libgcc)
+endif()
 
 if(NOT AMALGAMATION_BUILD AND NOT WIN32)
   target_link_libraries(shell utf8proc)
@@ -20,5 +27,4 @@ set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)
 set_target_properties(shell PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                        ${CMAKE_BINARY_DIR})
 
-install(TARGETS shell
-        RUNTIME DESTINATION "${INSTALL_BIN_DIR}")
+install(TARGETS shell RUNTIME DESTINATION "${INSTALL_BIN_DIR}")

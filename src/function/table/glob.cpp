@@ -31,7 +31,7 @@ struct GlobFunctionState : public FunctionOperatorData {
 
 static unique_ptr<FunctionOperatorData> glob_function_init(ClientContext &context, const FunctionData *bind_data,
                                                            vector<column_t> &column_ids,
-                                                           unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                           TableFilterSet *table_filters) {
 	return make_unique<GlobFunctionState>();
 }
 

@@ -18,3 +18,8 @@ query II
 SELECT MIN(i), MAX(i) FROM integers
 ----
 0	4999
+
+query II
+SELECT MIN(i), MAX(i) FROM integers WHERE i>2000
+----
+2001	4999

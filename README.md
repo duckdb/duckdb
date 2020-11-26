@@ -1,6 +1,6 @@
 <img src="https://duckdb.org/images/DuckDB_Logo_dl.png" height="50">
 
-[![Travis](https://travis-ci.com/cwida/duckdb.svg?branch=master)](https://travis-ci.com/cwida/duckdb)
+![.github/workflows/main.yml](https://github.com/cwida/duckdb/workflows/.github/workflows/main.yml/badge.svg?branch=master)
 [![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
 [![Coverage Status](https://coveralls.io/repos/github/cwida/duckdb/badge.svg?branch=master)](https://coveralls.io/github/cwida/duckdb?branch=master)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3901452.svg)](https://zenodo.org/record/3901452)

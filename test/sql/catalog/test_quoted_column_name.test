@@ -13,3 +13,14 @@ SELECT "42" FROM integers;
 ----
 33
 
+# verify escaped quotes and dots
+statement ok
+CREATE TABLE "table ""." ( "col ""." TEXT)
+
+statement ok
+INSERT INTO "table ""." ("col "".") VALUES ('quote_escaped_quote_''')
+
+query TT
+SELECT "table ""."."col "".", "col ""." FROM "table "".";
+----
+quote_escaped_quote_'	quote_escaped_quote_'

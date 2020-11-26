@@ -2,16 +2,18 @@
 # description: Contains word 'regular' in the l_comment (11.5%~)
 # group: [string]
 
+name Contains ('regular')
+group string
+
 require tpch
 
-cache tpch-sf2
+cache tpch_sf1
 
 load
-CALL dbgen(2);
+CALL dbgen(sf=1);
 
 run
 SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'regular')
 
-# FIXME, 11.5%
 result I
-1
+688156

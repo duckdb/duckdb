@@ -14,6 +14,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "parquet-extension.hpp"
 
 #include <random>
@@ -51,7 +52,7 @@ struct TimeConvert {
 
 struct StringConvert {
 	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
-		return py::str(val.GetData());
+		return py::str(val.GetString());
 	}
 };
 
@@ -69,11 +70,11 @@ template <> double IntegralConvert::convert_value(hugeint_t val) {
 
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static py::array fetch_column(string numpy_type, ChunkCollection &collection, idx_t column) {
-	auto out = py::array(py::dtype(numpy_type), collection.count);
+	auto out = py::array(py::dtype(numpy_type), collection.Count());
 	auto out_ptr = (NUMPY_T *)out.mutable_data();
 
 	idx_t out_offset = 0;
-	for (auto &data_chunk : collection.chunks) {
+	for (auto &data_chunk : collection.Chunks()) {
 		auto &src = data_chunk->data[column];
 		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
 		auto &nullmask = FlatVector::Nullmask(src);
@@ -95,7 +96,7 @@ template <class T> static py::array fetch_column_regular(string numpy_type, Chun
 template <class DUCKDB_T>
 static void decimal_convert_internal(ChunkCollection &collection, idx_t column, double *out_ptr, double division) {
 	idx_t out_offset = 0;
-	for (auto &data_chunk : collection.chunks) {
+	for (auto &data_chunk : collection.Chunks()) {
 		auto &src = data_chunk->data[column];
 		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
 		auto &nullmask = FlatVector::Nullmask(src);
@@ -111,7 +112,7 @@ static void decimal_convert_internal(ChunkCollection &collection, idx_t column, 
 
 static py::array fetch_column_decimal(string numpy_type, ChunkCollection &collection, idx_t column,
                                       LogicalType &decimal_type) {
-	auto out = py::array(py::dtype(numpy_type), collection.count);
+	auto out = py::array(py::dtype(numpy_type), collection.Count());
 	auto out_ptr = (double *)out.mutable_data();
 
 	auto dec_scale = decimal_type.scale();
@@ -191,7 +192,7 @@ struct PandasScanState : public FunctionOperatorData {
 struct PandasScanFunction : public TableFunction {
 	PandasScanFunction()
 	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_function, pandas_scan_bind, pandas_scan_init,
-	                    nullptr, nullptr, pandas_scan_cardinality){};
+	                    nullptr, nullptr, nullptr, pandas_scan_cardinality){};
 
 	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                 unordered_map<string, Value> &named_parameters,
@@ -275,7 +276,7 @@ struct PandasScanFunction : public TableFunction {
 
 	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
 	                                                         vector<column_t> &column_ids,
-	                                                         unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	                                                         TableFilterSet *table_filters) {
 		return make_unique<PandasScanState>();
 	}
 
@@ -329,7 +330,7 @@ struct PandasScanFunction : public TableFunction {
 		auto get_fun = data.df.attr("__getitem__");
 
 		output.SetCardinality(this_count);
-		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 			auto numpy_col = py::array(get_fun(df_names[col_idx]).attr("to_numpy")());
 
 			switch (data.pandas_types[col_idx]) {
@@ -445,9 +446,9 @@ struct PandasScanFunction : public TableFunction {
 		state.position += this_count;
 	}
 
-	static idx_t pandas_scan_cardinality(const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> pandas_scan_cardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (PandasScanFunctionData &)*bind_data;
-		return data.row_count;
+		return make_unique<NodeStatistics>(data.row_count, data.row_count);
 	}
 };
 
@@ -524,7 +525,7 @@ struct DuckDBPyResult {
 				break;
 
 			case LogicalTypeId::TIMESTAMP: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT64);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
 				auto timestamp = val.GetValue<int64_t>();
 				auto date = Timestamp::GetDate(timestamp);
@@ -536,7 +537,7 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::TIME: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
 				int32_t hour, min, sec, msec;
 				auto time = val.GetValue<int32_t>();
@@ -545,7 +546,7 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::DATE: {
-				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
 				auto date = val.GetValue<int32_t>();
 				res[col_idx] = PyDate_FromDate(duckdb::Date::ExtractYear(date), duckdb::Date::ExtractMonth(date),
@@ -586,7 +587,7 @@ struct DuckDBPyResult {
 		} else {
 			mres = (MaterializedQueryResult *)result.get();
 		}
-		assert(mres);
+		D_ASSERT(mres);
 
 		py::dict res;
 		for (idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
@@ -643,10 +644,10 @@ struct DuckDBPyResult {
 			}
 
 			// convert the nullmask
-			auto nullmask = py::array(py::dtype("bool"), mres->collection.count);
+			auto nullmask = py::array(py::dtype("bool"), mres->collection.Count());
 			auto nullmask_ptr = (bool *)nullmask.mutable_data();
 			idx_t out_offset = 0;
-			for (auto &data_chunk : mres->collection.chunks) {
+			for (auto &data_chunk : mres->collection.Chunks()) {
 				auto &src_nm = FlatVector::Nullmask(data_chunk->data[col_idx]);
 				for (idx_t i = 0; i < data_chunk->size(); i++) {
 					nullmask_ptr[i + out_offset] = src_nm[i];
@@ -722,7 +723,6 @@ struct DuckDBPyResult {
 struct DuckDBPyRelation;
 
 struct DuckDBPyConnection {
-
 	DuckDBPyConnection *executemany(string query, py::object params = py::list()) {
 		execute(query, params, true);
 		return this;
@@ -740,7 +740,21 @@ struct DuckDBPyConnection {
 		}
 		result = nullptr;
 
-		auto prep = connection->Prepare(query);
+		auto statements = connection->ExtractStatements(query);
+		if (statements.size() == 0) {
+			// no statements to execute
+			return this;
+		}
+		// if there are multiple statements, we directly execute the statements besides the last one
+		// we only return the result of the last statement to the user, unless one of the previous statements fails
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
+			auto res = connection->Query(move(statements[i]));
+			if (!res->success) {
+				throw runtime_error(res->error);
+			}
+		}
+
+		auto prep = connection->Prepare(move(statements.back()));
 		if (!prep->success) {
 			throw runtime_error(prep->error);
 		}
@@ -754,7 +768,7 @@ struct DuckDBPyConnection {
 			params_set = params;
 		}
 
-		for (const auto &single_query_params : params_set) {
+		for (pybind11::handle single_query_params : params_set) {
 			if (prep->n_param != py::len(single_query_params)) {
 				throw runtime_error("Prepared statments needs " + to_string(prep->n_param) + " parameters, " +
 				                    to_string(py::len(single_query_params)) + " given");
@@ -868,7 +882,7 @@ struct DuckDBPyConnection {
 		}
 
 		static int my_stream_getschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			if (!stream->release) {
 				my_stream->last_error = "stream was released";
@@ -879,7 +893,7 @@ struct DuckDBPyConnection {
 		}
 
 		static int my_stream_getnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			if (!stream->release) {
 				my_stream->last_error = "stream was released";
@@ -905,7 +919,7 @@ struct DuckDBPyConnection {
 			if (!stream->release) {
 				return "stream was released";
 			}
-			assert(stream->private_data);
+			D_ASSERT(stream->private_data);
 			auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 			return my_stream->last_error.c_str();
 		}
@@ -1021,8 +1035,9 @@ struct DuckDBPyConnection {
 	static shared_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 		auto res = make_shared<DuckDBPyConnection>();
 		DBConfig config;
-		if (read_only)
+		if (read_only) {
 			config.access_mode = AccessMode::READ_ONLY;
+		}
 		res->database = make_unique<DuckDB>(database, &config);
 		res->database->LoadExtension<ParquetExtension>();
 		res->connection = make_unique<Connection>(*res->database);
@@ -1054,7 +1069,7 @@ struct DuckDBPyConnection {
 		auto decimal_mod = py::module::import("decimal");
 		auto decimal_decimal = decimal_mod.attr("Decimal");
 
-		for (auto &ele : params) {
+		for (pybind11::handle ele : params) {
 			if (ele.is_none()) {
 				args.push_back(Value());
 			} else if (py::isinstance<py::bool_>(ele)) {
@@ -1305,11 +1320,63 @@ struct DuckDBPyRelation {
 	shared_ptr<Relation> rel;
 };
 
+enum PySQLTokenType {
+	PySQLTokenIdentifier = 0,
+	PySQLTokenNumericConstant,
+	PySQLTokenStringConstant,
+	PySQLTokenOperator,
+	PySQLTokenKeyword,
+	PySQLTokenComment
+};
+
+static py::object py_tokenize(string query) {
+	auto tokens = Parser::Tokenize(query);
+	py::list result;
+	for (auto &token : tokens) {
+		auto tuple = py::tuple(2);
+		tuple[0] = token.start;
+		switch (token.type) {
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+			tuple[1] = PySQLTokenIdentifier;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+			tuple[1] = PySQLTokenNumericConstant;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+			tuple[1] = PySQLTokenStringConstant;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+			tuple[1] = PySQLTokenOperator;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+			tuple[1] = PySQLTokenKeyword;
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+			tuple[1] = PySQLTokenComment;
+			break;
+		}
+		result.append(tuple);
+	}
+	return move(result);
+}
+
 PYBIND11_MODULE(duckdb, m) {
 	m.def("connect", &DuckDBPyConnection::connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
 	      py::arg("database") = ":memory:", py::arg("read_only") = false);
+	m.def("tokenize", py_tokenize,
+	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
+	      "used for e.g. syntax highlighting",
+	      py::arg("query"));
+	py::enum_<PySQLTokenType>(m, "token_type")
+	    .value("identifier", PySQLTokenType::PySQLTokenIdentifier)
+	    .value("numeric_const", PySQLTokenType::PySQLTokenNumericConstant)
+	    .value("string_const", PySQLTokenType::PySQLTokenStringConstant)
+	    .value("operator", PySQLTokenType::PySQLTokenOperator)
+	    .value("keyword", PySQLTokenType::PySQLTokenKeyword)
+	    .value("comment", PySQLTokenType::PySQLTokenComment)
+	    .export_values();
 
 	auto conn_class =
 	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection")

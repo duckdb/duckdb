@@ -9,6 +9,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 
+#include "extension_helper.hpp"
+
 // you can set this to enable compression. You will need to link zlib as well.
 // #define CPPHTTPLIB_ZLIB_SUPPORT 1
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_USECOND 10000
@@ -88,7 +90,7 @@ static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json 
 	auto &nullmask = FlatVector::Nullmask(*result_vector);
 	for (idx_t i = 0; i < count; i++) {
 		if (!nullmask[i]) {
-			j["data"][col_idx] += data_ptr[i].GetData();
+			j["data"][col_idx] += data_ptr[i].GetString();
 
 		} else {
 			j["data"][col_idx] += nullptr;
@@ -97,8 +99,8 @@ static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json 
 }
 
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
-	assert(res);
-	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
+	D_ASSERT(res);
+	for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
 		Vector &v = chunk->data[col_idx];
 		switch (v.type.id()) {
 		case LogicalTypeId::BOOLEAN:
@@ -193,8 +195,8 @@ void sleep_thread(Connection *conn, bool *is_active, int timeout_duration) {
 	// timeout is given in seconds
 	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
 	// iterations
-	assert(conn);
-	assert(is_active);
+	D_ASSERT(conn);
+	D_ASSERT(is_active);
 
 	if (timeout_duration < 0) {
 		return;
@@ -329,6 +331,7 @@ int main(int argc, char **argv) {
 	config.maximum_memory = 10737418240;
 
 	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile.c_str(), &config);
+	ExtensionHelper::LoadAllExtensions(duckdb);
 
 	svr.Get("/query", [&](const Request &req, Response &resp) {
 		auto q = req.get_param_value("q");

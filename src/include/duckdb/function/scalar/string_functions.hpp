@@ -22,11 +22,20 @@ struct ReverseFun {
 };
 
 struct LowerFun {
+	static uint8_t ASCIIToLowerMap[];
+
+	//! Returns the length of the result string obtained from lowercasing the given input (in bytes)
+	static idx_t LowerLength(const char *input_data, idx_t input_length);
+	//! Lowercases the string to the target output location, result_data must have space for at least LowerLength bytes
+	static void LowerCase(const char *input_data, idx_t input_length, char *result_data);
+
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct UpperFun {
+	static uint8_t ASCIIToUpperMap[];
+
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -47,7 +56,7 @@ struct ConcatWSFun {
 struct LengthFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 	template <class TA, class TR> static inline TR Length(TA input) {
-		auto input_data = input.GetData();
+		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		for (idx_t i = 0; i < input_length; i++) {
 			if (input_data[i] & 0x80) {
@@ -66,7 +75,7 @@ struct LengthFun {
 
 struct LikeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static bool Glob(const char *s, const char *pattern, const char *escape);
+	static bool Glob(const char *s, idx_t slen, const char *pattern, idx_t plen);
 };
 
 struct LikeEscapeFun {
@@ -100,9 +109,7 @@ struct RegexpFun {
 
 struct SubstringFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static string_t substring_ascii_only(Vector &result, const char *input_data, int offset, int length);
-	static string_t substring_scalar_function(Vector &result, string_t input, int offset, int length,
-	                                          unique_ptr<char[]> &output, idx_t &current_len);
+	static string_t substring_scalar_function(Vector &result, string_t input, int32_t offset, int32_t length);
 };
 
 struct PrintfFun {
@@ -142,6 +149,8 @@ struct TrimFun {
 struct ContainsFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
+	static idx_t Find(const string_t &haystack, const string_t &needle);
+	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size);
 };
 
 struct UnicodeFun {

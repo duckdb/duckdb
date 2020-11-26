@@ -1,4 +1,5 @@
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -107,10 +108,10 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 	return n;
 }
 
-static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
-	if (std::isdigit((unsigned char)buf[pos])) {
+static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result) {
+	if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 		result = buf[pos++] - '0';
-		if (std::isdigit((unsigned char)buf[pos])) {
+		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 			result = (buf[pos++] - '0') + result * 10;
 		}
 		return true;
@@ -118,27 +119,40 @@ static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool strict) {
+bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool strict) {
+
+	pos = 0;
+	if (len == 0) {
+		return false;
+	}
+
 	int32_t day = 0, month = -1;
 	int32_t year = 0, yearneg = (buf[0] == '-');
-	pos = 0;
 	int sep;
 
 	// skip leading spaces
-	while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
 	}
 
-	if (yearneg == 0 && !std::isdigit((unsigned char)buf[pos])) {
+	if (pos >= len) {
+		return false;
+	}
+
+	if (yearneg == 0 && !StringUtil::CharacterIsDigit(buf[pos])) {
 		return false;
 	}
 
 	// first parse the year
-	for (pos = pos + yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
+	for (pos = pos + yearneg; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
 		if (year > YEAR_MAX) {
 			break;
 		}
+	}
+
+	if (pos >= len) {
+		return false;
 	}
 
 	// fetch the separator
@@ -149,7 +163,11 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	}
 
 	// parse the month
-	if (!ParseDoubleDigit(buf, pos, month)) {
+	if (!ParseDoubleDigit(buf, len, pos, month)) {
+		return false;
+	}
+
+	if (pos >= len) {
 		return false;
 	}
 
@@ -157,14 +175,18 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 		return false;
 	}
 
+	if (pos >= len) {
+		return false;
+	}
+
 	// now parse the day
-	if (!ParseDoubleDigit(buf, pos, day)) {
+	if (!ParseDoubleDigit(buf, len, pos, day)) {
 		return false;
 	}
 
 	// check for an optional trailing " (BC)""
-	if (StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' && buf[pos + 3] == 'C' &&
-	    buf[pos + 4] == ')') {
+	if (len - pos > 5 && StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' &&
+	    buf[pos + 3] == 'C' && buf[pos + 4] == ')') {
 		year = -year;
 		pos += 5;
 	}
@@ -172,16 +194,16 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
-		while (StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+		while (pos < len && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
 			pos++;
 		}
 		// check position. if end was not reached, non-space chars remaining
-		if (pos < strlen(buf)) {
+		if (pos < len) {
 			return false;
 		}
 	} else {
 		// in non-strict mode, check for any direct trailing digits
-		if (std::isdigit((unsigned char)buf[pos])) {
+		if (pos < len && StringUtil::CharacterIsDigit((unsigned char)buf[pos])) {
 			return false;
 		}
 	}
@@ -190,19 +212,19 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	return true;
 }
 
-date_t Date::FromCString(const char *buf, bool strict) {
+date_t Date::FromCString(const char *buf, idx_t len, bool strict) {
 	date_t result;
 	idx_t pos;
-	if (!TryConvertDate(buf, pos, result, strict)) {
+	if (!TryConvertDate(buf, len, pos, result, strict)) {
 		throw ConversionException("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
-		                          buf);
+		                          string(buf, len));
 	}
 	return result;
 }
 
 date_t Date::FromString(string str, bool strict) {
-	return Date::FromCString(str.c_str(), strict);
+	return Date::FromCString(str.c_str(), str.size(), strict);
 }
 
 string Date::ToString(int32_t date) {
@@ -243,7 +265,7 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 }
 
 date_t Date::EpochDaysToDate(int32_t epoch) {
-	assert(epoch + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
+	D_ASSERT(epoch + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
 	return (date_t)(epoch + EPOCH_DATE);
 }
 
@@ -252,17 +274,149 @@ int32_t Date::EpochDays(date_t date) {
 }
 
 date_t Date::EpochToDate(int64_t epoch) {
-	assert((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
+	D_ASSERT((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
 	return (date_t)((epoch / SECONDS_PER_DAY) + EPOCH_DATE);
 }
 
 int64_t Date::Epoch(date_t date) {
 	return ((int64_t)date - EPOCH_DATE) * SECONDS_PER_DAY;
 }
-int32_t Date::ExtractYear(date_t date) {
-	int32_t out_year, out_month, out_day;
-	Date::Convert(date, out_year, out_month, out_day);
-	return out_year;
+
+static date_t common_year_days[] { 726102, 726468, 726833, 727198, 727563, 727929, 728294, 728659, 729024, 729390, 729755, 730120, 730485, 730851, 731216, 731581, 731946, 732312, 732677, 733042, 733407, 733773, 734138, 734503, 734868, 735234, 735599, 735964, 736329, 736695, 737060, 737425, 737790, 738156, 738521, 738886, 739251, 739617, 739982, 740347, 740712, 741078, 741443, 741808, 742173, 742539, 742904, 743269, 743634, 744000, 744365, 744730, 745095, 745461, 745826, 746191, 746556, 746922, 747287, 747652, 748017, 748383, 748748, 749113};
+
+
+int32_t Date::ExtractYear(date_t n, int32_t *last_year) {
+	if (n >= common_year_days[*last_year] && n < common_year_days[*last_year + 1]) {
+		return 1988 + *last_year;
+	}
+
+	if (n < common_year_days[32]) {
+		if (n < common_year_days[16]) {
+			if (n < common_year_days[8]) {
+				if (n >= common_year_days[0]) {
+					date_t result = 1988;
+					result += n >= common_year_days[1];
+					result += n >= common_year_days[2];
+					result += n >= common_year_days[3];
+					result += n >= common_year_days[4];
+					result += n >= common_year_days[5];
+					result += n >= common_year_days[6];
+					result += n >= common_year_days[7];
+					*last_year = result - 1988;
+					return result;
+				}
+			} else {
+				date_t result = 1996;
+				result += n >= common_year_days[9];
+				result += n >= common_year_days[10];
+				result += n >= common_year_days[11];
+				result += n >= common_year_days[12];
+				result += n >= common_year_days[13];
+				result += n >= common_year_days[14];
+				result += n >= common_year_days[15];
+				*last_year = result - 1988;
+				return result;
+			}
+		} else {
+			if (n < common_year_days[24]) {
+				date_t result = 2004;
+				result += n >= common_year_days[17];
+				result += n >= common_year_days[18];
+				result += n >= common_year_days[19];
+				result += n >= common_year_days[20];
+				result += n >= common_year_days[21];
+				result += n >= common_year_days[22];
+				result += n >= common_year_days[23];
+				*last_year = result - 1988;
+				return result;
+			} else {
+				date_t result = 2012;
+				result += n >= common_year_days[25];
+				result += n >= common_year_days[26];
+				result += n >= common_year_days[27];
+				result += n >= common_year_days[28];
+				result += n >= common_year_days[29];
+				result += n >= common_year_days[30];
+				result += n >= common_year_days[31];
+				*last_year = result - 1988;
+				return result;
+			}
+		}
+	} else {
+		if (n < common_year_days[48]) {
+			if (n < common_year_days[40]) {
+				date_t result = 2020;
+				result += n >= common_year_days[33];
+				result += n >= common_year_days[34];
+				result += n >= common_year_days[35];
+				result += n >= common_year_days[36];
+				result += n >= common_year_days[37];
+				result += n >= common_year_days[38];
+				result += n >= common_year_days[39];
+				*last_year = result - 1988;
+				return result;
+			} else {
+				date_t result = 2028;
+				result += n >= common_year_days[41];
+				result += n >= common_year_days[42];
+				result += n >= common_year_days[43];
+				result += n >= common_year_days[44];
+				result += n >= common_year_days[45];
+				result += n >= common_year_days[46];
+				result += n >= common_year_days[47];
+				*last_year = result - 1988;
+				return result;
+			}
+		} else {
+			if (n < common_year_days[56]) {
+				date_t result = 2036;
+				result += n >= common_year_days[49];
+				result += n >= common_year_days[50];
+				result += n >= common_year_days[51];
+				result += n >= common_year_days[52];
+				result += n >= common_year_days[53];
+				result += n >= common_year_days[54];
+				result += n >= common_year_days[55];
+				*last_year = result - 1988;
+				return result;
+			} else if (n < common_year_days[63]) {
+				date_t result = 2044;
+				result += n >= common_year_days[57];
+				result += n >= common_year_days[58];
+				result += n >= common_year_days[59];
+				result += n >= common_year_days[60];
+				result += n >= common_year_days[61];
+				result += n >= common_year_days[62];
+				*last_year = result - 1988;
+				return result;
+			}
+		}
+	}
+	// slower fallback for dates out of the supported common year range
+	return Date::ExtractYear(n);
+}
+
+int32_t Date::ExtractYear(timestamp_t ts, int32_t *last_year) {
+	return Date::ExtractYear(Timestamp::GetDate(ts), last_year);
+}
+
+int32_t Date::ExtractYear(date_t n) {
+	int32_t year = n / 365;
+	int32_t day = (n - year * 365) - leapyears(year >= 0 ? year - 1 : year);
+	if (n < 0) {
+		year--;
+		while (day >= 0) {
+			year++;
+			day -= YEARDAYS(year);
+		}
+		day = YEARDAYS(year) + day;
+	} else {
+		while (day < 0) {
+			year--;
+			day += YEARDAYS(year);
+		}
+	}
+	return (year <= 0) ? year - 1 : year;
 }
 
 int32_t Date::ExtractMonth(date_t date) {

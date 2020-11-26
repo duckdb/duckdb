@@ -31,7 +31,7 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 
 void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object, bool cascade,
                                    set_lock_map_t &lock_set) {
-	assert(dependents_map.find(object) != dependents_map.end());
+	D_ASSERT(dependents_map.find(object) != dependents_map.end());
 
 	// first check the objects that depend on this object
 	auto &dependent_objects = dependents_map[object];
@@ -63,8 +63,8 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 }
 
 void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_obj, CatalogEntry *new_obj) {
-	assert(dependents_map.find(old_obj) != dependents_map.end());
-	assert(dependencies_map.find(old_obj) != dependencies_map.end());
+	D_ASSERT(dependents_map.find(old_obj) != dependents_map.end());
+	D_ASSERT(dependencies_map.find(old_obj) != dependencies_map.end());
 
 	// first check the objects that depend on this object
 	auto &dependent_objects = dependents_map[old_obj];
@@ -104,13 +104,13 @@ void DependencyManager::EraseObjectInternal(CatalogEntry *object) {
 		// dependencies already removed
 		return;
 	}
-	assert(dependents_map.find(object) != dependents_map.end());
-	assert(dependencies_map.find(object) != dependencies_map.end());
+	D_ASSERT(dependents_map.find(object) != dependents_map.end());
+	D_ASSERT(dependencies_map.find(object) != dependencies_map.end());
 	// now for each of the dependencies, erase the entries from the dependents_map
 	for (auto &dependency : dependencies_map[object]) {
 		auto entry = dependents_map.find(dependency);
 		if (entry != dependents_map.end()) {
-			assert(entry->second.find(object) != entry->second.end());
+			D_ASSERT(entry->second.find(object) != entry->second.end());
 			entry->second.erase(object);
 		}
 	}

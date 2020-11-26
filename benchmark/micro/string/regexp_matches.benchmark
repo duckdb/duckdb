@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/regexp_matches.benchmark
+# description: Regexp Matches
+# group: [string]
+
+name Regexp Matches ('h')
+group string
+
+load benchmark/micro/string/strings_small.sql
+
+run
+SELECT MIN(REGEXP_MATCHES(s1, '0')) FROM strings
+
+result I
+false

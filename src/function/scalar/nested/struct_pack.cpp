@@ -14,15 +14,15 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
 	// this should never happen if the binder below is sane
-	assert(args.column_count() == info.stype.child_types().size());
+	D_ASSERT(args.ColumnCount() == info.stype.child_types().size());
 
 	bool all_const = true;
-	for (size_t i = 0; i < args.column_count(); i++) {
+	for (size_t i = 0; i < args.ColumnCount(); i++) {
 		if (args.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
 		// same holds for this
-		assert(args.data[i].type == info.stype.child_types()[i].second);
+		D_ASSERT(args.data[i].type == info.stype.child_types()[i].second);
 		auto new_child = make_unique<Vector>();
 		new_child->Reference(args.data[i]);
 		StructVector::AddEntry(result, info.stype.child_types()[i].first, move(new_child));

@@ -22,7 +22,7 @@ struct StringAggBaseFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->dataptr) {
 			nullmask[idx] = true;
 		} else {
@@ -71,11 +71,11 @@ struct StringAggBaseFunction {
 	}
 
 	static inline void PerformOperation(string_agg_state_t *state, string_t str, string_t sep) {
-		PerformOperation(state, str.GetData(), sep.GetData(), str.GetSize() + 1, sep.GetSize());
+		PerformOperation(state, str.GetDataUnsafe(), sep.GetDataUnsafe(), str.GetSize() + 1, sep.GetSize());
 	}
 
 	static inline void PerformOperation(string_agg_state_t *state, string_t str) {
-		PerformOperation(state, str.GetData(), ",", str.GetSize() + 1, 1);
+		PerformOperation(state, str.GetDataUnsafe(), ",", str.GetSize() + 1, 1);
 	}
 };
 

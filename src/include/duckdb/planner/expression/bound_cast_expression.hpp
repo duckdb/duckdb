@@ -18,11 +18,12 @@ public:
 
 	//! The child type
 	unique_ptr<Expression> child;
+
+public:
 	LogicalType source_type() {
 		return child->return_type;
 	}
 
-public:
 	//! Cast an expression to the specified SQL type if required
 	static unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, LogicalType target_type);
 	//! Returns true if a cast is invertible (i.e. CAST(s -> t -> s) = s for all values of s). This is not true for e.g.

@@ -1,0 +1,136 @@
+# name: test/sql/function/string/test_ilike.test
+# description: Test ILIKE statement
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar like
+query T
+SELECT 'aaa' ILIKE 'bbb'
+----
+0
+
+query T
+SELECT 'aaa' ILIKE 'aAa'
+----
+1
+
+query T
+SELECT 'aaa' ILIKE '%'
+----
+1
+
+query T
+SELECT 'aaa' ILIKE '%A'
+----
+1
+
+query T
+SELECT 'aaa' ILIKE '%b'
+----
+0
+
+query T
+SELECT 'aaa' ILIKE 'A%'
+----
+1
+
+query T
+SELECT 'aaa' ILIKE 'b%'
+----
+0
+
+query T
+SELECT 'aaa' ILIKE 'A_a'
+----
+1
+
+query T
+SELECT 'aaa' ILIKE 'a_'
+----
+0
+
+query T
+SELECT 'aaa' ILIKE '__%'
+----
+1
+
+query T
+SELECT 'aaa' ILIKE '____%'
+----
+0
+
+query T
+SELECT 'ababac' ILIKE '%abac'
+----
+1
+
+query T
+SELECT 'ababac' ILIKE '%%%aBac'
+----
+1
+
+query T
+SELECT 'ababac' ILIKE 'abab%%%%%'
+----
+1
+
+query T
+SELECT 'ababac' ILIKE '%%%a%%%b%%a%b%%%%%a%c%%'
+----
+1
+
+query T
+SELECT 'ababac' ILIKE '%%%a%%%b%%a%b%%%%%a%d%%'
+----
+0
+
+query T
+SELECT 'ababac' NOT ILIKE '%Abac'
+----
+0
+
+# like with table
+statement ok
+CREATE TABLE strings(s STRING, pat STRING);
+
+statement ok
+INSERT INTO strings VALUES ('abab', 'Ab%'), ('aaa', 'A_a'), ('aaa', '%b%')
+
+query T
+SELECT s FROM strings WHERE s LIKE 'ab%'
+----
+abab
+
+query T
+SELECT s FROM strings WHERE 'aba' ILIKE pat
+----
+abab
+aaa
+aaa
+
+query T
+SELECT s FROM strings WHERE s ILIKE pat
+----
+abab
+aaa
+
+# unicode
+query T
+SELECT 'MÜHLEISEN' ILIKE 'mühleisen'
+----
+1
+
+
+statement ok
+CREATE TABLE unicode_strings(s STRING, pat STRING);
+
+statement ok
+INSERT INTO unicode_strings VALUES ('öäb', 'Ö%B'), ('aaÄ', 'A_ä'), ('aaa', '%b%')
+
+query T
+SELECT s FROM unicode_strings WHERE s ILIKE pat
+----
+öäb
+aaÄ

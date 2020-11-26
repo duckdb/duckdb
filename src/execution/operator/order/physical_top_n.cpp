@@ -56,21 +56,21 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 		executor.AddExpression(*expr);
 	}
 
-	heap_size = (big_data.count > offset) ? min(limit + offset, big_data.count) : 0;
+	heap_size = (big_data.Count() > offset) ? min(limit + offset, big_data.Count()) : 0;
 	if (heap_size == 0) {
 		return nullptr;
 	}
 
 	ChunkCollection heap_collection;
-	for (idx_t i = 0; i < big_data.chunks.size(); i++) {
+	for (idx_t i = 0; i < big_data.ChunkCount(); i++) {
 		DataChunk heap_chunk;
 		heap_chunk.Initialize(sort_types);
 
-		executor.Execute(*big_data.chunks[i], heap_chunk);
+		executor.Execute(big_data.GetChunk(i), heap_chunk);
 		heap_collection.Append(heap_chunk);
 	}
 
-	assert(heap_collection.count == big_data.count);
+	D_ASSERT(heap_collection.Count() == big_data.Count());
 
 	// create and use the heap
 	auto heap = unique_ptr<idx_t[]>(new idx_t[heap_size]);

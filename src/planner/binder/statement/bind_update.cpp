@@ -44,7 +44,6 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.columns[check_column_id];
-			// first add
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    column.type, ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
@@ -131,7 +130,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		root = move(filter);
 	}
 
-	assert(stmt.columns.size() == stmt.expressions.size());
+	D_ASSERT(stmt.columns.size() == stmt.expressions.size());
 
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;

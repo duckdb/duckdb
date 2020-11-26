@@ -49,7 +49,8 @@ class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
 	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_function, parquet_scan_bind,
-	                    parquet_scan_init, /* cleanup */ nullptr, /* dependency */ nullptr, parquet_cardinality,
+	                    parquet_scan_init, /* statistics */ nullptr, /* cleanup */ nullptr, /* dependency */ nullptr,
+	                    parquet_cardinality,
 	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, parquet_max_threads,
 	                    parquet_init_parallel_state, parquet_scan_parallel_init, parquet_parallel_state_next) {
 		projection_pushdown = true;
@@ -89,9 +90,9 @@ public:
 		return move(result);
 	}
 
-	static unique_ptr<FunctionOperatorData>
-	parquet_scan_init(ClientContext &context, const FunctionData *bind_data_, vector<column_t> &column_ids,
-	                  unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	static unique_ptr<FunctionOperatorData> parquet_scan_init(ClientContext &context, const FunctionData *bind_data_,
+	                                                          vector<column_t> &column_ids,
+	                                                          TableFilterSet *table_filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_;
 
 		auto result = make_unique<ParquetReadOperatorData>();
@@ -111,7 +112,7 @@ public:
 
 	static unique_ptr<FunctionOperatorData>
 	parquet_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *parallel_state_,
-	                           vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	                           vector<column_t> &column_ids, TableFilterSet *table_filters) {
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;
@@ -133,7 +134,8 @@ public:
 					data.file_index++;
 					string file = bind_data.files[data.file_index];
 					// move to the next file
-					data.reader = make_shared<ParquetReader>(context, file, data.reader->return_types);
+					data.reader =
+					    make_shared<ParquetReader>(context, file, data.reader->return_types, bind_data.files[0]);
 					vector<idx_t> group_ids;
 					for (idx_t i = 0; i < data.reader->NumRowGroups(); i++) {
 						group_ids.push_back(i);
@@ -149,9 +151,9 @@ public:
 		} while (true);
 	}
 
-	static idx_t parquet_cardinality(const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> parquet_cardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
-		return data.initial_reader->NumRows() * data.files.size();
+		return make_unique<NodeStatistics>(data.initial_reader->NumRows() * data.files.size());
 	}
 
 	static idx_t parquet_max_threads(ClientContext &context, const FunctionData *bind_data) {
@@ -251,7 +253,7 @@ void parquet_write_sink(ClientContext &context, FunctionData &bind_data, GlobalF
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer->Append(input);
-	if (local_state.buffer->count > 100000) {
+	if (local_state.buffer->Count() > 100000) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
 		global_state.writer->Flush(*local_state.buffer);
 		// and reset the buffer

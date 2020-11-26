@@ -1,0 +1,27 @@
+# name: test/sql/copy/csv/test_empty_quote.test
+# description: Test reading a CSV file with an empty quote
+# group: [csv]
+
+statement ok
+CREATE TABLE no_quote(a VARCHAR, b VARCHAR);
+
+# empty quote
+query I
+COPY no_quote FROM 'test/sql/copy/csv/data/no_quote.csv' (HEADER 1, QUOTE '', ESCAPE '', AUTO_DETECT 1);
+----
+3
+
+query TT
+SELECT * FROM no_quote;
+----
+"hello	world
+h'ow do you	do"
+'I am'	"here"
+
+# empty quote in read_csv function
+query TT
+SELECT * FROM read_csv('test/sql/copy/csv/data/no_quote.csv', auto_detect=1, header=1, quote='');
+----
+"hello	world
+h'ow do you	do"
+'I am'	"here"

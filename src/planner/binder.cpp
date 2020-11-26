@@ -12,12 +12,15 @@ using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
     : context(context), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
-	if (parent_ && inherit_ctes_) {
-		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
-		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
-		bind_context.cte_references = parent_->bind_context.cte_references;
-		parameters = parent_->parameters;
-		CTE_bindings = parent_->CTE_bindings;
+	if (parent_) {
+		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
+		macro_binding = parent_->macro_binding;
+		if (inherit_ctes_) {
+			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
+			bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
+			bind_context.cte_references = parent_->bind_context.cte_references;
+			parameters = parent_->parameters;
+		}
 	}
 }
 
@@ -72,7 +75,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 		result = BindNode((RecursiveCTENode &)node);
 		break;
 	default:
-		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
 		result = BindNode((SetOperationNode &)node);
 		break;
 	}
@@ -149,8 +152,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 }
 
 void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
-	assert(info);
-	assert(!name.empty());
+	D_ASSERT(info);
+	D_ASSERT(!name.empty());
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
 		throw BinderException("Duplicate CTE \"%s\" in query!", name);
@@ -158,15 +161,17 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
 	CTE_bindings[name] = info;
 }
 
-CommonTableExpressionInfo *Binder::FindCTE(const string &name) {
+CommonTableExpressionInfo *Binder::FindCTE(const string &name, bool skip) {
 	auto entry = CTE_bindings.find(name);
-	if (entry == CTE_bindings.end()) {
-		if (parent && inherit_ctes) {
-			return parent->FindCTE(name);
+	if (entry != CTE_bindings.end()) {
+		if (!skip || entry->second->query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
+			return entry->second;
 		}
-		return nullptr;
 	}
-	return entry->second;
+	if (parent && inherit_ctes) {
+		return parent->FindCTE(name, name == alias);
+	}
+	return nullptr;
 }
 
 idx_t Binder::GenerateTableIndex() {
@@ -181,12 +186,12 @@ void Binder::PushExpressionBinder(ExpressionBinder *binder) {
 }
 
 void Binder::PopExpressionBinder() {
-	assert(HasActiveBinder());
+	D_ASSERT(HasActiveBinder());
 	GetActiveBinders().pop_back();
 }
 
 void Binder::SetActiveBinder(ExpressionBinder *binder) {
-	assert(HasActiveBinder());
+	D_ASSERT(HasActiveBinder());
 	GetActiveBinders().back() = binder;
 }
 
