@@ -60,8 +60,7 @@ struct FirstFunction : public FirstFunctionBase {
 };
 
 struct FirstFunctionString : public FirstFunctionBase {
-	template<class STATE>
-	static void SetValue(STATE *state, string_t value, bool is_null) {
+	template <class STATE> static void SetValue(STATE *state, string_t value, bool is_null) {
 		state->is_set = true;
 		if (is_null) {
 			state->is_null = true;
