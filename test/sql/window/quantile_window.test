@@ -60,3 +60,20 @@ NULL	1
 7	7
 8	8
 9	8
+
+query II
+SELECT r, quantile(r, 0.5) over (order by r rows between 1 preceding and 3 following) FROM quantile ORDER BY 1, 2
+----
+NULL	0
+NULL	0
+NULL	1
+0	1
+1	2
+2	3
+3	4
+4	5
+5	6
+6	7
+7	7
+8	8
+9	8
