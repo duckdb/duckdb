@@ -13,14 +13,13 @@
 namespace duckdb {
 using namespace std;
 
-static idx_t RequiredBitsForValue(idx_t v) {
-	idx_t bits = 1;
-	idx_t value = 1;
-	while(value < v) {
-		value *= 2;
-		bits++;
-	}
-	return bits;
+static uint32_t RequiredBitsForValue(uint32_t n) {
+	n |= (n >> 1);
+	n |= (n >> 2);
+	n |= (n >> 4);
+	n |= (n >> 8);
+	n |= (n >> 16);
+	return n - (n >> 1);
 }
 
 static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate &op, vector<idx_t> &bits_per_group) {
@@ -88,16 +87,20 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		default:
 			throw InternalException("Unsupported type for perfect hash (should be caught before)");
 		}
+		// bail out on any range bigger than 2^32
+		if (range >= NumericLimits<int32_t>::Maximum()) {
+			return false;
+		}
 		range += 2;
 		// figure out how many bits we need
 		idx_t required_bits = RequiredBitsForValue(range);
 		bits_per_group.push_back(required_bits);
 		perfect_hash_bits += required_bits;
-	}
-	// we support up perfect hash tables of up to 2^18 entries
-	if (perfect_hash_bits > context.perfect_ht_threshold) {
-		// too many bits for perfect hash
-		return false;
+		// check if we have exceeded the bits for the hash
+		if (perfect_hash_bits > context.perfect_ht_threshold) {
+			// too many bits for perfect hash
+			return false;
+		}
 	}
 	for (idx_t i = 0; i < op.expressions.size(); i++) {
 		auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
