@@ -3,7 +3,6 @@
 
 namespace duckdb {
 
-
 PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types_p,
 							vector<LogicalType> payload_types_p, vector<AggregateObject> aggregate_objects_p,
 							vector<Value> group_minima_p, vector<idx_t> required_bits_p) :
@@ -166,6 +165,8 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 				group_is_set[i] = true;
 				// only source has an entry for this group: we can just memcpy it over
 				memcpy(target_ptr, source_ptr, tuple_size);
+				// we clear this entry in the other HT as we "consume" the entry here
+				other.group_is_set[i] = false;
 			}
 		}
 		source_ptr += tuple_size;
