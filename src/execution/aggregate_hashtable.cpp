@@ -821,7 +821,6 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	});
 	FlushMove(addresses, hashes, group_idx);
 	string_heap.MergeHeap(other.string_heap);
-	other.entries = 0; // disable finalizers
 	Verify();
 }
 
