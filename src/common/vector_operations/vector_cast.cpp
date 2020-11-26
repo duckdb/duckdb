@@ -475,7 +475,6 @@ static void value_string_cast_switch(Vector &source, Vector &result, idx_t count
 			auto src_val = source.GetValue(i);
 			auto str_val = src_val.ToString();
 			result.SetValue(i, Value(str_val));
-			break;
 		}
 		break;
 	default:
