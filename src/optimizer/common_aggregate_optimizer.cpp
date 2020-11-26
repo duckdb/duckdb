@@ -12,14 +12,15 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		ExtractCommonAggregates((LogicalAggregate &) op);
+		ExtractCommonAggregates((LogicalAggregate &)op);
 		break;
 	default:
 		break;
 	}
 }
 
-unique_ptr<Expression> CommonAggregateOptimizer::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> CommonAggregateOptimizer::VisitReplace(BoundColumnRefExpression &expr,
+                                                              unique_ptr<Expression> *expr_ptr) {
 	// check if this column ref points to an aggregate that was remapped; if it does we remap it
 	auto entry = aggregate_map.find(expr.binding);
 	if (entry != aggregate_map.end()) {
@@ -31,7 +32,7 @@ unique_ptr<Expression> CommonAggregateOptimizer::VisitReplace(BoundColumnRefExpr
 void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
 	expression_map_t<idx_t> aggregate_remap;
 	idx_t total_erased = 0;
-	for(idx_t i = 0; i < aggr.expressions.size(); i++) {
+	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		idx_t original_index = i + total_erased;
 		auto entry = aggregate_remap.find(aggr.expressions[i].get());
 		if (entry == aggregate_remap.end()) {
@@ -56,6 +57,5 @@ void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
 		}
 	}
 }
-
 
 } // namespace duckdb

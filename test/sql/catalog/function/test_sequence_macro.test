@@ -1,0 +1,136 @@
+# name: test/sql/catalog/function/test_sequence_macro.test
+# description: Test Sequence Macro
+# group: [function]
+
+statement ok
+CREATE TABLE integers (i INT)
+
+statement ok
+INSERT INTO integers VALUES (42), (42)
+
+statement ok
+CREATE SEQUENCE seq
+
+# recursive CTE with sequences
+statement ok
+CREATE MACRO in_next_n(x, s, n) AS x IN (
+    WITH RECURSIVE cte AS (
+            SELECT nextval(s) AS nxt, 1 AS iter
+        UNION ALL
+            SELECT nextval(s), iter + 1
+            FROM cte
+            WHERE iter < n
+    )
+    SELECT nxt
+    FROM cte
+)
+
+query T
+SELECT in_next_n(3, 'seq', 5);
+----
+1
+
+query T
+SELECT in_next_n(3, 'seq', 5);
+----
+0
+
+query T
+SELECT in_next_n(12, 'seq', 5);
+----
+1
+
+# overlapping param/column names can be disambiguated
+statement ok
+CREATE MACRO in_next_n2(x, s, n) AS x IN (
+    WITH RECURSIVE cte AS (
+            SELECT nextval(s) AS nxt, n AS n
+        UNION ALL
+            SELECT nextval(s), cte.n - 1
+            FROM cte
+            WHERE cte.n > 1
+    )
+    SELECT nxt
+    FROM cte
+)
+
+query T
+SELECT in_next_n2(17, 'seq', 5);
+----
+1
+
+statement ok
+DROP SEQUENCE seq
+
+statement ok
+CREATE SEQUENCE seq1
+
+statement ok
+CREATE SEQUENCE seq2 INCREMENT BY 2 START WITH 2
+
+statement ok
+CREATE MACRO test(s1, s2, x) AS nextval(s1) + nextval(s2) + x
+
+query T
+SELECT test('seq1', 'seq2', i) FROM integers
+----
+45
+48
+
+statement ok
+DROP SEQUENCE seq1
+
+statement ok
+DROP SEQUENCE seq2
+
+# create two pairs of identical sequences
+statement ok
+CREATE SEQUENCE seq1
+
+statement ok
+CREATE SEQUENCE seq2 INCREMENT BY 2 START WITH 2
+
+statement ok
+CREATE SEQUENCE seq1m
+
+statement ok
+CREATE SEQUENCE seq2m INCREMENT BY 2 START WITH 2
+
+# insert the second pair into a table
+statement ok
+CREATE TABLE sequences (s VARCHAR)
+
+statement ok
+INSERT INTO sequences VALUES ('seq1m'), ('seq2m')
+
+# these should be equal to each other in each iteration, because the sequences are equal
+loop i 0 5
+
+query T
+SELECT
+        (SELECT (SELECT test(s, s, i1.i) + i FROM integers) FROM sequences)
+    =
+        (SELECT (SELECT nextval('seq1') + nextval('seq1') + i1.i) + i FROM integers
+    UNION ALL
+        SELECT (SELECT nextval('seq2') + nextval('seq2') + i1.i) + i FROM integers)
+FROM
+    integers i1
+----
+1
+1
+
+endloop
+
+# argument with side-effects not allowed
+statement ok
+CREATE MACRO add(a, b) AS a + b
+
+statement ok
+CREATE SEQUENCE seqq
+
+# TODO: uncomment when macro parameters are pushed as a projection
+#query T
+#SELECT add(i + nextval('seqq'), 5) FROM integers
+#----
+#48
+#48

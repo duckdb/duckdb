@@ -46,10 +46,6 @@ struct AggregateState {
 		other.aggregates = move(aggregates);
 		other.destructors = move(destructors);
 	}
-	void Clear() {
-		aggregates.clear();
-		destructors.clear();
-	}
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;
@@ -151,7 +147,6 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 
 			aggregate.function.combine(source_state, dest_state, 1);
 		}
-		source.state.Clear();
 	} else {
 		// complex aggregates: this is necessarily a non-parallel aggregate
 		// simply move over the source state into the global state
