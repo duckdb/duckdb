@@ -6,6 +6,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA perfect_ht_threshold=20;
+
+statement ok
 CREATE TABLE timeseries(year INTEGER, val INTEGER);
 
 statement ok
@@ -19,6 +22,26 @@ NULL	1	1	1
 1997	12	1	1
 2001	30	1	1
 
+# use aggregates with destructors
+query III
+SELECT year, LIST(val), STRING_AGG(val, ',') FROM timeseries GROUP BY year ORDER BY year;
+----
+NULL	[1]	1
+1996	[10, 20, NULL]	10,20
+1997	[12]	12
+2001	[30]	30
+
+# many small columns each having only the values 0 and 1
+# total possible combinations is 2^10, but there are only 2 groups
+statement ok
+create table manycolumns as select i a, i b, i c, i d, i e from range(0,2) tbl(i);
+
+query IIIII
+select a, b, c, d, e FROM manycolumns GROUP BY 1, 2, 3, 4, 5
+----
+0	0	0	0	0
+1	1	1	1	1
+
 # test edge cases: multiple tinyints without statistics
 # create a table of tinyints [-127, 128] stored as varchar
 # by forcing a varchar to tinyint cast we lose statistics
@@ -26,7 +49,7 @@ statement ok
 CREATE TABLE tinyints AS SELECT i::TINYINT::VARCHAR AS t FROM range(-127, 128) tbl(i);
 
 query IIII
-SELECT COUNT(DISTINCT i), MIN(i), MAX(i), SUM(i) / COUNT(i) FROM (SELECT t::TINYINT t1, t::TINYINT t2 FROM tinyints GROUP BY t1, t2) tbl(i)
+SELECT COUNT(DISTINCT i), MIN(i), MAX(i), SUM(i) / COUNT(i) FROM (SELECT t::TINYINT t1 FROM tinyints GROUP BY t1) tbl(i)
 ----
 255	-127	127	0
 

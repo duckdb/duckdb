@@ -8,11 +8,12 @@
 #include "duckdb/execution/operator/aggregate/physical_perfect_hash_aggregate.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 using namespace std;
 
-idx_t RequiredBitsForValue(idx_t v) {
+static idx_t RequiredBitsForValue(idx_t v) {
 	idx_t bits = 1;
 	idx_t value = 1;
 	while(value < v) {
@@ -22,7 +23,7 @@ idx_t RequiredBitsForValue(idx_t v) {
 	return bits;
 }
 
-bool CanUsePerfectHashAggregate(LogicalAggregate &op, vector<idx_t> &bits_per_group) {
+static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate &op, vector<idx_t> &bits_per_group) {
 	idx_t perfect_hash_bits = 0;
 	if (op.group_stats.size() == 0) {
 		op.group_stats.resize(op.groups.size());
@@ -94,7 +95,7 @@ bool CanUsePerfectHashAggregate(LogicalAggregate &op, vector<idx_t> &bits_per_gr
 		perfect_hash_bits += required_bits;
 	}
 	// we support up perfect hash tables of up to 2^18 entries
-	if (perfect_hash_bits > 18) {
+	if (perfect_hash_bits > context.perfect_ht_threshold) {
 		// too many bits for perfect hash
 		return false;
 	}
@@ -149,7 +150,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// groups! create a GROUP BY aggregator
 		// use a perfect hash aggregate if possible
 		vector<idx_t> required_bits;
-		if (CanUsePerfectHashAggregate(op, required_bits)) {
+		if (CanUsePerfectHashAggregate(context, op, required_bits)) {
 			groupby = make_unique_base<PhysicalOperator, PhysicalPerfectHashAggregate>(context, op.types, move(op.expressions), move(op.groups), move(op.group_stats), move(required_bits));
 		} else {
 			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
