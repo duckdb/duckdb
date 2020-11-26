@@ -94,7 +94,8 @@ template <class T> struct QuantileOperation {
 		auto v_t = (T *)state->v;
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		target[idx] = v_t[offset];
-	}
+        Destroy(state);
+    }
 
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->v) {
