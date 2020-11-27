@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -85,7 +86,8 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	// default parameters
 	for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {
-		dummy_types.push_back(LogicalType::SQLNULL);
+        auto &val = (ConstantExpression &)*it->second;
+		dummy_types.push_back(val.value.type());
 		dummy_names.push_back(it->first);
 	}
 	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
