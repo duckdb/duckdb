@@ -4,7 +4,6 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate/algebraic_functions.hpp"
 
 using namespace std;

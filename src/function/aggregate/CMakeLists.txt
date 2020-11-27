@@ -1,5 +1,6 @@
 add_subdirectory(algebraic)
 add_subdirectory(distributive)
+add_subdirectory(holistic)
 add_subdirectory(nested)
 
 add_library_unity(duckdb_func_aggr OBJECT algebraic_functions.cpp
