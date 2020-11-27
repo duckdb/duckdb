@@ -86,7 +86,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	// default parameters
 	for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {
-        auto &val = (ConstantExpression &)*it->second;
+		auto &val = (ConstantExpression &)*it->second;
 		dummy_types.push_back(val.value.type());
 		dummy_names.push_back(it->first);
 	}

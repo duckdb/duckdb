@@ -40,7 +40,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
 					throw ParserException("Invalid parameter: '%s'", comp_expr.left->ToString());
 				}
 				if (comp_expr.right->GetExpressionClass() != ExpressionClass::CONSTANT) {
-                    throw ParserException("Parameters may only have constants as default value");
+					throw ParserException("Parameters may only have constants as default value");
 				}
 				auto &param_name_expr = (ColumnRefExpression &)*comp_expr.left;
 				if (!param_name_expr.table_name.empty()) {
