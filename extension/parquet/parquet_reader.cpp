@@ -664,6 +664,7 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 
 				if (append_chunk->size() == STANDARD_VECTOR_SIZE) {
 					col_data.string_collection->Append(*append_chunk);
+					append_chunk->SetCardinality(0);
 				}
 
 				VerifyString(return_types[col_idx].id(), col_data.payload.ptr, str_len);
