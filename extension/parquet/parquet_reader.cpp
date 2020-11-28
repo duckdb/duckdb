@@ -221,8 +221,8 @@ static unique_ptr<parquet::format::FileMetaData> read_metadata(duckdb::FileSyste
 
 static shared_ptr<ParquetFileMetadataCache> load_metadata(duckdb::FileSystem &fs, duckdb::FileHandle *handle,
                                                           uint32_t footer_len, uint64_t file_size) {
-	return make_shared<ParquetFileMetadataCache>(read_metadata(fs, handle, footer_len, file_size),
-	                                             chrono::system_clock::to_time_t(chrono::system_clock::now()));
+	auto current_time = chrono::system_clock::to_time_t(chrono::system_clock::now());
+	return make_shared<ParquetFileMetadataCache>(read_metadata(fs, handle, footer_len, file_size), current_time);
 }
 
 ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types,
@@ -269,7 +269,7 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		metadata = load_metadata(fs, handle.get(), footer_len, file_size);
 	} else {
 		metadata = dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
-		if (!metadata || (fs.GetLastModifiedTime(*handle) >= metadata->read_time)) {
+		if (!metadata || (fs.GetLastModifiedTime(*handle) + 10 >= metadata->read_time)) {
 			metadata = load_metadata(fs, handle.get(), footer_len, file_size);
 			context.db.object_cache->Put(file_name, dynamic_pointer_cast<ObjectCacheEntry>(metadata));
 		}
