@@ -142,8 +142,11 @@ void ExpressionBinder::CheckForSideEffects(FunctionExpression &function, idx_t d
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalogEntry *macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> *expr) {
-	// validate the arguments
-	string error = MacroFunction::ValidateArguments(*macro_func, function);
+	auto &macro_def = *macro_func->function;
+	// validate the arguments and separate positional and default arguments
+	vector<unique_ptr<ParsedExpression>> positionals;
+	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
+	string error = MacroFunction::ValidateArguments(*macro_func, function, positionals, defaults);
 	if (!error.empty()) {
 		return BindResult(binder.FormatError(*expr->get(), error));
 	}
@@ -157,13 +160,21 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalo
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types;
 	vector<string> names;
-	for (idx_t i = 0; i < macro_func->function->parameters.size(); i++) {
+	// positional parameters
+	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
 		types.push_back(LogicalType::SQLNULL);
-		auto &param = (ColumnRefExpression &)*macro_func->function->parameters[i];
+		auto &param = (ColumnRefExpression &)*macro_def.parameters[i];
 		names.push_back(param.column_name);
 	}
+	// default parameters
+	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
+		types.push_back(LogicalType::SQLNULL);
+		names.push_back(it->first);
+		// now push the defaults into the positionals
+		positionals.push_back(move(defaults[it->first]));
+	}
 	auto new_macro_binding = make_unique<MacroBinding>(types, names, macro_func->name);
-	new_macro_binding->arguments = move(function.children);
+	new_macro_binding->arguments = move(positionals);
 	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression, and replace params

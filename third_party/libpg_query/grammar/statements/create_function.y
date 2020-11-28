@@ -8,7 +8,7 @@
 				{
 					PGCreateFunctionStmt *n = makeNode(PGCreateFunctionStmt);
 					n->name = $3;
-					n->args = $4;
+					n->params = $4;
 					n->function = $6;
 					$$ = (PGNode *)n;
 				}

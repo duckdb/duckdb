@@ -73,7 +73,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	Reference(other);
 	if (offset > 0) {
 		data = data + GetTypeIdSize(type.InternalType()) * offset;
-		nullmask <<= offset;
+		nullmask >>= offset;
 	}
 }
 

@@ -1,6 +1,8 @@
-# name: test/sql/types/list/array_agg.test
+# name: test/sql/types/list/list_aggregates.test
 # description: Test lists with aggregations
 # group: [list]
+
+require vector_size 512
 
 statement ok
 PRAGMA enable_verification

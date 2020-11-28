@@ -151,3 +151,40 @@ CREATE MACRO weird_avg(x) AS (MIN(x) + MAX(x)) / COUNT(x)
 
 statement error
 CREATE MACRO star() AS *
+
+# macro's with default arguments
+statement error
+CREATE MACRO conflict(a, a=1) AS a + a
+
+statement ok
+CREATE MACRO add_default5(a, b=5) AS a + b
+
+statement error
+SELECT add_default5(3, 6)
+
+query T
+SELECT add_default5(3)
+----
+8
+
+query T
+SELECT add_default5(3, b=6)
+----
+9
+
+statement error
+SELECT add_default5(b=6, 3)
+
+statement error
+CREATE MACRO wrong_order(a, b=3, c)
+
+statement error
+CREATE MACRO wrong_order(a=3, b)
+
+# only constant default values are allowed
+statement error
+CREATE MACRO select_plus_floats(a, f=b) AS (SELECT a + f FROM floats)
+
+# +(FLOAT, VARCHAR) does not work - constant types are checked at create time
+statement error
+CREATE MACRO wrong_type(s='not a float') AS (SELECT b + s FROM floats)
