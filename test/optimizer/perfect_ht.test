@@ -1,6 +1,6 @@
 # name: test/optimizer/perfect_ht.test
 # description: Test aggregates that can trigger a perfect HT
-# group: [aggregates]
+# group: [optimizer]
 
 statement ok
 PRAGMA enable_verification

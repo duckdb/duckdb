@@ -1,16 +1,16 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
-
 namespace duckdb {
 
 PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types_p,
-							vector<LogicalType> payload_types_p, vector<AggregateObject> aggregate_objects_p,
-							vector<Value> group_minima_p, vector<idx_t> required_bits_p) :
-	BaseAggregateHashTable(buffer_manager, move(group_types_p), move(payload_types_p), move(aggregate_objects_p)),
-	required_bits(move(required_bits_p)), total_required_bits(0), group_minima(move(group_minima_p)) {
+                                                     vector<LogicalType> payload_types_p,
+                                                     vector<AggregateObject> aggregate_objects_p,
+                                                     vector<Value> group_minima_p, vector<idx_t> required_bits_p)
+    : BaseAggregateHashTable(buffer_manager, move(group_types_p), move(payload_types_p), move(aggregate_objects_p)),
+      required_bits(move(required_bits_p)), total_required_bits(0), group_minima(move(group_minima_p)) {
 	addresses.Initialize(LogicalType::POINTER);
 
-	for(auto &group_bits : required_bits) {
+	for (auto &group_bits : required_bits) {
 		total_required_bits += group_bits;
 	}
 	// the total amount of groups we allocate space for is 2^required_bits
@@ -27,7 +27,7 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manag
 
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
 	data_ptr_t payload_ptr = data;
-	for(idx_t i = 0; i < total_groups; i++) {
+	for (idx_t i = 0; i < total_groups; i++) {
 		memcpy(payload_ptr, empty_payload_data.get(), payload_width);
 		payload_ptr += tuple_size;
 	}
@@ -37,12 +37,13 @@ PerfectAggregateHashTable::~PerfectAggregateHashTable() {
 	Destroy();
 }
 
-template<class T>
-static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, uint64_t *address_data, idx_t current_shift, idx_t count) {
-	auto data = (T*) group_data.data;
+template <class T>
+static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, uint64_t *address_data,
+                                          idx_t current_shift, idx_t count) {
+	auto data = (T *)group_data.data;
 	auto min_val = min.GetValueUnsafe<T>();
 	if (group_data.nullmask->any()) {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto index = group_data.sel->get_index(i);
 			// check if the value is NULL
 			// NULL groups are considered as "0" in the hash table
@@ -56,7 +57,7 @@ static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, ui
 		}
 	} else {
 		// no null values: we can directly compute the addresses
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto index = group_data.sel->get_index(i);
 			uint64_t adjusted_value = (data[index] - min_val) + 1;
 			address_data[i] += adjusted_value << current_shift;
@@ -68,7 +69,7 @@ static void ComputeGroupLocation(Vector &group, Value &min, uint64_t *address_da
 	VectorData vdata;
 	group.Orrify(count, vdata);
 
-	switch(group.type.InternalType()) {
+	switch (group.type.InternalType()) {
 	case PhysicalType::INT8:
 		ComputeGroupLocationTemplated<int8_t>(vdata, min, address_data, current_shift, count);
 		break;
@@ -95,13 +96,13 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 
 	// then compute the actual group location by iterating over each of the groups
 	idx_t current_shift = 0;
-	for(idx_t i = 0; i < groups.ColumnCount(); i++) {
+	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift, groups.size());
 		current_shift += required_bits[i];
 	}
 	// now we have the HT entry number for every tuple
 	// compute the actual pointer to the data by adding it to the base HT pointer and multiplying by the tuple size
-	for(idx_t i = 0; i < groups.size(); i++) {
+	for (idx_t i = 0; i < groups.size(); i++) {
 		D_ASSERT(address_data[i] < total_groups);
 		group_is_set[address_data[i]] = true;
 		address_data[i] = uint64_t(data) + address_data[i] * tuple_size;
@@ -113,7 +114,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		auto &aggr = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggr.child_count;
 		aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
-								payload.size());
+		                     payload.size());
 
 		// move to the next aggregate
 		payload_idx += input_count;
@@ -147,7 +148,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	data_ptr_t source_ptr = other.data;
 	data_ptr_t target_ptr = data;
 	idx_t combine_count = 0;
-	for(idx_t i = 0; i < total_groups; i++) {
+	for (idx_t i = 0; i < total_groups; i++) {
 		auto has_entry_source = other.group_is_set[i];
 		// we only have any work to do if the source has an entry for this group
 		if (has_entry_source) {
@@ -175,12 +176,13 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	Combine(source_addresses, target_addresses, combine_count);
 }
 
-template<class T>
-static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min, idx_t mask, idx_t shift, idx_t entry_count, Vector &result) {
-	auto data      = FlatVector::GetData<T>(result);
+template <class T>
+static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min, idx_t mask, idx_t shift,
+                                            idx_t entry_count, Vector &result) {
+	auto data = FlatVector::GetData<T>(result);
 	auto &nullmask = FlatVector::Nullmask(result);
-	auto min_data  = min.GetValueUnsafe<T>();
-	for(idx_t i = 0; i < entry_count; i++) {
+	auto min_data = min.GetValueUnsafe<T>();
+	for (idx_t i = 0; i < entry_count; i++) {
 		// extract the value of this group from the total group index
 		auto group_index = (group_values[i] >> shift) & mask;
 		if (group_index == 0) {
@@ -193,11 +195,11 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 	}
 }
 
-
-static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t required_bits, idx_t shift, idx_t entry_count, Vector &result) {
+static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t required_bits, idx_t shift,
+                                   idx_t entry_count, Vector &result) {
 	// construct the mask for this entry
 	idx_t mask = (1 << required_bits) - 1;
-	switch(result.type.InternalType()) {
+	switch (result.type.InternalType()) {
 	case PhysicalType::INT8:
 		ReconstructGroupVectorTemplated<int8_t>(group_values, min, mask, shift, entry_count, result);
 		break;
@@ -221,7 +223,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 
 	// iterate over the HT until we either have exhausted the entire HT, or
 	idx_t entry_count = 0;
-	for(; scan_position < total_groups; scan_position++) {
+	for (; scan_position < total_groups; scan_position++) {
 		if (group_is_set[scan_position]) {
 			// this group is set: add it to the set of groups to extract
 			data_pointers[entry_count] = data + tuple_size * scan_position;
@@ -238,7 +240,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	// first reconstruct the groups from the group index
 	idx_t shift = 0;
-	for(idx_t i = 0; i < group_types.size(); i++) {
+	for (idx_t i = 0; i < group_types.size(); i++) {
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
 		shift += required_bits[i];
 	}
@@ -271,7 +273,7 @@ void PerfectAggregateHashTable::Destroy() {
 
 	// iterate over all occupied slots of the hash table
 	data_ptr_t payload_ptr = data;
-	for(idx_t i = 0; i < total_groups; i++) {
+	for (idx_t i = 0; i < total_groups; i++) {
 		if (group_is_set[i]) {
 			data_pointers[count++] = payload_ptr;
 			if (count == STANDARD_VECTOR_SIZE) {
@@ -284,4 +286,4 @@ void PerfectAggregateHashTable::Destroy() {
 	CallDestructors(state_vector, count);
 }
 
-}
+} // namespace duckdb

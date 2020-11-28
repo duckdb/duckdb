@@ -18,7 +18,9 @@ class PerfectAggregateHashTable;
 //! PhysicalPerfectHashAggregate performs a group-by and aggregation using a perfect hash table
 class PhysicalPerfectHashAggregate : public PhysicalSink {
 public:
-	PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> aggregates, vector<unique_ptr<Expression>> groups, vector<unique_ptr<BaseStatistics>> group_stats, vector<idx_t> required_bits);
+	PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types,
+	                             vector<unique_ptr<Expression>> aggregates, vector<unique_ptr<Expression>> groups,
+	                             vector<unique_ptr<BaseStatistics>> group_stats, vector<idx_t> required_bits);
 
 	//! The groups
 	vector<unique_ptr<Expression>> groups;

@@ -17,9 +17,10 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 }
 
 BaseAggregateHashTable::BaseAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types_p,
-	                          vector<LogicalType> payload_types_p, vector<AggregateObject> aggregate_objects) :
-	buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(move(group_types_p)),
-	payload_types(move(payload_types_p)), group_width(0), group_padding(0), payload_width(0) {
+                                               vector<LogicalType> payload_types_p,
+                                               vector<AggregateObject> aggregate_objects)
+    : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(move(group_types_p)),
+      payload_types(move(payload_types_p)), group_width(0), group_padding(0), payload_width(0) {
 
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());
@@ -47,7 +48,6 @@ BaseAggregateHashTable::BaseAggregateHashTable(BufferManager &buffer_manager, ve
 	group_padding = aligned_group_width - group_width;
 	group_width += group_padding;
 #endif
-
 }
 
 void BaseAggregateHashTable::CallDestructors(Vector &state_vector, idx_t count) {
@@ -64,4 +64,4 @@ void BaseAggregateHashTable::CallDestructors(Vector &state_vector, idx_t count) 
 	}
 }
 
-}
+} // namespace duckdb

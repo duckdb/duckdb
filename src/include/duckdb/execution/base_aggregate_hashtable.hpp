@@ -35,16 +35,17 @@ struct AggregateObject {
 	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
 };
 
-
 class BaseAggregateHashTable {
 public:
 	BaseAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
-	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects);
-	virtual ~BaseAggregateHashTable(){}
+	                       vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects);
+	virtual ~BaseAggregateHashTable() {
+	}
 
 	static idx_t Align(idx_t n) {
 		return ((n + 7) / 8) * 8;
 	}
+
 protected:
 	BufferManager &buffer_manager;
 	//! The aggregates to be computed

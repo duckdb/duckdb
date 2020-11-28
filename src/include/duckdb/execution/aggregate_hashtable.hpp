@@ -106,7 +106,6 @@ public:
 private:
 	HtEntryType entry_type;
 
-
 	//! The total tuple size
 	idx_t tuple_size;
 	//! The amount of tuples that fit in a single block

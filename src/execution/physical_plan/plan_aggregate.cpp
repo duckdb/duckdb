@@ -15,7 +15,7 @@ using namespace std;
 
 static uint32_t RequiredBitsForValue(uint32_t n) {
 	idx_t required_bits = 0;
-	while(n > 0) {
+	while (n > 0) {
 		n >>= 1;
 		required_bits++;
 	}
@@ -27,11 +27,11 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 	if (op.group_stats.size() == 0) {
 		op.group_stats.resize(op.groups.size());
 	}
-	for(idx_t group_idx = 0; group_idx < op.groups.size(); group_idx++) {
+	for (idx_t group_idx = 0; group_idx < op.groups.size(); group_idx++) {
 		auto &group = op.groups[group_idx];
 		auto &stats = op.group_stats[group_idx];
 
-		switch(group->return_type.InternalType()) {
+		switch (group->return_type.InternalType()) {
 		case PhysicalType::INT8:
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
@@ -46,12 +46,14 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		if (!stats) {
 			// no stats, but we might still be able to use perfect hashing if the type is small enough
 			// for small types we can just set the stats to [type_min, type_max]
-			switch(group_type.InternalType()) {
+			switch (group_type.InternalType()) {
 			case PhysicalType::INT8:
-				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type), Value::MaximumValue(group_type));
+				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
+				                                       Value::MaximumValue(group_type));
 				break;
 			case PhysicalType::INT16:
-				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type), Value::MaximumValue(group_type));
+				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
+				                                       Value::MaximumValue(group_type));
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing
@@ -60,7 +62,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			// we had no stats before, so we have no clue if there are null values or not
 			stats->has_null = true;
 		}
-		auto &nstats = (NumericStatistics &) *stats;
+		auto &nstats = (NumericStatistics &)*stats;
 
 		if (nstats.min.is_null || nstats.max.is_null) {
 			return false;
@@ -69,7 +71,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		// we add two here, one for the NULL value, and one to make the computation one-indexed
 		// (e.g. if min and max are the same, we still need one entry in total)
 		int64_t range;
-		switch(group_type.InternalType()) {
+		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
 			range = int64_t(nstats.max.GetValueUnsafe<int8_t>()) - int64_t(nstats.min.GetValueUnsafe<int8_t>());
 			break;
@@ -80,7 +82,8 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			range = int64_t(nstats.max.GetValueUnsafe<int32_t>()) - int64_t(nstats.min.GetValueUnsafe<int32_t>());
 			break;
 		case PhysicalType::INT64:
-			if (!TrySubtractOperator::Operation(nstats.max.GetValueUnsafe<int64_t>(), nstats.min.GetValueUnsafe<int64_t>(), range)) {
+			if (!TrySubtractOperator::Operation(nstats.max.GetValueUnsafe<int64_t>(),
+			                                    nstats.min.GetValueUnsafe<int64_t>(), range)) {
 				return false;
 			}
 			break;
@@ -154,10 +157,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// use a perfect hash aggregate if possible
 		vector<idx_t> required_bits;
 		if (CanUsePerfectHashAggregate(context, op, required_bits)) {
-			groupby = make_unique_base<PhysicalOperator, PhysicalPerfectHashAggregate>(context, op.types, move(op.expressions), move(op.groups), move(op.group_stats), move(required_bits));
+			groupby = make_unique_base<PhysicalOperator, PhysicalPerfectHashAggregate>(
+			    context, op.types, move(op.expressions), move(op.groups), move(op.group_stats), move(required_bits));
 		} else {
 			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
-																				move(op.groups));
+			                                                                    move(op.groups));
 		}
 	}
 	groupby->children.push_back(move(plan));

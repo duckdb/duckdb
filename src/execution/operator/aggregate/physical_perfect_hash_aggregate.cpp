@@ -7,13 +7,18 @@
 
 namespace duckdb {
 
-PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types_p, vector<unique_ptr<Expression>> aggregates_p, vector<unique_ptr<Expression>> groups_p, vector<unique_ptr<BaseStatistics>> group_stats, vector<idx_t> required_bits_p) :
-	PhysicalSink(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, move(types_p)), groups(move(groups_p)), aggregates(move(aggregates_p)), required_bits(move(required_bits_p)) {
+PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types_p,
+                                                           vector<unique_ptr<Expression>> aggregates_p,
+                                                           vector<unique_ptr<Expression>> groups_p,
+                                                           vector<unique_ptr<BaseStatistics>> group_stats,
+                                                           vector<idx_t> required_bits_p)
+    : PhysicalSink(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, move(types_p)), groups(move(groups_p)),
+      aggregates(move(aggregates_p)), required_bits(move(required_bits_p)) {
 	D_ASSERT(groups.size() == group_stats.size());
 	group_minima.reserve(group_stats.size());
-	for(auto &stats : group_stats) {
+	for (auto &stats : group_stats) {
 		D_ASSERT(stats);
-		auto &nstats = (NumericStatistics &) *stats;
+		auto &nstats = (NumericStatistics &)*stats;
 		D_ASSERT(!nstats.min.is_null);
 		group_minima.push_back(move(nstats.min));
 	}
@@ -38,13 +43,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 }
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) {
-	return make_unique<PerfectAggregateHashTable>(
-		BufferManager::GetBufferManager(context),
-		group_types,
-		payload_types,
-		aggregate_objects,
-		group_minima,
-		required_bits);
+	return make_unique<PerfectAggregateHashTable>(BufferManager::GetBufferManager(context), group_types, payload_types,
+	                                              aggregate_objects, group_minima, required_bits);
 }
 
 //===--------------------------------------------------------------------===//
@@ -52,8 +52,8 @@ unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Cli
 //===--------------------------------------------------------------------===//
 class PerfectHashAggregateGlobalState : public GlobalOperatorState {
 public:
-	PerfectHashAggregateGlobalState(PhysicalPerfectHashAggregate &op, ClientContext &context) :
-		ht(op.CreateHT(context)) {
+	PerfectHashAggregateGlobalState(PhysicalPerfectHashAggregate &op, ClientContext &context)
+	    : ht(op.CreateHT(context)) {
 	}
 
 	//! The lock for updating the global aggregate state
@@ -64,8 +64,8 @@ public:
 
 class PerfectHashAggregateLocalState : public LocalSinkState {
 public:
-	PerfectHashAggregateLocalState(PhysicalPerfectHashAggregate &op, ClientContext &context) :
-		ht(op.CreateHT(context)) {
+	PerfectHashAggregateLocalState(PhysicalPerfectHashAggregate &op, ClientContext &context)
+	    : ht(op.CreateHT(context)) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (op.payload_types.size() > 0) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -86,8 +86,9 @@ unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(Execu
 	return make_unique<PerfectHashAggregateLocalState>(*this, context.client);
 }
 
-void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p, DataChunk &input) {
-	auto &lstate = (PerfectHashAggregateLocalState &) lstate_p;
+void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
+                                        DataChunk &input) {
+	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
 	DataChunk &group_chunk = lstate.group_chunk;
 	DataChunk &aggregate_input_chunk = lstate.aggregate_input_chunk;
 
@@ -120,9 +121,10 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
-	auto &lstate = (PerfectHashAggregateLocalState &) lstate_p;
-	auto &gstate = (PerfectHashAggregateGlobalState &) gstate_p;
+void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p,
+                                           LocalSinkState &lstate_p) {
+	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
+	auto &gstate = (PerfectHashAggregateGlobalState &)gstate_p;
 
 	lock_guard<mutex> l(gstate.lock);
 	gstate.ht->Combine(*lstate.ht);
@@ -140,8 +142,9 @@ public:
 	idx_t ht_scan_position;
 };
 
-void PhysicalPerfectHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
-	auto &state = (PerfectHashAggregateState &) *state_p;
+void PhysicalPerfectHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                                    PhysicalOperatorState *state_p) {
+	auto &state = (PerfectHashAggregateState &)*state_p;
 	auto &gstate = (PerfectHashAggregateGlobalState &)*sink_state;
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);
@@ -168,4 +171,4 @@ string PhysicalPerfectHashAggregate::ParamsToString() const {
 	return result;
 }
 
-}
+} // namespace duckdb

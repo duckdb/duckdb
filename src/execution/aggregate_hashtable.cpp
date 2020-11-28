@@ -29,11 +29,13 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types_p,
                                                      vector<LogicalType> payload_types_p,
-                                                     vector<AggregateObject> aggregate_objects_p, HtEntryType entry_type)
-    : BaseAggregateHashTable(buffer_manager, move(group_types_p), move(payload_types_p), move(aggregate_objects_p)), entry_type(entry_type),
-      capacity(0), entries(0), payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
-      hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
-      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
+                                                     vector<AggregateObject> aggregate_objects_p,
+                                                     HtEntryType entry_type)
+    : BaseAggregateHashTable(buffer_manager, move(group_types_p), move(payload_types_p), move(aggregate_objects_p)),
+      entry_type(entry_type), capacity(0), entries(0), payload_page_offset(0), is_finalized(false),
+      ht_offsets(LogicalTypeId::BIGINT), hash_salts(LogicalTypeId::SMALLINT),
+      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
+      empty_vector(STANDARD_VECTOR_SIZE) {
 
 	// HT layout
 	tuple_size = HASH_WIDTH + group_width + payload_width;

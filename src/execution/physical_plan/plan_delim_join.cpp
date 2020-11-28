@@ -54,8 +54,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	// now create the duplicate eliminated join
 	auto delim_join = make_unique<PhysicalDelimJoin>(op.types, move(plan), delim_scans);
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
-	delim_join->distinct = make_unique<PhysicalHashAggregate>(context, delim_types, move(distinct_expressions),
-	                                                          move(distinct_groups));
+	delim_join->distinct =
+	    make_unique<PhysicalHashAggregate>(context, delim_types, move(distinct_expressions), move(distinct_groups));
 	return move(delim_join);
 }
 

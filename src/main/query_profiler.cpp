@@ -305,16 +305,17 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 				}
 				ss << "┌─────────────────────────────────────┐\n";
 				ss << "│" +
-						DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
-									TOTAL_BOX_WIDTH - 2) +
-						"│\n";
+				          DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
+				                     TOTAL_BOX_WIDTH - 2) +
+				          "│\n";
 				ss << "│┌───────────────────────────────────┐│\n";
 				has_previous_phase = true;
 			} else {
 				string entry_name = StringUtil::Split(entry.first, " > ")[1];
 				ss << "││" +
-						DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second), TOTAL_BOX_WIDTH - 4) +
-						"││\n";
+				          DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second),
+				                     TOTAL_BOX_WIDTH - 4) +
+				          "││\n";
 			}
 		}
 		if (has_previous_phase) {
