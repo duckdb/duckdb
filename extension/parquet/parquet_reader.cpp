@@ -21,7 +21,7 @@
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
 #include "snappy.h"
-#include "miniz.hpp"
+#include "miniz_wrapper.hpp"
 
 #include "zstd.h"
 
@@ -37,7 +37,6 @@ using namespace parquet;
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
-using namespace duckdb_miniz;
 
 using parquet::format::CompressionCodec;
 using parquet::format::ConvertedType;
@@ -518,7 +517,6 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	case CompressionCodec::UNCOMPRESSED:
 		col_data.payload.ptr = col_data.buf.ptr;
 		break;
-
 	case CompressionCodec::SNAPPY: {
 		col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
 		auto res =
@@ -530,44 +528,10 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 		break;
 	}
 	case CompressionCodec::GZIP: {
-		struct MiniZStream {
-			~MiniZStream() {
-				if (init) {
-					mz_inflateEnd(&stream);
-				}
-			}
-
-			mz_stream stream;
-			bool init = false;
-		} s;
-		auto &stream = s.stream;
-		memset(&stream, 0, sizeof(mz_stream));
-
-		auto mz_ret = mz_inflateInit2(&stream, -MZ_DEFAULT_WINDOW_BITS);
-		if (mz_ret != MZ_OK) {
-			throw FormatException("Failed to initialize miniz");
-		}
-		s.init = true;
-
-		col_data.buf.available(GZIP_HEADER_MINSIZE);
-		auto gzip_hdr = (const unsigned char *)col_data.buf.ptr;
-
-		if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B || gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE ||
-		    gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
-			throw FormatException("Input is invalid/unsupported GZIP stream");
-		}
+		MiniZStream s;
 
 		col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
-
-		stream.next_in = (const unsigned char *)col_data.buf.ptr + GZIP_HEADER_MINSIZE;
-		stream.avail_in = page_hdr.compressed_page_size - GZIP_HEADER_MINSIZE;
-		stream.next_out = (unsigned char *)col_data.decompressed_buf.ptr;
-		stream.avail_out = page_hdr.uncompressed_page_size;
-
-		mz_ret = mz_inflate(&stream, MZ_FINISH);
-		if (mz_ret != MZ_OK && mz_ret != MZ_STREAM_END) {
-			throw FormatException("Decompression failure: " + string(mz_error(mz_ret)));
-		}
+		s.Decompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr, page_hdr.uncompressed_page_size);
 
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
 		break;
@@ -664,6 +628,7 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 
 				if (append_chunk->size() == STANDARD_VECTOR_SIZE) {
 					col_data.string_collection->Append(*append_chunk);
+					append_chunk->SetCardinality(0);
 				}
 
 				VerifyString(return_types[col_idx].id(), col_data.payload.ptr, str_len);
