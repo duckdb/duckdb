@@ -331,7 +331,7 @@ struct MicrosecondsOperator {
 	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
 	                                                      FunctionData *bind_data,
 	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-		return PropagateSimpleDatePartStatistics<0, 999999>(child_stats);
+		return PropagateSimpleDatePartStatistics<0, 60000000>(child_stats);
 	}
 };
 
@@ -348,7 +348,7 @@ struct MillisecondsOperator {
 	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
 	                                                      FunctionData *bind_data,
 	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-		return PropagateSimpleDatePartStatistics<0, 999>(child_stats);
+		return PropagateSimpleDatePartStatistics<0, 60000>(child_stats);
 	}
 };
 
