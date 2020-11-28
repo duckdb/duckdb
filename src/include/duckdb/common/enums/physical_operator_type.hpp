@@ -24,7 +24,6 @@ enum class PhysicalOperatorType : uint8_t {
 	AGGREGATE,
 	WINDOW,
 	UNNEST,
-	DISTINCT,
 	SIMPLE_AGGREGATE,
 	HASH_GROUP_BY,
 	PERFECT_HASH_GROUP_BY,

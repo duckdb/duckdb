@@ -41,7 +41,6 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::AGGREGATE:
 	case PhysicalOperatorType::WINDOW:
 	case PhysicalOperatorType::UNNEST:
-	case PhysicalOperatorType::DISTINCT:
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:
 	case PhysicalOperatorType::HASH_GROUP_BY:
 	case PhysicalOperatorType::SORT_GROUP_BY:

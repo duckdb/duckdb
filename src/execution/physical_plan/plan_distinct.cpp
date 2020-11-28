@@ -65,8 +65,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	child = ExtractAggregateExpressions(move(child), aggregates, groups);
 
 	// we add a physical hash aggregation in the plan to select the distinct groups
-	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, move(aggregates), move(groups),
-	                                                  PhysicalOperatorType::DISTINCT);
+	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, move(aggregates), move(groups));
 	groupby->children.push_back(move(child));
 	if (!requires_projection) {
 		return move(groupby);

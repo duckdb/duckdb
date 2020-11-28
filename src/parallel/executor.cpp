@@ -87,7 +87,6 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		case PhysicalOperatorType::UPDATE:
 		case PhysicalOperatorType::CREATE:
 		case PhysicalOperatorType::HASH_GROUP_BY:
-		case PhysicalOperatorType::DISTINCT:
 		case PhysicalOperatorType::SIMPLE_AGGREGATE:
 		case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
 		case PhysicalOperatorType::WINDOW:
