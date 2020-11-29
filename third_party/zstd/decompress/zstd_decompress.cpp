@@ -109,6 +109,8 @@ const S16 ZSTDInternalConstants::LL_defaultNorm[MaxLL+1] = { 4, 3, 2, 2, 2, 2, 2
                                             2, 2, 2, 2, 2, 2, 2, 2,
                                             2, 3, 2, 1, 1, 1, 1, 1,
                                             -1,-1,-1,-1 };
+#define LL_DEFAULTNORMLOG 6  /* for static allocation */
+const U32 ZSTDInternalConstants::LL_defaultNormLog = LL_DEFAULTNORMLOG;
 const U32 ZSTDInternalConstants::ML_bits[MaxML+1] = { 0, 0, 0, 0, 0, 0, 0, 0,
                                     0, 0, 0, 0, 0, 0, 0, 0,
                                     0, 0, 0, 0, 0, 0, 0, 0,
@@ -116,8 +118,25 @@ const U32 ZSTDInternalConstants::ML_bits[MaxML+1] = { 0, 0, 0, 0, 0, 0, 0, 0,
                                     1, 1, 1, 1, 2, 2, 3, 3,
                                     4, 4, 5, 7, 8, 9,10,11,
                                     12,13,14,15,16 };
+const S16 ZSTDInternalConstants::ML_defaultNorm[MaxML+1] = { 1, 4, 3, 2, 2, 2, 2, 2,
+                                             2, 1, 1, 1, 1, 1, 1, 1,
+                                             1, 1, 1, 1, 1, 1, 1, 1,
+                                             1, 1, 1, 1, 1, 1, 1, 1,
+                                             1, 1, 1, 1, 1, 1, 1, 1,
+                                             1, 1, 1, 1, 1, 1,-1,-1,
+                                            -1,-1,-1,-1,-1 };
+#define ML_DEFAULTNORMLOG 6  /* for static allocation */
+const U32 ZSTDInternalConstants::ML_defaultNormLog = ML_DEFAULTNORMLOG;
 
-static ZSTD_customMem const ZSTD_defaultCMem = { NULL, NULL, NULL };  /**< this constant defers to stdlib's functions */
+const S16 ZSTDInternalConstants::OF_defaultNorm[DefaultMaxOff+1] = { 1, 1, 1, 1, 1, 1, 2, 2,
+                                                     2, 1, 1, 1, 1, 1, 1, 1,
+                                                     1, 1, 1, 1, 1, 1, 1, 1,
+                                                    -1,-1,-1,-1,-1 };
+#define OF_DEFAULTNORMLOG 5  /* for static allocation */
+const U32 ZSTDInternalConstants::OF_defaultNormLog = OF_DEFAULTNORMLOG;
+const U32 ZSTDInternalConstants::repStartValue[ZSTD_REP_NUM] = { 1, 4, 8 };
+
+const ZSTD_customMem ZSTD_defaultCMem = { NULL, NULL, NULL };  /**< this constant defers to stdlib's functions */
 
 /*-*************************************************************
 *   Context management

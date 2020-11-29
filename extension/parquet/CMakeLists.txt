@@ -23,6 +23,22 @@ add_library(
   ../../third_party/zstd/common/zstd_common.cpp
   ../../third_party/zstd/common/error_private.cpp
   ../../third_party/zstd/common/xxhash.cpp
+  ../../third_party/zstd/compress/fse_compress.cpp
+  ../../third_party/zstd/compress/hist.cpp
+  ../../third_party/zstd/compress/huf_compress.cpp
+  ../../third_party/zstd/compress/zstd_compress.cpp
+  ../../third_party/zstd/compress/zstd_compress_literals.cpp
+  ../../third_party/zstd/compress/zstd_compress_sequences.cpp
+  ../../third_party/zstd/compress/zstd_compress_superblock.cpp
+  ../../third_party/zstd/compress/zstd_double_fast.cpp
+  ../../third_party/zstd/compress/zstd_fast.cpp
+  ../../third_party/zstd/compress/zstd_lazy.cpp
+  ../../third_party/zstd/compress/zstd_ldm.cpp
+  ../../third_party/zstd/compress/zstd_opt.cpp
+  ../../third_party/zstd/dictBuilder/cover.cpp
+  ../../third_party/zstd/dictBuilder/divsufsort.cpp
+  ../../third_party/zstd/dictBuilder/fastcover.cpp
+  ../../third_party/zstd/dictBuilder/zdict.cpp
   parquet-extension.cpp
   parquet_reader.cpp
   parquet_timestamp.cpp
