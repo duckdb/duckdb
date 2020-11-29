@@ -22,7 +22,7 @@ class FileSystem;
 
 class ParquetWriter {
 public:
-	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names);
+	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names, parquet::format::CompressionCodec::type codec);
 
 public:
 	void Flush(ChunkCollection &buffer);
@@ -32,6 +32,7 @@ private:
 	string file_name;
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
+	parquet::format::CompressionCodec::type codec;
 
 	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<apache::thrift::protocol::TProtocol> protocol;
