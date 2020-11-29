@@ -35,8 +35,8 @@ add_library(
   ../../third_party/zstd/compress/zstd_lazy.cpp
   ../../third_party/zstd/compress/zstd_ldm.cpp
   ../../third_party/zstd/compress/zstd_opt.cpp
-  ../../third_party/zstd/dictBuilder/divsufsort.cpp
-  ../../third_party/zstd/dictBuilder/zdict.cpp
+  ../../third_party/zstd/dict/divsufsort.cpp
+  ../../third_party/zstd/dict/zdict.cpp
   parquet-extension.cpp
   parquet_reader.cpp
   parquet_timestamp.cpp
