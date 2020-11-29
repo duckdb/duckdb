@@ -16,6 +16,7 @@
 
 #include "snappy.h"
 #include "miniz_wrapper.hpp"
+#include "zstd.h"
 
 namespace duckdb {
 
@@ -334,6 +335,14 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 			s.Compress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
 								(char *)compressed_buf.get(), &compressed_size);
+			compressed_data = compressed_buf.get();
+			break;
+		}
+		case CompressionCodec::ZSTD: {
+			compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.blob.size);
+			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+			compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
+			               (const void *)temp_writer.blob.data.get(), temp_writer.blob.size, ZSTD_CLEVEL_DEFAULT);
 			compressed_data = compressed_buf.get();
 			break;
 		}

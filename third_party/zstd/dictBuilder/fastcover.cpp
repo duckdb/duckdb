@@ -614,7 +614,6 @@ ZDICT_optimizeTrainFromBuffer_fastCover(
     ZDICT_cover_params_t coverParams;
     FASTCOVER_accel_t accelParams;
     /* constants */
-    const unsigned nbThreads = parameters->nbThreads;
     const double splitPoint =
         parameters->splitPoint <= 0.0 ? DEFAULT_SPLITPOINT : parameters->splitPoint;
     const unsigned kMinD = parameters->d == 0 ? 6 : parameters->d;

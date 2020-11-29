@@ -244,9 +244,12 @@ unique_ptr<FunctionData> parquet_write_bind(ClientContext &context, CopyInfo &in
 				} else if (roption == "gzip") {
 					bind_data->codec = parquet::format::CompressionCodec::GZIP;
 					continue;
+				} else if (roption == "zstd") {
+					bind_data->codec = parquet::format::CompressionCodec::ZSTD;
+					continue;
 				}
 			}
-			throw ParserException("Expected %s argument to be either [uncompressed, snappy, or gzip]", loption);
+			throw ParserException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]", loption);
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}

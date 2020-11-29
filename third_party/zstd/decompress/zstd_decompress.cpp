@@ -136,7 +136,7 @@ const S16 ZSTDInternalConstants::OF_defaultNorm[DefaultMaxOff+1] = { 1, 1, 1, 1,
 const U32 ZSTDInternalConstants::OF_defaultNormLog = OF_DEFAULTNORMLOG;
 const U32 ZSTDInternalConstants::repStartValue[ZSTD_REP_NUM] = { 1, 4, 8 };
 
-const ZSTD_customMem ZSTD_defaultCMem = { NULL, NULL, NULL };  /**< this constant defers to stdlib's functions */
+const ZSTD_customMem ZSTDInternalConstants::ZSTD_defaultCMem = { NULL, NULL, NULL };  /**< this constant defers to stdlib's functions */
 
 /*-*************************************************************
 *   Context management
@@ -213,7 +213,7 @@ ZSTD_DCtx* ZSTD_createDCtx_advanced(ZSTD_customMem customMem)
 ZSTD_DCtx* ZSTD_createDCtx(void)
 {
     DEBUGLOG(3, "ZSTD_createDCtx");
-    return ZSTD_createDCtx_advanced(ZSTD_defaultCMem);
+    return ZSTD_createDCtx_advanced(ZSTDInternalConstants::ZSTD_defaultCMem);
 }
 
 static void ZSTD_clearDict(ZSTD_DCtx* dctx)
@@ -1335,7 +1335,7 @@ size_t ZSTD_decompress_usingDDict(ZSTD_DCtx* dctx,
 ZSTD_DStream* ZSTD_createDStream(void)
 {
     DEBUGLOG(3, "ZSTD_createDStream");
-    return ZSTD_createDStream_advanced(ZSTD_defaultCMem);
+    return ZSTD_createDStream_advanced(ZSTDInternalConstants::ZSTD_defaultCMem);
 }
 
 ZSTD_DStream* ZSTD_initStaticDStream(void *workspace, size_t workspaceSize)
