@@ -875,9 +875,6 @@ void COVER_best_finish(COVER_best_t *best, ZDICT_cover_params_t parameters,
     return;
   }
   {
-    size_t liveJobs;
-    --best->liveJobs;
-    liveJobs = best->liveJobs;
     /* If the new dictionary is better */
     if (compressedSize < best->compressedSize) {
       /* Allocate space if necessary */
