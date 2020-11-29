@@ -73,7 +73,7 @@ struct MiniZStream {
 		return duckdb_miniz::mz_compressBound(input_size) + GZIP_HEADER_MINSIZE + GZIP_FOOTER_SIZE;
 	}
 	void Compress(const char *uncompressed_data, size_t uncompressed_size, char *out_data, size_t *out_size) {
-		auto mz_ret = mz_deflateInit2(&stream, duckdb_miniz::MZ_BEST_COMPRESSION, MZ_DEFLATED, -MZ_DEFAULT_WINDOW_BITS, 1, 0);
+		auto mz_ret = mz_deflateInit2(&stream, duckdb_miniz::MZ_DEFAULT_LEVEL, MZ_DEFLATED, -MZ_DEFAULT_WINDOW_BITS, 1, 0);
 		if (mz_ret != duckdb_miniz::MZ_OK) {
 			FormatException("Failed to initialize miniz", mz_ret);
 		}
