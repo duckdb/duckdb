@@ -1,7 +1,7 @@
--- create schema for the index to live in
+DROP SCHEMA IF EXISTS %fts_schema% CASCADE;
 CREATE SCHEMA %fts_schema%;
+CREATE MACRO %fts_schema%.tokenize(s) AS stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(s)), '[^a-z]', ' ', 'g'), '\s+')), '%stemmer%');
 
--- create docs table with docid and name
 CREATE TABLE %fts_schema%.docs AS (
     SELECT
         row_number() OVER (PARTITION BY(SELECT NULL)) AS docid,
@@ -10,7 +10,6 @@ CREATE TABLE %fts_schema%.docs AS (
         %input_schema%.%input_table%
 );
 
--- create terms table with term, docid, pos (term will be replace with termid later)
 CREATE TABLE %fts_schema%.terms AS (
     SELECT
         term,
@@ -18,15 +17,14 @@ CREATE TABLE %fts_schema%.terms AS (
         row_number() OVER (PARTITION BY docid) AS pos
     FROM (
         SELECT
-            stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(%input_val%)), '[^a-z]', ' ', 'g'), '\s+')), 'porter') AS term,
+            %fts_schema%.tokenize(%input_val%) AS term,
             row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
-        FROM %input_schema%.documents
+        FROM %input_schema%.%input_table%
     ) AS sq
     WHERE
         term != ''
 );
 
--- add len column to docs table
 ALTER TABLE %fts_schema%.docs ADD len INT;
 UPDATE %fts_schema%.docs d
 SET len = (
@@ -35,7 +33,6 @@ SET len = (
     WHERE t.docid = d.docid
 );
 
--- create dict table with termid, term
 CREATE TABLE %fts_schema%.dict AS
 WITH distinct_terms AS (
     SELECT DISTINCT term, docid
@@ -48,9 +45,7 @@ SELECT
 FROM
     distinct_terms;
 
--- add termid column to terms table and remove term column
 ALTER TABLE %fts_schema%.terms ADD termid INT;
-statement ok
 UPDATE %fts_schema%.terms t
 SET termid = (
     SELECT termid
@@ -59,7 +54,6 @@ SET termid = (
 );
 ALTER TABLE %fts_schema%.terms DROP term;
 
--- add df column to dict
 ALTER TABLE %fts_schema%.dict ADD df INT;
 UPDATE %fts_schema%.dict d
 SET df = (
@@ -67,4 +61,41 @@ SET df = (
     FROM %fts_schema%.terms t
     WHERE d.termid = t.termid
     GROUP BY termid
+);
+
+CREATE TABLE %fts_schema%.stats AS (
+    SELECT COUNT(docs.docid) AS num_docs, SUM(docs.len) / COUNT(docs.len) AS avgdl
+    FROM %fts_schema%.docs AS docs
+);
+
+CREATE MACRO %fts_schema%.match_bm25(docname, query_string, k=1.2, b=0.75, conjunctive=0) AS docname IN (
+    WITH tokens AS
+        (SELECT DISTINCT %fts_schema%.tokenize(query_string) AS t),
+    qtermids AS
+        (SELECT termid FROM %fts_schema%.dict AS dict, tokens WHERE dict.term = tokens.t),
+    qterms AS
+        (SELECT termid, docid FROM %fts_schema%.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
+    subscores AS (
+        SELECT
+            docs.docid, len, term_tf.termid, tf, df,
+            (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
+        FROM
+            (SELECT termid, docid, COUNT(*) AS tf FROM qterms GROUP BY docid, termid) AS term_tf
+        JOIN
+            (SELECT docid FROM qterms GROUP BY docid HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END) AS cdocs
+        ON
+            term_tf.docid = cdocs.docid
+        JOIN
+            %fts_schema%.docs AS docs
+        ON
+            term_tf.docid = docs.docid
+        JOIN
+            %fts_schema%.dict AS dict
+        ON
+            term_tf.termid = dict.termid
+    )
+    SELECT name
+    FROM (SELECT docid, sum(subscore) AS score FROM subscores GROUP BY docid) AS scores
+    JOIN %fts_schema%.docs AS docs
+    ON scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
 );
