@@ -18,6 +18,11 @@ SELECT STATS('hello');
 ----
 <REGEX>:.*hello.*hello.*
 
+query I
+SELECT STATS('1234567ü');
+----
+<REGEX>:.*1234567.*1234567.*
+
 # arithmetic
 query I
 SELECT STATS(5+2);
