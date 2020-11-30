@@ -95,10 +95,10 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	D_ASSERT(groups.ColumnCount() == group_minima.size());
 
 	// then compute the actual group location by iterating over each of the groups
-	idx_t current_shift = 0;
+	idx_t current_shift = total_required_bits;
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
+		current_shift -= required_bits[i];
 		ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift, groups.size());
-		current_shift += required_bits[i];
 	}
 	// now we have the HT entry number for every tuple
 	// compute the actual pointer to the data by adding it to the base HT pointer and multiplying by the tuple size
@@ -240,10 +240,10 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		return;
 	}
 	// first reconstruct the groups from the group index
-	idx_t shift = 0;
+	idx_t shift = total_required_bits;
 	for (idx_t i = 0; i < group_types.size(); i++) {
+		shift -= required_bits[i];
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
-		shift += required_bits[i];
 	}
 	// then construct the payloads
 	for (idx_t i = 0; i < aggregates.size(); i++) {
