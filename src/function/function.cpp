@@ -48,11 +48,6 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterPragmaFunctions();
 
-	// binder functions
-	// FIXME shouldn't be here
-	AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
-	AddFunction(ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
-
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
 	AddCollation("noaccent", StripAccentsFun::GetFunction());

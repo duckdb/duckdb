@@ -54,23 +54,6 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		auto &child = (BoundExpression &)*function.children[i];
 		children.push_back(move(child.expr));
 	}
-	// special binder-only functions
-	// FIXME: these shouldn't be special
-	if (function.function_name == "alias") {
-		if (children.size() != 1) {
-			throw BinderException(binder.FormatError(function, "alias function expects a single argument"));
-		}
-		// alias function: returns the alias of the current expression, or the name of the child
-		string alias = !function.alias.empty() ? function.alias : children[0]->GetName();
-		return BindResult(make_unique<BoundConstantExpression>(Value(alias)));
-	} else if (function.function_name == "typeof") {
-		if (children.size() != 1) {
-			throw BinderException(binder.FormatError(function, "typeof function expects a single argument"));
-		}
-		// typeof function: returns the type of the child expression
-		string type = children[0]->return_type.ToString();
-		return BindResult(make_unique<BoundConstantExpression>(Value(type)));
-	}
 	unique_ptr<Expression> result =
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
