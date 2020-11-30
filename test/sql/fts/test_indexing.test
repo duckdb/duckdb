@@ -8,13 +8,13 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-PRAGMA drop_fts_index('main', 'test')
+PRAGMA drop_fts_index('test')
 
 statement ok
 CREATE SCHEMA fts_main_test;
 
 statement ok
-PRAGMA drop_fts_index('main', 'test')
+PRAGMA drop_fts_index('test')
 
 statement ok
 CREATE TABLE documents(id VARCHAR, body VARCHAR)
@@ -23,7 +23,21 @@ statement ok
 INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING')
 
 statement ok
-PRAGMA create_fts_index('main', 'documents', 'id', 'body', 'porter')
+PRAGMA create_fts_index('documents', 'id', 'body', stemmer='turkish')
+
+# cannot overwrite without supplying the 'overwrite' param
+statement error
+PRAGMA create_fts_index('documents', 'id', 'body')
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', 'body', overwrite=True)
+
+# drop and re-create
+statement ok
+PRAGMA drop_fts_index('documents')
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', 'body')
 
 query III
 SELECT termid, docid, pos FROM fts_main_documents.terms
@@ -100,3 +114,9 @@ SELECT name, score FROM (SELECT docid, sum(subscore) AS score
 ----
 doc1	0.443697	
 doc2	0.375436
+
+query II
+SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'QUÁCKED BÁRKED')
+----
+doc1	 QUÁCKING+QUÁCKING+QUÁCKING
+doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING

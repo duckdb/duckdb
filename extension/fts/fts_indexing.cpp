@@ -12,23 +12,48 @@ static string fts_schema_name(string schema, string table) {
 	return "fts_" + schema + "_" + table;
 }
 
-string pragma_drop_fts_index_query(ClientContext &context, vector<Value> parameters) {
-    auto schema = parameters[0].str_value;
-    auto table = parameters[1].str_value;
+static pair<string, string> parse_qualified_name(ClientContext &context, string qualified_name, string &error) {
+    auto qname_split = StringUtil::Split(qualified_name, '.');
+    auto schema_name = qname_split.size() == 2 ? qname_split[0] : DEFAULT_SCHEMA;
+    auto table_name = qname_split.back();
+    auto result = make_pair(schema_name, table_name);
+    if (qname_split.size() > 2) {
+        error = StringUtil::Format("Invalid table name: '%s'", qualified_name);
+		return result;
+    }
+    if (!context.catalog.schemas->GetEntry(context, schema_name)) {
+        error = StringUtil::Format("No such schema: '%s'", schema_name);
+		return result;
+    }
+    auto schema = (SchemaCatalogEntry *)context.catalog.schemas->GetEntry(context, schema_name);
+    if (!schema->tables.GetEntry(context, table_name)) {
+        error = StringUtil::Format("No such table: '%s.%s'", schema_name, table_name);
+    }
+	return result;
+}
 
-	string fts_schema = fts_schema_name(schema, table);
-	if (!context.catalog.schemas->GetEntry(context, fts_schema))
-		throw Exception("a FTS index does not exist on table \"" + schema + "." + table +
-		                "\". Create one with create_fts_index().");
+string drop_fts_index_query(ClientContext &context, FunctionParameters parameters) {
+	string error;
+	auto qualified_name = parse_qualified_name(context, parameters.values[0].str_value, error);
+    auto schema_name = qualified_name.first;
+    auto table_name = qualified_name.second;
+	string fts_schema = fts_schema_name(schema_name, table_name);
+
+	if (!context.catalog.schemas->GetEntry(context, fts_schema)) {
+		throw CatalogException("a FTS index does not exist on table '%s.%s'. Create one with create_fts_index().",
+		                       schema_name, table_name);
+	}
 
 	return "DROP SCHEMA " + fts_schema + " CASCADE;";
 }
 
-static string indexing_script(string input_schema, string input_table, string input_id, string input_val) {
+static string indexing_script(string input_schema, string input_table, string input_id, vector<string> input_values, string stemmer) {
 	string fts_schema = fts_schema_name(input_schema, input_table);
 	// weird way to have decently readable SQL code in here
 	string result = SQL(
+	    DROP SCHEMA IF EXISTS %fts_schema% CASCADE;
         CREATE SCHEMA %fts_schema%;
+	    CREATE MACRO %fts_schema%.tokenize(s) AS stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(s)), '[^a-z]', ' ', 'g'), '\s+')), '%stemmer%');
 
         CREATE TABLE %fts_schema%.docs AS (
             SELECT
@@ -45,9 +70,9 @@ static string indexing_script(string input_schema, string input_table, string in
                 row_number() OVER (PARTITION BY docid) AS pos
             FROM (
                 SELECT
-                    stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(%input_val%)), '[^a-z]', ' ', 'g'), '\s+')), 'porter') AS term,
+                    %fts_schema%.tokenize(%input_val%) AS term,
                     row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
-                FROM %input_schema%.documents
+                FROM %input_schema%.%input_table%
             ) AS sq
             WHERE
                 term != ''
@@ -90,32 +115,95 @@ static string indexing_script(string input_schema, string input_table, string in
             WHERE d.termid = t.termid
             GROUP BY termid
         );
+
+	    CREATE TABLE %fts_schema%.stats AS (
+	        SELECT COUNT(docs.docid) AS num_docs, SUM(docs.len) / COUNT(docs.len) AS avgdl
+	        FROM %fts_schema%.docs AS docs
+        );
+
+        CREATE MACRO %fts_schema%.match_bm25(docname, query_string, k=1.2, b=0.75, conjunctive=0) AS docname IN (
+            WITH tokens AS
+                (SELECT DISTINCT %fts_schema%.tokenize(query_string) AS t),
+            qtermids AS
+                (SELECT termid FROM %fts_schema%.dict AS dict, tokens WHERE dict.term = tokens.t),
+            qterms AS
+                (SELECT termid, docid FROM %fts_schema%.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
+            subscores AS (
+                SELECT
+                    docs.docid, len, term_tf.termid, tf, df,
+                    (log((stats.num_docs - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / stats.avgdl)))))) AS subscore
+                FROM
+                    (SELECT termid, docid, COUNT(*) AS tf FROM qterms GROUP BY docid, termid) AS term_tf,
+                    %fts_schema%.stats AS stats
+                JOIN
+                    (SELECT docid FROM qterms GROUP BY docid HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END) AS cdocs
+                ON
+	                term_tf.docid = cdocs.docid
+                JOIN
+                    %fts_schema%.docs AS docs
+                ON
+                    term_tf.docid = docs.docid
+                JOIN
+                    %fts_schema%.dict AS dict
+                ON
+                    term_tf.termid = dict.termid
+            )
+            SELECT name
+            FROM (SELECT docid, sum(subscore) AS score FROM subscores GROUP BY docid) AS scores
+            JOIN %fts_schema%.docs AS docs
+            ON scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
+        );
     );
 
-	// fill in variables (inefficiently)
+	// fill in variables (inefficiently, but keeps SQL script readable)
 	result = StringUtil::Replace(result, "%fts_schema%", fts_schema);
 	result = StringUtil::Replace(result, "%input_schema%", input_schema);
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
-	result = StringUtil::Replace(result, "%input_val%", input_val);
+	result = StringUtil::Replace(result, "%input_val%", input_values[0]);
+    result = StringUtil::Replace(result, "%stemmer%", stemmer);
 
 	return result;
 }
 
-string pragma_create_fts_index_query(ClientContext &context, vector<Value> parameters) {
-    auto schema = parameters[0].str_value;
-    auto table = parameters[1].str_value;
-    auto id = parameters[2].str_value;
-    auto val = parameters[3].str_value;
-    auto stemmer = parameters[3].str_value;
+string create_fts_index_query(ClientContext &context, FunctionParameters parameters) {
+	string error;
+    auto qualified_name = parse_qualified_name(context, parameters.values[0].str_value, error);
+	if (!error.empty()) {
+		throw CatalogException(error);
+	}
+    auto schema_name = qualified_name.first;
+    auto table_name = qualified_name.second;
+	string fts_schema = fts_schema_name(schema_name, table_name);
 
-	string fts_schema = fts_schema_name(schema, table);
-	if (context.catalog.schemas->GetEntry(context, fts_schema))
-		throw Exception("a FTS index already exists on table " + schema + "." + table +
-		                ". Supply overwite=true to overwrite, or drop the existing index with drop_fts_index before "
-		                "creating a new one.");
+	// get named parameters
+    string stemmer = "porter";
+	if (parameters.named_parameters.find("stemmer") != parameters.named_parameters.end()) {
+        stemmer = parameters.named_parameters["stemmer"].str_value;
+	}
+    bool overwrite = false;
+    if (parameters.named_parameters.find("overwrite") != parameters.named_parameters.end()) {
+        overwrite = parameters.named_parameters["overwrite"].value_.boolean;
+    }
 
-	return indexing_script(schema, table, id, val);
+
+	// throw error if an index already exists on this table
+	if (context.catalog.schemas->GetEntry(context, fts_schema) && !overwrite) {
+		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=true' to overwrite, or drop the existing index with 'PRAGMA drop_fts_index('%s.%s')' with optional parameter 'cascade=True' before creating a new one.",
+		                       schema_name, table_name, schema_name, table_name);
+	}
+
+    // positional parameters (vararg document text fields to be indexed)
+    auto doc_id = parameters.values[1].str_value;
+    vector<string> doc_values;
+	for (idx_t i = 2; i < parameters.values.size(); i++) {
+		doc_values.push_back(parameters.values[i].str_value);
+	}
+	if (doc_values.empty()) {
+		throw Exception("at least one column to index must be supplied!");
+	}
+
+	return indexing_script(schema_name, table_name, doc_id, doc_values, stemmer);
 }
 
 } // namespace duckdb
