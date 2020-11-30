@@ -78,6 +78,9 @@ static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<
 	// run the operator on both the min and the max, this gives us the [min, max] bound
 	auto min = nstats.min.GetValueUnsafe<T>();
 	auto max = nstats.max.GetValueUnsafe<T>();
+	if (min > max) {
+		return nullptr;
+	}
 	auto min_year = OP::template Operation<T, int64_t>(min);
 	auto max_year = OP::template Operation<T, int64_t>(max);
 	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_year), Value::BIGINT(max_year));
