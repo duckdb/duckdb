@@ -131,10 +131,9 @@ static string indexing_script(string input_schema, string input_table, string in
             subscores AS (
                 SELECT
                     docs.docid, len, term_tf.termid, tf, df,
-                    (log((stats.num_docs - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / stats.avgdl)))))) AS subscore
+                    (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
                 FROM
-                    (SELECT termid, docid, COUNT(*) AS tf FROM qterms GROUP BY docid, termid) AS term_tf,
-                    %fts_schema%.stats AS stats
+                    (SELECT termid, docid, COUNT(*) AS tf FROM qterms GROUP BY docid, termid) AS term_tf
                 JOIN
                     (SELECT docid FROM qterms GROUP BY docid HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END) AS cdocs
                 ON
