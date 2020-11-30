@@ -68,7 +68,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	if (statement.unnests.size() > 0) {
 		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
 		unnest->expressions = move(statement.unnests);
-		// visit the window expressions
+		// visit the unnest expressions
 		for (auto &expr : unnest->expressions) {
 			PlanSubqueries(&expr, &root);
 		}

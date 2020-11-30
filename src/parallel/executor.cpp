@@ -87,8 +87,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		case PhysicalOperatorType::UPDATE:
 		case PhysicalOperatorType::CREATE:
 		case PhysicalOperatorType::HASH_GROUP_BY:
-		case PhysicalOperatorType::DISTINCT:
 		case PhysicalOperatorType::SIMPLE_AGGREGATE:
+		case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
 		case PhysicalOperatorType::WINDOW:
 		case PhysicalOperatorType::ORDER_BY:
 		case PhysicalOperatorType::TOP_N:
@@ -120,7 +120,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			break;
 		}
 		default:
-			throw NotImplementedException("Unimplemented sink type!");
+			throw InternalException("Unimplemented sink type!");
 		}
 		// recurse into the pipeline child
 		BuildPipelines(pipeline->child, pipeline.get());
@@ -175,7 +175,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 				auto &deps = cte_node.pipelines[i]->GetDependencies();
 				for (idx_t j = i + 1; j < cte_node.pipelines.size(); j++) {
 					if (deps.find(cte_node.pipelines[j].get()) != deps.end()) {
-						// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before pipeline "j"
+						// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before
+						// pipeline "j"
 						std::swap(cte_node.pipelines[i], cte_node.pipelines[j]);
 						i--;
 						continue;

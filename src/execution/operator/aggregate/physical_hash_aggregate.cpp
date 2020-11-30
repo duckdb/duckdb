@@ -47,10 +47,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 
 		aggregate_return_types.push_back(aggr.return_type);
-		if (aggr.children.size()) {
-			for (idx_t i = 0; i < aggr.children.size(); ++i) {
-				payload_types.push_back(aggr.children[i]->return_type);
-			}
+		for (idx_t i = 0; i < aggr.children.size(); ++i) {
+			payload_types.push_back(aggr.children[i]->return_type);
 		}
 		if (!aggr.function.combine) {
 			all_combinable = false;
