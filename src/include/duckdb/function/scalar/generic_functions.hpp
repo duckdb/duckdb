@@ -14,6 +14,10 @@
 namespace duckdb {
 class BoundFunctionExpression;
 
+struct AliasFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct LeastFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -23,6 +27,10 @@ struct GreatestFun {
 };
 
 struct StatsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct TypeOfFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
