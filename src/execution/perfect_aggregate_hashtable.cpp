@@ -230,6 +230,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 			group_values[entry_count] = scan_position;
 			entry_count++;
 			if (entry_count == STANDARD_VECTOR_SIZE) {
+				scan_position++;
 				break;
 			}
 		}
