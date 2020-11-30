@@ -19,10 +19,17 @@
 
 #include <exception>
 
+namespace parquet {
+namespace format {
+class FileMetaData;
+}
+} // namespace parquet
+
 namespace duckdb {
 class ClientContext;
 class RleBpDecoder;
 class ChunkCollection;
+class BaseStatistics;
 
 struct ParquetReaderColumnData {
 	~ParquetReaderColumnData();
@@ -85,6 +92,9 @@ public:
 	idx_t NumRowGroups();
 
 	const parquet::format::FileMetaData *GetFileMetadata();
+
+	static unique_ptr<BaseStatistics> ReadStatistics(LogicalType &type, column_t column_index,
+	                                                 const parquet::format::FileMetaData *file_meta_data);
 
 private:
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
