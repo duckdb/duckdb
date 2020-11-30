@@ -1081,6 +1081,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, colu
 			default:
 				return nullptr;
 			}
+			break;
 		}
 		case LogicalTypeId::VARCHAR: {
 			auto string_stats = make_unique<StringStatistics>(type);
