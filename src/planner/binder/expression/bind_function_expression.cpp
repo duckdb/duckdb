@@ -11,7 +11,8 @@
 namespace duckdb {
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
+                                            unique_ptr<ParsedExpression> *expr_ptr) {
 	// lookup the function in the catalog
 	QueryErrorContext error_context(binder.root_statement, function.query_location);
 
@@ -22,12 +23,16 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindUnnest(function, depth);
 	}
 	auto &catalog = Catalog::GetCatalog(context);
-	auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema,
-	                             function.function_name, false, error_context);
-	if (func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
+	auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema, function.function_name,
+	                             false, error_context);
+	switch (func->type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
-	} else {
+	case CatalogType::MACRO_ENTRY:
+		// macro function
+		return BindMacro(function, (MacroCatalogEntry *)func, depth, expr_ptr);
+	default:
 		// aggregate function
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
 	}
@@ -66,7 +71,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		string type = children[0]->return_type.ToString();
 		return BindResult(make_unique<BoundConstantExpression>(Value(type)));
 	}
-	auto result = ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
+	unique_ptr<Expression> result =
+	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}

@@ -71,7 +71,8 @@ public:
 	                                                              bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {
-		return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency;
+		return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency &&
+		       statistics == rhs.statistics;
 	}
 	bool operator!=(const ScalarFunction &rhs) const {
 		return !(*this == rhs);
@@ -94,19 +95,19 @@ private:
 
 public:
 	static void NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-		D_ASSERT(input.column_count() >= 1);
+		D_ASSERT(input.ColumnCount() >= 1);
 		result.Reference(input.data[0]);
 	}
 
 	template <class TA, class TR, class OP, bool SKIP_NULLS = false>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-		D_ASSERT(input.column_count() >= 1);
+		D_ASSERT(input.ColumnCount() >= 1);
 		UnaryExecutor::Execute<TA, TR, OP, SKIP_NULLS>(input.data[0], result, input.size());
 	}
 
 	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-		D_ASSERT(input.column_count() == 2);
+		D_ASSERT(input.ColumnCount() == 2);
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result,
 		                                                             input.size());
 	}

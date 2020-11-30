@@ -266,7 +266,7 @@ struct ParquetWriteBindData : public FunctionData {
 	vector<LogicalType> sql_types;
 	string file_name;
 	vector<string> column_names;
-	// TODO compression flag to test the param passing stuff
+	parquet::format::CompressionCodec::type codec = parquet::format::CompressionCodec::SNAPPY;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -284,6 +284,30 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 unique_ptr<FunctionData> parquet_write_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                             vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<ParquetWriteBindData>();
+	for (auto &option : info.options) {
+		auto loption = StringUtil::Lower(option.first);
+		if (loption == "compression" || loption == "codec") {
+			if (option.second.size() > 0) {
+				auto roption = StringUtil::Lower(option.second[0].ToString());
+				if (roption == "uncompressed") {
+					bind_data->codec = parquet::format::CompressionCodec::UNCOMPRESSED;
+					continue;
+				} else if (roption == "snappy") {
+					bind_data->codec = parquet::format::CompressionCodec::SNAPPY;
+					continue;
+				} else if (roption == "gzip") {
+					bind_data->codec = parquet::format::CompressionCodec::GZIP;
+					continue;
+				} else if (roption == "zstd") {
+					bind_data->codec = parquet::format::CompressionCodec::ZSTD;
+					continue;
+				}
+			}
+			throw ParserException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]", loption);
+		} else {
+			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
+		}
+	}
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
 	bind_data->file_name = info.file_path;
@@ -296,7 +320,7 @@ unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &co
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
-	    make_unique<ParquetWriter>(fs, parquet_bind.file_name, parquet_bind.sql_types, parquet_bind.column_names);
+	    make_unique<ParquetWriter>(fs, parquet_bind.file_name, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
 	return move(global_state);
 }
 
@@ -307,7 +331,7 @@ void parquet_write_sink(ClientContext &context, FunctionData &bind_data, GlobalF
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer->Append(input);
-	if (local_state.buffer->count > 100000) {
+	if (local_state.buffer->Count() > 100000) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
 		global_state.writer->Flush(*local_state.buffer);
 		// and reset the buffer

@@ -8,8 +8,9 @@ using namespace std;
 
 namespace duckdb {
 
-template<class UNSIGNED, int NEEDLE_SIZE>
-static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t base_offset) {
+template <class UNSIGNED, int NEEDLE_SIZE>
+static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
+                               idx_t base_offset) {
 	if (NEEDLE_SIZE > haystack_size) {
 		// needle is bigger than haystack: haystack cannot contain needle
 		return INVALID_INDEX;
@@ -23,12 +24,12 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
 	UNSIGNED haystack_entry = 0;
 	const UNSIGNED start = (sizeof(UNSIGNED) * 8) - 8;
 	const UNSIGNED shift = (sizeof(UNSIGNED) - NEEDLE_SIZE) * 8;
-	for(int i = 0; i < NEEDLE_SIZE; i++) {
-		needle_entry   |= UNSIGNED(needle[i])   << UNSIGNED(start - i * 8);
+	for (int i = 0; i < NEEDLE_SIZE; i++) {
+		needle_entry |= UNSIGNED(needle[i]) << UNSIGNED(start - i * 8);
 		haystack_entry |= UNSIGNED(haystack[i]) << UNSIGNED(start - i * 8);
 	}
 	// now we perform the actual search
-	for(idx_t offset = NEEDLE_SIZE; offset < haystack_size; offset++) {
+	for (idx_t offset = NEEDLE_SIZE; offset < haystack_size; offset++) {
 		// for this position we first compare the haystack with the needle
 		if (haystack_entry == needle_entry) {
 			return base_offset + offset - NEEDLE_SIZE;
@@ -46,9 +47,9 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
 	return INVALID_INDEX;
 }
 
-
-template<class UNSIGNED>
-static idx_t ContainsAligned(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t base_offset) {
+template <class UNSIGNED>
+static idx_t ContainsAligned(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
+                             idx_t base_offset) {
 	if (sizeof(UNSIGNED) > haystack_size) {
 		// needle is bigger than haystack: haystack cannot contain needle
 		return INVALID_INDEX;
@@ -56,7 +57,7 @@ static idx_t ContainsAligned(const unsigned char *haystack, idx_t haystack_size,
 	// contains for a small needle aligned with unsigned integer (2/4/8)
 	// similar to ContainsUnaligned, but simpler because we only need to do a reinterpret cast
 	auto needle_entry = Load<UNSIGNED>(needle);
-	for(idx_t offset = 0; offset <= haystack_size - sizeof(UNSIGNED); offset++) {
+	for (idx_t offset = 0; offset <= haystack_size - sizeof(UNSIGNED); offset++) {
 		// for this position we first compare the haystack with the needle
 		auto haystack_entry = Load<UNSIGNED>(haystack + offset);
 		if (needle_entry == haystack_entry) {
@@ -66,7 +67,8 @@ static idx_t ContainsAligned(const unsigned char *haystack, idx_t haystack_size,
 	return INVALID_INDEX;
 }
 
-idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size, idx_t base_offset) {
+idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
+                      idx_t needle_size, idx_t base_offset) {
 	if (needle_size > haystack_size) {
 		// needle is bigger than haystack: haystack cannot contain needle
 		return INVALID_INDEX;
@@ -78,12 +80,12 @@ idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const 
 	// we only need to call into memcmp when the window sum is equal to the needle sum
 	// when that happens, the characters are potentially the same and we call into memcmp to check if they are
 	uint32_t sums_diff = 0;
-	for(idx_t i = 0; i < needle_size; i++) {
-        sums_diff += haystack[i];
-        sums_diff -= needle[i];
+	for (idx_t i = 0; i < needle_size; i++) {
+		sums_diff += haystack[i];
+		sums_diff -= needle[i];
 	}
 	idx_t offset = 0;
-	while(true) {
+	while (true) {
 		if (sums_diff == 0 && haystack[offset] == needle[0]) {
 			if (memcmp(haystack + offset, needle, needle_size) == 0) {
 				return base_offset + offset;
@@ -92,24 +94,25 @@ idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const 
 		if (offset > haystack_size - needle_size) {
 			return INVALID_INDEX;
 		}
-        sums_diff -= haystack[offset];
-        sums_diff += haystack[offset + needle_size];
+		sums_diff -= haystack[offset];
+		sums_diff += haystack[offset + needle_size];
 		offset++;
 	}
 }
 
-idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size) {
+idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
+                        idx_t needle_size) {
 	D_ASSERT(needle_size > 0);
 	// start off by performing a memchr to find the first character of the
 	auto location = memchr(haystack, needle[0], haystack_size);
 	if (location == nullptr) {
 		return INVALID_INDEX;
 	}
-	idx_t base_offset = (const unsigned char *) location - haystack;
+	idx_t base_offset = (const unsigned char *)location - haystack;
 	haystack_size -= base_offset;
-	haystack = (const unsigned char *) location;
+	haystack = (const unsigned char *)location;
 	// switch algorithm depending on needle size
-	switch(needle_size) {
+	switch (needle_size) {
 	case 1:
 		return base_offset;
 	case 2:
@@ -132,10 +135,10 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 }
 
 idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
-	auto haystack      = (const unsigned char*) haystack_s.GetDataUnsafe();
+	auto haystack = (const unsigned char *)haystack_s.GetDataUnsafe();
 	auto haystack_size = haystack_s.GetSize();
-	auto needle        = (const unsigned char*) needle_s.GetDataUnsafe();
-	auto needle_size   = needle_s.GetSize();
+	auto needle = (const unsigned char *)needle_s.GetDataUnsafe();
+	auto needle_size = needle_s.GetSize();
 	if (needle_size == 0) {
 		// empty needle: always true
 		return 0;

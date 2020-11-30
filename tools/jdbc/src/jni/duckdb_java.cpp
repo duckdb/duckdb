@@ -241,9 +241,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	res_ref->chunk = res_ref->res->Fetch();
 	auto row_count = res_ref->chunk->size();
 
-	auto vec_array = (jobjectArray)env->NewObjectArray(res_ref->chunk->column_count(),
+	auto vec_array = (jobjectArray)env->NewObjectArray(res_ref->chunk->ColumnCount(),
 	                                                   env->FindClass("org/duckdb/DuckDBVector"), nullptr);
-	for (idx_t col_idx = 0; col_idx < res_ref->chunk->column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < res_ref->chunk->ColumnCount(); col_idx++) {
 		auto &vec = res_ref->chunk->data[col_idx];
 		auto type_str = env->NewStringUTF(vec.type.ToString().c_str());
 		// construct nullmask
@@ -308,7 +308,8 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 					continue;
 				}
 				env->SetObjectArrayElement(
-				    varlen_data, row_idx, env->NewStringUTF(((string_t *)FlatVector::GetData(vec))[row_idx].GetString().c_str()));
+				    varlen_data, row_idx,
+				    env->NewStringUTF(((string_t *)FlatVector::GetData(vec))[row_idx].GetString().c_str()));
 			}
 			break;
 		default:

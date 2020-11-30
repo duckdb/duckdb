@@ -14,10 +14,10 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
 	// this should never happen if the binder below is sane
-	D_ASSERT(args.column_count() == info.stype.child_types().size());
+	D_ASSERT(args.ColumnCount() == info.stype.child_types().size());
 
 	bool all_const = true;
-	for (size_t i = 0; i < args.column_count(); i++) {
+	for (size_t i = 0; i < args.ColumnCount(); i++) {
 		if (args.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}

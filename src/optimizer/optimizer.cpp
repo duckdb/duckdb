@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
+#include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -68,15 +69,26 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
 
-	// then we extract common subexpressions inside the different operators
-	// context.profiler.StartPhase("common_subexpressions");
-	// CommonSubExpressionOptimizer cse_optimizer;
-	// cse_optimizer.VisitOperator(*plan);
-	// context.profiler.EndPhase();
-
 	context.profiler.StartPhase("unused_columns");
 	RemoveUnusedColumns unused(binder, context, true);
 	unused.VisitOperator(*plan);
+	context.profiler.EndPhase();
+
+	// perform statistics propagation
+	context.profiler.StartPhase("statistics_propagation");
+	StatisticsPropagator propagator(context);
+	propagator.PropagateStatistics(plan);
+	context.profiler.EndPhase();
+
+	// then we extract common subexpressions inside the different operators
+	context.profiler.StartPhase("common_subexpressions");
+	CommonSubExpressionOptimizer cse_optimizer(binder);
+	cse_optimizer.VisitOperator(*plan);
+	context.profiler.EndPhase();
+
+	context.profiler.StartPhase("common_aggregate");
+	CommonAggregateOptimizer common_aggregate;
+	common_aggregate.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
 	context.profiler.StartPhase("column_lifetime");
@@ -94,12 +106,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("reorder_filter");
 	ExpressionHeuristics expression_heuristics(*this);
 	plan = expression_heuristics.Rewrite(move(plan));
-	context.profiler.EndPhase();
-
-	// perform statistics propagation
-	context.profiler.StartPhase("statistics_propagation");
-	StatisticsPropagator propagator(context);
-	propagator.PropagateStatistics(plan);
 	context.profiler.EndPhase();
 
 	return plan;

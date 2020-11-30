@@ -126,13 +126,13 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		idx_t offset = 0;
 		if (ListVector::HasEntry(res_true)) {
 			auto &true_child = ListVector::GetEntry(res_true);
-			D_ASSERT(true_child.types.size() == 1);
-			offset += true_child.count;
+			D_ASSERT(true_child.Types().size() == 1);
+			offset += true_child.Count();
 			result_child.Append(true_child);
 		}
 		if (ListVector::HasEntry(res_false)) {
 			auto &false_child = ListVector::GetEntry(res_false);
-			D_ASSERT(false_child.types.size() == 1);
+			D_ASSERT(false_child.Types().size() == 1);
 			result_child.Append(false_child);
 		}
 

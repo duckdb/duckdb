@@ -18,7 +18,7 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 }
 
 static bool HasNullValues(DataChunk &chunk) {
-	for (idx_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 		VectorData vdata;
 		chunk.data[col_idx].Orrify(chunk.size(), vdata);
 
@@ -37,7 +37,7 @@ static bool HasNullValues(DataChunk &chunk) {
 
 template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
-	D_ASSERT(left.column_count() == result.column_count());
+	D_ASSERT(left.ColumnCount() == result.ColumnCount());
 	// create the selection vector from the matches that were found
 	idx_t result_count = 0;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -69,7 +69,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
                                            bool has_null) {
 	// for the initial set of columns we just reference the left side
 	result.SetCardinality(left);
-	for (idx_t i = 0; i < left.column_count(); i++) {
+	for (idx_t i = 0; i < left.ColumnCount(); i++) {
 		result.data[i].Reference(left.data[i]);
 	}
 	auto &mark_vector = result.data.back();
@@ -78,7 +78,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
 	auto &nullmask = FlatVector::Nullmask(mark_vector);
-	for (idx_t col_idx = 0; col_idx < join_keys.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
 		VectorData jdata;
 		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
 		if (jdata.nullmask->any()) {
@@ -169,8 +169,8 @@ void PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, ClientContext &context
 	auto &gstate = (NestedLoopJoinGlobalState &)*state;
 	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
-		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_data.count]);
-		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_data.count);
+		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_data.Count()]);
+		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_data.Count());
 	}
 	PhysicalSink::Finalize(pipeline, context, move(state));
 }
@@ -257,7 +257,7 @@ void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, b
 	}
 	if (remaining_count > 0) {
 		result.Slice(left, remaining_sel, remaining_count);
-		for (idx_t idx = left.column_count(); idx < result.column_count(); idx++) {
+		for (idx_t idx = left.ColumnCount(); idx < result.ColumnCount(); idx++) {
 			result.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
 			ConstantVector::SetNull(result.data[idx], true);
 		}
@@ -276,7 +276,7 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 			state->left_tuple = 0;
 			state->right_tuple = 0;
 			// check if we exhausted all chunks on the RHS
-			state->fetch_next_left = state->right_chunk >= gstate.right_chunks.chunks.size();
+			state->fetch_next_left = state->right_chunk >= gstate.right_chunks.ChunkCount();
 			state->fetch_next_right = false;
 		}
 		if (state->fetch_next_left) {
@@ -315,8 +315,8 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 		// now we have a left and a right chunk that we can join together
 		// note that we only get here in the case of a LEFT, INNER or FULL join
 		auto &left_chunk = state->child_chunk;
-		auto &right_chunk = *gstate.right_chunks.chunks[state->right_chunk];
-		auto &right_data = *gstate.right_data.chunks[state->right_chunk];
+		auto &right_chunk = gstate.right_chunks.GetChunk(state->right_chunk);
+		auto &right_data = gstate.right_data.GetChunk(state->right_chunk);
 
 		// sanity check
 		left_chunk.Verify();
@@ -342,7 +342,7 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 				}
 			}
 			chunk.Slice(state->child_chunk, lvector, match_count);
-			chunk.Slice(right_data, rvector, match_count, state->child_chunk.column_count());
+			chunk.Slice(right_data, rvector, match_count, state->child_chunk.ColumnCount());
 		}
 
 		// check if we exhausted the RHS, if we did we need to move to the next right chunk in the next iteration
@@ -357,7 +357,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChu
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
-	if (gstate.right_chunks.count == 0) {
+	if (gstate.right_chunks.Count() == 0) {
 		// empty RHS
 		if (join_type == JoinType::SEMI || join_type == JoinType::INNER) {
 			// for SEMI or INNER join: empty RHS means empty result

@@ -12,11 +12,15 @@ using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
     : context(context), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
-	if (parent_ && inherit_ctes_) {
-		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
-		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
-		bind_context.cte_references = parent_->bind_context.cte_references;
-		parameters = parent_->parameters;
+	if (parent_) {
+		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
+		macro_binding = parent_->macro_binding;
+		if (inherit_ctes_) {
+			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
+			bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
+			bind_context.cte_references = parent_->bind_context.cte_references;
+			parameters = parent_->parameters;
+		}
 	}
 }
 

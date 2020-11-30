@@ -17,14 +17,15 @@ string BoundAggregateExpression::ToString() const {
 	if (distinct) {
 		result += "DISTINCT ";
 	}
-	StringUtil::Join(children, children.size(), ", ",
-	                 [](const unique_ptr<Expression> &child) { return child->ToString(); });
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<Expression> &child) { return child->ToString(); });
 	result += ")";
 	return result;
 }
+
 hash_t BoundAggregateExpression::Hash() const {
 	hash_t result = Expression::Hash();
-	result = CombineHash(result, duckdb::Hash(function.name.c_str()));
+	result = CombineHash(result, function.Hash());
 	result = CombineHash(result, duckdb::Hash(distinct));
 	return result;
 }
@@ -47,6 +48,9 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}
+	}
+	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+		return false;
 	}
 	return true;
 }

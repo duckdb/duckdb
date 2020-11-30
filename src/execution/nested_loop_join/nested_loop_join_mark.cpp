@@ -82,8 +82,8 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
                                  vector<JoinCondition> &conditions) {
 	// initialize a new temporary selection vector for the left chunk
 	// loop over all chunks in the RHS
-	for (idx_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
-		DataChunk &right_chunk = *right.chunks[chunk_idx];
+	for (idx_t chunk_idx = 0; chunk_idx < right.ChunkCount(); chunk_idx++) {
+		DataChunk &right_chunk = right.GetChunk(chunk_idx);
 		for (idx_t i = 0; i < conditions.size(); i++) {
 			mark_join(left.data[i], right_chunk.data[i], left.size(), right_chunk.size(), found_match,
 			          conditions[i].comparison);

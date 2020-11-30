@@ -135,7 +135,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
-	if (args.column_count() == 3) {
+	if (args.ColumnCount() == 3) {
 		auto &length_vector = args.data[2];
 
 		TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
@@ -155,7 +155,7 @@ static void substring_function(DataChunk &args, ExpressionState &state, Vector &
 static void substring_function_ascii(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
-	if (args.column_count() == 3) {
+	if (args.ColumnCount() == 3) {
 		auto &length_vector = args.data[2];
 
 		TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(

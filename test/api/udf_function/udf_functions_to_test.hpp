@@ -263,7 +263,7 @@ static void udf_several_constant_input(DataChunk &input, ExpressionState &state,
 template <typename TYPE> static void udf_max_constant(DataChunk &args, ExpressionState &state, Vector &result) {
 	TYPE max = 0;
 	result.vector_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		auto &input = args.data[col_idx];
 		if (ConstantVector::IsNull(input)) {
 			// constant null, skip
@@ -290,7 +290,7 @@ template <typename TYPE> static void udf_max_flat(DataChunk &args, ExpressionSta
 	// Initialize the result vector with the minimum value from TYPE.
 	memset(result_data, std::numeric_limits<TYPE>::min(), args.size() * sizeof(TYPE));
 
-	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		auto &input = args.data[col_idx];
 		D_ASSERT((GetTypeId<TYPE>()) == input.type.InternalType());
 		auto input_data = FlatVector::GetData<TYPE>(input);

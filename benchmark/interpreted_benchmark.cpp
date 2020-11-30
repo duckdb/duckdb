@@ -182,7 +182,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 					auto result_splits = StringUtil::Split(line, "|");
 					if (result_column_count < 0) {
 						result_column_count = result_splits.size();
-					} else if (result_column_count != result_splits.size()) {
+					} else if (idx_t(result_column_count) != result_splits.size()) {
 						throw std::runtime_error("error in file " + splits[1] + ", inconsistent amount of rows in CSV");
 					}
 					result_values.push_back(move(result_splits));
@@ -328,15 +328,15 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 		return string();
 	}
 	// compare the column count
-	if ((int64_t)state.result->column_count() != result_column_count) {
+	if ((int64_t)state.result->ColumnCount() != result_column_count) {
 		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s",
-		                          (int64_t)result_column_count, (int64_t)state.result->column_count(),
+		                          (int64_t)result_column_count, (int64_t)state.result->ColumnCount(),
 		                          state.result->ToString());
 	}
 	// compare row count
-	if (state.result->collection.count != result_values.size()) {
+	if (state.result->collection.Count() != result_values.size()) {
 		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
-		                          (int64_t)state.result->collection.count, (int64_t)result_values.size(),
+		                          (int64_t)state.result->collection.Count(), (int64_t)result_values.size(),
 		                          state.result->ToString());
 	}
 	// compare values
