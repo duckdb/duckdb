@@ -1024,8 +1024,8 @@ static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType 
 	} else {
 		stats->max.is_null = true;
 	}
-
-	return stats;
+    // GCC 4.x insists on a move() here
+	return move(stats);
 }
 
 template <class T> static Value transform_statistics_plain(const_data_ptr_t input) {
