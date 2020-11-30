@@ -997,11 +997,15 @@ static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType 
 		stats->min = FUNC((const_data_ptr_t)parquet_stats.min.data());
 	} else if (parquet_stats.__isset.min_value) {
 		stats->min = FUNC((const_data_ptr_t)parquet_stats.min_value.data());
+	} else {
+		stats->min.is_null = true;
 	}
 	if (parquet_stats.__isset.max) {
 		stats->max = FUNC((const_data_ptr_t)parquet_stats.max.data());
 	} else if (parquet_stats.__isset.max_value) {
 		stats->max = FUNC((const_data_ptr_t)parquet_stats.max_value.data());
+	} else {
+		stats->max.is_null = true;
 	}
 
 	return stats;
@@ -1091,6 +1095,8 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, colu
 			} else if (parquet_stats.__isset.min_value) {
 				memcpy(string_stats->min, (data_ptr_t)parquet_stats.min_value.data(),
 				       MinValue<idx_t>(parquet_stats.min_value.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
+			} else {
+				return nullptr;
 			}
 			if (parquet_stats.__isset.max) {
 				memcpy(string_stats->max, (data_ptr_t)parquet_stats.max.data(),
@@ -1098,10 +1104,11 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, colu
 			} else if (parquet_stats.__isset.max_value) {
 				memcpy(string_stats->max, (data_ptr_t)parquet_stats.max_value.data(),
 				       MinValue<idx_t>(parquet_stats.max_value.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
+			} else {
+				return nullptr;
 			}
 
 			string_stats->has_unicode = true; // we dont know better
-
 			row_group_stats = move(string_stats);
 			break;
 		}
@@ -1114,6 +1121,8 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, colu
 		if (row_group_stats) {
 			if (parquet_stats.__isset.null_count) {
 				row_group_stats->has_null = parquet_stats.null_count > 0;
+			} else {
+				row_group_stats->has_null = true;
 			}
 		} else {
 			// if stats are missing from any row group we know squat
