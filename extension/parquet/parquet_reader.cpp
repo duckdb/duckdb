@@ -658,10 +658,27 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	case PageType::DATA_PAGE:
 	case PageType::DATA_PAGE_V2: {
 
+		if (page_hdr.type == PageType::DATA_PAGE) {
+			D_ASSERT(page_hdr.__isset.data_page_header);
+		}
+		if (page_hdr.type == PageType::DATA_PAGE_V2) {
+			D_ASSERT(page_hdr.__isset.data_page_header_v2);
+		}
+
 		col_data.page_value_count = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.num_values
 		                                                                 : page_hdr.data_page_header_v2.num_values;
 		col_data.page_encoding = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.encoding
 		                                                              : page_hdr.data_page_header_v2.encoding;
+
+		if (!col_data.has_nulls && page_hdr.type == PageType::DATA_PAGE &&
+		    page_hdr.data_page_header.__isset.statistics && page_hdr.data_page_header.statistics.__isset.null_count &&
+		    page_hdr.data_page_header.statistics.null_count > 0) {
+			throw FormatException("Column is defined as REQUIRED but statistics still claim NULL present");
+		}
+		if (!col_data.has_nulls && page_hdr.type == PageType::DATA_PAGE_V2 &&
+		    page_hdr.data_page_header_v2.num_nulls > 0) {
+			throw FormatException("Column is defined as REQUIRED but statistics still claim NULL present");
+		}
 
 		if (col_data.has_nulls) {
 			// we have to first decode the define levels
