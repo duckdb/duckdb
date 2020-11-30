@@ -40,5 +40,4 @@ add_library(
   ../../third_party/snowball/src_c/stem_UTF_8_spanish.c
   ../../third_party/snowball/src_c/stem_UTF_8_swedish.c
   ../../third_party/snowball/src_c/stem_UTF_8_tamil.c
-  ../../third_party/snowball/src_c/stem_UTF_8_turkish.c
-  )
+  ../../third_party/snowball/src_c/stem_UTF_8_turkish.c)

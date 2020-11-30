@@ -24,7 +24,9 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 		    if (s == 0) {
 			    const char **stemmers = sb_stemmer_list();
 			    size_t n_stemmers = 27;
-			    throw Exception(StringUtil::Format("Unrecognized stemmer '%s'. Supported stemmers are: %s", stemmer.GetString(), StringUtil::Join(stemmers, n_stemmers, ", ", [](const char *st) { return st; })));
+			    throw Exception(StringUtil::Format(
+			        "Unrecognized stemmer '%s'. Supported stemmers are: %s", stemmer.GetString(),
+			        StringUtil::Join(stemmers, n_stemmers, ", ", [](const char *st) { return st; })));
 		    }
 
 		    auto input_data = input.GetDataUnsafe();
@@ -44,12 +46,14 @@ void FTSExtension::Load(DuckDB &db) {
 	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, stem_function);
 	CreateScalarFunctionInfo stem_info(stem_func);
 
-	auto create_fts_index_func = PragmaFunction::PragmaCall("create_fts_index", create_fts_index_query, {LogicalType::VARCHAR}, LogicalType::VARCHAR);
+	auto create_fts_index_func = PragmaFunction::PragmaCall("create_fts_index", create_fts_index_query,
+	                                                        {LogicalType::VARCHAR}, LogicalType::VARCHAR);
 	create_fts_index_func.named_parameters["stemmer"] = LogicalType::VARCHAR;
 	create_fts_index_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	CreatePragmaFunctionInfo create_fts_index_info(create_fts_index_func);
 
-	auto drop_fts_index_func = PragmaFunction::PragmaCall("drop_fts_index", drop_fts_index_query, {LogicalType::VARCHAR});
+	auto drop_fts_index_func =
+	    PragmaFunction::PragmaCall("drop_fts_index", drop_fts_index_query, {LogicalType::VARCHAR});
 	CreatePragmaFunctionInfo drop_fts_index_info(drop_fts_index_func);
 
 	Connection conn(db);

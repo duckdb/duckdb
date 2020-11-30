@@ -1,4 +1,4 @@
-# name: test/sql/fts/test_stemmer.test
+# name: test/sql/fts/test_stemmer.test_slow
 # description: Full text search stemmer
 # group: [fts]
 
