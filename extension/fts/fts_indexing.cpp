@@ -12,31 +12,11 @@ static string fts_schema_name(string schema, string table) {
 	return "fts_" + schema + "_" + table;
 }
 
-static pair<string, string> parse_qualified_name(ClientContext &context, string qualified_name, string &error) {
-	auto qname_split = StringUtil::Split(qualified_name, '.');
-	auto schema_name = qname_split.size() == 2 ? qname_split[0] : DEFAULT_SCHEMA;
-	auto table_name = qname_split.back();
-	auto result = make_pair(schema_name, table_name);
-	if (qname_split.size() > 2) {
-		error = StringUtil::Format("Invalid table name: '%s'", qualified_name);
-		return result;
-	}
-	if (!context.catalog.schemas->GetEntry(context, schema_name)) {
-		error = StringUtil::Format("No such schema: '%s'", schema_name);
-		return result;
-	}
-	auto schema = (SchemaCatalogEntry *)context.catalog.schemas->GetEntry(context, schema_name);
-	if (!schema->tables.GetEntry(context, table_name)) {
-		error = StringUtil::Format("No such table: '%s.%s'", schema_name, table_name);
-	}
-	return result;
-}
-
 string drop_fts_index_query(ClientContext &context, FunctionParameters parameters) {
-	string error;
-	auto qualified_name = parse_qualified_name(context, parameters.values[0].str_value, error);
-	auto schema_name = qualified_name.first;
-	auto table_name = qualified_name.second;
+    string schema_name;
+    string table_name;
+    Catalog::ParseRangeVar(parameters.values[0].str_value, schema_name, table_name);
+	schema_name = schema_name.empty() ? DEFAULT_SCHEMA : schema_name;
 	string fts_schema = fts_schema_name(schema_name, table_name);
 
 	if (!context.catalog.schemas->GetEntry(context, fts_schema)) {
@@ -167,13 +147,17 @@ static string indexing_script(string input_schema, string input_table, string in
 }
 
 string create_fts_index_query(ClientContext &context, FunctionParameters parameters) {
-	string error;
-	auto qualified_name = parse_qualified_name(context, parameters.values[0].str_value, error);
-	if (!error.empty()) {
-		throw CatalogException(error);
-	}
-	auto schema_name = qualified_name.first;
-	auto table_name = qualified_name.second;
+    string schema_name;
+    string table_name;
+    Catalog::ParseRangeVar(parameters.values[0].str_value, schema_name, table_name);
+    schema_name = schema_name.empty() ? DEFAULT_SCHEMA : schema_name;
+    if (!context.catalog.schemas->GetEntry(context, schema_name)) {
+        throw CatalogException("No such schema: '%s'", schema_name);
+    }
+    auto schema = (SchemaCatalogEntry *)context.catalog.schemas->GetEntry(context, schema_name);
+    if (!schema->tables.GetEntry(context, table_name)) {
+        throw CatalogException("No such table: '%s.%s'", schema_name, table_name);
+    }
 	string fts_schema = fts_schema_name(schema_name, table_name);
 
 	// get named parameters
