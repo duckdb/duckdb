@@ -22,6 +22,10 @@ struct GreatestFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct StatsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ConstantOrNull {
 	static ScalarFunction GetFunction(LogicalType return_type);
 	static unique_ptr<FunctionData> Bind(Value value);

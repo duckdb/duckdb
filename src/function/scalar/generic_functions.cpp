@@ -6,6 +6,7 @@ using namespace std;
 void BuiltinFunctions::RegisterGenericFunctions() {
 	Register<LeastFun>();
 	Register<GreatestFun>();
+	Register<StatsFun>();
 }
 
 } // namespace duckdb
