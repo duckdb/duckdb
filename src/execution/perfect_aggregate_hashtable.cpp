@@ -38,7 +38,7 @@ PerfectAggregateHashTable::~PerfectAggregateHashTable() {
 }
 
 template <class T>
-static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, uint64_t *address_data,
+static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, uintptr_t *address_data,
                                           idx_t current_shift, idx_t count) {
 	auto data = (T *)group_data.data;
 	auto min_val = min.GetValueUnsafe<T>();
@@ -51,7 +51,7 @@ static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, ui
 			// we only need to handle non-null values here
 			if (!(*group_data.nullmask)[index]) {
 				D_ASSERT(data[index] >= min_val);
-				uint64_t adjusted_value = (data[index] - min_val) + 1;
+				uintptr_t adjusted_value = (data[index] - min_val) + 1;
 				address_data[i] += adjusted_value << current_shift;
 			}
 		}
@@ -59,13 +59,13 @@ static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, ui
 		// no null values: we can directly compute the addresses
 		for (idx_t i = 0; i < count; i++) {
 			auto index = group_data.sel->get_index(i);
-			uint64_t adjusted_value = (data[index] - min_val) + 1;
+			uintptr_t adjusted_value = (data[index] - min_val) + 1;
 			address_data[i] += adjusted_value << current_shift;
 		}
 	}
 }
 
-static void ComputeGroupLocation(Vector &group, Value &min, uint64_t *address_data, idx_t current_shift, idx_t count) {
+static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_data, idx_t current_shift, idx_t count) {
 	VectorData vdata;
 	group.Orrify(count, vdata);
 
@@ -89,9 +89,9 @@ static void ComputeGroupLocation(Vector &group, Value &min, uint64_t *address_da
 
 void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	// first we need to find the location in the HT of each of the groups
-	auto address_data = FlatVector::GetData<uint64_t>(addresses);
+	auto address_data = FlatVector::GetData<uintptr_t>(addresses);
 	// zero-initialize the address data
-	memset(address_data, 0, groups.size() * sizeof(uint64_t));
+	memset(address_data, 0, groups.size() * sizeof(uintptr_t));
 	D_ASSERT(groups.ColumnCount() == group_minima.size());
 
 	// then compute the actual group location by iterating over each of the groups
@@ -105,7 +105,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	for (idx_t i = 0; i < groups.size(); i++) {
 		D_ASSERT(address_data[i] < total_groups);
 		group_is_set[address_data[i]] = true;
-		address_data[i] = uint64_t(data) + address_data[i] * tuple_size;
+		address_data[i] = uintptr_t(data) + address_data[i] * tuple_size;
 	}
 
 	// after finding the group location we update the aggregates
