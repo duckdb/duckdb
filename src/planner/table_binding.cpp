@@ -112,7 +112,7 @@ BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.column_index = entry->second;
 
 	// we are binding a parameter to create the macro, no arguments are supplied
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), LogicalType::SQLNULL, binding, depth));
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[entry->second], binding, depth));
 }
 
 unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {

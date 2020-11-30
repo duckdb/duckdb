@@ -22,11 +22,15 @@ public:
 	MacroFunction(unique_ptr<ParsedExpression> expression);
 
 	//! Check whether the supplied arguments are valid
-	static string ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr);
+	static string ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,
+	                                vector<unique_ptr<ParsedExpression>> &positionals,
+	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
 	//! The macro expression
 	unique_ptr<ParsedExpression> expression;
-	//! The macro parameters
+	//! The positional parameters
 	vector<unique_ptr<ParsedExpression>> parameters;
+	//! The default parameters and their associated values
+	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
 };
 
 } // namespace duckdb

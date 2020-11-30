@@ -15,6 +15,8 @@
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 
 #include "snappy.h"
+#include "miniz_wrapper.hpp"
+#include "zstd.h"
 
 namespace duckdb {
 
@@ -22,6 +24,7 @@ using namespace parquet;
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
+using namespace duckdb_miniz;
 
 using parquet::format::CompressionCodec;
 using parquet::format::ConvertedType;
@@ -126,8 +129,8 @@ static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serial
 	}
 }
 
-ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_, vector<string> names_)
-    : file_name(file_name_), sql_types(move(types_)), column_names(move(names_)) {
+ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_, vector<string> names_, CompressionCodec::type codec)
+    : file_name(file_name_), sql_types(move(types_)), column_names(move(names_)), codec(codec) {
 	// initialize the file writer
 	writer = make_unique<BufferedFileWriter>(fs, file_name.c_str(),
 	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -173,7 +176,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	// iterate over each of the columns of the chunk collection and write them
 	for (idx_t i = 0; i < buffer.ColumnCount(); i++) {
 		// we start off by writing everything into a temporary buffer
-		// this is necessary to (1) know the total written size, and (2) to compress it with snappy afterwards
+		// this is necessary to (1) know the total written size, and (2) to compress it afterwards
 		BufferedSerializer temp_writer;
 
 		// set up some metadata
@@ -309,23 +312,54 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		// now that we have finished writing the data we know the uncompressed size
 		hdr.uncompressed_page_size = temp_writer.blob.size;
 
-		// we perform snappy compression (FIXME: this should be a flag, possibly also include gzip?)
-		size_t compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
-		auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-		snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
-		                    (char *)compressed_buf.get(), &compressed_size);
+		// compress the data based
+		size_t compressed_size;
+		data_ptr_t compressed_data;
+		unique_ptr<data_t[]> compressed_buf;
+		switch(codec) {
+		case CompressionCodec::UNCOMPRESSED:
+			compressed_size = temp_writer.blob.size;
+			compressed_data = temp_writer.blob.data.get();
+			break;
+		case CompressionCodec::SNAPPY: {
+			compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
+			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+			snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
+								(char *)compressed_buf.get(), &compressed_size);
+			compressed_data = compressed_buf.get();
+			break;
+		}
+		case CompressionCodec::GZIP: {
+			MiniZStream s;
+			compressed_size = s.MaxCompressedLength(temp_writer.blob.size);
+			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+			s.Compress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
+								(char *)compressed_buf.get(), &compressed_size);
+			compressed_data = compressed_buf.get();
+			break;
+		}
+		case CompressionCodec::ZSTD: {
+			compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.blob.size);
+			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+			compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
+			               (const void *)temp_writer.blob.data.get(), temp_writer.blob.size, ZSTD_CLEVEL_DEFAULT);
+			compressed_data = compressed_buf.get();
+			break;
+		}
+		default:
+			throw InternalException("Unsupported codec for Parquet Writer");
+		}
 
 		hdr.compressed_page_size = compressed_size;
-
 		// now finally write the data to the actual file
 		hdr.write(protocol.get());
-		writer->WriteData(compressed_buf.get(), compressed_size);
+		writer->WriteData(compressed_data, compressed_size);
 
 		auto &column_chunk = row_group.columns[i];
 		column_chunk.__isset.meta_data = true;
 		column_chunk.meta_data.data_page_offset = start_offset;
 		column_chunk.meta_data.total_compressed_size = writer->GetTotalWritten() - start_offset;
-		column_chunk.meta_data.codec = CompressionCodec::SNAPPY;
+		column_chunk.meta_data.codec = codec;
 		column_chunk.meta_data.path_in_schema.push_back(file_meta_data.schema[i + 1].name);
 		column_chunk.meta_data.num_values = buffer.Count();
 		column_chunk.meta_data.type = file_meta_data.schema[i + 1].type;
