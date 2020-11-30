@@ -103,10 +103,6 @@ private:
 	void fill_from_plain(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset);
 
 private:
-	static constexpr uint8_t GZIP_HEADER_MINSIZE = 10;
-	static constexpr uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
-	static constexpr unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
-
 	ClientContext &context;
 };
 

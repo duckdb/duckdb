@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,13 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::DOUBLE: {
 		auto result = make_unique<NumericStatistics>(input.type(), input, input);
 		result->has_null = input.is_null;
+		return move(result);
+	}
+	case PhysicalType::VARCHAR: {
+		auto result = make_unique<StringStatistics>(input.type());
+		result->has_null = input.is_null;
+		string_t str(input.str_value.c_str(), input.str_value.size());
+		result->Update(str);
 		return move(result);
 	}
 	default:

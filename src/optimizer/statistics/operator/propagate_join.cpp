@@ -105,9 +105,6 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		switch (join.join_type) {
 		case JoinType::INNER:
 		case JoinType::SEMI:
-		case JoinType::LEFT:
-		case JoinType::RIGHT:
-		case JoinType::OUTER:
 			UpdateFilterStatistics(*condition.left, *condition.right, condition.comparison);
 			break;
 		default:

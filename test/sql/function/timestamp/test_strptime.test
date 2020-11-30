@@ -21,6 +21,11 @@ SELECT strptime('2018-20-10', '%Y-%d-%m')
 2018-10-20 00:00:00
 
 query I
+SELECT strptime('20182010', '%Y%d%m')
+----
+2018-10-20 00:00:00
+
+query I
 SELECT strptime('Mon 30, June 2003, 12:03:10 AM', '%a %d, %B %Y, %I:%M:%S %p')
 ----
 2003-06-30 00:03:10
