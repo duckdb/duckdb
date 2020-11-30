@@ -1,0 +1,54 @@
+# name: test/sql/copy/parquet/test_parquet_stats.test
+# description: Test statistic propagation for parquet reader
+# group: [parquet]
+
+require parquet
+require vector_size 512
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY
+
+# empty reference result
+query I nosort empty
+explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where false;
+----
+
+# verify null stats work
+query I nosort empty
+explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id is null;
+----
+
+
+# verify min/max stats on int cols work
+query I nosort empty
+explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id < 1;
+----
+
+query I nosort empty
+explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id > 1000;
+----
+
+
+# verify min/max stats on double cols work
+query I nosort empty
+explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where salary < 12380;
+----
+
+query I nosort empty
+explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where salary > 286593;
+----
+
+
+# verify min/max stats on string cols work
+query I nosort empty
+explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where country < 'Aruba';
+----
+
+query I nosort empty
+explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where country > 'Zimbabwe';
+----
+
+
+
+
+

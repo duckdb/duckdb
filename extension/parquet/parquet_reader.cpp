@@ -535,7 +535,8 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 		MiniZStream s;
 
 		col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
-		s.Decompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr, page_hdr.uncompressed_page_size);
+		s.Decompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr,
+		             page_hdr.uncompressed_page_size);
 
 		col_data.payload.ptr = col_data.decompressed_buf.ptr;
 		break;
@@ -986,7 +987,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 // statistics handling
 
 template <Value (*FUNC)(const_data_ptr_t input)>
-static unique_ptr<BaseStatistics> templated_get_numeric_stats(LogicalType &type,
+static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType &type,
                                                               const parquet::format::Statistics &parquet_stats) {
 	auto stats = make_unique<NumericStatistics>(type);
 
