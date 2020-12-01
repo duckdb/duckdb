@@ -1,0 +1,102 @@
+# name: test/sql/types/interval/interval_constants.test
+# description: Test constant intervals
+# group: [interval]
+
+statement ok
+PRAGMA enable_verification
+
+# interval constants with different representations
+query I
+SELECT interval 2 days;
+----
+2 days
+
+query I
+SELECT interval (2) day;
+----
+2 days
+
+query I
+SELECT interval (1+1) days;
+----
+2 days
+
+query I
+SELECT interval '2' days;
+----
+2 days
+
+# non-constant expression
+query I
+SELECT interval (i) day from range(1, 4) tbl(i);
+----
+1 day
+2 days
+3 days
+
+query I
+SELECT interval (i + 1) day from range(1, 4) tbl(i);
+----
+2 days
+3 days
+4 days
+
+# try all the different types
+query II
+SELECT interval 2 years, interval 2 year;
+----
+2 years	2 years
+
+query II
+SELECT interval 2 months, interval 2 month;
+----
+2 months	2 months
+
+query II
+SELECT interval 2 days, interval 2 day;
+----
+2 days	2 days
+
+query II
+SELECT interval 2 hours, interval 2 hour;
+----
+02:00:00	02:00:00
+
+query II
+SELECT interval 2 minutes, interval 2 minute;
+----
+00:02:00	00:02:00
+
+query II
+SELECT interval 2 seconds, interval 2 second;
+----
+00:00:02	00:00:02
+
+# for now we don't support the weird ones
+# 2 years 10 months
+statement error
+SELECT interval '2 10' years to months
+
+# 2 days 10 hours
+statement error
+SELECT interval '2 10' days to hours
+
+# 12 days 15:06:00
+statement error
+SELECT interval '12 15:06' days to minutes
+
+# 12 days 15:06:04.123
+statement error
+SELECT interval '12 15:06:04.123' days to seconds
+
+# 12:30:00
+statement error
+SELECT interval '12:30' hours to minutes
+
+# 15:06:04.123
+statement error
+SELECT interval '15:06:04.123' hours to seconds
+
+# 00:12:30
+statement error
+SELECT interval '12:30' minutes to seconds
