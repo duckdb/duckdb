@@ -237,12 +237,16 @@ static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx
 }
 
 idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data,
-                                 const SelectionVector *&current_sel, SelectionVector &sel) {
+                                 const SelectionVector *&current_sel, SelectionVector &sel, bool build_side) {
 	key_data = keys.Orrify();
 
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = &FlatVector::IncrementalSelectionVector;
 	idx_t added_count = keys.size();
+	if (build_side && IsRightOuterJoin(join_type)) {
+		// in case of a right or full outer join, we cannot remove NULL keys from the build side
+		return added_count;
+	}
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		if (!null_values_are_equal[i]) {
 			if (!key_data[i].nullmask->any()) {
@@ -283,7 +287,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	unique_ptr<VectorData[]> key_data;
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel);
+	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel, true);
 	if (added_count < keys.size()) {
 		has_null = true;
 	}
@@ -437,7 +441,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 
 	// first prepare the keys for probing
 	const SelectionVector *current_sel;
-	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector);
+	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector, false);
 	if (ss->count == 0) {
 		return ss;
 	}
