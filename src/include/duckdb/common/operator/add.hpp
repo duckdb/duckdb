@@ -55,6 +55,8 @@ struct TryDecimalAdd {
 	}
 };
 
+template <> bool TryDecimalAdd::Operation(int16_t left, int16_t right, int16_t &result);
+template <> bool TryDecimalAdd::Operation(int32_t left, int32_t right, int32_t &result);
 template <> bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result);
 template <> bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
 
