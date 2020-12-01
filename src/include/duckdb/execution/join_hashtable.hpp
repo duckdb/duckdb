@@ -199,7 +199,7 @@ private:
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
 
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
-	                  SelectionVector &sel);
+	                  SelectionVector &sel, bool build_side);
 	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
 	                         data_ptr_t key_locations[]);
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);

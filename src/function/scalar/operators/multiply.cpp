@@ -127,12 +127,24 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//
-template <> bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t &result) {
-	if (!TryMultiplyOperator::Operation(left, right, result) || result <= -1000000000000000000 ||
-	    result >= 1000000000000000000) {
+template<class T, T min, T max>
+bool TryDecimalMultiplyTemplated(T left, T right, T &result) {
+	if (!TryMultiplyOperator::Operation(left, right, result) || result < min || result > max) {
 		return false;
 	}
 	return true;
+}
+
+template <> bool TryDecimalMultiply::Operation(int16_t left, int16_t right, int16_t &result) {
+	return TryDecimalMultiplyTemplated<int16_t, -9999, 9999>(left, right, result);
+}
+
+template <> bool TryDecimalMultiply::Operation(int32_t left, int32_t right, int32_t &result) {
+	return TryDecimalMultiplyTemplated<int32_t, -999999999, 999999999>(left, right, result);
+}
+
+template <> bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t &result) {
+	return TryDecimalMultiplyTemplated<int64_t, -999999999999999999, 999999999999999999>(left, right, result);
 }
 
 template <> bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
