@@ -66,7 +66,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			D_ASSERT(state->list_data.ColumnCount() == select_list.size());
 
 			// initialize VectorData object so the nullmask can accessed
-            state->list_data.data[0].Orrify(state->list_data.size(), state->list_vector_data);
+			state->list_data.data[0].Orrify(state->list_data.size(), state->list_vector_data);
 		}
 
 		// need to figure out how many times we need to repeat for current row
@@ -76,10 +76,11 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 				D_ASSERT(v.type == LogicalType::LIST);
 
-                // deal with NULL values
-                if ((*state->list_vector_data.nullmask)[state->list_vector_data.sel->get_index(state->parent_position)]) {
+				// deal with NULL values
+				if ((*state->list_vector_data
+				          .nullmask)[state->list_vector_data.sel->get_index(state->parent_position)]) {
 					state->list_length = 1;
-                }
+				}
 
 				auto list_data = FlatVector::GetData<list_entry_t>(v);
 				auto list_entry = list_data[state->parent_position];
@@ -111,14 +112,15 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 			idx_t i = 0;
 			if (list_entry.length > state->list_position) {
-				if ((*state->list_vector_data.nullmask)[state->list_vector_data.sel->get_index(state->parent_position)]) {
+				if ((*state->list_vector_data
+				          .nullmask)[state->list_vector_data.sel->get_index(state->parent_position)]) {
 					// unnesting NULL input
-                    for (i = 0; i < min((idx_t)this_chunk_len, list_entry.length - state->list_position); i++) {
-                        FlatVector::SetNull(chunk.data[target_col], i, true);
-                    }
+					for (i = 0; i < min((idx_t)this_chunk_len, list_entry.length - state->list_position); i++) {
+						FlatVector::SetNull(chunk.data[target_col], i, true);
+					}
 				} else {
 					// non-NULL input
-                    auto &child_cc = ListVector::GetEntry(v);
+					auto &child_cc = ListVector::GetEntry(v);
 					for (i = 0; i < min((idx_t)this_chunk_len, list_entry.length - state->list_position); i++) {
 						chunk.data[target_col].SetValue(
 						    i, child_cc.GetValue(0, list_entry.offset + i + state->list_position));
