@@ -17,8 +17,8 @@ struct QualifiedName {
 	string schema;
 	string name;
 
-    //! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
-    //! the schema will be set to INVALID_SCHEMA
+	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
+	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(string input) {
 		string schema;
 		string name;
@@ -63,7 +63,7 @@ struct QualifiedName {
 		} else {
 			throw ParserException("Expected schema.entry or entry: too many entries found");
 		}
-		return QualifiedName {schema, name};
+		return QualifiedName{schema, name};
 	}
 };
 

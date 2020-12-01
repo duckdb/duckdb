@@ -79,7 +79,8 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 		UnaryExecutor::Execute<string_t, int64_t, true>(input, result, args.size(), [&](string_t value) {
 			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
-			auto sequence = Catalog::GetCatalog(info.context).GetEntry<SequenceCatalogEntry>(info.context, qname.schema, qname.name);
+			auto sequence = Catalog::GetCatalog(info.context)
+			                    .GetEntry<SequenceCatalogEntry>(info.context, qname.schema, qname.name);
 			// finally get the next value from the sequence
 			return next_sequence_value(transaction, sequence);
 		});
@@ -95,7 +96,7 @@ static unique_ptr<FunctionData> nextval_bind(ClientContext &context, ScalarFunct
 		Value seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (!seqname.is_null) {
 			D_ASSERT(seqname.type().id() == LogicalTypeId::VARCHAR);
-            auto qname = QualifiedName::Parse(seqname.str_value);
+			auto qname = QualifiedName::Parse(seqname.str_value);
 			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
 		}
 	}
