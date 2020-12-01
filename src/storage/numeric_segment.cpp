@@ -272,16 +272,21 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 }
 
 //===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
+void NumericSegment::InitializeScan(ColumnScanState &state) {
+	// pin the primary buffer
+	state.primary_handle = manager.Pin(block_id);
+}
+
+//===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
 void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	D_ASSERT(vector_index < max_vector_count);
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
-	// pin the buffer for this segment
-	auto handle = manager.Pin(block_id);
-	auto data = handle->node->buffer;
-
+	auto data = state.primary_handle->node->buffer;
 	auto offset = vector_index * vector_size;
 
 	idx_t count = GetVectorCount(vector_index);
@@ -324,8 +329,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
-	auto handle = manager.Pin(block_id);
-	auto data = handle->node->buffer;
+	auto data = state.primary_handle->node->buffer;
 
 	auto offset = vector_index * vector_size;
 	auto source_nullmask = (nullmask_t *)(data + offset);
