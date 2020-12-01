@@ -170,7 +170,7 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 
 	// throw error if an index already exists on this table
 	if (context.catalog.schemas->GetEntry(context, fts_schema) && !overwrite) {
-		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=true' to overwrite, or "
+		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=1' to overwrite, or "
 		                       "drop the existing index with 'PRAGMA drop_fts_index()' before creating a new one.",
 		                       qname.schema, qname.name);
 	}
