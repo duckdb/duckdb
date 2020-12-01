@@ -11,7 +11,7 @@ statement error
 PRAGMA drop_fts_index('test')
 
 statement ok
-CREATE SCHEMA fts_main_test;
+CREATE SCHEMA fts_main_test
 
 statement ok
 PRAGMA drop_fts_index('test')
@@ -22,6 +22,10 @@ CREATE TABLE documents(id VARCHAR, body VARCHAR)
 statement ok
 INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING')
 
+# non-existant parameters should yield an error
+statement error
+PRAGMA create_fts_index('documents', 'id', 'body', nonexistant_param='dummy')
+
 statement ok
 PRAGMA create_fts_index('documents', 'id', 'body', stemmer='turkish')
 
@@ -30,7 +34,7 @@ statement error
 PRAGMA create_fts_index('documents', 'id', 'body')
 
 statement ok
-PRAGMA create_fts_index('documents', 'id', 'body', overwrite=True)
+PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
 
 # drop and re-create
 statement ok
@@ -122,7 +126,7 @@ SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'QUÁCKED BÁRKE
 doc1	 QUÁCKING+QUÁCKING+QUÁCKING
 doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING
 
-# drop and re-create, but index more columns this time
+# drop and re-create, but index both the 'body' and 'author' column this time
 statement ok
 PRAGMA drop_fts_index('documents')
 
@@ -139,10 +143,9 @@ statement ok
 PRAGMA create_fts_index('main.documents', 'id', 'body', 'author')
 
 query III
-SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'QUÁCKED BÁRKED hannes')
+SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'hannes')
 ----
 doc1	 QUÁCKING+QUÁCKING+QUÁCKING	Hannes
-doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
 
 query III
 SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'mark laurens')

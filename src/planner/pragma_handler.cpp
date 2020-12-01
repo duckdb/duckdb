@@ -1,10 +1,10 @@
 #include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/parser.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 
-#include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/function/function.hpp"
 
@@ -25,7 +25,7 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 		if (statements[i]->type == StatementType::PRAGMA_STATEMENT) {
 			// PRAGMA statement: check if we need to replace it by a new set of statements
 			PragmaHandler handler(context);
-			auto new_query = handler.HandlePragma(*((PragmaStatement &)*statements[i]).info);
+			auto new_query = handler.HandlePragma(statements[i].get()); //*((PragmaStatement &)*statements[i]).info
 			if (!new_query.empty()) {
 				// this PRAGMA statement gets replaced by a new query string
 				// push the new query string through the parser again and add it to the transformer
@@ -60,7 +60,8 @@ void PragmaHandler::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 	context.RunFunctionInTransactionInternal([&]() { HandlePragmaStatementsInternal(statements); });
 }
 
-string PragmaHandler::HandlePragma(PragmaInfo &info) {
+string PragmaHandler::HandlePragma(SQLStatement *statement) { //PragmaInfo &info
+	auto info = *((PragmaStatement &)*statement).info;
 	auto entry =
 	    Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
 	string error;
@@ -70,6 +71,9 @@ string PragmaHandler::HandlePragma(PragmaInfo &info) {
 	}
 	auto &bound_function = entry->functions[bound_idx];
 	if (bound_function.query) {
+        QueryErrorContext error_context(statement, statement->stmt_location);
+        Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,
+                            bound_function.name);
 		FunctionParameters parameters{info.parameters, info.named_parameters};
 		return bound_function.query(context, parameters);
 	}

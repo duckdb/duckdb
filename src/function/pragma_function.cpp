@@ -20,13 +20,11 @@ PragmaFunction PragmaFunction::PragmaCall(string name, pragma_function_t functio
 
 PragmaFunction PragmaFunction::PragmaStatement(string name, pragma_query_t query) {
 	vector<LogicalType> types;
-	unordered_map<string, LogicalType> named_parameters;
 	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, query, nullptr, types, LogicalType::INVALID);
 }
 
 PragmaFunction PragmaFunction::PragmaStatement(string name, pragma_function_t function) {
 	vector<LogicalType> types;
-	unordered_map<string, LogicalType> named_parameters;
 	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, nullptr, function, types, LogicalType::INVALID);
 }
 
