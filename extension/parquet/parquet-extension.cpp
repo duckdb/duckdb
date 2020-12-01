@@ -19,6 +19,8 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
+#include "duckdb/storage/statistics/base_statistics.hpp"
+
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
@@ -49,8 +51,8 @@ class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
 	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_function, parquet_scan_bind,
-	                    parquet_scan_init, /* statistics */ nullptr, /* cleanup */ nullptr, /* dependency */ nullptr,
-	                    parquet_cardinality,
+	                    parquet_scan_init, /* statistics */ parquet_scan_stats, /* cleanup */ nullptr,
+	                    /* dependency */ nullptr, parquet_cardinality,
 	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, parquet_max_threads,
 	                    parquet_init_parallel_state, parquet_scan_parallel_init, parquet_parallel_state_next) {
 		projection_pushdown = true;
@@ -73,6 +75,56 @@ public:
 		return move(result);
 	}
 
+	static unique_ptr<BaseStatistics> parquet_scan_stats(ClientContext &context, const FunctionData *bind_data_,
+	                                                     column_t column_index) {
+		auto &bind_data = (ParquetReadBindData &)*bind_data_;
+
+		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+			return nullptr;
+		}
+
+		// we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
+
+		// We already parsed the metadata for the first file in a glob because we need some type info.
+		auto overall_stats =
+		    ParquetReader::ReadStatistics(bind_data.initial_reader->return_types[column_index], column_index,
+		                                  bind_data.initial_reader->metadata->metadata.get());
+
+		if (!overall_stats) {
+			return nullptr;
+		}
+
+		// if there is only one file in the glob (quite common case), we are done
+		if (bind_data.files.size() < 2) {
+			return overall_stats;
+		} else if (context.db.config.object_cache_enable) {
+			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
+			// enabled at all)
+			FileSystem &fs = FileSystem::GetFileSystem(context);
+			for (idx_t file_idx = 1; file_idx < bind_data.files.size(); file_idx++) {
+				auto &file_name = bind_data.files[file_idx];
+				auto metadata = dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
+				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+				// but we need to check if the metadata cache entries are current
+				if (!metadata || (fs.GetLastModifiedTime(*handle) >= metadata->read_time)) {
+					// missing or invalid metadata entry in cache, no usable stats overall
+					return nullptr;
+				}
+				// get and merge stats for file
+				auto file_stats = ParquetReader::ReadStatistics(bind_data.initial_reader->return_types[column_index],
+				                                                column_index, metadata->metadata.get());
+				if (!file_stats) {
+					return nullptr;
+				}
+				overall_stats->Merge(*file_stats);
+			}
+			// success!
+			return overall_stats;
+		}
+		// we have more than one file and no object cache so no statistics overall
+		return nullptr;
+	}
+
 	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                  unordered_map<string, Value> &named_parameters,
 	                                                  vector<LogicalType> &return_types, vector<string> &names) {
@@ -84,8 +136,10 @@ public:
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", file_name);
 		}
+
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0]);
 		return_types = result->initial_reader->return_types;
+
 		names = result->initial_reader->names;
 		return move(result);
 	}

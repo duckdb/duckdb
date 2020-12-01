@@ -168,6 +168,14 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
+		// perfect hash aggregate can always be parallelized
+		if (ScheduleOperator(sink->children[0].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
 	case PhysicalOperatorType::HASH_GROUP_BY: {
 		auto &hash_aggr = (PhysicalHashAggregate &)*sink;
 		if (!hash_aggr.all_combinable) {

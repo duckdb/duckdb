@@ -30,3 +30,8 @@ SELECT EXTRACT(milliseconds FROM i) FROM timestamps
 33420
 NULL
 
+query I
+SELECT EXTRACT(microseconds FROM i) FROM timestamps
+----
+33420000
+NULL

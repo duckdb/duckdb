@@ -5,6 +5,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 using namespace std;
 
 namespace duckdb {
@@ -26,7 +28,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	} else if (specifier == "microseconds" || specifier == "microsecond") {
 		return DatePartSpecifier::MICROSECONDS;
 	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" ||
-			   specifier == "msecs") {
+	           specifier == "msecs") {
 		return DatePartSpecifier::MILLISECONDS;
 	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
 		return DatePartSpecifier::SECOND;
@@ -57,18 +59,59 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	}
 }
 
-template <class T>
-static void year_operator(DataChunk &args, ExpressionState &state, Vector &result) {
+template <class T> static void year_operator(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
 	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
-		[&](T input) {
-			return Date::ExtractYear(input, &last_year);
-		});
+	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
+}
+
+template <class T, class OP>
+static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+	// we can only propagate complex date part stats if the child has stats
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &nstats = (NumericStatistics &)*child_stats[0];
+	if (nstats.min.is_null || nstats.max.is_null) {
+		return nullptr;
+	}
+	// run the operator on both the min and the max, this gives us the [min, max] bound
+	auto min = nstats.min.GetValueUnsafe<T>();
+	auto max = nstats.max.GetValueUnsafe<T>();
+	if (min > max) {
+		return nullptr;
+	}
+	auto min_year = OP::template Operation<T, int64_t>(min);
+	auto max_year = OP::template Operation<T, int64_t>(max);
+	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_year), Value::BIGINT(max_year));
+	result->has_null = child_stats[0]->has_null;
+	return move(result);
+}
+
+template <int64_t MIN, int64_t MAX>
+static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+	// we can always propagate simple date part statistics
+	// since the min and max can never exceed these bounds
+	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX));
+	if (!child_stats[0]) {
+		// if there are no child stats, we don't know
+		result->has_null = true;
+	} else {
+		result->has_null = child_stats[0]->has_null;
+	}
+	return move(result);
 }
 
 struct YearOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::ExtractYear(input);
+	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateDatePartStatistics<T, YearOperator>(child_stats);
 	}
 };
 
@@ -80,6 +123,14 @@ struct MonthOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::ExtractMonth(input);
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		// min/max of month operator is [1, 12]
+		return PropagateSimpleDatePartStatistics<1, 12>(child_stats);
+	}
 };
 
 template <> int64_t MonthOperator::Operation(timestamp_t input) {
@@ -89,6 +140,14 @@ template <> int64_t MonthOperator::Operation(timestamp_t input) {
 struct DayOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::ExtractDay(input);
+	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		// min/max of day operator is [1, 31]
+		return PropagateSimpleDatePartStatistics<1, 31>(child_stats);
 	}
 };
 
@@ -100,6 +159,13 @@ struct DecadeOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::ExtractYear(input) / 10;
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateDatePartStatistics<T, DecadeOperator>(child_stats);
+	}
 };
 
 template <> int64_t DecadeOperator::Operation(timestamp_t input) {
@@ -109,6 +175,13 @@ template <> int64_t DecadeOperator::Operation(timestamp_t input) {
 struct CenturyOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return ((Date::ExtractYear(input) - 1) / 100) + 1;
+	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateDatePartStatistics<T, CenturyOperator>(child_stats);
 	}
 };
 
@@ -120,6 +193,13 @@ struct MilleniumOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return ((Date::ExtractYear(input) - 1) / 1000) + 1;
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateDatePartStatistics<T, MilleniumOperator>(child_stats);
+	}
 };
 
 template <> int64_t MilleniumOperator::Operation(timestamp_t input) {
@@ -129,6 +209,14 @@ template <> int64_t MilleniumOperator::Operation(timestamp_t input) {
 struct QuarterOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return (Date::ExtractMonth(input) - 1) / 3 + 1;
+	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		// min/max of quarter operator is [1, 4]
+		return PropagateSimpleDatePartStatistics<1, 4>(child_stats);
 	}
 };
 
@@ -142,6 +230,13 @@ struct DayOfWeekOperator {
 		// turn sunday into 0 by doing mod 7
 		return Date::ExtractISODayOfTheWeek(input) % 7;
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<0, 6>(child_stats);
+	}
 };
 
 template <> int64_t DayOfWeekOperator::Operation(timestamp_t input) {
@@ -153,6 +248,13 @@ struct ISODayOfWeekOperator {
 		// isodow (Monday = 1, Sunday = 7)
 		return Date::ExtractISODayOfTheWeek(input);
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<1, 7>(child_stats);
+	}
 };
 
 template <> int64_t ISODayOfWeekOperator::Operation(timestamp_t input) {
@@ -162,6 +264,13 @@ template <> int64_t ISODayOfWeekOperator::Operation(timestamp_t input) {
 struct DayOfYearOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::ExtractDayOfTheYear(input);
+	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<1, 366>(child_stats);
 	}
 };
 
@@ -173,6 +282,13 @@ struct WeekOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::ExtractISOWeekNumber(input);
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<1, 54>(child_stats);
+	}
 };
 
 template <> int64_t WeekOperator::Operation(timestamp_t input) {
@@ -183,11 +299,25 @@ struct YearWeekOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return YearOperator::Operation<TA, TR>(input) * 100 + WeekOperator::Operation<TA, TR>(input);
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateDatePartStatistics<T, YearWeekOperator>(child_stats);
+	}
 };
 
 struct EpochOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::Epoch(input);
+	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateDatePartStatistics<T, EpochOperator>(child_stats);
 	}
 };
 
@@ -199,6 +329,13 @@ struct MicrosecondsOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return 0;
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<0, 60000000>(child_stats);
+	}
 };
 
 template <> int64_t MicrosecondsOperator::Operation(timestamp_t input) {
@@ -208,6 +345,13 @@ template <> int64_t MicrosecondsOperator::Operation(timestamp_t input) {
 struct MillisecondsOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return 0;
+	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<0, 60000>(child_stats);
 	}
 };
 
@@ -219,6 +363,13 @@ struct SecondsOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return 0;
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<0, 60>(child_stats);
+	}
 };
 
 template <> int64_t SecondsOperator::Operation(timestamp_t input) {
@@ -229,6 +380,13 @@ struct MinutesOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return 0;
 	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<0, 60>(child_stats);
+	}
 };
 
 template <> int64_t MinutesOperator::Operation(timestamp_t input) {
@@ -238,6 +396,13 @@ template <> int64_t MinutesOperator::Operation(timestamp_t input) {
 struct HoursOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return 0;
+	}
+
+	template <class T>
+	static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
+	                                                      FunctionData *bind_data,
+	                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+		return PropagateSimpleDatePartStatistics<0, 24>(child_stats);
 	}
 };
 
@@ -292,18 +457,21 @@ struct DatePartOperator {
 	}
 };
 
-void AddGenericDatePartOperator(BuiltinFunctions &set, string name, scalar_function_t date_func, scalar_function_t ts_func) {
+void AddGenericDatePartOperator(BuiltinFunctions &set, string name, scalar_function_t date_func,
+                                scalar_function_t ts_func, function_statistics_t date_stats,
+                                function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-		ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, date_func));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, ts_func));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, date_func, false, nullptr, nullptr, date_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, ts_func, false, nullptr, nullptr, ts_stats));
 	set.AddFunction(operator_set);
 }
 
 template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, string name) {
-	AddGenericDatePartOperator(set, name,
-		ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
-		ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>);
+	AddGenericDatePartOperator(set, name, ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
+	                           ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>,
+	                           OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>);
 }
 
 struct LastDayOperator {
@@ -335,7 +503,9 @@ struct DayNameOperator {
 
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
-	AddGenericDatePartOperator(set, "year", year_operator<date_t>, year_operator<timestamp_t>);
+	AddGenericDatePartOperator(set, "year", year_operator<date_t>, year_operator<timestamp_t>,
+	                           YearOperator::PropagateStatistics<date_t>,
+	                           YearOperator::PropagateStatistics<timestamp_t>);
 	AddDatePartOperator<MonthOperator>(set, "month");
 	AddDatePartOperator<DayOperator>(set, "day");
 	AddDatePartOperator<DecadeOperator>(set, "decade");
@@ -364,36 +534,36 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	//  register the last_day function
 	ScalarFunctionSet last_day("last_day");
 	last_day.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE,
-										ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator, true>));
+	                                    ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator, true>));
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
-										ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator, true>));
+	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator, true>));
 	set.AddFunction(last_day);
 
 	//  register the monthname function
 	ScalarFunctionSet monthname("monthname");
 	monthname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-										 ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator, true>));
+	                                     ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator, true>));
 	monthname.AddFunction(
-		ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-					   ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator, true>));
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
+	                   ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator, true>));
 	set.AddFunction(monthname);
 
 	//  register the dayname function
 	ScalarFunctionSet dayname("dayname");
 	dayname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-									   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator, true>));
+	                                   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator, true>));
 	dayname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-									   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator, true>));
+	                                   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator, true>));
 	set.AddFunction(dayname);
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(
-		ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
-					   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator, true>));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator, true>));
 	date_part.AddFunction(
-		ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
-					   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator, true>));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator, true>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);
