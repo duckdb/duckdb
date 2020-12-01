@@ -1467,36 +1467,54 @@ opt_timezone:
 			| /*EMPTY*/								{ $$ = false; }
 		;
 
+year_keyword:
+	YEAR_P | YEARS_P
+
+month_keyword:
+	MONTH_P | MONTHS_P
+
+day_keyword:
+	DAY_P | DAYS_P
+
+hour_keyword:
+	HOUR_P | HOURS_P
+
+minute_keyword:
+	MINUTE_P | MINUTES_P
+
+second_keyword:
+	SECOND_P | SECONDS_P
+
 opt_interval:
-			YEAR_P
+			year_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR), @1)); }
-			| MONTH_P
+			| month_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MONTH), @1)); }
-			| DAY_P
+			| day_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(DAY), @1)); }
-			| HOUR_P
+			| hour_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR), @1)); }
-			| MINUTE_P
+			| minute_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MINUTE), @1)); }
 			| interval_second
 				{ $$ = $1; }
-			| YEAR_P TO MONTH_P
+			| year_keyword TO month_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR) |
 												 INTERVAL_MASK(MONTH), @1));
 				}
-			| DAY_P TO HOUR_P
+			| day_keyword TO hour_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(DAY) |
 												 INTERVAL_MASK(HOUR), @1));
 				}
-			| DAY_P TO MINUTE_P
+			| day_keyword TO minute_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(DAY) |
 												 INTERVAL_MASK(HOUR) |
 												 INTERVAL_MASK(MINUTE), @1));
 				}
-			| DAY_P TO interval_second
+			| day_keyword TO interval_second
 				{
 					$$ = $3;
 					linitial($$) = makeIntConst(INTERVAL_MASK(DAY) |
@@ -1504,19 +1522,19 @@ opt_interval:
 												INTERVAL_MASK(MINUTE) |
 												INTERVAL_MASK(SECOND), @1);
 				}
-			| HOUR_P TO MINUTE_P
+			| hour_keyword TO minute_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR) |
 												 INTERVAL_MASK(MINUTE), @1));
 				}
-			| HOUR_P TO interval_second
+			| hour_keyword TO interval_second
 				{
 					$$ = $3;
 					linitial($$) = makeIntConst(INTERVAL_MASK(HOUR) |
 												INTERVAL_MASK(MINUTE) |
 												INTERVAL_MASK(SECOND), @1);
 				}
-			| MINUTE_P TO interval_second
+			| minute_keyword TO interval_second
 				{
 					$$ = $3;
 					linitial($$) = makeIntConst(INTERVAL_MASK(MINUTE) |
@@ -1527,11 +1545,11 @@ opt_interval:
 		;
 
 interval_second:
-			SECOND_P
+			second_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(SECOND), @1));
 				}
-			| SECOND_P '(' Iconst ')'
+			| second_keyword '(' Iconst ')'
 				{
 					$$ = list_make2(makeIntConst(INTERVAL_MASK(SECOND), @1),
 									makeIntConst($3, @3));
@@ -2779,14 +2797,14 @@ extract_list:
  * - thomas 2001-04-12
  */
 extract_arg:
-			IDENT									{ $$ = $1; }
-			| YEAR_P								{ $$ = (char*) "year"; }
-			| MONTH_P								{ $$ = (char*) "month"; }
-			| DAY_P									{ $$ = (char*) "day"; }
-			| HOUR_P								{ $$ = (char*) "hour"; }
-			| MINUTE_P								{ $$ = (char*) "minute"; }
-			| SECOND_P								{ $$ = (char*) "second"; }
-			| Sconst								{ $$ = $1; }
+			IDENT											{ $$ = $1; }
+			| year_keyword									{ $$ = (char*) "year"; }
+			| month_keyword									{ $$ = (char*) "month"; }
+			| day_keyword									{ $$ = (char*) "day"; }
+			| hour_keyword									{ $$ = (char*) "hour"; }
+			| minute_keyword								{ $$ = (char*) "minute"; }
+			| second_keyword								{ $$ = (char*) "second"; }
+			| Sconst										{ $$ = $1; }
 		;
 
 /* OVERLAY() arguments
@@ -3203,31 +3221,17 @@ AexprConst: Iconst
 				{
 					$$ = makeStringConstCast($2, @2, $1);
 				}
+			| ConstInterval '(' a_expr ')' opt_interval
+				{
+					$$ = makeIntervalNode($3, @3, $5);
+				}
+			| ConstInterval Iconst opt_interval
+				{
+					$$ = makeIntervalNode($2, @2, $3);
+				}
 			| ConstInterval Sconst opt_interval
 				{
-					PGTypeName *t = $1;
-					t->typmods = $3;
-					$$ = makeStringConstCast($2, @2, t);
-				}
-			| ConstInterval '(' Iconst ')' Sconst
-				{
-					PGTypeName *t = $1;
-					t->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
-											makeIntConst($3, @3));
-					$$ = makeStringConstCast($5, @5, t);
-				}
-      /* Version without () is handled in a_expr/b_expr logic due to ? mis-parsing as operator */
-			| ConstInterval '(' '?' ')' '?' opt_interval
-				{
-					PGTypeName *t = $1;
-					if ($6 != NIL)
-					{
-						t->typmods = lappend($6, makeParamRef(0, @3));
-					}
-					else
-						t->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
-												makeParamRef(0, @3));
-					$$ = makeParamRefCast(0, @5, t);
+					$$ = makeIntervalNode($2, @2, $3);
 				}
 			| TRUE_P
 				{
