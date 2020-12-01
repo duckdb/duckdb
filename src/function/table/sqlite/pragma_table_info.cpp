@@ -49,13 +49,11 @@ static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, v
 	names.push_back("pk");
 	return_types.push_back(LogicalType::BOOLEAN);
 
-	string schema, table_name;
-	auto range_var = inputs[0].GetValue<string>();
-	Catalog::ParseRangeVar(range_var, schema, table_name);
+	auto qname = QualifiedName::Parse(inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
 	auto &catalog = Catalog::GetCatalog(context);
-	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema, table_name);
+	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, qname.schema, qname.name);
 	return make_unique<PragmaTableFunctionData>(entry);
 }
 

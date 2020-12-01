@@ -100,10 +100,6 @@ public:
 	//! Alter an existing entry in the catalog.
 	void Alter(ClientContext &context, AlterInfo *info);
 
-	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
-	//! the schema will be set to DEFAULT_SCHEMA
-	static void ParseRangeVar(string input, string &schema, string &name);
-
 private:
 	void DropSchema(ClientContext &context, DropInfo *info);
 };

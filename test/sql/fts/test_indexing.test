@@ -112,11 +112,40 @@ SELECT name, score FROM (SELECT docid, sum(subscore) AS score
     FROM subscores GROUP BY docid) AS scores JOIN fts_main_documents.docs AS docs ON
     scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
 ----
-doc1	0.443697	
+doc1	0.443697
 doc2	0.375436
 
+# now test the actual match macro
 query II
 SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'QUÁCKED BÁRKED')
 ----
 doc1	 QUÁCKING+QUÁCKING+QUÁCKING
 doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING
+
+# drop and re-create, but index more columns this time
+statement ok
+PRAGMA drop_fts_index('documents')
+
+statement ok
+DROP TABLE documents
+
+statement ok
+CREATE TABLE documents(id VARCHAR, body VARCHAR, author VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING', 'Hannes'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING', 'Mark'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING', 'Laurens')
+
+statement ok
+PRAGMA create_fts_index('main.documents', 'id', 'body', 'author')
+
+query III
+SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'QUÁCKED BÁRKED hannes')
+----
+doc1	 QUÁCKING+QUÁCKING+QUÁCKING	Hannes
+doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
+
+query III
+SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'mark laurens')
+----
+doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
+doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING	Laurens

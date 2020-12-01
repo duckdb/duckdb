@@ -3,6 +3,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 
@@ -13,15 +14,13 @@ static string fts_schema_name(string schema, string table) {
 }
 
 string drop_fts_index_query(ClientContext &context, FunctionParameters parameters) {
-    string schema_name;
-    string table_name;
-    Catalog::ParseRangeVar(parameters.values[0].str_value, schema_name, table_name);
-	schema_name = schema_name.empty() ? DEFAULT_SCHEMA : schema_name;
-	string fts_schema = fts_schema_name(schema_name, table_name);
+    auto qname = QualifiedName::Parse(parameters.values[0].str_value);
+	qname.schema = qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : qname.schema;
+	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
 	if (!context.catalog.schemas->GetEntry(context, fts_schema)) {
-		throw CatalogException("a FTS index does not exist on table '%s.%s'. Create one with create_fts_index().",
-		                       schema_name, table_name);
+		throw CatalogException("a FTS index does not exist on table '%s.%s'. Create one with 'PRAGMA create_fts_index()'.",
+		                       qname.schema, qname.name);
 	}
 
 	return "DROP SCHEMA " + fts_schema + " CASCADE;";
@@ -51,7 +50,7 @@ static string indexing_script(string input_schema, string input_table, string in
                 row_number() OVER (PARTITION BY docid) AS pos
             FROM (
                 SELECT
-                    %fts_schema%.tokenize(%input_val%) AS term,
+                    %fts_schema%.tokenize(%input_values%) AS term,
                     row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
                 FROM %input_schema%.%input_table%
             ) AS sq
@@ -140,25 +139,24 @@ static string indexing_script(string input_schema, string input_table, string in
 	result = StringUtil::Replace(result, "%input_schema%", input_schema);
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
-	result = StringUtil::Replace(result, "%input_val%", input_values[0]);
+	result = StringUtil::Replace(result, "%input_values%", StringUtil::Join(input_values, " || ' ' || "));
 	result = StringUtil::Replace(result, "%stemmer%", stemmer);
 
 	return result;
 }
 
 string create_fts_index_query(ClientContext &context, FunctionParameters parameters) {
-    string schema_name;
-    string table_name;
-    Catalog::ParseRangeVar(parameters.values[0].str_value, schema_name, table_name);
-    schema_name = schema_name.empty() ? DEFAULT_SCHEMA : schema_name;
-    if (!context.catalog.schemas->GetEntry(context, schema_name)) {
-        throw CatalogException("No such schema: '%s'", schema_name);
+    auto qname = QualifiedName::Parse(parameters.values[0].str_value);
+    qname.schema = qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : qname.schema;
+    string fts_schema = fts_schema_name(qname.schema, qname.name);
+
+    if (!context.catalog.schemas->GetEntry(context, qname.schema)) {
+        throw CatalogException("No such schema: '%s'", qname.schema);
     }
-    auto schema = (SchemaCatalogEntry *)context.catalog.schemas->GetEntry(context, schema_name);
-    if (!schema->tables.GetEntry(context, table_name)) {
-        throw CatalogException("No such table: '%s.%s'", schema_name, table_name);
+    auto schema = (SchemaCatalogEntry *)context.catalog.schemas->GetEntry(context, qname.schema);
+    if (!schema->tables.GetEntry(context, qname.name)) {
+        throw CatalogException("No such table: '%s.%s'", qname.schema, qname.name);
     }
-	string fts_schema = fts_schema_name(schema_name, table_name);
 
 	// get named parameters
 	string stemmer = "porter";
@@ -173,9 +171,8 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 	// throw error if an index already exists on this table
 	if (context.catalog.schemas->GetEntry(context, fts_schema) && !overwrite) {
 		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=true' to overwrite, or "
-		                       "drop the existing index with 'PRAGMA drop_fts_index('%s.%s')' with optional parameter "
-		                       "'cascade=True' before creating a new one.",
-		                       schema_name, table_name, schema_name, table_name);
+		                       "drop the existing index with 'PRAGMA drop_fts_index()' before creating a new one.",
+		                       qname.schema, qname.name);
 	}
 
 	// positional parameters (vararg document text fields to be indexed)
@@ -185,10 +182,10 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 		doc_values.push_back(parameters.values[i].str_value);
 	}
 	if (doc_values.empty()) {
-		throw Exception("at least one column to index must be supplied!");
+		throw Exception("at least one column must be supplied for indexing!");
 	}
 
-	return indexing_script(schema_name, table_name, doc_id, doc_values, stemmer);
+	return indexing_script(qname.schema, qname.name, doc_id, doc_values, stemmer);
 }
 
 } // namespace duckdb

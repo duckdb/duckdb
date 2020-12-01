@@ -332,7 +332,7 @@ statement error
 select string_split('a')
 
 # TODO: re-enable when UNNEST(NULL) works
-#query T
-#SELECT UNNEST(string_split(NULL, NULL))
-#----
-#NULL
+query T
+SELECT UNNEST(string_split(NULL, NULL))
+----
+NULL
