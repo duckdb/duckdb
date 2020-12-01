@@ -89,8 +89,8 @@ public:
 	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);
 
 	//! Check usage, and cast named parameters to their types
-    static void BindNamedParameters(unordered_map<string, LogicalType> &types, unordered_map<string, Value> &values,
-                                    QueryErrorContext &error_context, string &func_name);
+	static void BindNamedParameters(unordered_map<string, LogicalType> &types, unordered_map<string, Value> &values,
+	                                QueryErrorContext &error_context, string &func_name);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);

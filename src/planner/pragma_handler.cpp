@@ -60,7 +60,7 @@ void PragmaHandler::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 	context.RunFunctionInTransactionInternal([&]() { HandlePragmaStatementsInternal(statements); });
 }
 
-string PragmaHandler::HandlePragma(SQLStatement *statement) { //PragmaInfo &info
+string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &info
 	auto info = *((PragmaStatement &)*statement).info;
 	auto entry =
 	    Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
@@ -71,9 +71,9 @@ string PragmaHandler::HandlePragma(SQLStatement *statement) { //PragmaInfo &info
 	}
 	auto &bound_function = entry->functions[bound_idx];
 	if (bound_function.query) {
-        QueryErrorContext error_context(statement, statement->stmt_location);
-        Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,
-                            bound_function.name);
+		QueryErrorContext error_context(statement, statement->stmt_location);
+		Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,
+		                            bound_function.name);
 		FunctionParameters parameters{info.parameters, info.named_parameters};
 		return bound_function.query(context, parameters);
 	}
