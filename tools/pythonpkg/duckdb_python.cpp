@@ -1382,6 +1382,11 @@ static py::object py_tokenize(string query) {
 }
 
 PYBIND11_MODULE(duckdb, m) {
+	m.doc() = "DuckDB is an embeddable SQL OLAP Database Management System";
+	m.attr("__package__") = "duckdb";
+	m.attr("__version__") = DuckDB::LibraryVersion();
+	m.attr("__git_revision__") = DuckDB::SourceID();
+
 	m.def("connect", &DuckDBPyConnection::connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
