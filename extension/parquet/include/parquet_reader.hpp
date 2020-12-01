@@ -30,6 +30,7 @@ class ClientContext;
 class RleBpDecoder;
 class ChunkCollection;
 class BaseStatistics;
+struct TableFilterSet;
 
 struct ParquetReaderColumnData {
 	~ParquetReaderColumnData();
@@ -68,6 +69,7 @@ struct ParquetReaderScanState {
 	idx_t group_offset;
 	vector<unique_ptr<ParquetReaderColumnData>> column_data;
 	bool finished;
+	TableFilterSet* filters;
 };
 
 class ParquetReader {
@@ -85,7 +87,7 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 
 public:
-	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read);
+	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read, TableFilterSet *table_filters);
 	void ReadChunk(ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows();
@@ -98,7 +100,7 @@ public:
 
 private:
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
-	void PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
+	bool PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
 	bool PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx);
 	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 

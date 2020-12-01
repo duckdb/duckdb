@@ -5,6 +5,9 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+
+#include "duckdb/planner/table_filter.hpp"
+
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
@@ -758,12 +761,13 @@ idx_t ParquetReader::NumRowGroups() {
 }
 
 void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> column_ids,
-                               vector<idx_t> groups_to_read) {
+                               vector<idx_t> groups_to_read, TableFilterSet* filters) {
 	state.current_group = -1;
 	state.finished = false;
 	state.column_ids = move(column_ids);
 	state.group_offset = 0;
 	state.group_idx_list = move(groups_to_read);
+	state.filters = filters;
 	for (idx_t i = 0; i < return_types.size(); i++) {
 		state.column_data.push_back(make_unique<ParquetReaderColumnData>());
 	}
