@@ -1,0 +1,28 @@
+# name: test/sql/tpch/q01_propagate.test_slow
+# description: Test statistics propagation in Q01
+# group: [tpch]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.01);
+
+query I
+SELECT stats(1 - l_discount) FROM lineitem LIMIT 1;
+----
+<REGEX>:.*0.90.*1.00.*
+
+query I
+SELECT stats(1 + l_tax) FROM lineitem LIMIT 1;
+----
+<REGEX>:.*1.00.*1.08.*
+
+query I
+SELECT stats(l_extendedprice * (1 - l_discount)) FROM lineitem LIMIT 1;
+----
+<REGEX>:.*813.6000.*94949.5000.*
+
+query I
+SELECT stats(l_extendedprice * (1 - l_discount) * (1 + l_tax)) FROM lineitem LIMIT 1;
+----
+<REGEX>:.*813.600000.*102545.460000.*
