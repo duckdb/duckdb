@@ -123,6 +123,9 @@ static PGNode *makeColumnRef(char *colname, PGList *indirection,
 static PGNode *makeTypeCast(PGNode *arg, PGTypeName *tpname, int location);
 static PGNode *makeStringConst(char *str, int location);
 static PGNode *makeStringConstCast(char *str, int location, PGTypeName *tpname);
+static PGNode *makeIntervalNode(char *str, int location, PGList *typmods);
+static PGNode *makeIntervalNode(int val, int location, PGList *typmods);
+static PGNode *makeIntervalNode(PGNode *arg, int location, PGList *typmods);
 static PGNode *makeIntConst(int val, int location);
 static PGNode *makeFloatConst(char *str, int location);
 static PGNode *makeBitStringConst(char *str, int location);
