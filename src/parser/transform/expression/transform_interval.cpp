@@ -50,7 +50,8 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	// for now we don't support all of the combined ones
 	// (we might add support if someone complains about it)
 
-	string suffix;
+	string fname;
+	LogicalType target_type;
 	if (mask & YEAR_MASK && mask & MONTH_MASK) {
 		// DAY TO HOUR
 		throw ParserException("YEAR TO MONTH is not supported");
@@ -72,41 +73,39 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	} else if (mask & MINUTE_MASK && mask & SECOND_MASK) {
 		// DAY TO SECOND
 		throw ParserException("MINUTE TO SECOND is not supported");
-	} else if (mask & HOUR_MASK) {
-		// HOUR
-		suffix = " hours";
 	} else if (mask & YEAR_MASK) {
 		// YEAR
-		suffix = " years";
+		fname = "to_years";
+		target_type = LogicalType::INTEGER;
 	} else if (mask & MONTH_MASK) {
 		// MONTH
-		suffix = " months";
+		fname = "to_months";
+		target_type = LogicalType::INTEGER;
 	} else if (mask & DAY_MASK) {
 		// DAY
-		suffix = " days";
+		fname = "to_days";
+		target_type = LogicalType::INTEGER;
+	} else if (mask & HOUR_MASK) {
+		// HOUR
+		fname = "to_hours";
+		target_type = LogicalType::BIGINT;
 	} else if (mask & MINUTE_MASK) {
 		// MINUTE
-		suffix = " minutes";
+		fname = "to_minutes";
+		target_type = LogicalType::BIGINT;
 	} else if (mask & SECOND_MASK) {
 		// SECOND
-		suffix = " seconds";
+		fname = "to_seconds";
+		target_type = LogicalType::BIGINT;
 	} else {
 		throw ParserException("Unsupported interval post-fix");
 	}
+	// first push a cast to the target type
+	expr = make_unique<CastExpression>(target_type, move(expr));
 	// now push the operation
-	// basically, we are going to turn this into "CONCAT((X::BIGINT), ' hours')::INTERVAL"
-	// we push the X -> BIGINT cast to ensure that "X" is a numeric value
-	// after that, we concat with the suffix, then we use the string to interval parser
-	// this is not very clean or efficient, but it saves us from having to create new operators
-	// we first push a cast to integer
-	expr = make_unique<CastExpression>(LogicalType::BIGINT, move(expr));
-	// now we push the concat operator
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(expr));
-	children.push_back(make_unique<ConstantExpression>(Value(suffix)));
-	expr = make_unique<FunctionExpression>("concat", children);
-	// finally we push the to-interval cast
-	return make_unique<CastExpression>(LogicalType::INTERVAL, move(expr));
+	return make_unique<FunctionExpression>(fname, children);
 }
 
 }

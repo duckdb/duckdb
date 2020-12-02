@@ -26,6 +26,12 @@ SELECT interval '2' days;
 ----
 2 days
 
+# use the interval functions
+query IIIIII
+SELECT to_years(2), to_months(2), to_days(2), to_hours(2), to_minutes(2), to_seconds(2);
+----
+2 years	2 months	2 days	02:00:00	00:02:00	00:00:02
+
 # non-constant expression
 query I
 SELECT interval (i) day from range(1, 4) tbl(i);
@@ -100,3 +106,19 @@ SELECT interval '15:06:04.123' hours to seconds
 # 00:12:30
 statement error
 SELECT interval '12:30' minutes to seconds
+
+# test out of range interval constants
+statement error
+SELECT interval '99999999999999' years;
+
+statement error
+SELECT interval '214748364' years;
+
+statement error
+SELECT interval '9223372036854775807' hours;
+
+statement error
+SELECT interval '9223372036854775807' minutes;
+
+statement error
+SELECT interval '9223372036854775807' seconds;
