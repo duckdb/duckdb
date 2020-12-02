@@ -89,6 +89,7 @@ public:
 public:
 	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read, TableFilterSet *table_filters);
 	void ReadChunk(ParquetReaderScanState &state, DataChunk &output);
+    void FillColumn(ParquetReaderScanState &state, idx_t count, idx_t out_col_idx, Vector& out);
 
 	idx_t NumRows();
 	idx_t NumRowGroups();

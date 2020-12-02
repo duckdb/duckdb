@@ -1,0 +1,12 @@
+# name: test/sql/copy/parquet/test_parquet_scan.test
+# description: Test basic parquet reading
+# group: [parquet]
+
+require parquet
+require vector_size 512
+
+# userdata1.parquet
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id > 500
+----
+500

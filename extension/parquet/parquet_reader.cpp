@@ -723,7 +723,25 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	return true;
 }
 
-void ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx) {
+//static bool check_stats(ExpressionType comparison_type, Value constant) {
+//    switch (comparison_type) {
+//    case ExpressionType::COMPARE_EQUAL:
+//        return constant >= min && constant <= max;
+//    case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+//        return constant <= max;
+//    case ExpressionType::COMPARE_GREATERTHAN:
+//        return constant < max;
+//    case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+//        return constant >= min;
+//    case ExpressionType::COMPARE_LESSTHAN:
+//        return constant > min;
+//    default:
+//        throw InternalException("Operation not implemented");
+//    }
+//}
+
+
+bool ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx) {
 	auto &chunk = GetGroup(state).columns[col_idx];
 	if (chunk.__isset.file_path) {
 		throw FormatException("Only inlined data files are supported (no references)");
@@ -733,7 +751,20 @@ void ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 		throw FormatException("Only flat tables are supported (no nesting)");
 	}
 
-	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
+	// maybe we can skip this chunk based on the table filters we have!
+    // FIXME
+//
+//
+//	if (state.filters) {
+//		for (auto &table_filter : state.filters->filters) {
+//			auto col_idx = table_filter.first;
+//			for (auto &filter : table_filter.second) {
+//                auto res = check_stats(filter.comparison_type, filter.constant);
+//			}
+//		}
+//	}
+
+    // ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
 	auto chunk_start = chunk.meta_data.data_page_offset;
 	if (chunk.meta_data.__isset.dictionary_page_offset && chunk.meta_data.dictionary_page_offset >= 4) {
 		// this assumes the data pages follow the dict pages directly.
@@ -750,6 +781,7 @@ void ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 	// read entire chunk into RAM
 	state.column_data[col_idx]->buf.resize(chunk_len);
 	fs.Read(*handle, state.column_data[col_idx]->buf.ptr, chunk_len, chunk_start);
+	return true;
 }
 
 idx_t ParquetReader::NumRows() {
@@ -771,6 +803,199 @@ void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> c
 	for (idx_t i = 0; i < return_types.size(); i++) {
 		state.column_data.push_back(make_unique<ParquetReaderColumnData>());
 	}
+}
+
+void ParquetReader::FillColumn(ParquetReaderScanState &state, idx_t count, idx_t out_col_idx, Vector& out) {
+    auto file_col_idx = state.column_ids[out_col_idx];
+    if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+        Value constant_42 = Value::BIGINT(42);
+        out.Reference(constant_42);
+        return;
+    }
+    auto &s_ele = GetFileMetadata()->schema[file_col_idx + 1];
+    auto &col_data = *state.column_data[file_col_idx];
+
+    // we might need to read multiple pages to fill the data chunk
+    idx_t output_offset = 0;
+    while (output_offset < count) {
+        // do this unpack business only if we run out of stuff from the current page
+        if (col_data.page_offset >= col_data.page_value_count) {
+            // read dictionaries and data page headers so that we are ready to go for scan
+            if (!PreparePageBuffers(state, file_col_idx)) {
+                continue;
+            }
+            col_data.page_offset = 0;
+        }
+
+        auto current_batch_size =
+            MinValue<idx_t>(col_data.page_value_count - col_data.page_offset, count - output_offset);
+
+        D_ASSERT(current_batch_size > 0);
+
+        if (col_data.has_nulls) {
+            col_data.defined_buf.resize(current_batch_size);
+            col_data.defined_decoder->GetBatch<uint8_t>(col_data.defined_buf.ptr, current_batch_size);
+        }
+
+        switch (col_data.page_encoding) {
+        case Encoding::RLE_DICTIONARY:
+        case Encoding::PLAIN_DICTIONARY: {
+            idx_t null_count = 0;
+            if (col_data.has_nulls) {
+                for (idx_t i = 0; i < current_batch_size; i++) {
+                    if (!col_data.defined_buf.ptr[i]) {
+                        null_count++;
+                    }
+                }
+            }
+
+            col_data.offset_buf.resize(current_batch_size * sizeof(uint32_t));
+            col_data.dict_decoder->GetBatch<uint32_t>(col_data.offset_buf.ptr, current_batch_size - null_count);
+
+            // TODO ensure we had seen a dict page IN THIS CHUNK before getting here
+
+            switch (return_types[file_col_idx].id()) {
+            case LogicalTypeId::BOOLEAN:
+                fill_from_dict<bool>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::INTEGER:
+                fill_from_dict<int32_t>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::BIGINT:
+                fill_from_dict<int64_t>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::FLOAT:
+                fill_from_dict<float>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::DOUBLE:
+                fill_from_dict<double>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::TIMESTAMP:
+                fill_from_dict<timestamp_t>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::BLOB:
+            case LogicalTypeId::VARCHAR: {
+                if (!col_data.string_collection) {
+                    throw FormatException("Did not see a dictionary for strings. Corrupt file?");
+                }
+
+                // the strings can be anywhere in the collection so just reference it all
+                for (auto &chunk : col_data.string_collection->Chunks()) {
+                    StringVector::AddHeapReference(out, chunk->data[0]);
+                }
+
+                auto out_data_ptr = FlatVector::GetData<string_t>(out);
+                for (idx_t i = 0; i < current_batch_size; i++) {
+                    if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
+                        auto offset = col_data.offset_buf.read<uint32_t>();
+                        if (offset >= col_data.string_collection->Count()) {
+                            throw FormatException("string dictionary offset out of bounds");
+                        }
+                        auto &chunk = col_data.string_collection->GetChunk(offset / STANDARD_VECTOR_SIZE);
+                        auto &vec = chunk.data[0];
+
+                        out_data_ptr[i + output_offset] =
+                            FlatVector::GetData<string_t>(vec)[offset % STANDARD_VECTOR_SIZE];
+                    } else {
+                        FlatVector::SetNull(out, i + output_offset, true);
+                    }
+                }
+            } break;
+            default:
+                throw FormatException(return_types[file_col_idx].ToString());
+            }
+
+            break;
+        }
+        case Encoding::PLAIN:
+            D_ASSERT(col_data.payload.ptr);
+            switch (return_types[file_col_idx].id()) {
+            case LogicalTypeId::BOOLEAN: {
+                // bit packed this
+                auto target_ptr = FlatVector::GetData<bool>(out);
+                for (idx_t i = 0; i < current_batch_size; i++) {
+                    if (col_data.has_nulls && !col_data.defined_buf.ptr[i]) {
+                        FlatVector::SetNull(out, i + output_offset, true);
+                        continue;
+                    }
+                    col_data.payload.available(1);
+                    target_ptr[i + output_offset] = (*col_data.payload.ptr >> col_data.byte_pos) & 1;
+                    col_data.byte_pos++;
+                    if (col_data.byte_pos == 8) {
+                        col_data.byte_pos = 0;
+                        col_data.payload.inc(1);
+                    }
+                }
+                break;
+            }
+            case LogicalTypeId::INTEGER:
+                fill_from_plain<int32_t>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::BIGINT:
+                fill_from_plain<int64_t>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::FLOAT:
+                fill_from_plain<float>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::DOUBLE:
+                fill_from_plain<double>(col_data, current_batch_size, out, output_offset);
+                break;
+            case LogicalTypeId::TIMESTAMP:
+                switch (s_ele.type) {
+                case Type::INT64:
+                    // arrow timestamp
+                    switch (s_ele.converted_type) {
+                    case ConvertedType::TIMESTAMP_MICROS:
+                        fill_timestamp_plain<int64_t, arrow_timestamp_micros_to_timestamp>(
+                            col_data, current_batch_size, out, output_offset);
+                        break;
+                    case ConvertedType::TIMESTAMP_MILLIS:
+                        fill_timestamp_plain<int64_t, arrow_timestamp_ms_to_timestamp>(
+                            col_data, current_batch_size, out, output_offset);
+                        break;
+                    default:
+                        throw InternalException("Unsupported converted type for timestamp");
+                    }
+                    break;
+                case Type::INT96:
+                    // impala timestamp
+                    fill_timestamp_plain<Int96, impala_timestamp_to_timestamp_t>(
+                        col_data, current_batch_size, out, output_offset);
+                    break;
+                default:
+                    throw InternalException("Unsupported type for timestamp");
+                }
+                break;
+            case LogicalTypeId::BLOB:
+            case LogicalTypeId::VARCHAR: {
+                for (idx_t i = 0; i < current_batch_size; i++) {
+                    if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
+                        uint32_t str_len = col_data.payload.read<uint32_t>();
+                        col_data.payload.available(str_len);
+                        VerifyString(return_types[file_col_idx].id(), col_data.payload.ptr, str_len);
+                        FlatVector::GetData<string_t>(out)[i + output_offset] =
+                            StringVector::AddStringOrBlob(out,
+                                                          string_t(col_data.payload.ptr, str_len));
+                        col_data.payload.inc(str_len);
+                    } else {
+                        FlatVector::SetNull(out, i + output_offset, true);
+                    }
+                }
+                break;
+            }
+            default:
+                throw FormatException(return_types[file_col_idx].ToString());
+            }
+
+            break;
+
+        default:
+            throw FormatException("Data page has unsupported/invalid encoding");
+        }
+
+        output_offset += current_batch_size;
+        col_data.page_offset += current_batch_size;
+    }
 }
 
 void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) {
@@ -797,7 +1022,7 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 			}
 
 			PrepareChunkBuffer(state, file_col_idx);
-			// trigger the reading of a new page below
+			// trigger the reading of a new page in FillColumn
 			state.column_data[file_col_idx]->page_value_count = 0;
 		}
 	}
@@ -808,200 +1033,52 @@ void ParquetReader::ReadChunk(ParquetReaderScanState &state, DataChunk &output) 
 		return;
 	}
 
-	auto file_meta_data = GetFileMetadata();
-
 	for (idx_t out_col_idx = 0; out_col_idx < output.ColumnCount(); out_col_idx++) {
-		auto file_col_idx = state.column_ids[out_col_idx];
-		if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
-			Value constant_42 = Value::BIGINT(42);
-			output.data[out_col_idx].Reference(constant_42);
-			continue;
-		}
-		auto &s_ele = file_meta_data->schema[file_col_idx + 1];
-		auto &col_data = *state.column_data[file_col_idx];
-
-		// we might need to read multiple pages to fill the data chunk
-		idx_t output_offset = 0;
-		while (output_offset < output.size()) {
-			// do this unpack business only if we run out of stuff from the current page
-			if (col_data.page_offset >= col_data.page_value_count) {
-				// read dictionaries and data page headers so that we are ready to go for scan
-				if (!PreparePageBuffers(state, file_col_idx)) {
-					continue;
-				}
-				col_data.page_offset = 0;
-			}
-
-			auto current_batch_size =
-			    MinValue<idx_t>(col_data.page_value_count - col_data.page_offset, output.size() - output_offset);
-
-			D_ASSERT(current_batch_size > 0);
-
-			if (col_data.has_nulls) {
-				col_data.defined_buf.resize(current_batch_size);
-				col_data.defined_decoder->GetBatch<uint8_t>(col_data.defined_buf.ptr, current_batch_size);
-			}
-
-			switch (col_data.page_encoding) {
-			case Encoding::RLE_DICTIONARY:
-			case Encoding::PLAIN_DICTIONARY: {
-				idx_t null_count = 0;
-				if (col_data.has_nulls) {
-					for (idx_t i = 0; i < current_batch_size; i++) {
-						if (!col_data.defined_buf.ptr[i]) {
-							null_count++;
-						}
-					}
-				}
-
-				col_data.offset_buf.resize(current_batch_size * sizeof(uint32_t));
-				col_data.dict_decoder->GetBatch<uint32_t>(col_data.offset_buf.ptr, current_batch_size - null_count);
-
-				// TODO ensure we had seen a dict page IN THIS CHUNK before getting here
-
-				switch (return_types[file_col_idx].id()) {
-				case LogicalTypeId::BOOLEAN:
-					fill_from_dict<bool>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::INTEGER:
-					fill_from_dict<int32_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::BIGINT:
-					fill_from_dict<int64_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::FLOAT:
-					fill_from_dict<float>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::DOUBLE:
-					fill_from_dict<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::TIMESTAMP:
-					fill_from_dict<timestamp_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::BLOB:
-				case LogicalTypeId::VARCHAR: {
-					if (!col_data.string_collection) {
-						throw FormatException("Did not see a dictionary for strings. Corrupt file?");
-					}
-
-					// the strings can be anywhere in the collection so just reference it all
-					for (auto &chunk : col_data.string_collection->Chunks()) {
-						StringVector::AddHeapReference(output.data[out_col_idx], chunk->data[0]);
-					}
-
-					auto out_data_ptr = FlatVector::GetData<string_t>(output.data[out_col_idx]);
-					for (idx_t i = 0; i < current_batch_size; i++) {
-						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
-							auto offset = col_data.offset_buf.read<uint32_t>();
-							if (offset >= col_data.string_collection->Count()) {
-								throw FormatException("string dictionary offset out of bounds");
-							}
-							auto &chunk = col_data.string_collection->GetChunk(offset / STANDARD_VECTOR_SIZE);
-							auto &vec = chunk.data[0];
-
-							out_data_ptr[i + output_offset] =
-							    FlatVector::GetData<string_t>(vec)[offset % STANDARD_VECTOR_SIZE];
-						} else {
-							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
-						}
-					}
-				} break;
-				default:
-					throw FormatException(return_types[file_col_idx].ToString());
-				}
-
-				break;
-			}
-			case Encoding::PLAIN:
-				D_ASSERT(col_data.payload.ptr);
-				switch (return_types[file_col_idx].id()) {
-				case LogicalTypeId::BOOLEAN: {
-					// bit packed this
-					auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
-					for (idx_t i = 0; i < current_batch_size; i++) {
-						if (col_data.has_nulls && !col_data.defined_buf.ptr[i]) {
-							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
-							continue;
-						}
-						col_data.payload.available(1);
-						target_ptr[i + output_offset] = (*col_data.payload.ptr >> col_data.byte_pos) & 1;
-						col_data.byte_pos++;
-						if (col_data.byte_pos == 8) {
-							col_data.byte_pos = 0;
-							col_data.payload.inc(1);
-						}
-					}
-					break;
-				}
-				case LogicalTypeId::INTEGER:
-					fill_from_plain<int32_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::BIGINT:
-					fill_from_plain<int64_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::FLOAT:
-					fill_from_plain<float>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::DOUBLE:
-					fill_from_plain<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
-					break;
-				case LogicalTypeId::TIMESTAMP:
-					switch (s_ele.type) {
-					case Type::INT64:
-						// arrow timestamp
-						switch (s_ele.converted_type) {
-						case ConvertedType::TIMESTAMP_MICROS:
-							fill_timestamp_plain<int64_t, arrow_timestamp_micros_to_timestamp>(
-							    col_data, current_batch_size, output.data[out_col_idx], output_offset);
-							break;
-						case ConvertedType::TIMESTAMP_MILLIS:
-							fill_timestamp_plain<int64_t, arrow_timestamp_ms_to_timestamp>(
-							    col_data, current_batch_size, output.data[out_col_idx], output_offset);
-							break;
-						default:
-							throw InternalException("Unsupported converted type for timestamp");
-						}
-						break;
-					case Type::INT96:
-						// impala timestamp
-						fill_timestamp_plain<Int96, impala_timestamp_to_timestamp_t>(
-						    col_data, current_batch_size, output.data[out_col_idx], output_offset);
-						break;
-					default:
-						throw InternalException("Unsupported type for timestamp");
-					}
-					break;
-				case LogicalTypeId::BLOB:
-				case LogicalTypeId::VARCHAR: {
-					for (idx_t i = 0; i < current_batch_size; i++) {
-						if (!col_data.has_nulls || col_data.defined_buf.ptr[i]) {
-							uint32_t str_len = col_data.payload.read<uint32_t>();
-							col_data.payload.available(str_len);
-							VerifyString(return_types[file_col_idx].id(), col_data.payload.ptr, str_len);
-							FlatVector::GetData<string_t>(output.data[out_col_idx])[i + output_offset] =
-							    StringVector::AddStringOrBlob(output.data[out_col_idx],
-							                                  string_t(col_data.payload.ptr, str_len));
-							col_data.payload.inc(str_len);
-						} else {
-							FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
-						}
-					}
-					break;
-				}
-				default:
-					throw FormatException(return_types[file_col_idx].ToString());
-				}
-
-				break;
-
-			default:
-				throw FormatException("Data page has unsupported/invalid encoding");
-			}
-
-			output_offset += current_batch_size;
-			col_data.page_offset += current_batch_size;
-		}
+        FillColumn(state, output.size(), out_col_idx, output.data[out_col_idx]);
 	}
+//
+//
+//    // FIXME maybe we can apply some filters here already?
+//    //  We should create a selection vector thats carried around no?
+//    // Scans should conly consider positions that are set in there
+//    // once its fully empty we are done
+//	// FIXME do a naive filter here for the lolz
+//
+//    SelectionVector sel(FlatVector::IncrementalSelectionVector);
+//	idx_t remaining = output.size();
+//
+//	if (state.filters) {
+//		for (auto& filters : state.filters->filters) {
+//			for (auto& filter : filters.second) {
+//				D_ASSERT(filter.column_index == filters.first);
+//				/*
+//				Value constant;
+//				ExpressionType comparison_type;
+//				idx_t column_index;
+//				 */
+//				Vector comp();
+//				comp.Slice(sel, remaining);
+//
+//				switch(filter.comparison_type) {
+//				case ExpressionType::COMPARE_GREATERTHAN: {
+//                    for (idx_t row_idx = 0; row_idx < remaining; row_idx++) {
+//						// TODO selection vector
+//						auto value = output.data[filter.column_index].GetValue(row_idx);
+//						if (value <= filter.constant) {
+//
+//						}
+//					}
+//                    break;
+//                }
+//				default:
+//					D_ASSERT(false);
+//
+//				}
+//			}
+//		}
+//	}
+//
+
 	state.group_offset += output.size();
 }
 
@@ -1047,6 +1124,7 @@ static Value transform_statistics_timestamp_micros(const_data_ptr_t input) {
 static Value transform_statistics_timestamp_impala(const_data_ptr_t input) {
 	return Value::TIMESTAMP(impala_timestamp_to_timestamp_t(Load<Int96>(input)));
 }
+
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, column_t column_index,
                                                          const parquet::format::FileMetaData *file_meta_data) {
