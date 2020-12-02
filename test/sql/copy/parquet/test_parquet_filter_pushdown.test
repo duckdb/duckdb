@@ -58,3 +58,15 @@ Alvarez
 Alvarez
 Arnold
 Arnold
+
+
+
+query I
+SELECT length(l_comment) FROM parquet_scan('test/sql/copy/parquet/data/lineitem-top10000.gzip.parquet') where l_orderkey = 1 order by l_comment
+----
+24
+17
+23
+23
+34
+29

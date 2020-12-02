@@ -72,6 +72,8 @@ struct ParquetReaderScanState {
 	TableFilterSet *filters;
 };
 
+typedef nullmask_t parquet_filter_t;
+
 class ParquetReader {
 public:
 	ParquetReader(ClientContext &context, string file_name, vector<LogicalType> expected_types,
@@ -100,12 +102,12 @@ public:
 	                                                 const parquet::format::FileMetaData *file_meta_data);
 
 private:
-	void FillColumn(ParquetReaderScanState &state, const SelectionVector &sel, idx_t count, idx_t out_col_idx,
+	void ScanColumn(ParquetReaderScanState &state, parquet_filter_t &filter_mask, idx_t count, idx_t out_col_idx,
 	                Vector &out);
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
-	bool PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
+	bool PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx, LogicalType &type);
 	bool PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx);
 	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 
@@ -113,11 +115,6 @@ private:
 		return std::runtime_error("Failed to read Parquet file \"" + file_name +
 		                          "\": " + StringUtil::Format(fmt_str, params...));
 	}
-
-	template <class T>
-	void fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset);
-	template <class T>
-	void fill_from_plain(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset);
 
 private:
 	ClientContext &context;
