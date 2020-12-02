@@ -5,31 +5,33 @@ This is the DuckDB Python package
 You would normally install the DuckDB released version using `pip` as follows:
     pip install duckdb
 
-## Installing locally
+## Installing locally for development
 
-For development, you may need a DuckDB python package that is installed from source.
-Proceed as follows.
+For development, you may need a DuckDB python package that is installed from source. In order to install from source, the simplest way is by cloning the git repo, and running the make command with `BUILD_PYTHON` set:
 
-Set the prefix path:
+    BUILD_PYTHON=1 make debug
+    
+Note that this will override any existing DuckDB installation you might have. You might also run into conflicts depending on your Python environment. In order to remedy that, it is possible to use virtualenv for installation, e.g. by running the following commands:
 
-    export DUCKDB_PREFIX=/path/to/install/duckdb
+    virtualenv .venv --python=python3.8
+    source .venv/bin/activate
+    BUILD_PYTHON=1 make
 
-Set the `PYTHONPATH` to the `site-packages` directory under the prefix path;
-this will usually work but do check the resulting `PYTHONPATH`.
+You can also directly invoke the setup.py script from the `tools/pythonpkg` environment.
 
-    export PYTHONPATH=${PYTHONPATH:+${PYTHONPATH}:}$(pip show six | \
-      grep "Location:" | cut -d " " -f2 | \
-      sed -e "s|/usr|${DUCKDB_PREFIX}|")
+    cd tools/pythonpkg
+    python3 setup.py install
 
-### Setup for development
+Alternatively, using virtualenv and pip:
 
-Install the package from the root of the DuckDB reposity:
+    # Create and activate Python virtualenv.
+    virtualenv .venv
+    source .venv/bin/activate
 
-    cd ../..
-    pip3 install --prefix $DUCKDB_PREFIX -e tools/pythonpkg
+    # Compile and install DuckDB for Python.
+    pip install -e tools/pythonpkg --verbose
 
-This creates a package that uses the files in `tools/pythonpkg`, the
-best option during development.
+This works fine for a single installation, but is not recommended for active development since incremental compilation does not always work correctly here.
 
 ### Setup for cloud storage
 
