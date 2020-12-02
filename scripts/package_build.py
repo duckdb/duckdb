@@ -74,8 +74,13 @@ def git_dev_version():
     long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
     version_splits = version.lstrip('v').split('.')
     dev_version = long_version.split('-')[1]
-    version_splits[2] = str(int(version_splits[2]) + 1)
-    return '.'.join(version_splits) + "-dev" + dev_version
+    if int(dev_version) == 0:
+        # directly on a tag: emit the regular version
+        return '.'.join(version_splits)
+    else:
+        # not on a tag: increment the version by one and add a -devX suffix
+        version_splits[2] = str(int(version_splits[2]) + 1)
+        return '.'.join(version_splits) + "-dev" + dev_version
 
 def build_package(target_dir, linenumbers = False):
     if not os.path.isdir(target_dir):
@@ -122,7 +127,7 @@ def build_package(target_dir, linenumbers = False):
     for inc in include_files:
         copy_file(inc, target_dir)
 
-    # handle pragma_version.cpp: paste #define DUCKDB_SOURCE_ID and DUCKDB_DEV_VERSION there
+    # handle pragma_version.cpp: paste #define DUCKDB_SOURCE_ID and DUCKDB_VERSION there
     curdir = os.getcwd()
     os.chdir(os.path.join(scripts_dir, '..'))
     githash = git_commit_hash()
@@ -141,14 +146,14 @@ def build_package(target_dir, linenumbers = False):
             lines[i] = '#define DUCKDB_SOURCE_ID "{}"'.format(githash)
             found_hash = True
             break
-        if '#define DUCKDB_DEV_VERSION ' in lines[i]:
-            lines[i] = '#define DUCKDB_DEV_VERSION "{}"'.format(dev_version)
+        if '#define DUCKDB_VERSION ' in lines[i]:
+            lines[i] = '#define DUCKDB_VERSION "{}"'.format(dev_version)
             found_dev = True
             break
     if not found_hash:
         lines = ['#ifndef DUCKDB_SOURCE_ID', '#define DUCKDB_SOURCE_ID "{}"'.format(githash), '#endif'] + lines
     if not found_hash:
-        lines = ['#ifndef DUCKDB_DEV_VERSION', '#define DUCKDB_DEV_VERSION "{}"'.format(dev_version), '#endif'] + lines
+        lines = ['#ifndef DUCKDB_VERSION', '#define DUCKDB_VERSION "{}"'.format(dev_version), '#endif'] + lines
     text = '\n'.join(lines)
     with open_utf8(fpath, 'w+') as f:
         f.write(text)

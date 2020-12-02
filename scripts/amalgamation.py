@@ -194,8 +194,13 @@ def git_dev_version():
     long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
     version_splits = version.lstrip('v').split('.')
     dev_version = long_version.split('-')[1]
-    version_splits[2] = str(int(version_splits[2]) + 1)
-    return '.'.join(version_splits) + "-dev" + dev_version
+    if int(dev_version) == 0:
+        # directly on a tag: emit the regular version
+        return '.'.join(version_splits)
+    else:
+        # not on a tag: increment the version by one and add a -devX suffix
+        version_splits[2] = str(int(version_splits[2]) + 1)
+        return '.'.join(version_splits) + "-dev" + dev_version
 
 def generate_duckdb_hpp(header_file):
     print("-----------------------")
@@ -209,7 +214,7 @@ def generate_duckdb_hpp(header_file):
         hfile.write("#pragma once\n")
         hfile.write("#define DUCKDB_AMALGAMATION 1\n")
         hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
-        hfile.write("#define DUCKDB_DEV_VERSION \"%s\"\n" % git_dev_version())
+        hfile.write("#define DUCKDB_VERSION \"%s\"\n" % git_dev_version())
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
 

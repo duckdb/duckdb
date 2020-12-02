@@ -133,8 +133,15 @@ string(REGEX REPLACE "v([0-9]+.[0-9]+.)[0-9]+" "\\1" DUCKDB_MAIN_VERSION "${GIT_
 string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
 string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
 
-MATH(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
-set(DUCKDB_DEV_VERSION "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
+if(${DUCKDB_DEV_ITERATION}==0)
+  # on a tag; directly use the version
+  set(DUCKDB_VERSION "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}")
+else()
+  # not on a tag, increment the patch version by one and add a -devX suffix
+  MATH(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
+
+  set(DUCKDB_VERSION "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
+endif()
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
