@@ -38,7 +38,7 @@ struct ParquetReadOperatorData : public FunctionOperatorData {
 	bool is_parallel;
 	idx_t file_index;
 	vector<column_t> column_ids;
-	TableFilterSet* table_filters;
+	TableFilterSet *table_filters;
 };
 
 struct ParquetReadParallelState : public ParallelState {
@@ -76,7 +76,6 @@ public:
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types);
 		return move(result);
 	}
-
 
 	static unique_ptr<BaseStatistics> parquet_scan_stats(ClientContext &context, const FunctionData *bind_data_,
 	                                                     column_t column_index) {
@@ -185,7 +184,7 @@ public:
 	                                  FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
 		do {
-			data.reader->ReadChunk(data.scan_state, output);
+			data.reader->Scan(data.scan_state, output);
 			if (output.size() == 0 && !data.is_parallel) {
 				auto &bind_data = (ParquetReadBindData &)*bind_data_;
 				// check if there is another file
@@ -241,7 +240,8 @@ public:
 			// groups remain in the current parquet file: read the next group
 			scan_data.reader = parallel_state.current_reader;
 			vector<idx_t> group_indexes{parallel_state.row_group_index};
-			scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes, scan_data.table_filters);
+			scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes,
+			                             scan_data.table_filters);
 			parallel_state.row_group_index++;
 			return true;
 		} else {
@@ -258,7 +258,8 @@ public:
 				// set up the scan state to read the first group
 				scan_data.reader = parallel_state.current_reader;
 				vector<idx_t> group_indexes{0};
-				scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes, scan_data.table_filters);
+				scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes,
+				                             scan_data.table_filters);
 				parallel_state.row_group_index = 1;
 				return true;
 			}
@@ -324,8 +325,8 @@ unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &co
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer =
-	    make_unique<ParquetWriter>(fs, parquet_bind.file_name, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
+	global_state->writer = make_unique<ParquetWriter>(fs, parquet_bind.file_name, parquet_bind.sql_types,
+	                                                  parquet_bind.column_names, parquet_bind.codec);
 	return move(global_state);
 }
 

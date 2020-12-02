@@ -69,7 +69,7 @@ struct ParquetReaderScanState {
 	idx_t group_offset;
 	vector<unique_ptr<ParquetReaderColumnData>> column_data;
 	bool finished;
-	TableFilterSet* filters;
+	TableFilterSet *filters;
 };
 
 class ParquetReader {
@@ -87,9 +87,9 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 
 public:
-	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read, TableFilterSet *table_filters);
-	void ReadChunk(ParquetReaderScanState &state, DataChunk &output);
-    void FillColumn(ParquetReaderScanState &state, idx_t count, idx_t out_col_idx, Vector& out);
+	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
+	                TableFilterSet *table_filters);
+	void Scan(ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows();
 	idx_t NumRowGroups();
@@ -100,6 +100,10 @@ public:
 	                                                 const parquet::format::FileMetaData *file_meta_data);
 
 private:
+	void FillColumn(ParquetReaderScanState &state, const SelectionVector &sel, idx_t count, idx_t out_col_idx,
+	                Vector &out);
+	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
+
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	bool PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
 	bool PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx);
