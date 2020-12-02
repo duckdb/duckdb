@@ -1333,7 +1333,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	}
 
 	auto this_output_chunk_rows =
-	    MinValue<int64_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.group_offset);
+	    MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.group_offset);
 	result.SetCardinality(this_output_chunk_rows);
 
 	if (this_output_chunk_rows == 0) {
