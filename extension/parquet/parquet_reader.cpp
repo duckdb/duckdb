@@ -552,7 +552,7 @@ static unique_ptr<BaseStatistics> get_col_chunk_stats(const parquet::format::Sch
 		return nullptr;
 	}
 
-	return move(row_group_stats);
+	return row_group_stats;
 }
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, column_t column_index,
