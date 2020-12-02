@@ -47,7 +47,7 @@ const char *DuckDB::SourceID() {
 }
 
 const char *DuckDB::LibraryVersion() {
-	return "DuckDB";
+	return DUCKDB_DEV_VERSION;
 }
 
 } // namespace duckdb

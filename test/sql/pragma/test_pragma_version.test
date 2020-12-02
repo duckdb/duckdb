@@ -8,8 +8,5 @@ PRAGMA version;
 statement ok
 select * from pragma_version();
 
-query I
+statement ok
 select library_version from pragma_version();
-----
-DuckDB
-

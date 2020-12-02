@@ -66,6 +66,17 @@ def get_relative_path(source_dir, target_file):
         target_file = target_file.replace(source_dir, "").lstrip('/')
     return target_file
 
+def git_commit_hash():
+    return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
+
+def git_dev_version():
+    version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
+    long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
+    version_splits = version.lstrip('v').split('.')
+    dev_version = long_version.split('-')[1]
+    version_splits[2] = str(int(version_splits[2]) + 1)
+    return '.'.join(version_splits) + "-dev" + dev_version
+
 def build_package(target_dir, linenumbers = False):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
@@ -111,26 +122,34 @@ def build_package(target_dir, linenumbers = False):
     for inc in include_files:
         copy_file(inc, target_dir)
 
-    # handle pragma_version.cpp: paste #define DUCKDB_SOURCE_ID there
-    # read the source id
-    proc = subprocess.Popen(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.path.join(scripts_dir, '..'))
-    githash = proc.stdout.read().strip().decode('utf8')
+    # handle pragma_version.cpp: paste #define DUCKDB_SOURCE_ID and DUCKDB_DEV_VERSION there
+    curdir = os.getcwd()
+    os.chdir(os.path.join(scripts_dir, '..'))
+    githash = git_commit_hash()
+    dev_version = git_dev_version()
+    os.chdir(curdir)
     # open the file and read the current contents
     fpath = os.path.join(target_dir, 'src', 'function', 'table', 'version', 'pragma_version.cpp')
     with open_utf8(fpath, 'r') as f:
         text = f.read()
     # now add the DUCKDB_SOURCE_ID define, if it is not there already
-    found = False
+    found_hash = False
+    found_dev = False
     lines = text.split('\n')
     for i in range(len(lines)):
         if '#define DUCKDB_SOURCE_ID ' in lines[i]:
             lines[i] = '#define DUCKDB_SOURCE_ID "{}"'.format(githash)
-            found = True
+            found_hash = True
             break
-    if not found:
-        text = '#ifndef DUCKDB_SOURCE_ID\n#define DUCKDB_SOURCE_ID "{}"\n#endif\n'.format(githash) + text
-    else:
-        text = '\n'.join(text)
+        if '#define DUCKDB_DEV_VERSION ' in lines[i]:
+            lines[i] = '#define DUCKDB_DEV_VERSION "{}"'.format(dev_version)
+            found_dev = True
+            break
+    if not found_hash:
+        lines = ['#ifndef DUCKDB_SOURCE_ID', '#define DUCKDB_SOURCE_ID "{}"'.format(githash), '#endif'] + lines
+    if not found_hash:
+        lines = ['#ifndef DUCKDB_DEV_VERSION', '#define DUCKDB_DEV_VERSION "{}"'.format(dev_version), '#endif'] + lines
+    text = '\n'.join(lines)
     with open_utf8(fpath, 'w+') as f:
         f.write(text)
 
