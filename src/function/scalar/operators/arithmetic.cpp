@@ -190,17 +190,17 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	// now select the physical function to execute
 	if (check_overflow) {
 		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType());
-		if (result_type.InternalType() != PhysicalType::INT128) {
-			if (IS_SUBTRACT) {
-				bound_function.statistics =
-				    propagate_numeric_statistics<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>;
-			} else {
-				bound_function.statistics =
-				    propagate_numeric_statistics<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
-			}
-		}
 	} else {
 		bound_function.function = GetScalarBinaryFunction<OP>(result_type.InternalType());
+	}
+	if (result_type.InternalType() != PhysicalType::INT128) {
+		if (IS_SUBTRACT) {
+			bound_function.statistics =
+				propagate_numeric_statistics<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>;
+		} else {
+			bound_function.statistics =
+				propagate_numeric_statistics<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
+		}
 	}
 	return nullptr;
 }
@@ -473,12 +473,12 @@ unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFun
 	// now select the physical function to execute
 	if (check_overflow) {
 		bound_function.function = GetScalarBinaryFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType());
-		if (result_type.InternalType() != PhysicalType::INT128) {
-			bound_function.statistics =
-			    propagate_numeric_statistics<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
-		}
 	} else {
 		bound_function.function = GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType());
+	}
+	if (result_type.InternalType() != PhysicalType::INT128) {
+		bound_function.statistics =
+			propagate_numeric_statistics<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
 	}
 	return nullptr;
 }

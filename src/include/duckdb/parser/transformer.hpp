@@ -136,6 +136,8 @@ private:
 	unique_ptr<ParsedExpression> TransformExpression(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres function call into an Expression
 	unique_ptr<ParsedExpression> TransformFuncCall(duckdb_libpgquery::PGFuncCall *root);
+	//! Transform a Postgres boolean expression into an Expression
+	unique_ptr<ParsedExpression> TransformInterval(duckdb_libpgquery::PGIntervalConstant *root);
 
 	//! Transform a Postgres constant value into an Expression
 	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c);

@@ -1941,4 +1941,18 @@ typedef struct PGImportStmt {
 	char *filename;       /* filename */
 } PGImportStmt;
 
+/* ----------------------
+ *		Interval Constant
+ * ----------------------
+ */
+typedef struct PGIntervalConstant {
+	PGNodeTag type;
+	int val_type;         /* interval constant type, either T_PGString, T_PGInteger or T_PGAExpr */
+	char *sval;           /* T_PGString */
+	int ival;             /* T_PGString */
+	PGNode *eval;         /* T_PGAExpr */
+	PGList *typmods;      /* how to interpret the interval constant (year, month, day, etc)  */
+	int location;         /* token location, or -1 if unknown */
+} PGIntervalConstant;
+
 }

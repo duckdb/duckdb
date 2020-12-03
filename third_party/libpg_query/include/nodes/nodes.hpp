@@ -474,6 +474,7 @@ typedef enum PGNodeTag {
 	T_PGPartitionBoundSpec,
 	T_PGPartitionRangeDatum,
 	T_PGPartitionCmd,
+	T_PGIntervalConstant,
 
 	/*
 	 * TAGS FOR REPLICATION GRAMMAR PARSE NODES (replnodes.h)
