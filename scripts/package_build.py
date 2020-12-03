@@ -6,7 +6,7 @@ from python_helpers import open_utf8
 
 excluded_objects = ['utf8proc_data.cpp']
 
-def get_libraries(binary_dir, libraries):
+def get_libraries(binary_dir, libraries, extensions):
     result_libs = []
     def find_library_recursive(search_dir, potential_libnames):
         flist = os.listdir(search_dir)
@@ -35,24 +35,26 @@ def get_libraries(binary_dir, libraries):
         result_libs += [(libdir, libname)]
 
     result_libs += [(os.path.join(binary_dir, 'src'), 'duckdb_static')]
-    result_libs += [(os.path.join(binary_dir, 'extension', 'parquet'), 'parquet_extension')]
-    result_libs += [(os.path.join(binary_dir, 'extension', 'icu'), 'icu_extension')]
+    for ext in extensions:
+        result_libs += [(os.path.join(binary_dir, 'extension', ext), ext + '_extension')]
 
     for libname in libraries:
         find_library(binary_dir, libname, result_libs)
 
     return result_libs
 
-def includes():
+def includes(extensions):
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
-    # add includes for duckdb and parquet
+    # add includes for duckdb and extensions
     includes = []
     includes.append(os.path.join(scripts_dir, '..', 'src', 'include'))
-    includes.append(os.path.join(scripts_dir, '..', 'extension', 'parquet', 'include'))
+    includes.append(os.path.join(scripts_dir, '..'))
+    for ext in extensions:
+        includes.append(os.path.join(scripts_dir, '..', 'extension', ext, 'include'))
     return includes
 
-def include_flags():
-    return ' ' + ' '.join(['-I' + x for x in includes()])
+def include_flags(extensions):
+    return ' ' + ' '.join(['-I' + x for x in includes(extensions)])
 
 def convert_backslashes(x):
     return '/'.join(x.split(os.path.sep))
@@ -82,15 +84,29 @@ def git_dev_version():
         version_splits[2] = str(int(version_splits[2]) + 1)
         return '.'.join(version_splits) + "-dev" + dev_version
 
-def build_package(target_dir, linenumbers = False):
+def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
+    import amalgamation
+    original_path = sys.path
+    # append the directory
+    sys.path.append(pkg_dir)
+    ext_pkg = __import__(pkg_name + '_config')
+
+    ext_include_dirs = ext_pkg.include_directories
+    ext_source_files = ext_pkg.source_files
+
+    include_files += amalgamation.list_includes_files(ext_include_dirs)
+    include_list += ext_include_dirs
+    source_list += ext_source_files
+
+    sys.path = original_path
+
+def build_package(target_dir, extensions, linenumbers = False):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
 
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
     sys.path.append(scripts_dir)
     import amalgamation
-    sys.path.append(os.path.join(scripts_dir, '..', 'extension', 'parquet'))
-    import parquet_amalgamation
 
     prev_wd = os.getcwd()
     os.chdir(os.path.join(scripts_dir, '..'))
@@ -112,14 +128,12 @@ def build_package(target_dir, linenumbers = False):
         target_file = os.path.join(current_path, target_name)
         amalgamation.copy_if_different(src, target_file)
 
-
-    # now do the same for the parquet extension
-    parquet_include_directories = parquet_amalgamation.include_directories
-
-    include_files += amalgamation.list_includes_files(parquet_include_directories)
-
-    include_list += parquet_include_directories
-    source_list += parquet_amalgamation.source_files
+    # include the main extension helper
+    include_files += [os.path.join('extension', 'extension_helper.hpp')]
+    # include the separate extensions
+    for ext in extensions:
+        ext_path = os.path.join(scripts_dir, '..', 'extension', ext)
+        include_package(ext, ext_path, include_files, include_list, source_list)
 
     for src in source_list:
         copy_file(src, target_dir)

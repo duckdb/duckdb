@@ -46,6 +46,24 @@
  *   TPCH              -- make will create TPCH (set in makefile)
  */
 
+#pragma once
+
+#ifndef DBNAME
+#define DBNAME "dss"
+#endif
+
+#ifndef MAC
+#define MAC
+#endif
+
+#ifndef ORACLE
+#define ORACLE
+#endif
+
+#ifndef TPCH
+#define TPCH
+#endif
+
 #ifdef ATT
 #define STDLIB_HAS_GETOPT
 #ifdef SQLSERVER

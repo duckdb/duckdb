@@ -7,7 +7,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "parquet-extension.hpp"
+#include "extension/extension_helper.hpp"
 
 #define R_NO_REMAP
 
@@ -939,7 +939,7 @@ SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	} catch (...) {
 		Rf_error("duckdb_startup_R: Failed to open database");
 	}
-	dbaddr->LoadExtension<ParquetExtension>();
+	ExtensionHelper::LoadAllExtensions(*dbaddr);
 
 	DataFrameScanFunction scan_fun;
 	CreateTableFunctionInfo info(scan_fun);
