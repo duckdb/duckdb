@@ -18,7 +18,6 @@ query I nosort empty
 explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id is null;
 ----
 
-
 # verify min/max stats on int cols work
 query I nosort empty
 explain select * from parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id < 1;
