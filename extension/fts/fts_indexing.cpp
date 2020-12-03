@@ -38,9 +38,9 @@ static string indexing_script(string input_schema, string input_table, string in
         CREATE TABLE %fts_schema%.docs AS (
             SELECT
                 rowid + 1 AS docid,
-                %input_id% AS name
+                ii.%input_id% AS name
             FROM
-                %input_schema%.%input_table%
+                %input_schema%.%input_table% AS ii
         );
 
         CREATE TABLE %fts_schema%.terms AS (
@@ -52,7 +52,7 @@ static string indexing_script(string input_schema, string input_table, string in
                 SELECT
                     %fts_schema%.tokenize(%input_values%) AS term,
                     rowid + 1 AS docid
-                FROM %input_schema%.%input_table%
+                FROM %input_schema%.%input_table% AS ii
             ) AS sq
             WHERE
                 term != '' AND term NOT NULL
@@ -139,8 +139,15 @@ static string indexing_script(string input_schema, string input_table, string in
 	result = StringUtil::Replace(result, "%input_schema%", input_schema);
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
+    result = StringUtil::Replace(result, "%stemmer%", stemmer);
+
+	// input value columns are a bit different because they need to be concatenated before indexing
+	// and the table alias must be given (in case a column is called 'table', etc.)
+	for (idx_t i = 0; i < input_values.size(); i++) {
+		input_values[i] = "ii." + input_values[i];
+	}
 	result = StringUtil::Replace(result, "%input_values%", StringUtil::Format("concat(%s)", StringUtil::Join(input_values, ", ' ', ")));
-	result = StringUtil::Replace(result, "%stemmer%", stemmer);
+
 
 	return result;
 }
