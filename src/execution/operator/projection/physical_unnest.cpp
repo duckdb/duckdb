@@ -69,6 +69,9 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			state->list_data.data[0].Orrify(state->list_data.size(), state->list_vector_data);
 		}
 
+		// whether we have UNNEST(*expression returning list that evaluated to NULL*)
+		bool unnest_null = (*state->list_vector_data.nullmask)[state->list_vector_data.sel->get_index(state->parent_position)];
+
 		// need to figure out how many times we need to repeat for current row
 		if (state->list_length < 0) {
 			for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
@@ -77,9 +80,9 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 				D_ASSERT(v.type == LogicalType::LIST);
 
 				// deal with NULL values
-				if ((*state->list_vector_data
-				          .nullmask)[state->list_vector_data.sel->get_index(state->parent_position)]) {
+				if (unnest_null) {
 					state->list_length = 1;
+					continue;
 				}
 
 				auto list_data = FlatVector::GetData<list_entry_t>(v);
@@ -112,14 +115,11 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 			idx_t i = 0;
 			if (list_entry.length > state->list_position) {
-				if ((*state->list_vector_data
-				          .nullmask)[state->list_vector_data.sel->get_index(state->parent_position)]) {
-					// unnesting NULL input
+				if (unnest_null) {
 					for (i = 0; i < min((idx_t)this_chunk_len, list_entry.length - state->list_position); i++) {
 						FlatVector::SetNull(chunk.data[target_col], i, true);
 					}
 				} else {
-					// non-NULL input
 					auto &child_cc = ListVector::GetEntry(v);
 					for (i = 0; i < min((idx_t)this_chunk_len, list_entry.length - state->list_position); i++) {
 						chunk.data[target_col].SetValue(
