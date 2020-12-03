@@ -11,6 +11,8 @@ from setuptools import setup, Extension
 from setuptools.command.sdist import sdist
 import distutils.spawn
 
+extensions = ['parquet', 'icu', 'tpch']
+
 def open_utf8(fpath, flags):
     import sys
     if sys.version_info[0] < 3:
@@ -53,6 +55,9 @@ sys.argv = new_sys_args
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
+for ext in extensions:
+    toolchain_args.extend(['-DBUILD_{}_EXTENSION'.format(ext.upper())])
+
 class get_pybind_include(object):
     def __init__(self, user=False):
         self.user = user
@@ -82,7 +87,7 @@ if len(existing_duckdb_dir) == 0:
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
 
-        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, 'duckdb'))
+        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, 'duckdb'), extensions)
 
         duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
         duckdb_sources.sort()
@@ -128,9 +133,9 @@ else:
     sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
     import package_build
 
-    toolchain_args += ['-I' + x for x in package_build.includes()]
+    toolchain_args += ['-I' + x for x in package_build.includes(extensions)]
 
-    result_libraries = package_build.get_libraries(existing_duckdb_dir, libraries)
+    result_libraries = package_build.get_libraries(existing_duckdb_dir, libraries, extensions)
     library_dirs = [x[0] for x in result_libraries if x[0] is not None]
     libnames = [x[1] for x in result_libraries if x[1] is not None]
 
