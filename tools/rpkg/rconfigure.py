@@ -24,7 +24,7 @@ if 'DUCKDB_R_BINDIR' in os.environ and 'DUCKDB_R_CFLAGS' in os.environ and 'DUCK
     with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
         text = f.read()
 
-    compile_flags += package_build.include_flags()
+    compile_flags += package_build.include_flags(extensions)
 
     # find libraries
     result_libs = package_build.get_libraries(existing_duckdb_dir, libraries, extensions)

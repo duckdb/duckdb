@@ -53,8 +53,8 @@ def includes(extensions):
         includes.append(os.path.join(scripts_dir, '..', 'extension', ext, 'include'))
     return includes
 
-def include_flags():
-    return ' ' + ' '.join(['-I' + x for x in includes()])
+def include_flags(extensions):
+    return ' ' + ' '.join(['-I' + x for x in includes(extensions)])
 
 def convert_backslashes(x):
     return '/'.join(x.split(os.path.sep))
