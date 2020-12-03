@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/aggregate/physical_perfect_hash_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
