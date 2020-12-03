@@ -16,6 +16,7 @@
 
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_types.h"
+#include "parquet_rle_bp_decoder.hpp"
 
 #include <exception>
 
@@ -27,7 +28,6 @@ class FileMetaData;
 
 namespace duckdb {
 class ClientContext;
-class RleBpDecoder;
 class ChunkCollection;
 class BaseStatistics;
 struct TableFilterSet;
