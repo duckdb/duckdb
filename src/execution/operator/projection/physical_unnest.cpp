@@ -70,7 +70,8 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		}
 
 		// whether we have UNNEST(*expression returning list that evaluated to NULL*)
-		bool unnest_null = (*state->list_vector_data.nullmask)[state->list_vector_data.sel->get_index(state->parent_position)];
+		bool unnest_null =
+		    (*state->list_vector_data.nullmask)[state->list_vector_data.sel->get_index(state->parent_position)];
 
 		// need to figure out how many times we need to repeat for current row
 		if (state->list_length < 0) {

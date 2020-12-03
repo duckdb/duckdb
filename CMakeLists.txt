@@ -129,18 +129,23 @@ execute_process(
   OUTPUT_VARIABLE GIT_ITERATION
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-string(REGEX REPLACE "v([0-9]+.[0-9]+.)[0-9]+" "\\1" DUCKDB_MAIN_VERSION "${GIT_LAST_TAG}")
-string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
-string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
+string(REGEX REPLACE "v([0-9]+.[0-9]+.)[0-9]+" "\\1" DUCKDB_MAIN_VERSION
+                     "${GIT_LAST_TAG}")
+string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION
+                     "${GIT_LAST_TAG}")
+string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION
+                     "${GIT_ITERATION}")
 
 if(${DUCKDB_DEV_ITERATION}==0)
   # on a tag; directly use the version
   set(DUCKDB_VERSION "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}")
 else()
   # not on a tag, increment the patch version by one and add a -devX suffix
-  MATH(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
+  math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
 
-  set(DUCKDB_VERSION "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
+  set(DUCKDB_VERSION
+      "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}"
+  )
 endif()
 
 option(AMALGAMATION_BUILD
