@@ -152,3 +152,7 @@ SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'mark laurens')
 ----
 doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
 doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING	Laurens
+
+query III
+SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, NULL)
+----
