@@ -75,11 +75,6 @@ SELECT INTERVAL '90' YEAR;
 90 years
 
 query T
-SELECT INTERVAL '1' YEAR TO MONTH;
-----
-1 year
-
-query T
 SELECT INTERVAL '90' MONTH;
 ----
 7 years 6 months
@@ -95,39 +90,9 @@ SELECT INTERVAL '90' MINUTE;
 01:30:00
 
 query T
-SELECT INTERVAL '90' MINUTE TO SECOND;
-----
-01:30:00
-
-query T
 SELECT INTERVAL '90' HOUR;
 ----
 90:00:00
-
-query T
-SELECT INTERVAL '90' HOUR TO MINUTE;
-----
-90:00:00
-
-query T
-SELECT INTERVAL '90' HOUR TO SECOND;
-----
-90:00:00
-
-query T
-SELECT INTERVAL '1' DAY TO HOUR;
-----
-24:00:00
-
-query T
-SELECT INTERVAL '1' DAY TO MINUTE;
-----
-24:00:00
-
-query T
-SELECT INTERVAL '1' DAY TO SECOND;
-----
-24:00:00
 
 # we can add together intervals
 query T
@@ -262,4 +227,3 @@ SELECT INTERVAL 'aa' DAY;
 
 statement error
 SELECT INTERVAL '100 months' DAY;
-
