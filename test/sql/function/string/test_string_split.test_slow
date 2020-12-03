@@ -27,6 +27,11 @@ a
 a
 a
 
+query T
+SELECT UNNEST(string_split(NULL, ' ')) IS NULL LIMIT 5
+----
+1
+
 # now continue with string split testing
 query I
 SELECT UNNEST(string_split(string_agg(range, 'DUCK '), ' ')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
