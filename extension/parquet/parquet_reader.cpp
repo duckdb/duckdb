@@ -470,7 +470,6 @@ static void fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, parqu
 template <class T>
 static void fill_from_plain(ParquetReaderColumnData &col_data, idx_t count, parquet_filter_t &filter_mask,
                             Vector &target, idx_t target_offset) {
-
 	if (!col_data.has_nulls && filter_mask.none()) {
 		col_data.payload.inc(sizeof(T) * count);
 		return;
@@ -498,7 +497,6 @@ static void fill_from_plain(ParquetReaderColumnData &col_data, idx_t count, parq
 template <class T, timestamp_t (*FUNC)(const T &input)>
 static void fill_timestamp_plain(ParquetReaderColumnData &col_data, idx_t count, parquet_filter_t &filter_mask,
                                  Vector &target, idx_t target_offset) {
-
 	if (!col_data.has_nulls && filter_mask.none()) {
 		col_data.payload.inc(sizeof(T) * count);
 		return;
@@ -713,7 +711,6 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	}
 	case PageType::DATA_PAGE:
 	case PageType::DATA_PAGE_V2: {
-
 		if (page_hdr.type == PageType::DATA_PAGE) {
 			D_ASSERT(page_hdr.__isset.data_page_header);
 		}
@@ -1149,7 +1146,6 @@ void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
 }
 
 bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &result) {
-
 	if (state.finished) {
 		return false;
 	}
@@ -1193,7 +1189,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	filter_mask.set();
 
 	if (state.filters) {
-
 		vector<bool> need_to_read(result.ColumnCount(), true);
 
 		// first load the columns that are used in filters

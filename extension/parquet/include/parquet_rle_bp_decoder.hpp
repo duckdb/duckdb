@@ -6,7 +6,6 @@ public:
     /// bit_width is the width of each value (before encoding).
     RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint32_t bit_width)
         : buffer(buffer), bit_width_(bit_width), current_value_(0), repeat_count_(0), literal_count_(0) {
-
         if (bit_width >= 64) {
             throw std::runtime_error("Decode bit width too large");
         }
