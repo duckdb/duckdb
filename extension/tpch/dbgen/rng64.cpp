@@ -62,7 +62,7 @@
  * first integration of rng64 for o_custkey and l_partkey
  *
  */
-#include "rng64.h"
+#include "dbgen/rng64.h"
 
 #include <stdio.h>
 #include <stdlib.h>

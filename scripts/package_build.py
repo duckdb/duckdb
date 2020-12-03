@@ -48,6 +48,7 @@ def includes(extensions):
     # add includes for duckdb and extensions
     includes = []
     includes.append(os.path.join(scripts_dir, '..', 'src', 'include'))
+    includes.append(os.path.join(scripts_dir, '..'))
     for ext in extensions:
         includes.append(os.path.join(scripts_dir, '..', 'extension', ext, 'include'))
     return includes
