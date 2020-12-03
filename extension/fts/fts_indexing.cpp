@@ -37,7 +37,7 @@ static string indexing_script(string input_schema, string input_table, string in
 
         CREATE TABLE %fts_schema%.docs AS (
             SELECT
-                row_number() OVER (PARTITION BY(SELECT NULL)) AS docid,
+                rowid + 1 AS docid,
                 %input_id% AS name
             FROM
                 %input_schema%.%input_table%
@@ -51,7 +51,7 @@ static string indexing_script(string input_schema, string input_table, string in
             FROM (
                 SELECT
                     %fts_schema%.tokenize(%input_values%) AS term,
-                    row_number() OVER (PARTITION BY (SELECT NULL)) AS docid
+                    rowid + 1 AS docid
                 FROM %input_schema%.%input_table%
             ) AS sq
             WHERE
@@ -139,7 +139,7 @@ static string indexing_script(string input_schema, string input_table, string in
 	result = StringUtil::Replace(result, "%input_schema%", input_schema);
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
-	result = StringUtil::Replace(result, "%input_values%", StringUtil::Join(input_values, " || ' ' || "));
+	result = StringUtil::Replace(result, "%input_values%", StringUtil::Format("concat(%s)", StringUtil::Join(input_values, ", ' ', ")));
 	result = StringUtil::Replace(result, "%stemmer%", stemmer);
 
 	return result;
