@@ -776,24 +776,7 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 	return true;
 }
 
-static bool check_stats(ExpressionType comparison_type, Value constant, Value min, Value max) {
-	switch (comparison_type) {
-	case ExpressionType::COMPARE_EQUAL:
-		return constant >= min && constant <= max;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return constant <= max;
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return constant < max;
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return constant >= min;
-	case ExpressionType::COMPARE_LESSTHAN:
-		return constant > min;
-	default:
-		throw InternalException("Operation not implemented");
-	}
-}
-
-bool ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx, LogicalType &type) {
+void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx, LogicalType &type) {
 	auto &group = GetGroup(state);
 	auto &chunk = group.columns[col_idx];
 	if (chunk.__isset.file_path) {
@@ -818,13 +801,14 @@ bool ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 			case LogicalTypeId::DOUBLE: {
 				auto num_stats = (NumericStatistics &)*stats;
 				for (auto &filter : filter_entry->second) {
-					skip_chunk = !check_stats(filter.comparison_type, filter.constant, num_stats.min, num_stats.max);
+					skip_chunk = !num_stats.CheckZonemap(filter.comparison_type, filter.constant);
 					if (skip_chunk) {
 						break;
 					}
 				}
 				break;
 			}
+			case LogicalTypeId::BLOB:
 			case LogicalTypeId::VARCHAR: {
 				auto str_stats = (StringStatistics &)*stats;
 				for (auto &filter : filter_entry->second) {
@@ -840,6 +824,7 @@ bool ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 			}
 			if (skip_chunk) {
 				state.group_offset = group.num_rows;
+				return;
 				// this effectively will skip this chunk
 			}
 		}
@@ -862,7 +847,7 @@ bool ParquetReader::PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_
 	// read entire chunk into RAM
 	state.column_data[col_idx]->buf.resize(chunk_len);
 	fs.Read(*handle, state.column_data[col_idx]->buf.ptr, chunk_len, chunk_start);
-	return true;
+	return;
 }
 
 idx_t ParquetReader::NumRows() {
@@ -884,6 +869,7 @@ void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> c
 	for (idx_t i = 0; i < return_types.size(); i++) {
 		state.column_data.push_back(make_unique<ParquetReaderColumnData>());
 	}
+	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 }
 
 void ParquetReader::ScanColumn(ParquetReaderScanState &state, parquet_filter_t &filter_mask, idx_t count,
@@ -1115,6 +1101,9 @@ void templated_filter_operation2(Vector &v, T constant, parquet_filter_t &filter
 
 template <class OP>
 static void templated_filter_operation(Vector &v, Value &constant, parquet_filter_t &filter_mask, idx_t count) {
+	if (filter_mask.none() || count == 0) {
+		return;
+	}
 	switch (v.type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		templated_filter_operation2<bool, OP>(v, constant.value_.boolean, filter_mask, count);
@@ -1183,7 +1172,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 
-			PrepareChunkBuffer(state, file_col_idx, result.GetTypes()[out_col_idx]);
+			PrepareRowGroupBuffer(state, file_col_idx, result.GetTypes()[out_col_idx]);
 			// trigger the reading of a new page in FillColumn
 			state.column_data[file_col_idx]->page_value_count = 0;
 		}
@@ -1250,16 +1239,14 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 		}
 
-		// TODO make this static
-		SelectionVector sel(this_output_chunk_rows);
 		idx_t sel_size = 0;
 		for (idx_t i = 0; i < this_output_chunk_rows; i++) {
 			if (filter_mask[i]) {
-				sel.set_index(sel_size++, i);
+				state.sel.set_index(sel_size++, i);
 			}
 		}
 
-		result.Slice(sel, sel_size);
+		result.Slice(state.sel, sel_size);
 		result.Verify();
 
 	} else { // just fricking load the data

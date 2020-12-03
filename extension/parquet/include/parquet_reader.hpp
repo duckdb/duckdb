@@ -70,6 +70,7 @@ struct ParquetReaderScanState {
 	vector<unique_ptr<ParquetReaderColumnData>> column_data;
 	bool finished;
 	TableFilterSet *filters;
+	SelectionVector sel;
 };
 
 typedef nullmask_t parquet_filter_t;
@@ -107,7 +108,7 @@ private:
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
-	bool PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx, LogicalType &type);
+	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx, LogicalType &type);
 	bool PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx);
 	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 
