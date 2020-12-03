@@ -34,7 +34,7 @@ struct RStrings {
 private:
 	RStrings() {
 		// allocate strings once
-		SEXP out = Rf_allocVector(STRSXP, 5);
+		SEXP out = PROTECT(Rf_allocVector(STRSXP, 5));
 		SET_STRING_ELT(out, 0, secs = Rf_mkChar("secs"));
 		SET_STRING_ELT(out, 1, mins = Rf_mkChar("mins"));
 		SET_STRING_ELT(out, 2, hours = Rf_mkChar("hours"));
@@ -42,7 +42,8 @@ private:
 		SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
 		R_PreserveObject(out);
 		MARK_NOT_MUTABLE(out);
-	}
+        UNPROTECT(1);
+    }
 };
 
 struct RStatement {
@@ -771,7 +772,7 @@ struct DataFrameScanFunction : public TableFunction {
 		// TODO have a better way to pass this pointer
 		SEXP df((SEXP)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
-		auto df_names = GET_NAMES(df);
+		auto df_names = PROTECT(GET_NAMES(df));
 		vector<RType> rtypes;
 
 		for (idx_t col_idx = 0; col_idx < (idx_t)Rf_length(df); col_idx++) {
@@ -807,10 +808,12 @@ struct DataFrameScanFunction : public TableFunction {
 				duckdb_col_type = LogicalType::DATE;
 				break;
 			default:
+				UNPROTECT(1); // df_names
 				Rf_error("Unsupported column type for scan");
 			}
 			return_types.push_back(duckdb_col_type);
 		}
+		UNPROTECT(1); // df_names
 
 		auto row_count = Rf_length(VECTOR_ELT(df, 0));
 		return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
