@@ -55,7 +55,7 @@ static string indexing_script(string input_schema, string input_table, string in
                 FROM %input_schema%.%input_table%
             ) AS sq
             WHERE
-                term != ''
+                term != '' AND term NOT NULL
         );
 
         ALTER TABLE %fts_schema%.docs ADD len INT;
