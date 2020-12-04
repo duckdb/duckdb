@@ -8,7 +8,7 @@ endif()
 
 add_extension_definitions()
 
-target_link_libraries(duckdb_rest_server duckdb_static Threads::Threads
-                      ${LINK_EXTRA})
+target_link_libraries(duckdb_rest_server duckdb_static ${LINK_EXTRA})
+link_threads(duckdb_rest_server)
 
 link_extension_libraries(duckdb_rest_server)
