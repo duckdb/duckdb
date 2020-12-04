@@ -1,5 +1,5 @@
 
-if(!${DISABLE_THREADS})
+if(${DISABLE_THREADS})
     add_definitions(-DDUCKDB_NO_THREADS)
 endif()
 
