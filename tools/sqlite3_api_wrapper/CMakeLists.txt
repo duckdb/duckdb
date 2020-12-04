@@ -6,15 +6,17 @@ add_definitions(-DSQLITE_SHELL_IS_UTF8)
 
 add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp
                                               ${ALL_OBJECT_FILES})
-target_link_libraries(sqlite3_api_wrapper_static duckdb_static Threads::Threads)
+target_link_libraries(sqlite3_api_wrapper_static duckdb_static)
+link_threads(sqlite3_api_wrapper_static)
 
 link_extension_libraries(sqlite3_api_wrapper_static)
 
 if(NOT WIN32)
   add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp
                                       ${ALL_OBJECT_FILES})
-  target_link_libraries(sqlite3_api_wrapper duckdb Threads::Threads
+  target_link_libraries(sqlite3_api_wrapper duckdb
                       ${DUCKDB_EXTRA_LINK_FLAGS})
+  link_threads(sqlite3_api_wrapper)
 
   link_extension_libraries(sqlite3_api_wrapper)
 

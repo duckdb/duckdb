@@ -10,7 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/thread.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
 
@@ -20,6 +19,8 @@ struct ConcurrentQueue;
 struct QueueProducerToken;
 class ClientContext;
 class TaskScheduler;
+
+struct SchedulerThread;
 
 struct ProducerToken {
 	ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token);
@@ -59,7 +60,7 @@ private:
 	//! The task queue
 	unique_ptr<ConcurrentQueue> queue;
 	//! The active background threads of the task scheduler
-	vector<unique_ptr<thread>> threads;
+	vector<unique_ptr<SchedulerThread>> threads;
 	//! Markers used by the various threads, if the markers are set to "false" the thread execution is stopped
 	vector<unique_ptr<bool>> markers;
 };

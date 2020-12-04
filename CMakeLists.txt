@@ -157,6 +157,7 @@ option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
+option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(
   ASSERT_EXCEPTION
   "Throw an exception on an assert failing, instead of triggering a sigabort"
@@ -372,6 +373,10 @@ function(link_extension_libraries LIBRARY)
   if(${BUILD_TPCH_EXTENSION})
    target_link_libraries(${LIBRARY} tpch_extension)
   endif()
+endfunction()
+
+function(link_threads LIBRARY)
+  target_link_libraries(${LIBRARY} Threads::Threads)
 endfunction()
 
 add_subdirectory(extension)
