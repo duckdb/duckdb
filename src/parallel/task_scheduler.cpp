@@ -49,7 +49,9 @@ TaskScheduler::TaskScheduler() : queue(make_unique<ConcurrentQueue>()) {
 }
 
 TaskScheduler::~TaskScheduler() {
+#ifndef DUCKDB_NO_THREADS
 	SetThreads(1);
+#endif
 }
 
 TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
@@ -90,19 +92,24 @@ void TaskScheduler::ExecuteForever(bool *marker) {
 	}
 }
 
+#ifndef DUCKDB_NO_THREADS
 static void ThreadExecuteTasks(TaskScheduler *scheduler, bool *marker) {
 	scheduler->ExecuteForever(marker);
 }
+#endif
 
 int32_t TaskScheduler::NumberOfThreads() {
 	return threads.size() + 1;
 }
 
 void TaskScheduler::SetThreads(int32_t n) {
-#ifndef DUCKDB_NO_THREADS
 	if (n < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
 	}
+	if (threads.size() == n - 1) {
+		return;
+	}
+#ifndef DUCKDB_NO_THREADS
 	idx_t new_thread_count = n - 1;
 	if (threads.size() < new_thread_count) {
 		// we are increasing the number of threads: launch them and run tasks on them
