@@ -10,7 +10,16 @@ target_link_libraries(sqlite3_api_wrapper_static duckdb_static Threads::Threads)
 
 link_extension_libraries(sqlite3_api_wrapper_static)
 
-include_directories(../../third_party/catch)
+if(NOT WIN32)
+  add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp
+                                      ${ALL_OBJECT_FILES})
+  target_link_libraries(sqlite3_api_wrapper duckdb Threads::Threads
+                      ${DUCKDB_EXTRA_LINK_FLAGS})
 
-add_executable(test_sqlite3_api_wrapper test_sqlite3_api_wrapper.cpp)
-target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper_static)
+  link_extension_libraries(sqlite3_api_wrapper)
+
+  include_directories(../../third_party/catch)
+
+  add_executable(test_sqlite3_api_wrapper test_sqlite3_api_wrapper.cpp)
+  target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper)
+endif()
