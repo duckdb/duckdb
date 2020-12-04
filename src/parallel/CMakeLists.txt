@@ -1,3 +1,8 @@
+
+if(!${DISABLE_THREADS})
+    add_definitions(-DDUCKDB_NO_THREADS)
+endif()
+
 add_library_unity(duckdb_parallel
                   OBJECT
                   executor.cpp

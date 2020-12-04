@@ -7,9 +7,21 @@
 #include "concurrentqueue.h"
 #include "lightweightsemaphore.h"
 
+#ifndef DUCKDB_NO_THREADS
+#include "duckdb/common/thread.hpp"
+#endif
+
 using namespace std;
 
 namespace duckdb {
+
+struct SchedulerThread {
+#ifndef DUCKDB_NO_THREADS
+	SchedulerThread(unique_ptr<thread> thread) : thread(move(thread)) {}
+
+	unique_ptr<thread> thread;
+#endif
+};
 
 typedef moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
 typedef moodycamel::LightweightSemaphore lightweight_semaphore_t;
@@ -87,6 +99,7 @@ int32_t TaskScheduler::NumberOfThreads() {
 }
 
 void TaskScheduler::SetThreads(int32_t n) {
+#ifndef DUCKDB_NO_THREADS
 	if (n < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
 	}
@@ -98,8 +111,9 @@ void TaskScheduler::SetThreads(int32_t n) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<bool>(new bool(true));
 			auto worker_thread = make_unique<thread>(ThreadExecuteTasks, this, marker.get());
+			auto thread_wrapper = make_unique<SchedulerThread>(move(worker_thread));
 
-			threads.push_back(move(worker_thread));
+			threads.push_back(move(thread_wrapper));
 			markers.push_back(move(marker));
 		}
 	} else if (threads.size() > new_thread_count) {
@@ -109,12 +123,15 @@ void TaskScheduler::SetThreads(int32_t n) {
 		}
 		// now join the threads to ensure they are fully stopped before erasing them
 		for (idx_t i = new_thread_count; i < threads.size(); i++) {
-			threads[i]->join();
+			threads[i]->thread->join();
 		}
 		// erase the threads/markers
 		threads.resize(new_thread_count);
 		markers.resize(new_thread_count);
 	}
+#else
+	throw NotImplementedException("DuckDB was compiled without threads! Setting threads is not allowed.");
+#endif
 }
 
 } // namespace duckdb
