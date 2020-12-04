@@ -4,11 +4,12 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
+#ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
 #include "lightweightsemaphore.h"
-
-#ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
+#else
+#include <queue>
 #endif
 
 using namespace std;
@@ -23,20 +24,67 @@ struct SchedulerThread {
 #endif
 };
 
+#ifndef DUCKDB_NO_THREADS
 typedef moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
 typedef moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
 	concurrent_queue_t q;
 	lightweight_semaphore_t semaphore;
+
+	void enqueue(ProducerToken &token, unique_ptr<Task> task);
+	bool dequeue_from_producer(ProducerToken &token, unique_ptr<Task> &task);
 };
 
 struct QueueProducerToken {
-	QueueProducerToken(concurrent_queue_t &q) : queue_token(q) {
+	QueueProducerToken(ConcurrentQueue &queue) : queue_token(queue.q) {
 	}
 
 	moodycamel::ProducerToken queue_token;
 };
+
+void ConcurrentQueue::enqueue(ProducerToken &token, unique_ptr<Task> task) {
+	lock_guard<mutex> producer_lock(token.producer_lock);
+	if (q.enqueue(token.token->queue_token, move(task))) {
+		semaphore.signal();
+	} else {
+		throw InternalException("Could not schedule task!");
+	}
+}
+
+bool ConcurrentQueue::dequeue_from_producer(ProducerToken &token, unique_ptr<Task> &task) {
+	lock_guard<mutex> producer_lock(token.producer_lock);
+	return q.try_dequeue_from_producer(token.token->queue_token, task);
+}
+
+#else
+struct ConcurrentQueue {
+	std::queue q;
+	mutex qlock;
+
+	void enqueue(ProducerToken &token, unique_ptr<Task> task);
+	bool dequeue_from_producer(ProducerToken &token, unique_ptr<Task> &task);
+};
+
+void ConcurrentQueue::enqueue(ProducerToken &token, unique_ptr<Task> task) {
+	lock_guard<mutex> lock(qlock);
+	q.enqueue(move(task));
+}
+
+bool ConcurrentQueue::dequeue_from_producer(ProducerToken &token, unique_ptr<Task> &task) {
+	lock_guard<mutex> lock(qlock);
+	if (q.empty()) {
+		return false;
+	}
+	task = q.dequeue();
+	return true;
+}
+
+struct QueueProducerToken {
+	QueueProducerToken(ConcurrentQueue &queue) {
+	}
+};
+#endif
 
 ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token)
     : scheduler(scheduler), token(move(token)) {
@@ -59,27 +107,21 @@ TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
 }
 
 unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
-	auto token = make_unique<QueueProducerToken>(queue->q);
+	auto token = make_unique<QueueProducerToken>(*queue);
 	return make_unique<ProducerToken>(*this, move(token));
 }
 
 void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
-
 	// Enqueue a task for the given producer token and signal any sleeping threads
-	if (queue->q.enqueue(token.token->queue_token, move(task))) {
-		queue->semaphore.signal();
-	} else {
-		throw InternalException("Could not schedule task!");
-	}
+	queue->enqueue(token, move(task));
 }
 
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
-	return queue->q.try_dequeue_from_producer(token.token->queue_token, task);
+	return queue->dequeue_from_producer(token, task);
 }
 
 void TaskScheduler::ExecuteForever(bool *marker) {
+#ifndef DUCKDB_NO_THREADS
 	unique_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
@@ -90,6 +132,9 @@ void TaskScheduler::ExecuteForever(bool *marker) {
 			task.reset();
 		}
 	}
+#else
+	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
+#endif
 }
 
 #ifndef DUCKDB_NO_THREADS
