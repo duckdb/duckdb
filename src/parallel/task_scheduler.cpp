@@ -106,7 +106,7 @@ void TaskScheduler::SetThreads(int32_t n) {
 	if (n < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
 	}
-	if (threads.size() == n - 1) {
+	if (threads.size() == idx_t(n - 1)) {
 		return;
 	}
 #ifndef DUCKDB_NO_THREADS
