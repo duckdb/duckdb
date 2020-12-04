@@ -156,6 +156,7 @@ option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
+option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(
   ASSERT_EXCEPTION
   "Throw an exception on an assert failing, instead of triggering a sigabort"
