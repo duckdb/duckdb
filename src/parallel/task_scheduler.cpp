@@ -59,7 +59,7 @@ bool ConcurrentQueue::dequeue_from_producer(ProducerToken &token, unique_ptr<Tas
 
 #else
 struct ConcurrentQueue {
-	std::queue q;
+	std::queue<std::unique_ptr<Task>> q;
 	mutex qlock;
 
 	void enqueue(ProducerToken &token, unique_ptr<Task> task);
@@ -68,7 +68,7 @@ struct ConcurrentQueue {
 
 void ConcurrentQueue::enqueue(ProducerToken &token, unique_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
-	q.enqueue(move(task));
+	q.push(move(task));
 }
 
 bool ConcurrentQueue::dequeue_from_producer(ProducerToken &token, unique_ptr<Task> &task) {
@@ -76,7 +76,8 @@ bool ConcurrentQueue::dequeue_from_producer(ProducerToken &token, unique_ptr<Tas
 	if (q.empty()) {
 		return false;
 	}
-	task = q.dequeue();
+	task = move(q.front());
+	q.pop();
 	return true;
 }
 
