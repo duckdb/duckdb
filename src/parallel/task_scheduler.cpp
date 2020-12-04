@@ -17,9 +17,9 @@ namespace duckdb {
 
 struct SchedulerThread {
 #ifndef DUCKDB_NO_THREADS
-	SchedulerThread(unique_ptr<thread> thread) : thread(move(thread)) {}
+	SchedulerThread(unique_ptr<thread> thread_p) : thread_(move(thread_p)) {}
 
-	unique_ptr<thread> thread;
+	unique_ptr<thread> thread_;
 #endif
 };
 
@@ -123,7 +123,7 @@ void TaskScheduler::SetThreads(int32_t n) {
 		}
 		// now join the threads to ensure they are fully stopped before erasing them
 		for (idx_t i = new_thread_count; i < threads.size(); i++) {
-			threads[i]->thread->join();
+			threads[i]->thread_->join();
 		}
 		// erase the threads/markers
 		threads.resize(new_thread_count);
