@@ -1,6 +1,9 @@
 # name: test/sql/sample/test_sample.test
 # description: Test SAMPLE keyword
-# group: [order]
+# group: [sample]
+
+statement ok
+PRAGMA enable_verification;
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
