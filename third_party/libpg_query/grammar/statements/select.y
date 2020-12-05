@@ -154,7 +154,7 @@ select_clause:
 simple_select:
 			SELECT opt_all_clause opt_target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause
+			group_clause having_clause window_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->targetList = $3;
@@ -164,11 +164,12 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
+					n->sampleClause = $10;
 					$$ = (PGNode *)n;
 				}
 			| SELECT distinct_clause target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause
+			group_clause having_clause window_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->distinctClause = $2;
@@ -179,6 +180,7 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
+					n->sampleClause = $10;
 					$$ = (PGNode *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -448,6 +450,14 @@ offset_clause:
 			/* SQL:2008 syntax */
 			| OFFSET select_fetch_first_value row_or_rows
 				{ $$ = $2; }
+		;
+
+
+sample_clause:
+			SAMPLE a_expr
+				{ $$ = $2; }
+			| /* EMPTY */
+				{ $$ = NULL; }
 		;
 
 select_limit_value:

@@ -39,6 +39,8 @@ public:
 	unique_ptr<ParsedExpression> having;
 	//! Aggregate handling during binding
 	AggregateHandling aggregate_handling;
+	//! The SAMPLE clause
+	unique_ptr<ParsedExpression> sample;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return select_list;

@@ -31,6 +31,7 @@ enum class PhysicalOperatorType : uint8_t {
 	FILTER,
 	PROJECTION,
 	COPY_TO_FILE,
+	PHYSICAL_SAMPLE,
 	// -----------------------------
 	// Scans
 	// -----------------------------

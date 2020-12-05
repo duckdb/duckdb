@@ -35,6 +35,8 @@ public:
 	vector<unique_ptr<Expression>> groups;
 	//! HAVING clause
 	unique_ptr<Expression> having;
+	//! SAMPLE clause
+	int64_t sample_count;
 
 	//! The amount of columns in the final result
 	idx_t column_count;

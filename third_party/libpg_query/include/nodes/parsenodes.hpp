@@ -1219,6 +1219,7 @@ typedef struct PGSelectStmt {
 	PGList *sortClause;       /* sort clause (a list of SortBy's) */
 	PGNode *limitOffset;      /* # of result tuples to skip */
 	PGNode *limitCount;       /* # of result tuples to return */
+	PGNode *sampleClause;      /* sample size (if any) */
 	PGList *lockingClause;    /* FOR UPDATE (list of LockingClause's) */
 	PGWithClause *withClause; /* WITH clause */
 

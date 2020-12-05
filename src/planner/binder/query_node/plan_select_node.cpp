@@ -20,6 +20,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	root = CreatePlan(*statement.from_table);
 	D_ASSERT(root);
 
+	// plan the sample clause
+	if (statement.sample_count >= 0) {
+		root = make_unique<LogicalSample>(statement.sample_count, move(root));
+	}
+
 	if (statement.where_clause) {
 		root = PlanFilter(move(statement.where_clause), move(root));
 	}

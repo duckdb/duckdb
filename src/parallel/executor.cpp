@@ -91,6 +91,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
 		case PhysicalOperatorType::WINDOW:
 		case PhysicalOperatorType::ORDER_BY:
+		case PhysicalOperatorType::PHYSICAL_SAMPLE:
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
 			// single operator, set as child

@@ -70,6 +70,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		TransformGroupBy(stmt->groupClause, result->groups);
 		// having
 		result->having = TransformExpression(stmt->havingClause);
+		// sample
+		result->sample = TransformExpression(stmt->sampleClause);
 		break;
 	}
 	case PG_SETOP_UNION:
@@ -100,6 +102,9 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		}
 		if (select_distinct) {
 			result->modifiers.push_back(make_unique<DistinctModifier>());
+		}
+		if (stmt->sampleClause) {
+			throw ParserException("SAMPLE clause is only allowed in regular SELECT statements");
 		}
 		break;
 	}

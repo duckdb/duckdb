@@ -188,6 +188,16 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first bind the FROM table statement
 	result->from_table = Bind(*statement.from_table);
 
+	// bind the sample clause
+	if (statement.sample) {
+		result->sample_count = BindConstant(*this, context, "SAMPLE", statement.sample);
+		if (result->sample_count < 0) {
+			throw ParserException("SAMPLE must be bigger than or equal to 0");
+		}
+	} else {
+		result->sample_count = -1;
+	}
+
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;
 	for (auto &select_element : statement.select_list) {

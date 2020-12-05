@@ -36,6 +36,7 @@ void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	switch (op_type) {
 	case PhysicalOperatorType::ORDER_BY:
+	case PhysicalOperatorType::PHYSICAL_SAMPLE:
 	case PhysicalOperatorType::LIMIT:
 	case PhysicalOperatorType::TOP_N:
 	case PhysicalOperatorType::AGGREGATE:

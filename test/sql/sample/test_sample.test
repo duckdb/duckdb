@@ -1,0 +1,74 @@
+# name: test/sql/sample/test_sample.test
+# description: Test SAMPLE keyword
+# group: [order]
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
+
+# test various limits using count
+query I
+SELECT COUNT(*) FROM test SAMPLE 0
+----
+0
+
+query I
+SELECT COUNT(*) FROM test SAMPLE 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM test SAMPLE 3
+----
+3
+
+# sample size exceeds input
+query I
+SELECT COUNT(*) FROM test SAMPLE 10
+----
+3
+
+query II
+SELECT * FROM test SAMPLE 10 ORDER BY a, b
+----
+11	22
+12	21
+13	22
+
+# test sample with multiple columns
+# we insert the same data in the entire column
+statement ok
+CREATE TABLE test2 AS SELECT i a, i::VARCHAR b, CONCAT(i, ' - ', i) c FROM repeat(1, 1000) tbl(i)
+
+query III
+SELECT a, b, c FROM test2 SAMPLE 3;
+----
+1	1	1 - 1
+1	1	1 - 1
+1	1	1 - 1
+
+# sample in scalar subqueries
+query I
+SELECT (SELECT COUNT(*) FROM test SAMPLE 1);
+----
+1
+
+query I
+SELECT (SELECT COUNT(*) + tbl.i FROM test SAMPLE 1) FROM range(3) tbl(i) ORDER BY i;
+----
+1
+2
+3
+
+# negative sample size not allowed
+statement error
+SELECT COUNT(*) FROM test SAMPLE -1
+
+# must be a number
+statement error
+SELECT COUNT(*) FROM test SAMPLE 'hello'
+
+statement error
+SELECT COUNT(*) FROM test SAMPLE DATE '1992-01-01'
