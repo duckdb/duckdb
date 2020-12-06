@@ -43,8 +43,12 @@ void ReservoirSample::SetNextEntry() {
 	// since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
 	min_threshold = T_w;
 	min_entry = min_key.second;
-	next_index = idx_t(round(X_w));
+	next_index = MaxValue<idx_t>(1, idx_t(round(X_w)));
 	current_count = 0;
+}
+
+unique_ptr<DataChunk> ReservoirSample::GetChunk() {
+	return reservoir.Fetch();
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {

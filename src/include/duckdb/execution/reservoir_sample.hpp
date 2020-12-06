@@ -35,6 +35,8 @@ struct RandomEngine {
 
 class BlockingSample {
 public:
+	virtual ~BlockingSample(){}
+
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
 
@@ -47,7 +49,7 @@ public:
 class ReservoirSample : public BlockingSample {
 public:
 	ReservoirSample(idx_t sample_count) :
-		sample_count(sample_count), scan_position(0) {}
+		sample_count(sample_count) {}
 
 
 	//! Add a chunk of data to the sample
@@ -83,8 +85,6 @@ private:
 	idx_t current_count;
 	//! The size of the reservoir sample
 	idx_t sample_count;
-	//! The position in the scan of this sample
-	idx_t scan_position;
 };
 
 

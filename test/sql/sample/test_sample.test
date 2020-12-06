@@ -75,3 +75,13 @@ SELECT COUNT(*) FROM test SAMPLE 'hello'
 
 statement error
 SELECT COUNT(*) FROM test SAMPLE DATE '1992-01-01'
+
+# verify that it is a sample without replacement (i.e. the same row will never occur more than once in the result)
+loop i 0 10
+
+query I
+select count(distinct i) from range(10) tbl(i) sample 5;
+----
+5
+
+endloop
