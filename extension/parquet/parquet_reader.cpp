@@ -1,5 +1,7 @@
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
+#include "thrift_tools.hpp"
+
 #include "parquet_file_metadata_cache.hpp"
 
 #include "duckdb/function/table_function.hpp"
@@ -25,8 +27,7 @@
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
-#include "thrift/protocol/TCompactProtocol.h"
-#include "thrift/transport/TBufferTransports.h"
+
 #include "snappy.h"
 #include "miniz_wrapper.hpp"
 
@@ -48,9 +49,7 @@ const uint32_t RleBpDecoder::BITPACK_MASKS[] = {
 const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 
 using namespace parquet;
-using namespace apache::thrift;
-using namespace apache::thrift::protocol;
-using namespace apache::thrift::transport;
+
 
 using parquet::format::ColumnChunk;
 using parquet::format::CompressionCodec;
@@ -65,37 +64,12 @@ using parquet::format::SchemaElement;
 using parquet::format::Statistics;
 using parquet::format::Type;
 
-static TCompactProtocolFactoryT<TMemoryBuffer> tproto_factory;
 
-template <class T> static void thrift_unpack(const uint8_t *buf, uint32_t *len, T *deserialized_msg) {
-	shared_ptr<TMemoryBuffer> tmem_transport(new TMemoryBuffer(const_cast<uint8_t *>(buf), *len));
-	shared_ptr<TProtocol> tproto = tproto_factory.getProtocol(tmem_transport);
-	try {
-		deserialized_msg->read(tproto.get());
-	} catch (std::exception &e) {
-		std::stringstream ss;
-		ss << "Couldn't deserialize thrift: " << e.what() << "\n";
-		throw std::runtime_error(ss.str());
-	}
-	uint32_t bytes_left = tmem_transport->available_read();
-	*len = *len - bytes_left;
-}
-
-static unique_ptr<FileMetaData> read_metadata(duckdb::FileSystem &fs, duckdb::FileHandle *handle, uint32_t footer_len,
-                                              uint64_t file_size) {
-	auto metadata = make_unique<FileMetaData>();
-	// read footer into buffer and de-thrift
-	ResizeableBuffer buf;
-	buf.resize(footer_len);
-	fs.Read(*handle, buf.ptr, footer_len, file_size - (footer_len + 8));
-	thrift_unpack((const uint8_t *)buf.ptr, &footer_len, metadata.get());
-	return metadata;
-}
-
-static shared_ptr<ParquetFileMetadataCache> load_metadata(duckdb::FileSystem &fs, duckdb::FileHandle *handle,
-                                                          uint32_t footer_len, uint64_t file_size) {
+static shared_ptr<ParquetFileMetadataCache> load_metadata(apache::thrift::protocol::TProtocol& proto, idx_t read_pos) {
 	auto current_time = chrono::system_clock::to_time_t(chrono::system_clock::now());
-	return make_shared<ParquetFileMetadataCache>(read_metadata(fs, handle, footer_len, file_size), current_time);
+    auto metadata = make_unique<FileMetaData>();
+    thrift_unpack_file(proto, read_pos, metadata.get());
+	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
 }
 
 ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types,
@@ -135,15 +109,22 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		throw FormatException("Footer length %d is too big for the file of size %d", footer_len, file_size);
 	}
 
+
+	// centrally create thrift transport/protocol to reduce allocation
+    shared_ptr<DuckdbFileTransport> trans(new DuckdbFileTransport(fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ)));
+	thrift_file_proto = make_unique<apache::thrift::protocol::TCompactProtocolT<DuckdbFileTransport>>(trans);
+
+
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
+	auto metadata_pos = file_size - (footer_len + 8);
 	if (!context.db.config.object_cache_enable) {
-		metadata = load_metadata(fs, handle.get(), footer_len, file_size);
+		metadata = load_metadata(*thrift_file_proto, metadata_pos);
 	} else {
 		metadata = dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
 		if (!metadata || (fs.GetLastModifiedTime(*handle) + 10 >= metadata->read_time)) {
-			metadata = load_metadata(fs, handle.get(), footer_len, file_size);
+			metadata = load_metadata(*thrift_file_proto, metadata_pos);
 			context.db.object_cache->Put(file_name, dynamic_pointer_cast<ObjectCacheEntry>(metadata));
 		}
 	}
@@ -282,34 +263,6 @@ timestamp_t arrow_timestamp_ms_to_timestamp(const int64_t &raw_ts) {
 
 // statistics handling
 
-template <Value (*FUNC)(const_data_ptr_t input)>
-static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType &type,
-                                                              const Statistics &parquet_stats) {
-	auto stats = make_unique<NumericStatistics>(type);
-
-	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
-	// `max_value`. All are optional. such elegance.
-	if (parquet_stats.__isset.min) {
-		stats->min = FUNC((const_data_ptr_t)parquet_stats.min.data());
-	} else if (parquet_stats.__isset.min_value) {
-		stats->min = FUNC((const_data_ptr_t)parquet_stats.min_value.data());
-	} else {
-		stats->min.is_null = true;
-	}
-	if (parquet_stats.__isset.max) {
-		stats->max = FUNC((const_data_ptr_t)parquet_stats.max.data());
-	} else if (parquet_stats.__isset.max_value) {
-		stats->max = FUNC((const_data_ptr_t)parquet_stats.max_value.data());
-	} else {
-		stats->max.is_null = true;
-	}
-	// GCC 4.x insists on a move() here
-	return move(stats);
-}
-
-template <class T> static Value transform_statistics_plain(const_data_ptr_t input) {
-	return Value(Load<T>(input));
-}
 
 static Value transform_statistics_timestamp_ms(const_data_ptr_t input) {
 	return Value::TIMESTAMP(arrow_timestamp_ms_to_timestamp(Load<int64_t>(input)));
@@ -834,6 +787,24 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 		}
 	}
 
+    switch (type.id()) {
+    case LogicalTypeId::INTEGER:
+        state.column_readers.push_back(make_unique<NumericColumnReader<int32_t>>(type, chunk, *thrift_file_proto));
+        break;
+    case LogicalTypeId::BIGINT:
+        state.column_readers.push_back(make_unique<NumericColumnReader<int64_t>>(type, chunk, *thrift_file_proto));
+        break;
+    case LogicalTypeId::FLOAT:
+        state.column_readers.push_back(make_unique<NumericColumnReader<float>>(type, chunk, *thrift_file_proto));
+        break;
+    case LogicalTypeId::DOUBLE:
+        state.column_readers.push_back(make_unique<NumericColumnReader<double>>(type, chunk, *thrift_file_proto));
+        break;
+
+    default:
+        break; // TODO
+    }
+
 	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
 	auto chunk_start = chunk.meta_data.data_page_offset;
 	if (chunk.meta_data.__isset.dictionary_page_offset && chunk.meta_data.dictionary_page_offset >= 4) {
@@ -842,7 +813,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 	}
 	auto chunk_len = chunk.meta_data.total_compressed_size;
 
-	auto &fs = FileSystem::GetFileSystem(context);
+    auto &fs = FileSystem::GetFileSystem(context);
+
 	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 
 	state.column_data[col_idx]->has_nulls =
@@ -872,7 +844,8 @@ void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> c
 	state.filters = filters;
 	for (idx_t i = 0; i < return_types.size(); i++) {
 		state.column_data.push_back(make_unique<ParquetReaderColumnData>());
-	}
+    }
+	state.column_readers.resize(return_types.size());
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 }
 

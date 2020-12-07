@@ -13,7 +13,68 @@ public:
     virtual const dwio::common::ColumnSelector& getColumnSelector() const = 0;
 
     // Get row reader options
-    virtual const dwio::common::RowReaderOptions& getRowReaderOptions() const = 0;
+    virtual const dwio::common::RowReaderOptclass StripeStreams {
+        public:
+        virtual ~StripeStreams() = default;
+
+        /**
+         * get column selector for current stripe reading session
+         * @return column selector will hold column projection info
+         */
+        virtual const dwio::common::ColumnSelector& getColumnSelector() const = 0;
+
+        // Get row reader options
+        virtual const dwio::common::RowReaderOptions& getRowReaderOptions() const = 0;
+
+        /**
+         * Get the encoding for the given column for this stripe.
+         */
+        virtual const proto::ColumnEncoding& getEncoding(
+        const EncodingKey&) const = 0;
+
+        /**
+         * Get the stream for the given column/kind in this stripe.
+         * @param streamId stream identifier object
+         * @param throwIfNotFound fail if a stream is required and not found
+         * @return the new stream
+         */
+        virtual std::unique_ptr<SeekableInputStream> getStream(
+        const StreamIdentifier& si,
+        bool throwIfNotFound) const = 0;
+
+        /**
+         * visit all streams of given node and execute visitor logic
+         * return number of streams visited
+         */
+        virtual uint32_t visitStreamsOfNode(
+        uint32_t node,
+        std::function<void(const StreamInformation&)> visitor) const = 0;
+
+        /**
+         * Get the value of useVInts for the given column in this stripe.
+         * Defaults to true.
+         * @param streamId stream identifier
+         */
+        virtual bool getUseVInts(const StreamIdentifier& streamId) const = 0;
+
+        /**
+         * Get the memory pool for this reader.
+         */
+        virtual memory::MemoryPool& getMemoryPool() const = 0;
+
+        /**
+         * Get the RowGroupIndex.
+         * @return a vector of RowIndex belonging to the stripe
+         */
+        virtual std::unique_ptr<proto::RowIndex> getRowGroupIndex(
+        const StreamIdentifier& si) const = 0;
+
+        /**
+         * Get stride index provider which is used by string dictionary reader to
+         * get the row index stride index where next() happens
+         */
+        virtual const StrideIndexProvider& getStrideIndexProvider() const = 0;
+    }ions& getRowReaderOptions() const = 0;
 
     /**
      * Get the encoding for the given column for this stripe.
@@ -90,39 +151,7 @@ public:
         VectorPtr& result,
         const uint64_t* nulls = nullptr) = 0;
 
-    /**
-     * Create a reader for the given stripe.
-     */
-    static std::unique_ptr<ColumnReader> build(
-        const std::shared_ptr<const dwio::common::TypeWithId>& requestedType,
-        const std::shared_ptr<const dwio::common::TypeWithId>& dataType,
-        StripeStreams& stripe,
-        uint32_t sequence = 0);
 };
-
-class ColumnReaderFactory {
-public:
-    virtual ~ColumnReaderFactory() = default;
-    virtual std::unique_ptr<ColumnReader> build(
-        const std::shared_ptr<const dwio::common::TypeWithId>& requestedType,
-        const std::shared_ptr<const dwio::common::TypeWithId>& dataType,
-        StripeStreams& stripe,
-        uint32_t sequence = 0) {
-        return ColumnReader::build(requestedType, dataType, stripe, sequence);
-    }
-
-    static ColumnReaderFactory* baseFactory();
-};
-
-template <typename T>
-static inline void ensureCapacity(
-    BufferPtr& data,
-    size_t capacity,
-    f4d::memory::MemoryPool* pool) {
-    if (!data || data->capacity() < BaseVector::byteSize<T>(capacity)) {
-        data = AlignedBuffer::allocate<T>(capacity, pool);
-    }
-}
 
 
 class SelectiveColumnReader : public ColumnReader {
