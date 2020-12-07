@@ -819,12 +819,21 @@ jobs:
 
     - name: Build
       run: |
+        if [[ -z "${GITHUB_HEAD_REF}" ]]; then
+          export GITHUB_HEAD_REF=master
+        fi
+        echo $GITHUB_ACTOR
+        echo $GITHUB_WORKSPACE
         echo $GITHUB_HEAD_REF
         echo $GITHUB_BASE_REF
         echo $GITHUB_REF
         echo $GITHUB_SHA
         echo $GITHUB_REPOSITORY
-        ls iogjrioajerwgiojwagiowe
+        wget https://github.com/$GITHUB_ACTOR/duckdb/archive/$GITHUB_HEAD_REF.zip
+        unzip $GITHUB_HEAD_REF.zip
+        cd duckdb-$GITHUB_HEAD_REF/tools/pythonpkg
+        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+        python3 setup.py install --user
 
   linux-nodejs:
     name: node.js Linux
