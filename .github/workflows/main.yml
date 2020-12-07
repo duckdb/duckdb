@@ -632,14 +632,14 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: pip install cibuildwheel twine
+      run: pip install cibuildwheel twine numpy
 
     - name: Build
       run: |
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        (cd duckdb_tarball && python3 setup.py install --user)
+        (cp -r duckdb_tarball ../../.. && cd ../../../duckdb_tarball && python3 setup.py install --user)
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
     - name: Deploy
