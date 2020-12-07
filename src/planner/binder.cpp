@@ -4,6 +4,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/operator/logical_sample.hpp"
 
 #include <algorithm>
 
@@ -108,47 +109,71 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 	}
 }
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
+	unique_ptr<BoundTableRef> result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
-		return Bind((BaseTableRef &)ref);
+		result = Bind((BaseTableRef &)ref);
+		break;
 	case TableReferenceType::CROSS_PRODUCT:
-		return Bind((CrossProductRef &)ref);
+		result = Bind((CrossProductRef &)ref);
+		break;
 	case TableReferenceType::JOIN:
-		return Bind((JoinRef &)ref);
+		result = Bind((JoinRef &)ref);
+		break;
 	case TableReferenceType::SUBQUERY:
-		return Bind((SubqueryRef &)ref);
+		result = Bind((SubqueryRef &)ref);
+		break;
 	case TableReferenceType::EMPTY:
-		return Bind((EmptyTableRef &)ref);
+		result = Bind((EmptyTableRef &)ref);
+		break;
 	case TableReferenceType::TABLE_FUNCTION:
-		return Bind((TableFunctionRef &)ref);
+		result = Bind((TableFunctionRef &)ref);
+		break;
 	case TableReferenceType::EXPRESSION_LIST:
-		return Bind((ExpressionListRef &)ref);
+		result = Bind((ExpressionListRef &)ref);
+		break;
 	default:
 		throw Exception("Unknown table ref type");
 	}
+	result->sample = move(ref.sample);
+	return result;
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
+	unique_ptr<LogicalOperator> root;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
-		return CreatePlan((BoundBaseTableRef &)ref);
+		root = CreatePlan((BoundBaseTableRef &)ref);
+		break;
 	case TableReferenceType::SUBQUERY:
-		return CreatePlan((BoundSubqueryRef &)ref);
+		root = CreatePlan((BoundSubqueryRef &)ref);
+		break;
 	case TableReferenceType::JOIN:
-		return CreatePlan((BoundJoinRef &)ref);
+		root = CreatePlan((BoundJoinRef &)ref);
+		break;
 	case TableReferenceType::CROSS_PRODUCT:
-		return CreatePlan((BoundCrossProductRef &)ref);
+		root = CreatePlan((BoundCrossProductRef &)ref);
+		break;
 	case TableReferenceType::TABLE_FUNCTION:
-		return CreatePlan((BoundTableFunction &)ref);
+		root = CreatePlan((BoundTableFunction &)ref);
+		break;
 	case TableReferenceType::EMPTY:
-		return CreatePlan((BoundEmptyTableRef &)ref);
+		root = CreatePlan((BoundEmptyTableRef &)ref);
+		break;
 	case TableReferenceType::EXPRESSION_LIST:
-		return CreatePlan((BoundExpressionListRef &)ref);
+		root = CreatePlan((BoundExpressionListRef &)ref);
+		break;
 	case TableReferenceType::CTE:
-		return CreatePlan((BoundCTERef &)ref);
+		root = CreatePlan((BoundCTERef &)ref);
+		break;
 	default:
 		throw Exception("Unsupported bound table ref type type");
 	}
+	// plan the sample clause
+	if (ref.sample) {
+		root = make_unique<LogicalSample>(move(ref.sample), move(root));
+	}
+	return root;
 }
 
 void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {

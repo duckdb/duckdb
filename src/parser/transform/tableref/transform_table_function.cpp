@@ -34,6 +34,9 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(PGRangeFunction *root) 
 	result->function = TransformFuncCall(func_call);
 	result->alias = TransformAlias(root->alias, result->column_name_alias);
 	result->query_location = func_call->location;
+	if (root->sample) {
+		result->sample = TransformSampleOptions(root->sample);
+	}
 	return move(result);
 }
 

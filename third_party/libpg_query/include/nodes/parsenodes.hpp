@@ -457,6 +457,7 @@ typedef struct PGRangeSubselect {
 	bool lateral;     /* does it have LATERAL prefix? */
 	PGNode *subquery; /* the untransformed sub-select clause */
 	PGAlias *alias;   /* table alias & optional column aliases */
+	PGNode *sample;   /* sample options (if any) */
 } PGRangeSubselect;
 
 /*
@@ -482,26 +483,8 @@ typedef struct PGRangeFunction {
 	PGAlias *alias;     /* table alias & optional column aliases */
 	PGList *coldeflist; /* list of PGColumnDef nodes to describe result
 								 * of function returning RECORD */
+	PGNode *sample;   /* sample options (if any) */
 } PGRangeFunction;
-
-/*
- * PGRangeTableSample - TABLESAMPLE appearing in a raw FROM clause
- *
- * This node, appearing only in raw parse trees, represents
- *		<relation> TABLESAMPLE <method> (<params>) REPEATABLE (<num>)
- * Currently, the <relation> can only be a PGRangeVar, but we might in future
- * allow PGRangeSubselect and other options.  Note that the PGRangeTableSample
- * is wrapped around the node representing the <relation>, rather than being
- * a subfield of it.
- */
-typedef struct PGRangeTableSample {
-	PGNodeTag type;
-	PGNode *relation;   /* relation to be sampled */
-	PGList *method;     /* sampling method name (possibly qualified) */
-	PGList *args;       /* argument(s) for sampling method */
-	PGNode *repeatable; /* REPEATABLE expression, or NULL if none */
-	int location;       /* method name location, or -1 if unknown */
-} PGRangeTableSample;
 
 /*
  * PGColumnDef - column definition (used in various creates)
@@ -834,18 +817,6 @@ typedef struct PGRangeTblFunction {
 	/* This is set during planning for use by the executor: */
 	PGBitmapset *funcparams; /* PG_PARAM_EXEC PGParam IDs affecting this func */
 } PGRangeTblFunction;
-
-/*
- * PGTableSampleClause - TABLESAMPLE appearing in a transformed FROM clause
- *
- * Unlike PGRangeTableSample, this is a subnode of the relevant RangeTblEntry.
- */
-typedef struct PGTableSampleClause {
-	PGNodeTag type;
-	PGOid tsmhandler;   /* OID of the tablesample handler function */
-	PGList *args;       /* tablesample argument expression(s) */
-	PGExpr *repeatable; /* REPEATABLE expression, or NULL if none */
-} PGTableSampleClause;
 
 /*
  * PGSortGroupClause -

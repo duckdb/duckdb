@@ -36,8 +36,8 @@ unique_ptr<TableRef> BaseTableRef::Copy() {
 
 	copy->schema_name = schema_name;
 	copy->table_name = table_name;
-	copy->alias = alias;
 	copy->column_name_alias = column_name_alias;
+	CopyProperties(*copy);
 
 	return move(copy);
 }

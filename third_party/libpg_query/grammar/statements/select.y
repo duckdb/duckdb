@@ -452,6 +452,9 @@ offset_clause:
 				{ $$ = $2; }
 		;
 
+/*
+ * SAMPLE clause
+ */
 sample_count:
 	FCONST '%'
 		{
@@ -461,7 +464,19 @@ sample_count:
 		{
 			$$ = makeSampleSize(makeInteger($1), true);
 		}
+	| FCONST PERCENT
+		{
+			$$ = makeSampleSize(makeFloat($1), true);
+		}
+	| ICONST PERCENT
+		{
+			$$ = makeSampleSize(makeInteger($1), true);
+		}
 	| ICONST
+		{
+			$$ = makeSampleSize(makeInteger($1), false);
+		}
+	| ICONST ROWS
 		{
 			$$ = makeSampleSize(makeInteger($1), false);
 		}
@@ -482,6 +497,32 @@ sample_clause:
 				}
 			| /* EMPTY */
 				{ $$ = NULL; }
+		;
+
+/*
+ * TABLESAMPLE decoration in a FROM item
+ */
+opt_sample_func:
+			ColId					{ $$ = $1; }
+			| /*EMPTY*/				{ $$ = NULL; }
+		;
+
+tablesample_clause:
+			TABLESAMPLE opt_sample_func '(' sample_count ')' opt_repeatable_clause
+				{
+					$$ = makeSampleOptions($4, $2, $6, @1);
+				}
+		;
+
+opt_tablesample_clause:
+			tablesample_clause			{ $$ = $1; }
+			| /*EMPTY*/					{ $$ = NULL; }
+		;
+
+
+opt_repeatable_clause:
+			REPEATABLE '(' ICONST ')'	{ $$ = $3; }
+			| /*EMPTY*/					{ $$ = -1; }
 		;
 
 select_limit_value:
@@ -679,6 +720,7 @@ from_list:
 table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 				{
 					$1->alias = $2;
+					$1->sample = $3;
 					$$ = (PGNode *) $1;
 				}
 			| func_table func_alias_clause opt_tablesample_clause
@@ -686,6 +728,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					PGRangeFunction *n = (PGRangeFunction *) $1;
 					n->alias = (PGAlias*) linitial($2);
 					n->coldeflist = (PGList*) lsecond($2);
+					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
 			| LATERAL_P func_table func_alias_clause
@@ -702,6 +745,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->lateral = false;
 					n->subquery = $1;
 					n->alias = $2;
+					n->sample = $3;
 					/*
 					 * The SQL spec does not permit a subselect
 					 * (<derived_table>) without an alias clause,
@@ -737,6 +781,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->lateral = true;
 					n->subquery = $2;
 					n->alias = $3;
+					n->sample = NULL;
 					/* same comment as above */
 					if ($3 == NULL)
 					{
@@ -985,32 +1030,6 @@ relation_expr:
  * has, causing the parser to prefer to reduce, in effect assuming that the
  * SET is not an alias.
  */
-/*
- * TABLESAMPLE decoration in a FROM item
- */
-tablesample_clause:
-			TABLESAMPLE func_name '(' expr_list ')' opt_repeatable_clause
-				{
-					PGRangeTableSample *n = makeNode(PGRangeTableSample);
-					/* n->relation will be filled in later */
-					n->method = $2;
-					n->args = $4;
-					n->repeatable = $6;
-					n->location = @2;
-					$$ = (PGNode *) n;
-				}
-		;
-
-opt_tablesample_clause:
-			tablesample_clause	{ $$ = $1; }
-			| /*EMPTY*/					{ $$ = NULL; }
-		;
-
-
-opt_repeatable_clause:
-			REPEATABLE '(' a_expr ')'	{ $$ = (PGNode *) $3; }
-			| /*EMPTY*/					{ $$ = NULL; }
-		;
 
 /*
  * func_table represents a function invocation in a FROM list. It can be
@@ -1031,6 +1050,7 @@ func_table: func_expr_windowless opt_ordinality
 					n->ordinality = $2;
 					n->is_rowsfrom = false;
 					n->functions = list_make1(list_make2($1, NIL));
+					n->sample = NULL;
 					/* alias and coldeflist are set by table_ref production */
 					$$ = (PGNode *) n;
 				}
@@ -1041,6 +1061,7 @@ func_table: func_expr_windowless opt_ordinality
 					n->ordinality = $6;
 					n->is_rowsfrom = true;
 					n->functions = $4;
+					n->sample = NULL;
 					/* alias and coldeflist are set by table_ref production */
 					$$ = (PGNode *) n;
 				}

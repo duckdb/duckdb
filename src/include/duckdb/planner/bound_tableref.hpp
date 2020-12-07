@@ -22,5 +22,7 @@ public:
 
 	//! The type of table reference
 	TableReferenceType type;
+	//! The sample options (if any)
+	unique_ptr<SampleOptions> sample;
 };
 } // namespace duckdb

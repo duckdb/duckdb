@@ -23,6 +23,11 @@ SELECT COUNT(*) FROM test USING SAMPLE 1
 1
 
 query I
+SELECT COUNT(*) FROM test USING SAMPLE 1 ROWS
+----
+1
+
+query I
 SELECT COUNT(*) FROM test USING SAMPLE 3
 ----
 3
@@ -125,6 +130,62 @@ select count(*) from range(100) using sample 10% (reservoir)
 
 endloop
 
-# todo: tablesample
-# create table integers as select i from range(100) tbl(i);
-# select * from integers tablesample system(10);
+# we can also use postgres/sqlserver-style tablesample syntax
+statement ok
+create table integers as select i from range(200) tbl(i);
+
+# default is percentage, which follows postgres syntax rules
+query I
+select count(*) from integers tablesample reservoir(10);
+----
+10
+
+query I
+select count(*) from integers tablesample reservoir(10%);
+----
+20
+
+query I
+select count(*) from integers tablesample reservoir(10 percent);
+----
+20
+
+query I
+select count(*) from integers tablesample reservoir(10 rows);
+----
+10
+
+# we can also use the default sampling method
+query I
+select count(*) from integers tablesample(10 rows);
+----
+10
+
+# we can also use this with table-producing functions
+query I
+select count(*) from range(200) tablesample reservoir(10%);
+----
+20
+
+# and subqueries
+query I
+select count(*) from (select * from range(200)) tbl(i) tablesample reservoir(10%);
+----
+20
+
+# specifying a seed leads to repeatable behavior
+loop i 0 10
+
+query I nosort reservoirseed
+select * from range(100) tablesample reservoir(10 rows) repeatable(250)
+----
+
+query I nosort bernoulliseed
+select * from range(100) tablesample bernoulli(10%) repeatable(250)
+----
+
+query I nosort systemseed
+select * from range(100) tablesample system(10%) repeatable(250)
+----
+
+endloop
