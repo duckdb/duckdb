@@ -161,6 +161,22 @@ select count(*) from integers tablesample(10 rows);
 ----
 10
 
+# we can use our sampling syntax here as well
+query I
+select count(*) from integers tablesample 10;
+----
+10
+
+query I
+select count(*) from integers tablesample 10 rows (reservoir);
+----
+10
+
+query I
+select count(*) from integers tablesample 10 rows (reservoir, 250);
+----
+10
+
 # we can also use this with table-producing functions
 query I
 select count(*) from range(200) tablesample reservoir(10%);
@@ -189,3 +205,13 @@ select * from range(100) tablesample system(10%) repeatable(250)
 ----
 
 endloop
+
+query I
+select count(*) from range(1000) using sample reservoir(0.01%);
+----
+0
+
+query I
+select count(*) from range(1000) using sample reservoir(0.1%);
+----
+1

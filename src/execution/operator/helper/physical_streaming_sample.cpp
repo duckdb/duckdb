@@ -52,21 +52,23 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 
 	// get the next chunk from the child
-	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-	if (state->child_chunk.size() == 0) {
-		return;
-	}
+	do {
+		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		if (state->child_chunk.size() == 0) {
+			return;
+		}
 
-	switch(method) {
-	case SampleMethod::BERNOULLI_SAMPLE:
-		BernoulliSample(state->child_chunk, chunk, state);
-		break;
-	case SampleMethod::SYSTEM_SAMPLE:
-		SystemSample(state->child_chunk, chunk, state);
-		break;
-	default:
-		throw InternalException("Unsupported sample method for streaming sample");
-	}
+		switch(method) {
+		case SampleMethod::BERNOULLI_SAMPLE:
+			BernoulliSample(state->child_chunk, chunk, state);
+			break;
+		case SampleMethod::SYSTEM_SAMPLE:
+			SystemSample(state->child_chunk, chunk, state);
+			break;
+		default:
+			throw InternalException("Unsupported sample method for streaming sample");
+		}
+	} while(chunk.size() == 0);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalStreamingSample::GetOperatorState() {

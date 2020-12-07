@@ -78,7 +78,7 @@
 %type <jexpr>	joined_table
 %type <range>	relation_expr
 
-%type <node>	tablesample_clause opt_tablesample_clause
+%type <node>	tablesample_clause opt_tablesample_clause tablesample_entry
 %type <node>	sample_clause sample_count
 %type <str>	opt_sample_func
 %type <ival>	opt_repeatable_clause

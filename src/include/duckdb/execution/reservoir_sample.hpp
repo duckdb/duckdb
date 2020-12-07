@@ -75,7 +75,7 @@ private:
 
 //! The reservoir sample percentage class maintains a streaming sample of variable size
 class ReservoirSamplePercentage : public BlockingSample {
-	constexpr static idx_t RESERVOIR_THRESHOLD = STANDARD_VECTOR_SIZE * 100;
+	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 public:
 	ReservoirSamplePercentage(double percentage, int64_t seed);
 

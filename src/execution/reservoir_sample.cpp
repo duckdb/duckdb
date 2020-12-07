@@ -4,6 +4,9 @@ namespace duckdb {
 using namespace std;
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
+	if (sample_count == 0) {
+		return;
+	}
 	// Input: A population V of n weighted items
 	// Output: A reservoir R with a size m
 	// 1: The first m items of V are inserted into R
@@ -183,7 +186,7 @@ void ReservoirSamplePercentage::Finalize() {
 	// need to finalize the current sample, if any
 	if (current_count > 0) {
 		// create a new sample
-		idx_t new_sample_size = idx_t(sample_percentage * current_count);
+		idx_t new_sample_size = idx_t(round(sample_percentage * current_count));
 		auto new_sample = make_unique<ReservoirSample>(new_sample_size, random.NextRandomInteger());
 		while(true) {
 			auto chunk = current_sample->GetChunk();
