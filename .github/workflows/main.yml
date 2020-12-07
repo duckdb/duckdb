@@ -607,7 +607,6 @@ jobs:
     - name: Test
       run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
-
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
@@ -632,14 +631,13 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: pip install cibuildwheel twine numpy
+      run: pip install cibuildwheel twine
 
     - name: Build
       run: |
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        (cp -r duckdb_tarball ../../.. && cd ../../../duckdb_tarball && python3 setup.py install --user)
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
     - name: Deploy
@@ -802,7 +800,31 @@ jobs:
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
+  linux-tarball:
+    name: Python 3 Tarball
+    runs-on: ubuntu-20.04
+    needs: linux-debug
 
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: pip install numpy
+
+    - name: Build
+      run: |
+        echo $GITHUB_HEAD_REF
+        echo $GITHUB_BASE_REF
+        echo $GITHUB_REF
+        echo $GITHUB_SHA
+        echo $GITHUB_REPOSITORY
+        ls iogjrioajerwgiojwagiowe
 
   linux-nodejs:
     name: node.js Linux
