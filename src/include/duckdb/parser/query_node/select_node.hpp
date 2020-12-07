@@ -12,6 +12,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,7 @@ public:
 	//! Aggregate handling during binding
 	AggregateHandling aggregate_handling;
 	//! The SAMPLE clause
-	unique_ptr<ParsedExpression> sample;
+	unique_ptr<SampleOptions> sample;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return select_list;

@@ -169,7 +169,7 @@ void Pipeline::Schedule() {
 		break;
 	}
 	case PhysicalOperatorType::ORDER_BY:
-	case PhysicalOperatorType::PHYSICAL_SAMPLE:
+	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
 		// perfect hash aggregate can always be parallelized
 		if (ScheduleOperator(sink->children[0].get())) {

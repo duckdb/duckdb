@@ -13,18 +13,8 @@
 namespace duckdb {
 using namespace std;
 
-unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
-	QueryErrorContext error_context(root_statement, ref.query_location);
-	auto bind_index = GenerateTableIndex();
-
-	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
-	auto fexpr = (FunctionExpression *)ref.function.get();
-
-	// evaluate the input parameters to the function
-	vector<LogicalType> arguments;
-	vector<Value> parameters;
-	unordered_map<string, Value> named_parameters;
-	for (auto &child : fexpr->children) {
+bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments, vector<Value> &parameters, unordered_map<string, Value> &named_parameters, string &error) {
+	for (auto &child : expressions) {
 		string parameter_name;
 
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
@@ -42,19 +32,39 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		if (!expr->IsFoldable()) {
-			throw BinderException(FormatError(ref, "Table function requires a constant parameter"));
+			error = "Table function requires a constant parameter";
+			return false;
 		}
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (named_parameters.size() > 0) {
-				throw BinderException(FormatError(ref, "Unnamed parameters cannot come after named parameters"));
+				error = "Unnamed parameters cannot come after named parameters";
+				return false;
 			}
 			arguments.push_back(sql_type);
 			parameters.push_back(move(constant));
 		} else {
 			named_parameters[parameter_name] = move(constant);
 		}
+	}
+	return true;
+}
+
+unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
+	QueryErrorContext error_context(root_statement, ref.query_location);
+	auto bind_index = GenerateTableIndex();
+
+	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
+	auto fexpr = (FunctionExpression *)ref.function.get();
+
+	// evaluate the input parameters to the function
+	vector<LogicalType> arguments;
+	vector<Value> parameters;
+	unordered_map<string, Value> named_parameters;
+	string error;
+	if (!BindFunctionParameters(fexpr->children, arguments, parameters, named_parameters, error)) {
+		throw BinderException(FormatError(ref, error));
 	}
 
 	// fetch the function from the catalog
@@ -63,7 +73,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	    catalog.GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name, false, error_context);
 
 	// select the function based on the input parameters
-	string error;
 	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);
 	if (best_function_idx == INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));

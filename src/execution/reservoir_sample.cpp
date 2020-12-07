@@ -119,5 +119,82 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	return input.size();
 }
 
+ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed) :
+	BlockingSample(seed), sample_percentage(percentage / 100.0), current_count(0), is_finalized(false) {
+	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
+	current_sample = make_unique<ReservoirSample>(reservoir_sample_size, random.NextRandomInteger());
+}
+
+void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
+	if (current_count + input.size() > RESERVOIR_THRESHOLD) {
+		// we don't have enough space in our current reservoir
+		// first check what we still need to append to the current sample
+		idx_t append_to_current_sample_count = RESERVOIR_THRESHOLD - current_count;
+		idx_t append_to_next_sample = input.size() - append_to_current_sample_count;
+		if (append_to_current_sample_count > 0) {
+			// we have elements remaining, first add them to the current sample
+			input.Normalify();
+
+			input.SetCardinality(append_to_current_sample_count);
+			current_sample->AddToReservoir(input);
+
+			if (append_to_next_sample > 0) {
+				// slice the input for the remainder
+				SelectionVector sel(STANDARD_VECTOR_SIZE);
+				for(idx_t i = 0; i < append_to_next_sample; i++) {
+					sel.set_index(i, append_to_current_sample_count + i);
+				}
+				input.Slice(sel, append_to_next_sample);
+			}
+		}
+		// now our first sample is filled: append it to the set of finished samples
+		finished_samples.push_back(move(current_sample));
+
+		// allocate a new sample, and potentially add the remainder of the current input to that sample
+		current_sample = make_unique<ReservoirSample>(reservoir_sample_size, random.NextRandomInteger());
+		if (append_to_next_sample > 0) {
+			current_sample->AddToReservoir(input);
+		}
+		current_count = append_to_next_sample;
+	} else {
+		// we can just append to the current sample
+		current_sample->AddToReservoir(input);
+		current_count += input.size();
+	}
+}
+
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
+	if (!is_finalized) {
+		Finalize();
+	}
+	while(finished_samples.size() > 0) {
+		auto &front = finished_samples.front();
+		auto chunk = front->GetChunk();
+		if (chunk && chunk->size() > 0) {
+			return chunk;
+		}
+		// move to the next sample
+		finished_samples.erase(finished_samples.begin());
+	}
+	return nullptr;
+}
+
+void ReservoirSamplePercentage::Finalize() {
+	// need to finalize the current sample, if any
+	if (current_count > 0) {
+		// create a new sample
+		idx_t new_sample_size = idx_t(sample_percentage * current_count);
+		auto new_sample = make_unique<ReservoirSample>(new_sample_size, random.NextRandomInteger());
+		while(true) {
+			auto chunk = current_sample->GetChunk();
+			if (!chunk || chunk->size() == 0) {
+				break;
+			}
+			new_sample->AddToReservoir(*chunk);
+		}
+		finished_samples.push_back(move(new_sample));
+	}
+	is_finalized = true;
+}
 
 }

@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/helper/physical_sample.hpp"
+#include "duckdb/execution/operator/helper/physical_reservoir_sample.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 
 using namespace std;
@@ -10,7 +10,21 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class SampleGlobalOperatorState : public GlobalOperatorState {
 public:
-	SampleGlobalOperatorState(unique_ptr<BlockingSample> sample) : sample(move(sample)) {}
+	SampleGlobalOperatorState(SampleOptions &options) {
+		if (options.is_percentage) {
+			auto percentage = options.sample_size.GetValue<double>();
+			if (percentage == 0) {
+				return;
+			}
+			sample = make_unique<ReservoirSamplePercentage>(percentage, options.seed);
+		} else {
+			auto size = options.sample_size.GetValue<int64_t>();
+			if (size == 0) {
+				return;
+			}
+			sample = make_unique<ReservoirSample>(size, options.seed);
+		}
+	}
 
 	//! The lock for updating the global aggregate state
 	mutex lock;
@@ -18,19 +32,19 @@ public:
 	unique_ptr<BlockingSample> sample;
 };
 
-unique_ptr<GlobalOperatorState> PhysicalSample::GetGlobalState(ClientContext &context) {
-	return make_unique<SampleGlobalOperatorState>(make_unique<ReservoirSample>(sample_count));
+unique_ptr<GlobalOperatorState> PhysicalReservoirSample::GetGlobalState(ClientContext &context) {
+	return make_unique<SampleGlobalOperatorState>(*options);
 }
 
-void PhysicalSample::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                          DataChunk &input) {
-	if (sample_count == 0) {
+	auto &gstate = (SampleGlobalOperatorState &)state;
+	if (!gstate.sample) {
 		return;
 	}
 	// we implement reservoir sampling without replacement and exponential jumps here
 	// the algorithm is adopted from the paper Weighted random sampling with a reservoir by Pavlos S. Efraimidis et al.
 	// note that the original algorithm is about weighted sampling; this is a simplified approach for uniform sampling
-	auto &gstate = (SampleGlobalOperatorState &)state;
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.sample->AddToReservoir(input);
 }
@@ -38,8 +52,11 @@ void PhysicalSample::Sink(ExecutionContext &context, GlobalOperatorState &state,
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalSample::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalReservoirSample::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &sink = (SampleGlobalOperatorState &)*this->sink_state;
+	if (!sink.sample) {
+		return;
+	}
 	auto sample_chunk = sink.sample->GetChunk();
 	if (!sample_chunk) {
 		return;
@@ -47,12 +64,12 @@ void PhysicalSample::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	chunk.Reference(*sample_chunk);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalSample::GetOperatorState() {
+unique_ptr<PhysicalOperatorState> PhysicalReservoirSample::GetOperatorState() {
 	return make_unique<PhysicalOperatorState>(*this, children[0].get());
 }
 
-string PhysicalSample::ParamsToString() const {
-	return to_string(sample_count);
+string PhysicalReservoirSample::ParamsToString() const {
+	return options->sample_size.ToString() + (options->is_percentage ? "%" : " rows");
 }
 
 } // namespace duckdb

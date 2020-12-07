@@ -9,19 +9,20 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 
 //! LogicalSample represents a SAMPLE clause
 class LogicalSample : public LogicalOperator {
 public:
-	LogicalSample(int64_t sample_size_p, unique_ptr<LogicalOperator> child)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_SAMPLE), sample_size(sample_size_p) {
+	LogicalSample(unique_ptr<SampleOptions> sample_options_p, unique_ptr<LogicalOperator> child)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_SAMPLE), sample_options(move(sample_options_p)) {
 		children.push_back(move(child));
 	}
 
-	//! The number of elements to sample
-	int64_t sample_size;
+	//! The sample options
+	unique_ptr<SampleOptions> sample_options;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

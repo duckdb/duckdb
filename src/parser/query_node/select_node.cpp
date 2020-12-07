@@ -36,10 +36,9 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	if (!ExpressionUtil::ListEquals(groups, other->groups)) {
 		return false;
 	}
-	if (!BaseExpression::Equals(sample.get(), other->sample.get())) {
+	if (!SampleOptions::Equals(sample.get(), other->sample.get())) {
 		return false;
 	}
-
 	// HAVING
 	if (!BaseExpression::Equals(having.get(), other->having.get())) {
 		return false;
@@ -89,7 +88,7 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	// group by / having
 	source.ReadList<ParsedExpression>(result->groups);
 	result->having = source.ReadOptional<ParsedExpression>();
-	result->sample = source.ReadOptional<ParsedExpression>();
+	result->sample = source.ReadOptional<SampleOptions>();
 	return move(result);
 }
 

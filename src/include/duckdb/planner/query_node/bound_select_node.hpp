@@ -12,6 +12,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 
@@ -36,7 +37,7 @@ public:
 	//! HAVING clause
 	unique_ptr<Expression> having;
 	//! SAMPLE clause
-	int64_t sample_count;
+	unique_ptr<SampleOptions> sample_options;
 
 	//! The amount of columns in the final result
 	idx_t column_count;

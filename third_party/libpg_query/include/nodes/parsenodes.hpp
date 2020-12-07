@@ -1219,7 +1219,7 @@ typedef struct PGSelectStmt {
 	PGList *sortClause;       /* sort clause (a list of SortBy's) */
 	PGNode *limitOffset;      /* # of result tuples to skip */
 	PGNode *limitCount;       /* # of result tuples to return */
-	PGNode *sampleClause;      /* sample size (if any) */
+	PGNode *sampleOptions;    /* sample options (if any) */
 	PGList *lockingClause;    /* FOR UPDATE (list of LockingClause's) */
 	PGWithClause *withClause; /* WITH clause */
 
@@ -1955,5 +1955,23 @@ typedef struct PGIntervalConstant {
 	PGList *typmods;      /* how to interpret the interval constant (year, month, day, etc)  */
 	int location;         /* token location, or -1 if unknown */
 } PGIntervalConstant;
+
+/* ----------------------
+ *		Sample Options
+ * ----------------------
+ */
+typedef struct PGSampleSize {
+	PGNodeTag type;
+	bool is_percentage;   /* whether or not the sample size is expressed in row numbers or a percentage */
+	PGValue sample_size;  /* sample size */
+} PGSampleSize;
+
+typedef struct PGSampleOptions {
+	PGNodeTag type;
+	PGNode *sample_size;      /* the size of the sample to take */
+	char *method;             /* sample method, or NULL for default */
+	int seed;                 /* seed, or NULL for default; */
+	int location;             /* token location, or -1 if unknown */
+} PGSampleOptions;
 
 }

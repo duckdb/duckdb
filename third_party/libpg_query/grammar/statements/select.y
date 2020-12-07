@@ -164,7 +164,7 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
-					n->sampleClause = $10;
+					n->sampleOptions = $10;
 					$$ = (PGNode *)n;
 				}
 			| SELECT distinct_clause target_list
@@ -180,7 +180,7 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
-					n->sampleClause = $10;
+					n->sampleOptions = $10;
 					$$ = (PGNode *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -452,10 +452,34 @@ offset_clause:
 				{ $$ = $2; }
 		;
 
+sample_count:
+	FCONST '%'
+		{
+			$$ = makeSampleSize(makeFloat($1), true);
+		}
+	| ICONST '%'
+		{
+			$$ = makeSampleSize(makeInteger($1), true);
+		}
+	| ICONST
+		{
+			$$ = makeSampleSize(makeInteger($1), false);
+		}
+	;
 
 sample_clause:
-			SAMPLE a_expr
-				{ $$ = $2; }
+			USING SAMPLE sample_count
+				{
+					$$ = makeSampleOptions($3, NULL, -1, @3);
+				}
+			| USING SAMPLE sample_count '(' ColId ')'
+				{
+					$$ = makeSampleOptions($3, $5, -1, @3);
+				}
+			| USING SAMPLE sample_count '(' ColId ',' ICONST ')'
+				{
+					$$ = makeSampleOptions($3, $5, $7, @3);
+				}
 			| /* EMPTY */
 				{ $$ = NULL; }
 		;
@@ -652,20 +676,12 @@ from_list:
 /*
  * table_ref is where an alias clause can be attached.
  */
-table_ref:	relation_expr opt_alias_clause
+table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 				{
 					$1->alias = $2;
 					$$ = (PGNode *) $1;
 				}
-			| relation_expr opt_alias_clause tablesample_clause
-				{
-					PGRangeTableSample *n = (PGRangeTableSample *) $3;
-					$1->alias = $2;
-					/* relation_expr goes inside the PGRangeTableSample node */
-					n->relation = (PGNode *) $1;
-					$$ = (PGNode *) n;
-				}
-			| func_table func_alias_clause
+			| func_table func_alias_clause opt_tablesample_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $1;
 					n->alias = (PGAlias*) linitial($2);
@@ -680,7 +696,7 @@ table_ref:	relation_expr opt_alias_clause
 					n->coldeflist = (PGList*) lsecond($3);
 					$$ = (PGNode *) n;
 				}
-			| select_with_parens opt_alias_clause
+			| select_with_parens opt_alias_clause opt_tablesample_clause
 				{
 					PGRangeSubselect *n = makeNode(PGRangeSubselect);
 					n->lateral = false;
@@ -984,6 +1000,12 @@ tablesample_clause:
 					$$ = (PGNode *) n;
 				}
 		;
+
+opt_tablesample_clause:
+			tablesample_clause	{ $$ = $1; }
+			| /*EMPTY*/					{ $$ = NULL; }
+		;
+
 
 opt_repeatable_clause:
 			REPEATABLE '(' a_expr ')'	{ $$ = (PGNode *) $3; }

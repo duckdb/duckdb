@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/helper/physical_sample.hpp"
+#include "duckdb/execution/operator/helper/physical_reservoir_sample.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 
@@ -10,9 +10,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 
 	auto plan = CreatePlan(*op.children[0]);
 
-	auto limit = make_unique<PhysicalSample>(op.types, op.sample_size);
-	limit->children.push_back(move(plan));
-	return move(limit);
+	unique_ptr<PhysicalOperator> sample;
+	switch(op.sample_options->method) {
+	case SampleMethod::RESERVOIR_SAMPLE:
+		sample = make_unique<PhysicalReservoirSample>(op.types, move(op.sample_options));
+		break;
+	default:
+		throw InternalException("Unimplemented sample method");
+	}
+	sample->children.push_back(move(plan));
+	return sample;
 }
 
 } // namespace duckdb

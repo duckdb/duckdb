@@ -13,28 +13,40 @@ INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
 
 # test various limits using count
 query I
-SELECT COUNT(*) FROM test SAMPLE 0
+SELECT COUNT(*) FROM test USING SAMPLE 0
 ----
 0
 
 query I
-SELECT COUNT(*) FROM test SAMPLE 1
+SELECT COUNT(*) FROM test USING SAMPLE 1
 ----
 1
 
 query I
-SELECT COUNT(*) FROM test SAMPLE 3
+SELECT COUNT(*) FROM test USING SAMPLE 3
 ----
 3
 
 # sample size exceeds input
 query I
-SELECT COUNT(*) FROM test SAMPLE 10
+SELECT COUNT(*) FROM test USING SAMPLE 10
+----
+3
+
+# specify sample
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 3 (reservoir)
+----
+3
+
+# specify seed
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 3 (reservoir, 3)
 ----
 3
 
 query II
-SELECT * FROM test SAMPLE 10 ORDER BY a, b
+SELECT * FROM test USING SAMPLE 10 ORDER BY a, b
 ----
 11	22
 12	21
@@ -46,7 +58,7 @@ statement ok
 CREATE TABLE test2 AS SELECT i a, i::VARCHAR b, CONCAT(i, ' - ', i) c FROM repeat(1, 1000) tbl(i)
 
 query III
-SELECT a, b, c FROM test2 SAMPLE 3;
+SELECT a, b, c FROM test2 USING SAMPLE 3;
 ----
 1	1	1 - 1
 1	1	1 - 1
@@ -54,12 +66,12 @@ SELECT a, b, c FROM test2 SAMPLE 3;
 
 # sample in scalar subqueries
 query I
-SELECT (SELECT COUNT(*) FROM test SAMPLE 1);
+SELECT (SELECT COUNT(*) FROM test USING SAMPLE 1);
 ----
 1
 
 query I
-SELECT (SELECT COUNT(*) + tbl.i FROM test SAMPLE 1) FROM range(3) tbl(i) ORDER BY i;
+SELECT (SELECT COUNT(*) + tbl.i FROM test USING SAMPLE 1) FROM range(3) tbl(i) ORDER BY i;
 ----
 1
 2
@@ -67,21 +79,45 @@ SELECT (SELECT COUNT(*) + tbl.i FROM test SAMPLE 1) FROM range(3) tbl(i) ORDER B
 
 # negative sample size not allowed
 statement error
-SELECT COUNT(*) FROM test SAMPLE -1
+SELECT COUNT(*) FROM test USING SAMPLE -1
 
 # must be a number
 statement error
-SELECT COUNT(*) FROM test SAMPLE 'hello'
+SELECT COUNT(*) FROM test USING SAMPLE 'hello'
 
 statement error
-SELECT COUNT(*) FROM test SAMPLE DATE '1992-01-01'
+SELECT COUNT(*) FROM test USING SAMPLE DATE '1992-01-01'
 
 # verify that it is a sample without replacement (i.e. the same row will never occur more than once in the result)
 loop i 0 10
 
 query I
-select count(distinct i) from range(10) tbl(i) sample 5;
+select count(distinct i) from range(10) tbl(i) using sample 5;
 ----
 5
 
 endloop
+
+# specifying a seed leads to repeatable behavior
+loop i 0 10
+
+query I nosort reservoirseed
+select * from range(100) using sample 10 (reservoir, 250)
+----
+
+endloop
+
+# specify as percentage, with reservoir sampling this should give us an exact count (i.e. always 10)
+loop i 0 10
+
+query I
+select count(*) from range(100) using sample 10% (reservoir)
+----
+10
+
+endloop
+
+
+# todo: tablesample
+# create table integers as select i from range(100) tbl(i);
+# select * from integers tablesample system(10);

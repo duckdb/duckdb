@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/helper/physical_sample.hpp
+// duckdb/execution/operator/helper/physical_reservoir_sample.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,17 +9,18 @@
 #pragma once
 
 #include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 
-//! PhysicalSample represents the SAMPLE operator
-class PhysicalSample : public PhysicalSink {
+//! PhysicalReservoirSample represents a sample taken using reservoir sampling, which is a blocking sampling method
+class PhysicalReservoirSample : public PhysicalSink {
 public:
-	PhysicalSample(vector<LogicalType> types, idx_t sample_count)
-	    : PhysicalSink(PhysicalOperatorType::PHYSICAL_SAMPLE, move(types)), sample_count(sample_count) {
+	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options)
+	    : PhysicalSink(PhysicalOperatorType::RESERVOIR_SAMPLE, move(types)), options(move(options)) {
 	}
 
-	idx_t sample_count;
+	unique_ptr<SampleOptions> options;
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;

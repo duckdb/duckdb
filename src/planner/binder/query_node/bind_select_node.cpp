@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace std;
 
@@ -190,12 +192,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// bind the sample clause
 	if (statement.sample) {
-		result->sample_count = BindConstant(*this, context, "SAMPLE", statement.sample);
-		if (result->sample_count < 0) {
-			throw ParserException("SAMPLE must be bigger than or equal to 0");
-		}
-	} else {
-		result->sample_count = -1;
+		result->sample_options = move(statement.sample);
 	}
 
 	// visit the select list and expand any "*" statements

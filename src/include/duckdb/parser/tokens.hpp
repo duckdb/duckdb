@@ -83,4 +83,9 @@ class TableFunctionRef;
 class EmptyTableRef;
 class ExpressionListRef;
 
+//===--------------------------------------------------------------------===//
+// Other
+//===--------------------------------------------------------------------===//
+struct SampleOptions;
+
 } // namespace duckdb
