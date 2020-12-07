@@ -78,7 +78,7 @@ unique_ptr<PhysicalOperatorState> PhysicalStreamingSample::GetOperatorState() {
 }
 
 string PhysicalStreamingSample::ParamsToString() const {
-	return SampleMethodToString(method) + ": " + to_string(percentage) + "%";
+	return SampleMethodToString(method) + ": " + to_string(100 * percentage) + "%";
 }
 
 } // namespace duckdb

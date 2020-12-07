@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 
