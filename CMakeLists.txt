@@ -162,6 +162,8 @@ option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
+option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
+option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(
   ASSERT_EXCEPTION
   "Throw an exception on an assert failing, instead of triggering a sigabort"
@@ -354,23 +356,41 @@ function(add_extension_definitions)
   endif()
 endfunction()
 
-function(link_extension_libraries LIBRARY)
+
+function(add_extension_dependencies LIBRARY)
   if(${BUILD_PARQUET_EXTENSION})
-    target_link_libraries(${LIBRARY} parquet_extension)
+   add_dependencies(${LIBRARY} parquet_extension)
   endif()
 
   if(${BUILD_ICU_EXTENSION})
-    target_link_libraries(${LIBRARY} icu_extension)
+   add_dependencies(${LIBRARY} icu_extension)
   endif()
 
   if(${BUILD_TPCH_EXTENSION})
-    target_link_libraries(${LIBRARY} tpch_extension)
+   add_dependencies(${LIBRARY} tpch_extension)
+  endif()
+endfunction()
+
+function(link_extension_libraries LIBRARY)
+  if(${BUILD_PARQUET_EXTENSION})
+   target_link_libraries(${LIBRARY} parquet_extension)
+  endif()
+
+  if(${BUILD_ICU_EXTENSION})
+   target_link_libraries(${LIBRARY} icu_extension)
+  endif()
+
+  if(${BUILD_TPCH_EXTENSION})
+   target_link_libraries(${LIBRARY} tpch_extension)
   endif()
 
   if(${BUILD_FTS_EXTENSION})
     target_link_libraries(${LIBRARY} fts_extension)
   endif()
+endfunction()
 
+function(link_threads LIBRARY)
+  target_link_libraries(${LIBRARY} Threads::Threads)
 endfunction()
 
 add_subdirectory(extension)

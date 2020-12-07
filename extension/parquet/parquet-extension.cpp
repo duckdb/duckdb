@@ -38,6 +38,7 @@ struct ParquetReadOperatorData : public FunctionOperatorData {
 	bool is_parallel;
 	idx_t file_index;
 	vector<column_t> column_ids;
+	TableFilterSet *table_filters;
 };
 
 struct ParquetReadParallelState : public ParallelState {
@@ -56,6 +57,7 @@ public:
 	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, parquet_max_threads,
 	                    parquet_init_parallel_state, parquet_scan_parallel_init, parquet_parallel_state_next) {
 		projection_pushdown = true;
+		filter_pushdown = true;
 	}
 
 	static unique_ptr<FunctionData> parquet_read_bind(ClientContext &context, CopyInfo &info,
@@ -154,13 +156,14 @@ public:
 
 		result->is_parallel = false;
 		result->file_index = 0;
+		result->table_filters = table_filters;
 		// single-threaded: one thread has to read all groups
 		vector<idx_t> group_ids;
 		for (idx_t i = 0; i < bind_data.initial_reader->NumRowGroups(); i++) {
 			group_ids.push_back(i);
 		}
 		result->reader = bind_data.initial_reader;
-		result->reader->Initialize(result->scan_state, column_ids, move(group_ids));
+		result->reader->Initialize(result->scan_state, column_ids, move(group_ids), table_filters);
 		return move(result);
 	}
 
@@ -170,6 +173,7 @@ public:
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;
+		result->table_filters = table_filters;
 		if (!parquet_parallel_state_next(context, bind_data_, result.get(), parallel_state_)) {
 			return nullptr;
 		}
@@ -180,7 +184,7 @@ public:
 	                                  FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
 		do {
-			data.reader->ReadChunk(data.scan_state, output);
+			data.reader->Scan(data.scan_state, output);
 			if (output.size() == 0 && !data.is_parallel) {
 				auto &bind_data = (ParquetReadBindData &)*bind_data_;
 				// check if there is another file
@@ -194,7 +198,7 @@ public:
 					for (idx_t i = 0; i < data.reader->NumRowGroups(); i++) {
 						group_ids.push_back(i);
 					}
-					data.reader->Initialize(data.scan_state, data.column_ids, move(group_ids));
+					data.reader->Initialize(data.scan_state, data.column_ids, move(group_ids), data.table_filters);
 				} else {
 					// exhausted all the files: done
 					break;
@@ -236,7 +240,8 @@ public:
 			// groups remain in the current parquet file: read the next group
 			scan_data.reader = parallel_state.current_reader;
 			vector<idx_t> group_indexes{parallel_state.row_group_index};
-			scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes);
+			scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes,
+			                             scan_data.table_filters);
 			parallel_state.row_group_index++;
 			return true;
 		} else {
@@ -253,7 +258,8 @@ public:
 				// set up the scan state to read the first group
 				scan_data.reader = parallel_state.current_reader;
 				vector<idx_t> group_indexes{0};
-				scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes);
+				scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes,
+				                             scan_data.table_filters);
 				parallel_state.row_group_index = 1;
 				return true;
 			}
@@ -319,8 +325,8 @@ unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &co
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer =
-	    make_unique<ParquetWriter>(fs, parquet_bind.file_name, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
+	global_state->writer = make_unique<ParquetWriter>(fs, parquet_bind.file_name, parquet_bind.sql_types,
+	                                                  parquet_bind.column_names, parquet_bind.codec);
 	return move(global_state);
 }
 

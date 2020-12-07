@@ -15,7 +15,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "parquet-extension.hpp"
+#include "extension/extension_helper.hpp"
 
 #include <random>
 
@@ -1060,7 +1060,7 @@ struct DuckDBPyConnection {
 			config.access_mode = AccessMode::READ_ONLY;
 		}
 		res->database = make_unique<DuckDB>(database, &config);
-		res->database->LoadExtension<ParquetExtension>();
+		ExtensionHelper::LoadAllExtensions(*res->database);
 		res->connection = make_unique<Connection>(*res->database);
 
 		PandasScanFunction scan_fun;

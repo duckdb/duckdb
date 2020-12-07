@@ -16,6 +16,7 @@
 
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_types.h"
+#include "parquet_rle_bp_decoder.hpp"
 
 #include <exception>
 
@@ -27,9 +28,9 @@ class FileMetaData;
 
 namespace duckdb {
 class ClientContext;
-class RleBpDecoder;
 class ChunkCollection;
 class BaseStatistics;
+struct TableFilterSet;
 
 struct ParquetReaderColumnData {
 	~ParquetReaderColumnData();
@@ -68,7 +69,11 @@ struct ParquetReaderScanState {
 	idx_t group_offset;
 	vector<unique_ptr<ParquetReaderColumnData>> column_data;
 	bool finished;
+	TableFilterSet *filters;
+	SelectionVector sel;
 };
+
+typedef nullmask_t parquet_filter_t;
 
 class ParquetReader {
 public:
@@ -85,8 +90,9 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 
 public:
-	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read);
-	void ReadChunk(ParquetReaderScanState &state, DataChunk &output);
+	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
+	                TableFilterSet *table_filters);
+	void Scan(ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows();
 	idx_t NumRowGroups();
@@ -97,8 +103,12 @@ public:
 	                                                 const parquet::format::FileMetaData *file_meta_data);
 
 private:
+	void ScanColumn(ParquetReaderScanState &state, parquet_filter_t &filter_mask, idx_t count, idx_t out_col_idx,
+	                Vector &out);
+	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
+
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
-	void PrepareChunkBuffer(ParquetReaderScanState &state, idx_t col_idx);
+	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx, LogicalType &type);
 	bool PreparePageBuffers(ParquetReaderScanState &state, idx_t col_idx);
 	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 
@@ -106,11 +116,6 @@ private:
 		return std::runtime_error("Failed to read Parquet file \"" + file_name +
 		                          "\": " + StringUtil::Format(fmt_str, params...));
 	}
-
-	template <class T>
-	void fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset);
-	template <class T>
-	void fill_from_plain(ParquetReaderColumnData &col_data, idx_t count, Vector &target, idx_t target_offset);
 
 private:
 	ClientContext &context;

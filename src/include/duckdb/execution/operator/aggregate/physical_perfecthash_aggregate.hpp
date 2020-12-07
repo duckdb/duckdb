@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/aggregate/physical_perfect_hash_aggregate.hpp
+// duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp
 //
 //
 //===----------------------------------------------------------------------===//
