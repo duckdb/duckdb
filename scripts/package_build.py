@@ -166,7 +166,7 @@ def build_package(target_dir, extensions, linenumbers = False):
             break
     if not found_hash:
         lines = ['#ifndef DUCKDB_SOURCE_ID', '#define DUCKDB_SOURCE_ID "{}"'.format(githash), '#endif'] + lines
-    if not found_hash:
+    if not found_dev:
         lines = ['#ifndef DUCKDB_VERSION', '#define DUCKDB_VERSION "{}"'.format(dev_version), '#endif'] + lines
     text = '\n'.join(lines)
     with open_utf8(fpath, 'w+') as f:

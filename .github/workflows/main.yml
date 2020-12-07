@@ -264,7 +264,7 @@ jobs:
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
-          
+
 
 
   linux-release-32:
@@ -306,7 +306,7 @@ jobs:
       with:
         name: duckdb-binaries-linux
         path: |
-          libduckdb-linux-i386.zip 
+          libduckdb-linux-i386.zip
           duckdb_cli-linux-i386.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
@@ -639,6 +639,7 @@ jobs:
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        (cd duckdb_tarball && python3 setup.py install --user)
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
     - name: Deploy
@@ -817,16 +818,16 @@ jobs:
     - name: Setup
       run: ./scripts/node_version.sh upload
 
-    - name: Node 10 
+    - name: Node 10
       run: ./scripts/node_build.sh 10
 
-    - name: Node 12 
+    - name: Node 12
       run: ./scripts/node_build.sh 12
 
-    - name: Node 14 
+    - name: Node 14
       run: ./scripts/node_build.sh 14
 
-    - name: Node 15 
+    - name: Node 15
       run: ./scripts/node_build.sh 15
 
 
@@ -843,14 +844,14 @@ jobs:
     - name: Setup
       run: ./scripts/node_version.sh
 
-    - name: Node 10 
+    - name: Node 10
       run: ./scripts/node_build.sh 10
 
-    - name: Node 12 
+    - name: Node 12
       run: ./scripts/node_build.sh 12
 
-    - name: Node 14 
+    - name: Node 14
       run: ./scripts/node_build.sh 14
 
-    - name: Node 15 
+    - name: Node 15
       run: ./scripts/node_build.sh 15
