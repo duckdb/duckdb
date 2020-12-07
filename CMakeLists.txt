@@ -356,32 +356,31 @@ function(add_extension_definitions)
   endif()
 endfunction()
 
-
 function(add_extension_dependencies LIBRARY)
   if(${BUILD_PARQUET_EXTENSION})
-   add_dependencies(${LIBRARY} parquet_extension)
+    add_dependencies(${LIBRARY} parquet_extension)
   endif()
 
   if(${BUILD_ICU_EXTENSION})
-   add_dependencies(${LIBRARY} icu_extension)
+    add_dependencies(${LIBRARY} icu_extension)
   endif()
 
   if(${BUILD_TPCH_EXTENSION})
-   add_dependencies(${LIBRARY} tpch_extension)
+    add_dependencies(${LIBRARY} tpch_extension)
   endif()
 endfunction()
 
 function(link_extension_libraries LIBRARY)
   if(${BUILD_PARQUET_EXTENSION})
-   target_link_libraries(${LIBRARY} parquet_extension)
+    target_link_libraries(${LIBRARY} parquet_extension)
   endif()
 
   if(${BUILD_ICU_EXTENSION})
-   target_link_libraries(${LIBRARY} icu_extension)
+    target_link_libraries(${LIBRARY} icu_extension)
   endif()
 
   if(${BUILD_TPCH_EXTENSION})
-   target_link_libraries(${LIBRARY} tpch_extension)
+    target_link_libraries(${LIBRARY} tpch_extension)
   endif()
 
   if(${BUILD_FTS_EXTENSION})
