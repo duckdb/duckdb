@@ -21,6 +21,8 @@ enum class SampleMethod : uint8_t {
 	RESERVOIR_SAMPLE = 2
 };
 
+string SampleMethodToString(SampleMethod method);
+
 struct SampleOptions {
 	Value sample_size;
 	bool is_percentage;

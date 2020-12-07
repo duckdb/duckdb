@@ -4,6 +4,19 @@
 namespace duckdb {
 using namespace std;
 
+string SampleMethodToString(SampleMethod method) {
+	switch(method) {
+	case SampleMethod::SYSTEM_SAMPLE:
+		return "System";
+	case SampleMethod::BERNOULLI_SAMPLE:
+		return "Bernoulli";
+	case SampleMethod::RESERVOIR_SAMPLE:
+		return "Reservoir";
+	default:
+		return "Unknown";
+	}
+}
+
 void SampleOptions::Serialize(Serializer &serializer) {
 	sample_size.Serialize(serializer);
 	serializer.Write<bool>(is_percentage);

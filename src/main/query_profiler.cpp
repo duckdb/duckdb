@@ -37,6 +37,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	switch (op_type) {
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
+	case PhysicalOperatorType::STREAMING_SAMPLE:
 	case PhysicalOperatorType::LIMIT:
 	case PhysicalOperatorType::TOP_N:
 	case PhysicalOperatorType::AGGREGATE:

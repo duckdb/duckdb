@@ -105,6 +105,14 @@ query I nosort reservoirseed
 select * from range(100) using sample 10 (reservoir, 250)
 ----
 
+query I nosort bernoulliseed
+select * from range(100) using sample 10% (bernoulli, 250)
+----
+
+query I nosort systemseed
+select * from range(100) using sample 10% (system, 250)
+----
+
 endloop
 
 # specify as percentage, with reservoir sampling this should give us an exact count (i.e. always 10)
@@ -116,7 +124,6 @@ select count(*) from range(100) using sample 10% (reservoir)
 10
 
 endloop
-
 
 # todo: tablesample
 # create table integers as select i from range(100) tbl(i);

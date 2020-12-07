@@ -101,6 +101,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::STREAMING_SAMPLE:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
 	case PhysicalOperatorType::TABLE_SCAN: {

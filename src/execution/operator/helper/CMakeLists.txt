@@ -5,6 +5,7 @@ add_library_unity(duckdb_operator_helper
                   physical_pragma.cpp
                   physical_prepare.cpp
                   physical_reservoir_sample.cpp
+                  physical_streaming_sample.cpp
                   physical_transaction.cpp
                   physical_vacuum.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
