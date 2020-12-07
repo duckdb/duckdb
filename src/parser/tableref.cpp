@@ -8,7 +8,8 @@ namespace duckdb {
 using namespace std;
 
 bool TableRef::Equals(const TableRef *other) const {
-	return other && type == other->type && alias == other->alias && SampleOptions::Equals(sample.get(), other->sample.get());
+	return other && type == other->type && alias == other->alias &&
+	       SampleOptions::Equals(sample.get(), other->sample.get());
 }
 
 void TableRef::Serialize(Serializer &serializer) {

@@ -5,9 +5,10 @@ using namespace std;
 
 namespace duckdb {
 
-
-PhysicalStreamingSample::PhysicalStreamingSample(vector<LogicalType> types, SampleMethod method, double percentage, int64_t seed)
-	: PhysicalOperator(PhysicalOperatorType::STREAMING_SAMPLE, move(types)), method(method), percentage(percentage / 100), seed(seed) {
+PhysicalStreamingSample::PhysicalStreamingSample(vector<LogicalType> types, SampleMethod method, double percentage,
+                                                 int64_t seed)
+    : PhysicalOperator(PhysicalOperatorType::STREAMING_SAMPLE, move(types)), method(method),
+      percentage(percentage / 100), seed(seed) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -24,7 +25,7 @@ public:
 
 void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, PhysicalOperatorState *state_p) {
 	// system sampling: we throw one dice per chunk
-	auto &state = (StreamingSampleOperatorState&) *state_p;
+	auto &state = (StreamingSampleOperatorState &)*state_p;
 	double rand = state.random.NextRandom();
 	if (rand <= percentage) {
 		// rand is smaller than percentage: output chunk
@@ -35,10 +36,10 @@ void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, 
 void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result, PhysicalOperatorState *state_p) {
 	// bernoulli sampling: we throw one dice per tuple
 	// then slice the result chunk
-	auto &state = (StreamingSampleOperatorState&) *state_p;
+	auto &state = (StreamingSampleOperatorState &)*state_p;
 	idx_t result_count = 0;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	for(idx_t i = 0; i < input.size(); i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		double rand = state.random.NextRandom();
 		if (rand <= percentage) {
 			sel.set_index(result_count++, i);
@@ -49,7 +50,8 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 	}
 }
 
-void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                               PhysicalOperatorState *state) {
 
 	// get the next chunk from the child
 	do {
@@ -58,7 +60,7 @@ void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataCh
 			return;
 		}
 
-		switch(method) {
+		switch (method) {
 		case SampleMethod::BERNOULLI_SAMPLE:
 			BernoulliSample(state->child_chunk, chunk, state);
 			break;
@@ -68,7 +70,7 @@ void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataCh
 		default:
 			throw InternalException("Unsupported sample method for streaming sample");
 		}
-	} while(chunk.size() == 0);
+	} while (chunk.size() == 0);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalStreamingSample::GetOperatorState() {

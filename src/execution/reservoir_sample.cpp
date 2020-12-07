@@ -20,7 +20,7 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	// find the position of next_index relative to current_count
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
-	while(true) {
+	while (true) {
 		idx_t offset = next_index - current_count;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
@@ -57,7 +57,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item vi
-	for(idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		reservoir.SetValue(col_idx, min_entry, input.GetValue(col_idx, index_in_chunk));
 	}
 	// pop the minimum entry
@@ -95,7 +95,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 		// 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
 		// we then define the threshold to enter the reservoir T_w as the minimum key of R
 		// we use a priority queue to extract the minimum key in O(1) time
-		for(idx_t i = 0; i < sample_count; i++) {
+		for (idx_t i = 0; i < sample_count; i++) {
 			double k_i = random.NextRandom();
 			reservoir_weights.push(make_pair(-k_i, i));
 		}
@@ -114,7 +114,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	// we still need to process a part of the chunk
 	// create a selection vector of the remaining elements
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	for(idx_t i = required_count; i < chunk_count; i++) {
+	for (idx_t i = required_count; i < chunk_count; i++) {
 		sel.set_index(i - required_count, i);
 	}
 	// slice the input vector and continue
@@ -122,8 +122,8 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	return input.size();
 }
 
-ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed) :
-	BlockingSample(seed), sample_percentage(percentage / 100.0), current_count(0), is_finalized(false) {
+ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed)
+    : BlockingSample(seed), sample_percentage(percentage / 100.0), current_count(0), is_finalized(false) {
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
 	current_sample = make_unique<ReservoirSample>(reservoir_sample_size, random.NextRandomInteger());
 }
@@ -144,7 +144,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 			if (append_to_next_sample > 0) {
 				// slice the input for the remainder
 				SelectionVector sel(STANDARD_VECTOR_SIZE);
-				for(idx_t i = 0; i < append_to_next_sample; i++) {
+				for (idx_t i = 0; i < append_to_next_sample; i++) {
 					sel.set_index(i, append_to_current_sample_count + i);
 				}
 				input.Slice(sel, append_to_next_sample);
@@ -170,7 +170,7 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 	if (!is_finalized) {
 		Finalize();
 	}
-	while(finished_samples.size() > 0) {
+	while (finished_samples.size() > 0) {
 		auto &front = finished_samples.front();
 		auto chunk = front->GetChunk();
 		if (chunk && chunk->size() > 0) {
@@ -188,7 +188,7 @@ void ReservoirSamplePercentage::Finalize() {
 		// create a new sample
 		idx_t new_sample_size = idx_t(round(sample_percentage * current_count));
 		auto new_sample = make_unique<ReservoirSample>(new_sample_size, random.NextRandomInteger());
-		while(true) {
+		while (true) {
 			auto chunk = current_sample->GetChunk();
 			if (!chunk || chunk->size() == 0) {
 				break;
@@ -200,4 +200,4 @@ void ReservoirSamplePercentage::Finalize() {
 	is_finalized = true;
 }
 
-}
+} // namespace duckdb

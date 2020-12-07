@@ -5,7 +5,7 @@ namespace duckdb {
 using namespace std;
 
 string SampleMethodToString(SampleMethod method) {
-	switch(method) {
+	switch (method) {
 	case SampleMethod::SYSTEM_SAMPLE:
 		return "System";
 	case SampleMethod::BERNOULLI_SAMPLE:
@@ -49,10 +49,8 @@ bool SampleOptions::Equals(SampleOptions *a, SampleOptions *b) {
 	if (!a || !b) {
 		return false;
 	}
-	if (a->sample_size != b->sample_size
-		|| a->is_percentage != b->is_percentage
-		|| a->method != b->method
-		|| a->seed != b->seed) {
+	if (a->sample_size != b->sample_size || a->is_percentage != b->is_percentage || a->method != b->method ||
+	    a->seed != b->seed) {
 		return false;
 	}
 	return true;

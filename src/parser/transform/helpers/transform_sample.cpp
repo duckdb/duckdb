@@ -11,7 +11,7 @@ static SampleMethod GetSampleMethod(string method) {
 		return SampleMethod::SYSTEM_SAMPLE;
 	} else if (lmethod == "bernoulli") {
 		return SampleMethod::BERNOULLI_SAMPLE;
-	}  else if (lmethod == "reservoir") {
+	} else if (lmethod == "reservoir") {
 		return SampleMethod::RESERVOIR_SAMPLE;
 	} else {
 		throw ParserException("Unrecognized sampling method %s, expected system, bernoulli or reservoir", method);
@@ -23,8 +23,8 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(duckdb_libpgquery:
 		return nullptr;
 	}
 	auto result = make_unique<SampleOptions>();
-	auto &sample_options = (duckdb_libpgquery::PGSampleOptions &) *options;
-	auto &sample_size = (duckdb_libpgquery::PGSampleSize &) *sample_options.sample_size;
+	auto &sample_options = (duckdb_libpgquery::PGSampleOptions &)*options;
+	auto &sample_size = (duckdb_libpgquery::PGSampleSize &)*sample_options.sample_size;
 	auto sample_value = TransformValue(sample_size.sample_size)->value;
 	result->is_percentage = sample_size.is_percentage;
 	if (sample_size.is_percentage) {
@@ -51,4 +51,4 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(duckdb_libpgquery:
 	return result;
 }
 
-}
+} // namespace duckdb

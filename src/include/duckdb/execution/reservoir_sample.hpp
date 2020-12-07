@@ -17,9 +17,10 @@ namespace duckdb {
 
 class BlockingSample {
 public:
-	BlockingSample(int64_t seed) :
-		random(seed) {}
-	virtual ~BlockingSample(){}
+	BlockingSample(int64_t seed) : random(seed) {
+	}
+	virtual ~BlockingSample() {
+	}
 
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
@@ -36,9 +37,8 @@ protected:
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
 public:
-	ReservoirSample(idx_t sample_count, int64_t seed) :
-		BlockingSample(seed), sample_count(sample_count) {}
-
+	ReservoirSample(idx_t sample_count, int64_t seed) : BlockingSample(seed), sample_count(sample_count) {
+	}
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -46,6 +46,7 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	// sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
+
 private:
 	//! Sets the next index to insert into the reservoir based on the reservoir weights
 	void SetNextEntry();
@@ -76,6 +77,7 @@ private:
 //! The reservoir sample percentage class maintains a streaming sample of variable size
 class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
+
 public:
 	ReservoirSamplePercentage(double percentage, int64_t seed);
 
