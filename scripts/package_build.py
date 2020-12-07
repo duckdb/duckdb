@@ -5,8 +5,6 @@ import subprocess
 from python_helpers import open_utf8
 
 excluded_objects = ['utf8proc_data.cpp']
-DEFAULT_HASH = "86eeb2647"
-DEFAULT_VERSION = "0.2.3"
 
 def get_libraries(binary_dir, libraries, extensions):
     result_libs = []
@@ -74,7 +72,10 @@ def git_commit_hash():
     try:
         return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
     except:
-        return DEFAULT_HASH
+        if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
+            return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
+        else:
+            return "deadbeeff"
 
 def git_dev_version():
     try:
@@ -90,7 +91,10 @@ def git_dev_version():
             version_splits[2] = str(int(version_splits[2]) + 1)
             return '.'.join(version_splits) + "-dev" + dev_version
     except:
-        return DEFAULT_VERSION
+        if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
+            return os.environ['SETUPTOOLS_SCM_PRETEND_VERSION']
+        else:
+            return "0.0.0"
 
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
     import amalgamation
