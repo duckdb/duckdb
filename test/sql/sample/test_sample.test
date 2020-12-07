@@ -215,3 +215,14 @@ query I
 select count(*) from range(1000) using sample reservoir(0.1%);
 ----
 1
+
+# cannot use bernoulli or system sampling with X number of rows
+statement error
+select * from integers using sample bernoulli(5 rows);
+
+statement error
+select * from integers using sample system(5 rows);
+
+# percentage is out of range
+statement error
+select * from integers using sample 10000%;
