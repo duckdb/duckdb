@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 
@@ -22,5 +23,7 @@ public:
 
 	//! The type of table reference
 	TableReferenceType type;
+	//! The sample options (if any)
+	unique_ptr<SampleOptions> sample;
 };
 } // namespace duckdb

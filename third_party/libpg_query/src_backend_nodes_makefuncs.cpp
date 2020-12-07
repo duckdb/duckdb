@@ -181,6 +181,7 @@ PGRangeVar *makeRangeVar(char *schemaname, char *relname, int location) {
 	r->relpersistence = RELPERSISTENCE_PERMANENT;
 	r->alias = NULL;
 	r->location = location;
+	r->sample = NULL;
 
 	return r;
 }
