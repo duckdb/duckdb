@@ -17,7 +17,7 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 	// separate positional and default arguments
 	auto &macro_def = *macro_func.function;
 	for (auto &arg : function_expr.children) {
-		if (arg->GetExpressionClass() == ExpressionClass::COMPARISON) {
+		if (arg->type == ExpressionType::COMPARE_EQUAL) {
 			// default argument
 			auto &comp_expr = (ComparisonExpression &)*arg;
 			if (macro_def.default_parameters.find(comp_expr.left->ToString()) == macro_def.default_parameters.end()) {

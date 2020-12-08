@@ -156,6 +156,28 @@ makeIntervalNode(PGNode *arg, int location, PGList *typmods) {
 }
 
 static PGNode *
+makeSampleSize(PGValue *sample_size, bool is_percentage) {
+	PGSampleSize *n = makeNode(PGSampleSize);
+
+	n->sample_size = *sample_size;
+	n->is_percentage = is_percentage;
+
+	return (PGNode *)n;
+}
+
+static PGNode *
+makeSampleOptions(PGNode *sample_size, char *method, int seed, int location) {
+	PGSampleOptions *n = makeNode(PGSampleOptions);
+
+	n->sample_size = sample_size;
+	n->method = method;
+	n->seed = seed;
+	n->location = location;
+
+	return (PGNode *)n;
+}
+
+static PGNode *
 makeIntConst(int val, int location)
 {
 	PGAConst *n = makeNode(PGAConst);

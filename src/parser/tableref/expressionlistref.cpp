@@ -38,7 +38,7 @@ unique_ptr<TableRef> ExpressionListRef::Copy() {
 	}
 	result->expected_names = expected_names;
 	result->expected_types = expected_types;
-	result->alias = alias;
+	CopyProperties(*result);
 	return move(result);
 }
 
