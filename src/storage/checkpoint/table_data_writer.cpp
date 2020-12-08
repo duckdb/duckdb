@@ -21,9 +21,12 @@ public:
 
 	//! The checkpoint manager
 	CheckpointManager &manager;
+
+	//! Block handle of temporary buffer
+	shared_ptr<BlockHandle> block;
 	//! Block handle use for writing to
 	unique_ptr<BufferHandle> handle;
-	//! The current block we are writing to
+	//! The block on-disk to which we are writing
 	block_id_t block_id;
 	//! The offset within the current block
 	idx_t offset;
@@ -129,7 +132,7 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 	}
 
 	// get the buffer of the segment and pin it
-	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block_id);
+	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block);
 
 	// get a free block id to write to
 	auto block_id = manager.block_manager.GetFreeBlockId();
@@ -202,18 +205,19 @@ void TableDataWriter::WriteDataPointers() {
 }
 
 WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(CheckpointManager &manager)
-    : manager(manager), handle(nullptr), block_id(INVALID_BLOCK), offset(0) {
+    : manager(manager), block_id(INVALID_BLOCK), offset(0) {
 }
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
 	if (offset > 0) {
-		manager.block_manager.Write(*handle->node, block_id);
+		manager.block_manager.Write(*handle->node, block->BlockId());
 	}
 }
 
 void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
 	if (!handle) {
-		handle = manager.buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+		block = manager.buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+		handle = manager.buffer_manager.Pin(block);
 	}
 	// first write the length of the string
 	if (block_id == INVALID_BLOCK || offset + sizeof(uint32_t) >= STRING_SPACE) {
@@ -250,7 +254,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 }
 
 void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
-	if (block_id != INVALID_BLOCK) {
+	if (block->BlockId() != INVALID_BLOCK) {
 		// there is an old block, write it first
 		manager.block_manager.Write(*handle->node, block_id);
 	}

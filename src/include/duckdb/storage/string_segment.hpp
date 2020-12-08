@@ -11,6 +11,7 @@
 #include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
+
 class OverflowStringWriter {
 public:
 	virtual ~OverflowStringWriter() {
@@ -20,7 +21,7 @@ public:
 };
 
 struct StringBlock {
-	block_id_t block_id;
+	shared_ptr<BlockHandle> block;
 	idx_t offset;
 	idx_t size;
 	unique_ptr<StringBlock> next;
@@ -59,6 +60,8 @@ public:
 	unique_ptr<string_update_info_t[]> string_updates;
 	//! Overflow string writer (if any), if not set overflow strings will be written to memory blocks
 	unique_ptr<OverflowStringWriter> overflow_writer;
+	//! Set of blocks used for holding overflow strings
+	unordered_map<block_id_t, unique_ptr<BlockHandle>> overflow_blocks;
 
 public:
 	void InitializeScan(ColumnScanState &state) override;
@@ -99,17 +102,17 @@ private:
 	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, idx_t vector_index, Vector &result, idx_t count);
 
 	string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
-	string_t FetchString(buffer_handle_set_t &handles, data_ptr_t baseptr, string_location_t location);
+	string_t FetchString(Vector &result, data_ptr_t baseptr, string_location_t location);
 	//! Fetch a single string from the dictionary and returns it, potentially pins a buffer manager page and adds it to
 	//! the set of pinned pages
-	string_t FetchStringFromDict(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t dict_offset);
+	string_t FetchStringFromDict(Vector &result, data_ptr_t baseptr, int32_t dict_offset);
 
 	//! Fetch string locations for a subset of the strings
 	void FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset, idx_t count,
 	                          string_location_t result[]);
 
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
-	string_t ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset);
+	string_t ReadString(Vector &result, block_id_t block, int32_t offset);
 	string_t ReadString(data_ptr_t target, int32_t offset);
 
 	void WriteStringMemory(string_t string, block_id_t &result_block, int32_t &result_offset);
@@ -131,10 +134,10 @@ private:
 	//! The amount of bytes remaining to store in the block
 	idx_t RemainingSpace(BufferHandle &handle);
 
-	void read_string(string_t *result_data, buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset,
+	void read_string(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
 	                 idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index);
 	template <class OP>
-	void Select_String(buffer_handle_set_t &handles, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
+	void Select_String(Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
 	                   SelectionVector &sel, const string &constant, idx_t &approved_tuple_count,
 	                   nullmask_t *source_nullmask, size_t vector_index) {
 		result.vector_type = VectorType::FLAT_VECTOR;
@@ -145,7 +148,7 @@ private:
 		if (source_nullmask->any()) {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
-				read_string(result_data, handles, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
+				read_string(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
 				if (!(*source_nullmask)[src_idx] && OP::Operation(result_data[src_idx].GetString(), constant)) {
 					new_sel.set_index(result_count++, src_idx);
 				}
@@ -153,7 +156,7 @@ private:
 		} else {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
-				read_string(result_data, handles, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
+				read_string(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
 				if (OP::Operation(result_data[src_idx].GetString(), constant)) {
 					new_sel.set_index(result_count++, src_idx);
 				}
@@ -164,7 +167,7 @@ private:
 	}
 
 	template <class OPL, class OPR>
-	void Select_String_Between(buffer_handle_set_t &handles, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
+	void Select_String_Between(Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
 	                           SelectionVector &sel, string constantLeft, string constantRight,
 	                           idx_t &approved_tuple_count, nullmask_t *source_nullmask, size_t vector_index) {
 		result.vector_type = VectorType::FLAT_VECTOR;
@@ -175,7 +178,7 @@ private:
 		if (source_nullmask->any()) {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
-				read_string(result_data, handles, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
+				read_string(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
 				if (!(*source_nullmask)[src_idx] && OPL::Operation(result_data[src_idx].GetString(), constantLeft) &&
 				    OPR::Operation(result_data[src_idx].GetString(), constantRight)) {
 					new_sel.set_index(result_count++, src_idx);
@@ -184,7 +187,7 @@ private:
 		} else {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
-				read_string(result_data, handles, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
+				read_string(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
 				if (OPL::Operation(result_data[src_idx].GetString(), constantLeft) &&
 				    OPR::Operation(result_data[src_idx].GetString(), constantRight)) {
 					new_sel.set_index(result_count++, src_idx);

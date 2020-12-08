@@ -26,7 +26,7 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(PhysicalType type);
 
-NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t row_start, block_id_t block)
+NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t row_start, block_id_t block_id)
     : UncompressedSegment(manager, type, row_start) {
 	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
@@ -41,16 +41,17 @@ NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t 
 	this->vector_size = sizeof(nullmask_t) + type_size * STANDARD_VECTOR_SIZE;
 	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
 
-	this->block_id = block;
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
-		auto handle = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
-		this->block_id = handle->block_id;
+		this->block = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+		auto handle = manager.Pin(block);
 		// initialize nullmasks to 0 for all vectors
 		for (idx_t i = 0; i < max_vector_count; i++) {
 			auto mask = (nullmask_t *)(handle->node->buffer + (i * vector_size));
 			mask->reset();
 		}
+	} else {
+		this->block = manager.RegisterBlock(block_id);
 	}
 }
 
@@ -204,7 +205,7 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
-	auto handle = manager.Pin(block_id);
+	auto handle = manager.Pin(block);
 	auto data = handle->node->buffer;
 	auto offset = vector_index * vector_size;
 	auto source_nullmask = (nullmask_t *)(data + offset);
@@ -276,7 +277,7 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 //===--------------------------------------------------------------------===//
 void NumericSegment::InitializeScan(ColumnScanState &state) {
 	// pin the primary buffer
-	state.primary_handle = manager.Pin(block_id);
+	state.primary_handle = manager.Pin(block);
 }
 
 //===--------------------------------------------------------------------===//
@@ -394,7 +395,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
                               idx_t result_idx) {
 	auto read_lock = lock.GetSharedLock();
-	auto handle = manager.Pin(block_id);
+	auto handle = manager.Pin(block);
 
 	// get the vector index
 	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
@@ -420,7 +421,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 //===--------------------------------------------------------------------===//
 idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
 	D_ASSERT(data.type.InternalType() == type);
-	auto handle = manager.Pin(block_id);
+	auto handle = manager.Pin(block);
 
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
@@ -449,7 +450,7 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
                             row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
 	if (!node) {
-		auto handle = manager.Pin(block_id);
+		auto handle = manager.Pin(block);
 
 		// create a new node in the undo buffer for this update
 		node = CreateUpdateInfo(column_data, transaction, ids, count, vector_index, vector_offset, type_size);
@@ -457,7 +458,7 @@ void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, T
 		update_function(stats, node, handle->node->buffer + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
-		auto handle = manager.Pin(block_id);
+		auto handle = manager.Pin(block);
 
 		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids, count,
 		                      vector_offset);
@@ -467,7 +468,7 @@ void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, T
 void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
-	auto handle = manager.Pin(block_id);
+	auto handle = manager.Pin(block);
 
 	// move the data from the UpdateInfo back into the base table
 	rollback_update(info, handle->node->buffer + info->vector_index * vector_size);

@@ -59,15 +59,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 }
 
 JoinHashTable::~JoinHashTable() {
-	if (hash_map) {
-		auto hash_id = hash_map->block_id;
-		hash_map.reset();
-		buffer_manager.DestroyBuffer(hash_id);
-	}
-	pinned_handles.clear();
-	for (auto &block : blocks) {
-		buffer_manager.DestroyBuffer(block.block_id);
-	}
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
@@ -308,7 +299,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			auto &last_block = blocks.back();
 			if (last_block.count < last_block.capacity) {
 				// last block has space: pin the buffer of this block
-				auto handle = buffer_manager.Pin(last_block.block_id);
+				auto handle = buffer_manager.Pin(last_block.block);
 				// now append to the block
 				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
 				remaining -= append_count;
@@ -317,17 +308,18 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 		while (remaining > 0) {
 			// now for the remaining data, allocate new buffers to store the data and append there
-			auto handle = buffer_manager.Allocate(block_capacity * entry_size);
+			auto block = buffer_manager.Allocate(block_capacity * entry_size);
+			auto handle = buffer_manager.Pin(block);
 
 			HTDataBlock new_block;
 			new_block.count = 0;
 			new_block.capacity = block_capacity;
-			new_block.block_id = handle->block_id;
+			new_block.block = move(block);
 
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
-			blocks.push_back(new_block);
+			blocks.push_back(move(new_block));
 		}
 	}
 	// now set up the key_locations based on the append entries
@@ -394,7 +386,8 @@ void JoinHashTable::Finalize() {
 	bitmask = capacity - 1;
 
 	// allocate the HT and initialize it with all-zero entries
-	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
+	hash_map_block = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
+	hash_map = buffer_manager.Pin(hash_map_block);
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
 	Vector hashes(LogicalType::HASH);
@@ -405,7 +398,7 @@ void JoinHashTable::Finalize() {
 	// this is so that we can keep pointers around to the blocks
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : blocks) {
-		auto handle = buffer_manager.Pin(block.block_id);
+		auto handle = buffer_manager.Pin(block.block);
 		data_ptr_t dataptr = handle->node->buffer;
 		idx_t entry = 0;
 		while (entry < block.count) {
