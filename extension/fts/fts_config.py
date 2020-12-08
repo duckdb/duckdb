@@ -1,6 +1,6 @@
 import os
 # list all include directories
-include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/fts/include', 'third_party/snowball']]
+include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/fts/include', 'third_party/snowball/libstemmer']]
 # source files
 source_files = [os.path.sep.join(x.split('/')) for x in ['extension/fts/fts-extension.cpp', 'extension/fts/fts_indexing.cpp']]
 # snowball

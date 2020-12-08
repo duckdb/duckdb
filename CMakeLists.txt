@@ -368,6 +368,10 @@ function(add_extension_dependencies LIBRARY)
   if(${BUILD_TPCH_EXTENSION})
     add_dependencies(${LIBRARY} tpch_extension)
   endif()
+
+  if(${BUILD_FTS_EXTENSION})
+    add_dependencies(${LIBRARY} fts_extension)
+  endif()
 endfunction()
 
 function(link_extension_libraries LIBRARY)
