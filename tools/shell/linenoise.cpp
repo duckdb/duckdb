@@ -137,6 +137,7 @@ static int atexit_registered = 0;   /* Register atexit just 1 time. */
 static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
 static char **history = NULL;
+static char *history_file = NULL;
 #ifndef DISABLE_HIGHLIGHT
 #include <string>
 
@@ -1418,6 +1419,19 @@ int linenoiseHistoryAdd(const char *line) {
 	}
 	history[history_len] = linecopy;
 	history_len++;
+	if (history_file && strlen(line) > 0) {
+		// if there is a history file that we loaded from
+		// append to the history
+		// this way we can recover history in case of a crash
+		FILE *fp;
+
+		fp = fopen(history_file, "a");
+		if (fp == NULL) {
+			return 1;
+		}
+		fprintf(fp, "%s\n", line);
+		fclose(fp);
+	}
 	return 1;
 }
 
@@ -1483,19 +1497,24 @@ int linenoiseHistoryLoad(const char *filename) {
 	FILE *fp = fopen(filename, "r");
 	char buf[LINENOISE_MAX_LINE];
 
-	if (fp == NULL)
+	if (fp == NULL) {
 		return -1;
+	}
 
 	while (fgets(buf, LINENOISE_MAX_LINE, fp) != NULL) {
 		char *p;
 
 		p = strchr(buf, '\r');
-		if (!p)
+		if (!p) {
 			p = strchr(buf, '\n');
-		if (p)
+		}
+		if (p) {
 			*p = '\0';
+		}
 		linenoiseHistoryAdd(buf);
 	}
 	fclose(fp);
+
+	history_file = strdup(filename);
 	return 0;
 }

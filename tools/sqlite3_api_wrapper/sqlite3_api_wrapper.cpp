@@ -552,7 +552,11 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
 	}
-	return sqlite3_internal_bind_value(stmt, idx, Value(value));
+	try {
+		return sqlite3_internal_bind_value(stmt, idx, Value(value));
+	} catch(std::exception &ex) {
+		return SQLITE_ERROR;
+	}
 }
 
 int sqlite3_clear_bindings(sqlite3_stmt *stmt) {
