@@ -41,6 +41,7 @@ public:
 private:
 	static unique_ptr<BufferHandle> Load(shared_ptr<BlockHandle> &handle);
 	void Unload();
+	bool CanUnload();
 
 	//! The block-level lock
 	mutex lock;

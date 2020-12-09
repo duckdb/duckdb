@@ -65,6 +65,7 @@ void BlockHandle::Unload() {
 		// already unloaded: nothing to do
 		return;
 	}
+	D_ASSERT(CanUnload());
 	D_ASSERT(memory_usage >= Storage::BLOCK_SIZE);
 	state = BlockState::BLOCK_UNLOADED;
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
@@ -74,6 +75,25 @@ void BlockHandle::Unload() {
 	buffer.reset();
 	manager.current_memory -= memory_usage;
 }
+
+bool BlockHandle::CanUnload() {
+	if (state == BlockState::BLOCK_UNLOADED) {
+		// already unloaded
+		return false;
+	}
+	if (readers > 0) {
+		// there are active readers
+		return false;
+	}
+	if (block_id >= MAXIMUM_BLOCK && !can_destroy && manager.temp_directory.empty()) {
+		// in order to unload this block we need to write it to a temporary buffer
+		// however, no temporary directory is specified!
+		// hence we cannot unload the block
+		return false;
+	}
+	return true;
+}
+
 
 struct BufferEvictionNode {
 	BufferEvictionNode(std::weak_ptr<BlockHandle> handle_p, idx_t timestamp_p) :
@@ -85,7 +105,11 @@ struct BufferEvictionNode {
 	idx_t timestamp;
 
 	bool CanUnload(BlockHandle &handle) {
-		return handle.state != BlockState::BLOCK_UNLOADED && handle.readers == 0 && timestamp == handle.eviction_timestamp;
+		if (timestamp != handle.eviction_timestamp) {
+			// handle was used in between
+			return false;
+		}
+		return handle.CanUnload();
 	}
 };
 
@@ -226,6 +250,7 @@ string BufferManager::GetTemporaryPath(block_id_t id) {
 }
 
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
+	D_ASSERT(!temp_directory.empty());
 	D_ASSERT(buffer.size + Storage::BLOCK_HEADER_SIZE >= Storage::BLOCK_ALLOC_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
