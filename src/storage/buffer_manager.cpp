@@ -299,7 +299,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	// now allocate a buffer of this size and read the data into that buffer
 	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size + Storage::BLOCK_HEADER_SIZE, false, id);
 	buffer->Read(*handle, sizeof(idx_t));
-	return buffer;
+	return move(buffer);
 }
 
 void BufferManager::DeleteTemporaryFile(block_id_t id) {
