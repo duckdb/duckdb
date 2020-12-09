@@ -47,6 +47,10 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 	}
 	handle->state = BlockState::BLOCK_LOADED;
 	if (handle->block_id < MAXIMUM_BLOCK) {
+		// FIXME: currently we still require a lock for reading blocks from disk
+		// this is mainly down to the block manager only having a single pointer into the file
+		// this is relatively easy to fix later on
+		lock_guard<mutex> buffer_lock(handle->manager.manager_lock);
 		auto block = make_unique<Block>(handle->block_id);
 		handle->manager.manager.Read(*block);
 		handle->buffer = move(block);
@@ -153,9 +157,10 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t alloc_size, bool can_destroy) {
-	lock_guard<mutex> lock(manager_lock);
 	// first evict blocks until we have enough memory to store this buffer
-	EvictBlocks(alloc_size, maximum_memory);
+	if (!EvictBlocks(alloc_size, maximum_memory)) {
+		throw OutOfRangeException("Not enough memory to complete operation: could not allocate block of %lld bytes", alloc_size);
+	}
 
 	// allocate the buffer
 	auto temp_id = ++temporary_id;
@@ -179,9 +184,10 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		handle->readers++;
 		return handle->Load(handle);
 	}
-	lock_guard<mutex> buffer_lock(manager_lock);
 	// evict blocks until we have space for the current block
-	EvictBlocks(handle->memory_usage, maximum_memory);
+	if (!EvictBlocks(handle->memory_usage, maximum_memory)) {
+		throw OutOfRangeException("Not enough memory to complete operation: failed to pin block");
+	}
 	// now we can actually load the current block
 	D_ASSERT(handle->readers == 0);
 	handle->readers = 1;
@@ -199,12 +205,14 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	}
 }
 
-void BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
+bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	unique_ptr<BufferEvictionNode> node;
-	while(current_memory + extra_memory > memory_limit) {
+	current_memory += extra_memory;
+	while(current_memory > memory_limit) {
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
-			throw Exception("Not enough memory to complete operation!");
+			current_memory -= extra_memory;
+			return false;
 		}
 		// get a reference to the underlying block pointer
 		auto handle = node->handle.lock();
@@ -225,11 +233,10 @@ void BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		// release the memory and mark the block as unloaded
 		handle->Unload();
 	}
-	current_memory += extra_memory;
+	return true;
 }
 
 void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
-	lock_guard<mutex> lock(manager_lock);
 	if (block_id >= MAXIMUM_BLOCK) {
 		// in-memory buffer: destroy the buffer
 		if (!can_destroy) {
@@ -237,14 +244,26 @@ void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 			DeleteTemporaryFile(block_id);
 		}
 	} else {
+		lock_guard<mutex> lock(manager_lock);
 		// on-disk block: erase from list of blocks in manager
 		blocks.erase(block_id);
 	}
 }
 void BufferManager::SetLimit(idx_t limit) {
 	lock_guard<mutex> buffer_lock(manager_lock);
-	EvictBlocks(0, limit);
+	// try to evict until the limit is reached
+	if (!EvictBlocks(0, limit)) {
+		throw OutOfRangeException("Failed to change memory limit to new limit %lld: could not free up enough memory for the new limit", limit);
+	}
+	idx_t old_limit = maximum_memory;
+	// set the global maximum memory to the new limit if successful
 	maximum_memory = limit;
+	// evict again
+	if (!EvictBlocks(0, limit)) {
+		// failed: go back to old limit
+		maximum_memory = old_limit;
+		throw OutOfRangeException("Failed to change memory limit to new limit %lld: could not free up enough memory for the new limit", limit);
+	}
 }
 
 string BufferManager::GetTemporaryPath(block_id_t id) {

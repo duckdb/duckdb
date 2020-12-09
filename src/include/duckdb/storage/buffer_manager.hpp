@@ -57,7 +57,9 @@ public:
 	static BufferManager &GetBufferManager(ClientContext &context);
 
 private:
-	void EvictBlocks(idx_t extra_memory, idx_t memory_limit);
+	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
+	//! (i.e. not enough blocks could be evicted)
+	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit);
 
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(ManagedBuffer &buffer);
