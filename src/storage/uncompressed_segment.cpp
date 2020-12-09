@@ -375,7 +375,7 @@ void UncompressedSegment::ToTemporary() {
 	auto current = manager.Pin(block);
 
 	// now allocate a new block from the buffer manager
-	auto new_block = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	auto new_block = manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
 	auto handle = manager.Pin(new_block);
 	// now copy the data over and switch to using the new block id
 	memcpy(handle->node->buffer, current->node->buffer, Storage::BLOCK_SIZE);

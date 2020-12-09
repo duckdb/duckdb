@@ -854,6 +854,15 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	return string_buffer.EmptyString(len);
 }
 
+void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
+	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	string_buffer.AddHeapReference(make_unique<ManagedVectorBuffer>(move(handle)));
+}
+
 void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(other.type.InternalType() == PhysicalType::VARCHAR);

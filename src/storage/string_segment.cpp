@@ -21,7 +21,7 @@ StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t
 
 	if (block_id == INVALID_BLOCK) {
 		// start off with an empty string segment: allocate space for it
-		this->block = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+		this->block = manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
 		auto handle = manager.Pin(block);
 		SetDictionaryOffset(*handle, sizeof(idx_t));
 
@@ -553,7 +553,9 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 		new_block->offset = 0;
 		new_block->size = alloc_size;
 		// allocate an in-memory buffer for it
-		block = manager.Allocate(alloc_size);
+		block = manager.RegisterMemory(alloc_size, false);
+		handle = manager.Pin(block);
+		overflow_blocks[block->BlockId()] = new_block.get();
 		new_block->block = move(block);
 		new_block->next = move(head);
 		head = move(new_block);
@@ -578,66 +580,53 @@ string_t StringSegment::ReadString(Vector &result, block_id_t block, int32_t off
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
 	}
-	throw InternalException("FIXME: read overflow string");
+	if (block < MAXIMUM_BLOCK) {
+		// read the overflow string from disk
+		// pin the initial handle and read the length
+		auto block_handle = manager.RegisterBlock(block);
+		auto handle = manager.Pin(block_handle);
 
-	// if (block < MAXIMUM_BLOCK) {
-	// 	// read the overflow string from disk
-	// 	// pin the initial handle and read the length
-	// 	unique_ptr<BufferHandle> handle;
-	// 	auto entry = overflow_blocks.find(block);
-	// 	if (entry == overflow_blocks.end()) {
-	// 		auto block_handle = manager.RegisterBlock(block);
-	// 		handle = manager.Pin(*block_handle);
-	// 		overflow_blocks[block] = move(block_handle);
-	// 	} else {
-	// 		handle = manager.Pin(*entry->second);
-	// 	}
+		uint32_t length = Load<uint32_t>(handle->node->buffer + offset);
+		uint32_t remaining = length;
+		offset += sizeof(uint32_t);
 
-	// 	uint32_t length = Load<uint32_t>(handle->node->buffer + offset);
-	// 	uint32_t remaining = length;
-	// 	offset += sizeof(uint32_t);
+		// allocate a buffer to store the string
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + sizeof(uint32_t));
+		auto target_handle = manager.Allocate(alloc_size);
+		auto target_ptr = target_handle->node->buffer;
+		// write the length in this block as well
+		Store<uint32_t>(length, target_ptr);
+		target_ptr += sizeof(uint32_t);
+		// now append the string to the single buffer
+		while (remaining > 0) {
+			idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
+			memcpy(target_ptr, handle->node->buffer + offset, to_write);
 
-	// 	// allocate a buffer to store the string
-	// 	auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + sizeof(uint32_t));
-	// 	auto target_handle = manager.Allocate(alloc_size, true);
-	// 	auto target_ptr = target_handle->node->buffer;
-	// 	// write the length in this block as well
-	// 	Store<uint32_t>(length, target_ptr);
-	// 	target_ptr += sizeof(uint32_t);
-	// 	// now append the string to the single buffer
-	// 	while (remaining > 0) {
-	// 		idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
-	// 		memcpy(target_ptr, handle->node->buffer + offset, to_write);
+			remaining -= to_write;
+			offset += to_write;
+			target_ptr += to_write;
+			if (remaining > 0) {
+				// read the next block
+				block_id_t next_block = Load<block_id_t>(handle->node->buffer + offset);
+				block_handle = manager.RegisterBlock(next_block);
+				handle = manager.Pin(block_handle);
+				offset = 0;
+			}
+		}
 
-	// 		remaining -= to_write;
-	// 		offset += to_write;
-	// 		target_ptr += to_write;
-	// 		if (remaining > 0) {
-	// 			// read the next block
-	// 			block_id_t next_block = Load<block_id_t>(handle->node->buffer + offset);
-	// 			handle = manager.Pin(next_block);
-	// 			offset = 0;
-	// 		}
-	// 	}
-
-	// 	auto final_buffer = target_handle->node->buffer;
-	// 	handles.insert(make_pair(target_handle->block_id, move(target_handle)));
-	// 	return ReadString(final_buffer, 0);
-	// } else {
-	// 	// read the overflow string from memory
-	// 	// first pin the handle, if it is not pinned yet
-	// 	BufferHandle *handle;
-	// 	auto entry = handles.find(block);
-	// 	if (entry == handles.end()) {
-	// 		auto pinned_handle = manager.Pin(block);
-	// 		handle = pinned_handle.get();
-
-	// 		handles.insert(make_pair(block, move(pinned_handle)));
-	// 	} else {
-	// 		handle = entry->second.get();
-	// 	}
-	// 	return ReadString(handle->node->buffer, offset);
-	// }
+		auto final_buffer = target_handle->node->buffer;
+		StringVector::AddHandle(result, move(target_handle));
+		return ReadString(final_buffer, 0);
+	} else {
+		// read the overflow string from memory
+		// first pin the handle, if it is not pinned yet
+		auto entry = overflow_blocks.find(block);
+		D_ASSERT(entry != overflow_blocks.end());
+		auto handle = manager.Pin(entry->second->block);
+		auto final_buffer = handle->node->buffer;
+		StringVector::AddHandle(result, move(handle));
+		return ReadString(final_buffer, offset);
+	}
 }
 
 string_t StringSegment::ReadString(data_ptr_t target, int32_t offset) {

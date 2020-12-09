@@ -308,7 +308,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 		while (remaining > 0) {
 			// now for the remaining data, allocate new buffers to store the data and append there
-			auto block = buffer_manager.Allocate(block_capacity * entry_size);
+			auto block = buffer_manager.RegisterMemory(block_capacity * entry_size, false);
 			auto handle = buffer_manager.Pin(block);
 
 			HTDataBlock new_block;
@@ -386,8 +386,7 @@ void JoinHashTable::Finalize() {
 	bitmask = capacity - 1;
 
 	// allocate the HT and initialize it with all-zero entries
-	hash_map_block = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
-	hash_map = buffer_manager.Pin(hash_map_block);
+	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
 	Vector hashes(LogicalType::HASH);

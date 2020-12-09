@@ -43,7 +43,7 @@ NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t 
 
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
-		this->block = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+		this->block = manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
 		auto handle = manager.Pin(block);
 		// initialize nullmasks to 0 for all vectors
 		for (idx_t i = 0; i < max_vector_count; i++) {

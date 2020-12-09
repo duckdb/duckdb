@@ -123,7 +123,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
-shared_ptr<BlockHandle> BufferManager::Allocate(idx_t alloc_size, bool can_destroy) {
+shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t alloc_size, bool can_destroy) {
 	lock_guard<mutex> lock(manager_lock);
 	// first evict blocks until we have enough memory to store this buffer
 	EvictBlocks(alloc_size, maximum_memory);
@@ -134,6 +134,11 @@ shared_ptr<BlockHandle> BufferManager::Allocate(idx_t alloc_size, bool can_destr
 
 	// create a new block pointer for this block
 	return make_shared<BlockHandle>(*this, temp_id, move(buffer), can_destroy, alloc_size);
+}
+
+unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
+	auto block = RegisterMemory(alloc_size, true);
+	return Pin(block);
 }
 
 unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {

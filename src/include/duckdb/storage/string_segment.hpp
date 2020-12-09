@@ -60,8 +60,8 @@ public:
 	unique_ptr<string_update_info_t[]> string_updates;
 	//! Overflow string writer (if any), if not set overflow strings will be written to memory blocks
 	unique_ptr<OverflowStringWriter> overflow_writer;
-	//! Set of blocks used for holding overflow strings
-	unordered_map<block_id_t, unique_ptr<BlockHandle>> overflow_blocks;
+	//! Map of block id to string block
+	unordered_map<block_id_t, StringBlock*> overflow_blocks;
 
 public:
 	void InitializeScan(ColumnScanState &state) override;

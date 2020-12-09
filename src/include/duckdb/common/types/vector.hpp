@@ -244,6 +244,8 @@ struct StringVector {
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
 	static string_t EmptyString(Vector &vector, idx_t len);
+	//! Adds a reference to a handle that stores strings of this vector
+	static void AddHandle(Vector &vector, unique_ptr<BufferHandle> handle);
 
 	//! Add a reference from this vector to the string heap of the provided vector
 	static void AddHeapReference(Vector &vector, Vector &other);

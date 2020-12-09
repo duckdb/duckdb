@@ -1,6 +1,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 #include "duckdb/common/assert.hpp"
 
@@ -39,5 +40,12 @@ void VectorListBuffer::SetChild(unique_ptr<ChunkCollection> new_child) {
 
 VectorListBuffer::~VectorListBuffer() {
 }
+
+ManagedVectorBuffer::ManagedVectorBuffer(unique_ptr<BufferHandle> handle) :
+	VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(move(handle)) {
+
+}
+
+ManagedVectorBuffer::~ManagedVectorBuffer() {}
 
 } // namespace duckdb

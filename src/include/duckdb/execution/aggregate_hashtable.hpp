@@ -117,12 +117,10 @@ private:
 	//! The amount of entries stored in the HT currently
 	idx_t entries;
 	//! The data of the HT
-	vector<shared_ptr<BlockHandle>> payload_blocks;
 	vector<unique_ptr<BufferHandle>> payload_hds;
 	vector<data_ptr_t> payload_hds_ptrs;
 
 	//! The hashes of the HT
-	shared_ptr<BlockHandle> hashes_block;
 	unique_ptr<BufferHandle> hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
 	data_ptr_t hashes_end_ptr; // of hashes

@@ -211,7 +211,6 @@ private:
 	//! Pinned handles, these are pinned during finalization only
 	vector<unique_ptr<BufferHandle>> pinned_handles;
 	//! The hash map of the HT, created after finalization
-	shared_ptr<BlockHandle> hash_map_block;
 	unique_ptr<BufferHandle> hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;

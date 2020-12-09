@@ -22,9 +22,7 @@ public:
 	//! The checkpoint manager
 	CheckpointManager &manager;
 
-	//! Block handle of temporary buffer
-	shared_ptr<BlockHandle> block;
-	//! Block handle use for writing to
+	//! Temporary buffer
 	unique_ptr<BufferHandle> handle;
 	//! The block on-disk to which we are writing
 	block_id_t block_id;
@@ -210,14 +208,13 @@ WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(CheckpointManager &manage
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
 	if (offset > 0) {
-		manager.block_manager.Write(*handle->node, block->BlockId());
+		manager.block_manager.Write(*handle->node, block_id);
 	}
 }
 
 void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
 	if (!handle) {
-		block = manager.buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
-		handle = manager.buffer_manager.Pin(block);
+		handle = manager.buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 	}
 	// first write the length of the string
 	if (block_id == INVALID_BLOCK || offset + sizeof(uint32_t) >= STRING_SPACE) {
@@ -254,7 +251,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 }
 
 void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
-	if (block->BlockId() != INVALID_BLOCK) {
+	if (block_id != INVALID_BLOCK) {
 		// there is an old block, write it first
 		manager.block_manager.Write(*handle->node, block_id);
 	}

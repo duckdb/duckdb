@@ -45,8 +45,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 
 	D_ASSERT(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 	tuples_per_block = Storage::BLOCK_ALLOC_SIZE / tuple_size;
-	hashes_block = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true);
-	hashes_hdl = buffer_manager.Pin(hashes_block);
+	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 	hashes_hdl_ptr = hashes_hdl->Ptr();
 
 	switch (entry_type) {
@@ -109,9 +108,7 @@ template <class FUNC> void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
 }
 
 void GroupedAggregateHashTable::NewBlock() {
-	auto block = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, true);
-	auto pin = buffer_manager.Pin(block);
-	payload_blocks.push_back(move(block));
+	auto pin = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 	payload_hds.push_back(move(pin));
 	payload_hds_ptrs.push_back(payload_hds.back()->Ptr());
 	payload_page_offset = 0;
@@ -212,11 +209,7 @@ template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
 
 	auto byte_size = size * sizeof(T);
 	if (byte_size > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
-		hashes_hdl.reset();
-		hashes_block.reset();
-
-		hashes_block = buffer_manager.Allocate(byte_size, true);
-		hashes_hdl = buffer_manager.Pin(hashes_block);
+		hashes_hdl = buffer_manager.Allocate(byte_size);
 		hashes_hdl_ptr = hashes_hdl->Ptr();
 	}
 	memset(hashes_hdl_ptr, 0, byte_size);
