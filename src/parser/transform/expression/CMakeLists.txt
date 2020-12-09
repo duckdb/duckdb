@@ -8,6 +8,7 @@ add_library_unity(duckdb_transformer_expression
                   transform_constant.cpp
                   transform_expression.cpp
                   transform_function.cpp
+                  transform_interval.cpp
                   transform_is_null.cpp
                   transform_operator.cpp
                   transform_param_ref.cpp

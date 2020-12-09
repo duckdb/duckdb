@@ -1,8 +1,8 @@
-#include "dbgen.hpp"
+#include "dbgen/dbgen.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "dbgen_gunk.hpp"
+#include "dbgen/dbgen_gunk.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "tpch_constants.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -15,8 +15,8 @@
 
 #define DECLARER /* EXTERN references get defined here */
 
-#include "dss.h"
-#include "dsstypes.h"
+#include "dbgen/dss.h"
+#include "dbgen/dsstypes.h"
 
 #include <cassert>
 #include <mutex>

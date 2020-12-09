@@ -15,7 +15,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "parquet-extension.hpp"
+#include "extension/extension_helper.hpp"
 
 #include <random>
 
@@ -53,6 +53,12 @@ struct TimeConvert {
 struct StringConvert {
 	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
 		return py::str(val.GetString());
+	}
+};
+
+struct BlobConvert {
+	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
+		return py::bytes(val.GetString());
 	}
 };
 
@@ -544,7 +550,9 @@ struct DuckDBPyResult {
 			case LogicalTypeId::VARCHAR:
 				res[col_idx] = val.GetValue<string>();
 				break;
-
+			case LogicalTypeId::BLOB:
+				res[col_idx] = py::bytes(val.GetValue<string>());
+				break;
 			case LogicalTypeId::TIMESTAMP: {
 				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
@@ -658,6 +666,10 @@ struct DuckDBPyResult {
 				break;
 			case LogicalTypeId::VARCHAR:
 				col_res = duckdb_py_convert::fetch_column<string_t, py::str, duckdb_py_convert::StringConvert>(
+				    "object", mres->collection, col_idx);
+				break;
+			case LogicalTypeId::BLOB:
+				col_res = duckdb_py_convert::fetch_column<string_t, py::bytes, duckdb_py_convert::BlobConvert>(
 				    "object", mres->collection, col_idx);
 				break;
 			default:
@@ -1060,7 +1072,7 @@ struct DuckDBPyConnection {
 			config.access_mode = AccessMode::READ_ONLY;
 		}
 		res->database = make_unique<DuckDB>(database, &config);
-		res->database->LoadExtension<ParquetExtension>();
+		ExtensionHelper::LoadAllExtensions(*res->database);
 		res->connection = make_unique<Connection>(*res->database);
 
 		PandasScanFunction scan_fun;
@@ -1382,6 +1394,11 @@ static py::object py_tokenize(string query) {
 }
 
 PYBIND11_MODULE(duckdb, m) {
+	m.doc() = "DuckDB is an embeddable SQL OLAP Database Management System";
+	m.attr("__package__") = "duckdb";
+	m.attr("__version__") = DuckDB::LibraryVersion();
+	m.attr("__git_revision__") = DuckDB::SourceID();
+
 	m.def("connect", &DuckDBPyConnection::connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",

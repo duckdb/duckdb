@@ -6,7 +6,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 
-#include "dbgen.hpp"
+#include "dbgen/dbgen.hpp"
 
 namespace duckdb {
 

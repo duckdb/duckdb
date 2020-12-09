@@ -13,6 +13,7 @@ void BuiltinFunctions::RegisterDateFunctions() {
 	Register<EpochFun>();
 	Register<StrfTimeFun>();
 	Register<StrpTimeFun>();
+	Register<ToIntervalFun>();
 }
 
 } // namespace duckdb

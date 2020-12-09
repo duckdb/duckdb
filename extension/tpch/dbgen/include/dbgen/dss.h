@@ -15,6 +15,8 @@
 #ifndef DSS_H
 #define DSS_H
 
+#include "dbgen/config.h"
+
 #ifdef TPCH
 #define NAME "TPC-H"
 #endif
@@ -27,8 +29,8 @@
 #define TPC "Transaction Processing Performance Council"
 #define C_DATES "1994 - 2010"
 
-#include "config.h"
-#include "shared.h"
+#include "dbgen/config.h"
+#include "dbgen/shared.h"
 
 #include <stdio.h>
 #include <stdlib.h>
