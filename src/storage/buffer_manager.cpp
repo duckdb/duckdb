@@ -192,9 +192,11 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->readers > 0);
 	handle->readers--;
-	handle->eviction_timestamp++;
-	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
-	// FIXME: do some house-keeping to prevent the queue from being flooded with many old blocks
+	if (handle->readers == 0) {
+		handle->eviction_timestamp++;
+		queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
+		// FIXME: do some house-keeping to prevent the queue from being flooded with many old blocks
+	}
 }
 
 void BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
