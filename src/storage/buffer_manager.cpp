@@ -31,6 +31,11 @@ BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p, unique
 
 BlockHandle::~BlockHandle() {
 	// no references remain to this block: erase
+	if (state == BlockState::BLOCK_LOADED) {
+		// the block is still loaded in memory: erase it
+		buffer.reset();
+		manager.current_memory -= memory_usage;
+	}
 	manager.UnregisterBlock(block_id, can_destroy);
 }
 
