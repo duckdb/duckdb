@@ -33,7 +33,8 @@ static string indexing_script(string input_schema, string input_table, string in
     string result = SQL(
         DROP SCHEMA IF EXISTS %fts_schema% CASCADE;
         CREATE SCHEMA %fts_schema%;
-        CREATE MACRO %fts_schema%.tokenize(s) AS stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(s)), '[^a-z]', ' ', 'g'), '\s+')), '%stemmer%');
+        CREATE MACRO %fts_schema%.tokenize(s) AS
+            stem(unnest(string_split_regex(regexp_replace(lower(strip_accents(s)), '(\\\\.|[^a-z])', ' ', 'g'), '\s+')), '%stemmer%');
 
         CREATE TABLE %fts_schema%.docs AS (
             SELECT
