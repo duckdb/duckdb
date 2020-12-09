@@ -28,11 +28,11 @@ unique_ptr<CreateMacroInfo> MacroCatalogEntry::Deserialize(Deserializer &source)
 	for (idx_t i = 0; i < param_count; i++) {
 		info->function->parameters.push_back(ParsedExpression::Deserialize(source));
 	}
-    auto default_param_count = source.Read<uint32_t>();
-    for (idx_t i = 0; i < default_param_count; i++) {
+	auto default_param_count = source.Read<uint32_t>();
+	for (idx_t i = 0; i < default_param_count; i++) {
 		auto name = source.Read<string>();
-        info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
-    }
+		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
+	}
 	return info;
 }
 

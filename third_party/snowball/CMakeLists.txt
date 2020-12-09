@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(Snowball)
 
-#cmake_policy(SET CMP0063 NEW)
+# cmake_policy(SET CMP0063 NEW)
 
 include_directories(libstemmer runtime src_c)
 
@@ -50,4 +50,3 @@ install(
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
-
