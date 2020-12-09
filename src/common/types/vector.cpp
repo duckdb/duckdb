@@ -11,6 +11,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 using namespace std;
 
