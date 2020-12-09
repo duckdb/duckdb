@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
