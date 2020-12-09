@@ -336,7 +336,8 @@ struct PandasScanFunction : public TableFunction {
 		}
 	}
 
-	static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
+	static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
+	                          Vector &out) {
 		switch (bind_data.pandas_type) {
 		case PandasType::BOOLEAN:
 			scan_pandas_column<bool>(numpy_col, count, offset, out);
@@ -366,8 +367,7 @@ struct PandasScanFunction : public TableFunction {
 			scan_pandas_numeric_object<int64_t>(numpy_col, count, offset, out);
 			break;
 		case PandasType::FLOAT:
-			scan_pandas_fp_column<float>((float *)numpy_col.data(), count, offset,
-											out);
+			scan_pandas_fp_column<float>((float *)numpy_col.data(), count, offset, out);
 			break;
 		case PandasType::DOUBLE:
 			scan_pandas_fp_column<double>((double *)numpy_col.data(), count, offset, out);
@@ -445,7 +445,6 @@ struct PandasScanFunction : public TableFunction {
 		default:
 			throw runtime_error("Unsupported type " + out.type.ToString());
 		}
-
 	}
 
 	static void pandas_scan_function(ClientContext &context, const FunctionData *bind_data,
@@ -462,7 +461,8 @@ struct PandasScanFunction : public TableFunction {
 
 		output.SetCardinality(this_count);
 		for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-			ConvertVector(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count, state.position, output.data[col_idx]);
+			ConvertVector(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count,
+			              state.position, output.data[col_idx]);
 		}
 		state.position += this_count;
 	}

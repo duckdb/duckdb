@@ -19,7 +19,8 @@ using namespace duckdb;
 using namespace std;
 
 struct RProtector {
-	RProtector() : protect_count(0) {}
+	RProtector() : protect_count(0) {
+	}
 	~RProtector() {
 		if (protect_count > 0) {
 			UNPROTECT(protect_count);
@@ -61,7 +62,7 @@ private:
 		SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
 		R_PreserveObject(out);
 		MARK_NOT_MUTABLE(out);
-    }
+	}
 };
 
 struct RStatement {
