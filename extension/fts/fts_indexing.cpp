@@ -68,9 +68,8 @@ static string indexing_script(string input_schema, string input_table, string in
 
         CREATE TABLE %fts_schema%.dict AS
         WITH distinct_terms AS (
-            SELECT DISTINCT term, docid
+            SELECT DISTINCT term
             FROM %fts_schema%.terms
-            ORDER BY docid
         )
         SELECT
             row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,

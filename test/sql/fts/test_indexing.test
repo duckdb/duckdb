@@ -156,3 +156,13 @@ doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING	Laurens
 query III
 SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, NULL)
 ----
+
+query III
+SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'mark laurens', k=1.1, b=0.7)
+----
+doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
+doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING	Laurens
+
+query III
+SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'mark laurens', conjunctive=1)
+----
