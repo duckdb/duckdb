@@ -17,18 +17,17 @@ class BufferHandle;
 class BufferManager;
 class FileBuffer;
 
-enum class BlockState : uint8_t {
-	BLOCK_UNLOADED = 0,
-	BLOCK_LOADED = 1
-};
+enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
 
 class BlockHandle {
 	friend struct BufferEvictionNode;
 	friend class BufferHandle;
 	friend class BufferManager;
+
 public:
 	BlockHandle(BufferManager &manager, block_id_t block_id);
-	BlockHandle(BufferManager &manager, block_id_t block_id, unique_ptr<FileBuffer> buffer, bool can_destroy, idx_t alloc_size);
+	BlockHandle(BufferManager &manager, block_id_t block_id, unique_ptr<FileBuffer> buffer, bool can_destroy,
+	            idx_t alloc_size);
 	~BlockHandle();
 
 	BufferManager &manager;
@@ -61,4 +60,4 @@ private:
 	idx_t memory_usage;
 };
 
-}
+} // namespace duckdb

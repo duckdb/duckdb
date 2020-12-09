@@ -80,9 +80,8 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 // Filter base data
 //===--------------------------------------------------------------------===//
-void StringSegment::read_string(string_t *result_data, Vector &result, data_ptr_t baseptr,
-                                int32_t *dict_offset, idx_t src_idx, idx_t res_idx, idx_t &update_idx,
-                                size_t vector_index) {
+void StringSegment::read_string(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
+                                idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index) {
 	if (string_updates && string_updates[vector_index]) {
 		auto &info = *string_updates[vector_index];
 		while (update_idx < STANDARD_VECTOR_SIZE && info.ids[update_idx] < src_idx) {
@@ -125,21 +124,18 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			Select_String<GreaterThan>(result, baseptr, base_data, sel,
-			                           tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
-			                           vector_index);
+			Select_String<GreaterThan>(result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			                           approved_tuple_count, base_nullmask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			Select_String<LessThanEquals>(result, baseptr, base_data, sel,
-			                              tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
-			                              vector_index);
+			Select_String<LessThanEquals>(result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			                              approved_tuple_count, base_nullmask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			Select_String<GreaterThanEquals>(result, baseptr, base_data, sel,
-			                                 tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
-			                                 vector_index);
+			Select_String<GreaterThanEquals>(result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			                                 approved_tuple_count, base_nullmask, vector_index);
 
 			break;
 		}

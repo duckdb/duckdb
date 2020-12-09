@@ -6,8 +6,7 @@
 namespace duckdb {
 using namespace std;
 
-BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p) :
-	manager(manager_p) {
+BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p) : manager(manager_p) {
 	block_id = block_id_p;
 	readers = 0;
 	buffer = nullptr;
@@ -17,8 +16,9 @@ BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p) :
 	memory_usage = Storage::BLOCK_ALLOC_SIZE;
 }
 
-BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p, bool can_destroy_p, idx_t alloc_size) :
-	manager(manager_p) {
+BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
+                         bool can_destroy_p, idx_t alloc_size)
+    : manager(manager_p) {
 	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
 	block_id = block_id_p;
 	readers = 0;
@@ -74,7 +74,7 @@ void BlockHandle::Unload() {
 	state = BlockState::BLOCK_UNLOADED;
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file
-		manager.WriteTemporaryBuffer((ManagedBuffer &) *buffer);
+		manager.WriteTemporaryBuffer((ManagedBuffer &)*buffer);
 	}
 	buffer.reset();
 	manager.current_memory -= memory_usage;
@@ -98,10 +98,9 @@ bool BlockHandle::CanUnload() {
 	return true;
 }
 
-
 struct BufferEvictionNode {
-	BufferEvictionNode(std::weak_ptr<BlockHandle> handle_p, idx_t timestamp_p) :
-		handle(move(handle_p)), timestamp(timestamp_p) {
+	BufferEvictionNode(std::weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
+	    : handle(move(handle_p)), timestamp(timestamp_p) {
 		D_ASSERT(!handle.expired());
 	}
 
@@ -159,7 +158,8 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t alloc_size, bool can_destroy) {
 	// first evict blocks until we have enough memory to store this buffer
 	if (!EvictBlocks(alloc_size, maximum_memory)) {
-		throw OutOfRangeException("Not enough memory to complete operation: could not allocate block of %lld bytes", alloc_size);
+		throw OutOfRangeException("Not enough memory to complete operation: could not allocate block of %lld bytes",
+		                          alloc_size);
 	}
 
 	// allocate the buffer
@@ -208,7 +208,7 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	unique_ptr<BufferEvictionNode> node;
 	current_memory += extra_memory;
-	while(current_memory > memory_limit) {
+	while (current_memory > memory_limit) {
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
 			current_memory -= extra_memory;
@@ -253,7 +253,9 @@ void BufferManager::SetLimit(idx_t limit) {
 	lock_guard<mutex> buffer_lock(manager_lock);
 	// try to evict until the limit is reached
 	if (!EvictBlocks(0, limit)) {
-		throw OutOfRangeException("Failed to change memory limit to new limit %lld: could not free up enough memory for the new limit", limit);
+		throw OutOfRangeException(
+		    "Failed to change memory limit to new limit %lld: could not free up enough memory for the new limit",
+		    limit);
 	}
 	idx_t old_limit = maximum_memory;
 	// set the global maximum memory to the new limit if successful
@@ -262,7 +264,9 @@ void BufferManager::SetLimit(idx_t limit) {
 	if (!EvictBlocks(0, limit)) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
-		throw OutOfRangeException("Failed to change memory limit to new limit %lld: could not free up enough memory for the new limit", limit);
+		throw OutOfRangeException(
+		    "Failed to change memory limit to new limit %lld: could not free up enough memory for the new limit",
+		    limit);
 	}
 }
 

@@ -61,7 +61,7 @@ public:
 	//! Overflow string writer (if any), if not set overflow strings will be written to memory blocks
 	unique_ptr<OverflowStringWriter> overflow_writer;
 	//! Map of block id to string block
-	unordered_map<block_id_t, StringBlock*> overflow_blocks;
+	unordered_map<block_id_t, StringBlock *> overflow_blocks;
 
 public:
 	void InitializeScan(ColumnScanState &state) override;
@@ -134,12 +134,12 @@ private:
 	//! The amount of bytes remaining to store in the block
 	idx_t RemainingSpace(BufferHandle &handle);
 
-	void read_string(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
-	                 idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index);
+	void read_string(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset, idx_t src_idx,
+	                 idx_t res_idx, idx_t &update_idx, size_t vector_index);
 	template <class OP>
-	void Select_String(Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
-	                   SelectionVector &sel, const string &constant, idx_t &approved_tuple_count,
-	                   nullmask_t *source_nullmask, size_t vector_index) {
+	void Select_String(Vector &result, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
+	                   const string &constant, idx_t &approved_tuple_count, nullmask_t *source_nullmask,
+	                   size_t vector_index) {
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<string_t>(result);
 		SelectionVector new_sel(approved_tuple_count);
@@ -167,9 +167,9 @@ private:
 	}
 
 	template <class OPL, class OPR>
-	void Select_String_Between(Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
-	                           SelectionVector &sel, string constantLeft, string constantRight,
-	                           idx_t &approved_tuple_count, nullmask_t *source_nullmask, size_t vector_index) {
+	void Select_String_Between(Vector &result, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
+	                           string constantLeft, string constantRight, idx_t &approved_tuple_count,
+	                           nullmask_t *source_nullmask, size_t vector_index) {
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<string_t>(result);
 		SelectionVector new_sel(approved_tuple_count);

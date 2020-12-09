@@ -41,11 +41,11 @@ void VectorListBuffer::SetChild(unique_ptr<ChunkCollection> new_child) {
 VectorListBuffer::~VectorListBuffer() {
 }
 
-ManagedVectorBuffer::ManagedVectorBuffer(unique_ptr<BufferHandle> handle) :
-	VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(move(handle)) {
-
+ManagedVectorBuffer::ManagedVectorBuffer(unique_ptr<BufferHandle> handle)
+    : VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(move(handle)) {
 }
 
-ManagedVectorBuffer::~ManagedVectorBuffer() {}
+ManagedVectorBuffer::~ManagedVectorBuffer() {
+}
 
 } // namespace duckdb

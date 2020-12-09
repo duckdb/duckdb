@@ -143,6 +143,7 @@ class ManagedVectorBuffer : public VectorBuffer {
 public:
 	ManagedVectorBuffer(unique_ptr<BufferHandle> handle);
 	~ManagedVectorBuffer();
+
 private:
 	unique_ptr<BufferHandle> handle;
 };
