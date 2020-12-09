@@ -37,8 +37,6 @@ struct ColumnScanState {
 	idx_t vector_index;
 	//! The primary buffer handle
 	unique_ptr<BufferHandle> primary_handle;
-	//! The set of pinned block handles for this scan
-	buffer_handle_set_t handles;
 	//! The locks that are held during the scan, only used by the index scan
 	vector<unique_ptr<StorageLockKey>> locks;
 	//! Whether or not InitializeState has been called for this segment

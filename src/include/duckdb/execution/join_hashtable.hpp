@@ -103,7 +103,7 @@ private:
 	struct HTDataBlock {
 		idx_t count;
 		idx_t capacity;
-		block_id_t block_id;
+		shared_ptr<BlockHandle> block;
 	};
 
 	struct BlockAppendEntry {
