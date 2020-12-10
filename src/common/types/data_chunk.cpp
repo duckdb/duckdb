@@ -281,7 +281,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				auto target_ptr = (uint64_t *)child.buffers[1];
 				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = Timestamp::GetEpoch(target_ptr[row_idx]) * 1e9;
+					target_ptr[row_idx] = Timestamp::GetEpochNanoSeconds(target_ptr[row_idx]);
 				}
 				break;
 			}

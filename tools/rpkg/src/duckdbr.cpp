@@ -631,7 +631,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				auto &nullmask = FlatVector::Nullmask(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpoch(src_data[row_idx]);
+					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -649,7 +649,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				auto &nullmask = FlatVector::Nullmask(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]) - 719528;
+					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -659,16 +659,15 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			}
 			case LogicalTypeId::TIME: {
 				auto &src_vec = chunk->data[col_idx];
-				auto src_data = FlatVector::GetData<int32_t>(src_vec);
+				auto src_data = FlatVector::GetData<int64_t>(src_vec);
 				auto &nullmask = FlatVector::Nullmask(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-
 					if (nullmask[row_idx]) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
 						time_t n = src_data[row_idx];
-						dest_ptr[row_idx] = n / 1000.0;
+						dest_ptr[row_idx] = n / 1000000.0;
 					}
 				}
 

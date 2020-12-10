@@ -140,9 +140,9 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 		return GetFirstAggregateTemplated<int16_t>(type);
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
 		return GetFirstAggregateTemplated<int32_t>(type);
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 		return GetFirstAggregateTemplated<int64_t>(type);
 	case LogicalTypeId::HUGEINT:

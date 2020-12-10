@@ -36,6 +36,31 @@ SELECT '30000-01-01'::DATE::VARCHAR == '30000-01-01'
 1
 
 query I
+SELECT '1969-01-01'::DATE::VARCHAR == '1969-01-01'
+----
+1
+
+query I
+SELECT '1970-01-01'::DATE::VARCHAR == '1970-01-01'
+----
+1
+
+query I
+SELECT '2369-01-01'::DATE::VARCHAR == '2369-01-01'
+----
+1
+
+query I
+SELECT '2370-01-01'::DATE::VARCHAR == '2370-01-01'
+----
+1
+
+query I
+SELECT '2371-01-01'::DATE::VARCHAR == '2371-01-01'
+----
+1
+
+query I
 SELECT '-1000-01-01'::DATE::VARCHAR == '1001-01-01 (BC)'
 ----
 1

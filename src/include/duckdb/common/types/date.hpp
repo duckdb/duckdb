@@ -56,8 +56,6 @@ public:
 
 	//! Returns true if (year) is a leap year, and false otherwise
 	static bool IsLeapYear(int32_t year);
-	//! The amount of days present in a given year
-	static int32_t YearDays(int32_t year);
 
 	//! Returns true if the specified (year, month, day) combination is a valid
 	//! date
@@ -99,6 +97,9 @@ public:
 	static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
 	//! Returns the date of the monday of the current week.
 	static date_t GetMondayOfCurrentWeek(date_t date);
+
+	//! Helper function to parse two digits from a string (e.g. "30" -> 30, "03" -> 3, "3" -> 3)
+	static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result);
 
 private:
 	static void ExtractYearDay(int32_t n, int32_t &year, int32_t &day_of_year);

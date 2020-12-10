@@ -322,7 +322,7 @@ struct EpochOperator {
 };
 
 template <> int64_t EpochOperator::Operation(timestamp_t input) {
-	return Timestamp::GetEpoch(input);
+	return Timestamp::GetEpochSeconds(input);
 }
 
 struct MicrosecondsOperator {
@@ -339,7 +339,9 @@ struct MicrosecondsOperator {
 };
 
 template <> int64_t MicrosecondsOperator::Operation(timestamp_t input) {
-	return Timestamp::GetMilliseconds(input) * 1000;
+	int n = Timestamp::GetTime(input);
+	int m = n / 60000;
+	return n - m * 60000;
 }
 
 struct MillisecondsOperator {
@@ -356,7 +358,9 @@ struct MillisecondsOperator {
 };
 
 template <> int64_t MillisecondsOperator::Operation(timestamp_t input) {
-	return Timestamp::GetMilliseconds(input);
+	int n = Timestamp::GetTime(input) / 1000;
+	int m = n / 60000;
+	return n - m * 60000;
 }
 
 struct SecondsOperator {
@@ -373,7 +377,9 @@ struct SecondsOperator {
 };
 
 template <> int64_t SecondsOperator::Operation(timestamp_t input) {
-	return Timestamp::GetSeconds(input);
+	int n = Timestamp::GetTime(input) / 1000;
+	int m = n / 60000;
+	return (n - m * 60000) / 1000;
 }
 
 struct MinutesOperator {
@@ -390,7 +396,9 @@ struct MinutesOperator {
 };
 
 template <> int64_t MinutesOperator::Operation(timestamp_t input) {
-	return Timestamp::GetMinutes(input);
+	int n = Timestamp::GetTime(input) / 1000;
+	int h = n / 3600000;
+	return (n - h * 3600000) / 60000;
 }
 
 struct HoursOperator {
@@ -407,7 +415,7 @@ struct HoursOperator {
 };
 
 template <> int64_t HoursOperator::Operation(timestamp_t input) {
-	return Timestamp::GetHours(input);
+	return Timestamp::GetTime(input) / 3600000000;
 }
 
 template <class T> static int64_t extract_element(DatePartSpecifier type, T element) {

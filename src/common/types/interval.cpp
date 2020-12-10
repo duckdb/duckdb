@@ -41,7 +41,7 @@ bool Interval::FromCString(const char *str, idx_t len, interval_t &result) {
 	DatePartSpecifier specifier;
 
 	result.days = 0;
-	result.msecs = 0;
+	result.micros = 0;
 	result.months = 0;
 
 	if (len == 0) {
@@ -111,7 +111,7 @@ interval_parse_number:
 interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time = Time::FromCString(str + start_pos, len);
-	result.msecs += time;
+	result.micros += time;
 	found_any = true;
 	goto end_of_string;
 }
@@ -164,19 +164,19 @@ interval_parse_identifier:
 		interval_try_addition<int32_t>(result.days, number, DAYS_PER_WEEK);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
-		interval_try_addition<int64_t>(result.msecs, number / 1000, 1);
+		interval_try_addition<int64_t>(result.micros, number, 1);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		interval_try_addition<int64_t>(result.msecs, number, 1);
+		interval_try_addition<int64_t>(result.micros, number, MICROS_PER_MSEC);
 		break;
 	case DatePartSpecifier::SECOND:
-		interval_try_addition<int64_t>(result.msecs, number, MSECS_PER_SEC);
+		interval_try_addition<int64_t>(result.micros, number, MICROS_PER_SEC);
 		break;
 	case DatePartSpecifier::MINUTE:
-		interval_try_addition<int64_t>(result.msecs, number, MSECS_PER_MINUTE);
+		interval_try_addition<int64_t>(result.micros, number, MICROS_PER_MINUTE);
 		break;
 	case DatePartSpecifier::HOUR:
-		interval_try_addition<int64_t>(result.msecs, number, MSECS_PER_HOUR);
+		interval_try_addition<int64_t>(result.micros, number, MICROS_PER_HOUR);
 		break;
 	default:
 		return false;
@@ -212,7 +212,7 @@ interval_parse_ago:
 	// invert all the values
 	result.months = -result.months;
 	result.days = -result.days;
-	result.msecs = -result.msecs;
+	result.micros = -result.micros;
 	goto end_of_string;
 end_of_string:
 	if (!found_any) {
@@ -245,43 +245,16 @@ string Interval::ToString(interval_t date) {
 		}
 		result += to_string(date.days) + (date.days != 1 ? " days" : " day");
 	}
-	if (date.msecs != 0) {
+	if (date.micros != 0) {
 		if (!result.empty()) {
 			result += " ";
 		}
-		int64_t msecs = date.msecs;
-		if (msecs < 0) {
+		int64_t micros = date.micros;
+		if (micros < 0) {
 			result += "-";
-			msecs = -msecs;
+			micros = -micros;
 		}
-		int64_t hours = msecs / MSECS_PER_HOUR;
-		msecs -= hours * MSECS_PER_HOUR;
-		int32_t minutes = msecs / MSECS_PER_MINUTE;
-		msecs -= minutes * MSECS_PER_MINUTE;
-		int32_t secs = msecs / MSECS_PER_SEC;
-		msecs -= secs * MSECS_PER_SEC;
-		if (hours < 10) {
-			result += "0";
-		}
-		result += to_string(hours) + ":";
-		if (minutes < 10) {
-			result += "0";
-		}
-		result += to_string(minutes) + ":";
-		if (secs < 10) {
-			result += "0";
-		}
-		result += to_string(secs);
-		if (msecs > 0) {
-			result += ".";
-			if (msecs < 100) {
-				result += "0";
-			}
-			if (msecs < 10) {
-				result += "0";
-			}
-			result += to_string(msecs);
-		}
+		result += Time::ToString(micros);
 	} else if (result.empty()) {
 		return "00:00:00";
 	}
@@ -296,9 +269,12 @@ constexpr bool isleap(int16_t year) {
 }
 
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
-	// First extract the dates
-	auto date1 = Timestamp::GetDate(timestamp_1);
-	auto date2 = Timestamp::GetDate(timestamp_2);
+	date_t date1, date2;
+	dtime_t time1, time2;
+
+	Timestamp::Convert(timestamp_1, date1, time1);
+	Timestamp::Convert(timestamp_2, date2, time2);
+
 	// and from date extract the years, months and days
 	int32_t year1, month1, day1;
 	int32_t year2, month2, day2;
@@ -309,20 +285,16 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	auto month_diff = month1 - month2;
 	auto day_diff = day1 - day2;
 
-	// Now we extract the time
-	auto time1 = Timestamp::GetTime(timestamp_1);
-	auto time2 = Timestamp::GetTime(timestamp_2);
-
 	// and from time extract hours, minutes, seconds and miliseconds
-	int32_t hour1, min1, sec1, msec1;
-	int32_t hour2, min2, sec2, msec2;
-	Time::Convert(time1, hour1, min1, sec1, msec1);
-	Time::Convert(time2, hour2, min2, sec2, msec2);
+	int32_t hour1, min1, sec1, micros1;
+	int32_t hour2, min2, sec2, micros2;
+	Time::Convert(time1, hour1, min1, sec1, micros1);
+	Time::Convert(time2, hour2, min2, sec2, micros2);
 	// finally perform the differences
 	auto hour_diff = hour1 - hour2;
 	auto min_diff = min1 - min2;
 	auto sec_diff = sec1 - sec2;
-	auto msec_diff = msec1 - msec2;
+	auto micros_diff = micros1 - micros2;
 
 	// flip sign if necessary
 	if (timestamp_1 < timestamp_2) {
@@ -332,11 +304,11 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 		hour_diff = -hour_diff;
 		min_diff = -min_diff;
 		sec_diff = -sec_diff;
-		msec_diff = -msec_diff;
+		micros_diff = -micros_diff;
 	}
 	// now propagate any negative field into the next higher field
-	while (msec_diff < 0) {
-		msec_diff += MSECS_PER_SEC;
+	while (micros_diff < 0) {
+		micros_diff += MICROS_PER_SEC;
 		sec_diff--;
 	}
 	while (sec_diff < 0) {
@@ -353,10 +325,10 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	}
 	while (day_diff < 0) {
 		if (timestamp_1 < timestamp_2) {
-			day_diff += days_per_month[isleap(year1)][month1 - 1];
+			day_diff += Date::IsLeapYear(year1) ? Date::LeapDays[month1] : Date::NormalDays[month1];
 			month_diff--;
 		} else {
-			day_diff += days_per_month[isleap(year2)][month2 - 1];
+			day_diff += Date::IsLeapYear(year2) ? Date::LeapDays[month2] : Date::NormalDays[month2];
 			month_diff--;
 		}
 	}
@@ -373,40 +345,39 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 		hour_diff = -hour_diff;
 		min_diff = -min_diff;
 		sec_diff = -sec_diff;
-		msec_diff = -msec_diff;
+		micros_diff = -micros_diff;
 	}
 	interval_t interval;
 	interval.months = year_diff * MONTHS_PER_YEAR + month_diff;
 	interval.days = day_diff;
-	interval.msecs =
-	    ((((((hour_diff * MINS_PER_HOUR) + min_diff) * SECS_PER_MINUTE) + sec_diff) * MSECS_PER_SEC) + msec_diff);
+	interval.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff);
 
 	return interval;
 }
 
-static void normalize_interval_entries(interval_t input, int64_t &months, int64_t &days, int64_t &msecs) {
+static void normalize_interval_entries(interval_t input, int64_t &months, int64_t &days, int64_t &micros) {
 	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
-	int64_t extra_months_ms = input.msecs / Interval::MSECS_PER_MONTH;
+	int64_t extra_months_micros = input.micros / Interval::MICROS_PER_MONTH;
 	input.days -= extra_months_d * Interval::DAYS_PER_MONTH;
-	input.msecs -= extra_months_ms * Interval::MSECS_PER_MONTH;
+	input.micros -= extra_months_micros * Interval::MICROS_PER_MONTH;
 
-	int64_t extra_days_ms = input.msecs / Interval::MSECS_PER_DAY;
-	input.msecs -= extra_days_ms * Interval::MSECS_PER_DAY;
+	int64_t extra_days_micros = input.micros / Interval::MICROS_PER_DAY;
+	input.micros -= extra_days_micros * Interval::MICROS_PER_DAY;
 
-	months = input.months + extra_months_d + extra_months_ms;
-	days = input.days + extra_days_ms;
-	msecs = input.msecs;
+	months = input.months + extra_months_d + extra_months_micros;
+	days = input.days + extra_days_micros;
+	micros = input.micros;
 }
 
 bool Interval::Equals(interval_t left, interval_t right) {
-	return left.months == right.months && left.days == right.days && left.msecs == right.msecs;
+	return left.months == right.months && left.days == right.days && left.micros == right.micros;
 }
 
 bool Interval::GreaterThan(interval_t left, interval_t right) {
-	int64_t lmonths, ldays, lmsecs;
-	int64_t rmonths, rdays, rmsecs;
-	normalize_interval_entries(left, lmonths, ldays, lmsecs);
-	normalize_interval_entries(right, rmonths, rdays, rmsecs);
+	int64_t lmonths, ldays, lmicros;
+	int64_t rmonths, rdays, rmicros;
+	normalize_interval_entries(left, lmonths, ldays, lmicros);
+	normalize_interval_entries(right, rmonths, rdays, rmicros);
 
 	if (lmonths > rmonths) {
 		return true;
@@ -418,7 +389,7 @@ bool Interval::GreaterThan(interval_t left, interval_t right) {
 	} else if (ldays < rdays) {
 		return false;
 	}
-	return lmsecs > rmsecs;
+	return lmicros > rmicros;
 }
 
 bool Interval::GreaterThanEquals(interval_t left, interval_t right) {

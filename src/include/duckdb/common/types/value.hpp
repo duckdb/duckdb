@@ -84,15 +84,15 @@ public:
 	//! Create a time Value from a specified time
 	static Value TIME(dtime_t time);
 	//! Create a time Value from a specified time
-	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec);
+	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
 	static Value TIMESTAMP(date_t date, dtime_t time);
 	//! Create a timestamp Value from a specified timestamp
 	static Value TIMESTAMP(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
-	                       int32_t msec);
-	static Value INTERVAL(int32_t months, int32_t days, int64_t msecs);
+	                       int32_t micros);
+	static Value INTERVAL(int32_t months, int32_t days, int64_t micros);
 	static Value INTERVAL(interval_t interval);
 
 	// Decimal values

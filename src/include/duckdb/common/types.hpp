@@ -20,7 +20,7 @@ class Deserializer;
 struct interval_t {
 	int32_t months;
 	int32_t days;
-	int64_t msecs;
+	int64_t micros;
 };
 
 struct hugeint_t {

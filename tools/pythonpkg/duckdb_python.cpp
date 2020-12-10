@@ -34,7 +34,7 @@ struct RegularConvert {
 
 struct TimestampConvert {
 	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(timestamp_t val) {
-		return Date::Epoch(Timestamp::GetDate(val)) * 1000 + (int64_t)(Timestamp::GetTime(val));
+		return val / 1000.0;
 	}
 };
 
@@ -556,30 +556,32 @@ struct DuckDBPyResult {
 			case LogicalTypeId::TIMESTAMP: {
 				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
-				auto timestamp = val.GetValue<int64_t>();
-				auto date = Timestamp::GetDate(timestamp);
-				res[col_idx] = PyDateTime_FromDateAndTime(
-				    Date::ExtractYear(date), Date::ExtractMonth(date), Date::ExtractDay(date),
-				    Timestamp::GetHours(timestamp), Timestamp::GetMinutes(timestamp), Timestamp::GetSeconds(timestamp),
-				    Timestamp::GetMilliseconds(timestamp) * 1000 - Timestamp::GetSeconds(timestamp) * 1000000);
-
+				auto timestamp = val.GetValueUnsafe<int64_t>();
+				int32_t year, month, day, hour, min, sec, micros;
+				date_t date;
+				dtime_t time;
+				Timestamp::Convert(timestamp, date, time);
+				Date::Convert(date, year, month, day);
+				Time::Convert(time, hour, min, sec, micros);
+				res[col_idx] = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros * 1000);
 				break;
 			}
 			case LogicalTypeId::TIME: {
-				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
-				int32_t hour, min, sec, msec;
-				auto time = val.GetValue<int32_t>();
-				duckdb::Time::Convert(time, hour, min, sec, msec);
-				res[col_idx] = PyTime_FromTime(hour, min, sec, msec * 1000);
+				int32_t hour, min, sec, microsec;
+				auto time = val.GetValueUnsafe<int64_t>();
+				duckdb::Time::Convert(time, hour, min, sec, microsec);
+				res[col_idx] = PyTime_FromTime(hour, min, sec, microsec);
 				break;
 			}
 			case LogicalTypeId::DATE: {
 				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
-				auto date = val.GetValue<int32_t>();
-				res[col_idx] = PyDate_FromDate(duckdb::Date::ExtractYear(date), duckdb::Date::ExtractMonth(date),
-				                               duckdb::Date::ExtractDay(date));
+				auto date = val.GetValueUnsafe<int32_t>();
+				int32_t year, month, day;
+				duckdb::Date::Convert(date, year, month, day);
+				res[col_idx] = PyDate_FromDate(year, month, day);
 				break;
 			}
 
@@ -661,7 +663,7 @@ struct DuckDBPyResult {
 				    "datetime64[s]", mres->collection, col_idx);
 				break;
 			case LogicalTypeId::TIME:
-				col_res = duckdb_py_convert::fetch_column<time_t, py::str, duckdb_py_convert::TimeConvert>(
+				col_res = duckdb_py_convert::fetch_column<dtime_t, py::str, duckdb_py_convert::TimeConvert>(
 				    "object", mres->collection, col_idx);
 				break;
 			case LogicalTypeId::VARCHAR:
