@@ -24,7 +24,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
 		auto &sq = ((SubqueryExpression &)*expr).subquery;
-        ReplaceMacroParametersRecursive(*expr, *sq);
+		ReplaceMacroParametersRecursive(*expr, *sq);
 		break;
 	}
 	default: // fall through
@@ -36,8 +36,8 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 }
 
 void ExpressionBinder::ReplaceMacroParametersRecursive(ParsedExpression &expr, SelectStatement &statement) {
-    ReplaceMacroParametersRecursive(expr, *statement.node);
-    for (auto &kv : statement.cte_map) {
+	ReplaceMacroParametersRecursive(expr, *statement.node);
+	for (auto &kv : statement.cte_map) {
 		ReplaceMacroParametersRecursive(expr, *kv.second->query);
 	}
 }
