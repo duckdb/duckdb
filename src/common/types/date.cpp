@@ -118,8 +118,10 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		return false;
 	}
 
-	int32_t day = 0, month = -1;
-	int32_t year = 0, yearneg = (buf[0] == '-');
+	int32_t day = 0;
+	int32_t month = -1;
+	int32_t year = 0;
+	bool yearneg = false;
 	int sep;
 
 	// skip leading spaces
@@ -130,13 +132,18 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	if (pos >= len) {
 		return false;
 	}
-
-	if (yearneg == 0 && !StringUtil::CharacterIsDigit(buf[pos])) {
+	if (buf[pos] == '-') {
+		yearneg = true;
+		pos++;
+		if (pos >= len) {
+			return false;
+		}
+	}
+	if (!StringUtil::CharacterIsDigit(buf[pos])) {
 		return false;
 	}
-
 	// first parse the year
-	for (pos = pos + yearneg; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
+	for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
 		if (year > Date::MaxYear) {
 			break;

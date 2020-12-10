@@ -272,6 +272,17 @@ SELECT '-'::DATE::VARCHAR
 statement error
 SELECT '-/10/10'::DATE::VARCHAR
 
+# min year is slightly smaller than max year, because we start at 1970
+# -291000 is out of range, but 291000 is not
+statement error
+SELECT '-291000-01-01'::DATE:VARCHAR;
+
+statement ok
+SELECT '291000-01-01'::DATE::VARCHAR;
+
+statement error
+SELECT '291000-01-01 (BC)'::DATE:VARCHAR;
+
 statement error
 SELECT '-a'::DATE::VARCHAR
 
