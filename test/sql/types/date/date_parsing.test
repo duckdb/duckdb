@@ -36,7 +36,7 @@ SELECT '30000-01-01'::DATE::VARCHAR == '30000-01-01'
 1
 
 query I
-SELECT '-1000-01-01'::DATE::VARCHAR == '1000-01-01 (BC)'
+SELECT '-1000-01-01'::DATE::VARCHAR == '1001-01-01 (BC)'
 ----
 1
 
@@ -227,8 +227,8 @@ SELECT '2000-02-29'::DATE::VARCHAR == '2000-02-29'
 ----
 1
 
-# year 0 is not allowed
-statement error
+# year 0 is fine, results in 1 BC (iso-8601)
+statement ok
 SELECT '0-01-01'::DATE::VARCHAR
 
 # year 1 and -1 are fine
