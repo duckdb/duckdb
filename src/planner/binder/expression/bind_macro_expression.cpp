@@ -24,11 +24,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
 		auto &sq = ((SubqueryExpression &)*expr).subquery;
-		ReplaceMacroParametersRecursive(*expr, *sq->node.get());
-
-		for (auto &kv : sq->cte_map) {
-			ReplaceMacroParametersRecursive(*expr, *kv.second->query->node.get());
-		}
+        ReplaceMacroParametersRecursive(*expr, *sq);
 		break;
 	}
 	default: // fall through
@@ -37,6 +33,13 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	// unfold child expressions
 	ParsedExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
+}
+
+void ExpressionBinder::ReplaceMacroParametersRecursive(ParsedExpression &expr, SelectStatement &statement) {
+    ReplaceMacroParametersRecursive(expr, *statement.node);
+    for (auto &kv : statement.cte_map) {
+		ReplaceMacroParametersRecursive(expr, *kv.second->query);
+	}
 }
 
 void ExpressionBinder::ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref) {
@@ -65,10 +68,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(ParsedExpression &expr, T
 	}
 	case TableReferenceType::SUBQUERY: {
 		auto &sq_ref = (SubqueryRef &)ref;
-		ReplaceMacroParametersRecursive(expr, *sq_ref.subquery->node);
-		for (auto &kv : sq_ref.subquery->cte_map) {
-			ReplaceMacroParametersRecursive(expr, *kv.second->query->node.get());
-		}
+		ReplaceMacroParametersRecursive(expr, *sq_ref.subquery);
 		break;
 	}
 	case TableReferenceType::TABLE_FUNCTION: {

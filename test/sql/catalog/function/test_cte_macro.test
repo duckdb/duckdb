@@ -67,3 +67,25 @@ query T
 SELECT plus42(a) + plus1(a) FROM integers;
 ----
 45
+
+statement ok
+CREATE MACRO deep_cte(param) AS (
+    WITH cte1 AS (
+        WITH cte2 AS (
+            WITH cte3 AS (
+                WITH cte4 AS (
+                    SELECT param AS d
+                )
+                SELECT d AS c FROM cte4
+            )
+            SELECT c AS b FROM cte3
+        )
+        SELECT b AS a FROM cte2
+    )
+    SELECT a FROM cte1
+)
+
+query T
+SELECT deep_cte(42)
+----
+42
