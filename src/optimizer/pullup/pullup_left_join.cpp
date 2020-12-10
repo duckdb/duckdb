@@ -1,0 +1,27 @@
+#include "duckdb/optimizer/filter_pullup.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
+
+namespace duckdb {
+using namespace std;
+
+unique_ptr<LogicalOperator> FilterPullup::PullupLeftJoin(unique_ptr<LogicalOperator> op) {
+	auto &join = (LogicalJoin &)*op;
+	D_ASSERT(join.join_type == JoinType::LEFT);
+	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	FilterPullup left_pullup(optimizer, root_pullup_node_ptr, true);
+	FilterPullup right_pullup(optimizer, root_pullup_node_ptr, false);
+
+	op->children[0] = left_pullup.Rewrite(move(op->children[0]));
+	op->children[1] = right_pullup.Rewrite(move(op->children[1]));
+
+	// check only for filters from the LHS
+	if(left_pullup.filters_pullup.size() > 0 && right_pullup.filters_pullup.size() == 0) {
+		auto filter = move(left_pullup.filters_pullup[0]);
+		filter->children.push_back(move(op));
+		return filter;
+	}
+	return op;
+}
+
+} // namespace duckdb
