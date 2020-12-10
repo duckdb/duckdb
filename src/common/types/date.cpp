@@ -274,7 +274,13 @@ int64_t Date::Epoch(date_t date) {
 }
 
 int32_t Date::ExtractYear(date_t n, int32_t *last_year) {
-	return Date::ExtractYear(n);
+	// cached look up: check if year is the same as the last year
+	if (n >= Date::CumulativeYearDays[*last_year] && n < Date::CumulativeYearDays[*last_year + 1]) {
+		return Date::EpochYear + *last_year;
+	}
+	int32_t year;
+	Date::ExtractYearOffset(n, year, *last_year);
+	return year;
 }
 
 int32_t Date::ExtractYear(timestamp_t ts, int32_t *last_year) {
