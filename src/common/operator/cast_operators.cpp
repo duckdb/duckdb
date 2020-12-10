@@ -618,7 +618,7 @@ struct DateToStringCast {
 		if (date[0] <= 0) {
 			// add (BC) suffix
 			length += 5;
-			date[0] = -date[0];
+			date[0] = -date[0] + 1;
 			add_bc = true;
 		}
 

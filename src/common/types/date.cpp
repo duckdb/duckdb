@@ -43,13 +43,15 @@ void Date::ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset) {
 		n -= Date::DaysPerYearInterval;
 		year += Date::YearInterval;
 	}
-	// we can find a lower bound of the year by dividing n by 365
+	// we can find an upper bound of the year by assuming each year has 365 days
 	year_offset = n / 365;
-	// because of leap years we might be off by a little bit: compensate by incrementing the year offset until we find our year
-	while(Date::CumulativeYearDays[year_offset + 1] <= n) {
-		year_offset++;
+	// because of leap years we might be off by a little bit: compensate by decrementing the year offset until we find our year
+	while(n < Date::CumulativeYearDays[year_offset]) {
+		year_offset--;
+		D_ASSERT(year_offset >= 0);
 	}
 	year += year_offset;
+	D_ASSERT(n >= Date::CumulativeYearDays[year_offset]);
 }
 
 void Date::ExtractYearDay(int32_t n, int32_t &year, int32_t &day_of_year) {
@@ -60,6 +62,7 @@ void Date::ExtractYearDay(int32_t n, int32_t &year, int32_t &day_of_year) {
 
 void Date::Convert(int32_t n, int32_t &year, int32_t &month, int32_t &day) {
 	Date::ExtractYearDay(n, year, day);
+	D_ASSERT(day >= 0 && day <= 365);
 
 	day++;
 	month = 1;
@@ -77,16 +80,12 @@ void Date::Convert(int32_t n, int32_t &year, int32_t &month, int32_t &day) {
 		D_ASSERT(day > 0 && day <= Date::NormalDays[month]);
 	}
 	D_ASSERT(month > 0 && month <= 12);
-	year = (year <= 0) ? year - 1 : year;
 }
 
 int32_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
 	int32_t n = 0;
 	if (!Date::IsValid(year, month, day)) {
 		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
-	}
-	if (year < 0) {
-		year++;
 	}
 	while(year < 1970) {
 		year += Date::YearInterval;
@@ -143,6 +142,12 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 			break;
 		}
 	}
+	if (yearneg) {
+		year = -year;
+		if (year < Date::MinYear) {
+			return false;
+		}
+	}
 
 	if (pos >= len) {
 		return false;
@@ -178,10 +183,17 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	}
 
 	// check for an optional trailing " (BC)""
-	if (len - pos > 5 && StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' &&
+	if (len - pos >= 5 && StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' &&
 	    buf[pos + 3] == 'C' && buf[pos + 4] == ')') {
-		year = -year;
+		if (yearneg || year == 0) {
+			return false;
+		}
+		year = -year + 1;
 		pos += 5;
+
+		if (year < Date::MinYear) {
+			return false;
+		}
 	}
 
 	// in strict mode, check remaining string for non-space characters
@@ -197,12 +209,6 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	} else {
 		// in non-strict mode, check for any direct trailing digits
 		if (pos < len && StringUtil::CharacterIsDigit((unsigned char)buf[pos])) {
-			return false;
-		}
-	}
-	if (yearneg) {
-		year = -year;
-		if (year < Date::MinYear) {
 			return false;
 		}
 	}
@@ -229,8 +235,8 @@ date_t Date::FromString(string str, bool strict) {
 string Date::ToString(int32_t date) {
 	int32_t year, month, day;
 	Date::Convert(date, year, month, day);
-	if (year < 0) {
-		return StringUtil::Format("%04d-%02d-%02d (BC)", -year, month, day);
+	if (year <= 0) {
+		return StringUtil::Format("%04d-%02d-%02d (BC)", -year + 1, month, day);
 	} else {
 		return StringUtil::Format("%04d-%02d-%02d", year, month, day);
 	}
@@ -248,7 +254,7 @@ bool Date::IsValid(int32_t year, int32_t month, int32_t day) {
 	if (month < 1 || month > 12) {
 		return false;
 	}
-	if (year == 0 || year < Date::MinYear || year > Date::MaxYear) {
+	if (year < Date::MinYear || year > Date::MaxYear) {
 		return false;
 	}
 	if (day < 1) {
@@ -274,7 +280,8 @@ int64_t Date::Epoch(date_t date) {
 }
 
 int32_t Date::ExtractYear(date_t n, int32_t *last_year) {
-	// cached look up: check if year is the same as the last year
+	// cached look up: check if year of this date is the same as the last one we looked up
+	// note that this only works for years in the range [1970, 2370]
 	if (n >= Date::CumulativeYearDays[*last_year] && n < Date::CumulativeYearDays[*last_year + 1]) {
 		return Date::EpochYear + *last_year;
 	}
@@ -290,7 +297,7 @@ int32_t Date::ExtractYear(timestamp_t ts, int32_t *last_year) {
 int32_t Date::ExtractYear(date_t n) {
 	int32_t year, year_offset;
 	Date::ExtractYearOffset(n, year, year_offset);
-	return (year <= 0) ? year - 1 : year;
+	return year;
 }
 
 int32_t Date::ExtractMonth(date_t date) {
