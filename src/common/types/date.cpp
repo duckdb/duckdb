@@ -31,66 +31,10 @@ int32_t Date::YearDays(int32_t year) {
 	return Date::IsLeapYear(year) ? 366 : 365;
 }
 
-template<idx_t BASE_OFFSET, idx_t COUNT>
-static void TemplatedYearOffsetLoop(int32_t n, int32_t &year_offset) {
-	year_offset = BASE_OFFSET;
-	for(idx_t i = 0; i < COUNT; i++) {
-		year_offset += n >= Date::CumulativeYearDays[BASE_OFFSET + i + 1];
-	}
-}
-
-// 13
-template<idx_t LOCATION>
-static void YearOffsetSwitch5(int32_t n, int32_t &year_offset) {
-	if (n < Date::CumulativeYearDays[LOCATION]) {
-		TemplatedYearOffsetLoop<LOCATION - 13, 12>(n, year_offset);
-	} else {
-		TemplatedYearOffsetLoop<LOCATION, 11>(n, year_offset);
-	}
-}
-
-// 25
-template<idx_t LOCATION>
-static void YearOffsetSwitch4(int32_t n, int32_t &year_offset) {
-	if (n < Date::CumulativeYearDays[LOCATION]) {
-		YearOffsetSwitch5<LOCATION - 12>(n, year_offset);
-	} else {
-		YearOffsetSwitch5<LOCATION + 13>(n, year_offset);
-	}
-}
-
-// 50
-template<idx_t LOCATION>
-static void YearOffsetSwitch3(int32_t n, int32_t &year_offset) {
-	if (n < Date::CumulativeYearDays[LOCATION]) {
-		YearOffsetSwitch4<LOCATION - 25>(n, year_offset);
-	} else {
-		YearOffsetSwitch4<LOCATION + 25>(n, year_offset);
-	}
-}
-
-// 100
-template<idx_t LOCATION>
-static void YearOffsetSwitch2(int32_t n, int32_t &year_offset) {
-	if (n < Date::CumulativeYearDays[LOCATION]) {
-		YearOffsetSwitch3<LOCATION - 50>(n, year_offset);
-	} else {
-		YearOffsetSwitch3<LOCATION + 50>(n, year_offset);
-	}
-}
-
-// 200
-template<idx_t LOCATION>
-static void YearOffsetSwitch(int32_t n, int32_t &year_offset) {
-	if (n < Date::CumulativeYearDays[LOCATION]) {
-		YearOffsetSwitch2<LOCATION - 100>(n, year_offset);
-	} else {
-		YearOffsetSwitch2<LOCATION + 100>(n, year_offset);
-	}
-}
-
 void Date::ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset) {
 	year = Date::EpochYear;
+	// first we normalize n to be in the year range [1970, 2370]
+	// since leap years repeat every 400 years, we can safely normalize just by "shifting" the CumulativeYearDays array
 	while(n < 0) {
 		n += Date::DaysPerYearInterval;
 		year -= Date::YearInterval;
@@ -99,8 +43,12 @@ void Date::ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset) {
 		n -= Date::DaysPerYearInterval;
 		year += Date::YearInterval;
 	}
-	// perform binary search in CumulativeYearDays
-	YearOffsetSwitch<200>(n, year_offset);
+	// we can find a lower bound of the year by dividing n by 365
+	year_offset = n / 365;
+	// because of leap years we might be off by a little bit: compensate by incrementing the year offset until we find our year
+	while(Date::CumulativeYearDays[year_offset + 1] <= n) {
+		year_offset++;
+	}
 	year += year_offset;
 }
 
