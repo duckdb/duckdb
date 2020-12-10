@@ -31,6 +31,7 @@ public:
 	static constexpr const int32_t SECS_PER_MINUTE = 60;
 	static constexpr const int32_t MINS_PER_HOUR = 60;
 	static constexpr const int32_t HOURS_PER_DAY = 24;
+	static constexpr const int32_t SECS_PER_DAY = SECS_PER_MINUTE * MINS_PER_HOUR * HOURS_PER_DAY;
 
 public:
 	//! Convert a string to an interval object

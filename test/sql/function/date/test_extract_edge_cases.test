@@ -97,6 +97,16 @@ SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - 6);
 ----
 5
 
+query I
+SELECT EXTRACT(dow FROM cast('1793-05-26' AS DATE));
+----
+0
+
+query I
+SELECT EXTRACT(isodow FROM cast('1793-05-26' AS DATE));
+----
+7
+
 # week numbers are weird
 query I
 SELECT EXTRACT(week FROM cast('2005-01-01' AS DATE));

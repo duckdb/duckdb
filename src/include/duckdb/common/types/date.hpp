@@ -21,6 +21,19 @@ public:
 	static string_t MonthNamesAbbreviated[12];
 	static string_t DayNames[7];
 	static string_t DayNamesAbbreviated[7];
+	static int32_t NormalDays[13];
+	static int32_t CumulativeDays[13];
+	static int32_t LeapDays[13];
+	static int32_t CumulativeLeapDays[13];
+	static int32_t CumulativeYearDays[401];
+
+	constexpr static int32_t MinYear = -290307;
+	constexpr static int32_t MaxYear = 294247;
+	constexpr static int32_t EpochYear = 1970;
+
+	constexpr static int32_t YearInterval = 400;
+	constexpr static int32_t DaysPerYearInterval = 146097;
+
 
 public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
@@ -43,10 +56,12 @@ public:
 
 	//! Returns true if (year) is a leap year, and false otherwise
 	static bool IsLeapYear(int32_t year);
+	//! The amount of days present in a given year
+	static int32_t YearDays(int32_t year);
 
 	//! Returns true if the specified (year, month, day) combination is a valid
 	//! date
-	static bool IsValidDay(int32_t year, int32_t month, int32_t day);
+	static bool IsValid(int32_t year, int32_t month, int32_t day);
 
 	//! Extract the epoch from the date (seconds since 1970-01-01)
 	static int64_t Epoch(date_t date);
@@ -84,5 +99,10 @@ public:
 	static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
 	//! Returns the date of the monday of the current week.
 	static date_t GetMondayOfCurrentWeek(date_t date);
+
+private:
+	static void ExtractYearDay(int32_t n, int32_t &year, int32_t &day_of_year);
+	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
+
 };
 } // namespace duckdb
