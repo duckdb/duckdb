@@ -33,7 +33,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
 			throw ParserException("Failed to transform macro parameters!");
 		}
 		for (auto &param : parameters) {
-			if (param->GetExpressionClass() == ExpressionClass::COMPARISON) {
+			if (param->type == ExpressionType::COMPARE_EQUAL) {
 				// parameters with default value
 				auto &comp_expr = (ComparisonExpression &)*param;
 				if (comp_expr.left->GetExpressionClass() != ExpressionClass::COLUMN_REF) {

@@ -69,20 +69,32 @@ def get_relative_path(source_dir, target_file):
     return target_file
 
 def git_commit_hash():
-    return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
+    try:
+        return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
+    except:
+        if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
+            return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
+        else:
+            return "deadbeeff"
 
 def git_dev_version():
-    version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
-    long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
-    version_splits = version.lstrip('v').split('.')
-    dev_version = long_version.split('-')[1]
-    if int(dev_version) == 0:
-        # directly on a tag: emit the regular version
-        return '.'.join(version_splits)
-    else:
-        # not on a tag: increment the version by one and add a -devX suffix
-        version_splits[2] = str(int(version_splits[2]) + 1)
-        return '.'.join(version_splits) + "-dev" + dev_version
+    try:
+        version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
+        long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
+        version_splits = version.lstrip('v').split('.')
+        dev_version = long_version.split('-')[1]
+        if int(dev_version) == 0:
+            # directly on a tag: emit the regular version
+            return '.'.join(version_splits)
+        else:
+            # not on a tag: increment the version by one and add a -devX suffix
+            version_splits[2] = str(int(version_splits[2]) + 1)
+            return '.'.join(version_splits) + "-dev" + dev_version
+    except:
+        if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
+            return os.environ['SETUPTOOLS_SCM_PRETEND_VERSION']
+        else:
+            return "0.0.0"
 
 def include_package(pkg_name, pkg_dir, include_files, include_list, source_list):
     import amalgamation
@@ -166,7 +178,7 @@ def build_package(target_dir, extensions, linenumbers = False):
             break
     if not found_hash:
         lines = ['#ifndef DUCKDB_SOURCE_ID', '#define DUCKDB_SOURCE_ID "{}"'.format(githash), '#endif'] + lines
-    if not found_hash:
+    if not found_dev:
         lines = ['#ifndef DUCKDB_VERSION', '#define DUCKDB_VERSION "{}"'.format(dev_version), '#endif'] + lines
     text = '\n'.join(lines)
     with open_utf8(fpath, 'w+') as f:

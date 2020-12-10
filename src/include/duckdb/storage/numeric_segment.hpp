@@ -20,6 +20,8 @@ public:
 	idx_t type_size;
 
 public:
+	void InitializeScan(ColumnScanState &state) override;
+
 	//! Fetch a single value and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
 	              idx_t result_idx) override;

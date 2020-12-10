@@ -11,6 +11,7 @@
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 
 namespace duckdb {
+class BlockHandle;
 class BufferHandle;
 
 //! GroupedAggregateHashTable is a linear probing HT that is used for computing
@@ -116,11 +117,10 @@ private:
 	//! The amount of entries stored in the HT currently
 	idx_t entries;
 	//! The data of the HT
-	//! unique_ptr to indicate the ownership
-	vector<unique_ptr<BufferHandle>> payload_hds; //! The data of the HT
-	vector<data_ptr_t> payload_hds_ptrs;          //! The data of the HT
+	vector<unique_ptr<BufferHandle>> payload_hds;
+	vector<data_ptr_t> payload_hds_ptrs;
 
-	//! unique_ptr to indicate the ownership
+	//! The hashes of the HT
 	unique_ptr<BufferHandle> hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
 	data_ptr_t hashes_end_ptr; // of hashes

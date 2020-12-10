@@ -331,176 +331,178 @@
      PARTITION = 547,
      PASSING = 548,
      PASSWORD = 549,
-     PLACING = 550,
-     PLANS = 551,
-     POLICY = 552,
-     POSITION = 553,
-     PRAGMA_P = 554,
-     PRECEDING = 555,
-     PRECISION = 556,
-     PREPARE = 557,
-     PREPARED = 558,
-     PRESERVE = 559,
-     PRIMARY = 560,
-     PRIOR = 561,
-     PRIVILEGES = 562,
-     PROCEDURAL = 563,
-     PROCEDURE = 564,
-     PROGRAM = 565,
-     PUBLICATION = 566,
-     QUOTE = 567,
-     RANGE = 568,
-     READ_P = 569,
-     REAL = 570,
-     REASSIGN = 571,
-     RECHECK = 572,
-     RECURSIVE = 573,
-     REF = 574,
-     REFERENCES = 575,
-     REFERENCING = 576,
-     REFRESH = 577,
-     REINDEX = 578,
-     RELATIVE_P = 579,
-     RELEASE = 580,
-     RENAME = 581,
-     REPEATABLE = 582,
-     REPLACE = 583,
-     REPLICA = 584,
-     RESET = 585,
-     RESTART = 586,
-     RESTRICT = 587,
-     RETURNING = 588,
-     RETURNS = 589,
-     REVOKE = 590,
-     RIGHT = 591,
-     ROLE = 592,
-     ROLLBACK = 593,
-     ROLLUP = 594,
-     ROW = 595,
-     ROWS = 596,
-     RULE = 597,
-     SAVEPOINT = 598,
-     SCHEMA = 599,
-     SCHEMAS = 600,
-     SCROLL = 601,
-     SEARCH = 602,
-     SECOND_P = 603,
-     SECONDS_P = 604,
-     SECURITY = 605,
-     SELECT = 606,
-     SEQUENCE = 607,
-     SEQUENCES = 608,
-     SERIALIZABLE = 609,
-     SERVER = 610,
-     SESSION = 611,
-     SESSION_USER = 612,
-     SET = 613,
-     SETOF = 614,
-     SETS = 615,
-     SHARE = 616,
-     SHOW = 617,
-     SIMILAR = 618,
-     SIMPLE = 619,
-     SKIP = 620,
-     SMALLINT = 621,
-     SNAPSHOT = 622,
-     SOME = 623,
-     SQL_P = 624,
-     STABLE = 625,
-     STANDALONE_P = 626,
-     START = 627,
-     STATEMENT = 628,
-     STATISTICS = 629,
-     STDIN = 630,
-     STDOUT = 631,
-     STORAGE = 632,
-     STRICT_P = 633,
-     STRIP_P = 634,
-     SUBSCRIPTION = 635,
-     SUBSTRING = 636,
-     SYMMETRIC = 637,
-     SYSID = 638,
-     SYSTEM_P = 639,
-     TABLE = 640,
-     TABLES = 641,
-     TABLESAMPLE = 642,
-     TABLESPACE = 643,
-     TEMP = 644,
-     TEMPLATE = 645,
-     TEMPORARY = 646,
-     TEXT_P = 647,
-     THEN = 648,
-     TIME = 649,
-     TIMESTAMP = 650,
-     TO = 651,
-     TRAILING = 652,
-     TRANSACTION = 653,
-     TRANSFORM = 654,
-     TREAT = 655,
-     TRIGGER = 656,
-     TRIM = 657,
-     TRUE_P = 658,
-     TRUNCATE = 659,
-     TRUSTED = 660,
-     TYPE_P = 661,
-     TYPES_P = 662,
-     UNBOUNDED = 663,
-     UNCOMMITTED = 664,
-     UNENCRYPTED = 665,
-     UNION = 666,
-     UNIQUE = 667,
-     UNKNOWN = 668,
-     UNLISTEN = 669,
-     UNLOGGED = 670,
-     UNTIL = 671,
-     UPDATE = 672,
-     USER = 673,
-     USING = 674,
-     VACUUM = 675,
-     VALID = 676,
-     VALIDATE = 677,
-     VALIDATOR = 678,
-     VALUE_P = 679,
-     VALUES = 680,
-     VARCHAR = 681,
-     VARIADIC = 682,
-     VARYING = 683,
-     VERBOSE = 684,
-     VERSION_P = 685,
-     VIEW = 686,
-     VIEWS = 687,
-     VOLATILE = 688,
-     WHEN = 689,
-     WHERE = 690,
-     WHITESPACE_P = 691,
-     WINDOW = 692,
-     WITH = 693,
-     WITHIN = 694,
-     WITHOUT = 695,
-     WORK = 696,
-     WRAPPER = 697,
-     WRITE_P = 698,
-     XML_P = 699,
-     XMLATTRIBUTES = 700,
-     XMLCONCAT = 701,
-     XMLELEMENT = 702,
-     XMLEXISTS = 703,
-     XMLFOREST = 704,
-     XMLNAMESPACES = 705,
-     XMLPARSE = 706,
-     XMLPI = 707,
-     XMLROOT = 708,
-     XMLSERIALIZE = 709,
-     XMLTABLE = 710,
-     YEAR_P = 711,
-     YEARS_P = 712,
-     YES_P = 713,
-     ZONE = 714,
-     NOT_LA = 715,
-     NULLS_LA = 716,
-     WITH_LA = 717,
-     POSTFIXOP = 718,
-     UMINUS = 719
+     PERCENT = 550,
+     PLACING = 551,
+     PLANS = 552,
+     POLICY = 553,
+     POSITION = 554,
+     PRAGMA_P = 555,
+     PRECEDING = 556,
+     PRECISION = 557,
+     PREPARE = 558,
+     PREPARED = 559,
+     PRESERVE = 560,
+     PRIMARY = 561,
+     PRIOR = 562,
+     PRIVILEGES = 563,
+     PROCEDURAL = 564,
+     PROCEDURE = 565,
+     PROGRAM = 566,
+     PUBLICATION = 567,
+     QUOTE = 568,
+     RANGE = 569,
+     READ_P = 570,
+     REAL = 571,
+     REASSIGN = 572,
+     RECHECK = 573,
+     RECURSIVE = 574,
+     REF = 575,
+     REFERENCES = 576,
+     REFERENCING = 577,
+     REFRESH = 578,
+     REINDEX = 579,
+     RELATIVE_P = 580,
+     RELEASE = 581,
+     RENAME = 582,
+     REPEATABLE = 583,
+     REPLACE = 584,
+     REPLICA = 585,
+     RESET = 586,
+     RESTART = 587,
+     RESTRICT = 588,
+     RETURNING = 589,
+     RETURNS = 590,
+     REVOKE = 591,
+     RIGHT = 592,
+     ROLE = 593,
+     ROLLBACK = 594,
+     ROLLUP = 595,
+     ROW = 596,
+     ROWS = 597,
+     RULE = 598,
+     SAMPLE = 599,
+     SAVEPOINT = 600,
+     SCHEMA = 601,
+     SCHEMAS = 602,
+     SCROLL = 603,
+     SEARCH = 604,
+     SECOND_P = 605,
+     SECONDS_P = 606,
+     SECURITY = 607,
+     SELECT = 608,
+     SEQUENCE = 609,
+     SEQUENCES = 610,
+     SERIALIZABLE = 611,
+     SERVER = 612,
+     SESSION = 613,
+     SESSION_USER = 614,
+     SET = 615,
+     SETOF = 616,
+     SETS = 617,
+     SHARE = 618,
+     SHOW = 619,
+     SIMILAR = 620,
+     SIMPLE = 621,
+     SKIP = 622,
+     SMALLINT = 623,
+     SNAPSHOT = 624,
+     SOME = 625,
+     SQL_P = 626,
+     STABLE = 627,
+     STANDALONE_P = 628,
+     START = 629,
+     STATEMENT = 630,
+     STATISTICS = 631,
+     STDIN = 632,
+     STDOUT = 633,
+     STORAGE = 634,
+     STRICT_P = 635,
+     STRIP_P = 636,
+     SUBSCRIPTION = 637,
+     SUBSTRING = 638,
+     SYMMETRIC = 639,
+     SYSID = 640,
+     SYSTEM_P = 641,
+     TABLE = 642,
+     TABLES = 643,
+     TABLESAMPLE = 644,
+     TABLESPACE = 645,
+     TEMP = 646,
+     TEMPLATE = 647,
+     TEMPORARY = 648,
+     TEXT_P = 649,
+     THEN = 650,
+     TIME = 651,
+     TIMESTAMP = 652,
+     TO = 653,
+     TRAILING = 654,
+     TRANSACTION = 655,
+     TRANSFORM = 656,
+     TREAT = 657,
+     TRIGGER = 658,
+     TRIM = 659,
+     TRUE_P = 660,
+     TRUNCATE = 661,
+     TRUSTED = 662,
+     TYPE_P = 663,
+     TYPES_P = 664,
+     UNBOUNDED = 665,
+     UNCOMMITTED = 666,
+     UNENCRYPTED = 667,
+     UNION = 668,
+     UNIQUE = 669,
+     UNKNOWN = 670,
+     UNLISTEN = 671,
+     UNLOGGED = 672,
+     UNTIL = 673,
+     UPDATE = 674,
+     USER = 675,
+     USING = 676,
+     VACUUM = 677,
+     VALID = 678,
+     VALIDATE = 679,
+     VALIDATOR = 680,
+     VALUE_P = 681,
+     VALUES = 682,
+     VARCHAR = 683,
+     VARIADIC = 684,
+     VARYING = 685,
+     VERBOSE = 686,
+     VERSION_P = 687,
+     VIEW = 688,
+     VIEWS = 689,
+     VOLATILE = 690,
+     WHEN = 691,
+     WHERE = 692,
+     WHITESPACE_P = 693,
+     WINDOW = 694,
+     WITH = 695,
+     WITHIN = 696,
+     WITHOUT = 697,
+     WORK = 698,
+     WRAPPER = 699,
+     WRITE_P = 700,
+     XML_P = 701,
+     XMLATTRIBUTES = 702,
+     XMLCONCAT = 703,
+     XMLELEMENT = 704,
+     XMLEXISTS = 705,
+     XMLFOREST = 706,
+     XMLNAMESPACES = 707,
+     XMLPARSE = 708,
+     XMLPI = 709,
+     XMLROOT = 710,
+     XMLSERIALIZE = 711,
+     XMLTABLE = 712,
+     YEAR_P = 713,
+     YEARS_P = 714,
+     YES_P = 715,
+     ZONE = 716,
+     NOT_LA = 717,
+     NULLS_LA = 718,
+     WITH_LA = 719,
+     POSTFIXOP = 720,
+     UMINUS = 721
    };
 #endif
 /* Tokens.  */
@@ -796,176 +798,178 @@
 #define PARTITION 547
 #define PASSING 548
 #define PASSWORD 549
-#define PLACING 550
-#define PLANS 551
-#define POLICY 552
-#define POSITION 553
-#define PRAGMA_P 554
-#define PRECEDING 555
-#define PRECISION 556
-#define PREPARE 557
-#define PREPARED 558
-#define PRESERVE 559
-#define PRIMARY 560
-#define PRIOR 561
-#define PRIVILEGES 562
-#define PROCEDURAL 563
-#define PROCEDURE 564
-#define PROGRAM 565
-#define PUBLICATION 566
-#define QUOTE 567
-#define RANGE 568
-#define READ_P 569
-#define REAL 570
-#define REASSIGN 571
-#define RECHECK 572
-#define RECURSIVE 573
-#define REF 574
-#define REFERENCES 575
-#define REFERENCING 576
-#define REFRESH 577
-#define REINDEX 578
-#define RELATIVE_P 579
-#define RELEASE 580
-#define RENAME 581
-#define REPEATABLE 582
-#define REPLACE 583
-#define REPLICA 584
-#define RESET 585
-#define RESTART 586
-#define RESTRICT 587
-#define RETURNING 588
-#define RETURNS 589
-#define REVOKE 590
-#define RIGHT 591
-#define ROLE 592
-#define ROLLBACK 593
-#define ROLLUP 594
-#define ROW 595
-#define ROWS 596
-#define RULE 597
-#define SAVEPOINT 598
-#define SCHEMA 599
-#define SCHEMAS 600
-#define SCROLL 601
-#define SEARCH 602
-#define SECOND_P 603
-#define SECONDS_P 604
-#define SECURITY 605
-#define SELECT 606
-#define SEQUENCE 607
-#define SEQUENCES 608
-#define SERIALIZABLE 609
-#define SERVER 610
-#define SESSION 611
-#define SESSION_USER 612
-#define SET 613
-#define SETOF 614
-#define SETS 615
-#define SHARE 616
-#define SHOW 617
-#define SIMILAR 618
-#define SIMPLE 619
-#define SKIP 620
-#define SMALLINT 621
-#define SNAPSHOT 622
-#define SOME 623
-#define SQL_P 624
-#define STABLE 625
-#define STANDALONE_P 626
-#define START 627
-#define STATEMENT 628
-#define STATISTICS 629
-#define STDIN 630
-#define STDOUT 631
-#define STORAGE 632
-#define STRICT_P 633
-#define STRIP_P 634
-#define SUBSCRIPTION 635
-#define SUBSTRING 636
-#define SYMMETRIC 637
-#define SYSID 638
-#define SYSTEM_P 639
-#define TABLE 640
-#define TABLES 641
-#define TABLESAMPLE 642
-#define TABLESPACE 643
-#define TEMP 644
-#define TEMPLATE 645
-#define TEMPORARY 646
-#define TEXT_P 647
-#define THEN 648
-#define TIME 649
-#define TIMESTAMP 650
-#define TO 651
-#define TRAILING 652
-#define TRANSACTION 653
-#define TRANSFORM 654
-#define TREAT 655
-#define TRIGGER 656
-#define TRIM 657
-#define TRUE_P 658
-#define TRUNCATE 659
-#define TRUSTED 660
-#define TYPE_P 661
-#define TYPES_P 662
-#define UNBOUNDED 663
-#define UNCOMMITTED 664
-#define UNENCRYPTED 665
-#define UNION 666
-#define UNIQUE 667
-#define UNKNOWN 668
-#define UNLISTEN 669
-#define UNLOGGED 670
-#define UNTIL 671
-#define UPDATE 672
-#define USER 673
-#define USING 674
-#define VACUUM 675
-#define VALID 676
-#define VALIDATE 677
-#define VALIDATOR 678
-#define VALUE_P 679
-#define VALUES 680
-#define VARCHAR 681
-#define VARIADIC 682
-#define VARYING 683
-#define VERBOSE 684
-#define VERSION_P 685
-#define VIEW 686
-#define VIEWS 687
-#define VOLATILE 688
-#define WHEN 689
-#define WHERE 690
-#define WHITESPACE_P 691
-#define WINDOW 692
-#define WITH 693
-#define WITHIN 694
-#define WITHOUT 695
-#define WORK 696
-#define WRAPPER 697
-#define WRITE_P 698
-#define XML_P 699
-#define XMLATTRIBUTES 700
-#define XMLCONCAT 701
-#define XMLELEMENT 702
-#define XMLEXISTS 703
-#define XMLFOREST 704
-#define XMLNAMESPACES 705
-#define XMLPARSE 706
-#define XMLPI 707
-#define XMLROOT 708
-#define XMLSERIALIZE 709
-#define XMLTABLE 710
-#define YEAR_P 711
-#define YEARS_P 712
-#define YES_P 713
-#define ZONE 714
-#define NOT_LA 715
-#define NULLS_LA 716
-#define WITH_LA 717
-#define POSTFIXOP 718
-#define UMINUS 719
+#define PERCENT 550
+#define PLACING 551
+#define PLANS 552
+#define POLICY 553
+#define POSITION 554
+#define PRAGMA_P 555
+#define PRECEDING 556
+#define PRECISION 557
+#define PREPARE 558
+#define PREPARED 559
+#define PRESERVE 560
+#define PRIMARY 561
+#define PRIOR 562
+#define PRIVILEGES 563
+#define PROCEDURAL 564
+#define PROCEDURE 565
+#define PROGRAM 566
+#define PUBLICATION 567
+#define QUOTE 568
+#define RANGE 569
+#define READ_P 570
+#define REAL 571
+#define REASSIGN 572
+#define RECHECK 573
+#define RECURSIVE 574
+#define REF 575
+#define REFERENCES 576
+#define REFERENCING 577
+#define REFRESH 578
+#define REINDEX 579
+#define RELATIVE_P 580
+#define RELEASE 581
+#define RENAME 582
+#define REPEATABLE 583
+#define REPLACE 584
+#define REPLICA 585
+#define RESET 586
+#define RESTART 587
+#define RESTRICT 588
+#define RETURNING 589
+#define RETURNS 590
+#define REVOKE 591
+#define RIGHT 592
+#define ROLE 593
+#define ROLLBACK 594
+#define ROLLUP 595
+#define ROW 596
+#define ROWS 597
+#define RULE 598
+#define SAMPLE 599
+#define SAVEPOINT 600
+#define SCHEMA 601
+#define SCHEMAS 602
+#define SCROLL 603
+#define SEARCH 604
+#define SECOND_P 605
+#define SECONDS_P 606
+#define SECURITY 607
+#define SELECT 608
+#define SEQUENCE 609
+#define SEQUENCES 610
+#define SERIALIZABLE 611
+#define SERVER 612
+#define SESSION 613
+#define SESSION_USER 614
+#define SET 615
+#define SETOF 616
+#define SETS 617
+#define SHARE 618
+#define SHOW 619
+#define SIMILAR 620
+#define SIMPLE 621
+#define SKIP 622
+#define SMALLINT 623
+#define SNAPSHOT 624
+#define SOME 625
+#define SQL_P 626
+#define STABLE 627
+#define STANDALONE_P 628
+#define START 629
+#define STATEMENT 630
+#define STATISTICS 631
+#define STDIN 632
+#define STDOUT 633
+#define STORAGE 634
+#define STRICT_P 635
+#define STRIP_P 636
+#define SUBSCRIPTION 637
+#define SUBSTRING 638
+#define SYMMETRIC 639
+#define SYSID 640
+#define SYSTEM_P 641
+#define TABLE 642
+#define TABLES 643
+#define TABLESAMPLE 644
+#define TABLESPACE 645
+#define TEMP 646
+#define TEMPLATE 647
+#define TEMPORARY 648
+#define TEXT_P 649
+#define THEN 650
+#define TIME 651
+#define TIMESTAMP 652
+#define TO 653
+#define TRAILING 654
+#define TRANSACTION 655
+#define TRANSFORM 656
+#define TREAT 657
+#define TRIGGER 658
+#define TRIM 659
+#define TRUE_P 660
+#define TRUNCATE 661
+#define TRUSTED 662
+#define TYPE_P 663
+#define TYPES_P 664
+#define UNBOUNDED 665
+#define UNCOMMITTED 666
+#define UNENCRYPTED 667
+#define UNION 668
+#define UNIQUE 669
+#define UNKNOWN 670
+#define UNLISTEN 671
+#define UNLOGGED 672
+#define UNTIL 673
+#define UPDATE 674
+#define USER 675
+#define USING 676
+#define VACUUM 677
+#define VALID 678
+#define VALIDATE 679
+#define VALIDATOR 680
+#define VALUE_P 681
+#define VALUES 682
+#define VARCHAR 683
+#define VARIADIC 684
+#define VARYING 685
+#define VERBOSE 686
+#define VERSION_P 687
+#define VIEW 688
+#define VIEWS 689
+#define VOLATILE 690
+#define WHEN 691
+#define WHERE 692
+#define WHITESPACE_P 693
+#define WINDOW 694
+#define WITH 695
+#define WITHIN 696
+#define WITHOUT 697
+#define WORK 698
+#define WRAPPER 699
+#define WRITE_P 700
+#define XML_P 701
+#define XMLATTRIBUTES 702
+#define XMLCONCAT 703
+#define XMLELEMENT 704
+#define XMLEXISTS 705
+#define XMLFOREST 706
+#define XMLNAMESPACES 707
+#define XMLPARSE 708
+#define XMLPI 709
+#define XMLROOT 710
+#define XMLSERIALIZE 711
+#define XMLTABLE 712
+#define YEAR_P 713
+#define YEARS_P 714
+#define YES_P 715
+#define ZONE 716
+#define NOT_LA 717
+#define NULLS_LA 718
+#define WITH_LA 719
+#define POSTFIXOP 720
+#define UMINUS 721
 
 
 
@@ -1016,7 +1020,7 @@ typedef union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 }
 /* Line 1529 of yacc.c.  */
-#line 1020 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 1024 "third_party/libpg_query/grammar/grammar_out.hpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

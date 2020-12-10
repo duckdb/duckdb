@@ -264,7 +264,7 @@ jobs:
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
-          
+
 
 
   linux-release-32:
@@ -306,7 +306,7 @@ jobs:
       with:
         name: duckdb-binaries-linux
         path: |
-          libduckdb-linux-i386.zip 
+          libduckdb-linux-i386.zip
           duckdb_cli-linux-i386.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
@@ -607,7 +607,6 @@ jobs:
     - name: Test
       run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
-
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
@@ -801,7 +800,40 @@ jobs:
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
+  linux-tarball:
+    name: Python 3 Tarball
+    runs-on: ubuntu-20.04
+    needs: linux-debug
 
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: pip install numpy
+
+    - name: Build
+      run: |
+        if [[ -z "${GITHUB_HEAD_REF}" ]]; then
+          export GITHUB_HEAD_REF=master
+        fi
+        echo $GITHUB_ACTOR
+        echo $GITHUB_WORKSPACE
+        echo $GITHUB_HEAD_REF
+        echo $GITHUB_BASE_REF
+        echo $GITHUB_REF
+        echo $GITHUB_SHA
+        echo $GITHUB_REPOSITORY
+        wget https://github.com/$GITHUB_ACTOR/duckdb/archive/$GITHUB_HEAD_REF.zip
+        unzip $GITHUB_HEAD_REF.zip
+        cd duckdb-$GITHUB_HEAD_REF/tools/pythonpkg
+        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+        python3 setup.py install --user
 
   linux-nodejs:
     name: node.js Linux
@@ -817,16 +849,16 @@ jobs:
     - name: Setup
       run: ./scripts/node_version.sh upload
 
-    - name: Node 10 
+    - name: Node 10
       run: ./scripts/node_build.sh 10
 
-    - name: Node 12 
+    - name: Node 12
       run: ./scripts/node_build.sh 12
 
-    - name: Node 14 
+    - name: Node 14
       run: ./scripts/node_build.sh 14
 
-    - name: Node 15 
+    - name: Node 15
       run: ./scripts/node_build.sh 15
 
 
@@ -843,14 +875,14 @@ jobs:
     - name: Setup
       run: ./scripts/node_version.sh
 
-    - name: Node 10 
+    - name: Node 10
       run: ./scripts/node_build.sh 10
 
-    - name: Node 12 
+    - name: Node 12
       run: ./scripts/node_build.sh 12
 
-    - name: Node 14 
+    - name: Node 14
       run: ./scripts/node_build.sh 14
 
-    - name: Node 15 
+    - name: Node 15
       run: ./scripts/node_build.sh 15
