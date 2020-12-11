@@ -45,7 +45,7 @@ struct DateConvert {
 };
 
 struct TimeConvert {
-	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(time_t val) {
+	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(dtime_t val) {
 		return py::str(duckdb::Time::ToString(val).c_str());
 	}
 };
