@@ -390,11 +390,7 @@ struct PandasScanFunction : public TableFunction {
 					nullmask[row] = true;
 					continue;
 				}
-				auto ms = src_ptr[source_idx] / 1000000; // nanoseconds
-				auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
-				date_t date = Date::EpochToDate(ms / 1000);
-				dtime_t time = (dtime_t)(ms % ms_per_day);
-				tgt_ptr[row] = Timestamp::FromDatetime(date, time);
+				tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
 			}
 			break;
 		}
@@ -415,10 +411,7 @@ struct PandasScanFunction : public TableFunction {
 				// FIXME: consider timezone
 				auto epoch = py_obj.attr("timestamp")();
 				auto seconds = int64_t(epoch.cast<double>());
-				auto seconds_per_day = (int64_t)60 * 60 * 24;
-				date_t date = Date::EpochToDate(seconds);
-				dtime_t time = (dtime_t)(seconds % seconds_per_day) * 1000;
-				tgt_ptr[row] = Timestamp::FromDatetime(date, time);
+				tgt_ptr[row] = Timestamp::FromEpochSeconds(seconds);
 			}
 			break;
 		}
