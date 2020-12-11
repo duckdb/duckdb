@@ -49,8 +49,9 @@ public:
 class ResizeableBuffer : public ByteBuffer {
 public:
 	void resize(uint64_t new_size) {
-		if (new_size > len) {
-			auto new_holder = std::unique_ptr<char[]>(new char[new_size]);
+		if (new_size > alloc_len) {
+			alloc_len = new_size;
+			auto new_holder = std::unique_ptr<char[]>(new char[alloc_len]);
 			holder = move(new_holder);
 		}
 		len = new_size;
@@ -59,6 +60,7 @@ public:
 
 private:
 	std::unique_ptr<char[]> holder = nullptr;
+	idx_t alloc_len = 0;
 };
 
 } // namespace duckdb

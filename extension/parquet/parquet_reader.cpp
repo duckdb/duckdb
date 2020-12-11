@@ -27,7 +27,6 @@
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
-
 #include "snappy.h"
 #include "miniz_wrapper.hpp"
 
@@ -50,7 +49,6 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 
 using namespace parquet;
 
-
 using parquet::format::ColumnChunk;
 using parquet::format::CompressionCodec;
 using parquet::format::ConvertedType;
@@ -64,11 +62,10 @@ using parquet::format::SchemaElement;
 using parquet::format::Statistics;
 using parquet::format::Type;
 
-
-static shared_ptr<ParquetFileMetadataCache> load_metadata(apache::thrift::protocol::TProtocol& proto, idx_t read_pos) {
+static shared_ptr<ParquetFileMetadataCache> load_metadata(apache::thrift::protocol::TProtocol &proto, idx_t read_pos) {
 	auto current_time = chrono::system_clock::to_time_t(chrono::system_clock::now());
-    auto metadata = make_unique<FileMetaData>();
-    thrift_unpack_file(proto, read_pos, metadata.get());
+	auto metadata = make_unique<FileMetaData>();
+	thrift_unpack_file(proto, read_pos, metadata.get());
 	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
 }
 
@@ -109,11 +106,9 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		throw FormatException("Footer length %d is too big for the file of size %d", footer_len, file_size);
 	}
 
-
 	// centrally create thrift transport/protocol to reduce allocation
-    shared_ptr<DuckdbFileTransport> trans(new DuckdbFileTransport(fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ)));
+	shared_ptr<DuckdbFileTransport> trans(new DuckdbFileTransport(fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ)));
 	thrift_file_proto = make_unique<apache::thrift::protocol::TCompactProtocolT<DuckdbFileTransport>>(trans);
-
 
 	// If object cached is disabled
 	// or if this file has cached metadata
@@ -262,7 +257,6 @@ timestamp_t arrow_timestamp_ms_to_timestamp(const int64_t &raw_ts) {
 }
 
 // statistics handling
-
 
 static Value transform_statistics_timestamp_ms(const_data_ptr_t input) {
 	return Value::TIMESTAMP(arrow_timestamp_ms_to_timestamp(Load<int64_t>(input)));
@@ -787,23 +781,27 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 		}
 	}
 
-    switch (type.id()) {
-    case LogicalTypeId::INTEGER:
-        state.column_readers.push_back(make_unique<NumericColumnReader<int32_t>>(type, chunk, *thrift_file_proto));
-        break;
-    case LogicalTypeId::BIGINT:
-        state.column_readers.push_back(make_unique<NumericColumnReader<int64_t>>(type, chunk, *thrift_file_proto));
-        break;
-    case LogicalTypeId::FLOAT:
-        state.column_readers.push_back(make_unique<NumericColumnReader<float>>(type, chunk, *thrift_file_proto));
-        break;
-    case LogicalTypeId::DOUBLE:
-        state.column_readers.push_back(make_unique<NumericColumnReader<double>>(type, chunk, *thrift_file_proto));
-        break;
+	switch (type.id()) {
+	case LogicalTypeId::INTEGER:
+		state.column_readers[col_idx] = make_unique<NumericColumnReader<int32_t>>(type, chunk, *thrift_file_proto);
+		break;
+	case LogicalTypeId::BIGINT:
+		state.column_readers[col_idx] = make_unique<NumericColumnReader<int64_t>>(type, chunk, *thrift_file_proto);
+		break;
+	case LogicalTypeId::FLOAT:
+		state.column_readers[col_idx] = make_unique<NumericColumnReader<float>>(type, chunk, *thrift_file_proto);
+		break;
+	case LogicalTypeId::DOUBLE:
+		state.column_readers[col_idx] = make_unique<NumericColumnReader<double>>(type, chunk, *thrift_file_proto);
+		break;
+	case LogicalTypeId::VARCHAR:
+		state.column_readers[col_idx] = make_unique<StringColumnReader>(type, chunk, *thrift_file_proto);
+		break;
 
-    default:
-        break; // TODO
-    }
+	default:
+		D_ASSERT(0);
+		break;
+	}
 
 	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
 	auto chunk_start = chunk.meta_data.data_page_offset;
@@ -813,7 +811,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 	}
 	auto chunk_len = chunk.meta_data.total_compressed_size;
 
-    auto &fs = FileSystem::GetFileSystem(context);
+	auto &fs = FileSystem::GetFileSystem(context);
 
 	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 
@@ -844,7 +842,7 @@ void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> c
 	state.filters = filters;
 	for (idx_t i = 0; i < return_types.size(); i++) {
 		state.column_data.push_back(make_unique<ParquetReaderColumnData>());
-    }
+	}
 	state.column_readers.resize(return_types.size());
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 }
@@ -1177,6 +1175,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			if (filter_mask.none()) { // if no rows are left we can stop checking filters
 				break;
 			}
+
 			ScanColumn(state, filter_mask, result.size(), filter_col.first, result.data[filter_col.first]);
 			need_to_read[filter_col.first] = false;
 
@@ -1227,7 +1226,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 	} else { // just fricking load the data
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
-			ScanColumn(state, filter_mask, result.size(), out_col_idx, result.data[out_col_idx]);
+			state.column_readers[out_col_idx]->Read(result.size(), result.data[out_col_idx]);
+			// ScanColumn(state, filter_mask, result.size(), out_col_idx, result.data[out_col_idx]);
 		}
 	}
 

@@ -1,0 +1,23 @@
+# name: test/sql/copy/parquet/test_parquet_scan.test
+# description: Test basic parquet reading
+# group: [parquet]
+
+require parquet
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT l_orderkey FROM parquet_scan('test/sql/copy/parquet/data/lineitem-top10000.gzip.parquet') order by l_orderkey offset 9990  limit 10
+----
+10049
+10050
+10050
+10050
+10050
+10051
+10051
+10051
+10051
+10052
