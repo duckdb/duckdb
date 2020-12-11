@@ -56,6 +56,12 @@ struct StringConvert {
 	}
 };
 
+struct BlobConvert {
+	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
+		return py::bytes(val.GetString());
+	}
+};
+
 struct IntegralConvert {
 	template <class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(DUCKDB_T val) {
 		return NUMPY_T(val);
@@ -544,7 +550,9 @@ struct DuckDBPyResult {
 			case LogicalTypeId::VARCHAR:
 				res[col_idx] = val.GetValue<string>();
 				break;
-
+			case LogicalTypeId::BLOB:
+				res[col_idx] = py::bytes(val.GetValue<string>());
+				break;
 			case LogicalTypeId::TIMESTAMP: {
 				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
@@ -658,6 +666,10 @@ struct DuckDBPyResult {
 				break;
 			case LogicalTypeId::VARCHAR:
 				col_res = duckdb_py_convert::fetch_column<string_t, py::str, duckdb_py_convert::StringConvert>(
+				    "object", mres->collection, col_idx);
+				break;
+			case LogicalTypeId::BLOB:
+				col_res = duckdb_py_convert::fetch_column<string_t, py::bytes, duckdb_py_convert::BlobConvert>(
 				    "object", mres->collection, col_idx);
 				break;
 			default:

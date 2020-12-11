@@ -1,0 +1,136 @@
+
+.Treant { position: relative; overflow: hidden; padding: 0 !important; }
+.Treant > .node,
+.Treant > .pseudo { position: absolute; display: block; visibility: hidden; }
+.Treant.loaded .node,
+.Treant.loaded .pseudo { visibility: visible; }
+.Treant > .pseudo { width: 0; height: 0; border: none; padding: 0; }
+.Treant .collapse-switch { width: 3px; height: 3px; display: block; border: 1px solid black; position: absolute; top: 1px; right: 1px; cursor: pointer; }
+.Treant .collapsed .collapse-switch { background-color: #868DEE; }
+.Treant > .node img {	border: none; float: left; }
+
+body,div,dl,dt,dd,ul,ol,li,h1,h2,h3,h4,h5,h6,pre,form,fieldset,input,textarea,p,blockquote,th,td { margin:0; padding:0; }
+table { border-collapse:collapse; border-spacing:0; }
+fieldset,img { border:0; }
+address,caption,cite,code,dfn,em,strong,th,var { font-style:normal; font-weight:normal; }
+caption,th { text-align:left; }
+h1,h2,h3,h4,h5,h6 { font-size:100%; font-weight:normal; }
+q:before,q:after { content:''; }
+abbr,acronym { border:0; }
+
+body { background: #fff; }
+/* optional Container STYLES */
+.chart { height: 500px; margin: 5px; width: 100%;  }
+.Treant > .node {  }
+.Treant > p { font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif; font-weight: bold; font-size: 12px; }
+
+.tree-node {
+	padding: 2px;
+	-webkit-border-radius: 3px;
+	-moz-border-radius: 3px;
+	border-radius: 3px;
+	background-color: #ffffff;
+	border: 1px solid #000;
+	width: 200px;
+	font-family: Tahoma;
+	font-size: 12px;
+}
+
+.metainfo {
+	font-family: Tahoma;
+	font-weight: bold;
+}
+
+.metainfo > th {
+	padding: 1px 5px;
+}
+
+.mainphase {
+	background-color: #668D3C;
+}
+.subphase {
+	background-color: #B99C6B;
+}
+.phaseheader {
+	background-color: #83929F;
+}
+
+.node-name {
+	font-weight: bold;
+	text-align: center;
+	font-size: 14px;
+}
+
+.node-title {
+	text-align: center;
+}
+
+.node-contact {
+	font-weight: bold;
+	text-align: center;
+}
+th {
+	background:none;
+}
+.small-impact {
+	opacity: 0.7;
+}
+
+.medium-impact {
+	opacity: 0.8;
+}
+
+.high-impact {
+	opacity: 0.9;
+}
+
+.most-impact {
+	opacity: 1;
+}
+
+.tone-1 {
+	background-color: #493829;
+}
+.tone-2 {
+	background-color: #816C5B;
+}
+.tone-3 {
+	background-color: #A9A18C;
+}
+.tone-4 {
+	background-color: #613318;
+}
+.tone-5 {
+	background-color: #B99C6B;
+}
+.tone-6 {
+	background-color: #A15038;
+}
+.tone-7 {
+	background-color: #8F3B1B;
+}
+.tone-8 {
+	background-color: #D57500;
+}
+.tone-9 {
+	background-color: #DBCA69;
+}
+.tone-10 {
+	background-color: #404F24;
+}
+.tone-11 {
+	background-color: #668D3C;
+}
+.tone-12 {
+	background-color: #BDD09F;
+}
+.tone-13 {
+	background-color: #4E6172;
+}
+.tone-14 {
+	background-color: #83929F;
+}
+.tone-15 {
+	background-color: #A3ADB8;
+}
+

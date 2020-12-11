@@ -1056,6 +1056,7 @@ void ParquetReader::ScanColumn(ParquetReaderScanState &state, parquet_filter_t &
 						uint32_t str_len = col_data.payload.read<uint32_t>();
 
 						if (!filter_mask[i + output_offset]) {
+							col_data.payload.inc(str_len);
 							continue; // early out if this value is skipped
 						}
 

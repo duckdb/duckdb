@@ -379,10 +379,12 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::DECIMAL:
 			rtype = "numeric";
 			break;
-		case LogicalTypeId::VARCHAR: {
+		case LogicalTypeId::VARCHAR:
 			rtype = "character";
 			break;
-		}
+		case LogicalTypeId::BLOB:
+			rtype = "raw";
+			break;
 		default:
 			Rf_error("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;
@@ -581,9 +583,15 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		case LogicalTypeId::VARCHAR:
 			varvalue = r_varvalue.Protect(NEW_STRING(nrows));
 			break;
+		case LogicalTypeId::BLOB:
+			varvalue = r_varvalue.Protect(NEW_LIST(nrows));
+			break;
 		default:
 			Rf_error("duckdb_execute_R: Unknown column type for execute: %s",
 			         result->types[col_idx].ToString().c_str());
+		}
+		if (!varvalue) {
+			throw std::bad_alloc();
 		}
 		SET_VECTOR_ELT(retlist, col_idx, varvalue);
 	}
@@ -731,6 +739,23 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 						SET_STRING_ELT(
 						    dest, dest_offset + row_idx,
 						    Rf_mkCharLenCE(src_ptr[row_idx].GetDataUnsafe(), src_ptr[row_idx].GetSize(), CE_UTF8));
+					}
+				}
+				break;
+			}
+			case LogicalTypeId::BLOB: {
+				auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
+				auto &nullmask = FlatVector::Nullmask(chunk->data[col_idx]);
+				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+					if (nullmask[row_idx]) {
+						SET_VECTOR_ELT(dest, dest_offset + row_idx, Rf_ScalarLogical(NA_LOGICAL));
+					} else {
+						SEXP rawval = NEW_RAW(src_ptr[row_idx].GetSize());
+						if (!rawval) {
+							throw std::bad_alloc();
+						}
+						memcpy(RAW_POINTER(rawval), src_ptr[row_idx].GetDataUnsafe(), src_ptr[row_idx].GetSize());
+						SET_VECTOR_ELT(dest, dest_offset + row_idx, rawval);
 					}
 				}
 				break;

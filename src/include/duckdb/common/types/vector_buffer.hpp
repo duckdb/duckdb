@@ -15,6 +15,7 @@
 
 namespace duckdb {
 
+class BufferHandle;
 class VectorBuffer;
 class Vector;
 class ChunkCollection;
@@ -25,7 +26,8 @@ enum class VectorBufferType : uint8_t {
 	VECTOR_CHILD_BUFFER, // vector child buffer: holds another vector
 	STRING_BUFFER,       // string buffer, holds a string heap
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
-	LIST_BUFFER          // list buffer, holds a single flatvector child
+	LIST_BUFFER,         // list buffer, holds a single flatvector child
+	MANAGED_BUFFER       // managed buffer, holds a buffer managed by the buffermanager
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -134,6 +136,16 @@ public:
 private:
 	//! child vectors used for nested data
 	unique_ptr<ChunkCollection> child;
+};
+
+//! The ManagedVectorBuffer holds a buffer handle
+class ManagedVectorBuffer : public VectorBuffer {
+public:
+	ManagedVectorBuffer(unique_ptr<BufferHandle> handle);
+	~ManagedVectorBuffer();
+
+private:
+	unique_ptr<BufferHandle> handle;
 };
 
 } // namespace duckdb

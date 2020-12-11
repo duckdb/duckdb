@@ -414,6 +414,19 @@ SELECT SUM(i)*MAX(i) FROM integers JOIN integers2 USING (i);
 
 shutil.rmtree(target_dir)
 
+# test using .import with a CSV file containing invalid UTF8
+
+duckdb_nonsensecsv = 'duckdbtest_nonsensecsv.csv'
+with open(duckdb_nonsensecsv, 'wb+') as f:
+     f.write(b'\xFF\n')
+test('''
+.nullvalue NULL
+CREATE TABLE test(i INTEGER);
+.import duckdbtest_nonsensecsv.csv test
+SELECT * FROM test;
+''', out="NULL")
+os.remove(duckdb_nonsensecsv)
+
 # dump blobs: FIXME
 # test('''
 # CREATE TABLE a (b BLOB);
