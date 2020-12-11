@@ -18,6 +18,7 @@ namespace duckdb {
 using std::move;
 using std::shared_ptr;
 using std::unique_ptr;
+using std::weak_ptr;
 using data_ptr = unique_ptr<char[]>;
 using std::make_shared;
 
