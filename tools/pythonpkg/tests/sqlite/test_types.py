@@ -81,7 +81,7 @@ class DuckDBTypeTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as context:
             self.cur.execute("insert into test(f) values (?)", (decimal.Decimal('inf'),))
 
- 
+
     def test_CheckUnicodeExecute(self):
         self.cur.execute(u"select 'Österreich'")
         row = self.cur.fetchone()
@@ -180,5 +180,4 @@ class DateTimeTests(unittest.TestCase):
         self.cur.execute("select ts from test")
         ts2 = self.cur.fetchone()[0]
         self.assertEqual(ts.year, ts2.year)
-        # this is modified because DuckDB only has millisecond precision
-        self.assertEqual(ts2.microsecond, 510000)
+        self.assertEqual(ts2.microsecond, 510241)

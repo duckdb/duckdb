@@ -34,7 +34,7 @@ struct RegularConvert {
 
 struct TimestampConvert {
 	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(timestamp_t val) {
-		return Date::Epoch(Timestamp::GetDate(val)) * 1000 + (int64_t)(Timestamp::GetTime(val));
+		return val / 1000.0;
 	}
 };
 
@@ -45,7 +45,7 @@ struct DateConvert {
 };
 
 struct TimeConvert {
-	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(time_t val) {
+	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(dtime_t val) {
 		return py::str(duckdb::Time::ToString(val).c_str());
 	}
 };
@@ -390,11 +390,7 @@ struct PandasScanFunction : public TableFunction {
 					nullmask[row] = true;
 					continue;
 				}
-				auto ms = src_ptr[source_idx] / 1000000; // nanoseconds
-				auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
-				date_t date = Date::EpochToDate(ms / 1000);
-				dtime_t time = (dtime_t)(ms % ms_per_day);
-				tgt_ptr[row] = Timestamp::FromDatetime(date, time);
+				tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
 			}
 			break;
 		}
@@ -415,10 +411,7 @@ struct PandasScanFunction : public TableFunction {
 				// FIXME: consider timezone
 				auto epoch = py_obj.attr("timestamp")();
 				auto seconds = int64_t(epoch.cast<double>());
-				auto seconds_per_day = (int64_t)60 * 60 * 24;
-				date_t date = Date::EpochToDate(seconds);
-				dtime_t time = (dtime_t)(seconds % seconds_per_day) * 1000;
-				tgt_ptr[row] = Timestamp::FromDatetime(date, time);
+				tgt_ptr[row] = Timestamp::FromEpochSeconds(seconds);
 			}
 			break;
 		}
@@ -556,30 +549,32 @@ struct DuckDBPyResult {
 			case LogicalTypeId::TIMESTAMP: {
 				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
-				auto timestamp = val.GetValue<int64_t>();
-				auto date = Timestamp::GetDate(timestamp);
-				res[col_idx] = PyDateTime_FromDateAndTime(
-				    Date::ExtractYear(date), Date::ExtractMonth(date), Date::ExtractDay(date),
-				    Timestamp::GetHours(timestamp), Timestamp::GetMinutes(timestamp), Timestamp::GetSeconds(timestamp),
-				    Timestamp::GetMilliseconds(timestamp) * 1000 - Timestamp::GetSeconds(timestamp) * 1000000);
-
+				auto timestamp = val.GetValueUnsafe<int64_t>();
+				int32_t year, month, day, hour, min, sec, micros;
+				date_t date;
+				dtime_t time;
+				Timestamp::Convert(timestamp, date, time);
+				Date::Convert(date, year, month, day);
+				Time::Convert(time, hour, min, sec, micros);
+				res[col_idx] = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros);
 				break;
 			}
 			case LogicalTypeId::TIME: {
-				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
+				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
-				int32_t hour, min, sec, msec;
-				auto time = val.GetValue<int32_t>();
-				duckdb::Time::Convert(time, hour, min, sec, msec);
-				res[col_idx] = PyTime_FromTime(hour, min, sec, msec * 1000);
+				int32_t hour, min, sec, microsec;
+				auto time = val.GetValueUnsafe<int64_t>();
+				duckdb::Time::Convert(time, hour, min, sec, microsec);
+				res[col_idx] = PyTime_FromTime(hour, min, sec, microsec);
 				break;
 			}
 			case LogicalTypeId::DATE: {
 				D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
-				auto date = val.GetValue<int32_t>();
-				res[col_idx] = PyDate_FromDate(duckdb::Date::ExtractYear(date), duckdb::Date::ExtractMonth(date),
-				                               duckdb::Date::ExtractDay(date));
+				auto date = val.GetValueUnsafe<int32_t>();
+				int32_t year, month, day;
+				duckdb::Date::Convert(date, year, month, day);
+				res[col_idx] = PyDate_FromDate(year, month, day);
 				break;
 			}
 
@@ -661,7 +656,7 @@ struct DuckDBPyResult {
 				    "datetime64[s]", mres->collection, col_idx);
 				break;
 			case LogicalTypeId::TIME:
-				col_res = duckdb_py_convert::fetch_column<time_t, py::str, duckdb_py_convert::TimeConvert>(
+				col_res = duckdb_py_convert::fetch_column<dtime_t, py::str, duckdb_py_convert::TimeConvert>(
 				    "object", mres->collection, col_idx);
 				break;
 			case LogicalTypeId::VARCHAR:
@@ -1122,14 +1117,14 @@ struct DuckDBPyConnection {
 				auto hour = PyDateTime_DATE_GET_HOUR(ele.ptr());
 				auto minute = PyDateTime_DATE_GET_MINUTE(ele.ptr());
 				auto second = PyDateTime_DATE_GET_SECOND(ele.ptr());
-				auto millis = PyDateTime_DATE_GET_MICROSECOND(ele.ptr()) / 1000;
-				args.push_back(Value::TIMESTAMP(year, month, day, hour, minute, second, millis));
+				auto micros = PyDateTime_DATE_GET_MICROSECOND(ele.ptr());
+				args.push_back(Value::TIMESTAMP(year, month, day, hour, minute, second, micros));
 			} else if (py::isinstance(ele, datetime_time)) {
 				auto hour = PyDateTime_TIME_GET_HOUR(ele.ptr());
 				auto minute = PyDateTime_TIME_GET_MINUTE(ele.ptr());
 				auto second = PyDateTime_TIME_GET_SECOND(ele.ptr());
-				auto millis = PyDateTime_TIME_GET_MICROSECOND(ele.ptr()) / 1000;
-				args.push_back(Value::TIME(hour, minute, second, millis));
+				auto micros = PyDateTime_TIME_GET_MICROSECOND(ele.ptr());
+				args.push_back(Value::TIME(hour, minute, second, micros));
 			} else if (py::isinstance(ele, datetime_date)) {
 				auto year = PyDateTime_GET_YEAR(ele.ptr());
 				auto month = PyDateTime_GET_MONTH(ele.ptr());

@@ -2,6 +2,10 @@
 # description: Test BC dates
 # group: [date]
 
+# BC dates are off-by-one because the year 0 does not exist in the gregorian calender
+# however, ISO 8601 DOES have the year 0, thus "0000-01-01" is actually equal to "0001-01-01 (BC)"
+# this means all BC dates are off-by-one, so -1000-01-01 is equal to "1001-01-01 (BC)", etc
+
 statement ok
 PRAGMA enable_verification
 
@@ -9,17 +13,18 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE dates(i DATE)
 
+# insert an ISO-8601 formatted negative date
 statement ok
 INSERT INTO dates VALUES ('-1993-08-14'), (NULL)
 
-# check that we can select dates
+# the BC formatted variant is one off
 query T
 SELECT * FROM dates
 ----
-1993-08-14 (BC)
+1994-08-14 (BC)
 NULL
 
-# YEAR function
+# YEAR function returns the ISO 8601 year
 query I
 SELECT year(i) FROM dates
 ----
@@ -29,6 +34,77 @@ NULL
 query T
 SELECT cast(i AS VARCHAR) FROM dates
 ----
-1993-08-14 (BC)
+1994-08-14 (BC)
 NULL
 
+# the year 0 exists in the ISO-8601 format
+query T
+SELECT DATE '0000-01-01'
+----
+0001-01-01 (BC)
+
+# year 0 does not exist in the gregorian calendar
+statement error
+SELECT DATE '0000-01-01 (BC)'
+
+# negative BC years do not exist either
+statement error
+SELECT DATE '-0030-01-01 (BC)'
+
+query T
+SELECT DATE '1992-01-01 (BC)'
+----
+1992-01-01 (BC)
+
+query T
+SELECT DATE '-1992-01-01'
+----
+1993-01-01 (BC)
+
+# check intervals on negative dates
+statement ok
+CREATE TABLE bc_dates AS SELECT date '0020-01-01' - interval (i) years AS d from range(0, 40) tbl(i);
+
+query II
+SELECT d, d::VARCHAR FROM bc_dates ORDER BY 1
+----
+0020-01-01 (BC)	0020-01-01 (BC)
+0019-01-01 (BC)	0019-01-01 (BC)
+0018-01-01 (BC)	0018-01-01 (BC)
+0017-01-01 (BC)	0017-01-01 (BC)
+0016-01-01 (BC)	0016-01-01 (BC)
+0015-01-01 (BC)	0015-01-01 (BC)
+0014-01-01 (BC)	0014-01-01 (BC)
+0013-01-01 (BC)	0013-01-01 (BC)
+0012-01-01 (BC)	0012-01-01 (BC)
+0011-01-01 (BC)	0011-01-01 (BC)
+0010-01-01 (BC)	0010-01-01 (BC)
+0009-01-01 (BC)	0009-01-01 (BC)
+0008-01-01 (BC)	0008-01-01 (BC)
+0007-01-01 (BC)	0007-01-01 (BC)
+0006-01-01 (BC)	0006-01-01 (BC)
+0005-01-01 (BC)	0005-01-01 (BC)
+0004-01-01 (BC)	0004-01-01 (BC)
+0003-01-01 (BC)	0003-01-01 (BC)
+0002-01-01 (BC)	0002-01-01 (BC)
+0001-01-01 (BC)	0001-01-01 (BC)
+0001-01-01	0001-01-01
+0002-01-01	0002-01-01
+0003-01-01	0003-01-01
+0004-01-01	0004-01-01
+0005-01-01	0005-01-01
+0006-01-01	0006-01-01
+0007-01-01	0007-01-01
+0008-01-01	0008-01-01
+0009-01-01	0009-01-01
+0010-01-01	0010-01-01
+0011-01-01	0011-01-01
+0012-01-01	0012-01-01
+0013-01-01	0013-01-01
+0014-01-01	0014-01-01
+0015-01-01	0015-01-01
+0016-01-01	0016-01-01
+0017-01-01	0017-01-01
+0018-01-01	0018-01-01
+0019-01-01	0019-01-01
+0020-01-01	0020-01-01

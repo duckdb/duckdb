@@ -122,3 +122,24 @@ SELECT interval '9223372036854775807' minutes;
 
 statement error
 SELECT interval '9223372036854775807' seconds;
+
+# milli/microseconds
+query I
+SELECT interval 3 milliseconds;
+----
+00:00:00.003
+
+query I
+SELECT interval 3 microseconds;
+----
+00:00:00.000003
+
+query I
+select timestamp '1992-01-01 12:00:00' + interval 3 microseconds + interval 3 milliseconds
+----
+1992-01-01 12:00:00.003003
+
+query I
+select timestamp '1992-01-01 12:00:00' + (interval 3 microseconds + interval 3 milliseconds)
+----
+1992-01-01 12:00:00.003003

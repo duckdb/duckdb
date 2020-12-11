@@ -2,7 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"

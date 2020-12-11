@@ -5,7 +5,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 #include "duckdb/common/string_util.hpp"
 
@@ -73,7 +73,7 @@ void StrfTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
 }
 
-idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, time_t time) {
+idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time) {
 	switch (specifier) {
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME:
 		return Date::DayNames[Date::ExtractISODayOfTheWeek(date) % 7].GetSize();
@@ -135,7 +135,7 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 }
 
 //! Returns the total length of the date formatted by this format specifier
-idx_t StrfTimeFormat::GetLength(date_t date, time_t time) {
+idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time) {
 	idx_t size = constant_size;
 	if (var_length_specifiers.size() > 0) {
 		for (auto &specifier : var_length_specifiers) {
@@ -372,7 +372,7 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[7], char *target) {
 	memcpy(target, literals[i].c_str(), literals[i].size());
 }
 
-void StrfTimeFormat::FormatString(date_t date, time_t time, char *target) {
+void StrfTimeFormat::FormatString(date_t date, dtime_t time, char *target) {
 	int32_t data[7]; // year, month, day, hour, min, sec, msec
 	Date::Convert(date, data[0], data[1], data[2]);
 	Time::Convert(time, data[3], data[4], data[5], data[6]);
@@ -584,7 +584,7 @@ static void strftime_function_date(DataChunk &args, ExpressionState &state, Vect
 		return;
 	}
 
-	time_t time = 0;
+	dtime_t time = 0;
 	UnaryExecutor::Execute<date_t, string_t, true>(args.data[0], result, args.size(), [&](date_t date) {
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);
@@ -940,7 +940,11 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 		return false;
 	}
 	if (ampm != TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE) {
-		// fixme: adjust the hours based on the AM or PM specifier
+		if (result_data[3] > 12) {
+			error_message = "Invalid hour: " + std::to_string(result_data[3]) + " AM/PM, expected an hour within the range [0..12]";
+			return false;
+		}
+		// adjust the hours based on the AM or PM specifier
 		if (ampm == TimeSpecifierAMOrPM::TIME_SPECIFIER_AM) {
 			// AM: 12AM=0, 1AM=1, 2AM=2, ..., 11AM=11
 			if (result_data[3] == 12) {

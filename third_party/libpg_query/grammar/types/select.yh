@@ -45,7 +45,7 @@
 
 %type <list>	extract_list overlay_list position_list
 %type <list>	substr_list trim_list
-%type <list>	opt_interval interval_second
+%type <list>	opt_interval
 %type <node>	overlay_placing substr_from substr_for
 
 

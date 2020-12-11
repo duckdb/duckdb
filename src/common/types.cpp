@@ -52,10 +52,10 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INT16;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
 	case LogicalTypeId::INTEGER:
 		return PhysicalType::INT32;
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 		return PhysicalType::INT64;
 	case LogicalTypeId::HUGEINT:

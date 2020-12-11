@@ -36,21 +36,21 @@ template <> interval_t SubtractOperator::Operation(interval_t left, interval_t r
 	interval_t result;
 	result.months = left.months - right.months;
 	result.days = left.days - right.days;
-	result.msecs = left.msecs - right.msecs;
+	result.micros = left.micros - right.micros;
 	return result;
 }
 
 template <> date_t SubtractOperator::Operation(date_t left, interval_t right) {
 	right.months = -right.months;
 	right.days = -right.days;
-	right.msecs = -right.msecs;
+	right.micros = -right.micros;
 	return AddOperator::Operation<date_t, interval_t, date_t>(left, right);
 }
 
 template <> timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right) {
 	right.months = -right.months;
 	right.days = -right.days;
-	right.msecs = -right.msecs;
+	right.micros = -right.micros;
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, right);
 }
 
@@ -158,7 +158,7 @@ template <> hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hu
 // subtract time operator
 //===--------------------------------------------------------------------===//
 template <> dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right) {
-	right.msecs = -right.msecs;
+	right.micros = -right.micros;
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
 }
 
