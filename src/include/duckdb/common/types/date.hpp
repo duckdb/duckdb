@@ -26,6 +26,8 @@ public:
 	static int32_t LeapDays[13];
 	static int32_t CumulativeLeapDays[13];
 	static int32_t CumulativeYearDays[401];
+	static int8_t MonthPerDayOfYear[365];
+	static int8_t LeapMonthPerDayOfYear[366];
 
 	constexpr static int32_t MinYear = -290307;
 	constexpr static int32_t MaxYear = 294247;
@@ -102,7 +104,6 @@ public:
 	static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result);
 
 private:
-	static void ExtractYearDay(int32_t n, int32_t &year, int32_t &day_of_year);
 	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
 
 };
