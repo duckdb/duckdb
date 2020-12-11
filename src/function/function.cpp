@@ -35,6 +35,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
 	RegisterNestedAggregates();
+	RegisterHolisticAggregates();
 
 	RegisterDateFunctions();
 	RegisterGenericFunctions();
@@ -46,11 +47,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterTrigonometricsFunctions();
 
 	RegisterPragmaFunctions();
-
-	// binder functions
-	// FIXME shouldn't be here
-	AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
-	AddFunction(ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
 
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
@@ -379,7 +375,10 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(Cl
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
+		// we may have lost some arguments in the bind
+		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}
+
 	// check if we need to add casts to the children
 	bound_function.CastToFunctionArguments(children);
 

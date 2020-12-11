@@ -24,6 +24,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "ORDER_BY";
 	case PhysicalOperatorType::LIMIT:
 		return "LIMIT";
+	case PhysicalOperatorType::RESERVOIR_SAMPLE:
+		return "RESERVOIR_SAMPLE";
+	case PhysicalOperatorType::STREAMING_SAMPLE:
+		return "STREAMING_SAMPLE";
 	case PhysicalOperatorType::TOP_N:
 		return "TOP_N";
 	case PhysicalOperatorType::AGGREGATE:
@@ -32,12 +36,12 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "WINDOW";
 	case PhysicalOperatorType::UNNEST:
 		return "UNNEST";
-	case PhysicalOperatorType::DISTINCT:
-		return "DISTINCT";
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:
 		return "SIMPLE_AGGREGATE";
 	case PhysicalOperatorType::HASH_GROUP_BY:
 		return "HASH_GROUP_BY";
+	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
+		return "PERFECT_HASH_GROUP_BY";
 	case PhysicalOperatorType::SORT_GROUP_BY:
 		return "SORT_GROUP_BY";
 	case PhysicalOperatorType::FILTER:

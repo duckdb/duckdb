@@ -20241,7 +20241,7 @@ static const char zOptions[] =
 #endif
   "   -stats               print memory stats before each finalize\n"
   "   -table               set output mode to 'table'\n"
-  "   -version             show SQLite version\n"
+  "   -version             show DuckDB version\n"
   "   -vfs NAME            use NAME as the default VFS\n"
 #ifdef SQLITE_ENABLE_VFSTRACE
   "   -vfstrace            enable tracing of all VFS calls\n"
@@ -20253,7 +20253,7 @@ static const char zOptions[] =
 static void usage(int showDetail){
   utf8_printf(stderr,
       "Usage: %s [OPTIONS] FILENAME [SQL]\n"
-      "FILENAME is the name of an SQLite database. A new database is created\n"
+      "FILENAME is the name of an DuckDB database. A new database is created\n"
       "if the file does not previously exist.\n", Argv0);
   if( showDetail ){
     utf8_printf(stderr, "OPTIONS include:\n%s", zOptions);

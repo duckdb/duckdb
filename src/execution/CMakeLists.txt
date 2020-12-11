@@ -10,13 +10,16 @@ add_library_unity(
   OBJECT
   adaptive_filter.cpp
   aggregate_hashtable.cpp
+  base_aggregate_hashtable.cpp
   column_binding_resolver.cpp
   expression_executor.cpp
   expression_executor_state.cpp
   join_hashtable.cpp
   partitionable_hashtable.cpp
+  perfect_aggregate_hashtable.cpp
   physical_operator.cpp
   physical_plan_generator.cpp
+  reservoir_sample.cpp
   window_segment_tree.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution>

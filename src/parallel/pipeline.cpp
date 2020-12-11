@@ -101,6 +101,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::STREAMING_SAMPLE:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
 	case PhysicalOperatorType::TABLE_SCAN: {
@@ -162,6 +163,16 @@ void Pipeline::Schedule() {
 			// not all aggregates are parallelizable: switch to sequential mode
 			break;
 		}
+		if (ScheduleOperator(sink->children[0].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
+	case PhysicalOperatorType::ORDER_BY:
+	case PhysicalOperatorType::RESERVOIR_SAMPLE:
+	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
+		// perfect hash aggregate can always be parallelized
 		if (ScheduleOperator(sink->children[0].get())) {
 			// all parallel tasks have been scheduled: return
 			return;

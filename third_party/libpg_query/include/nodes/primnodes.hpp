@@ -68,6 +68,7 @@ typedef struct PGRangeVar {
 	char relpersistence; /* see RELPERSISTENCE_* in pg_class.h */
 	PGAlias *alias;      /* table alias & optional column aliases */
 	int location;        /* token location, or -1 if unknown */
+	PGNode *sample;      /* sample, if any */
 } PGRangeVar;
 
 /*

@@ -24,13 +24,15 @@ enum class PhysicalOperatorType : uint8_t {
 	AGGREGATE,
 	WINDOW,
 	UNNEST,
-	DISTINCT,
 	SIMPLE_AGGREGATE,
 	HASH_GROUP_BY,
+	PERFECT_HASH_GROUP_BY,
 	SORT_GROUP_BY,
 	FILTER,
 	PROJECTION,
 	COPY_TO_FILE,
+	RESERVOIR_SAMPLE,
+	STREAMING_SAMPLE,
 	// -----------------------------
 	// Scans
 	// -----------------------------

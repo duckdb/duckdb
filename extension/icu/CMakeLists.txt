@@ -5,5 +5,5 @@ project(ICUExtension)
 include_directories(include)
 
 add_library(icu_extension STATIC icu-collate.cpp icu-extension.cpp)
-target_link_libraries(icu_extension Threads::Threads)
+link_threads(icu_extension)
 disable_target_warnings(icu_extension)

@@ -457,6 +457,7 @@ typedef struct PGRangeSubselect {
 	bool lateral;     /* does it have LATERAL prefix? */
 	PGNode *subquery; /* the untransformed sub-select clause */
 	PGAlias *alias;   /* table alias & optional column aliases */
+	PGNode *sample;   /* sample options (if any) */
 } PGRangeSubselect;
 
 /*
@@ -482,26 +483,8 @@ typedef struct PGRangeFunction {
 	PGAlias *alias;     /* table alias & optional column aliases */
 	PGList *coldeflist; /* list of PGColumnDef nodes to describe result
 								 * of function returning RECORD */
+	PGNode *sample;   /* sample options (if any) */
 } PGRangeFunction;
-
-/*
- * PGRangeTableSample - TABLESAMPLE appearing in a raw FROM clause
- *
- * This node, appearing only in raw parse trees, represents
- *		<relation> TABLESAMPLE <method> (<params>) REPEATABLE (<num>)
- * Currently, the <relation> can only be a PGRangeVar, but we might in future
- * allow PGRangeSubselect and other options.  Note that the PGRangeTableSample
- * is wrapped around the node representing the <relation>, rather than being
- * a subfield of it.
- */
-typedef struct PGRangeTableSample {
-	PGNodeTag type;
-	PGNode *relation;   /* relation to be sampled */
-	PGList *method;     /* sampling method name (possibly qualified) */
-	PGList *args;       /* argument(s) for sampling method */
-	PGNode *repeatable; /* REPEATABLE expression, or NULL if none */
-	int location;       /* method name location, or -1 if unknown */
-} PGRangeTableSample;
 
 /*
  * PGColumnDef - column definition (used in various creates)
@@ -834,18 +817,6 @@ typedef struct PGRangeTblFunction {
 	/* This is set during planning for use by the executor: */
 	PGBitmapset *funcparams; /* PG_PARAM_EXEC PGParam IDs affecting this func */
 } PGRangeTblFunction;
-
-/*
- * PGTableSampleClause - TABLESAMPLE appearing in a transformed FROM clause
- *
- * Unlike PGRangeTableSample, this is a subnode of the relevant RangeTblEntry.
- */
-typedef struct PGTableSampleClause {
-	PGNodeTag type;
-	PGOid tsmhandler;   /* OID of the tablesample handler function */
-	PGList *args;       /* tablesample argument expression(s) */
-	PGExpr *repeatable; /* REPEATABLE expression, or NULL if none */
-} PGTableSampleClause;
 
 /*
  * PGSortGroupClause -
@@ -1219,6 +1190,7 @@ typedef struct PGSelectStmt {
 	PGList *sortClause;       /* sort clause (a list of SortBy's) */
 	PGNode *limitOffset;      /* # of result tuples to skip */
 	PGNode *limitCount;       /* # of result tuples to return */
+	PGNode *sampleOptions;    /* sample options (if any) */
 	PGList *lockingClause;    /* FOR UPDATE (list of LockingClause's) */
 	PGWithClause *withClause; /* WITH clause */
 
@@ -1665,7 +1637,7 @@ typedef struct PGAlterSeqStmt {
 typedef struct PGCreateFunctionStmt {
 	PGNodeTag type;
 	PGRangeVar *name;
-	PGList *args;
+	PGList *params;
 	PGNode *function;
 } PGCreateFunctionStmt;
 
@@ -1940,5 +1912,37 @@ typedef struct PGImportStmt {
 	PGNodeTag type;
 	char *filename;       /* filename */
 } PGImportStmt;
+
+/* ----------------------
+ *		Interval Constant
+ * ----------------------
+ */
+typedef struct PGIntervalConstant {
+	PGNodeTag type;
+	int val_type;         /* interval constant type, either T_PGString, T_PGInteger or T_PGAExpr */
+	char *sval;           /* T_PGString */
+	int ival;             /* T_PGString */
+	PGNode *eval;         /* T_PGAExpr */
+	PGList *typmods;      /* how to interpret the interval constant (year, month, day, etc)  */
+	int location;         /* token location, or -1 if unknown */
+} PGIntervalConstant;
+
+/* ----------------------
+ *		Sample Options
+ * ----------------------
+ */
+typedef struct PGSampleSize {
+	PGNodeTag type;
+	bool is_percentage;   /* whether or not the sample size is expressed in row numbers or a percentage */
+	PGValue sample_size;  /* sample size */
+} PGSampleSize;
+
+typedef struct PGSampleOptions {
+	PGNodeTag type;
+	PGNode *sample_size;      /* the size of the sample to take */
+	char *method;             /* sample method, or NULL for default */
+	int seed;                 /* seed, or NULL for default; */
+	int location;             /* token location, or -1 if unknown */
+} PGSampleOptions;
 
 }

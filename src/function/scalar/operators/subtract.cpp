@@ -111,18 +111,31 @@ template <> bool TrySubtractOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // subtract decimal with overflow check
 //===--------------------------------------------------------------------===//
-template <> bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t &result) {
+template<class T, T min, T max>
+bool TryDecimalSubtractTemplated(T left, T right, T &result) {
 	if (right < 0) {
-		if (999999999999999999 + right < left) {
+		if (max + right < left) {
 			return false;
 		}
 	} else {
-		if (-999999999999999999 + right > left) {
+		if (min + right > left) {
 			return false;
 		}
 	}
 	result = left - right;
 	return true;
+}
+
+template <> bool TryDecimalSubtract::Operation(int16_t left, int16_t right, int16_t &result) {
+	return TryDecimalSubtractTemplated<int16_t, -9999, 9999>(left, right, result);
+}
+
+template <> bool TryDecimalSubtract::Operation(int32_t left, int32_t right, int32_t &result) {
+	return TryDecimalSubtractTemplated<int32_t, -999999999, 999999999>(left, right, result);
+}
+
+template <> bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t &result) {
+	return TryDecimalSubtractTemplated<int64_t, -999999999999999999, 999999999999999999>(left, right, result);
 }
 
 template <> bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {

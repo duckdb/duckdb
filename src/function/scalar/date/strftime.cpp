@@ -383,7 +383,7 @@ void StrfTimeFormat::FormatString(date_t date, time_t time, char *target) {
 string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &format) {
 	format.specifiers.clear();
 	format.literals.clear();
-	format.is_numeric.clear();
+	format.numeric_width.clear();
 	format.constant_size = 0;
 	idx_t pos = 0;
 	string current_literal;
@@ -639,20 +639,20 @@ void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 	default:
 		break;
 	}
-	is_numeric.push_back(IsNumericSpecifier(specifier));
+	numeric_width.push_back(NumericSpecifierWidth(specifier));
 	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
 }
 
-bool StrpTimeFormat::IsNumericSpecifier(StrTimeSpecifier specifier) {
+int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::WEEKDAY_DECIMAL:
+		return 1;
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 	case StrTimeSpecifier::DAY_OF_MONTH:
 	case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 	case StrTimeSpecifier::MONTH_DECIMAL:
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
-	case StrTimeSpecifier::YEAR_DECIMAL:
 	case StrTimeSpecifier::HOUR_24_PADDED:
 	case StrTimeSpecifier::HOUR_24_DECIMAL:
 	case StrTimeSpecifier::HOUR_12_PADDED:
@@ -661,15 +661,19 @@ bool StrpTimeFormat::IsNumericSpecifier(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::MINUTE_DECIMAL:
 	case StrTimeSpecifier::SECOND_PADDED:
 	case StrTimeSpecifier::SECOND_DECIMAL:
-	case StrTimeSpecifier::MICROSECOND_PADDED:
+	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
+		return 2;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
-	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
-	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
-		return true;
+		return 3;
+	case StrTimeSpecifier::YEAR_DECIMAL:
+		return 4;
+	case StrTimeSpecifier::MICROSECOND_PADDED:
+		return 6;
 	default:
-		return false;
+		return -1;
 	}
 }
 
@@ -740,17 +744,12 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 			break;
 		}
 		// now parse the specifier
-		if (is_numeric[i]) {
+		if (numeric_width[i] > 0) {
 			// numeric specifier: parse a number
 			uint64_t number = 0;
 			size_t start_pos = pos;
-			while (pos < size && StringUtil::CharacterIsDigit(data[pos])) {
-				if (number > 1000000ULL) {
-					// no number bigger than this is required anywhere
-					error_message = "Number is out of range of format specifier";
-					error_position = start_pos;
-					return false;
-				}
+			size_t end_pos = start_pos + numeric_width[i];
+			while (pos < size && pos < end_pos && StringUtil::CharacterIsDigit(data[pos])) {
 				number = number * 10 + data[pos] - '0';
 				pos++;
 			}

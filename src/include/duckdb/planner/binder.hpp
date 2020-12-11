@@ -174,6 +174,10 @@ private:
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 
+	bool BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
+	                            vector<Value> &parameters, unordered_map<string, Value> &named_parameters,
+	                            string &error);
+
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCrossProductRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);

@@ -11,6 +11,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 using namespace std;
 
@@ -73,7 +74,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	Reference(other);
 	if (offset > 0) {
 		data = data + GetTypeIdSize(type.InternalType()) * offset;
-		nullmask <<= offset;
+		nullmask >>= offset;
 	}
 }
 
@@ -852,6 +853,15 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.EmptyString(len);
+}
+
+void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
+	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	string_buffer.AddHeapReference(make_unique<ManagedVectorBuffer>(move(handle)));
 }
 
 void StringVector::AddHeapReference(Vector &vector, Vector &other) {

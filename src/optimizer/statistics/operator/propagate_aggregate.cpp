@@ -9,8 +9,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	node_stats = PropagateStatistics(aggr.children[0]);
 
 	// handle the groups: simply propagate statistics and assign the stats to the group binding
+	aggr.group_stats.resize(aggr.groups.size());
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
 		auto stats = PropagateExpression(aggr.groups[group_idx]);
+		aggr.group_stats[group_idx] = stats ? stats->Copy() : nullptr;
 		if (!stats) {
 			continue;
 		}

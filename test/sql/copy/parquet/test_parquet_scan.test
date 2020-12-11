@@ -194,3 +194,5 @@ SELECT FIRST(comments) OVER w, LAST(comments) OVER w FROM userdata1 WINDOW w AS 
 ----
 1E+02	(empty)
 
+statement error
+SELECT * FROM parquet_scan('test/sql/copy/parquet/data/broken-arrow.parquet')

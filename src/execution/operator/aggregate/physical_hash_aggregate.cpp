@@ -4,7 +4,6 @@
 #include "duckdb/execution/partitionable_hashtable.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -47,10 +46,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 
 		aggregate_return_types.push_back(aggr.return_type);
-		if (aggr.children.size()) {
-			for (idx_t i = 0; i < aggr.children.size(); ++i) {
-				payload_types.push_back(aggr.children[i]->return_type);
-			}
+		for (idx_t i = 0; i < aggr.children.size(); ++i) {
+			payload_types.push_back(aggr.children[i]->return_type);
 		}
 		if (!aggr.function.combine) {
 			all_combinable = false;

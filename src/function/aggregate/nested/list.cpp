@@ -15,17 +15,13 @@ struct ListFunction {
 		state->cc = nullptr;
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-		throw NotImplementedException("COMBINE not implemented for LIST");
-	}
-
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->cc) {
 			delete state->cc;
 		}
 	}
 	static bool IgnoreNull() {
-		return true;
+		return false;
 	}
 };
 
@@ -70,7 +66,6 @@ static void list_combine(Vector &state, Vector &combined, idx_t count) {
 			combined_ptr[i]->cc = new ChunkCollection();
 		}
 		combined_ptr[i]->cc->Append(*state->cc);
-		delete state->cc;
 	}
 }
 
@@ -81,10 +76,15 @@ static void list_finalize(Vector &state_vector, FunctionData *, Vector &result, 
 
 	result.Initialize(LogicalType::LIST);
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
+	auto &nullmask = FlatVector::Nullmask(result);
 
 	size_t total_len = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
+		if (!state->cc) {
+			nullmask[i] = true;
+			continue;
+		}
 		D_ASSERT(state->cc);
 		auto &state_cc = *state->cc;
 		D_ASSERT(state_cc.Types().size() == 1);
@@ -96,6 +96,9 @@ static void list_finalize(Vector &state_vector, FunctionData *, Vector &result, 
 	auto list_child = make_unique<ChunkCollection>();
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
+		if (!state->cc) {
+			continue;
+		}
 		auto &state_cc = *state->cc;
 		D_ASSERT(state_cc.GetChunk(0).ColumnCount() == 1);
 		list_child->Append(state_cc);

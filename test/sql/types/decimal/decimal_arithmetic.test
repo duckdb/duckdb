@@ -17,8 +17,6 @@ SELECT +('0.1'::DECIMAL), +('-0.1'::DECIMAL)
 ----
 0.1	-0.1
 
-
-
 # addition
 query I
 SELECT '0.1'::DECIMAL + '0.1'::DECIMAL
@@ -173,3 +171,33 @@ SELECT '0.001'::DECIMAL * 100::TINYINT,
 # multiplication could not be performed exactly: throw error
 statement error
 SELECT '0.000000000000000000000000000001'::DECIMAL(38,30) * '0.000000000000000000000000000001'::DECIMAL(38,30)
+
+# test addition, subtraction and multiplication with various scales and precisions
+query IIII
+SELECT 2.0 + 1.0,
+       2.0000 + 1.0000,
+       2.000000000000 + 1.000000000000,
+       2.00000000000000000000 + 1.00000000000000000000
+----
+3.0
+3.0000
+3.000000000000
+3.00000000000000000000
+
+query IIII
+SELECT 2.0 - 1.0,
+       2.0000 - 1.0000,
+       2.000000000000 - 1.000000000000,
+       2.00000000000000000000 - 1.00000000000000000000
+----
+1.0
+1.0000
+1.000000000000
+1.00000000000000000000
+
+query II
+SELECT 2.0 * 1.0,
+       2.0000 * 1.0000
+----
+2.0
+2.0000

@@ -23,6 +23,7 @@ bool SubqueryRef::Equals(const TableRef *other_) const {
 unique_ptr<TableRef> SubqueryRef::Copy() {
 	auto copy = make_unique<SubqueryRef>(subquery->Copy(), alias);
 	copy->column_name_alias = column_name_alias;
+	CopyProperties(*copy);
 	return move(copy);
 }
 

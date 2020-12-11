@@ -21,7 +21,7 @@ TransientSegment::TransientSegment(BufferManager &manager, LogicalType type, idx
 
 TransientSegment::TransientSegment(PersistentSegment &segment)
     : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), manager(segment.manager) {
-	if (segment.block_id == segment.data->block_id) {
+	if (segment.block_id == segment.data->block->BlockId()) {
 		segment.data->ToTemporary();
 	}
 	data = move(segment.data);

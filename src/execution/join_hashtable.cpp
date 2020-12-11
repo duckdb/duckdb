@@ -59,15 +59,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 }
 
 JoinHashTable::~JoinHashTable() {
-	if (hash_map) {
-		auto hash_id = hash_map->block_id;
-		hash_map.reset();
-		buffer_manager.DestroyBuffer(hash_id);
-	}
-	pinned_handles.clear();
-	for (auto &block : blocks) {
-		buffer_manager.DestroyBuffer(block.block_id);
-	}
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
@@ -237,12 +228,16 @@ static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx
 }
 
 idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data,
-                                 const SelectionVector *&current_sel, SelectionVector &sel) {
+                                 const SelectionVector *&current_sel, SelectionVector &sel, bool build_side) {
 	key_data = keys.Orrify();
 
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = &FlatVector::IncrementalSelectionVector;
 	idx_t added_count = keys.size();
+	if (build_side && IsRightOuterJoin(join_type)) {
+		// in case of a right or full outer join, we cannot remove NULL keys from the build side
+		return added_count;
+	}
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		if (!null_values_are_equal[i]) {
 			if (!key_data[i].nullmask->any()) {
@@ -283,7 +278,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	unique_ptr<VectorData[]> key_data;
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel);
+	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel, true);
 	if (added_count < keys.size()) {
 		has_null = true;
 	}
@@ -304,7 +299,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			auto &last_block = blocks.back();
 			if (last_block.count < last_block.capacity) {
 				// last block has space: pin the buffer of this block
-				auto handle = buffer_manager.Pin(last_block.block_id);
+				auto handle = buffer_manager.Pin(last_block.block);
 				// now append to the block
 				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
 				remaining -= append_count;
@@ -313,17 +308,18 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 		while (remaining > 0) {
 			// now for the remaining data, allocate new buffers to store the data and append there
-			auto handle = buffer_manager.Allocate(block_capacity * entry_size);
+			auto block = buffer_manager.RegisterMemory(block_capacity * entry_size, false);
+			auto handle = buffer_manager.Pin(block);
 
 			HTDataBlock new_block;
 			new_block.count = 0;
 			new_block.capacity = block_capacity;
-			new_block.block_id = handle->block_id;
+			new_block.block = move(block);
 
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
-			blocks.push_back(new_block);
+			blocks.push_back(move(new_block));
 		}
 	}
 	// now set up the key_locations based on the append entries
@@ -401,7 +397,7 @@ void JoinHashTable::Finalize() {
 	// this is so that we can keep pointers around to the blocks
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : blocks) {
-		auto handle = buffer_manager.Pin(block.block_id);
+		auto handle = buffer_manager.Pin(block.block);
 		data_ptr_t dataptr = handle->node->buffer;
 		idx_t entry = 0;
 		while (entry < block.count) {
@@ -437,7 +433,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 
 	// first prepare the keys for probing
 	const SelectionVector *current_sel;
-	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector);
+	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector, false);
 	if (ss->count == 0) {
 		return ss;
 	}

@@ -165,7 +165,8 @@ struct StringMinMaxBase : public MinMaxBase {
 		}
 		if (!target->isset) {
 			// target is NULL, use source value directly
-			*target = source;
+			Assign(target, source.value);
+			target->isset = true;
 		} else {
 			OP::template Execute<string_t, STATE>(target, source.value);
 		}

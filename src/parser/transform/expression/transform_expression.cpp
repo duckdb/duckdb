@@ -69,6 +69,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(PGNode *node) {
 		return make_unique<DefaultExpression>();
 	case T_PGCollateClause:
 		return TransformCollateExpr(reinterpret_cast<PGCollateClause *>(node));
+	case T_PGIntervalConstant:
+		return TransformInterval(reinterpret_cast<PGIntervalConstant *>(node));
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
 	}

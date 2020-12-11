@@ -10,7 +10,8 @@ bool BaseTableRef::Equals(const TableRef *other_) const {
 		return false;
 	}
 	auto other = (BaseTableRef *)other_;
-	return other->schema_name == schema_name && other->table_name == table_name && column_name_alias == other->column_name_alias;
+	return other->schema_name == schema_name && other->table_name == table_name &&
+	       column_name_alias == other->column_name_alias;
 }
 
 void BaseTableRef::Serialize(Serializer &serializer) {
@@ -36,8 +37,8 @@ unique_ptr<TableRef> BaseTableRef::Copy() {
 
 	copy->schema_name = schema_name;
 	copy->table_name = table_name;
-	copy->alias = alias;
 	copy->column_name_alias = column_name_alias;
+	CopyProperties(*copy);
 
 	return move(copy);
 }

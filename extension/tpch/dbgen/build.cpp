@@ -16,11 +16,11 @@
 #if defined(SUN)
 #include <unistd.h>
 #endif
-#include "dss.h"
-#include "dsstypes.h"
+#include "dbgen/dss.h"
+#include "dbgen/dsstypes.h"
 
 #include <math.h>
-#include "rng64.h"
+#include "dbgen/rng64.h"
 
 static tdef *tdefs = DBGenGlobals::tdefs;
 

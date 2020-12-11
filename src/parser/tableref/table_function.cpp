@@ -34,8 +34,8 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 	auto copy = make_unique<TableFunctionRef>();
 
 	copy->function = function->Copy();
-	copy->alias = alias;
 	copy->column_name_alias = column_name_alias;
+	CopyProperties(*copy);
 
 	return move(copy);
 }
