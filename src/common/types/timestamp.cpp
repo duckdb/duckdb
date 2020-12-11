@@ -66,11 +66,14 @@ timestamp_t Timestamp::FromString(string str) {
 }
 
 string Timestamp::ToString(timestamp_t timestamp) {
-	return Date::ToString(GetDate(timestamp)) + " " + Time::ToString(GetTime(timestamp));
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(timestamp, date, time);
+	return Date::ToString(date) + " " + Time::ToString(time);
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
-	return timestamp / Interval::MICROS_PER_DAY - (timestamp < 0);
+	return (timestamp + (timestamp < 0)) / Interval::MICROS_PER_DAY - (timestamp < 0);
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
@@ -85,6 +88,7 @@ timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
 void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {
 	out_date = GetDate(timestamp);
 	out_time = timestamp - (int64_t(out_date) * int64_t(Interval::MICROS_PER_DAY));
+	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
