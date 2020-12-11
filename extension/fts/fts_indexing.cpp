@@ -53,14 +53,14 @@ static string indexing_script(string input_schema, string input_table, string in
                 row_number() OVER (PARTITION BY docid) AS pos
             FROM (
                 WITH unstopped_tokens AS (
-                    SELECT unnest(%fts_schema%.tokenize(%input_values%)) AS w, rank() OVER (ORDER BY ii.%input_id%) AS docid
+                    SELECT unnest(%fts_schema%.tokenize(%input_values%)) AS w, rowid + 1 AS docid
                     FROM %input_schema%.%input_table% AS ii
                 )
                 SELECT
                     stem(ut.w, '%stemmer%') AS term,
                     ut.docid AS docid
                 FROM unstopped_tokens AS ut
-                WHERE w NOT IN (SELECT sw FROM %fts_schema%.stopwords)
+                WHERE ut.w NOT IN (SELECT sw FROM %fts_schema%.stopwords)
             ) AS sq
             WHERE
                 len(term) != 0 AND term NOT NULL
