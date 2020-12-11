@@ -72,6 +72,28 @@ struct ToSecondsOperator {
 	}
 };
 
+struct ToMilliSecondsOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		interval_t result;
+		result.months = 0;
+		result.days = 0;
+		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_MSEC, result.micros)) {
+			throw OutOfRangeException("Interval value %d seconds out of range", input);
+		}
+		return result;
+	}
+};
+
+struct ToMicroSecondsOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		interval_t result;
+		result.months = 0;
+		result.days = 0;
+		result.micros = input;
+		return result;
+	}
+};
+
 void ToIntervalFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
 	set.AddFunction(ScalarFunction("to_years", { LogicalType::INTEGER }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator, true>));
@@ -80,6 +102,8 @@ void ToIntervalFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("to_hours", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator, true>));
 	set.AddFunction(ScalarFunction("to_minutes", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator, true>));
 	set.AddFunction(ScalarFunction("to_seconds", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToSecondsOperator, true>));
+	set.AddFunction(ScalarFunction("to_milliseconds", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToMilliSecondsOperator, true>));
+	set.AddFunction(ScalarFunction("to_microseconds", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator, true>));
 }
 
 }
