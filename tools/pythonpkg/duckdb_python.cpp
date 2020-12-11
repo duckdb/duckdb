@@ -556,7 +556,7 @@ struct DuckDBPyResult {
 				Timestamp::Convert(timestamp, date, time);
 				Date::Convert(date, year, month, day);
 				Time::Convert(time, hour, min, sec, micros);
-				res[col_idx] = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros * 1000);
+				res[col_idx] = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros);
 				break;
 			}
 			case LogicalTypeId::TIME: {
