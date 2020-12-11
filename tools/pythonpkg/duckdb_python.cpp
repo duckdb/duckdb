@@ -1117,14 +1117,14 @@ struct DuckDBPyConnection {
 				auto hour = PyDateTime_DATE_GET_HOUR(ele.ptr());
 				auto minute = PyDateTime_DATE_GET_MINUTE(ele.ptr());
 				auto second = PyDateTime_DATE_GET_SECOND(ele.ptr());
-				auto millis = PyDateTime_DATE_GET_MICROSECOND(ele.ptr()) / 1000;
-				args.push_back(Value::TIMESTAMP(year, month, day, hour, minute, second, millis));
+				auto micros = PyDateTime_DATE_GET_MICROSECOND(ele.ptr());
+				args.push_back(Value::TIMESTAMP(year, month, day, hour, minute, second, micros));
 			} else if (py::isinstance(ele, datetime_time)) {
 				auto hour = PyDateTime_TIME_GET_HOUR(ele.ptr());
 				auto minute = PyDateTime_TIME_GET_MINUTE(ele.ptr());
 				auto second = PyDateTime_TIME_GET_SECOND(ele.ptr());
-				auto millis = PyDateTime_TIME_GET_MICROSECOND(ele.ptr()) / 1000;
-				args.push_back(Value::TIME(hour, minute, second, millis));
+				auto micros = PyDateTime_TIME_GET_MICROSECOND(ele.ptr());
+				args.push_back(Value::TIME(hour, minute, second, micros));
 			} else if (py::isinstance(ele, datetime_date)) {
 				auto year = PyDateTime_GET_YEAR(ele.ptr());
 				auto month = PyDateTime_GET_MONTH(ele.ptr());
