@@ -940,7 +940,11 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 		return false;
 	}
 	if (ampm != TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE) {
-		// fixme: adjust the hours based on the AM or PM specifier
+		if (result_data[3] > 12) {
+			error_message = "Invalid hour: " + std::to_string(result_data[3]) + " AM/PM, expected an hour within the range [0..12]";
+			return false;
+		}
+		// adjust the hours based on the AM or PM specifier
 		if (ampm == TimeSpecifierAMOrPM::TIME_SPECIFIER_AM) {
 			// AM: 12AM=0, 1AM=1, 2AM=2, ..., 11AM=11
 			if (result_data[3] == 12) {
