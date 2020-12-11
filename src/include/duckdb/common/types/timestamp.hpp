@@ -47,6 +47,8 @@ public:
 	static timestamp_t FromEpochMs(int64_t ms);
 	//! Convert the epoch (in microseconds) to a timestamp
 	static timestamp_t FromEpochMicroSeconds(int64_t micros);
+	//! Convert the epoch (in nanoseconds) to a timestamp
+	static timestamp_t FromEpochNanoSeconds(int64_t micros);
 
 	//! Convert the epoch (in seconds) to a timestamp
 	static int64_t GetEpochSeconds(timestamp_t timestamp);

@@ -6,6 +6,10 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 using namespace std;
 
@@ -16,19 +20,13 @@ bool Interval::FromString(string str, interval_t &result) {
 }
 
 template <class T> void interval_try_addition(T &target, int64_t input, int64_t multiplier) {
-	if (target >= 0) {
-		if (input > (NumericLimits<T>::Maximum() / multiplier) - target) {
-			throw OutOfRangeException("interval value is out of range");
-		}
-	} else {
-		if (input < ((NumericLimits<T>::Minimum() / multiplier) - target)) {
-			throw OutOfRangeException("interval value is out of range");
-		}
+	int64_t addition;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, multiplier, addition)) {
+		throw OutOfRangeException("interval value is out of range");
 	}
-	if (std::is_same<T, int64_t>()) {
-		target += input * multiplier;
-	} else {
-		target += Cast::Operation<int64_t, T>(input * multiplier);
+	T addition_base = Cast::Operation<int64_t, T>(addition);
+	if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
+		throw OutOfRangeException("interval value is out of range");
 	}
 }
 
@@ -224,48 +222,10 @@ posix_interval:
 	return false;
 }
 
-string Interval::ToString(interval_t date) {
-	string result;
-	if (date.months != 0) {
-		int32_t years = date.months / 12;
-		int32_t months = date.months - years * 12;
-		if (years != 0) {
-			result += to_string(years) + (years != 1 ? " years" : " year");
-		}
-		if (months != 0) {
-			if (!result.empty()) {
-				result += " ";
-			}
-			result += to_string(months) + (months != 1 ? " months" : " month");
-		}
-	}
-	if (date.days != 0) {
-		if (!result.empty()) {
-			result += " ";
-		}
-		result += to_string(date.days) + (date.days != 1 ? " days" : " day");
-	}
-	if (date.micros != 0) {
-		if (!result.empty()) {
-			result += " ";
-		}
-		int64_t micros = date.micros;
-		if (micros < 0) {
-			result += "-";
-			micros = -micros;
-		}
-		result += Time::ToString(micros);
-	} else if (result.empty()) {
-		return "00:00:00";
-	}
-	return result;
-}
-
-// Used to check amount of days per month in common year and leap year
-constexpr int days_per_month[2][13] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0},
-                                       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0}};
-constexpr bool isleap(int16_t year) {
-	return (((year) % 4) == 0 && (((year) % 100) != 0 || ((year) % 400) == 0));
+string Interval::ToString(interval_t interval) {
+	char buffer[70];
+	idx_t length = IntervalToStringCast::Format(interval, buffer);
+	return string(buffer, length);
 }
 
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {

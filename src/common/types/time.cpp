@@ -167,14 +167,14 @@ bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 }
 
 void Time::Convert(dtime_t time, int32_t &hour, int32_t &min, int32_t &sec, int32_t &micros) {
-	hour = time / Interval::MICROS_PER_HOUR;
-	time -= hour * Interval::MICROS_PER_HOUR;
-	min = time / Interval::MICROS_PER_MINUTE;
-	time -= min * Interval::MICROS_PER_MINUTE;
-	sec = time / Interval::MICROS_PER_SEC;
-	time -= sec * Interval::MICROS_PER_SEC;
-	micros = time;
-	D_ASSERT(Time::IsValidTime(hour, min, sec, micros));
+	hour = int32_t(time / Interval::MICROS_PER_HOUR);
+	time -= dtime_t(hour) * Interval::MICROS_PER_HOUR;
+	min = int32_t(time / Interval::MICROS_PER_MINUTE);
+	time -= dtime_t(min) * Interval::MICROS_PER_MINUTE;
+	sec = int32_t(time / Interval::MICROS_PER_SEC);
+	time -= dtime_t(sec) * Interval::MICROS_PER_SEC;
+	micros = int32_t(time);
+	D_ASSERT(IsValidTime(hour, min, sec, micros));
 }
 
 } // namespace duckdb

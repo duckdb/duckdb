@@ -597,8 +597,9 @@ template <> string_t StringCast::Operation(double input, Vector &vector) {
 }
 
 template <> string_t StringCast::Operation(interval_t input, Vector &vector) {
-	std::string s = Interval::ToString(input);
-	return StringVector::AddString(vector, s);
+	char buffer[70];
+	idx_t length = IntervalToStringCast::Format(input, buffer);
+	return StringVector::AddString(vector, buffer, length);
 }
 
 template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
@@ -643,7 +644,7 @@ template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
 	int32_t time[4];
 	Time::Convert(input, time[0], time[1], time[2], time[3]);
 
-	char micro_buffer[6];
+	char micro_buffer[10];
 	idx_t length = TimeToStringCast::Length(time, micro_buffer);
 
 	string_t result = StringVector::EmptyString(vector, length);

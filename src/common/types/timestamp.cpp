@@ -74,7 +74,8 @@ date_t Timestamp::GetDate(timestamp_t timestamp) {
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
-	return (timestamp - (Timestamp::GetDate(timestamp) * Interval::MICROS_PER_DAY));
+	date_t date = Timestamp::GetDate(timestamp);
+	return timestamp - (int64_t(date) * int64_t(Interval::MICROS_PER_DAY));
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
@@ -83,7 +84,7 @@ timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
 
 void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {
 	out_date = GetDate(timestamp);
-	out_time = timestamp - (out_date * Interval::MICROS_PER_DAY);
+	out_time = timestamp - (int64_t(out_date) * int64_t(Interval::MICROS_PER_DAY));
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
@@ -103,6 +104,10 @@ timestamp_t Timestamp::FromEpochMs(int64_t ms) {
 
 timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
 	return micros;
+}
+
+timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
+	return ns / 1000;
 }
 
 int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {

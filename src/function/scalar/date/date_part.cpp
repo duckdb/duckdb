@@ -339,9 +339,9 @@ struct MicrosecondsOperator {
 };
 
 template <> int64_t MicrosecondsOperator::Operation(timestamp_t input) {
-	int n = Timestamp::GetTime(input);
-	int m = n / 60000;
-	return n - m * 60000;
+	auto time = Timestamp::GetTime(input);
+	// remove everything but the second & microsecond part
+	return time % Interval::MICROS_PER_MINUTE;
 }
 
 struct MillisecondsOperator {
@@ -358,9 +358,7 @@ struct MillisecondsOperator {
 };
 
 template <> int64_t MillisecondsOperator::Operation(timestamp_t input) {
-	int n = Timestamp::GetTime(input) / 1000;
-	int m = n / 60000;
-	return n - m * 60000;
+	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_MSEC;
 }
 
 struct SecondsOperator {
@@ -377,9 +375,7 @@ struct SecondsOperator {
 };
 
 template <> int64_t SecondsOperator::Operation(timestamp_t input) {
-	int n = Timestamp::GetTime(input) / 1000;
-	int m = n / 60000;
-	return (n - m * 60000) / 1000;
+	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_SEC;
 }
 
 struct MinutesOperator {
@@ -396,9 +392,9 @@ struct MinutesOperator {
 };
 
 template <> int64_t MinutesOperator::Operation(timestamp_t input) {
-	int n = Timestamp::GetTime(input) / 1000;
-	int h = n / 3600000;
-	return (n - h * 3600000) / 60000;
+	auto time = Timestamp::GetTime(input);
+	// remove the hour part, and truncate to minutes
+	return (time % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
 }
 
 struct HoursOperator {
@@ -415,7 +411,7 @@ struct HoursOperator {
 };
 
 template <> int64_t HoursOperator::Operation(timestamp_t input) {
-	return Timestamp::GetTime(input) / 3600000000;
+	return Timestamp::GetTime(input) / Interval::MICROS_PER_HOUR;
 }
 
 template <class T> static int64_t extract_element(DatePartSpecifier type, T element) {
