@@ -2862,6 +2862,8 @@ extract_arg:
 			| hour_keyword									{ $$ = (char*) "hour"; }
 			| minute_keyword								{ $$ = (char*) "minute"; }
 			| second_keyword								{ $$ = (char*) "second"; }
+			| millisecond_keyword							{ $$ = (char*) "millisecond"; }
+			| microsecond_keyword							{ $$ = (char*) "microsecond"; }
 			| Sconst										{ $$ = $1; }
 		;
 
