@@ -282,11 +282,7 @@ struct PandasScanFunction : public TableFunction {
 			} else {
 				// regular type
 				auto column = get_fun(df_columns[col_idx]);
-				if (py::hasattr(column, "to_numpy")) {
-					bind_data.numpy_col = py::array(column.attr("to_numpy")());
-				} else {
-					bind_data.numpy_col = py::array(column);
-				}
+				bind_data.numpy_col = py::array(column.attr("to_numpy")());
 				bind_data.mask = nullptr;
 				if (col_type == "category") {
 					// for category types, we use the converted numpy type
