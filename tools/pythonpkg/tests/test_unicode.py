@@ -5,7 +5,6 @@ import duckdb
 import pandas as pd
 import sys
 
-
 class TestUnicode(object):
     def test_unicode_pandas_scan(self, duckdb_cursor):
         if sys.version_info.major < 3:
