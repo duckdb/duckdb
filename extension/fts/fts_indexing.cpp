@@ -1,6 +1,7 @@
 #include "fts_indexing.hpp"
 
 #include "duckdb/main/connection.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -233,11 +234,27 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 		                       qname.schema, qname.name);
 	}
 
-	// positional parameters (vararg document text fields to be indexed)
+	// positional parameters
 	auto doc_id = parameters.values[1].str_value;
+	// check all specified columns
+    auto schema = (SchemaCatalogEntry *)context.catalog.schemas->GetEntry(context, qname.schema);
+    auto table = (TableCatalogEntry *)schema->tables.GetEntry(context, qname.name);
 	vector<string> doc_values;
 	for (idx_t i = 2; i < parameters.values.size(); i++) {
-		doc_values.push_back(parameters.values[i].str_value);
+		string col_name = parameters.values[i].str_value;
+        if (col_name == "*") {
+            // star found - get all columns
+            doc_values.clear();
+            for (auto &cd : table->columns) {
+                doc_values.push_back(cd.name);
+            }
+            break;
+        }
+        if (table->name_map.find(col_name) == table->name_map.end()) {
+            // we check this here because else we we end up with an error halfway the indexing script
+            throw CatalogException("Table '%s.%s' does not have a column named '%s'!", qname.schema, qname.name, col_name);
+        }
+		doc_values.push_back(col_name);
 	}
 	if (doc_values.empty()) {
 		throw Exception("at least one column must be supplied for indexing!");

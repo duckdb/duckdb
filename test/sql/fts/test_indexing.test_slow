@@ -26,6 +26,7 @@ INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2'
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body', nonexistant_param='dummy')
 
+# test different stemmer
 statement ok
 PRAGMA create_fts_index('documents', 'id', 'body', stemmer='turkish')
 
@@ -230,3 +231,21 @@ query I
 SELECT body FROM (SELECT *, fts_main_documents.match_bm25(id, '999') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
  MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999
+
+# re-index with '*' to index all columns
+statement ok
+PRAGMA drop_fts_index('documents')
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', '*')
+
+# prepared statement again for easier use
+statement ok
+PREPARE fts_query AS (WITH scored_docs AS (SELECT *, fts_main_documents.match_bm25(id, ?) AS score FROM documents) SELECT id, body, author FROM scored_docs WHERE score IS NOT NULL ORDER BY score DESC)
+
+query III
+EXECUTE fts_query('quacked mark laurens')
+----
+doc1	 QUÁCKING+QUÁCKING+QUÁCKING	Hannes
+doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
+doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999	Laurens
