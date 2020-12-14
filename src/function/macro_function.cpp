@@ -42,7 +42,8 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 		    StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
 			    return ((ColumnRefExpression &)*p).column_name;
 		    }));
-		error += parameters.size() == 1 ? "a single positional argument" : StringUtil::Format("%i positional arguments", parameters.size());
+		error += parameters.size() == 1 ? "a single positional argument"
+		                                : StringUtil::Format("%i positional arguments", parameters.size());
 		error += ", but ";
 		error += positionals.size() == 1 ? "a single positional argument was"
 		                                 : StringUtil::Format("%i positional arguments were", positionals.size());

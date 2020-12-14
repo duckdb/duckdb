@@ -113,7 +113,7 @@ struct RDoubleType {
 
 struct RDateType : public RDoubleType {
 	static double Convert(double val) {
-		return (date_t) val;
+		return (date_t)val;
 	}
 };
 
@@ -125,35 +125,35 @@ struct RTimestampType : public RDoubleType {
 
 struct RTimeSecondsType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val) * Interval::MICROS_PER_SEC;
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_SEC;
 		return time;
 	}
 };
 
 struct RTimeMinutesType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val) * Interval::MICROS_PER_MINUTE;
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_MINUTE;
 		return time;
 	}
 };
 
 struct RTimeHoursType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val) * Interval::MICROS_PER_HOUR;
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_HOUR;
 		return time;
 	}
 };
 
 struct RTimeDaysType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val) * Interval::MICROS_PER_DAY;
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_DAY;
 		return time;
 	}
 };
 
 struct RTimeWeeksType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val) * Interval::MICROS_PER_DAY * 7;
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_DAY * 7;
 		return time;
 	}
 };
@@ -631,7 +631,8 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				auto &nullmask = FlatVector::Nullmask(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
+					dest_ptr[row_idx] =
+					    nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
 				}
 
 				// some dresssup for R

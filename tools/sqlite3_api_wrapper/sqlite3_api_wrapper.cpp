@@ -554,7 +554,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	}
 	try {
 		return sqlite3_internal_bind_value(stmt, idx, Value(value));
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		return SQLITE_ERROR;
 	}
 }
