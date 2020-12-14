@@ -27,7 +27,7 @@ string drop_fts_index_query(ClientContext &context, FunctionParameters parameter
 }
 
 static string indexing_script(string input_schema, string input_table, string input_id, vector<string> input_values,
-                              string stemmer, string stopwords) {
+                              string stemmer, string stopwords, string ignore) {
 	string fts_schema = fts_schema_name(input_schema, input_table);
 	// weird way to have decently readable SQL code in here
     string result = SQL(
@@ -48,7 +48,7 @@ static string indexing_script(string input_schema, string input_table, string in
     }
 
 	result += SQL(
-        CREATE MACRO %fts_schema%.tokenize(s) AS string_split_regex(regexp_replace(lower(strip_accents(s)), '(\\\\.|[^a-z])', ' ', 'g'), '\s+');
+        CREATE MACRO %fts_schema%.tokenize(s) AS string_split_regex(regexp_replace(lower(strip_accents(s)), '%ignore%', ' ', 'g'), '\s+');
 
         CREATE TABLE %fts_schema%.docs AS (
             SELECT
@@ -172,6 +172,7 @@ static string indexing_script(string input_schema, string input_table, string in
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
     result = StringUtil::Replace(result, "%stemmer%", stemmer);
+    result = StringUtil::Replace(result, "%ignore%", ignore);
 
 	return result;
 }
@@ -198,6 +199,10 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
     if (parameters.named_parameters.find("stopwords") != parameters.named_parameters.end()) {
         stopwords = parameters.named_parameters["stopwords"].str_value;
     }
+	string ignore = "(\\\\.|[^a-z])+";
+    if (parameters.named_parameters.find("ignore") != parameters.named_parameters.end()) {
+        ignore = parameters.named_parameters["ignore"].str_value;
+    }
     bool overwrite = false;
 	if (parameters.named_parameters.find("overwrite") != parameters.named_parameters.end()) {
 		overwrite = parameters.named_parameters["overwrite"].value_.boolean;
@@ -220,7 +225,7 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 		throw Exception("at least one column must be supplied for indexing!");
 	}
 
-	return indexing_script(qname.schema, qname.name, doc_id, doc_values, stemmer, stopwords);
+	return indexing_script(qname.schema, qname.name, doc_id, doc_values, stemmer, stopwords, ignore);
 }
 
 } // namespace duckdb

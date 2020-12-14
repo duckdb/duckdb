@@ -49,7 +49,8 @@ void FTSExtension::Load(DuckDB &db) {
 	auto create_fts_index_func = PragmaFunction::PragmaCall("create_fts_index", create_fts_index_query,
 	                                                        {LogicalType::VARCHAR}, LogicalType::VARCHAR);
 	create_fts_index_func.named_parameters["stemmer"] = LogicalType::VARCHAR;
-    create_fts_index_func.named_parameters["stopwords"] = LogicalType::VARCHAR;
+	create_fts_index_func.named_parameters["stopwords"] = LogicalType::VARCHAR;
+	create_fts_index_func.named_parameters["ignore"] = LogicalType::VARCHAR;
 	create_fts_index_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	CreatePragmaFunctionInfo create_fts_index_info(create_fts_index_func);
 

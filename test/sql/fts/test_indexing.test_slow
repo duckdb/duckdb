@@ -20,7 +20,7 @@ statement ok
 CREATE TABLE documents(id VARCHAR, body VARCHAR)
 
 statement ok
-INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING')
+INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999')
 
 # non-existant parameters should yield an error
 statement error
@@ -137,7 +137,7 @@ statement ok
 CREATE TABLE documents(id VARCHAR, body VARCHAR, author VARCHAR)
 
 statement ok
-INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING', 'Hannes'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING', 'Mark'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING', 'Laurens')
+INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING', 'Hannes'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING', 'Mark'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999', 'Laurens')
 
 statement ok
 PRAGMA create_fts_index('main.documents', 'id', 'body', 'author')
@@ -155,7 +155,7 @@ query III
 EXECUTE fts_query('mark laurens')
 ----
 doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
-doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING	Laurens
+doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999	Laurens
 
 query III
 EXECUTE fts_query(NULL)
@@ -213,6 +213,18 @@ PRAGMA create_fts_index('documents', 'id', 'body', stopwords='my_stopwords')
 
 # the word 'quacking' is no longer indexed, therefore doc1 is no longer retrieved with this query
 query III
-SELECT id, body, author FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked', k=0.6, b=0.1) AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+SELECT id, body, author FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
 doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
+
+# re-index with a custom whitelist, so that we can retrieve documents by searching on numbers
+statement ok
+PRAGMA drop_fts_index('documents')
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', 'body', ignore='(\\.|[^a-z0-9])+')
+
+query I
+SELECT body FROM (SELECT *, fts_main_documents.match_bm25(id, '999') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+----
+ MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999
