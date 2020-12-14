@@ -127,7 +127,7 @@ static string indexing_script(string input_schema, string input_table, string in
             qtermids AS
                 (SELECT termid FROM %fts_schema%.dict AS dict, tokens WHERE dict.term = tokens.t),
             qterms AS
-                (SELECT termid, docid FROM %fts_schema%.terms AS terms WHERE CASE WHEN fields = '' THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split(fields, ','))) AS fsq) END AND termid IN (SELECT qtermids.termid FROM qtermids)),
+                (SELECT termid, docid FROM %fts_schema%.terms AS terms WHERE CASE WHEN len(fields) = 0 THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split(fields, ','))) AS fsq) END AND termid IN (SELECT qtermids.termid FROM qtermids)),
             subscores AS (
                 SELECT
                     docs.docid, len, term_tf.termid, tf, df,
