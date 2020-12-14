@@ -41,9 +41,9 @@ static string indexing_script(string input_schema, string input_table, string in
         CREATE TABLE %fts_schema%.docs AS (
             SELECT
                 rowid + 1 AS docid,
-                ii.%input_id% AS name
+                %input_id% AS name
             FROM
-                %input_schema%.%input_table% AS ii
+                %input_schema%.%input_table%
         );
 
         CREATE TABLE %fts_schema%.terms AS (
@@ -54,7 +54,7 @@ static string indexing_script(string input_schema, string input_table, string in
             FROM (
                 WITH unstopped_tokens AS (
                     SELECT unnest(%fts_schema%.tokenize(%input_values%)) AS w, rowid + 1 AS docid
-                    FROM %input_schema%.%input_table% AS ii
+                    FROM %input_schema%.%input_table% AS fts_ii
                 )
                 SELECT
                     stem(ut.w, '%stemmer%') AS term,
@@ -108,36 +108,42 @@ static string indexing_script(string input_schema, string input_table, string in
             FROM %fts_schema%.docs AS docs
         );
 
-        CREATE MACRO %fts_schema%.match_bm25(docname, query_string, k=1.2, b=0.75, conjunctive=0) AS docname IN (
-            WITH tokens AS
-                (SELECT stem(unnest(%fts_schema%.tokenize(query_string)), '%stemmer%') AS t),
-            qtermids AS
-                (SELECT termid FROM %fts_schema%.dict AS dict, tokens WHERE dict.term = tokens.t),
-            qterms AS
-                (SELECT termid, docid FROM %fts_schema%.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
-            subscores AS (
-                SELECT
-                    docs.docid, len, term_tf.termid, tf, df,
-                    (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
-                FROM
-                    (SELECT termid, docid, COUNT(*) AS tf FROM qterms GROUP BY docid, termid) AS term_tf
-                JOIN
-                    (SELECT docid FROM qterms GROUP BY docid HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END) AS cdocs
-                ON
-                    term_tf.docid = cdocs.docid
-                JOIN
-                    %fts_schema%.docs AS docs
-                ON
-                    term_tf.docid = docs.docid
-                JOIN
-                    %fts_schema%.dict AS dict
-                ON
-                    term_tf.termid = dict.termid
-            )
-            SELECT name
-            FROM (SELECT docid, sum(subscore) AS score FROM subscores GROUP BY docid) AS scores
-            JOIN %fts_schema%.docs AS docs
-            ON scores.docid = docs.docid ORDER BY score DESC LIMIT 1000
+        CREATE MACRO %fts_schema%.match_bm25(query_string, k=1.2, b=0.75, conjunctive=0) AS (
+            SELECT %input_table%.*
+            FROM (
+                WITH tokens AS
+                    (SELECT stem(unnest(%fts_schema%.tokenize(query_string)), '%stemmer%') AS t),
+                qtermids AS
+                    (SELECT termid FROM %fts_schema%.dict AS dict, tokens WHERE dict.term = tokens.t),
+                qterms AS
+                    (SELECT termid, docid FROM %fts_schema%.terms AS terms WHERE termid IN (SELECT qtermids.termid FROM qtermids)),
+                subscores AS (
+                    SELECT
+                        docs.docid, len, term_tf.termid, tf, df,
+                        (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
+                    FROM
+                        (SELECT termid, docid, COUNT(*) AS tf FROM qterms GROUP BY docid, termid) AS term_tf
+                    JOIN
+                        (SELECT docid FROM qterms GROUP BY docid HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END) AS cdocs
+                    ON
+                        term_tf.docid = cdocs.docid
+                    JOIN
+                        %fts_schema%.docs AS docs
+                    ON
+                        term_tf.docid = docs.docid
+                    JOIN
+                        %fts_schema%.dict AS dict
+                    ON
+                        term_tf.termid = dict.termid
+                )
+                SELECT name
+                FROM (SELECT docid, sum(subscore) AS score FROM subscores GROUP BY docid) AS scores
+                JOIN %fts_schema%.docs AS docs
+                ON scores.docid = docs.docid
+                ORDER BY score DESC LIMIT 1000
+            ) AS ranked_docs
+            JOIN %input_schema%.%input_table% AS fts_ii
+            ON ranked_docs.name = fts_ii.%input_id%
         );
     );
 
@@ -151,7 +157,7 @@ static string indexing_script(string input_schema, string input_table, string in
 	// input value columns are a bit different because they need to be concatenated before indexing
 	// and the table alias must be given (in case a column is called 'table', etc.)
 	for (idx_t i = 0; i < input_values.size(); i++) {
-		input_values[i] = "ii." + input_values[i];
+		input_values[i] = "fts_ii." + input_values[i];
 	}
 	result = StringUtil::Replace(result, "%input_values%", StringUtil::Format("concat(%s)", StringUtil::Join(input_values, ", ' ', ")));
 
