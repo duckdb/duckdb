@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/filter_pullup.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -58,7 +59,7 @@ unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<Logica
     }
     expressions.clear();
     filter->children.push_back(move(child));
-    return filter;
+    return move(filter);
 }
 
 unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperator> op) {
