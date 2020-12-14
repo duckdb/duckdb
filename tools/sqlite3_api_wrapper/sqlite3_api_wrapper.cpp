@@ -801,9 +801,46 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 	return -1;
 }
 
-const char *sqlite3_column_decltype(sqlite3_stmt *stmt, int col) {
-	fprintf(stderr, "sqlite3_column_decltype: unsupported.\n");
-	return nullptr;
+const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
+	if (!pStmt || !pStmt->prepared) {
+		return NULL;
+	}
+	auto column_type = pStmt->prepared->types[iCol];
+	switch (column_type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return "BOOLEAN";
+	case LogicalTypeId::TINYINT:
+		return "TINYINT";
+	case LogicalTypeId::SMALLINT:
+		return "SMALLINT";
+	case LogicalTypeId::INTEGER:
+		return "INTEGER";
+	case LogicalTypeId::BIGINT:
+		return "BIGINT";
+	case LogicalTypeId::FLOAT:
+		return "FLOAT";
+	case LogicalTypeId::DOUBLE:
+		return "DOUBLE";
+	case LogicalTypeId::DECIMAL:
+		return "DECIMAL";
+	case LogicalTypeId::DATE:
+		return "DATE";
+	case LogicalTypeId::TIME:
+		return "TIME";
+	case LogicalTypeId::TIMESTAMP:
+		return "TIMESTAMP";
+	case LogicalTypeId::VARCHAR:
+		return "VARCHAR";
+	case LogicalTypeId::LIST:
+		return "LIST";
+	case LogicalTypeId::STRUCT:
+		return "STRUCT";
+	case LogicalTypeId::BLOB:
+		return "BLOB";
+	default:
+		return NULL;
+	}
+	return NULL;
 }
 
 int sqlite3_status64(int op, sqlite3_int64 *pCurrent, sqlite3_int64 *pHighwater, int resetFlag) {
