@@ -458,18 +458,7 @@ struct PandasScanFunction : public TableFunction {
 					}
 					tgt_ptr[row] = string_t(dataptr, size);
 				} else if (PyUnicode_CheckExact(val)) {
-					auto data = PyUnicode_AS_UNICODE(val);
-					auto unicode_size = sizeof(Py_UNICODE);
-					switch(unicode_size) {
-					case 2:
-						tgt_ptr[row] = DecodePythonUnicode<Py_UNICODE>(data, PyUnicode_GET_SIZE(val), out);
-						break;
-					case 4:
-						tgt_ptr[row] = DecodePythonUnicode<Py_UNICODE>(data, PyUnicode_GET_SIZE(val), out);
-						break;
-					default:
-						throw runtime_error("Unsupported unicode size");
-					}
+					throw std::runtime_error("Unicode is only supported in Python 3 and up.");
 				} else {
 					FlatVector::SetNull(out, row, true);
 					continue;
