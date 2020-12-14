@@ -54,7 +54,7 @@ class TestParallelPandasScan(object):
         run_parallel_queries(main_table, left_join_table, left_join_table)
 
     def test_parallel_emojis(self, duckdb_cursor):
-        main_table = pd.DataFrame([{"join_column":"🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️"}])
+        main_table = pd.DataFrame([{"join_column":u"🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️"}])
         left_join_table = pd.DataFrame([{"join_column": u"🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️","other_column":u"🦆🍞🦆"}])
         run_parallel_queries(main_table, left_join_table, left_join_table)
 
