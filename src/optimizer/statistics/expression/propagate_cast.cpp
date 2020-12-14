@@ -20,7 +20,6 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 
 static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics *input, LogicalType target) {
 	switch (target.InternalType()) {
-	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
@@ -41,7 +40,6 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 		return nullptr;
 	}
 	switch (cast.child->return_type.InternalType()) {
-	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
