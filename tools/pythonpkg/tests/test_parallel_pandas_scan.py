@@ -44,12 +44,12 @@ class TestParallelPandasScan(object):
         run_parallel_queries(main_table, left_join_table, left_join_table)
 
     def test_parallel_unicode_text(self, duckdb_cursor):
-        main_table = pd.DataFrame([{"join_column":"mühleisen"}])
+        main_table = pd.DataFrame([{"join_column":u"mühleisen"}])
         left_join_table = pd.DataFrame([{"join_column": u"mühleisen","other_column":u"höhöhö"}])
         run_parallel_queries(main_table, left_join_table, left_join_table)
 
     def test_parallel_complex_unicode_text(self, duckdb_cursor):
-        main_table = pd.DataFrame([{"join_column":"鴨"}])
+        main_table = pd.DataFrame([{"join_column":u"鴨"}])
         left_join_table = pd.DataFrame([{"join_column": u"鴨","other_column":u"數據庫"}])
         run_parallel_queries(main_table, left_join_table, left_join_table)
 
