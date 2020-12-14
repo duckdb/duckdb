@@ -40,8 +40,11 @@ PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
 statement ok
 PRAGMA drop_fts_index('documents')
 
+statement error
+PRAGMA create_fts_index('documents', 'id', 'body', stopwords='nonexistant_stopwords_table')
+
 statement ok
-PRAGMA create_fts_index('documents', 'id', 'body')
+PRAGMA create_fts_index('documents', 'id', 'body', stopwords='english')
 
 query IIII
 SELECT termid, docid, pos, field FROM fts_main_documents.terms
