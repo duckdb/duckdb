@@ -267,19 +267,13 @@ struct PandasScanFunction : public TableFunction {
 			PandasColumnBindData bind_data;
 
 			auto col_type = string(py::str(df_types[col_idx]));
-			if (col_type == "category") {
-				// for category types, we use the converted numpy type
-				bind_data.numpy_col = py::array(get_fun(df_columns[col_idx]).attr("to_numpy")());
-				auto numpy_type = bind_data.numpy_col.attr("dtype");
-				auto category_type = string(py::str(numpy_type));
-				ConvertPandasType(category_type, duckdb_col_type, bind_data.pandas_type);
-			} else if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64") {
+			if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64") {
 				// numeric object
 				// fetch the internal data and mask array
 				bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
 				bind_data.mask = make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
 				ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
-			} else if (StringUtil::StartsWith(col_type, "datetime64[ns")) {
+			} else if (StringUtil::StartsWith(col_type, "datetime64[ns") || col_type == "<M8[ns]") {
 				// timestamp type
 				bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
 				bind_data.mask = nullptr;
@@ -287,9 +281,21 @@ struct PandasScanFunction : public TableFunction {
 				bind_data.pandas_type = PandasType::TIMESTAMP;
 			} else {
 				// regular type
-				bind_data.numpy_col = py::array(get_fun(df_columns[col_idx]).attr("to_numpy")());
+				auto column = get_fun(df_columns[col_idx]);
+				if (py::hasattr(column, "to_numpy")) {
+					bind_data.numpy_col = py::array(column.attr("to_numpy")());
+				} else {
+					bind_data.numpy_col = py::array(column);
+				}
 				bind_data.mask = nullptr;
-				ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
+				if (col_type == "category") {
+					// for category types, we use the converted numpy type
+					auto numpy_type = bind_data.numpy_col.attr("dtype");
+					auto category_type = string(py::str(numpy_type));
+					ConvertPandasType(category_type, duckdb_col_type, bind_data.pandas_type);
+				} else {
+					ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
+				}
 			}
 			names.push_back(string(py::str(df_columns[col_idx])));
 			return_types.push_back(duckdb_col_type);
