@@ -427,6 +427,15 @@ SELECT * FROM test;
 ''', out="NULL")
 os.remove(duckdb_nonsensecsv)
 
+# .mode latex
+test('''
+.mode latex
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+SELECT * FROM a;
+''', '\\begin{tabular}')
+
 # dump blobs: FIXME
 # test('''
 # CREATE TABLE a (b BLOB);

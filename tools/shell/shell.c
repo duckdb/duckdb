@@ -10806,6 +10806,7 @@ struct ShellState {
 #define MODE_Markdown 14 /* Markdown formatting */
 #define MODE_Table   15  /* MySQL-style table formatting */
 #define MODE_Box     16  /* Unicode box-drawing characters */
+#define MODE_Latex   17  /* Unicode box-drawing characters */
 
 static const char *modeDescr[] = {
   "line",
@@ -10824,7 +10825,8 @@ static const char *modeDescr[] = {
   "json",
   "markdown",
   "table",
-  "box"
+  "box",
+  "latex"
 };
 
 /*
@@ -12650,6 +12652,34 @@ char *strdup_handle_newline(ShellState *p, const char *z) {
   return result;
 }
 
+int column_type_is_integer(const char *type) {
+  if (!type) {
+    return 0;
+  }
+  if (strcmp(type, "TINYINT") == 0) {
+    return 1;
+  }
+  if (strcmp(type, "SMALLINT") == 0) {
+    return 1;
+  }
+  if (strcmp(type, "INTEGER") == 0) {
+    return 1;
+  }
+  if (strcmp(type, "BIGINT") == 0) {
+    return 1;
+  }
+  if (strcmp(type, "FLOAT") == 0) {
+    return 1;
+  }
+  if (strcmp(type, "DOUBLE") == 0) {
+    return 1;
+  }
+  if (strcmp(type, "DECIMAL") == 0) {
+    return 1;
+  }
+  return 0;
+}
+
 /*
 ** Run a prepared statement and output the result in one of the
 ** table-oriented formats: MODE_Column, MODE_Markdown, MODE_Table,
@@ -12778,9 +12808,32 @@ static void exec_prepared_stmt_columnar(
       print_box_row_separator(p, nColumn, BOX_123, BOX_1234, BOX_134);
       break;
     }
+    case MODE_Latex: {
+      colSep = " & ";
+      rowSep = " \\\\\n";
+      fputs("\\begin{tabular}{|", p->out);
+      for(i=0; i<nColumn; i++){
+        const char *column_type = sqlite3_column_decltype(pStmt, i);
+        if (column_type_is_integer(column_type)) {
+          fputs("r", p->out);
+        } else {
+          fputs("l", p->out);
+        }
+      }
+      fputs("|}\n", p->out);
+      fputs("\\hline\n", p->out);
+      for(i=0; i<nColumn; i++){
+        w = p->actualWidth[i];
+        n = strlenChar(azData[i]);
+        utf8_printf(p->out, "%*s%s%*s", (w-n)/2, "", azData[i], (w-n+1)/2, "");
+        fputs(i==nColumn-1? rowSep:colSep, p->out);
+      }
+      fputs("\\hline\n", p->out);
+      break;
+    }
   }
   for(i=nColumn, j=0; i<nTotal; i++, j++){
-    if( j==0 && p->cMode!=MODE_Column ){
+    if( j==0 && p->cMode!=MODE_Column && p->cMode != MODE_Latex ){
       utf8_printf(p->out, "%s", p->cMode==MODE_Box?BOX_13" ":"| ");
     }
     z = azData[i];
@@ -12800,6 +12853,9 @@ static void exec_prepared_stmt_columnar(
     print_row_separator(p, nColumn, "+");
   }else if( p->cMode==MODE_Box ){
     print_box_row_separator(p, nColumn, BOX_12, BOX_124, BOX_14);
+  } else if (p->cMode == MODE_Latex) {
+    fputs("\\hline\n", p->out);
+    fputs("\\end{tabular}\n", p->out);
   }
 columnar_end:
   if( seenInterrupt ){
@@ -12823,6 +12879,7 @@ static void exec_prepared_stmt(
    || pArg->cMode==MODE_Table
    || pArg->cMode==MODE_Box
    || pArg->cMode==MODE_Markdown
+   || pArg->cMode == MODE_Latex
   ){
     exec_prepared_stmt_columnar(pArg, pStmt);
     return;
@@ -18182,6 +18239,8 @@ static int do_meta_command(char *zLine, ShellState *p){
       p->mode = MODE_Box;
     }else if( c2=='j' && strncmp(azArg[1],"json",n2)==0 ){
       p->mode = MODE_Json;
+    }else if( c2=='l' && strncmp(azArg[1],"latex",n2)==0 ){
+      p->mode = MODE_Latex;
     }else if( nArg==1 ){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
@@ -20650,6 +20709,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.mode = MODE_Table;
     }else if( strcmp(z,"-box")==0 ){
       data.mode = MODE_Box;
+    }else if( strcmp(z,"-latex")==0 ){
+      data.mode = MODE_Latex;
     }else if( strcmp(z,"-csv")==0 ){
       data.mode = MODE_Csv;
       memcpy(data.colSeparator,",",2);
