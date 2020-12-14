@@ -1,4 +1,4 @@
-# name: test/sql/fts/test_indexing.test
+# name: test/sql/fts/test_indexing.test_slow
 # DESCription: Full text search indexing
 # group: [fts]
 
