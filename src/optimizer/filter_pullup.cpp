@@ -50,11 +50,15 @@ unique_ptr<LogicalOperator> FilterPullup::PullupCrossProduct(unique_ptr<LogicalO
 	return PullupBothSide(move(op));
 }
 
-unique_ptr<LogicalOperator> FilterPullup::FixParenthood(unique_ptr<LogicalOperator> parent, unique_ptr<LogicalOperator> child,
-                                                        idx_t parent_child_idx, idx_t child_child_idx) {
-    child->children.push_back(move(parent->children[parent_child_idx]));
-    parent->children[0] = move(child);
-    return parent;
+unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<LogicalOperator> child,
+                                                               vector<unique_ptr<Expression>> &expressions) {
+    unique_ptr<LogicalFilter> filter = make_unique<LogicalFilter>();
+    for(idx_t i=0; i < expressions.size(); ++i) {
+        filter->expressions.push_back(move(expressions[i]));
+    }
+    expressions.clear();
+    filter->children.push_back(move(child));
+    return filter;
 }
 
 unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperator> op) {

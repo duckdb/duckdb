@@ -16,10 +16,8 @@ unique_ptr<LogicalOperator> FilterPullup::PullupLeftJoin(unique_ptr<LogicalOpera
 	op->children[1] = right_pullup.Rewrite(move(op->children[1]));
 
 	// check only for filters from the LHS
-	if(left_pullup.filters_pullup.size() > 0 && right_pullup.filters_pullup.size() == 0) {
-		auto filter = move(left_pullup.filters_pullup[0]);
-		filter->children.push_back(move(op));
-		return filter;
+	if(left_pullup.filters_expr_pullup.size() > 0 && right_pullup.filters_expr_pullup.size() == 0) {
+		return GeneratePullupFilter(move(op), left_pullup.filters_expr_pullup);
 	}
 	return op;
 }

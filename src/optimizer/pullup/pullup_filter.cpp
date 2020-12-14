@@ -7,15 +7,6 @@
 namespace duckdb {
 using namespace std;
 
-// static bool HasNullFilters(vector<unique_ptr<Expression>> &expressions) {
-// 	for(auto &expr: expressions) {
-// 		if(expr->type == duckdb::ExpressionType::OPERATOR_IS_NOT_NULL) {
-// 			return true;
-// 		}
-// 	}
-// 	return false;
-// }
-
 static bool IsComparisonFodable(unique_ptr<Expression> &expr) {
 	if(expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		auto &comparison = (BoundComparisonExpression &)*expr;
@@ -48,9 +39,12 @@ unique_ptr<LogicalOperator> FilterPullup::PullupFilter(unique_ptr<LogicalOperato
 
 	if(fork && IsFilterFodable(op->expressions)) {
 		unique_ptr<LogicalOperator> child = move(op->children[0]);
-		op->children.erase(op->children.begin());
 		child = Rewrite(move(child));
-		filters_pullup.push_back(move(op));
+		//moving filter's expressions
+		for(idx_t i=0; i < op->expressions.size(); ++i) {
+			filters_expr_pullup.push_back(move(op->expressions[i]));
+		}
+		op.reset(nullptr); //deleting logical filter
 		return child;
 	}
 	op->children[0] = Rewrite(move(op->children[0]));

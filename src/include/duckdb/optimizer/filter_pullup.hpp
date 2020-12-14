@@ -31,15 +31,15 @@ public:
     unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
 
 private:
-    vector<unique_ptr<LogicalOperator>> filters_pullup;
+    vector<unique_ptr<Expression>> filters_expr_pullup;
     Optimizer &optimizer;
-    unique_ptr<LogicalOperator>::pointer root_pullup_node_ptr = nullptr; // node resposible for pulling up filters
-    bool fork = false; // only pull up filters when there is a fork
+    // node resposible for pulling up filters
+    unique_ptr<LogicalOperator>::pointer root_pullup_node_ptr = nullptr;
+    // only pull up filters when there is a fork
+    bool fork = false;
 
-    // Swap twp operators, the 
-    unique_ptr<LogicalOperator> FixParenthood(unique_ptr<LogicalOperator> parent, unique_ptr<LogicalOperator> child,
-                                              idx_t parent_child_idx = 0, idx_t child_child_idx = 0);
-
+    // Generate logical filters pulled up
+    unique_ptr<LogicalOperator> GeneratePullupFilter(unique_ptr<LogicalOperator> child, vector<unique_ptr<Expression>> &expressions);
 
 	//! Pull up a LogicalFilter op
 	unique_ptr<LogicalOperator> PullupFilter(unique_ptr<LogicalOperator> op);
