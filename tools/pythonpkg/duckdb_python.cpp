@@ -16,6 +16,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "extension/extension_helper.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <random>
 
@@ -162,24 +163,26 @@ std::string generate() {
 
 enum class PandasType : uint8_t {
 	BOOLEAN,
-	TINYINT_NATIVE,
-	TINYINT_OBJECT,
-	SMALLINT_NATIVE,
-	SMALLINT_OBJECT,
-	INTEGER_NATIVE,
-	INTEGER_OBJECT,
-	BIGINT_NATIVE,
-	BIGINT_OBJECT,
+	TINYINT,
+	SMALLINT,
+	INTEGER,
+	BIGINT,
 	FLOAT,
 	DOUBLE,
-	TIMESTAMP_NATIVE,
-	TIMESTAMP_OBJECT,
+	TIMESTAMP,
 	VARCHAR
+};
+
+struct NumPyArrayWrapper {
+	NumPyArrayWrapper(py::array numpy_array) : numpy_array(move(numpy_array)) {}
+
+	py::array numpy_array;
 };
 
 struct PandasColumnBindData {
 	PandasType pandas_type;
 	py::array numpy_col;
+	unique_ptr<NumPyArrayWrapper> mask;
 };
 
 struct PandasScanFunctionData : public TableFunctionData {
@@ -209,42 +212,24 @@ struct PandasScanFunction : public TableFunction {
 		if (col_type == "bool") {
 			duckdb_col_type = LogicalType::BOOLEAN;
 			pandas_type = PandasType::BOOLEAN;
-		} else if (col_type == "int8") {
+		} else if (col_type == "int8" || col_type == "Int8") {
 			duckdb_col_type = LogicalType::TINYINT;
-			pandas_type = PandasType::TINYINT_NATIVE;
-		} else if (col_type == "Int8") {
-			duckdb_col_type = LogicalType::TINYINT;
-			pandas_type = PandasType::TINYINT_OBJECT;
-		} else if (col_type == "int16") {
+			pandas_type = PandasType::TINYINT;
+		} else if (col_type == "int16" || col_type == "Int16") {
 			duckdb_col_type = LogicalType::SMALLINT;
-			pandas_type = PandasType::SMALLINT_NATIVE;
-		} else if (col_type == "Int16") {
-			duckdb_col_type = LogicalType::SMALLINT;
-			pandas_type = PandasType::SMALLINT_OBJECT;
-		} else if (col_type == "int32") {
+			pandas_type = PandasType::SMALLINT;
+		} else if (col_type == "int32" || col_type == "Int32") {
 			duckdb_col_type = LogicalType::INTEGER;
-			pandas_type = PandasType::INTEGER_NATIVE;
-		} else if (col_type == "Int32") {
-			duckdb_col_type = LogicalType::INTEGER;
-			pandas_type = PandasType::INTEGER_OBJECT;
-		} else if (col_type == "int64") {
+			pandas_type = PandasType::INTEGER;
+		} else if (col_type == "int64" || col_type == "Int64") {
 			duckdb_col_type = LogicalType::BIGINT;
-			pandas_type = PandasType::BIGINT_NATIVE;
-		} else if (col_type == "Int64") {
-			duckdb_col_type = LogicalType::BIGINT;
-			pandas_type = PandasType::BIGINT_OBJECT;
+			pandas_type = PandasType::BIGINT;
 		} else if (col_type == "float32") {
 			duckdb_col_type = LogicalType::FLOAT;
 			pandas_type = PandasType::FLOAT;
 		} else if (col_type == "float64") {
 			duckdb_col_type = LogicalType::DOUBLE;
 			pandas_type = PandasType::DOUBLE;
-		} else if (col_type == "datetime64[ns]") {
-			duckdb_col_type = LogicalType::TIMESTAMP;
-			pandas_type = PandasType::TIMESTAMP_NATIVE;
-		} else if (StringUtil::StartsWith(col_type, "datetime64[ns")) {
-			duckdb_col_type = LogicalType::TIMESTAMP;
-			pandas_type = PandasType::TIMESTAMP_OBJECT;
 		} else if (col_type == "object") {
 			// this better be strings
 			duckdb_col_type = LogicalType::VARCHAR;
@@ -280,16 +265,30 @@ struct PandasScanFunction : public TableFunction {
 		for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 			LogicalType duckdb_col_type;
 			PandasColumnBindData bind_data;
-			bind_data.numpy_col = py::array(get_fun(df_columns[col_idx]).attr("to_numpy")());
 
 			auto col_type = string(py::str(df_types[col_idx]));
 			if (col_type == "category") {
 				// for category types, we use the converted numpy type
+				bind_data.numpy_col = py::array(get_fun(df_columns[col_idx]).attr("to_numpy")());
 				auto numpy_type = bind_data.numpy_col.attr("dtype");
 				auto category_type = string(py::str(numpy_type));
 				ConvertPandasType(category_type, duckdb_col_type, bind_data.pandas_type);
+			} else if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64") {
+				// numeric object
+				// fetch the internal data and mask array
+				bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
+				bind_data.mask = make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
+				ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
+			} else if (StringUtil::StartsWith(col_type, "datetime64[ns")) {
+				// timestamp type
+				bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
+				bind_data.mask = nullptr;
+				duckdb_col_type = LogicalType::TIMESTAMP;
+				bind_data.pandas_type = PandasType::TIMESTAMP;
 			} else {
 				// regular type
+				bind_data.numpy_col = py::array(get_fun(df_columns[col_idx]).attr("to_numpy")());
+				bind_data.mask = nullptr;
 				ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
 			}
 			names.push_back(string(py::str(df_columns[col_idx])));
@@ -312,18 +311,16 @@ struct PandasScanFunction : public TableFunction {
 	}
 
 	template <class T>
-	static void scan_pandas_numeric_object(py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
-		auto src_ptr = (PyObject **)numpy_col.data();
-		auto tgt_ptr = FlatVector::GetData<T>(out);
-		auto &nullmask = FlatVector::Nullmask(out);
-		for (idx_t i = 0; i < count; i++) {
-			auto obj = src_ptr[offset + i];
-			auto &py_obj = *((py::object *)&obj);
-			if (!py::isinstance<py::int_>(py_obj)) {
-				nullmask[i] = true;
-				continue;
+	static void scan_pandas_numeric(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
+		scan_pandas_column<T>(bind_data.numpy_col, count, offset, out);
+		if (bind_data.mask) {
+			auto mask = (bool *) bind_data.mask->numpy_array.data();
+			for(idx_t i = 0; i < count; i++) {
+				auto is_null = mask[offset + i];
+				if (is_null) {
+					FlatVector::SetNull(out, i, true);
+				}
 			}
-			tgt_ptr[i] = py_obj.cast<T>();
 		}
 	}
 
@@ -342,34 +339,42 @@ struct PandasScanFunction : public TableFunction {
 		}
 	}
 
+	template<class T>
+	static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector &out) {
+		// first figure out how many bytes to allocate
+		idx_t utf8_length = 0;
+		for(idx_t i = 0; i < codepoint_count; i++) {
+			int len = Utf8Proc::CodepointLength(int(codepoints[i]));
+			D_ASSERT(len >= 1);
+			utf8_length += len;
+		}
+		int sz;
+		auto result = StringVector::EmptyString(out, utf8_length);
+		auto target = result.GetDataWriteable();
+		for(idx_t i = 0; i < codepoint_count; i++) {
+			Utf8Proc::CodepointToUtf8(int(codepoints[i]), sz, target);
+			D_ASSERT(sz >= 1);
+			target += sz;
+		}
+		return result;
+	}
+
 	static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
 		switch (bind_data.pandas_type) {
 		case PandasType::BOOLEAN:
 			scan_pandas_column<bool>(numpy_col, count, offset, out);
 			break;
-		case PandasType::TINYINT_NATIVE:
-			scan_pandas_column<int8_t>(numpy_col, count, offset, out);
+		case PandasType::TINYINT:
+			scan_pandas_numeric<int8_t>(bind_data, count, offset, out);
 			break;
-		case PandasType::SMALLINT_NATIVE:
-			scan_pandas_column<int16_t>(numpy_col, count, offset, out);
+		case PandasType::SMALLINT:
+			scan_pandas_numeric<int16_t>(bind_data, count, offset, out);
 			break;
-		case PandasType::INTEGER_NATIVE:
-			scan_pandas_column<int32_t>(numpy_col, count, offset, out);
+		case PandasType::INTEGER:
+			scan_pandas_numeric<int32_t>(bind_data, count, offset, out);
 			break;
-		case PandasType::BIGINT_NATIVE:
-			scan_pandas_column<int64_t>(numpy_col, count, offset, out);
-			break;
-		case PandasType::TINYINT_OBJECT:
-			scan_pandas_numeric_object<int8_t>(numpy_col, count, offset, out);
-			break;
-		case PandasType::SMALLINT_OBJECT:
-			scan_pandas_numeric_object<int16_t>(numpy_col, count, offset, out);
-			break;
-		case PandasType::INTEGER_OBJECT:
-			scan_pandas_numeric_object<int32_t>(numpy_col, count, offset, out);
-			break;
-		case PandasType::BIGINT_OBJECT:
-			scan_pandas_numeric_object<int64_t>(numpy_col, count, offset, out);
+		case PandasType::BIGINT:
+			scan_pandas_numeric<int64_t>(bind_data, count, offset, out);
 			break;
 		case PandasType::FLOAT:
 			scan_pandas_fp_column<float>((float *)numpy_col.data(), count, offset,
@@ -378,7 +383,7 @@ struct PandasScanFunction : public TableFunction {
 		case PandasType::DOUBLE:
 			scan_pandas_fp_column<double>((double *)numpy_col.data(), count, offset, out);
 			break;
-		case PandasType::TIMESTAMP_NATIVE: {
+		case PandasType::TIMESTAMP: {
 			auto src_ptr = (int64_t *)numpy_col.data();
 			auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 			auto &nullmask = FlatVector::Nullmask(out);
@@ -394,27 +399,6 @@ struct PandasScanFunction : public TableFunction {
 			}
 			break;
 		}
-		case PandasType::TIMESTAMP_OBJECT: {
-			auto src_ptr = (PyObject **)numpy_col.data();
-			auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
-			auto &nullmask = FlatVector::Nullmask(out);
-			auto pandas_mod = py::module::import("pandas");
-			auto pandas_datetime = pandas_mod.attr("Timestamp");
-			for (idx_t row = 0; row < count; row++) {
-				auto source_idx = offset + row;
-				auto val = src_ptr[source_idx];
-				auto &py_obj = *((py::object *)&val);
-				if (!py::isinstance(py_obj, pandas_datetime)) {
-					nullmask[row] = true;
-					continue;
-				}
-				// FIXME: consider timezone
-				auto epoch = py_obj.attr("timestamp")();
-				auto seconds = int64_t(epoch.cast<double>());
-				tgt_ptr[row] = Timestamp::FromEpochSeconds(seconds);
-			}
-			break;
-		}
 		case PandasType::VARCHAR: {
 			auto src_ptr = (PyObject **)numpy_col.data();
 			auto tgt_ptr = FlatVector::GetData<string_t>(out);
@@ -422,21 +406,72 @@ struct PandasScanFunction : public TableFunction {
 				auto source_idx = offset + row;
 				auto val = src_ptr[source_idx];
 #if PY_MAJOR_VERSION >= 3
-				if (!PyUnicode_Check(val)) {
+				// Python 3 string representation:
+				// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
+				if (!PyUnicode_CheckExact(val)) {
 					FlatVector::SetNull(out, row, true);
 					continue;
 				}
-				if (PyUnicode_READY(val) != 0) {
-					throw runtime_error("failure in PyUnicode_READY");
+				if (PyUnicode_IS_COMPACT_ASCII(val)) {
+					// ascii string: we can zero copy
+					tgt_ptr[row] = string_t((const char*) PyUnicode_DATA(val), PyUnicode_GET_LENGTH(val));
+				} else {
+					// unicode gunk
+					auto ascii_obj = (PyASCIIObject *) val;
+					auto unicode_obj = (PyCompactUnicodeObject *) val;
+					// compact unicode string: is there utf8 data available?
+					if (unicode_obj->utf8) {
+						// there is! zero copy
+						tgt_ptr[row] = string_t((const char*) unicode_obj->utf8, unicode_obj->utf8_length);
+					} else if (PyUnicode_IS_COMPACT(unicode_obj) && !PyUnicode_IS_ASCII(unicode_obj)) {
+						auto kind = PyUnicode_KIND(val);
+						switch(kind) {
+						case PyUnicode_1BYTE_KIND:
+							tgt_ptr[row] = DecodePythonUnicode<Py_UCS1>(PyUnicode_1BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+							break;
+						case PyUnicode_2BYTE_KIND:
+							tgt_ptr[row] = DecodePythonUnicode<Py_UCS2>(PyUnicode_2BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+							break;
+						case PyUnicode_4BYTE_KIND:
+							tgt_ptr[row] = DecodePythonUnicode<Py_UCS4>(PyUnicode_4BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+							break;
+						default:
+							throw runtime_error("Unsupported typekind for Python Unicode Compact decode");
+						}
+					} else if (ascii_obj->state.kind == PyUnicode_WCHAR_KIND) {
+						throw runtime_error("Unsupported: decode not ready legacy string");
+					} else if (!PyUnicode_IS_COMPACT(unicode_obj) && ascii_obj->state.kind != PyUnicode_WCHAR_KIND) {
+						throw runtime_error("Unsupported: decode ready legacy string");
+					} else {
+						throw runtime_error("Unsupported string type: no clue what this string is");
+					}
 				}
-				tgt_ptr[row] = StringVector::AddString(out, ((py::object *)&val)->cast<string>());
 #else
-				if (!py::isinstance<py::str>(*((py::object *)&val))) {
+				if (PyString_CheckExact(val)) {
+					auto dataptr = PyString_AS_STRING(val);
+					auto size = PyString_GET_SIZE(val);
+					// string object: directly pass the data
+					if (Utf8Proc::Analyze(dataptr, size) == UnicodeType::INVALID) {
+						throw runtime_error("String does contains invalid UTF8! Please encode as UTF8 first");
+					}
+					tgt_ptr[row] = string_t(dataptr, size);
+				} else if (PyUnicode_CheckExact(val)) {
+					auto data = PyUnicode_AS_UNICODE(val);
+					auto unicode_size = sizeof(Py_UNICODE);
+					switch(unicode_size) {
+					case 2:
+						tgt_ptr[row] = DecodePythonUnicode<Py_UNICODE>(data, PyUnicode_GET_SIZE(val), out);
+						break;
+					case 4:
+						tgt_ptr[row] = DecodePythonUnicode<Py_UNICODE>(data, PyUnicode_GET_SIZE(val), out);
+						break;
+					default:
+						throw runtime_error("Unsupported unicode size");
+					}
+				} else {
 					FlatVector::SetNull(out, row, true);
 					continue;
 				}
-
-				tgt_ptr[row] = StringVector::AddString(out, ((py::object *)&val)->cast<string>());
 #endif
 			}
 			break;
@@ -444,20 +479,20 @@ struct PandasScanFunction : public TableFunction {
 		default:
 			throw runtime_error("Unsupported type " + out.type.ToString());
 		}
-
 	}
 
+	//! The main pandas scan function: note that this can be called in parallel without the GIL
+	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 	static void pandas_scan_function(ClientContext &context, const FunctionData *bind_data,
 	                                 FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (PandasScanFunctionData &)*bind_data;
 		auto &state = (PandasScanState &)*operator_state;
 
+
 		if (state.position >= data.row_count) {
 			return;
 		}
 		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - state.position);
-
-		auto df_names = py::list(data.df.attr("columns"));
 
 		output.SetCardinality(this_count);
 		for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {

@@ -49,6 +49,7 @@ def includes(extensions):
     includes = []
     includes.append(os.path.join(scripts_dir, '..', 'src', 'include'))
     includes.append(os.path.join(scripts_dir, '..'))
+    includes.append(os.path.join(scripts_dir, '..', 'third_party', 'utf8proc', 'include'))
     for ext in extensions:
         includes.append(os.path.join(scripts_dir, '..', 'extension', ext, 'include'))
     return includes
