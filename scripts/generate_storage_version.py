@@ -1,5 +1,5 @@
 # this script re-generates the storage used for storage_version.test_slow
-# before running this script, please increment the version number in src/storage/storage_info.cpp
+# before running this script, increment the version number in src/storage/storage_info.cpp and recompile (make debug)
 
 import os
 import subprocess

@@ -36,7 +36,7 @@ template <> double AddOperator::Operation(double left, double right) {
 template <> interval_t AddOperator::Operation(interval_t left, interval_t right) {
 	left.months = AddOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.months, right.months);
 	left.days = AddOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.days, right.days);
-	left.msecs = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(left.msecs, right.msecs);
+	left.micros = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(left.micros, right.micros);
 	return left;
 }
 
@@ -62,8 +62,8 @@ template <> date_t AddOperator::Operation(date_t left, interval_t right) {
 	if (right.days != 0) {
 		result += right.days;
 	}
-	if (right.msecs != 0) {
-		result += right.msecs / Interval::MSECS_PER_DAY;
+	if (right.micros != 0) {
+		result += right.micros / Interval::MICROS_PER_DAY;
 	}
 	return result;
 }
@@ -73,8 +73,9 @@ template <> date_t AddOperator::Operation(interval_t left, date_t right) {
 }
 
 template <> timestamp_t AddOperator::Operation(timestamp_t left, interval_t right) {
-	auto date = Timestamp::GetDate(left);
-	auto time = Timestamp::GetTime(left);
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(left, date, time);
 	auto new_date = AddOperator::Operation<date_t, interval_t, date_t>(date, right);
 	auto new_time = AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(time, right);
 	return Timestamp::FromDatetime(new_date, new_time);
@@ -179,12 +180,12 @@ template <> hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint
 // add time operator
 //===--------------------------------------------------------------------===//
 template <> dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
-	int64_t diff = right.msecs - ((right.msecs / Interval::MSECS_PER_DAY) * Interval::MSECS_PER_DAY);
+	int64_t diff = right.micros - ((right.micros / Interval::MICROS_PER_DAY) * Interval::MICROS_PER_DAY);
 	left += diff;
-	if (left >= Interval::MSECS_PER_DAY) {
-		left -= Interval::MSECS_PER_DAY;
+	if (left >= Interval::MICROS_PER_DAY) {
+		left -= Interval::MICROS_PER_DAY;
 	} else if (left < 0) {
-		left += Interval::MSECS_PER_DAY;
+		left += Interval::MICROS_PER_DAY;
 	}
 	return left;
 }

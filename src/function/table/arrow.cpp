@@ -209,7 +209,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 		case LogicalTypeId::DOUBLE:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
-		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
 			FlatVector::SetData(output.data[col_idx],
 			                    (data_ptr_t)array.buffers[1] + GetTypeIdSize(output.data[col_idx].type.InternalType()) *
 			                                                       (data.chunk_offset + array.offset));
@@ -235,29 +235,25 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 			}
 
 			break;
-		} // TODO timestamps in duckdb are subject to change
+		}
+		case LogicalTypeId::TIME: {
+			// convert time from milliseconds to microseconds
+			auto src_ptr = (uint32_t *)array.buffers[1] + data.chunk_offset;
+			auto tgt_ptr = (dtime_t *)FlatVector::GetData(output.data[col_idx]);
+			for (idx_t row = 0; row < output.size(); row++) {
+				auto source_idx = data.chunk_offset + row;
+				tgt_ptr[row] = dtime_t(src_ptr[source_idx]) * 1000;
+			}
+			break;
+		}
 		case LogicalTypeId::TIMESTAMP: {
+			// convert timestamps from nanoseconds to microseconds
 			auto src_ptr = (uint64_t *)array.buffers[1] + data.chunk_offset;
 			auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
 
 			for (idx_t row = 0; row < output.size(); row++) {
 				auto source_idx = data.chunk_offset + row;
-
-				auto ms = src_ptr[source_idx] / 1000000; // nanoseconds
-				auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
-				date_t date = Date::EpochToDate(ms / 1000);
-				dtime_t time = (dtime_t)(ms % ms_per_day);
-				tgt_ptr[row] = Timestamp::FromDatetime(date, time);
-			}
-			break;
-		}
-		case LogicalTypeId::DATE: {
-			auto src_ptr = (int32_t *)array.buffers[1] + data.chunk_offset;
-			auto tgt_ptr = (date_t *)FlatVector::GetData(output.data[col_idx]);
-
-			for (idx_t row = 0; row < output.size(); row++) {
-				auto source_idx = data.chunk_offset + row;
-				tgt_ptr[row] = Date::EpochDaysToDate(src_ptr[source_idx]);
+				tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
 			}
 			break;
 		}

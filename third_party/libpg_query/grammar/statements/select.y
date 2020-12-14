@@ -1549,6 +1549,12 @@ minute_keyword:
 second_keyword:
 	SECOND_P | SECONDS_P
 
+millisecond_keyword:
+	MILLISECOND_P | MILLISECONDS_P
+
+microsecond_keyword:
+	MICROSECOND_P | MICROSECONDS_P
+
 opt_interval:
 			year_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR), @1)); }
@@ -1560,8 +1566,12 @@ opt_interval:
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR), @1)); }
 			| minute_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MINUTE), @1)); }
-			| interval_second
-				{ $$ = $1; }
+			| second_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(SECOND), @1)); }
+			| millisecond_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MILLISECOND), @1)); }
+			| microsecond_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MICROSECOND), @1)); }
 			| year_keyword TO month_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR) |
@@ -1578,48 +1588,32 @@ opt_interval:
 												 INTERVAL_MASK(HOUR) |
 												 INTERVAL_MASK(MINUTE), @1));
 				}
-			| day_keyword TO interval_second
+			| day_keyword TO second_keyword
 				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(DAY) |
-												INTERVAL_MASK(HOUR) |
-												INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
+					$$ = list_make1(makeIntConst(INTERVAL_MASK(DAY) |
+												 INTERVAL_MASK(HOUR) |
+												 INTERVAL_MASK(MINUTE) |
+												 INTERVAL_MASK(SECOND), @1));
 				}
 			| hour_keyword TO minute_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR) |
 												 INTERVAL_MASK(MINUTE), @1));
 				}
-			| hour_keyword TO interval_second
+			| hour_keyword TO second_keyword
 				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(HOUR) |
-												INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
+					$$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR) |
+												 INTERVAL_MASK(MINUTE) |
+												 INTERVAL_MASK(SECOND), @1));
 				}
-			| minute_keyword TO interval_second
+			| minute_keyword TO second_keyword
 				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
+					$$ = list_make1(makeIntConst(INTERVAL_MASK(MINUTE) |
+												 INTERVAL_MASK(SECOND), @1));
 				}
 			| /*EMPTY*/
 				{ $$ = NIL; }
 		;
-
-interval_second:
-			second_keyword
-				{
-					$$ = list_make1(makeIntConst(INTERVAL_MASK(SECOND), @1));
-				}
-			| second_keyword '(' Iconst ')'
-				{
-					$$ = list_make2(makeIntConst(INTERVAL_MASK(SECOND), @1),
-									makeIntConst($3, @3));
-				}
-		;
-
 
 /*****************************************************************************
  *
@@ -2868,6 +2862,8 @@ extract_arg:
 			| hour_keyword									{ $$ = (char*) "hour"; }
 			| minute_keyword								{ $$ = (char*) "minute"; }
 			| second_keyword								{ $$ = (char*) "second"; }
+			| millisecond_keyword							{ $$ = (char*) "millisecond"; }
+			| microsecond_keyword							{ $$ = (char*) "microsecond"; }
 			| Sconst										{ $$ = $1; }
 		;
 

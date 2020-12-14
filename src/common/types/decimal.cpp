@@ -1,5 +1,5 @@
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 

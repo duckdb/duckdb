@@ -1,13 +1,9 @@
-//===--------------------------------------------------------------------===//
-// cast_operators.cpp
-// Description: This file contains the implementation of the different casts
-//===--------------------------------------------------------------------===//
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 using namespace std;
