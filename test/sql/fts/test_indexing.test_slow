@@ -192,11 +192,10 @@ SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', fiel
 doc2
 doc3
 
+# if we don't search any fields, we won't get any results
 query I
-SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', fields='') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'hannes mark laurens', fields='') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
-doc2
-doc3
 
 # re-index with different stopwords table
 statement ok
