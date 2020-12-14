@@ -43,21 +43,21 @@ PRAGMA drop_fts_index('documents')
 statement ok
 PRAGMA create_fts_index('documents', 'id', 'body')
 
-query III
-SELECT termid, docid, pos FROM fts_main_documents.terms
+query IIII
+SELECT termid, docid, pos, field FROM fts_main_documents.terms
 ----
-1	1	1
-1	1	2
-1	1	3
-2	2	1
-2	2	2
-2	2	3
-2	2	4
-3	3	1
-3	3	2
-3	3	3
-3	3	4
-3	3	5
+1	1	1	body
+1	1	2	body
+1	1	3	body
+2	2	1	body
+2	2	2	body
+2	2	3	body
+2	2	4	body
+3	3	1	body
+3	3	2	body
+3	3	3	body
+3	3	4	body
+3	3	5	body
 
 query III
 SELECT name, docid, len FROM fts_main_documents.docs
@@ -120,11 +120,11 @@ doc1	0.443697
 doc2	0.375436
 
 # now test the actual match macro
-query II
-SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'QUÁCKED BÁRKED')
+query III
+SELECT score, id, body FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score desc
 ----
-doc1	 QUÁCKING+QUÁCKING+QUÁCKING
-doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING
+0.443697	doc1	 QUÁCKING+QUÁCKING+QUÁCKING
+0.375436	doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING
 
 # drop and re-create, but index both the 'body' and 'author' column this time
 statement ok
@@ -142,27 +142,33 @@ INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING', 'Hannes'
 statement ok
 PRAGMA create_fts_index('main.documents', 'id', 'body', 'author')
 
+# prepared statement for easier use
+statement ok
+PREPARE fts_query AS (WITH scored_docs AS (SELECT *, fts_main_documents.match_bm25(id, ?) AS score FROM documents) SELECT id, body, author FROM scored_docs WHERE score IS NOT NULL ORDER BY score desc)
+
 query III
-SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'hannes')
+EXECUTE fts_query('hannes')
 ----
 doc1	 QUÁCKING+QUÁCKING+QUÁCKING	Hannes
 
 query III
-SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'mark laurens')
+EXECUTE fts_query('mark laurens')
 ----
 doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
 doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING	Laurens
 
 query III
-SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, NULL)
+EXECUTE fts_query(NULL)
 ----
 
+# different order by changing the parameters
 query III
-SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'mark laurens', k=1.1, b=0.7)
+SELECT id, body, author FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked', k=0.6, b=0.1) AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score desc
 ----
 doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
-doc3	 MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING	Laurens
+doc1	 QUÁCKING+QUÁCKING+QUÁCKING	Hannes
 
-query III
-SELECT * FROM documents WHERE fts_main_documents.match_bm25(id, 'mark laurens', conjunctive=1)
+# no results for conjunctive query because no document contains both 'mark' and 'laurens
+query I
+SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', conjunctive=1) AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score desc
 ----
