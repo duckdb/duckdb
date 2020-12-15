@@ -67,7 +67,7 @@ static string indexing_script(string input_schema, string input_table, string in
 	result += SQL(
         CREATE TABLE %fts_schema%.docs AS (
             SELECT rowid + 1 AS docid,
-                   %input_id% AS name
+                   "%input_id%" AS name
             FROM %input_schema%.%input_table%
         );
 
@@ -190,7 +190,7 @@ static string indexing_script(string input_schema, string input_table, string in
 
     // we may have more than 1 input field, therefore we union over the fields, retaining information which field it came from
 	string field_query = SQL(
-        SELECT unnest(%fts_schema%.tokenize(fts_ii.%input_value%)) AS w, rowid + 1 AS docid, '%input_value%' AS field
+        SELECT unnest(%fts_schema%.tokenize(fts_ii."%input_value%")) AS w, rowid + 1 AS docid, '%input_value%' AS field
         FROM %input_schema%.%input_table% AS fts_ii
     );
 	vector<string> fields;
