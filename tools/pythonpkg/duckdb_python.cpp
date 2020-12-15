@@ -16,6 +16,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "extension/extension_helper.hpp"
+#include "duckdb/parallel/parallel_state.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <random>
@@ -197,16 +198,26 @@ struct PandasScanFunctionData : public TableFunctionData {
 };
 
 struct PandasScanState : public FunctionOperatorData {
-	PandasScanState() : position(0) {
+	PandasScanState(idx_t start, idx_t end) : start(start), end(end) {
 	}
 
+	idx_t start;
+	idx_t end;
+};
+
+struct ParallelPandasScanState : public ParallelState {
+	ParallelPandasScanState() : position(0) {}
+
+	std::mutex lock;
 	idx_t position;
 };
 
 struct PandasScanFunction : public TableFunction {
 	PandasScanFunction()
 	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_function, pandas_scan_bind, pandas_scan_init,
-	                    nullptr, nullptr, nullptr, pandas_scan_cardinality){};
+	                    nullptr, nullptr, nullptr, pandas_scan_cardinality, nullptr, nullptr,
+						pandas_scan_max_threads, pandas_scan_init_parallel_state, pandas_scan_parallel_init,
+						pandas_scan_parallel_state_next) {}
 
 	static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_type, PandasType &pandas_type) {
 		if (col_type == "bool") {
@@ -301,10 +312,52 @@ struct PandasScanFunction : public TableFunction {
 		return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
 	}
 
-	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data,
+	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data_,
 	                                                         vector<column_t> &column_ids,
 	                                                         TableFilterSet *table_filters) {
-		return make_unique<PandasScanState>();
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+		return make_unique<PandasScanState>(0, bind_data.row_count);
+	}
+
+	static constexpr idx_t PANDAS_PARTITION_COUNT = 50 * STANDARD_VECTOR_SIZE;
+
+	static idx_t pandas_scan_max_threads(ClientContext &context, const FunctionData *bind_data_) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+		return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
+	}
+
+	static unique_ptr<ParallelState> pandas_scan_init_parallel_state(ClientContext &context, const FunctionData *bind_data_) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+		return make_unique<ParallelPandasScanState>();
+	}
+
+	static unique_ptr<FunctionOperatorData> pandas_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_,
+																	ParallelState *state, vector<column_t> &column_ids,
+																	TableFilterSet *table_filters) {
+		auto result = make_unique<PandasScanState>(0, 0);
+		if (!pandas_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
+			return nullptr;
+		}
+		return move(result);
+	}
+
+	static bool pandas_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_,
+										FunctionOperatorData *operator_state, ParallelState *parallel_state_) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+		auto &parallel_state = (ParallelPandasScanState &)*parallel_state_;
+		auto &state = (PandasScanState &)*operator_state;
+
+		lock_guard<mutex> parallel_lock(parallel_state.lock);
+		if (parallel_state.position >= bind_data.row_count) {
+			return false;
+		}
+		state.start = parallel_state.position;
+		parallel_state.position += PANDAS_PARTITION_COUNT;
+		if (parallel_state.position > bind_data.row_count) {
+			parallel_state.position = bind_data.row_count;
+		}
+		state.end = parallel_state.position;
+		return true;
 	}
 
 	template <class T> static void scan_pandas_column(py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
@@ -479,17 +532,16 @@ struct PandasScanFunction : public TableFunction {
 		auto &data = (PandasScanFunctionData &)*bind_data;
 		auto &state = (PandasScanState &)*operator_state;
 
-
-		if (state.position >= data.row_count) {
+		if (state.start >= state.end) {
 			return;
 		}
-		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - state.position);
+		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, state.end - state.start);
 
 		output.SetCardinality(this_count);
 		for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-			ConvertVector(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count, state.position, output.data[col_idx]);
+			ConvertVector(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count, state.start, output.data[col_idx]);
 		}
-		state.position += this_count;
+		state.start += this_count;
 	}
 
 	static unique_ptr<NodeStatistics> pandas_scan_cardinality(ClientContext &context, const FunctionData *bind_data) {
