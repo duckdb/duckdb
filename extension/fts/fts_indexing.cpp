@@ -218,7 +218,7 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 	string stopwords = "english";
     if (parameters.named_parameters.find("stopwords") != parameters.named_parameters.end()) {
         stopwords = parameters.named_parameters["stopwords"].str_value;
-		if (stopwords != "english") {
+		if (stopwords != "english" && stopwords != "none") {
 			auto stopwords_qname = QualifiedName::Parse(stopwords);
             stopwords_qname.schema = stopwords_qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : stopwords_qname.schema;
 			check_exists(context, stopwords_qname);

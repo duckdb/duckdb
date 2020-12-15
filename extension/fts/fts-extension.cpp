@@ -20,17 +20,22 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 
 	BinaryExecutor::Execute<string_t, string_t, string_t, true>(
 	    input_vector, stemmer_vector, result, args.size(), [&](string_t input, string_t stemmer) {
+            auto input_data = input.GetDataUnsafe();
+            auto input_size = input.GetSize();
+
+		    if (stemmer.GetString() == "none") {
+                auto output = StringVector::AddString(result, input_data, input_size);
+			    return output;
+		    }
+
 		    struct sb_stemmer *s = sb_stemmer_new(stemmer.GetString().c_str(), "UTF_8");
 		    if (s == 0) {
 			    const char **stemmers = sb_stemmer_list();
 			    size_t n_stemmers = 27;
 			    throw Exception(StringUtil::Format(
-			        "Unrecognized stemmer '%s'. Supported stemmers are: %s", stemmer.GetString(),
+			        "Unrecognized stemmer '%s'. Supported stemmers are: [%s], or use 'none' for no stemming", stemmer.GetString(),
 			        StringUtil::Join(stemmers, n_stemmers, ", ", [](const char *st) { return st; })));
 		    }
-
-		    auto input_data = input.GetDataUnsafe();
-		    auto input_size = input.GetSize();
 
 		    auto output_data = (char *)sb_stemmer_stem(s, (const sb_symbol *)input_data, input_size);
 		    auto output_size = sb_stemmer_length(s);

@@ -48,6 +48,11 @@ SELECT stem(concat(repeat('i', 64), 'nformation'), 'porter')
 iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiinform
 
 query T
+SELECT stem('information', 'none')
+----
+information
+
+query T
 select stem(UNNEST(string_split(repeat('information ', 5), ' ')), 'porter')
 ----
 inform
