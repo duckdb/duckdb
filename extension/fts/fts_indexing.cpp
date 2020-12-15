@@ -66,39 +66,35 @@ static string indexing_script(string input_schema, string input_table, string in
     // parameterized definition of indexing and retrieval model
 	result += SQL(
         CREATE TABLE %fts_schema%.docs AS (
-            SELECT
-                rowid + 1 AS docid,
-                %input_id% AS name
-            FROM
-                %input_schema%.%input_table%
+            SELECT rowid + 1 AS docid,
+                   %input_id% AS name
+            FROM %input_schema%.%input_table%
         );
 
-        CREATE TABLE %fts_schema%.terms AS (
-            SELECT
-                term,
-                docid,
-                row_number() OVER (PARTITION BY docid, field) AS pos,
-                field
-            FROM (
-                WITH unstopped_tokens AS (
-                    %union_fields_query%
-                )
-                SELECT
-                    stem(ut.w, '%stemmer%') AS term,
-                    ut.docid AS docid,
-                    ut.field
-                FROM unstopped_tokens AS ut
-                WHERE ut.w NOT IN (SELECT sw FROM %fts_schema%.stopwords)
-            ) AS sq
-            WHERE
-                len(term) != 0 AND term NOT NULL
-        );
+        CREATE TABLE %fts_schema%.terms AS
+        WITH tokenized AS (
+            %union_fields_query%
+        ),
+	    stemmed_stopped AS (
+            SELECT stem(t.w, '%stemmer%') AS term,
+	               t.docid AS docid,
+                   t.field AS field
+	        FROM tokenized AS t
+	        WHERE t.w NOT NULL
+              AND len(t.w) > 0
+	          AND t.w NOT IN (SELECT sw FROM %fts_schema%.stopwords)
+        )
+	    SELECT ss.term,
+	           ss.docid,
+	           row_number() OVER (PARTITION BY ss.docid, ss.field) AS pos,
+	           ss.field
+        FROM stemmed_stopped AS ss;
 
         ALTER TABLE %fts_schema%.docs ADD len INT;
         UPDATE %fts_schema%.docs d
         SET len = (
             SELECT count(term)
-            FROM %fts_schema%.terms t
+            FROM %fts_schema%.terms AS t
             WHERE t.docid = d.docid
         );
 
@@ -107,11 +103,9 @@ static string indexing_script(string input_schema, string input_table, string in
             SELECT DISTINCT term
             FROM %fts_schema%.terms
         )
-        SELECT
-            row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
-            dt.term
-        FROM
-            distinct_terms AS dt;
+        SELECT row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
+               dt.term
+        FROM distinct_terms AS dt;
 
         ALTER TABLE %fts_schema%.terms ADD termid INT;
         UPDATE %fts_schema%.terms t
@@ -132,40 +126,65 @@ static string indexing_script(string input_schema, string input_table, string in
         );
 
         CREATE TABLE %fts_schema%.stats AS (
-            SELECT COUNT(docs.docid) AS num_docs, SUM(docs.len) / COUNT(docs.len) AS avgdl
+            SELECT COUNT(docs.docid) AS num_docs,
+                   SUM(docs.len) / COUNT(docs.len) AS avgdl
             FROM %fts_schema%.docs AS docs
         );
 
         CREATE MACRO %fts_schema%.match_bm25(docname, query_string, fields=NULL, k=1.2, b=0.75, conjunctive=0) AS (
-            WITH tokens AS
-                (SELECT DISTINCT stem(unnest(%fts_schema%.tokenize(query_string)), '%stemmer%') AS t),
-            qtermids AS
-                (SELECT termid FROM %fts_schema%.dict AS dict, tokens WHERE dict.term = tokens.t),
-            qterms AS
-                (SELECT termid, docid FROM %fts_schema%.terms AS terms WHERE CASE WHEN fields IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split(fields, ','))) AS fsq) END AND termid IN (SELECT qtermids.termid FROM qtermids)),
+            WITH tokens AS (
+                SELECT DISTINCT stem(unnest(%fts_schema%.tokenize(query_string)), '%stemmer%') AS t
+            ),
+            qtermids AS (
+                SELECT termid
+                FROM %fts_schema%.dict AS dict,
+                     tokens
+                WHERE dict.term = tokens.t
+            ),
+            qterms AS (
+                SELECT termid,
+                       docid
+                FROM %fts_schema%.terms AS terms
+                WHERE CASE WHEN fields IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split(fields, ','))) AS fsq) END
+                  AND termid IN (SELECT qtermids.termid FROM qtermids)
+            ),
             subscores AS (
-                SELECT
-                    docs.docid, len, term_tf.termid, tf, df,
-                    (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
-                FROM
-                    (SELECT termid, docid, COUNT(*) AS tf FROM qterms GROUP BY docid, termid) AS term_tf
-                JOIN
-                    (SELECT docid FROM qterms GROUP BY docid HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END) AS cdocs
-                ON
-                    term_tf.docid = cdocs.docid
-                JOIN
-                    %fts_schema%.docs AS docs
-                ON
-                    term_tf.docid = docs.docid
-                JOIN
-                    %fts_schema%.dict AS dict
-                ON
-                    term_tf.termid = dict.termid
+                SELECT docs.docid,
+                       len,
+                       term_tf.termid,
+                       tf,
+                       df,
+                       (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
+                FROM (
+                    SELECT termid,
+                           docid,
+                           COUNT(*) AS tf
+                    FROM qterms
+                    GROUP BY docid,
+                             termid
+                ) AS term_tf
+                JOIN (
+                    SELECT docid
+                    FROM qterms
+                    GROUP BY docid
+                    HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END
+                ) AS cdocs
+                ON term_tf.docid = cdocs.docid
+                JOIN %fts_schema%.docs AS docs
+                ON term_tf.docid = docs.docid
+                JOIN %fts_schema%.dict AS dict
+                ON term_tf.termid = dict.termid
             )
             SELECT score
-            FROM (SELECT docid, sum(subscore) AS score FROM subscores GROUP BY docid) AS scores
+            FROM (
+                SELECT docid,
+                       sum(subscore) AS score
+                FROM subscores
+                GROUP BY docid
+            ) AS scores
             JOIN %fts_schema%.docs AS docs
-            ON scores.docid = docs.docid AND docs.name = docname
+            ON  scores.docid = docs.docid
+            AND docs.name = docname
         );
     );
 
