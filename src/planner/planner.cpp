@@ -89,8 +89,13 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		Binder binder(context);
 		auto bound_stmt = binder.Bind(*stmt.info->query);
 		stmt.info->types = bound_stmt.types;
-		auto new_stmt = handler.HandleShowSelect(*stmt.info);
-		CreatePlan(move(new_stmt));
+		stmt.info->aliases = bound_stmt.names;
+		DataChunk output;
+		vector<TypeId> types(6, TypeId::VARCHAR);
+		output.Initialize(types);
+		show_select_info_schema(*stmt.info, output);
+		//auto new_stmt = handler.HandleShowSelect(*stmt.info);
+		//CreatePlan(move(new_stmt));
 		break;
 	}
 	case StatementType::PREPARE_STATEMENT: {
