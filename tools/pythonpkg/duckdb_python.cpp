@@ -161,20 +161,11 @@ std::string generate() {
 }
 } // namespace random_string
 
-enum class PandasType : uint8_t {
-	BOOLEAN,
-	TINYINT,
-	SMALLINT,
-	INTEGER,
-	BIGINT,
-	FLOAT,
-	DOUBLE,
-	TIMESTAMP,
-	VARCHAR
-};
+enum class PandasType : uint8_t { BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, FLOAT, DOUBLE, TIMESTAMP, VARCHAR };
 
 struct NumPyArrayWrapper {
-	NumPyArrayWrapper(py::array numpy_array) : numpy_array(move(numpy_array)) {}
+	NumPyArrayWrapper(py::array numpy_array) : numpy_array(move(numpy_array)) {
+	}
 
 	py::array numpy_array;
 };
@@ -271,7 +262,8 @@ struct PandasScanFunction : public TableFunction {
 				// numeric object
 				// fetch the internal data and mask array
 				bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
-				bind_data.mask = make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
+				bind_data.mask =
+				    make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
 				ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
 			} else if (StringUtil::StartsWith(col_type, "datetime64[ns") || col_type == "<M8[ns]") {
 				// timestamp type
@@ -316,8 +308,8 @@ struct PandasScanFunction : public TableFunction {
 	static void scan_pandas_numeric(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
 		scan_pandas_column<T>(bind_data.numpy_col, count, offset, out);
 		if (bind_data.mask) {
-			auto mask = (bool *) bind_data.mask->numpy_array.data();
-			for(idx_t i = 0; i < count; i++) {
+			auto mask = (bool *)bind_data.mask->numpy_array.data();
+			for (idx_t i = 0; i < count; i++) {
 				auto is_null = mask[offset + i];
 				if (is_null) {
 					FlatVector::SetNull(out, i, true);
@@ -341,11 +333,10 @@ struct PandasScanFunction : public TableFunction {
 		}
 	}
 
-	template<class T>
-	static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector &out) {
+	template <class T> static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector &out) {
 		// first figure out how many bytes to allocate
 		idx_t utf8_length = 0;
-		for(idx_t i = 0; i < codepoint_count; i++) {
+		for (idx_t i = 0; i < codepoint_count; i++) {
 			int len = Utf8Proc::CodepointLength(int(codepoints[i]));
 			D_ASSERT(len >= 1);
 			utf8_length += len;
@@ -353,7 +344,7 @@ struct PandasScanFunction : public TableFunction {
 		int sz;
 		auto result = StringVector::EmptyString(out, utf8_length);
 		auto target = result.GetDataWriteable();
-		for(idx_t i = 0; i < codepoint_count; i++) {
+		for (idx_t i = 0; i < codepoint_count; i++) {
 			Utf8Proc::CodepointToUtf8(int(codepoints[i]), sz, target);
 			D_ASSERT(sz >= 1);
 			target += sz;
@@ -361,7 +352,8 @@ struct PandasScanFunction : public TableFunction {
 		return result;
 	}
 
-	static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
+	static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
+	                          Vector &out) {
 		switch (bind_data.pandas_type) {
 		case PandasType::BOOLEAN:
 			scan_pandas_column<bool>(numpy_col, count, offset, out);
@@ -415,26 +407,29 @@ struct PandasScanFunction : public TableFunction {
 				}
 				if (PyUnicode_IS_COMPACT_ASCII(val)) {
 					// ascii string: we can zero copy
-					tgt_ptr[row] = string_t((const char*) PyUnicode_DATA(val), PyUnicode_GET_LENGTH(val));
+					tgt_ptr[row] = string_t((const char *)PyUnicode_DATA(val), PyUnicode_GET_LENGTH(val));
 				} else {
 					// unicode gunk
-					auto ascii_obj = (PyASCIIObject *) val;
-					auto unicode_obj = (PyCompactUnicodeObject *) val;
+					auto ascii_obj = (PyASCIIObject *)val;
+					auto unicode_obj = (PyCompactUnicodeObject *)val;
 					// compact unicode string: is there utf8 data available?
 					if (unicode_obj->utf8) {
 						// there is! zero copy
-						tgt_ptr[row] = string_t((const char*) unicode_obj->utf8, unicode_obj->utf8_length);
+						tgt_ptr[row] = string_t((const char *)unicode_obj->utf8, unicode_obj->utf8_length);
 					} else if (PyUnicode_IS_COMPACT(unicode_obj) && !PyUnicode_IS_ASCII(unicode_obj)) {
 						auto kind = PyUnicode_KIND(val);
-						switch(kind) {
+						switch (kind) {
 						case PyUnicode_1BYTE_KIND:
-							tgt_ptr[row] = DecodePythonUnicode<Py_UCS1>(PyUnicode_1BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+							tgt_ptr[row] =
+							    DecodePythonUnicode<Py_UCS1>(PyUnicode_1BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
 							break;
 						case PyUnicode_2BYTE_KIND:
-							tgt_ptr[row] = DecodePythonUnicode<Py_UCS2>(PyUnicode_2BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+							tgt_ptr[row] =
+							    DecodePythonUnicode<Py_UCS2>(PyUnicode_2BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
 							break;
 						case PyUnicode_4BYTE_KIND:
-							tgt_ptr[row] = DecodePythonUnicode<Py_UCS4>(PyUnicode_4BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+							tgt_ptr[row] =
+							    DecodePythonUnicode<Py_UCS4>(PyUnicode_4BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
 							break;
 						default:
 							throw runtime_error("Unsupported typekind for Python Unicode Compact decode");
@@ -477,7 +472,6 @@ struct PandasScanFunction : public TableFunction {
 	                                 FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (PandasScanFunctionData &)*bind_data;
 		auto &state = (PandasScanState &)*operator_state;
-
 
 		if (state.position >= data.row_count) {
 			return;

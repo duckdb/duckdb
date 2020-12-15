@@ -51,8 +51,8 @@ void FTSExtension::Load(DuckDB &db) {
 	create_fts_index_func.named_parameters["stemmer"] = LogicalType::VARCHAR;
 	create_fts_index_func.named_parameters["stopwords"] = LogicalType::VARCHAR;
 	create_fts_index_func.named_parameters["ignore"] = LogicalType::VARCHAR;
-    create_fts_index_func.named_parameters["strip_accents"] = LogicalType::BOOLEAN;
-    create_fts_index_func.named_parameters["lower"] = LogicalType::BOOLEAN;
+	create_fts_index_func.named_parameters["strip_accents"] = LogicalType::BOOLEAN;
+	create_fts_index_func.named_parameters["lower"] = LogicalType::BOOLEAN;
 	create_fts_index_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	CreatePragmaFunctionInfo create_fts_index_info(create_fts_index_func);
 
