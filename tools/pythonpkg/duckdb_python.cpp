@@ -203,6 +203,7 @@ struct PandasScanState : public FunctionOperatorData {
 
 	idx_t start;
 	idx_t end;
+	vector<column_t> column_ids;
 };
 
 struct ParallelPandasScanState : public ParallelState {
@@ -217,7 +218,7 @@ struct PandasScanFunction : public TableFunction {
 	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_function, pandas_scan_bind, pandas_scan_init,
 	                    nullptr, nullptr, nullptr, pandas_scan_cardinality, nullptr, nullptr,
 						pandas_scan_max_threads, pandas_scan_init_parallel_state, pandas_scan_parallel_init,
-						pandas_scan_parallel_state_next) {}
+						pandas_scan_parallel_state_next, true) {}
 
 	static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_type, PandasType &pandas_type) {
 		if (col_type == "bool") {
@@ -316,7 +317,9 @@ struct PandasScanFunction : public TableFunction {
 	                                                         vector<column_t> &column_ids,
 	                                                         TableFilterSet *table_filters) {
 		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
-		return make_unique<PandasScanState>(0, bind_data.row_count);
+		auto result = make_unique<PandasScanState>(0, bind_data.row_count);
+		result->column_ids = column_ids;
+		return result;
 	}
 
 	static constexpr idx_t PANDAS_PARTITION_COUNT = 50 * STANDARD_VECTOR_SIZE;
@@ -327,7 +330,6 @@ struct PandasScanFunction : public TableFunction {
 	}
 
 	static unique_ptr<ParallelState> pandas_scan_init_parallel_state(ClientContext &context, const FunctionData *bind_data_) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
 		return make_unique<ParallelPandasScanState>();
 	}
 
@@ -335,6 +337,7 @@ struct PandasScanFunction : public TableFunction {
 																	ParallelState *state, vector<column_t> &column_ids,
 																	TableFilterSet *table_filters) {
 		auto result = make_unique<PandasScanState>(0, 0);
+		result->column_ids = column_ids;
 		if (!pandas_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
 			return nullptr;
 		}
@@ -536,10 +539,14 @@ struct PandasScanFunction : public TableFunction {
 			return;
 		}
 		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, state.end - state.start);
-
 		output.SetCardinality(this_count);
-		for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-			ConvertVector(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count, state.start, output.data[col_idx]);
+		for (idx_t idx = 0; idx < state.column_ids.size(); idx++) {
+			auto col_idx = state.column_ids[idx];
+			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				output.data[idx].Sequence(state.start, this_count);
+			} else {
+				ConvertVector(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count, state.start, output.data[idx]);
+			}
 		}
 		state.start += this_count;
 	}
