@@ -247,9 +247,9 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 		for (auto &f : functions) {
 			candidate_str += "\t" + f.ToString() + "\n";
 		}
-		error = StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
+		error = StringUtil::Format("No function matches the given name '%s' and argument types '%s'. You might need to add "
 		                           "explicit type casts.\n\tCandidate functions:\n%s",
-		                           call_str, candidate_str);
+		                           name, call_str, candidate_str);
 		return INVALID_INDEX;
 	}
 	return best_function;
