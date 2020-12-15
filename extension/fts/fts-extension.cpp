@@ -20,11 +20,11 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 
 	BinaryExecutor::Execute<string_t, string_t, string_t, true>(
 	    input_vector, stemmer_vector, result, args.size(), [&](string_t input, string_t stemmer) {
-            auto input_data = input.GetDataUnsafe();
-            auto input_size = input.GetSize();
+		    auto input_data = input.GetDataUnsafe();
+		    auto input_size = input.GetSize();
 
 		    if (stemmer.GetString() == "none") {
-                auto output = StringVector::AddString(result, input_data, input_size);
+			    auto output = StringVector::AddString(result, input_data, input_size);
 			    return output;
 		    }
 
@@ -33,7 +33,8 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 			    const char **stemmers = sb_stemmer_list();
 			    size_t n_stemmers = 27;
 			    throw Exception(StringUtil::Format(
-			        "Unrecognized stemmer '%s'. Supported stemmers are: [%s], or use 'none' for no stemming", stemmer.GetString(),
+			        "Unrecognized stemmer '%s'. Supported stemmers are: [%s], or use 'none' for no stemming",
+			        stemmer.GetString(),
 			        StringUtil::Join(stemmers, n_stemmers, ", ", [](const char *st) { return st; })));
 		    }
 
@@ -51,8 +52,8 @@ void FTSExtension::Load(DuckDB &db) {
 	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, stem_function);
 	CreateScalarFunctionInfo stem_info(stem_func);
 
-	auto create_fts_index_func = PragmaFunction::PragmaCall("create_fts_index", create_fts_index_query,
-	                                                        {LogicalType::VARCHAR}, LogicalType::VARCHAR);
+	auto create_fts_index_func = PragmaFunction::PragmaCall(
+	    "create_fts_index", create_fts_index_query, {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR);
 	create_fts_index_func.named_parameters["stemmer"] = LogicalType::VARCHAR;
 	create_fts_index_func.named_parameters["stopwords"] = LogicalType::VARCHAR;
 	create_fts_index_func.named_parameters["ignore"] = LogicalType::VARCHAR;

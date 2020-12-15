@@ -237,7 +237,7 @@ statement ok
 PRAGMA drop_fts_index('documents')
 
 statement ok
-PRAGMA create_fts_index('documents', 'id', '*')
+PRAGMA create_fts_index('documents', 'id', '*', stopwords='english')
 
 # prepared statement again for easier use
 statement ok
