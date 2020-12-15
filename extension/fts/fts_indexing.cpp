@@ -189,7 +189,6 @@ static string indexing_script(string input_schema, string input_table, string in
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
     result = StringUtil::Replace(result, "%stemmer%", stemmer);
-    result = StringUtil::Replace(result, "%ignore%", ignore);
 
 	return result;
 }

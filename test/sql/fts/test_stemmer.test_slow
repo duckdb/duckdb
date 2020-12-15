@@ -55,7 +55,7 @@ information
 query T
 SELECT stem('information ', 'porter')
 ----
-information 
+information
 
 query T
 select stem(UNNEST(string_split(repeat('information ', 5), ' ')), 'porter')
