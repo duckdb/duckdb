@@ -99,15 +99,17 @@ string PhysicalTableScan::ParamsToString() const {
 		result = function.to_string(bind_data.get());
 		result += "\n[INFOSEPARATOR]\n";
 	}
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] < names.size()) {
-			if (i > 0) {
-				result += "\n";
+	if (function.projection_pushdown) {
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (column_ids[i] < names.size()) {
+				if (i > 0) {
+					result += "\n";
+				}
+				result += names[column_ids[i]];
 			}
-			result += names[column_ids[i]];
 		}
 	}
-	if (table_filters) {
+	if (function.filter_pushdown && table_filters) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
 		for (auto &f : table_filters->filters) {
