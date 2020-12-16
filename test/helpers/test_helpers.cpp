@@ -101,11 +101,11 @@ void WriteBinary(string path, const uint8_t *data, uint64_t length) {
 }
 
 bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
-	unique_ptr<MaterializedQueryResult> materialized;
 	if (result_.type == QueryResultType::STREAM_RESULT) {
-		materialized = ((StreamQueryResult &)result_).Materialize();
+		fprintf(stderr, "Unexpected stream query result in CHECK_COLUMN\n");
+		return false;
 	}
-	auto &result = materialized ? *materialized : (MaterializedQueryResult &)result_;
+	auto &result = (MaterializedQueryResult &)result_;
 	if (!result.success) {
 		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
 		return false;
@@ -167,6 +167,10 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 }
 
 bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto &stream = (StreamQueryResult &) *result;
+		result = stream.Materialize();
+	}
 	return CHECK_COLUMN(*result, column_number, values);
 }
 

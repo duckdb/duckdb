@@ -24,7 +24,7 @@ Connection::Connection(DuckDB &database) : db(database), context(make_unique<Cli
 
 Connection::~Connection() {
 	if (!context->is_invalidated) {
-		context->Cleanup();
+		context->Destroy();
 		db.connection_manager->RemoveConnection(this);
 	}
 }
@@ -93,7 +93,7 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Va
 	if (!statement->success) {
 		return make_unique<MaterializedQueryResult>(statement->error);
 	}
-	return statement->Execute(values);
+	return statement->Execute(values, false);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(string table_name) {

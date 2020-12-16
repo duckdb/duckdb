@@ -35,6 +35,7 @@ class BufferedFileWriter;
 class ClientContext {
 public:
 	ClientContext(DuckDB &database);
+	~ClientContext();
 
 	//! Query profiler
 	QueryProfiler profiler;
@@ -97,6 +98,8 @@ public:
 	unique_ptr<DataChunk> Fetch();
 	//! Cleanup the result set (if any).
 	void Cleanup();
+	//! Destroy the client context
+	void Destroy();
 	//! Invalidate the client context. The current query will be interrupted and the client context will be invalidated,
 	//! making it impossible for future queries to run.
 	void Invalidate();

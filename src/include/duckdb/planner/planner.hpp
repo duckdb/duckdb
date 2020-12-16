@@ -34,6 +34,7 @@ public:
 
 	bool read_only;
 	bool requires_valid_transaction;
+	bool allow_stream_result;
 
 private:
 	void CreatePlan(SQLStatement &statement);

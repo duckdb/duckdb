@@ -20,6 +20,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->prepared.get();
 	this->read_only = prepared->read_only;
 	this->requires_valid_transaction = prepared->requires_valid_transaction;
+	this->allow_stream_result = prepared->allow_stream_result;
 
 	vector<Value> bind_values;
 	for (idx_t i = 0; i < stmt.values.size(); i++) {

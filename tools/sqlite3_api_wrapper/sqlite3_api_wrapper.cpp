@@ -225,6 +225,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		}
 		// fetch a chunk
 		pStmt->current_chunk = pStmt->result->Fetch();
+		pStmt->current_chunk->Normalify();
 		pStmt->current_row = -1;
 		if (!sqlite3_display_result(pStmt->prepared->type)) {
 			// only SELECT statements return results
@@ -239,6 +240,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		// have to fetch again!
 		pStmt->current_row = 0;
 		pStmt->current_chunk = pStmt->result->Fetch();
+		pStmt->current_chunk->Normalify();
 		if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
 			sqlite3_reset(pStmt);
 			return SQLITE_DONE;

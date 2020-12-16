@@ -42,7 +42,11 @@ ClientContext::ClientContext(DuckDB &database)
 	random_engine.seed(rd());
 }
 
-void ClientContext::Cleanup() {
+ClientContext::~ClientContext() {
+
+}
+
+void ClientContext::Destroy() {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated || !prepared_statements) {
 		return;
@@ -62,6 +66,11 @@ void ClientContext::Cleanup() {
 	for (auto &appender : appenders) {
 		appender->Invalidate("Connection has been closed!", false);
 	}
+	CleanupInternal();
+}
+
+void ClientContext::Cleanup() {
+	lock_guard<mutex> client_guard(context_lock);
 	CleanupInternal();
 }
 
@@ -172,6 +181,7 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	// extract the result column names from the plan
 	result->read_only = planner.read_only;
 	result->requires_valid_transaction = planner.requires_valid_transaction;
+	result->allow_stream_result = planner.allow_stream_result;
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = move(planner.value_map);
@@ -208,7 +218,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	// bind the bound values before execution
 	statement.Bind(move(bound_values));
 
-	bool create_stream_result = statement.statement_type == StatementType::SELECT_STATEMENT && allow_stream_result;
+	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
 
 	// store the physical plan in the context for calls to Fetch()
 	executor.Initialize(move(statement.plan));
@@ -262,6 +272,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query) {
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLStatement> statement) {
 	auto n_param = statement->n_param;
 
+	auto statement_query = statement->query;
 	// now write the prepared statement data into the catalog
 	string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
 	prepare_count++;
@@ -271,13 +282,13 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLState
 	prepare->statement = move(statement);
 
 	// now perform the actual PREPARE query
-	auto result = RunStatement(query, move(prepare), false);
+	auto result = RunStatement(statement_query, move(prepare), false);
 	if (!result->success) {
 		throw Exception(result->error);
 	}
 	auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
 	auto prepared_object =
-	    make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared, n_param);
+	    make_unique<PreparedStatement>(this, prepare_name, statement_query, *prepared_catalog->prepared, n_param);
 	prepared_statement_objects.insert(prepared_object.get());
 	return prepared_object;
 }
@@ -331,6 +342,7 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 
 	return RunStatement(query, move(execute), allow_stream_result);
 }
+
 void ClientContext::RemovePreparedStatement(PreparedStatement *statement) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (!statement->success || statement->is_invalidated || is_invalidated) {

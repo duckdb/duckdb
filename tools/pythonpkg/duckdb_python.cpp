@@ -404,9 +404,11 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 
 py::object ArrayWrapper::ToArray(idx_t count) {
 	D_ASSERT(data->array && mask->array);
+	data->Resize(data->count);
 	if (!requires_mask) {
 		return move(data->array);
 	}
+	mask->Resize(mask->count);
 	// construct numpy arrays from the data and the mask
 	auto values = move(data->array);
 	auto nullmask = move(mask->array);
@@ -872,6 +874,12 @@ template <> bool PandasScanFunction::ValueIsNull(double value) {
 }
 
 struct DuckDBPyResult {
+public:
+	idx_t chunk_offset = 0;
+
+	unique_ptr<QueryResult> result;
+	unique_ptr<DataChunk> current_chunk;
+public:
 
 	template <class SRC> static SRC fetch_scalar(Vector &src_vec, idx_t offset) {
 		auto src_ptr = FlatVector::GetData<SRC>(src_vec);
@@ -886,7 +894,7 @@ struct DuckDBPyResult {
 			current_chunk = result->Fetch();
 			chunk_offset = 0;
 		}
-		if (current_chunk->size() == 0) {
+		if (!current_chunk || current_chunk->size() == 0) {
 			return py::none();
 		}
 		py::tuple res(result->types.size());
@@ -1046,7 +1054,7 @@ struct DuckDBPyResult {
 		py::list batches;
 		while (true) {
 			auto data_chunk = result->Fetch();
-			if (data_chunk->size() == 0) {
+			if (!data_chunk || data_chunk->size() == 0) {
 				break;
 			}
 			ArrowArray data;
@@ -1077,10 +1085,6 @@ struct DuckDBPyResult {
 	void close() {
 		result = nullptr;
 	}
-	idx_t chunk_offset = 0;
-
-	unique_ptr<QueryResult> result;
-	unique_ptr<DataChunk> current_chunk;
 };
 
 struct DuckDBPyRelation;
@@ -1133,7 +1137,7 @@ struct DuckDBPyConnection {
 
 		for (pybind11::handle single_query_params : params_set) {
 			if (prep->n_param != py::len(single_query_params)) {
-				throw runtime_error("Prepared statments needs " + to_string(prep->n_param) + " parameters, " +
+				throw runtime_error("Prepared statement needs " + to_string(prep->n_param) + " parameters, " +
 				                    to_string(py::len(single_query_params)) + " given");
 			}
 			auto args = DuckDBPyConnection::transform_python_param_list(single_query_params);

@@ -49,6 +49,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		result->collection.Append(*chunk);
 	}
+	return result;
 }
 
 void StreamQueryResult::Close() {

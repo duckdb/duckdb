@@ -12,7 +12,8 @@ namespace duckdb {
 using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
-    : context(context), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
+    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false),
+	  parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
 	if (parent_) {
 		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
 		macro_binding = parent_->macro_binding;

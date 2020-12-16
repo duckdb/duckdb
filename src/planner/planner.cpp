@@ -31,6 +31,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	this->read_only = binder.read_only;
 	this->requires_valid_transaction = binder.requires_valid_transaction;
+	this->allow_stream_result = binder.allow_stream_result;
 	this->names = bound_statement.names;
 	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
@@ -94,6 +95,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		prepared_data->value_map = move(value_map);
 		prepared_data->read_only = this->read_only;
 		prepared_data->requires_valid_transaction = this->requires_valid_transaction;
+		prepared_data->allow_stream_result = this->allow_stream_result;
 
 		this->read_only = true;
 		this->requires_valid_transaction = false;
