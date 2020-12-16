@@ -279,6 +279,10 @@ int64_t Date::Epoch(date_t date) {
 	return ((int64_t)date) * Interval::SECS_PER_DAY;
 }
 
+int64_t Date::EpochNanoseconds(date_t date) {
+	return ((int64_t)date) * (Interval::MICROS_PER_DAY * 1000);
+}
+
 int32_t Date::ExtractYear(date_t n, int32_t *last_year) {
 	// cached look up: check if year of this date is the same as the last one we looked up
 	// note that this only works for years in the range [1970, 2370]

@@ -41,7 +41,7 @@ struct RegularConvert {
 
 struct TimestampConvert {
 	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(timestamp_t val) {
-		return val * 1000;
+		return Timestamp::GetEpochNanoSeconds(val);
 	}
 
 	template<class NUMPY_T> static NUMPY_T null_value() {
@@ -51,7 +51,7 @@ struct TimestampConvert {
 
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(date_t val) {
-		return Date::Epoch(val) * 1000000;
+		return Date::EpochNanoseconds(val);
 	}
 
 	template<class NUMPY_T> static NUMPY_T null_value() {
@@ -109,7 +109,7 @@ template <> double IntegralConvert::convert_value(hugeint_t val) {
 } // namespace duckdb_py_convert
 
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
-static void ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &source, idx_t count) {
+static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &source, idx_t count) {
 	auto src_ptr = FlatVector::GetData<DUCKDB_T>(source);
 	auto out_ptr = (NUMPY_T *) target_data;
 	auto &nullmask = FlatVector::Nullmask(source);
@@ -124,52 +124,59 @@ static void ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *tar
 				target_mask[offset] = false;
 			}
 		}
+		return true;
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t offset = target_offset + i;
 			out_ptr[offset] = CONVERT::template convert_value<DUCKDB_T, NUMPY_T>(src_ptr[i]);
 			target_mask[offset] = false;
 		}
-
+		return false;
 	}
 }
 
-template <class T> static void ConvertColumnRegular(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &source, idx_t count) {
-	ConvertColumn<T, T, duckdb_py_convert::RegularConvert>(target_offset, target_data, target_mask, source, count);
+template <class T> static bool ConvertColumnRegular(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &source, idx_t count) {
+	return ConvertColumn<T, T, duckdb_py_convert::RegularConvert>(target_offset, target_data, target_mask, source, count);
 }
 
 template <class DUCKDB_T>
-static void ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &source, idx_t count, double division) {
+static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &source, idx_t count, double division) {
 	auto src_ptr = FlatVector::GetData<DUCKDB_T>(source);
 	auto out_ptr = (double *) target_data;
 	auto &nullmask = FlatVector::Nullmask(source);
-	for (idx_t i = 0; i < count; i++) {
-		idx_t offset = target_offset + i;
-		if (nullmask[i]) {
-			target_mask[offset] = true;
-		} else {
+	if (nullmask.any()) {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t offset = target_offset + i;
+			if (nullmask[i]) {
+				target_mask[offset] = true;
+			} else {
+				out_ptr[offset] = duckdb_py_convert::IntegralConvert::convert_value<DUCKDB_T, double>(src_ptr[i]) / division;
+				target_mask[offset] = false;
+			}
+		}
+		return true;
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t offset = target_offset + i;
 			out_ptr[offset] = duckdb_py_convert::IntegralConvert::convert_value<DUCKDB_T, double>(src_ptr[i]) / division;
 			target_mask[offset] = false;
 		}
+		return false;
 	}
 }
 
-static void ConvertDecimal(LogicalType &decimal_type, idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &source, idx_t count) {
+static bool ConvertDecimal(LogicalType &decimal_type, idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &source, idx_t count) {
 	auto dec_scale = decimal_type.scale();
 	double division = pow(10, dec_scale);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
-		ConvertDecimalInternal<int16_t>(target_offset, target_data, target_mask, source, count, division);
-		break;
+		return ConvertDecimalInternal<int16_t>(target_offset, target_data, target_mask, source, count, division);
 	case PhysicalType::INT32:
-		ConvertDecimalInternal<int32_t>(target_offset, target_data, target_mask, source, count, division);
-		break;
+		return ConvertDecimalInternal<int32_t>(target_offset, target_data, target_mask, source, count, division);
 	case PhysicalType::INT64:
-		ConvertDecimalInternal<int64_t>(target_offset, target_data, target_mask, source, count, division);
-		break;
+		return ConvertDecimalInternal<int64_t>(target_offset, target_data, target_mask, source, count, division);
 	case PhysicalType::INT128:
-		ConvertDecimalInternal<hugeint_t>(target_offset, target_data, target_mask, source, count, division);
-		break;
+		return ConvertDecimalInternal<hugeint_t>(target_offset, target_data, target_mask, source, count, division);
 	default:
 		throw NotImplementedException("Unimplemented internal type for DECIMAL");
 	}
@@ -195,6 +202,7 @@ struct ArrayWrapper {
 
 	unique_ptr<RawArrayWrapper> data;
 	unique_ptr<RawArrayWrapper> mask;
+	bool requires_mask;
 
 public:
 	void Initialize(idx_t capacity);
@@ -319,7 +327,7 @@ void RawArrayWrapper::Resize(idx_t new_capacity) {
 	data = (data_ptr_t) array.mutable_data();
 }
 
-ArrayWrapper::ArrayWrapper(LogicalType type) {
+ArrayWrapper::ArrayWrapper(LogicalType type) : requires_mask(false) {
 	data = make_unique<RawArrayWrapper>(type);
 	mask = make_unique<RawArrayWrapper>(LogicalType::BOOLEAN);
 }
@@ -340,51 +348,55 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	D_ASSERT(dataptr);
 	D_ASSERT(maskptr);
 	D_ASSERT(input.type == data->type);
+	bool may_have_null;
 	switch (input.type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		ConvertColumnRegular<bool>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumnRegular<bool>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::TINYINT:
-		ConvertColumnRegular<int8_t>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumnRegular<int8_t>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::SMALLINT:
-		ConvertColumnRegular<int16_t>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumnRegular<int16_t>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::INTEGER:
-		ConvertColumnRegular<int32_t>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumnRegular<int32_t>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::BIGINT:
-		ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::HUGEINT:
-		ConvertColumn<hugeint_t, double, duckdb_py_convert::IntegralConvert>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumn<hugeint_t, double, duckdb_py_convert::IntegralConvert>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::FLOAT:
-		ConvertColumnRegular<float>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumnRegular<float>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::DOUBLE:
-		ConvertColumnRegular<double>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumnRegular<double>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::DECIMAL:
-		ConvertDecimal(input.type, current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertDecimal(input.type, current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::DATE:
-		ConvertColumn<date_t, int64_t, duckdb_py_convert::DateConvert>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumn<date_t, int64_t, duckdb_py_convert::DateConvert>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::TIME:
-		ConvertColumn<dtime_t, PyObject*, duckdb_py_convert::TimeConvert>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumn<dtime_t, PyObject*, duckdb_py_convert::TimeConvert>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::VARCHAR:
-		ConvertColumn<string_t, PyObject*, duckdb_py_convert::StringConvert>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumn<string_t, PyObject*, duckdb_py_convert::StringConvert>(current_offset, dataptr, maskptr, input, count);
 		break;
 	case LogicalTypeId::BLOB:
-		ConvertColumn<string_t, PyObject*, duckdb_py_convert::BlobConvert>(current_offset, dataptr, maskptr, input, count);
+		may_have_null = ConvertColumn<string_t, PyObject*, duckdb_py_convert::BlobConvert>(current_offset, dataptr, maskptr, input, count);
 		break;
 	default:
 		throw runtime_error("unsupported type " + input.type.ToString());
+	}
+	if (may_have_null) {
+		requires_mask = true;
 	}
 	data->count += count;
 	mask->count += count;
@@ -392,6 +404,9 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 
 py::object ArrayWrapper::ToArray(idx_t count) {
 	D_ASSERT(data->array && mask->array);
+	if (!requires_mask) {
+		return move(data->array);
+	}
 	// construct numpy arrays from the data and the mask
 	auto values = move(data->array);
 	auto nullmask = move(mask->array);
