@@ -168,8 +168,8 @@ static void ConvertDecimal(LogicalType &decimal_type, idx_t target_offset, data_
 
 struct RawArrayWrapper {
 	RawArrayWrapper(LogicalType type);
-	~RawArrayWrapper();
 
+	py::array array;
 	data_ptr_t data;
 	LogicalType type;
 	idx_t type_width;
@@ -179,7 +179,6 @@ public:
 	void Initialize(idx_t capacity);
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
-	py::object ToArray(idx_t count);
 };
 
 struct ArrayWrapper {
@@ -261,41 +260,54 @@ RawArrayWrapper::RawArrayWrapper(LogicalType type) : data(nullptr), type(type), 
 	}
 }
 
-RawArrayWrapper::~RawArrayWrapper() {
-	// free any of the memory we allocated
-	if (data) {
-		// for types that construct python objects, we also need to decref the objects
-		switch (type.id()) {
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::VARCHAR:
-		case LogicalTypeId::BLOB: {
-			auto objects = (PyObject **) data;
-			for(idx_t i = 0; i < count; i++) {
-				if (objects[i]) {
-					Py_DECREF(objects[i]);
-				}
-			}
-		}
-		default:
-			break;
-		}
-		free(data);
-		data = nullptr;
-	}
-}
-
 void RawArrayWrapper::Initialize(idx_t capacity) {
-	data = (data_ptr_t) malloc(type_width * capacity);
-	if (!data) {
-		throw std::bad_alloc();
+	string dtype;
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		dtype = "bool";
+		break;
+	case LogicalTypeId::TINYINT:
+		dtype = "int8";
+		break;
+	case LogicalTypeId::SMALLINT:
+		dtype = "int16";
+		break;
+	case LogicalTypeId::INTEGER:
+		dtype = "int32";
+		break;
+	case LogicalTypeId::BIGINT:
+		dtype = "int64";
+		break;
+	case LogicalTypeId::FLOAT:
+		dtype = "float32";
+		break;
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		dtype = "float64";
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		dtype = "datetime64[ms]";
+		break;
+	case LogicalTypeId::DATE:
+		dtype = "datetime64[s]";
+		break;
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		dtype = "object";
+		break;
+	default:
+		throw runtime_error("unsupported type " + type.ToString());
 	}
+	array = py::array(py::dtype(dtype), capacity);
+	data = (data_ptr_t) array.mutable_data();
 }
 
 void RawArrayWrapper::Resize(idx_t new_capacity) {
-	data = (data_ptr_t) realloc(data, type_width * new_capacity);
-	if (!data) {
-		throw std::bad_alloc();
-	}
+	vector<ssize_t> new_shape { ssize_t(new_capacity) };
+	array.resize(new_shape, false);
+	data = (data_ptr_t) array.mutable_data();
 }
 
 ArrayWrapper::ArrayWrapper(LogicalType type) {
@@ -369,62 +381,11 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	mask->count += count;
 }
 
-static py::array CreateNumPyArray(unique_ptr<RawArrayWrapper> array) {
-	D_ASSERT(array);
-
-	string dtype;
-	switch (array->type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		dtype = "bool";
-		break;
-	case LogicalTypeId::TINYINT:
-		dtype = "int8";
-		break;
-	case LogicalTypeId::SMALLINT:
-		dtype = "int16";
-		break;
-	case LogicalTypeId::INTEGER:
-		dtype = "int32";
-		break;
-	case LogicalTypeId::BIGINT:
-		dtype = "int64";
-		break;
-	case LogicalTypeId::FLOAT:
-		dtype = "float32";
-		break;
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::DECIMAL:
-		dtype = "float64";
-		break;
-	case LogicalTypeId::TIMESTAMP:
-		dtype = "datetime64[ms]";
-		break;
-	case LogicalTypeId::DATE:
-		dtype = "datetime64[s]";
-		break;
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
-		dtype = "object";
-		break;
-	default:
-		throw runtime_error("unsupported type " + array->type.ToString());
-	}
-
-	// create a capsule that owns the data and use it as base class of the NumPy array
-	// this effectively transfers ownership (data will be deleted when the NumPy array is deleted)
-	auto capsule = pybind11::capsule(array.get(), [](void *data) { delete ((RawArrayWrapper *) data); });
-	auto result = py::array(py::dtype(dtype), array->count, array->data, capsule);
-	array.release();
-	return result;
-}
-
 py::object ArrayWrapper::ToArray(idx_t count) {
-	D_ASSERT(data && mask);
+	D_ASSERT(data->array && mask->array);
 	// construct numpy arrays from the data and the mask
-	auto values = CreateNumPyArray(move(data));
-	auto nullmask = CreateNumPyArray(move(mask));
+	auto values = move(data->array);
+	auto nullmask = move(mask->array);
 
 	// create masked array and return it
 	auto masked_array = py::module::import("numpy.ma").attr("masked_array")(values, nullmask);
