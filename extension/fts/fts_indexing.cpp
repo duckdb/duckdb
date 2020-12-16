@@ -66,10 +66,13 @@ static string indexing_script(string input_schema, string input_table, string in
     // parameterized definition of indexing and retrieval model
 	result += SQL(
         CREATE TABLE %fts_schema%.docs AS (
-            SELECT rowid + 1 AS docid,
+            SELECT rowid AS docid,
                    "%input_id%" AS name
             FROM %input_schema%.%input_table%
         );
+
+	    CREATE TABLE %fts_schema%.fields (fieldid BIGINT, field VARCHAR);
+	    INSERT INTO %fts_schema%.fields VALUES %field_values%;
 
         CREATE TABLE %fts_schema%.terms AS
         WITH tokenized AS (
@@ -78,7 +81,7 @@ static string indexing_script(string input_schema, string input_table, string in
 	    stemmed_stopped AS (
             SELECT stem(t.w, '%stemmer%') AS term,
 	               t.docid AS docid,
-                   t.field AS field
+                   t.fieldid AS fieldid
 	        FROM tokenized AS t
 	        WHERE t.w NOT NULL
               AND len(t.w) > 0
@@ -86,11 +89,10 @@ static string indexing_script(string input_schema, string input_table, string in
         )
 	    SELECT ss.term,
 	           ss.docid,
-	           row_number() OVER (PARTITION BY ss.docid, ss.field) AS pos,
-	           ss.field
+	           ss.fieldid
         FROM stemmed_stopped AS ss;
 
-        ALTER TABLE %fts_schema%.docs ADD len INT;
+        ALTER TABLE %fts_schema%.docs ADD len BIGINT;
         UPDATE %fts_schema%.docs d
         SET len = (
             SELECT count(term)
@@ -103,11 +105,11 @@ static string indexing_script(string input_schema, string input_table, string in
             SELECT DISTINCT term
             FROM %fts_schema%.terms
         )
-        SELECT row_number() OVER (PARTITION BY (SELECT NULL)) AS termid,
+        SELECT row_number() OVER (PARTITION BY (SELECT NULL)) - 1 AS termid,
                dt.term
         FROM distinct_terms AS dt;
 
-        ALTER TABLE %fts_schema%.terms ADD termid INT;
+        ALTER TABLE %fts_schema%.terms ADD termid BIGINT;
         UPDATE %fts_schema%.terms t
         SET termid = (
             SELECT termid
@@ -116,7 +118,7 @@ static string indexing_script(string input_schema, string input_table, string in
         );
         ALTER TABLE %fts_schema%.terms DROP term;
 
-        ALTER TABLE %fts_schema%.dict ADD df INT;
+        ALTER TABLE %fts_schema%.dict ADD df BIGINT;
         UPDATE %fts_schema%.dict d
         SET df = (
             SELECT count(distinct docid)
@@ -135,6 +137,11 @@ static string indexing_script(string input_schema, string input_table, string in
             WITH tokens AS (
                 SELECT DISTINCT stem(unnest(%fts_schema%.tokenize(query_string)), '%stemmer%') AS t
             ),
+            fieldids AS (
+                SELECT fieldid
+                FROM %fts_schema%.fields
+                WHERE CASE WHEN fields IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split(fields, ','))) AS fsq) END
+            ),
             qtermids AS (
                 SELECT termid
                 FROM %fts_schema%.dict AS dict,
@@ -145,7 +152,7 @@ static string indexing_script(string input_schema, string input_table, string in
                 SELECT termid,
                        docid
                 FROM %fts_schema%.terms AS terms
-                WHERE CASE WHEN fields IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split(fields, ','))) AS fsq) END
+                WHERE CASE WHEN fields IS NULL THEN 1 ELSE fieldid IN (SELECT * FROM fieldids) END
                   AND termid IN (SELECT qtermids.termid FROM qtermids)
             ),
             subscores AS (
@@ -189,16 +196,20 @@ static string indexing_script(string input_schema, string input_table, string in
     );
 
     // we may have more than 1 input field, therefore we union over the fields, retaining information which field it came from
-	string field_query = SQL(
-        SELECT unnest(%fts_schema%.tokenize(fts_ii."%input_value%")) AS w, rowid + 1 AS docid, '%input_value%' AS field
+	string tokenize_field_query = SQL(
+        SELECT unnest(%fts_schema%.tokenize(fts_ii."%input_value%")) AS w,
+	           rowid AS docid,
+	           (SELECT fieldid FROM %fts_schema%.fields WHERE field = '%input_value%') AS fieldid
         FROM %input_schema%.%input_table% AS fts_ii
     );
-	vector<string> fields;
-	for (auto val : input_values) {
-		fields.push_back(StringUtil::Replace(field_query, "%input_value%", val));
+	vector<string> field_values;
+	vector<string> tokenize_fields;
+	for (idx_t i = 0; i < input_values.size(); i++) {
+		field_values.push_back(StringUtil::Format("(%i, '%s')"));
+        tokenize_fields.push_back(StringUtil::Replace(tokenize_field_query, "%input_value%", input_values[i]));
 	}
-	string union_fields_query = StringUtil::Join(fields, " UNION ALL ");
-	result = StringUtil::Replace(result, "%union_fields_query%", union_fields_query);
+    result = StringUtil::Replace(result, "%field_values%", StringUtil::Join(field_values, ", "));
+	result = StringUtil::Replace(result, "%union_fields_query%", StringUtil::Join(tokenize_fields, " UNION ALL "));
 
     string fts_schema = fts_schema_name(input_schema, input_table);
 
@@ -208,6 +219,8 @@ static string indexing_script(string input_schema, string input_table, string in
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
     result = StringUtil::Replace(result, "%stemmer%", stemmer);
+
+	printf(result.c_str());
 
 	return result;
 }

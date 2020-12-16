@@ -47,21 +47,21 @@ PRAGMA create_fts_index('documents', 'id', 'body', stopwords='nonexistant_stopwo
 statement ok
 PRAGMA create_fts_index('documents', 'id', 'body', stopwords='english')
 
-query IIII
-SELECT termid, docid, pos, field FROM fts_main_documents.terms
+query III
+SELECT termid, docid, field FROM fts_main_documents.terms
 ----
-1	1	1	body
-1	1	2	body
-1	1	3	body
-2	2	1	body
-2	2	2	body
-2	2	3	body
-2	2	4	body
-3	3	1	body
-3	3	2	body
-3	3	3	body
-3	3	4	body
-3	3	5	body
+1	1	body
+1	1	body
+1	1	body
+2	2	body
+2	2	body
+2	2	body
+2	2	body
+3	3	body
+3	3	body
+3	3	body
+3	3	body
+3	3	body
 
 query III
 SELECT name, docid, len FROM fts_main_documents.docs
