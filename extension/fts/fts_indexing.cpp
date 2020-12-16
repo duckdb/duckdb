@@ -205,7 +205,7 @@ static string indexing_script(string input_schema, string input_table, string in
 	vector<string> field_values;
 	vector<string> tokenize_fields;
 	for (idx_t i = 0; i < input_values.size(); i++) {
-		field_values.push_back(StringUtil::Format("(%i, '%s')"));
+		field_values.push_back(StringUtil::Format("(%i, '%s')", i, input_values[i]));
         tokenize_fields.push_back(StringUtil::Replace(tokenize_field_query, "%input_value%", input_values[i]));
 	}
     result = StringUtil::Replace(result, "%field_values%", StringUtil::Join(field_values, ", "));
@@ -219,8 +219,6 @@ static string indexing_script(string input_schema, string input_table, string in
 	result = StringUtil::Replace(result, "%input_table%", input_table);
 	result = StringUtil::Replace(result, "%input_id%", input_id);
     result = StringUtil::Replace(result, "%stemmer%", stemmer);
-
-	printf(result.c_str());
 
 	return result;
 }
