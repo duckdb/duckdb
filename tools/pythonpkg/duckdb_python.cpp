@@ -41,7 +41,7 @@ struct RegularConvert {
 
 struct TimestampConvert {
 	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(timestamp_t val) {
-		return val / 1000.0;
+		return val * 1000;
 	}
 
 	template<class NUMPY_T> static NUMPY_T null_value() {
@@ -51,7 +51,7 @@ struct TimestampConvert {
 
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(date_t val) {
-		return Date::Epoch(val);
+		return Date::Epoch(val) * 1000000;
 	}
 
 	template<class NUMPY_T> static NUMPY_T null_value() {
@@ -113,15 +113,24 @@ static void ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *tar
 	auto src_ptr = FlatVector::GetData<DUCKDB_T>(source);
 	auto out_ptr = (NUMPY_T *) target_data;
 	auto &nullmask = FlatVector::Nullmask(source);
-	for (idx_t i = 0; i < count; i++) {
-		idx_t offset = target_offset + i;
-		if (nullmask[i]) {
-			target_mask[offset] = true;
-			out_ptr[offset] = CONVERT::template null_value<NUMPY_T>();
-		} else {
+	if (nullmask.any()) {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t offset = target_offset + i;
+			if (nullmask[i]) {
+				target_mask[offset] = true;
+				out_ptr[offset] = CONVERT::template null_value<NUMPY_T>();
+			} else {
+				out_ptr[offset] = CONVERT::template convert_value<DUCKDB_T, NUMPY_T>(src_ptr[i]);
+				target_mask[offset] = false;
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t offset = target_offset + i;
 			out_ptr[offset] = CONVERT::template convert_value<DUCKDB_T, NUMPY_T>(src_ptr[i]);
 			target_mask[offset] = false;
 		}
+
 	}
 }
 
@@ -287,10 +296,10 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 		dtype = "float64";
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		dtype = "datetime64[ms]";
+		dtype = "datetime64[ns]";
 		break;
 	case LogicalTypeId::DATE:
-		dtype = "datetime64[s]";
+		dtype = "datetime64[ns]";
 		break;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::VARCHAR:
@@ -976,13 +985,21 @@ struct DuckDBPyResult {
 		}
 
 		NumpyResultConversion conversion(result->types, initial_capacity);
-		while(true) {
-			auto chunk = result->Fetch();
-			if (!chunk || chunk->size() == 0) {
-				// finished
-				break;
+		if (result->type == QueryResultType::MATERIALIZED_RESULT) {
+			auto &materialized = (MaterializedQueryResult &) *result;
+			for (auto &chunk : materialized.collection.Chunks()) {
+				conversion.Append(*chunk);
 			}
-			conversion.Append(*chunk);
+			materialized.collection.Reset();
+		} else {
+			while(true) {
+				auto chunk = result->Fetch();
+				if (!chunk || chunk->size() == 0) {
+					// finished
+					break;
+				}
+				conversion.Append(*chunk);
+			}
 		}
 
 		// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays
