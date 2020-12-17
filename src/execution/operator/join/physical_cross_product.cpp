@@ -5,6 +5,37 @@
 namespace duckdb {
 using namespace std;
 
+PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
+                                           unique_ptr<PhysicalOperator> right)
+    : PhysicalSink(PhysicalOperatorType::CROSS_PRODUCT, move(types)) {
+	children.push_back(move(left));
+	children.push_back(move(right));
+}
+
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class CrossProductGlobalState : public GlobalOperatorState {
+public:
+	CrossProductGlobalState() {
+	}
+	ChunkCollection rhs_materialized;
+};
+
+unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientContext &context) {
+    auto state = make_unique<CrossProductGlobalState>();
+	return move(state);
+}
+
+void PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+                                DataChunk &input) {
+	auto &sink = (CrossProductGlobalState &)state;
+	sink.rhs_materialized.Append(input);
+}
+
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
 class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalCrossProductOperatorState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right)
@@ -17,38 +48,24 @@ public:
 	ChunkCollection right_data;
 };
 
-PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-                                           unique_ptr<PhysicalOperator> right)
-    : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, move(types)) {
-	children.push_back(move(left));
-	children.push_back(move(right));
+unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
+	return make_unique<PhysicalCrossProductOperatorState>(*this, children[0].get(), children[1].get());
 }
 
 void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                             PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
-	// first we fully materialize the right child, if we haven't done that yet
-	if (state->right_data.ColumnCount() == 0) {
-		auto right_state = children[1]->GetOperatorState();
-		auto types = children[1]->GetTypes();
+    auto &sink = (CrossProductGlobalState &)*sink_state;
 
-		DataChunk new_chunk;
-		new_chunk.Initialize(types);
-		do {
-			children[1]->GetChunk(context, new_chunk, right_state.get());
-			if (new_chunk.size() == 0) {
-				break;
-			}
-			state->right_data.Append(new_chunk);
-		} while (new_chunk.size() > 0);
-
+    if (state->right_data.ColumnCount() == 0) {
+		state->right_data.Append(sink.rhs_materialized);
 		if (state->right_data.Count() == 0) {
 			return;
 		}
-		state->left_position = 0;
+        state->left_position = 0;
 		state->right_position = 0;
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		state->child_chunk.Normalify();
+        children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+        state->child_chunk.Normalify();
 	}
 
 	if (state->left_position >= state->child_chunk.size()) {
@@ -84,10 +101,6 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 			state->child_chunk.Normalify();
 		}
 	}
-}
-
-unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
-	return make_unique<PhysicalCrossProductOperatorState>(*this, children[0].get(), children[1].get());
 }
 
 } // namespace duckdb

@@ -101,6 +101,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::STREAMING_SAMPLE:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
@@ -191,6 +192,7 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::HASH_JOIN: {
 		// schedule build side of the join
 		if (ScheduleOperator(sink->children[1].get())) {
