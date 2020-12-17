@@ -12,8 +12,6 @@
 
 namespace duckdb {
 
-typedef unsigned char sb_symbol;
-
 class FTSExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
