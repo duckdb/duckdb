@@ -1,6 +1,8 @@
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
 
@@ -11,52 +13,12 @@
 namespace duckdb {
 using namespace std;
 
-// string format is hh:mm:ssZ
-// Z is optional
+// string format is hh:mm:ss.microsecondsZ
+// microseconds and Z are optional
 // ISO 8601
 
-// Taken from MonetDB mtime.c
-#define DD_TIME(h, m, s, x)                                                                                            \
-	((h) >= 0 && (h) < 24 && (m) >= 0 && (m) < 60 && (s) >= 0 && (s) <= 60 && (x) >= 0 && (x) < 1000)
-
-static dtime_t time_to_number(int hour, int min, int sec, int msec) {
-	if (!DD_TIME(hour, min, sec, msec)) {
-		throw ParserException("Invalid time hour=%d, min=%d, sec=%d, msec=%d", hour, min, sec, msec);
-	}
-	return (dtime_t)(((((hour * 60) + min) * 60) + sec) * 1000 + msec);
-}
-
-static void number_to_time(dtime_t n, int32_t &hour, int32_t &min, int32_t &sec, int32_t &msec) {
-	int h, m, s, ms;
-
-	h = n / 3600000;
-	n -= h * 3600000;
-	m = n / 60000;
-	n -= m * 60000;
-	s = n / 1000;
-	n -= s * 1000;
-	ms = n;
-
-	hour = h;
-	min = m;
-	sec = s;
-	msec = ms;
-}
-
-// TODO this is duplicated in date.cpp
-static bool ParseDoubleDigit2(const char *buf, idx_t len, idx_t &pos, int32_t &result) {
-	if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
-		result = buf[pos++] - '0';
-		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
-			result = (buf[pos++] - '0') + result * 10;
-		}
-		return true;
-	}
-	return false;
-}
-
 bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
-	int32_t hour = -1, min = -1, sec = -1, msec = -1;
+	int32_t hour = -1, min = -1, sec = -1, micros = -1;
 	pos = 0;
 
 	if (len == 0) {
@@ -78,10 +40,10 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		return false;
 	}
 
-	if (!ParseDoubleDigit2(buf, len, pos, hour)) {
+	if (!Date::ParseDoubleDigit(buf, len, pos, hour)) {
 		return false;
 	}
-	if (hour < 0 || hour > 24) {
+	if (hour < 0 || hour >= 24) {
 		return false;
 	}
 
@@ -96,10 +58,10 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		return false;
 	}
 
-	if (!ParseDoubleDigit2(buf, len, pos, min)) {
+	if (!Date::ParseDoubleDigit(buf, len, pos, min)) {
 		return false;
 	}
-	if (min < 0 || min > 60) {
+	if (min < 0 || min >= 60) {
 		return false;
 	}
 
@@ -111,19 +73,20 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		return false;
 	}
 
-	if (!ParseDoubleDigit2(buf, len, pos, sec)) {
+	if (!Date::ParseDoubleDigit(buf, len, pos, sec)) {
 		return false;
 	}
 	if (sec < 0 || sec > 60) {
 		return false;
 	}
 
-	msec = 0;
-	if (pos < len && buf[pos++] == '.') { // we expect some milliseconds
-		uint8_t mult = 100;
+	micros = 0;
+	if (pos < len && buf[pos++] == '.') {
+		// we expect some microseconds
+		int32_t mult = 100000;
 		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
 			if (mult > 0) {
-				msec += (buf[pos] - '0') * mult;
+				micros += (buf[pos] - '0') * mult;
 			}
 		}
 	}
@@ -140,7 +103,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		}
 	}
 
-	result = Time::FromTime(hour, min, sec, msec);
+	result = Time::FromTime(hour, min, sec, micros);
 	return true;
 }
 
@@ -150,7 +113,7 @@ dtime_t Time::FromCString(const char *buf, idx_t len, bool strict) {
 	if (!TryConvertTime(buf, len, pos, result, strict)) {
 		// last chance, check if we can parse as timestamp
 		if (!strict) {
-			return Timestamp::GetTime(Timestamp::FromString(buf));
+			return Timestamp::GetTime(Timestamp::FromCString(buf, len));
 		}
 		throw ConversionException("time field value out of range: \"%s\", "
 		                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
@@ -164,30 +127,54 @@ dtime_t Time::FromString(string str, bool strict) {
 }
 
 string Time::ToString(dtime_t time) {
-	int32_t hour, min, sec, msec;
-	number_to_time(time, hour, min, sec, msec);
+	int32_t time_units[4];
+	Time::Convert(time, time_units[0], time_units[1], time_units[2], time_units[3]);
 
-	if (msec > 0) {
-		return StringUtil::Format("%02d:%02d:%02d.%03d", hour, min, sec, msec);
-	} else {
-		return StringUtil::Format("%02d:%02d:%02d", hour, min, sec);
+	char micro_buffer[6];
+	auto length = TimeToStringCast::Length(time_units, micro_buffer);
+	auto buffer = unique_ptr<char[]>(new char[length]);
+	TimeToStringCast::Format(buffer.get(), length, time_units, micro_buffer);
+	return string(buffer.get(), length);
+}
+
+string Time::Format(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
+	return ToString(Time::FromTime(hour, minute, second, microseconds));
+}
+
+dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
+	dtime_t result;
+	result = hour;                                            // hours
+	result = result * Interval::MINS_PER_HOUR + minute;        // hours -> minutes
+	result = result * Interval::SECS_PER_MINUTE + second;      // minutes -> seconds
+	result = result * Interval::MICROS_PER_SEC + microseconds; // seconds -> microseconds
+	return result;
+}
+
+bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
+	if (hour < 0 || hour >= 24) {
+		return false;
 	}
+	if (minute < 0 || minute >= 60) {
+		return false;
+	}
+	if (second < 0 || second > 60) {
+		return false;
+	}
+	if (microseconds < 0 || microseconds > 1000000) {
+		return false;
+	}
+	return true;
 }
 
-string Time::Format(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
-	return ToString(Time::FromTime(hour, minute, second, milisecond));
-}
-
-dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
-	return time_to_number(hour, minute, second, milisecond);
-}
-
-bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
-	return DD_TIME(hour, minute, second, milisecond);
-}
-
-void Time::Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec, int32_t &out_msec) {
-	number_to_time(time, out_hour, out_min, out_sec, out_msec);
+void Time::Convert(dtime_t time, int32_t &hour, int32_t &min, int32_t &sec, int32_t &micros) {
+	hour = int32_t(time / Interval::MICROS_PER_HOUR);
+	time -= dtime_t(hour) * Interval::MICROS_PER_HOUR;
+	min = int32_t(time / Interval::MICROS_PER_MINUTE);
+	time -= dtime_t(min) * Interval::MICROS_PER_MINUTE;
+	sec = int32_t(time / Interval::MICROS_PER_SEC);
+	time -= dtime_t(sec) * Interval::MICROS_PER_SEC;
+	micros = int32_t(time);
+	D_ASSERT(IsValidTime(hour, min, sec, micros));
 }
 
 } // namespace duckdb

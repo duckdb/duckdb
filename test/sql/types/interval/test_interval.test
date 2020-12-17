@@ -26,29 +26,29 @@ SELECT INTERVAL '2Y 1 M';
 query T
 SELECT INTERVAL '2Y 1 month 1 M 3S 20mS';
 ----
-2 years 1 month 00:01:03.020
+2 years 1 month 00:01:03.02
 
 query T
 SELECT INTERVAL '2Y 1 month 1M 3S 20mS'::VARCHAR;
 ----
-2 years 1 month 00:01:03.020
+2 years 1 month 00:01:03.02
 
 # -2 years +4 days +one minute 3 seconds 20 milliseconds
 query T
 SELECT INTERVAL '-2Y 4 days 1 MinUteS 3S 20mS';
 ----
--2 years 4 days 00:01:03.020
+-2 years 4 days 00:01:03.02
 
 query T
 SELECT INTERVAL '-2Y 4 days 1 MinUteS 3S 20mS'::VARCHAR;
 ----
--2 years 4 days 00:01:03.020
+-2 years 4 days 00:01:03.02
 
 # test ago usage
 query T
 SELECT INTERVAL '2Y 4 days 1 MinUteS 3S 20mS ago'::VARCHAR;
 ----
--2 years -4 days -00:01:03.020
+-2 years -4 days -00:01:03.02
 
 # months and hours, with optional @
 query T
@@ -190,7 +190,7 @@ SELECT INTERVAL '100000000000000000days';
 statement error
 SELECT INTERVAL '1294967296days 1294967296days';
 
-# overflow in msecs
+# overflow in micro seconds
 statement error
 SELECT INTERVAL '100000000000000000000msecs';
 
@@ -198,22 +198,32 @@ statement error
 SELECT INTERVAL '100000000000000000hours';
 
 query T
-SELECT INTERVAL '2562047788000 hours';
+SELECT INTERVAL '2562047788 hours';
 ----
-2562047788000:00:00
+2562047788:00:00
 
 statement error
-SELECT INTERVAL '2562047788000 hours 2562047788000 hours';
+SELECT INTERVAL '2562047788 hours 2562047788 hours';
 
 query T
-SELECT INTERVAL '-9223372036854775807msecs';
+SELECT INTERVAL '-9223372036854775msecs';
 ----
--2562047788015:12:55.807
+-2562047788:00:54.775
 
 query T
-SELECT INTERVAL '9223372036854775807msecs';
+SELECT INTERVAL '9223372036854775msecs';
 ----
-2562047788015:12:55.807
+2562047788:00:54.775
+
+query T
+SELECT INTERVAL '-2147483647 months -2147483647 days -9223372036854775msecs';
+----
+-178956970 years -7 months -2147483647 days -2562047788:00:54.775
+
+query T
+SELECT INTERVAL '2147483647 months 2147483647 days 9223372036854775msecs';
+----
+178956970 years 7 months 2147483647 days 2562047788:00:54.775
 
 statement error
 SELECT INTERVAL '9223372036854775810msecs';

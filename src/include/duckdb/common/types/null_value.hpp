@@ -48,7 +48,7 @@ template <> inline interval_t NullValue() {
 	interval_t null_value;
 	null_value.days = NullValue<int32_t>();
 	null_value.months = NullValue<int32_t>();
-	null_value.msecs = NullValue<int64_t>();
+	null_value.micros = NullValue<int64_t>();
 	return null_value;
 }
 
@@ -81,7 +81,7 @@ template <> inline bool IsNullValue(string_t value) {
 
 template <> inline bool IsNullValue(interval_t value) {
 	return value.days == NullValue<int32_t>() && value.months == NullValue<int32_t>() &&
-	       value.msecs == NullValue<int64_t>();
+	       value.micros == NullValue<int64_t>();
 }
 
 template <> inline bool IsNullValue(char *value) {

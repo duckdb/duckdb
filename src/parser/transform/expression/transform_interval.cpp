@@ -44,6 +44,8 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	constexpr int HOUR_MASK = 1 << 10;
 	constexpr int MINUTE_MASK = 1 << 11;
 	constexpr int SECOND_MASK = 1 << 12;
+	constexpr int MILLISECOND_MASK = 1 << 13;
+	constexpr int MICROSECOND_MASK = 1 << 14;
 
 	// we need to check certain combinations
 	// because certain interval masks (e.g. INTERVAL '10' HOURS TO DAYS) set multiple bits
@@ -96,6 +98,14 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	} else if (mask & SECOND_MASK) {
 		// SECOND
 		fname = "to_seconds";
+		target_type = LogicalType::BIGINT;
+	} else if (mask & MILLISECOND_MASK) {
+		// MILLISECOND
+		fname = "to_milliseconds";
+		target_type = LogicalType::BIGINT;
+	} else if (mask & MICROSECOND_MASK) {
+		// SECOND
+		fname = "to_microseconds";
 		target_type = LogicalType::BIGINT;
 	} else {
 		throw ParserException("Unsupported interval post-fix");

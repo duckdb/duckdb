@@ -107,3 +107,8 @@ SELECT EXTRACT(milliseconds FROM i) FROM dates
 0
 NULL
 
+query I
+SELECT EXTRACT(microsecond FROM i) FROM dates
+----
+0
+NULL

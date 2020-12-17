@@ -14,6 +14,10 @@ def open_utf8(fpath, flags):
     else:
         return open(fpath, flags, encoding="utf8")
 
+extension_list = ""
+for ext in extensions:
+    extension_list += ' -DBUILD_{}_EXTENSION'.format(ext.upper())
+
 # check if we are doing a build from an existing DuckDB installation
 if 'DUCKDB_R_BINDIR' in os.environ and 'DUCKDB_R_CFLAGS' in os.environ and 'DUCKDB_R_LIBS' in os.environ:
     existing_duckdb_dir = os.environ['DUCKDB_R_BINDIR']
@@ -25,6 +29,7 @@ if 'DUCKDB_R_BINDIR' in os.environ and 'DUCKDB_R_CFLAGS' in os.environ and 'DUCK
         text = f.read()
 
     compile_flags += package_build.include_flags(extensions)
+    compile_flags += extension_list
 
     # find libraries
     result_libs = package_build.get_libraries(existing_duckdb_dir, libraries, extensions)
@@ -65,9 +70,7 @@ object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in duckdb_sources])
 # include list
 include_list = ' '.join(['-I' + 'duckdb/' + x for x in include_list])
 include_list += ' -Iduckdb'
-
-for ext in extensions:
-    include_list += ' -DBUILD_{}_EXTENSION'.format(ext.upper())
+include_list += extension_list
 
 # read Makevars.in and replace the {{ SOURCES }} and {{ INCLUDES }} macros
 with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:

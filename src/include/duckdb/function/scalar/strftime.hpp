@@ -76,10 +76,10 @@ protected:
 };
 
 struct StrfTimeFormat : public StrTimeFormat {
-	idx_t GetLength(date_t date, time_t time);
+	idx_t GetLength(date_t date, dtime_t time);
 
 	void FormatString(date_t date, int32_t data[7], char *target);
-	void FormatString(date_t date, time_t time, char *target);
+	void FormatString(date_t date, dtime_t time, char *target);
 
 protected:
 	//! The variable-length specifiers. To determine total string size, these need to be checked.
@@ -89,7 +89,7 @@ protected:
 	vector<bool> is_date_specifier;
 
 	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
-	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, time_t time);
+	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time);
 	char *WriteString(char *target, string_t &str);
 	char *Write2(char *target, uint8_t value);
 	char *WritePadded2(char *target, int32_t value);

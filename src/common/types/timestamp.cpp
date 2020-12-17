@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -29,7 +30,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	}
 	if (pos == len) {
 		// no time: only a date
-		return (uint64_t)date << 32;
+		return Timestamp::FromDatetime(date, 0);
 	}
 	// try to parse a time field
 	if (str[pos] == ' ' || str[pos] == 'T') {
@@ -57,8 +58,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 			                          string(str, len));
 		}
 	}
-	// use uint here because otherwise the shift is undefined
-	return ((uint64_t)date << 32 | (int32_t)time);
+	return Timestamp::FromDatetime(date, time);
 }
 
 timestamp_t Timestamp::FromString(string str) {
@@ -66,24 +66,29 @@ timestamp_t Timestamp::FromString(string str) {
 }
 
 string Timestamp::ToString(timestamp_t timestamp) {
-	return Date::ToString(GetDate(timestamp)) + " " + Time::ToString(GetTime(timestamp));
+	date_t date;
+	dtime_t time;
+	Timestamp::Convert(timestamp, date, time);
+	return Date::ToString(date) + " " + Time::ToString(time);
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
-	return (date_t)(((uint64_t)timestamp) >> 32);
+	return (timestamp + (timestamp < 0)) / Interval::MICROS_PER_DAY - (timestamp < 0);
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
-	return (dtime_t)(timestamp & 0xFFFFFFFF);
+	date_t date = Timestamp::GetDate(timestamp);
+	return timestamp - (int64_t(date) * int64_t(Interval::MICROS_PER_DAY));
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
-	return ((uint64_t)date << 32 | (int64_t)time);
+	return date * Interval::MICROS_PER_DAY + time;
 }
 
-void Timestamp::Convert(timestamp_t date, date_t &out_date, dtime_t &out_time) {
-	out_date = GetDate(date);
-	out_time = GetTime(date);
+void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {
+	out_date = GetDate(timestamp);
+	out_time = timestamp - (int64_t(out_date) * int64_t(Interval::MICROS_PER_DAY));
+	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
@@ -93,41 +98,36 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	return Timestamp::FromEpochMs(epoch_ms);
 }
 
+timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
+	return sec * Interval::MICROS_PER_SEC;
+}
+
 timestamp_t Timestamp::FromEpochMs(int64_t ms) {
-	auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
-	date_t date = Date::EpochToDate(ms / 1000);
-	dtime_t time = (dtime_t)(ms % ms_per_day);
-	return Timestamp::FromDatetime(date, time);
+	return ms * Interval::MICROS_PER_MSEC;
 }
 
 timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
-	return Timestamp::FromEpochMs(micros / 1000);
+	return micros;
 }
 
-int64_t Timestamp::GetEpoch(timestamp_t timestamp) {
-	return Date::Epoch(Timestamp::GetDate(timestamp)) + (int64_t)(Timestamp::GetTime(timestamp) / 1000);
+timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
+	return ns / 1000;
 }
 
-int64_t Timestamp::GetMilliseconds(timestamp_t timestamp) {
-	int n = Timestamp::GetTime(timestamp);
-	int m = n / 60000;
-	return n - m * 60000;
+int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {
+	return timestamp / Interval::MICROS_PER_SEC;
 }
 
-int64_t Timestamp::GetSeconds(timestamp_t timestamp) {
-	int n = Timestamp::GetTime(timestamp);
-	int m = n / 60000;
-	return (n - m * 60000) / 1000;
+int64_t Timestamp::GetEpochMs(timestamp_t timestamp) {
+	return timestamp / Interval::MICROS_PER_MSEC;
 }
 
-int64_t Timestamp::GetMinutes(timestamp_t timestamp) {
-	int n = Timestamp::GetTime(timestamp);
-	int h = n / 3600000;
-	return (n - h * 3600000) / 60000;
+int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
+	return timestamp;
 }
 
-int64_t Timestamp::GetHours(timestamp_t timestamp) {
-	return Timestamp::GetTime(timestamp) / 3600000;
+int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
+	return timestamp * 1000;
 }
 
 } // namespace duckdb
