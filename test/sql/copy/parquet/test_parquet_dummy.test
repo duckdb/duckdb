@@ -1,12 +1,12 @@
-# name: test/sql/copy/parquet/test_parquet_scan.test
+# name: test/sql/copy/parquet/test_parquet_dummy.test
 # description: Test basic parquet reading
 # group: [parquet]
 
 require parquet
 require vector_size 512
 
-statement ok
-PRAGMA enable_verification
+#statement ok
+#PRAGMA enable_verification
 
 query I
 SELECT l_orderkey FROM parquet_scan('test/sql/copy/parquet/data/lineitem-top10000.gzip.parquet') order by l_orderkey offset 9990  limit 10
@@ -21,3 +21,18 @@ SELECT l_orderkey FROM parquet_scan('test/sql/copy/parquet/data/lineitem-top1000
 10051
 10051
 10052
+
+
+query I
+SELECT trim(l_comment) FROM parquet_scan('test/sql/copy/parquet/data/lineitem-top10000.gzip.parquet') order by l_orderkey offset 9990  limit 10
+----
+ses sleep along the furiously unusual shea
+ests haggl
+bold, regular foxe
+he ideas detect slyly dur
+st furiously final requ
+nal packages sleep along the r
+final ideas sle
+ully even requests are fi
+eaves are after the blithely ev
+ove the blithely final a

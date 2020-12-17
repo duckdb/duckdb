@@ -8,6 +8,7 @@
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -33,10 +34,6 @@ public:
 			// this assumes the data pages follow the dict pages directly.
 			chunk_read_offset = chunk.meta_data.dictionary_page_offset;
 		}
-		chunk_len = chunk.meta_data.total_compressed_size;
-
-		auto trans = (DuckdbFileTransport *)protocol.getTransport().get();
-		trans->SetLocation(chunk_read_offset);
 	};
 
 	virtual ~ColumnReader();
@@ -50,23 +47,21 @@ public:
 protected:
 	virtual void Plain(ByteBuffer *data, idx_t num_values, idx_t result_offset, Vector &result) = 0;
 
-    virtual void Dictionary(ByteBuffer *data, idx_t num_entries) = 0;
+	virtual void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) = 0;
 
 	virtual void Offsets(uint32_t *offsets, idx_t num_values, idx_t result_offset, Vector &result) = 0;
 
 	LogicalType type;
 	const parquet::format::ColumnChunk &chunk;
+	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 
 private:
 	apache::thrift::protocol::TProtocol &protocol;
 	idx_t rows_available;
 	idx_t chunk_read_offset;
-	idx_t chunk_len;
-	ResizeableBuffer unpack_buffer;
-	ResizeableBuffer read_buffer;
 	ResizeableBuffer offset_buffer;
+	shared_ptr<ResizeableBuffer> block;
 
-	ByteBuffer *col_data_buf;
 	unique_ptr<RleBpDecoder> dict_decoder;
 	unique_ptr<RleBpDecoder> defined_decoder;
 };
@@ -113,15 +108,14 @@ public:
 		return templated_get_numeric_stats<transform_statistics_plain<VALUE_TYPE>>(type, chunk.meta_data.statistics);
 	}
 
-	void Dictionary(ByteBuffer *data, idx_t num_entries) override {
-		dict_buf.resize(num_entries * GetTypeIdSize(type.InternalType()));
-		data->copy_to(dict_buf.ptr, dict_buf.len); // TODO HMMM
+	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override {
+		dict = move(data);
 	}
 
 	// TODO pass NULL mask / skip mask into those functions
 	void Offsets(uint32_t *offsets, uint64_t num_values, idx_t result_offset, Vector &result) override {
 		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto dict_ptr = (VALUE_TYPE *)dict_buf.ptr;
+		auto dict_ptr = (VALUE_TYPE *)dict->ptr;
 
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
 			result_ptr[row_idx + result_offset] = dict_ptr[offsets[row_idx]];
@@ -140,7 +134,7 @@ public:
 	}
 
 private:
-	ResizeableBuffer dict_buf;
+	shared_ptr<ByteBuffer> dict;
 };
 
 class StringColumnReader : public ColumnReader {
@@ -149,42 +143,19 @@ public:
 	StringColumnReader(LogicalType type_p, const parquet::format::ColumnChunk &chunk_p, TProtocol &protocol_p)
 	    : ColumnReader(type_p, chunk_p, protocol_p){};
 
-	unique_ptr<BaseStatistics> GetStatistics() override {
-		if (!chunk.__isset.meta_data || !chunk.meta_data.__isset.statistics) {
-			return nullptr;
-		}
-		// FIXME   return templated_get_numeric_stats<transform_statistics_plain<VALUE_TYPE>>(type,
-		// chunk.meta_data.statistics);
-	}
-
-	void Dictionary(ByteBuffer *data, idx_t num_entries) override {
-		//        dict_buf.resize(num_entries * GetTypeIdSize(type.InternalType()));
-		//        data->copy_to(dict_buf.ptr, dict_buf.len); // TODO HMMM
-	}
+	unique_ptr<BaseStatistics> GetStatistics() override;
+	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override;
 
 	// TODO pass NULL mask / skip mask into those functions
-	void Offsets(uint32_t *offsets, uint64_t num_values, idx_t result_offset, Vector &result) override {
-		//        auto result_ptr = FlatVector::GetData<string_t>(result);
-		//        auto dict_ptr = (VALUE_TYPE *)dict_buf.ptr;
-		//
-		//        for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-		//            result_ptr[row_idx + result_offset] = dict_ptr[offsets[row_idx]];
-		//        }
-	}
+	void Offsets(uint32_t *offsets, uint64_t num_values, idx_t result_offset, Vector &result) override;
 
-	void Plain(ByteBuffer *data, uint64_t num_values, idx_t result_offset, Vector &result) override {
-		//        auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		//        for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-		//            result_ptr[row_idx + result_offset] = data->read<VALUE_TYPE>();
-		//        }
-	}
+	void Plain(ByteBuffer *data, uint64_t num_values, idx_t result_offset, Vector &result) override;
 
-	void Skip(idx_t num_values) override {
-		D_ASSERT(0);
-	}
+	void Skip(idx_t num_values) override;
 
 private:
-	ResizeableBuffer dict_buf;
+	shared_ptr<ByteBuffer> dict_page;
+	unique_ptr<string_t[]> dict_strings;
 };
 
 } // namespace duckdb

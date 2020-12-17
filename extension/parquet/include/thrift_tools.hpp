@@ -25,6 +25,10 @@ public:
 		location = location_p;
 	}
 
+	idx_t GetLocation() {
+		return location;
+	}
+
 private:
 	unique_ptr<duckdb::FileHandle> handle;
 	duckdb::idx_t location;
