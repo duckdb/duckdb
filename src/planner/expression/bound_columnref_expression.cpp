@@ -3,7 +3,6 @@
 #include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundColumnRefExpression::BoundColumnRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, move(type)), binding(binding),
@@ -35,7 +34,7 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_) const {
 }
 
 string BoundColumnRefExpression::ToString() const {
-	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
+	return "#[" + std::to_string(binding.table_index) + "." + std::to_string(binding.column_index) + "]";
 }
 
 } // namespace duckdb

@@ -18,8 +18,6 @@
 #include <cstring>
 #include <fstream>
 
-using namespace std;
-
 namespace duckdb {
 
 static char is_newline(char c) {
@@ -135,7 +133,7 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
 }
 
 BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types,
-                                     unique_ptr<istream> ssource)
+                                     unique_ptr<std::istream> ssource)
     : options(options), source(move(ssource)), buffer_size(0), position(0), start(0) {
 	Initialize(requested_types);
 }
@@ -161,17 +159,17 @@ void BufferedCSVReader::PrepareComplexParser() {
 	quote_search = TextSearchShiftArray(options.quote);
 }
 
-unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
+unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
 	if (!FileSystem::GetFileSystem(context).FileExists(options.file_path)) {
 		throw IOException("File \"%s\" not found", options.file_path.c_str());
 	}
-	unique_ptr<istream> result;
+	unique_ptr<std::istream> result;
 	// decide based on the extension which stream to use
 	if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
 		result = make_unique<GzipStream>(options.file_path);
 		plain_file_source = false;
 	} else {
-		auto csv_local = make_unique<ifstream>();
+		auto csv_local = make_unique<std::ifstream>();
 		csv_local->open(options.file_path);
 		result = move(csv_local);
 
@@ -309,7 +307,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 		// seek backwards from the end in last chunk and hope to catch the end of the file
 		// TODO: actually it would be good to make sure that the end of file is being reached, because
 		// messy end-lines are quite common. For this case, however, we first need a skip_end detection anyways.
-		source->seekg(-streamoff(bytes_in_chunk), source->end);
+		source->seekg(-std::streamoff(bytes_in_chunk), source->end);
 
 		// estimate linenr
 		linenr = (idx_t)round((file_size - bytes_in_chunk) / bytes_per_line_avg);

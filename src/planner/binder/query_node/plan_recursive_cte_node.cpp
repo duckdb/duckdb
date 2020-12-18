@@ -6,7 +6,6 @@
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	// Generate the logical plan for the left and right sides of the set operation

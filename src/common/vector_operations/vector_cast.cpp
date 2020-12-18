@@ -6,7 +6,6 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result, idx_t count) {
 	D_ASSERT(result.type.InternalType() == PhysicalType::VARCHAR);

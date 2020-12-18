@@ -3,7 +3,6 @@
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Exception::Exception(string message) : std::exception(), type(ExceptionType::INVALID) {
 	exception_message_ = message;

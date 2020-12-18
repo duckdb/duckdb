@@ -4,7 +4,6 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 hash_t ValueOperations::Hash(const Value &op) {
 	if (op.is_null) {

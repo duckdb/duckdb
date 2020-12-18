@@ -3,15 +3,13 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
 
 string JoinRelationSet::ToString() const {
 	string result = "[";
-	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return to_string(relation); });
+	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return std::to_string(relation); });
 	result += "]";
 	return result;
 }
@@ -73,7 +71,7 @@ JoinRelationSet *JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &b
 	for (auto &entry : bindings) {
 		relations[count++] = entry;
 	}
-	sort(relations.get(), relations.get() + count);
+	std::sort(relations.get(), relations.get() + count);
 	return GetJoinRelation(move(relations), count);
 }
 
@@ -144,4 +142,4 @@ JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinR
 	return GetJoinRelation(move(relations), count);
 }
 
-}
+} // namespace duckdb

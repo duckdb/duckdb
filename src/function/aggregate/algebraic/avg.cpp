@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class T> struct avg_state_t {
 	T value;

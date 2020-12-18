@@ -4,7 +4,6 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
 	auto root = make_unique_base<LogicalOperator, LogicalDummyScan>(0);

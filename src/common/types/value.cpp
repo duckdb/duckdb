@@ -24,7 +24,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
@@ -299,7 +298,8 @@ Value Value::TIMESTAMP(date_t date, dtime_t time) {
 	return val;
 }
 
-Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec, int32_t micros) {
+Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
+                       int32_t micros) {
 	auto val = Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, micros));
 	val.type_ = LogicalType::TIMESTAMP;
 	return val;
@@ -567,19 +567,19 @@ string Value::ToString() const {
 	case LogicalTypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
 	case LogicalTypeId::TINYINT:
-		return to_string(value_.tinyint);
+		return std::to_string(value_.tinyint);
 	case LogicalTypeId::SMALLINT:
-		return to_string(value_.smallint);
+		return std::to_string(value_.smallint);
 	case LogicalTypeId::INTEGER:
-		return to_string(value_.integer);
+		return std::to_string(value_.integer);
 	case LogicalTypeId::BIGINT:
-		return to_string(value_.bigint);
+		return std::to_string(value_.bigint);
 	case LogicalTypeId::HUGEINT:
 		return Hugeint::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
-		return to_string(value_.float_);
+		return std::to_string(value_.float_);
 	case LogicalTypeId::DOUBLE:
-		return to_string(value_.double_);
+		return std::to_string(value_.double_);
 	case LogicalTypeId::DECIMAL: {
 		auto internal_type = type_.InternalType();
 		if (internal_type == PhysicalType::INT16) {
@@ -606,9 +606,9 @@ string Value::ToString() const {
 	case LogicalTypeId::BLOB:
 		return Blob::ToString(string_t(str_value));
 	case LogicalTypeId::POINTER:
-		return to_string(value_.pointer);
+		return std::to_string(value_.pointer);
 	case LogicalTypeId::HASH:
-		return to_string(value_.hash);
+		return std::to_string(value_.hash);
 	case LogicalTypeId::STRUCT: {
 		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {

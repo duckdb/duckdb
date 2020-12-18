@@ -4,8 +4,6 @@
 #include <ctype.h>
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 static string_t left_scalar_function(Vector &result, const string_t str, int64_t pos) {

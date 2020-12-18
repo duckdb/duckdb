@@ -8,7 +8,6 @@
 #include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
-using namespace std;
 
 struct HashOp {
 	template <class T> static inline hash_t Operation(T input, bool is_null) {

@@ -4,8 +4,6 @@
 #include "fmt/format.h"
 #include "fmt/printf.h"
 
-using namespace std;
-
 namespace duckdb {
 
 struct FMTPrintf {

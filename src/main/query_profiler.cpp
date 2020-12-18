@@ -15,8 +15,6 @@
 #include <utility>
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
@@ -159,7 +157,7 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 }
 
 OperatorProfiler::OperatorProfiler(bool enabled_) : enabled(enabled_) {
-	execution_stack = stack<PhysicalOperator *>();
+	execution_stack = std::stack<PhysicalOperator *>();
 }
 
 void OperatorProfiler::StartOperator(PhysicalOperator *phys_op) {
@@ -335,7 +333,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << "{\n";
 	ss << string(depth * 3, ' ') << "\"name\": \"" + node.name + "\",\n";
 	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
-	ss << string(depth * 3, ' ') << "\"cardinality\":" + to_string(node.info.elements) + ",\n";
+	ss << string(depth * 3, ' ') << "\"cardinality\":" + std::to_string(node.info.elements) + ",\n";
 	ss << string(depth * 3, ' ') << "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	ss << string(depth * 3, ' ') << "\"children\": [";
 	if (node.children.size() == 0) {
@@ -366,7 +364,7 @@ string QueryProfiler::ToJSON() const {
 	}
 	std::stringstream ss;
 	ss << "{\n";
-	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
+	ss << "   \"result\": " + std::to_string(main_query.Elapsed()) + ",\n";
 	// print the phase timings
 	ss << "   \"timings\": {\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
@@ -377,7 +375,7 @@ string QueryProfiler::ToJSON() const {
 		ss << "      \"";
 		ss << ordered_phase_timings[i].first;
 		ss << "\": ";
-		ss << to_string(ordered_phase_timings[i].second);
+		ss << std::to_string(ordered_phase_timings[i].second);
 	}
 	ss << "\n   },\n";
 	// recursively print the physical operator tree

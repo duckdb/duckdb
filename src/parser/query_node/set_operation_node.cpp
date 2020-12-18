@@ -1,7 +1,6 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool SetOperationNode::Equals(const QueryNode *other_) const {
 	if (!QueryNode::Equals(other_)) {

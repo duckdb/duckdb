@@ -13,8 +13,6 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 Vector::Vector(LogicalType type, bool create_data, bool zero_data)
@@ -247,7 +245,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		if (val.list_value.size() > 0) {
 			idx_t append_idx = 0;
 			while (append_idx < val.list_value.size()) {
-				idx_t this_append_len = min((idx_t)STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
+				idx_t this_append_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
 
 				DataChunk child_append_chunk;
 				child_append_chunk.SetCardinality(this_append_len);
@@ -352,7 +350,8 @@ Value Vector::GetValue(idx_t index) const {
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
 		for (auto &struct_child : StructVector::GetEntries(*this)) {
-			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
+			ret.struct_value.push_back(
+			    std::pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
 		}
 		return ret;
 	}
@@ -387,7 +386,7 @@ string VectorTypeToString(VectorType type) {
 }
 
 string Vector::ToString(idx_t count) const {
-	string retval = VectorTypeToString(vector_type) + " " + type.ToString() + ": " + to_string(count) + " = [ ";
+	string retval = VectorTypeToString(vector_type) + " " + type.ToString() + ": " + std::to_string(count) + " = [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 	case VectorType::DICTIONARY_VECTOR:
@@ -402,7 +401,7 @@ string Vector::ToString(idx_t count) const {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			retval += to_string(start + increment * i) + (i == count - 1 ? "" : ", ");
+			retval += std::to_string(start + increment * i) + (i == count - 1 ? "" : ", ");
 		}
 		break;
 	}

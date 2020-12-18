@@ -10,7 +10,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
@@ -34,7 +33,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 }
 
 vector<string> BindContext::GetSimilarBindings(const string &column_name) {
-	vector<pair<string, idx_t>> scores;
+	vector<std::pair<string, idx_t>> scores;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		for (auto &name : binding->names) {
@@ -102,7 +101,8 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	return binding->Bind(colref, depth);
 }
 
-void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding) {
+void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
+                                               Binding *binding) {
 	for (auto &column_name : binding->names) {
 		D_ASSERT(!column_name.empty());
 		if (BindingIsHidden(binding->alias, column_name)) {
@@ -151,7 +151,8 @@ void BindContext::AddTableFunction(idx_t index, const string &alias, vector<stri
 	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index));
 }
 
-vector<string> BindContext::AliasColumnNames(string table_name, const vector<string> &names, const vector<string> &column_aliases) {
+vector<string> BindContext::AliasColumnNames(string table_name, const vector<string> &names,
+                                             const vector<string> &column_aliases) {
 	vector<string> result;
 	if (column_aliases.size() > names.size()) {
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
@@ -188,16 +189,16 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string>
 }
 
 void BindContext::AddContext(BindContext other) {
-	for(auto &binding : other.bindings) {
+	for (auto &binding : other.bindings) {
 		if (bindings.find(binding.first) != bindings.end()) {
 			throw BinderException("Duplicate alias \"%s\" in query!", binding.first);
 		}
 		bindings[binding.first] = move(binding.second);
 	}
-	for(auto &binding : other.bindings_list) {
+	for (auto &binding : other.bindings_list) {
 		bindings_list.push_back(move(binding));
 	}
-	for(auto &hidden_column : other.hidden_columns) {
+	for (auto &hidden_column : other.hidden_columns) {
 		hidden_columns.insert(hidden_column);
 	}
 }

@@ -14,7 +14,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 Transaction &Transaction::GetTransaction(ClientContext &context) {
 	return context.ActiveTransaction();

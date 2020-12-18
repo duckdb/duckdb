@@ -2,8 +2,6 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct list_agg_state_t {
@@ -111,7 +109,7 @@ unique_ptr<FunctionData> list_bind(ClientContext &context, AggregateFunction &fu
                                    vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() == 1);
 	child_list_t<LogicalType> children;
-	children.push_back(make_pair("", arguments[0]->return_type));
+	children.push_back(std::make_pair("", arguments[0]->return_type));
 
 	function.return_type = LogicalType(LogicalTypeId::LIST, move(children));
 	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all

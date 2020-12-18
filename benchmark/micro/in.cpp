@@ -5,7 +5,6 @@
 #include <random>
 
 using namespace duckdb;
-using namespace std;
 
 #define IN_LIST_ROW_COUNT 1000000
 #define STRING_LENGTH 4

@@ -12,7 +12,6 @@
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
-using namespace std;
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type)

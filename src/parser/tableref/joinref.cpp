@@ -3,8 +3,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 bool JoinRef::Equals(const TableRef *other_) const {
@@ -68,4 +66,4 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 	return move(result);
 }
 
-}
+} // namespace duckdb

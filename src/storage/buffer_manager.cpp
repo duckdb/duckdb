@@ -4,7 +4,6 @@
 #include "concurrentqueue.h"
 
 namespace duckdb {
-using namespace std;
 
 BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p) : manager(manager_p) {
 	block_id = block_id_p;
@@ -271,7 +270,7 @@ void BufferManager::SetLimit(idx_t limit) {
 }
 
 string BufferManager::GetTemporaryPath(block_id_t id) {
-	return fs.JoinPath(temp_directory, to_string(id) + ".block");
+	return fs.JoinPath(temp_directory, std::to_string(id) + ".block");
 }
 
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {

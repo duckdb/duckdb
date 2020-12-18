@@ -7,7 +7,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 using JoinNode = JoinOrderOptimizer::JoinNode;
 
@@ -427,7 +426,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			best_right = smallest_index[1];
 			// the code below assumes best_right > best_left
 			if (best_left > best_right) {
-				swap(best_left, best_right);
+				std::swap(best_left, best_right);
 			}
 		}
 		// now update the to-be-checked pairs
@@ -478,7 +477,7 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) 
 	throw Exception("Could not find relation in parent node (?)");
 }
 
-pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
+std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node) {
 	JoinRelationSet *left_node = nullptr, *right_node = nullptr;
 	JoinRelationSet *result_relation;

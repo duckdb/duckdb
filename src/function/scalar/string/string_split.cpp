@@ -9,8 +9,6 @@
 
 #include "duckdb/function/scalar/regexp.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct StringSplitIterator {

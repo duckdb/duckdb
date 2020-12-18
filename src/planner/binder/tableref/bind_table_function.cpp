@@ -11,7 +11,6 @@
 #include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
                                     vector<Value> &parameters, unordered_map<string, Value> &named_parameters,
@@ -106,7 +105,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 	for (idx_t i = 0; i < return_names.size(); i++) {
 		if (return_names[i].empty()) {
-			return_names[i] = "C" + to_string(i);
+			return_names[i] = "C" + std::to_string(i);
 		}
 	}
 	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);

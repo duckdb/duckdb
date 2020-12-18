@@ -7,8 +7,6 @@
 
 #include <limits>
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -127,8 +125,7 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//
-template<class T, T min, T max>
-bool TryDecimalMultiplyTemplated(T left, T right, T &result) {
+template <class T, T min, T max> bool TryDecimalMultiplyTemplated(T left, T right, T &result) {
 	if (!TryMultiplyOperator::Operation(left, right, result) || result < min || result > max) {
 		return false;
 	}

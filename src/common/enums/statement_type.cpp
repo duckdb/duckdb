@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/statement_type.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string StatementTypeToString(StatementType type) {

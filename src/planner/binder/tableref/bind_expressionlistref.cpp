@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	auto result = make_unique<BoundExpressionListRef>();
@@ -18,7 +17,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 		if (result->names.size() == 0) {
 			// no names provided, generate them
 			for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-				result->names.push_back("col" + to_string(val_idx));
+				result->names.push_back("col" + std::to_string(val_idx));
 			}
 		}
 

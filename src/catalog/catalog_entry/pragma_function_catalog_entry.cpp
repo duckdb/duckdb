@@ -2,7 +2,6 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 
 namespace duckdb {
-using namespace std;
 
 PragmaFunctionCatalogEntry::PragmaFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
                                                        CreatePragmaFunctionInfo *info)

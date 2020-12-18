@@ -4,8 +4,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {

@@ -10,8 +10,6 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct NextvalBindData : public FunctionData {

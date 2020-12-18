@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BufferEntry> BufferList::Pop() {
 	if (!root) {

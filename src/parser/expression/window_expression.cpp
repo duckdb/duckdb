@@ -4,8 +4,6 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type, string schema, string function_name)
@@ -144,4 +142,4 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	return move(expr);
 }
 
-}
+} // namespace duckdb

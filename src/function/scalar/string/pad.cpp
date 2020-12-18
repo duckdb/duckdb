@@ -6,11 +6,9 @@
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "utf8proc.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
-static pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const idx_t size) {
+static std::pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const idx_t size) {
 	//  Count how much of str will fit in the output
 	auto str = reinterpret_cast<const utf8proc_uint8_t *>(data);
 	idx_t nbytes = 0;
@@ -22,7 +20,7 @@ static pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const i
 		nbytes += bytes;
 	}
 
-	return pair<idx_t, idx_t>(nbytes, nchars);
+	return std::pair<idx_t, idx_t>(nbytes, nchars);
 }
 
 static bool insert_padding(const idx_t len, const string_t &pad, vector<char> &result) {
@@ -124,7 +122,7 @@ template <class Op> static void pad_function(DataChunk &args, ExpressionState &s
 	vector<char> buffer;
 	TernaryExecutor::Execute<string_t, int32_t, string_t, string_t>(
 	    str_vector, len_vector, pad_vector, result, args.size(), [&](string_t str, int32_t len, string_t pad) {
-		    len = max(len, int32_t(0));
+		    len = MaxValue<int32_t>(len, 0);
 		    return StringVector::AddString(result, Op::Operation(str, len, pad, buffer));
 	    });
 }

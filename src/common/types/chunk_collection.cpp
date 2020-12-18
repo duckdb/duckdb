@@ -10,8 +10,6 @@
 #include <cstring>
 #include <queue>
 
-using namespace std;
-
 namespace duckdb {
 
 void ChunkCollection::Verify() {
@@ -245,7 +243,7 @@ struct QuicksortInfo {
 };
 
 struct QuicksortStack {
-	queue<QuicksortInfo> info_queue;
+	std::queue<QuicksortInfo> info_queue;
 
 	QuicksortInfo Pop() {
 		auto element = info_queue.front();
@@ -389,7 +387,7 @@ static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, idx
 
 // TODO: reorder functionality is similar, perhaps merge
 void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset) {
-	idx_t remaining_data = min((idx_t)STANDARD_VECTOR_SIZE, count - start_offset);
+	idx_t remaining_data = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - start_offset);
 	D_ASSERT(target.GetTypes() == types);
 
 	target.SetCardinality(remaining_data);
@@ -554,7 +552,7 @@ void ChunkCollection::Heap(vector<OrderType> &desc, vector<OrderByNullType> &nul
 }
 
 idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size) {
-	idx_t remaining_data = min((idx_t)STANDARD_VECTOR_SIZE, heap_size - start_offset);
+	idx_t remaining_data = MinValue<idx_t>(STANDARD_VECTOR_SIZE, heap_size - start_offset);
 	D_ASSERT(target.GetTypes() == types);
 
 	target.SetCardinality(remaining_data);

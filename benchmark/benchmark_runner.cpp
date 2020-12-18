@@ -16,7 +16,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 void BenchmarkRunner::RegisterBenchmark(Benchmark *benchmark) {
 	GetInstance().benchmarks.push_back(benchmark);
@@ -285,7 +284,8 @@ ConfigurationError run_benchmarks() {
 				auto display_name = benchmarks[benchmark_index]->DisplayName();
 				auto display_group = benchmarks[benchmark_index]->Group();
 				auto subgroup = benchmarks[benchmark_index]->Subgroup();
-				fprintf(stdout, "display_name:%s\ngroup:%s\nsubgroup:%s\n", display_name.c_str(), display_group.c_str(), subgroup.c_str());
+				fprintf(stdout, "display_name:%s\ngroup:%s\nsubgroup:%s\n", display_name.c_str(), display_group.c_str(),
+				        subgroup.c_str());
 			}
 		} else if (instance.configuration.meta == BenchmarkMetaType::QUERY) {
 			for (const auto &benchmark_index : benchmark_indices) {

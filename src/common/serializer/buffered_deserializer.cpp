@@ -3,7 +3,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 BufferedDeserializer::BufferedDeserializer(data_ptr_t ptr, idx_t data_size) : ptr(ptr), endptr(ptr + data_size) {
 }

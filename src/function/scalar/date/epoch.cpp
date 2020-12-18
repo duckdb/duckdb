@@ -5,26 +5,22 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void epoch_sec_function(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	string output_buffer;
-	UnaryExecutor::Execute<int64_t, timestamp_t, true>(input.data[0], result, input.size(), [&](int64_t input) {
-		return Timestamp::FromEpochSeconds(input);
-	});
+	UnaryExecutor::Execute<int64_t, timestamp_t, true>(
+	    input.data[0], result, input.size(), [&](int64_t input) { return Timestamp::FromEpochSeconds(input); });
 }
 
 static void epoch_ms_function(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	string output_buffer;
-	UnaryExecutor::Execute<int64_t, timestamp_t, true>(input.data[0], result, input.size(), [&](int64_t input) {
-		return Timestamp::FromEpochMs(input);
-	});
+	UnaryExecutor::Execute<int64_t, timestamp_t, true>(input.data[0], result, input.size(),
+	                                                   [&](int64_t input) { return Timestamp::FromEpochMs(input); });
 }
 
 void EpochFun::RegisterFunction(BuiltinFunctions &set) {

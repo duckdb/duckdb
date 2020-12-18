@@ -1,7 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalExecute::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {

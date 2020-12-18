@@ -29,8 +29,6 @@
 
 #include "duckdb/planner/pragma_handler.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 ClientContext::ClientContext(DuckDB &database)
@@ -38,7 +36,7 @@ ClientContext::ClientContext(DuckDB &database)
       catalog(*database.catalog),
       temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA, true)),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
-	random_device rd;
+	std::random_device rd;
 	random_engine.seed(rd());
 }
 
@@ -263,7 +261,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLState
 	auto n_param = statement->n_param;
 
 	// now write the prepared statement data into the catalog
-	string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
+	string prepare_name = "____duckdb_internal_prepare_" + std::to_string(prepare_count);
 	prepare_count++;
 	// create a prepare statement out of the underlying statement
 	auto prepare = make_unique<PrepareStatement>();

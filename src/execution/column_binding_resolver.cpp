@@ -10,7 +10,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ColumnBindingResolver::ColumnBindingResolver() {
 }
@@ -85,7 +84,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 		if (i != 0) {
 			bound_columns += " ";
 		}
-		bound_columns += to_string(bindings[i].table_index) + "." + to_string(bindings[i].column_index);
+		bound_columns += std::to_string(bindings[i].table_index) + "." + std::to_string(bindings[i].column_index);
 	}
 	bound_columns += "]";
 

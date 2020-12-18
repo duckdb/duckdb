@@ -8,7 +8,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 ExpressionType Transformer::OperatorToExpressionType(string &op) {

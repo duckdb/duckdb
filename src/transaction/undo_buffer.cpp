@@ -12,8 +12,6 @@
 
 #include <unordered_map>
 
-using namespace std;
-
 namespace duckdb {
 constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096 * 3;
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -117,13 +115,13 @@ template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
 		data_ptr_t start = current->data.get();
 		data_ptr_t end = start + current->current_position;
 		// create a vector with all nodes in this chunk
-		vector<pair<UndoFlags, data_ptr_t>> nodes;
+		vector<std::pair<UndoFlags, data_ptr_t>> nodes;
 		while (start < end) {
 			auto type = Load<UndoFlags>(start);
 			start += sizeof(UndoFlags);
 			auto len = Load<uint32_t>(start);
 			start += sizeof(uint32_t);
-			nodes.push_back(make_pair(type, start));
+			nodes.push_back(std::make_pair(type, start));
 			start += len;
 		}
 		// iterate over it in reverse order

@@ -6,8 +6,6 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate/algebraic_functions.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class T> struct sum_state_t {

@@ -10,8 +10,6 @@
 
 #include <cmath>
 
-using namespace std;
-
 namespace duckdb {
 
 LogicalType::LogicalType() : id_(LogicalTypeId::INVALID), width_(0), scale_(0), collation_(string()) {

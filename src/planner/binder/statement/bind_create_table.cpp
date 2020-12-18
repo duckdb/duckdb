@@ -10,7 +10,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 static void CreateColumnMap(BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;

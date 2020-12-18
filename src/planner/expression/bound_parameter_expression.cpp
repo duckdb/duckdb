@@ -2,7 +2,6 @@
 #include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER,
@@ -21,7 +20,7 @@ bool BoundParameterExpression::IsFoldable() const {
 }
 
 string BoundParameterExpression::ToString() const {
-	return to_string(parameter_nr);
+	return std::to_string(parameter_nr);
 }
 
 bool BoundParameterExpression::Equals(const BaseExpression *other_) const {

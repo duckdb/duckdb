@@ -3,7 +3,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 bool Transformer::TransformOrderBy(PGList *order, vector<OrderByNode> &result) {

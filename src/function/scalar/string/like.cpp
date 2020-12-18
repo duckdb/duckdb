@@ -5,8 +5,6 @@
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct StandardCharacterReader {
@@ -17,7 +15,7 @@ struct StandardCharacterReader {
 
 struct ASCIILCaseReader {
 	static char Operation(const char *data, idx_t pos) {
-		return (char) LowerFun::ASCIIToLowerMap[(uint8_t) data[pos]];
+		return (char)LowerFun::ASCIIToLowerMap[(uint8_t)data[pos]];
 	}
 };
 
@@ -49,7 +47,7 @@ bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, i
 			}
 			for (; sidx < slen; sidx++) {
 				if (templated_like_operator<PERCENTAGE, UNDERSCORE, READER>(sdata + sidx, slen - sidx, pdata + pidx,
-				                                                    plen - pidx, escape)) {
+				                                                            plen - pidx, escape)) {
 					return true;
 				}
 			}
@@ -67,18 +65,19 @@ bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, i
 }
 
 struct LikeSegment {
-	LikeSegment(string pattern) : pattern(move(pattern)) {}
+	LikeSegment(string pattern) : pattern(move(pattern)) {
+	}
 
 	string pattern;
 };
 
 struct LikeMatcher : public FunctionData {
-	LikeMatcher(vector<LikeSegment> segments, bool has_start_percentage, bool has_end_percentage) :
-		segments(move(segments)), has_start_percentage(has_start_percentage), has_end_percentage(has_end_percentage) {
+	LikeMatcher(vector<LikeSegment> segments, bool has_start_percentage, bool has_end_percentage)
+	    : segments(move(segments)), has_start_percentage(has_start_percentage), has_end_percentage(has_end_percentage) {
 	}
 
 	bool Match(string_t &str) {
-		auto str_data = (const unsigned char*) str.GetDataUnsafe();
+		auto str_data = (const unsigned char *)str.GetDataUnsafe();
 		auto str_len = str.GetSize();
 		idx_t segment_idx = 0;
 		idx_t end_idx = segments.size() - 1;
@@ -96,15 +95,17 @@ struct LikeMatcher : public FunctionData {
 			segment_idx++;
 			if (segments.size() == 1) {
 				// only one segment, and it matches
-				// we have a match if there is an end percentage, OR if the memcmp was an exact match (remaining str is empty)
+				// we have a match if there is an end percentage, OR if the memcmp was an exact match (remaining str is
+				// empty)
 				return has_end_percentage || str_len == 0;
 			}
 		}
 		// main match loop: for every segment in the middle, use Contains to find the needle in the haystack
-		for(; segment_idx < end_idx; segment_idx++) {
+		for (; segment_idx < end_idx; segment_idx++) {
 			auto &segment = segments[segment_idx];
 			// find the pattern of the current segment
-			idx_t next_offset = ContainsFun::Find(str_data, str_len, (const unsigned char *) segment.pattern.c_str(), segment.pattern.size());
+			idx_t next_offset = ContainsFun::Find(str_data, str_len, (const unsigned char *)segment.pattern.c_str(),
+			                                      segment.pattern.size());
 			if (next_offset == INVALID_INDEX) {
 				// could not find this pattern in the string: no match
 				return false;
@@ -120,14 +121,16 @@ struct LikeMatcher : public FunctionData {
 			if (str_len < segment.pattern.size()) {
 				return false;
 			}
-			if (memcmp(str_data + str_len - segment.pattern.size(), segment.pattern.c_str(), segment.pattern.size()) != 0) {
+			if (memcmp(str_data + str_len - segment.pattern.size(), segment.pattern.c_str(), segment.pattern.size()) !=
+			    0) {
 				return false;
 			}
 			return true;
 		} else {
 			auto &segment = segments.back();
 			// find the pattern of the current segment
-			idx_t next_offset = ContainsFun::Find(str_data, str_len, (const unsigned char *) segment.pattern.c_str(), segment.pattern.size());
+			idx_t next_offset = ContainsFun::Find(str_data, str_len, (const unsigned char *)segment.pattern.c_str(),
+			                                      segment.pattern.size());
 			return next_offset != INVALID_INDEX;
 		}
 	}
@@ -137,7 +140,7 @@ struct LikeMatcher : public FunctionData {
 		idx_t last_non_pattern = 0;
 		bool has_start_percentage = false;
 		bool has_end_percentage = false;
-		for(idx_t i = 0; i < like_pattern.size(); i++) {
+		for (idx_t i = 0; i < like_pattern.size(); i++) {
 			auto ch = like_pattern[i];
 			if (ch == escape || ch == '%' || ch == '_') {
 				// special character, push a constant pattern
@@ -161,7 +164,8 @@ struct LikeMatcher : public FunctionData {
 			}
 		}
 		if (last_non_pattern < like_pattern.size()) {
-			segments.push_back(LikeSegment(like_pattern.substr(last_non_pattern, like_pattern.size() - last_non_pattern)));
+			segments.push_back(
+			    LikeSegment(like_pattern.substr(last_non_pattern, like_pattern.size() - last_non_pattern)));
 		}
 		if (segments.empty()) {
 			return nullptr;
@@ -179,7 +183,8 @@ private:
 	bool has_end_percentage;
 };
 
-static unique_ptr<FunctionData> like_bind_function(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> like_bind_function(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->IsFoldable()) {
@@ -389,7 +394,8 @@ struct NotILikeOperator {
 
 struct ILikeOperatorASCII {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		return templated_like_operator<'%', '_', ASCIILCaseReader>(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
+		return templated_like_operator<'%', '_', ASCIILCaseReader>(str.GetDataUnsafe(), str.GetSize(),
+		                                                           pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
 	}
 };
 
@@ -417,8 +423,8 @@ template <typename Func> static void like_escape_function(DataChunk &args, Expre
 
 template <class ASCII_OP>
 static unique_ptr<BaseStatistics> ilike_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
-                                                              FunctionData *bind_data,
-                                                              vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                                        FunctionData *bind_data,
+                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() >= 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
@@ -431,43 +437,39 @@ static unique_ptr<BaseStatistics> ilike_propagate_stats(ClientContext &context, 
 	return nullptr;
 }
 
-
-template<class OP, bool INVERT>
+template <class OP, bool INVERT>
 static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	if (func_expr.bind_info) {
 		auto &matcher = (LikeMatcher &)*func_expr.bind_info;
 		// use fast like matcher
-		UnaryExecutor::Execute<string_t, bool, true>(input.data[0], result, input.size(),
-			[&](string_t str) {
-				return INVERT ? !matcher.Match(str) : matcher.Match(str);
-			});
+		UnaryExecutor::Execute<string_t, bool, true>(input.data[0], result, input.size(), [&](string_t str) {
+			return INVERT ? !matcher.Match(str) : matcher.Match(str);
+		});
 	} else {
 		// use generic like matcher
 		BinaryExecutor::ExecuteStandard<string_t, string_t, bool, OP, true>(input.data[0], input.data[1], result,
-																		input.size());
+		                                                                    input.size());
 	}
 }
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	// like
 	set.AddFunction(ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               RegularLikeFunction<LikeOperator, false>,
-								   false, like_bind_function));
+	                               RegularLikeFunction<LikeOperator, false>, false, like_bind_function));
 	// not like
 	set.AddFunction(ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               RegularLikeFunction<NotLikeOperator, true>,
-								   false, like_bind_function));
+	                               RegularLikeFunction<NotLikeOperator, true>, false, like_bind_function));
 	// glob
 	set.AddFunction(ScalarFunction("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator, true>));
 	// ilike
 	set.AddFunction(ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true>,
-								   false, nullptr, nullptr, ilike_propagate_stats<ILikeOperatorASCII>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true>, false,
+	                               nullptr, nullptr, ilike_propagate_stats<ILikeOperatorASCII>));
 	// not ilike
 	set.AddFunction(ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true>,
-								   false, nullptr, nullptr, ilike_propagate_stats<NotILikeOperatorASCII>));
+	                               false, nullptr, nullptr, ilike_propagate_stats<NotILikeOperatorASCII>));
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {

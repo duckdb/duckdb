@@ -8,7 +8,7 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 static ExpressionType WindowToExpressionType(string &fun_name) {
@@ -246,7 +246,7 @@ static string SQLValueOpToString(PGSQLValueFunctionOp op) {
 	case PG_SVFOP_CURRENT_SCHEMA:
 		return "current_schema";
 	default:
-		throw Exception("Could not find named SQL value function specification " + to_string((int)op));
+		throw Exception("Could not find named SQL value function specification " + std::to_string((int)op));
 	}
 }
 

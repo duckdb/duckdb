@@ -5,7 +5,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *node) {
@@ -16,7 +16,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	// interval 'string' year
 	// interval int year
 	unique_ptr<ParsedExpression> expr;
-	switch(node->val_type) {
+	switch (node->val_type) {
 	case T_PGAExpr:
 		expr = TransformExpression(node->eval);
 		break;
@@ -118,4 +118,4 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	return make_unique<FunctionExpression>(fname, children);
 }
 
-}
+} // namespace duckdb

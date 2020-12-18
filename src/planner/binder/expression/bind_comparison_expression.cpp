@@ -14,8 +14,6 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source,

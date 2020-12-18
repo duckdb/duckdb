@@ -13,7 +13,6 @@
 #include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Connection::Connection(DuckDB &database) : db(database), context(make_unique<ClientContext>(database)) {
 	db.connection_manager->AddConnection(this);

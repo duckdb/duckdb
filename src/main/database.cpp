@@ -9,8 +9,6 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 DBConfig::~DBConfig() {

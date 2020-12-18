@@ -5,7 +5,6 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
                                            unique_ptr<ParsedExpression> right)

@@ -17,8 +17,8 @@
 #include "duckdb/storage/table/morsel_info.hpp"
 
 namespace duckdb {
-using namespace std;
-using namespace chrono;
+
+using namespace std::chrono;
 
 DataTable::DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types_,
                      unique_ptr<PersistentTableData> data)
@@ -568,7 +568,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 
 void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
 	// obtain the append lock for this table
-	state.append_lock = unique_lock<mutex>(append_lock);
+	state.append_lock = std::unique_lock<mutex>(append_lock);
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
@@ -963,8 +963,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
-	state.append_lock = unique_lock<mutex>(append_lock);
-	state.delete_lock = unique_lock<mutex>(versions->node_lock);
+	state.append_lock = std::unique_lock<mutex>(append_lock);
+	state.delete_lock = std::unique_lock<mutex>(versions->node_lock);
 
 	InitializeScan(state, column_ids);
 }

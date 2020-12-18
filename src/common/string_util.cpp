@@ -9,7 +9,6 @@
 #include <string.h>
 
 namespace duckdb {
-using namespace std;
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {
 	return (haystack.find(needle) != string::npos);
@@ -48,7 +47,7 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 }
 
 string StringUtil::Repeat(const string &str, idx_t n) {
-	ostringstream os;
+	std::ostringstream os;
 	if (n == 0 || str.empty()) {
 		return (os.str());
 	}
@@ -59,7 +58,7 @@ string StringUtil::Repeat(const string &str, idx_t n) {
 }
 
 vector<string> StringUtil::Split(const string &str, char delimiter) {
-	stringstream ss(str);
+	std::stringstream ss(str);
 	vector<string> lines;
 	string temp;
 	while (getline(ss, temp, delimiter)) {
@@ -77,10 +76,10 @@ string StringUtil::Prefix(const string &str, const string &prefix) {
 	if (lines.empty())
 		return ("");
 
-	ostringstream os;
+	std::ostringstream os;
 	for (idx_t i = 0, cnt = lines.size(); i < cnt; i++) {
 		if (i > 0)
-			os << endl;
+			os << std::endl;
 		os << prefix << lines[i];
 	} // FOR
 	return (os.str());
@@ -93,29 +92,29 @@ string StringUtil::FormatSize(idx_t bytes) {
 	double MB = KB * BASE;
 	double GB = MB * BASE;
 
-	ostringstream os;
+	std::ostringstream os;
 
 	if (bytes >= GB) {
-		os << fixed << setprecision(2) << (bytes / GB) << " GB";
+		os << std::fixed << std::setprecision(2) << (bytes / GB) << " GB";
 	} else if (bytes >= MB) {
-		os << fixed << setprecision(2) << (bytes / MB) << " MB";
+		os << std::fixed << std::setprecision(2) << (bytes / MB) << " MB";
 	} else if (bytes >= KB) {
-		os << fixed << setprecision(2) << (bytes / KB) << " KB";
+		os << std::fixed << std::setprecision(2) << (bytes / KB) << " KB";
 	} else {
-		os << to_string(bytes) + " bytes";
+		os << std::to_string(bytes) + " bytes";
 	}
 	return (os.str());
 }
 
 string StringUtil::Upper(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return toupper(c); });
+	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
 	return (copy);
 }
 
 string StringUtil::Lower(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return tolower(c); });
+	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::tolower(c); });
 	return (copy);
 }
 
@@ -159,7 +158,9 @@ vector<string> StringUtil::TopNStrings(vector<std::pair<string, idx_t>> scores, 
 		return vector<string>();
 	}
 	sort(scores.begin(), scores.end(),
-	     [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) -> bool { return a.second < b.second; });
+	     [](const std::pair<string, idx_t> &a, const std::pair<string, idx_t> &b) -> bool {
+		     return a.second < b.second;
+	     });
 	vector<string> result;
 	result.push_back(scores[0].first);
 	for (idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {

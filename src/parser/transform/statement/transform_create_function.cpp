@@ -5,7 +5,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {

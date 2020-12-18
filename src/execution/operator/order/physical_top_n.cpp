@@ -6,8 +6,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -56,7 +54,7 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 		executor.AddExpression(*expr);
 	}
 
-	heap_size = (big_data.Count() > offset) ? min(limit + offset, big_data.Count()) : 0;
+	heap_size = (big_data.Count() > offset) ? MinValue<idx_t>(limit + offset, big_data.Count()) : 0;
 	if (heap_size == 0) {
 		return nullptr;
 	}

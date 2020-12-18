@@ -5,7 +5,6 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
-using namespace std;
 
 TransactionContext::~TransactionContext() {
 	if (is_invalidated) {

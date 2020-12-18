@@ -5,7 +5,6 @@
 #include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ParameterExpression::ParameterExpression()
     : ParsedExpression(ExpressionType::VALUE_PARAMETER, ExpressionClass::PARAMETER), parameter_nr(0) {

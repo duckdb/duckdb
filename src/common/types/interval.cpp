@@ -11,8 +11,6 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 bool Interval::FromString(string str, interval_t &result) {

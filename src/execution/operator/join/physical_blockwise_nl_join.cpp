@@ -4,8 +4,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,

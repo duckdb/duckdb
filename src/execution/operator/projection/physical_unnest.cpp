@@ -6,8 +6,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 //! The operator state of the window
@@ -96,7 +94,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 		D_ASSERT(state->list_length >= 0);
 
-		auto this_chunk_len = min((idx_t)STANDARD_VECTOR_SIZE, state->list_length - state->list_position);
+		auto this_chunk_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state->list_length - state->list_position);
 
 		// first cols are from child, last n cols from unnest
 		chunk.SetCardinality(this_chunk_len);
@@ -117,12 +115,12 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			idx_t i = 0;
 			if (list_entry.length > state->list_position) {
 				if (unnest_null) {
-					for (i = 0; i < min((idx_t)this_chunk_len, list_entry.length - state->list_position); i++) {
+					for (i = 0; i < MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position); i++) {
 						FlatVector::SetNull(chunk.data[target_col], i, true);
 					}
 				} else {
 					auto &child_cc = ListVector::GetEntry(v);
-					for (i = 0; i < min((idx_t)this_chunk_len, list_entry.length - state->list_position); i++) {
+					for (i = 0; i < MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position); i++) {
 						chunk.data[target_col].SetValue(
 						    i, child_cc.GetValue(0, list_entry.offset + i + state->list_position));
 					}

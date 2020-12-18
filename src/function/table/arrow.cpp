@@ -117,7 +117,7 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 		}
 		auto name = string(schema.name);
 		if (name.empty()) {
-			name = string("v") + to_string(col_idx);
+			name = string("v") + std::to_string(col_idx);
 		}
 		names.push_back(name);
 	}
@@ -228,7 +228,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 
 				auto utf_type = Utf8Proc::Analyze(cptr, str_len);
 				if (utf_type == UnicodeType::INVALID) {
-					throw runtime_error("Invalid UTF8 string encoding");
+					throw std::runtime_error("Invalid UTF8 string encoding");
 				}
 				FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
 				    StringVector::AddString(output.data[col_idx], cptr, str_len);
@@ -258,7 +258,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 			break;
 		}
 		default:
-			throw runtime_error("Unsupported type " + output.data[col_idx].type.ToString());
+			throw std::runtime_error("Unsupported type " + output.data[col_idx].type.ToString());
 		}
 	}
 	output.Verify();

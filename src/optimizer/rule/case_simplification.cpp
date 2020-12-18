@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a CaseExpression that has a ConstantExpression as a check
