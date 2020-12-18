@@ -98,6 +98,14 @@ void Pipeline::ScheduleSequentialTask() {
 
 bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	switch (op->type) {
+    case PhysicalOperatorType::CREATE: {
+		if (op->children.empty()) {
+			// CREATE TABLE
+			return false;
+		}
+		// CREATE TABLE AS
+        return ScheduleOperator(op->children[0].get());
+	}
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
