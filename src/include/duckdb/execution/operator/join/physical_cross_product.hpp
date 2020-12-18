@@ -18,6 +18,8 @@ public:
 	PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
 	                     unique_ptr<PhysicalOperator> right);
 
+	std::mutex rhs_lock;
+
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
