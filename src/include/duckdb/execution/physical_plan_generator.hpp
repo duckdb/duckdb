@@ -19,6 +19,9 @@
 //Why is this needed here for compile?
 #include "duckdb/planner/operator/logical_show.hpp"
 
+//Why is this include needed here?
+#include "duckdb/planner/operator/logical_show.hpp"
+
 namespace duckdb {
 class ClientContext;
 
@@ -67,6 +70,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalInsert &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyToFile &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExplain &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalShow &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUpdate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPrepare &expr);
