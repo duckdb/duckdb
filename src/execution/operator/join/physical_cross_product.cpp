@@ -54,6 +54,7 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
                                             PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
     auto &sink = (CrossProductGlobalState &)*sink_state;
+	auto &right_collection = sink.rhs_materialized;
 
 	if (sink.rhs_materialized.Count() == 0) {
 		// no RHS: empty result
@@ -75,7 +76,6 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 	}
 
 	auto &left_chunk = state->child_chunk;
-	auto &right_collection = sink.rhs_materialized;
 	// now match the current vector of the left relation with the current row
 	// from the right relation
 	chunk.SetCardinality(left_chunk.size());
