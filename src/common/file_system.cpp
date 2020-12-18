@@ -590,7 +590,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	DeleteFileA(filename.c_str());
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
+bool FileSystem::ListFiles(const string &directory, std::function<void(string, bool)> callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	WIN32_FIND_DATA ffd;
