@@ -82,13 +82,13 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			parent->AddDependency(pipeline.get());
 		}
 		switch (op->type) {
-        case PhysicalOperatorType::CREATE: {
-            if (op->children.empty()) {
+		case PhysicalOperatorType::CREATE: {
+			if (op->children.empty()) {
 				return;
-            }
-            pipeline->child = op->children[0].get();
-            break;
-        }
+			}
+			pipeline->child = op->children[0].get();
+			break;
+		}
 		case PhysicalOperatorType::INSERT:
 		case PhysicalOperatorType::DELETE_OPERATOR:
 		case PhysicalOperatorType::UPDATE:

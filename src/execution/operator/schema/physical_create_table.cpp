@@ -9,7 +9,8 @@ using namespace std;
 
 namespace duckdb {
 
-PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info)
+PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema,
+                                         unique_ptr<BoundCreateTableInfo> info)
     : PhysicalSink(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
 }
 
@@ -18,8 +19,8 @@ PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry
 //===--------------------------------------------------------------------===//
 class CreateTableGlobalState : public GlobalOperatorState {
 public:
-    CreateTableGlobalState() {
-    }
+	CreateTableGlobalState() {
+	}
 	ChunkCollection materialized_child;
 };
 
@@ -29,8 +30,8 @@ unique_ptr<GlobalOperatorState> PhysicalCreateTable::GetGlobalState(ClientContex
 
 void PhysicalCreateTable::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
                                DataChunk &input) {
-    lock_guard<mutex> client_guard(append_lock);
-    auto &sink = (CreateTableGlobalState &)state;
+	lock_guard<mutex> client_guard(append_lock);
+	auto &sink = (CreateTableGlobalState &)state;
 	sink.materialized_child.Append(input);
 }
 
@@ -38,10 +39,10 @@ void PhysicalCreateTable::Sink(ExecutionContext &context, GlobalOperatorState &s
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 void PhysicalCreateTable::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-    auto table = (TableCatalogEntry *)schema->CreateTable(context.client, info.get());
+	auto table = (TableCatalogEntry *)schema->CreateTable(context.client, info.get());
 	if (table && children.size() > 0) {
 		// CREATE TABLE AS
-        auto &sink = (CreateTableGlobalState &)*sink_state;
+		auto &sink = (CreateTableGlobalState &)*sink_state;
 		for (auto &chunk : sink.materialized_child.Chunks()) {
 			table->storage->Append(*table, context.client, *chunk);
 		}
