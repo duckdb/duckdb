@@ -79,6 +79,43 @@ with recursive t as (select 1 as x union select x+(SELECT 1) from t where x < 3)
 2
 3
 
+# hash join
+query I
+with recursive t as (select 1 as x union all select * from (select x from t where x < 5) tbl(i) join (select 1) tbl2(i) using (i)) select * from t limit 3;
+----
+1
+1
+1
+
+query I
+with recursive t as (select 1 as x union all select * from (select 1) tbl2(i) join (select x from t where x < 5) tbl(i) using (i)) select * from t limit 3;
+----
+1
+1
+1
+
+query I
+with recursive t as (select 1 as x union all select * from (select x from t where x < 5) tbl(i) join (select first(i) from (values (1)) tbl3(i) limit 1) tbl2(i) using (i)) select * from t limit 3;
+----
+1
+1
+1
+
+query I
+with recursive t as (select 1 as x union all select * from (select first(i) from (values (1)) tbl3(i) limit 1) tbl2(i) join (select x from t where x < 5) tbl(i) using (i)) select * from t limit 3;
+----
+1
+1
+1
+
+# correlated subquery
+query I
+with recursive t as (select 1 as x union select x+(SELECT 1+t.x) from t where x < 5) select * from t order by x;
+----
+1
+3
+7
+
 # use with recursive in table creation
 statement ok
 create table integers as with recursive t as (select 1 as x union select x+1 from t where x < 3) select * from t;

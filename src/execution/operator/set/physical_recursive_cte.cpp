@@ -94,6 +94,8 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 			if (match_count > 0) {
 				intermediate_table.Append(chunk);
 				state->intermediate_empty = false;
+			} else {
+				continue;
 			}
 		} else {
 			intermediate_table.Append(chunk);

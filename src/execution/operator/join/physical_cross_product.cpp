@@ -38,13 +38,12 @@ void PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalOperatorState &
 class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalCrossProductOperatorState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(op, left), left_position(0) {
+	    : PhysicalOperatorState(op, left), left_position(0), right_position(0) {
 		D_ASSERT(left && right);
 	}
 
 	idx_t left_position;
 	idx_t right_position;
-	ChunkCollection right_data;
 };
 
 unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
@@ -56,49 +55,41 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
     auto &sink = (CrossProductGlobalState &)*sink_state;
 
-    if (state->right_data.ColumnCount() == 0) {
-		state->right_data.Append(sink.rhs_materialized);
-		if (state->right_data.Count() == 0) {
-			return;
-		}
-        state->left_position = 0;
-		state->right_position = 0;
+	if (sink.rhs_materialized.Count() == 0) {
+		// no RHS: empty result
+		return;
+	}
+	if (state->child_chunk.size() == 0) {
         children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
         state->child_chunk.Normalify();
 	}
-
-	if (state->left_position >= state->child_chunk.size()) {
+	if (state->child_chunk.size() == 0) {
 		return;
 	}
 
 	auto &left_chunk = state->child_chunk;
-	auto &right_chunk = state->right_data.GetChunk(state->right_position);
-	// now match the current row of the left relation with the current chunk
+	auto &right_collection = sink.rhs_materialized;
+	// now match the current vector of the left relation with the current row
 	// from the right relation
-	chunk.SetCardinality(right_chunk.size());
+	chunk.SetCardinality(left_chunk.size());
 	for (idx_t i = 0; i < left_chunk.ColumnCount(); i++) {
 		// first duplicate the values of the left side
-		auto lvalue = left_chunk.GetValue(i, state->left_position);
-		chunk.data[i].Reference(lvalue);
+		chunk.data[i].Reference(left_chunk.data[i]);
 	}
-	for (idx_t i = 0; i < right_chunk.ColumnCount(); i++) {
+	for (idx_t i = 0; i < right_collection.ColumnCount(); i++) {
 		// now create a reference to the vectors of the right chunk
-		chunk.data[left_chunk.ColumnCount() + i].Reference(right_chunk.data[i]);
+		auto rvalue = right_collection.GetValue(i, state->right_position);
+		chunk.data[left_chunk.ColumnCount() + i].Reference(rvalue);
 	}
 
-	// for the next iteration, move to the next position on the left side
-	state->left_position++;
-	if (state->left_position >= state->child_chunk.size()) {
-		// ran out of this chunk
-		// move to the next chunk on the right side
-		state->left_position = 0;
-		state->right_position++;
-		if (state->right_position >= state->right_data.ChunkCount()) {
-			state->right_position = 0;
-			// move to the next chunk on the left side
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			state->child_chunk.Normalify();
-		}
+	// for the next iteration, move to the next position on the right side
+	state->right_position++;
+	if (state->right_position >= right_collection.Count()) {
+		// ran out of entries on the RHS
+		// reset the RHS and move to the next chunk on the LHS
+		state->right_position = 0;
+		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		state->child_chunk.Normalify();
 	}
 }
 

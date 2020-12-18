@@ -109,16 +109,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			break;
 		case PhysicalOperatorType::DELIM_JOIN: {
 			// duplicate eliminated join
-			auto &delim_join = (PhysicalDelimJoin &)*op;
 			// create a pipeline with the duplicate eliminated path as source
 			pipeline->child = op->children[0].get();
-			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
-			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
-			for (auto &delim_scan : delim_join.delim_scans) {
-				delim_join_dependencies[delim_scan] = pipeline.get();
-			}
-			// recurse into the actual join; any pipelines in there depend on the main pipeline
-			BuildPipelines(delim_join.join.get(), parent);
 			break;
 		}
 		default:
@@ -131,6 +123,17 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			if (dependency_cte) {
 				pipeline->SetRecursiveCTE(dependency_cte);
 			}
+		}
+		if (op->type == PhysicalOperatorType::DELIM_JOIN) {
+			// for delim joins, recurse into the actual join
+			// any pipelines in there depend on the main pipeline
+			auto &delim_join = (PhysicalDelimJoin &)*op;
+			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
+			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
+			for (auto &delim_scan : delim_join.delim_scans) {
+				delim_join_dependencies[delim_scan] = pipeline.get();
+			}
+			BuildPipelines(delim_join.join.get(), parent);
 		}
 		auto pipeline_cte = pipeline->GetRecursiveCTE();
 		if (!pipeline_cte) {
@@ -146,7 +149,6 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		// first check if there is any additional action we need to do depending on the type
 		switch (op->type) {
 		case PhysicalOperatorType::DELIM_SCAN: {
-			// check if this chunk scan scans a duplicate eliminated join collection
 			auto entry = delim_join_dependencies.find(op);
 			D_ASSERT(entry != delim_join_dependencies.end());
 			// this chunk scan introduces a dependency to the current pipeline
@@ -171,7 +173,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 				throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
 			}
 			recursive_cte = op;
-			BuildPipelines(op->children[1].get(), nullptr);
+			BuildPipelines(op->children[1].get(), parent);
 			// re-order the pipelines such that they are executed in the correct order of dependencies
 			for (idx_t i = 0; i < cte_node.pipelines.size(); i++) {
 				auto &deps = cte_node.pipelines[i]->GetDependencies();
@@ -187,6 +189,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			}
 			for (idx_t i = 0; i < cte_node.pipelines.size(); i++) {
 				cte_node.pipelines[i]->ClearParents();
+			}
+			if (parent) {
+				parent->SetRecursiveCTE(nullptr);
 			}
 
 			recursive_cte = nullptr;
