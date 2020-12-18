@@ -60,19 +60,15 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 		// no RHS: empty result
 		return;
 	}
-	if (state->right_position >= right_collection.Count()) {
+	if (state->child_chunk.size() == 0 || state->right_position >= right_collection.Count()) {
 		// ran out of entries on the RHS
 		// reset the RHS and move to the next chunk on the LHS
 		state->right_position = 0;
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		state->child_chunk.Normalify();
-	}
-	if (state->child_chunk.size() == 0) {
-        children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-        state->child_chunk.Normalify();
-	}
-	if (state->child_chunk.size() == 0) {
-		return;
+		if (state->child_chunk.size() == 0) {
+			// exhausted LHS: done
+			return;
+		}
 	}
 
 	auto &left_chunk = state->child_chunk;
