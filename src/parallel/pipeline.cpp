@@ -177,6 +177,7 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::CREATE:
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
