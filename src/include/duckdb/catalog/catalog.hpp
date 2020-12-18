@@ -95,25 +95,25 @@ public:
 	                       bool if_exists = false, QueryErrorContext error_context = QueryErrorContext());
 
 	template <class T>
-	T *GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists = false, QueryErrorContext error_context = QueryErrorContext());
+	T *GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists = false,
+	            QueryErrorContext error_context = QueryErrorContext());
 
 	//! Alter an existing entry in the catalog.
 	void Alter(ClientContext &context, AlterInfo *info);
-
-	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
-	//! the schema will be set to DEFAULT_SCHEMA
-	static void ParseRangeVar(string input, string &schema, string &name);
 
 private:
 	void DropSchema(ClientContext &context, DropInfo *info);
 };
 
 template <>
-TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists, QueryErrorContext error_context);
+TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
+                                     QueryErrorContext error_context);
 template <>
-ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists, QueryErrorContext error_context);
+ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
+                                    QueryErrorContext error_context);
 template <>
-SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists, QueryErrorContext error_context);
+SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
+                                        QueryErrorContext error_context);
 template <>
 TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                              bool if_exists, QueryErrorContext error_context);
@@ -127,6 +127,7 @@ template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                                  bool if_exists, QueryErrorContext error_context);
 template <>
-CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists, QueryErrorContext error_context);
+CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
+                                       QueryErrorContext error_context);
 
 } // namespace duckdb
