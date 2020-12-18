@@ -145,10 +145,10 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 }
 
 void Pipeline::ClearParents() {
-	for(auto &parent : parents) {
+	for (auto &parent : parents) {
 		parent->dependencies.erase(this);
 	}
-	for(auto &dep : dependencies) {
+	for (auto &dep : dependencies) {
 		dep->parents.erase(this);
 	}
 	parents.clear();

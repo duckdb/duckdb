@@ -23,12 +23,12 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientContext &context) {
-    return make_unique<CrossProductGlobalState>();
+	return make_unique<CrossProductGlobalState>();
 }
 
 void PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
                                 DataChunk &input) {
-    lock_guard<mutex> client_guard(rhs_lock);
+	lock_guard<mutex> client_guard(rhs_lock);
 	auto &sink = (CrossProductGlobalState &)state;
 	sink.rhs_materialized.Append(input);
 }
@@ -54,7 +54,7 @@ unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
 void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                             PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
-    auto &sink = (CrossProductGlobalState &)*sink_state;
+	auto &sink = (CrossProductGlobalState &)*sink_state;
 	auto &right_collection = sink.rhs_materialized;
 
 	if (sink.rhs_materialized.Count() == 0) {

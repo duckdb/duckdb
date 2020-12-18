@@ -1,4 +1,4 @@
-# name: test/sql/update/test_update.test
+# name: test/sql/update/test_update_from.test
 # description: Test updates that use a from clause
 # group: [update]
 

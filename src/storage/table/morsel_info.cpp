@@ -161,7 +161,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			// info exists but it's a constant info: convert to a vector info
 			auto new_info = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
 			new_info->insert_id = constant.insert_id;
-			for(idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 				new_info->inserted[i] = constant.insert_id;
 			}
 			info.root->info[vector_idx] = move(new_info);
