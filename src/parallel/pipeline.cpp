@@ -106,6 +106,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		// CREATE TABLE AS
         return ScheduleOperator(op->children[0].get());
 	}
+	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
@@ -178,6 +179,7 @@ void Pipeline::Schedule() {
 		break;
 	}
 	case PhysicalOperatorType::CREATE:
+	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
