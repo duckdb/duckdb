@@ -5,7 +5,8 @@ namespace duckdb {
 
 PragmaFunction::PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,
                                vector<LogicalType> arguments, LogicalType varargs)
-    : SimpleNamedParameterFunction(move(name), move(arguments), move(varargs)), type(pragma_type), query(query), function(function) {
+    : SimpleNamedParameterFunction(move(name), move(arguments), move(varargs)), type(pragma_type), query(query),
+      function(function) {
 }
 
 PragmaFunction PragmaFunction::PragmaCall(string name, pragma_query_t query, vector<LogicalType> arguments,
@@ -20,13 +21,11 @@ PragmaFunction PragmaFunction::PragmaCall(string name, pragma_function_t functio
 
 PragmaFunction PragmaFunction::PragmaStatement(string name, pragma_query_t query) {
 	vector<LogicalType> types;
-	unordered_map<string, LogicalType> named_parameters;
 	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, query, nullptr, types, LogicalType::INVALID);
 }
 
 PragmaFunction PragmaFunction::PragmaStatement(string name, pragma_function_t function) {
 	vector<LogicalType> types;
-	unordered_map<string, LogicalType> named_parameters;
 	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, nullptr, function, types, LogicalType::INVALID);
 }
 

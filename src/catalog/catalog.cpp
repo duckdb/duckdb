@@ -250,48 +250,4 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	return schema->Alter(context, info);
 }
 
-void Catalog::ParseRangeVar(string input, string &schema, string &name) {
-	idx_t idx = 0;
-	vector<string> entries;
-	string entry;
-normal:
-	// quote
-	for (; idx < input.size(); idx++) {
-		if (input[idx] == '"') {
-			idx++;
-			goto quoted;
-		} else if (input[idx] == '.') {
-			goto separator;
-		}
-		entry += input[idx];
-	}
-	goto end;
-separator:
-	entries.push_back(entry);
-	entry = "";
-	idx++;
-	goto normal;
-quoted:
-	// look for another quote
-	for (; idx < input.size(); idx++) {
-		if (input[idx] == '"') {
-			// unquote
-			idx++;
-			goto normal;
-		}
-		entry += input[idx];
-	}
-	throw ParserException("Unterminated quote in range var!");
-end:
-	if (entries.size() == 0) {
-		schema = INVALID_SCHEMA;
-		name = entry;
-	} else if (entries.size() == 1) {
-		schema = entries[0];
-		name = entry;
-	} else {
-		throw ParserException("Expected schema.entry or entry: too many entries found");
-	}
-}
-
 } // namespace duckdb
