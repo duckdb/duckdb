@@ -2,10 +2,13 @@
 #include "duckdb/parser/statement/show_statement.hpp"
 #include "duckdb/planner/operator/logical_show.hpp"
 
+#include <iostream>
+
 using namespace duckdb;
 using namespace std;
 
 BoundStatement Binder::Bind(ShowStatement &stmt) {
+  cout << "bind show\n";
 	BoundStatement result;
 
   auto plan = Bind(*stmt.info->query);
