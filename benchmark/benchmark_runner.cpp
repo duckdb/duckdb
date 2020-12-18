@@ -141,7 +141,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		}
 		is_active = true;
 		timeout = false;
-		thread interrupt_thread(sleep_thread, benchmark, state.get(), benchmark->Timeout());
+		std::thread interrupt_thread(sleep_thread, benchmark, state.get(), benchmark->Timeout());
 
 		profiler.Start();
 		benchmark->Run(state.get());
@@ -166,7 +166,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogOutput("INCORRECT RESULT: " + verify);
 					break;
 				} else {
-					LogResult(to_string(profiler.Elapsed()));
+					LogResult(std::to_string(profiler.Elapsed()));
 				}
 			}
 		} else {
