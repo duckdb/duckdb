@@ -23,8 +23,7 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientContext &context) {
-    auto state = make_unique<CrossProductGlobalState>();
-	return move(state);
+    return make_unique<CrossProductGlobalState>();
 }
 
 void PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
