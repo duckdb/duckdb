@@ -69,7 +69,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					if (find(keys.begin(), keys.end(), entry->second) != keys.end()) {
+					if (std::find(keys.begin(), keys.end(), entry->second) != keys.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",
 						                      keyname);
