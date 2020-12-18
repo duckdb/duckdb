@@ -27,7 +27,8 @@ enum class VectorBufferType : uint8_t {
 	STRING_BUFFER,       // string buffer, holds a string heap
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
-	MANAGED_BUFFER       // managed buffer, holds a buffer managed by the buffermanager
+	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
+	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data

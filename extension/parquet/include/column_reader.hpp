@@ -13,19 +13,19 @@
 namespace duckdb {
 
 using apache::thrift::protocol::TProtocol;
+using parquet::format::ColumnChunk;
 using parquet::format::CompressionCodec;
 using parquet::format::Encoding;
+using parquet::format::FieldRepetitionType;
 using parquet::format::PageType;
+using parquet::format::SchemaElement;
 
-// class ParquetDecoder {
-//    TProtocol& protocol_p;
-//	unique_ptr<FileHandle> handle
-//};
+typedef nullmask_t parquet_filter_t;
 
 class ColumnReader {
 
 public:
-	ColumnReader(LogicalType type_p, const parquet::format::ColumnChunk &chunk_p, TProtocol &protocol_p)
+	ColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p, TProtocol &protocol_p)
 	    : type(type_p), chunk(chunk_p), protocol(protocol_p), rows_available(0) {
 
 		// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
@@ -34,33 +34,46 @@ public:
 			// this assumes the data pages follow the dict pages directly.
 			chunk_read_offset = chunk.meta_data.dictionary_page_offset;
 		}
+		can_have_nulls = schema_p.repetition_type == FieldRepetitionType::OPTIONAL;
 	};
 
 	virtual ~ColumnReader();
 
-	void Read(uint64_t num_values, Vector &result);
+	void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result);
 
 	virtual void Skip(idx_t num_values) = 0;
 
 	virtual unique_ptr<BaseStatistics> GetStatistics() = 0;
 
 protected:
-	virtual void Plain(ByteBuffer *data, idx_t num_values, idx_t result_offset, Vector &result) = 0;
+	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
+	                   idx_t result_offset, Vector &result) = 0;
 
-	virtual void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) = 0;
+	virtual void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) = 0;
 
-	virtual void Offsets(uint32_t *offsets, idx_t num_values, idx_t result_offset, Vector &result) = 0;
+	virtual void Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
+	                     idx_t result_offset, Vector &result) = 0;
+
+	virtual void DictReference(Vector &result) {
+	}
+	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result) {
+	}
 
 	LogicalType type;
 	const parquet::format::ColumnChunk &chunk;
 	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 
+	bool can_have_nulls;
+
 private:
 	apache::thrift::protocol::TProtocol &protocol;
 	idx_t rows_available;
 	idx_t chunk_read_offset;
-	ResizeableBuffer offset_buffer;
+
 	shared_ptr<ResizeableBuffer> block;
+
+	ResizeableBuffer offset_buffer;
+	ResizeableBuffer defined_buffer;
 
 	unique_ptr<RleBpDecoder> dict_decoder;
 	unique_ptr<RleBpDecoder> defined_decoder;
@@ -95,11 +108,12 @@ template <class T> static Value transform_statistics_plain(const_data_ptr_t inpu
 	return Value(Load<T>(input));
 }
 // TODO conversion operator template param for timestamps / decimals etc.
-template <class VALUE_TYPE> class NumericColumnReader : public ColumnReader {
+template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
 
 public:
-	NumericColumnReader(LogicalType type_p, const parquet::format::ColumnChunk &chunk_p, TProtocol &protocol_p)
-	    : ColumnReader(type_p, chunk_p, protocol_p){};
+	TemplatedColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
+	                      TProtocol &protocol_p)
+	    : ColumnReader(type_p, chunk_p, schema_p, protocol_p){};
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		if (!chunk.__isset.meta_data || !chunk.meta_data.__isset.statistics) {
@@ -112,20 +126,34 @@ public:
 		dict = move(data);
 	}
 
-	// TODO pass NULL mask / skip mask into those functions
-	void Offsets(uint32_t *offsets, uint64_t num_values, idx_t result_offset, Vector &result) override {
+	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
+	             idx_t result_offset, Vector &result) override {
 		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto dict_ptr = (VALUE_TYPE *)dict->ptr;
 
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			result_ptr[row_idx + result_offset] = dict_ptr[offsets[row_idx]];
+			if (!defines[row_idx]) {
+				FlatVector::SetNull(result, row_idx + result_offset, true);
+				continue;
+			}
+			if (filter[row_idx + result_offset]) {
+				result_ptr[row_idx + result_offset] = DictRead(offsets[row_idx], result);
+			}
 		}
 	}
 
-	void Plain(ByteBuffer *data, uint64_t num_values, idx_t result_offset, Vector &result) override {
+	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
+	           idx_t result_offset, Vector &result) override {
 		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			result_ptr[row_idx + result_offset] = data->read<VALUE_TYPE>();
+			if (!defines[row_idx]) {
+				FlatVector::SetNull(result, row_idx + result_offset, true);
+				continue;
+			}
+			if (filter[row_idx + result_offset]) {
+				result_ptr[row_idx + result_offset] = PlainRead(*plain_data, result);
+			} else { // there is still some data there that we have to skip over
+				PlainSkip(*plain_data);
+			}
 		}
 	}
 
@@ -133,28 +161,42 @@ public:
 		D_ASSERT(0);
 	}
 
-private:
+protected:
+	virtual VALUE_TYPE DictRead(uint32_t &offset, Vector &result) {
+		return ((VALUE_TYPE *)dict->ptr)[offset];
+	}
+
+	virtual VALUE_TYPE PlainRead(ByteBuffer &plain_data, Vector &result) {
+		return plain_data.read<VALUE_TYPE>();
+	}
+
+	virtual void PlainSkip(ByteBuffer &plain_data) {
+		plain_data.inc(sizeof(VALUE_TYPE));
+	}
+
 	shared_ptr<ByteBuffer> dict;
 };
 
-class StringColumnReader : public ColumnReader {
+class StringColumnReader : public TemplatedColumnReader<string_t> {
 
 public:
-	StringColumnReader(LogicalType type_p, const parquet::format::ColumnChunk &chunk_p, TProtocol &protocol_p)
-	    : ColumnReader(type_p, chunk_p, protocol_p){};
+	StringColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
+	                   TProtocol &protocol_p)
+	    : TemplatedColumnReader<string_t>(type_p, chunk_p, schema_p, protocol_p){};
 
 	unique_ptr<BaseStatistics> GetStatistics() override;
-	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override;
-
-	// TODO pass NULL mask / skip mask into those functions
-	void Offsets(uint32_t *offsets, uint64_t num_values, idx_t result_offset, Vector &result) override;
-
-	void Plain(ByteBuffer *data, uint64_t num_values, idx_t result_offset, Vector &result) override;
-
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 	void Skip(idx_t num_values) override;
 
+protected:
+	string_t PlainRead(ByteBuffer &plain_data, Vector &result) override;
+	void PlainSkip(ByteBuffer &plain_data) override;
+	string_t DictRead(uint32_t &offset, Vector &result) override;
+
+	void DictReference(Vector &result) override;
+	void PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) override;
+
 private:
-	shared_ptr<ByteBuffer> dict_page;
 	unique_ptr<string_t[]> dict_strings;
 };
 

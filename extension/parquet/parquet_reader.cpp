@@ -37,6 +37,7 @@
 #include <sstream>
 #include <cassert>
 #include <chrono>
+#include <cstring>
 
 namespace duckdb {
 
@@ -728,7 +729,7 @@ bool ParquetReader::PreparePageBuffers(ParquetReaderScanState &state, idx_t col_
 }
 
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t file_col_idx, LogicalType &type) {
-	auto &s_ele = GetFileMetadata()->schema[file_col_idx + 1];
+	auto &schema = GetFileMetadata()->schema[file_col_idx + 1];
 
 	auto &group = GetGroup(state);
 	auto &chunk = group.columns[file_col_idx];
@@ -742,8 +743,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 	}
 
 	if (state.filters) {
-		auto &s_ele = GetFileMetadata()->schema[file_col_idx + 1];
-		auto stats = get_col_chunk_stats(s_ele, type, group.columns[file_col_idx]);
+		auto stats = get_col_chunk_stats(schema, type, group.columns[file_col_idx]);
 		auto filter_entry = state.filters->filters.find(file_col_idx);
 		if (stats && filter_entry != state.filters->filters.end()) {
 			bool skip_chunk = false;
@@ -786,20 +786,24 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 
 	switch (type.id()) {
 	case LogicalTypeId::INTEGER:
-		state.column_readers[file_col_idx] = make_unique<NumericColumnReader<int32_t>>(type, chunk, *thrift_file_proto);
+		state.column_readers[file_col_idx] =
+		    make_unique<TemplatedColumnReader<int32_t>>(type, chunk, schema, *thrift_file_proto);
 		break;
 	case LogicalTypeId::BIGINT:
-		state.column_readers[file_col_idx] = make_unique<NumericColumnReader<int64_t>>(type, chunk, *thrift_file_proto);
+		state.column_readers[file_col_idx] =
+		    make_unique<TemplatedColumnReader<int64_t>>(type, chunk, schema, *thrift_file_proto);
 		break;
 	case LogicalTypeId::FLOAT:
-		state.column_readers[file_col_idx] = make_unique<NumericColumnReader<float>>(type, chunk, *thrift_file_proto);
+		state.column_readers[file_col_idx] =
+		    make_unique<TemplatedColumnReader<float>>(type, chunk, schema, *thrift_file_proto);
 		break;
 	case LogicalTypeId::DOUBLE:
-		state.column_readers[file_col_idx] = make_unique<NumericColumnReader<double>>(type, chunk, *thrift_file_proto);
+		state.column_readers[file_col_idx] =
+		    make_unique<TemplatedColumnReader<double>>(type, chunk, schema, *thrift_file_proto);
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		state.column_readers[file_col_idx] = make_unique<StringColumnReader>(type, chunk, *thrift_file_proto);
+		state.column_readers[file_col_idx] = make_unique<StringColumnReader>(type, chunk, schema, *thrift_file_proto);
 		break;
 
 	default:
@@ -807,24 +811,10 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 		break;
 	}
 
-	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
-	auto chunk_start = chunk.meta_data.data_page_offset;
-	if (chunk.meta_data.__isset.dictionary_page_offset && chunk.meta_data.dictionary_page_offset >= 4) {
-		// this assumes the data pages follow the dict pages directly.
-		chunk_start = chunk.meta_data.dictionary_page_offset;
-	}
-	auto chunk_len = chunk.meta_data.total_compressed_size;
+	// TODO figure out what to do wrt file io
+	// auto &fs = FileSystem::GetFileSystem(context);
+	// auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-
-	state.column_data[file_col_idx]->has_nulls =
-	    GetFileMetadata()->schema[file_col_idx + 1].repetition_type == FieldRepetitionType::OPTIONAL;
-
-	// read entire chunk into RAM
-	state.column_data[file_col_idx]->buf.resize(chunk_len);
-	fs.Read(*handle, state.column_data[file_col_idx]->buf.ptr, chunk_len, chunk_start);
 	return;
 }
 
@@ -1232,7 +1222,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			auto file_col_idx = state.column_ids[out_col_idx];
 
-			state.column_readers[file_col_idx]->Read(result.size(), result.data[out_col_idx]);
+			state.column_readers[file_col_idx]->Read(result.size(), filter_mask, result.data[out_col_idx]);
 			// ScanColumn(state, filter_mask, result.size(), out_col_idx, result.data[out_col_idx]);
 		}
 	}

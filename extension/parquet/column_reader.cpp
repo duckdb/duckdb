@@ -8,7 +8,7 @@ namespace duckdb {
 ColumnReader::~ColumnReader() {
 }
 
-void ColumnReader::Read(uint64_t num_values, Vector &result) {
+void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) {
 	auto trans = (DuckdbFileTransport *)protocol.getTransport().get();
 	trans->SetLocation(chunk_read_offset);
 
@@ -19,6 +19,7 @@ void ColumnReader::Read(uint64_t num_values, Vector &result) {
 
 		while (rows_available == 0) {
 			dict_decoder.reset();
+			defined_decoder.reset();
 			block.reset();
 
 			// TODO make this a function, read page header, buffers and unpack if req.
@@ -28,8 +29,8 @@ void ColumnReader::Read(uint64_t num_values, Vector &result) {
 			block = make_shared<ResizeableBuffer>(page_hdr.compressed_page_size);
 			trans->read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
 
-			page_hdr.printTo(std::cout);
-			std::cout << '\n';
+			//			page_hdr.printTo(std::cout);
+			//			std::cout << '\n';
 
 			switch (chunk.meta_data.codec) {
 			case CompressionCodec::UNCOMPRESSED:
@@ -53,13 +54,12 @@ void ColumnReader::Read(uint64_t num_values, Vector &result) {
 			case PageType::DATA_PAGE: {
 				rows_available = page_hdr.data_page_header.num_values;
 
-				// TODO skip this if no nulls
-				// TODO fix len, its no longer accurate!
-
-				uint32_t def_length = block->read<uint32_t>();
-				block->available(def_length);
-				defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, 1);
-				block->inc(def_length);
+				if (can_have_nulls) {
+					uint32_t def_length = block->read<uint32_t>();
+					block->available(def_length);
+					defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, 1);
+					block->inc(def_length);
+				}
 
 				switch (page_hdr.data_page_header.encoding) {
 				case Encoding::RLE_DICTIONARY:
@@ -98,12 +98,22 @@ void ColumnReader::Read(uint64_t num_values, Vector &result) {
 		D_ASSERT(block);
 
 		auto read_now = MinValue<idx_t>(to_read, rows_available);
+
+		if (defined_decoder) {
+			D_ASSERT(can_have_nulls);
+			defined_buffer.resize(sizeof(uint8_t) * read_now);
+			defined_decoder->GetBatch<uint8_t>(defined_buffer.ptr, read_now);
+		}
+
 		if (dict_decoder) {
 			offset_buffer.resize(sizeof(uint32_t) * read_now);
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now);
-			Offsets((uint32_t *)offset_buffer.ptr, read_now, result_offset, result);
+			DictReference(result);
+			Offsets((uint32_t *)offset_buffer.ptr, (uint8_t *)defined_buffer.ptr, read_now, filter, result_offset,
+			        result);
 		} else {
-			Plain(block.get(), read_now, result_offset, result);
+			PlainReference(block, result);
+			Plain(block, (uint8_t *)defined_buffer.ptr, read_now, filter, result_offset, result);
 		}
 		result_offset += read_now;
 		rows_available -= read_now;
@@ -155,37 +165,53 @@ unique_ptr<BaseStatistics> StringColumnReader::GetStatistics() {
 }
 
 void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) {
-	dict_page = move(data);
+	dict = move(data);
 	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
 		// TODO we can apply filters here already and put a marker into dict
-		uint32_t str_len = dict_page->read<uint32_t>();
-		dict_page->available(str_len);
+		uint32_t str_len = dict->read<uint32_t>();
+		dict->available(str_len);
 
-		VerifyString(type.id(), dict_page->ptr, str_len);
-		dict_strings[dict_idx] = string_t(dict_page->ptr, str_len);
-		dict_page->inc(str_len);
+		VerifyString(type.id(), dict->ptr, str_len);
+		dict_strings[dict_idx] = string_t(dict->ptr, str_len);
+		dict->inc(str_len);
 	}
 }
 
-// TODO pass NULL mask / skip mask into those functions
-void StringColumnReader::Offsets(uint32_t *offsets, uint64_t num_values, idx_t result_offset, Vector &result) {
-	auto result_ptr = FlatVector::GetData<string_t>(result);
-	for (idx_t str_idx = 0; str_idx < num_values; str_idx++) {
-		// TODO reference dict page instead of adding to heap
-		result_ptr[str_idx + result_offset] = StringVector::AddStringOrBlob(result, dict_strings[offsets[str_idx]]);
+class ParquetStringVectorBuffer : public VectorBuffer {
+public:
+	ParquetStringVectorBuffer(shared_ptr<ByteBuffer> buffer_p)
+	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(move(buffer_p)) {
 	}
+
+private:
+	shared_ptr<ByteBuffer> buffer;
+};
+
+void StringColumnReader::DictReference(Vector &result) {
+	StringVector::AddBuffer(result, make_unique<ParquetStringVectorBuffer>(dict));
+}
+void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) {
+	StringVector::AddBuffer(result, make_unique<ParquetStringVectorBuffer>(move(plain_data)));
 }
 
-void StringColumnReader::Plain(ByteBuffer *data, uint64_t num_values, idx_t result_offset, Vector &result) {
-	auto result_ptr = FlatVector::GetData<string_t>(result);
+string_t StringColumnReader::DictRead(uint32_t &offset, Vector &result) {
+	return dict_strings[offset];
+};
 
-	for (idx_t str_idx = 0; str_idx < num_values; str_idx++) {
-		uint32_t str_len = data->read<uint32_t>();
-		data->available(str_len);
-		result_ptr[str_idx + result_offset] = StringVector::AddStringOrBlob(result, string_t(data->ptr, str_len));
-		data->inc(str_len);
-	}
+string_t StringColumnReader::PlainRead(ByteBuffer &plain_data, Vector &result) {
+	uint32_t str_len = plain_data.read<uint32_t>();
+	plain_data.available(str_len);
+    VerifyString(type.id(), plain_data.ptr, str_len);
+    auto ret_str = string_t(plain_data.ptr, str_len);
+	plain_data.inc(str_len);
+	return ret_str;
+};
+
+void StringColumnReader::PlainSkip(ByteBuffer &plain_data) {
+	uint32_t str_len = plain_data.read<uint32_t>();
+	plain_data.available(str_len);
+	plain_data.inc(str_len);
 }
 
 void StringColumnReader::Skip(idx_t num_values) {

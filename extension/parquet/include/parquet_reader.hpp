@@ -69,14 +69,12 @@ struct ParquetReaderScanState {
 	vector<column_t> column_ids;
 	idx_t group_offset;
 	vector<unique_ptr<ParquetReaderColumnData>> column_data;
-    vector<unique_ptr<ColumnReader>> column_readers;
+	vector<unique_ptr<ColumnReader>> column_readers;
 
-    bool finished;
+	bool finished;
 	TableFilterSet *filters;
 	SelectionVector sel;
 };
-
-typedef nullmask_t parquet_filter_t;
 
 class ParquetReader {
 public:
@@ -93,8 +91,7 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 
 	unique_ptr<apache::thrift::protocol::TProtocol> thrift_file_proto;
-    unique_ptr<apache::thrift::protocol::TProtocol> thrift_memory_proto;
-
+	unique_ptr<apache::thrift::protocol::TProtocol> thrift_memory_proto;
 
 public:
 	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
