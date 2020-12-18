@@ -9,21 +9,43 @@ using namespace std;
 
 namespace duckdb {
 
+PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info)
+    : PhysicalSink(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
+}
+
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class CreateTableGlobalState : public GlobalOperatorState {
+public:
+    CreateTableGlobalState() {
+    }
+	ChunkCollection materialized_child;
+};
+
+unique_ptr<GlobalOperatorState> PhysicalCreateTable::GetGlobalState(ClientContext &context) {
+	return make_unique<CreateTableGlobalState>();
+}
+
+void PhysicalCreateTable::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+                               DataChunk &input) {
+    auto &sink = (CreateTableGlobalState &)state;
+	sink.materialized_child.Append(input);
+}
+
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
 void PhysicalCreateTable::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	int64_t inserted_count = 0;
+    auto &sink = (CreateTableGlobalState &)*sink_state;
 
 	auto table = (TableCatalogEntry *)schema->CreateTable(context.client, info.get());
 	if (table && children.size() > 0) {
-		while (true) {
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			if (state->child_chunk.size() == 0) {
-				break;
-			}
-			inserted_count += state->child_chunk.size();
-			table->storage->Append(*table, context.client, state->child_chunk);
+		for (auto &chunk : sink.materialized_child.Chunks()) {
+			table->storage->Append(*table, context.client, *chunk);
 		}
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(inserted_count));
+		chunk.SetValue(0, 0, Value::BIGINT(sink.materialized_child.Count()));
 	}
 
 	state->finished = true;

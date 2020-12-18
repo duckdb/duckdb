@@ -8,17 +8,15 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 namespace duckdb {
 
 //! Physically CREATE TABLE statement
-class PhysicalCreateTable : public PhysicalOperator {
+class PhysicalCreateTable : public PhysicalSink {
 public:
-	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
-	}
+	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info);
 
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;
@@ -26,6 +24,10 @@ public:
 	unique_ptr<BoundCreateTableInfo> info;
 
 public:
+    unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+
+    void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 } // namespace duckdb
