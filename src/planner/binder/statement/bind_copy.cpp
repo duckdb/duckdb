@@ -21,7 +21,8 @@ using namespace std;
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
-	if (!context.db.config.enable_copy) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_copy) {
 		throw Exception("COPY TO is disabled by configuration");
 	}
 	BoundStatement result;
@@ -50,7 +51,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 }
 
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
-	if (!context.db.config.enable_copy) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_copy) {
 		throw Exception("COPY FROM is disabled by configuration");
 	}
 	BoundStatement result;

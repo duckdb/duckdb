@@ -225,9 +225,8 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		}
 		// fetch a chunk
 		pStmt->current_chunk = pStmt->result->Fetch();
-		pStmt->current_chunk->Normalify();
 		pStmt->current_row = -1;
-		if (!sqlite3_display_result(pStmt->prepared->type)) {
+		if (!sqlite3_display_result(pStmt->prepared->StatementType())) {
 			// only SELECT statements return results
 			sqlite3_reset(pStmt);
 		}
@@ -240,7 +239,6 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		// have to fetch again!
 		pStmt->current_row = 0;
 		pStmt->current_chunk = pStmt->result->Fetch();
-		pStmt->current_chunk->Normalify();
 		if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
 			sqlite3_reset(pStmt);
 			return SQLITE_DONE;
@@ -362,10 +360,10 @@ const char *sqlite3_sql(sqlite3_stmt *pStmt) {
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
-	if (!pStmt) {
+	if (!pStmt || !pStmt->prepared) {
 		return 0;
 	}
-	return (int)pStmt->prepared->types.size();
+	return (int)pStmt->prepared->ColumnCount();
 }
 
 ////////////////////////////
@@ -406,10 +404,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	if (!pStmt) {
+	if (!pStmt || !pStmt->prepared) {
 		return nullptr;
 	}
-	return pStmt->prepared->names[N].c_str();
+	return pStmt->prepared->GetNames()[N].c_str();
 }
 
 static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType target_type, Value &val) {
@@ -807,7 +805,7 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->prepared) {
 		return NULL;
 	}
-	auto column_type = pStmt->prepared->types[iCol];
+	auto column_type = pStmt->prepared->GetTypes()[iCol];
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";
@@ -1264,7 +1262,7 @@ SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
 	if (!pStmt || !pStmt->prepared) {
 		return 0;
 	}
-	return pStmt->prepared->type == StatementType::EXPLAIN_STATEMENT;
+	return pStmt->prepared->StatementType() == StatementType::EXPLAIN_STATEMENT;
 }
 
 SQLITE_API int sqlite3_vtab_config(sqlite3 *, int op, ...) {

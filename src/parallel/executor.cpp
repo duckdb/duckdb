@@ -23,17 +23,17 @@ Executor::Executor(ClientContext &context) : context(context) {
 Executor::~Executor() {
 }
 
-void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
+void Executor::Initialize(PhysicalOperator *plan) {
 	Reset();
 
-	physical_plan = move(plan);
+	physical_plan = plan;
 	physical_state = physical_plan->GetOperatorState();
 
-	context.profiler.Initialize(physical_plan.get());
+	context.profiler.Initialize(physical_plan);
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	this->producer = scheduler.CreateProducer();
 
-	BuildPipelines(physical_plan.get(), nullptr);
+	BuildPipelines(physical_plan, nullptr);
 
 	this->total_pipelines = pipelines.size();
 

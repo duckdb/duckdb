@@ -20,15 +20,10 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 
-//! The database object. This object holds the catalog and all the
-//! database-specific meta information.
-class Connection;
-class DuckDB {
+class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
+	friend class DuckDB;
 public:
-	DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
-	DuckDB(const string &path, DBConfig *config = nullptr);
-
-	~DuckDB();
+	DatabaseInstance();
 
 	DBConfig config;
 
@@ -38,6 +33,27 @@ public:
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ConnectionManager> connection_manager;
 	unique_ptr<ObjectCache> object_cache;
+
+public:
+	FileSystem &GetFileSystem();
+
+	idx_t NumberOfThreads();
+private:
+	void Initialize(const char *path, DBConfig *config);
+
+	void Configure(DBConfig &config);
+};
+
+//! The database object. This object holds the catalog and all the
+//! database-specific meta information.
+class DuckDB {
+public:
+	DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
+	DuckDB(const string &path, DBConfig *config = nullptr);
+	~DuckDB();
+
+	//! Reference to the actual database instance
+	shared_ptr<DatabaseInstance> instance;
 
 public:
 	template <class T> void LoadExtension() {
@@ -51,8 +67,6 @@ public:
 	static const char *SourceID();
 	static const char *LibraryVersion();
 
-private:
-	void Configure(DBConfig &config);
 };
 
 } // namespace duckdb

@@ -19,5 +19,12 @@ public:
 	CallStatement() : SQLStatement(StatementType::CALL_STATEMENT){};
 
 	unique_ptr<ParsedExpression> function;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		auto result = make_unique<CallStatement>();
+		result->function = function->Copy();
+		return move(result);
+	}
 };
 } // namespace duckdb

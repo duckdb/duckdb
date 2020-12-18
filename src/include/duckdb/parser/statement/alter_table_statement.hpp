@@ -22,6 +22,11 @@ public:
 	}
 
 	unique_ptr<AlterInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		throw NotImplementedException("Unimplemented type for Copy");
+	}
 };
 
 } // namespace duckdb

@@ -115,8 +115,8 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		D_ASSERT(get.function.init_parallel_state);
 		D_ASSERT(get.function.parallel_state_next);
 		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
-		if (max_threads > executor.context.db.NumberOfThreads()) {
-			max_threads = executor.context.db.NumberOfThreads();
+		if (max_threads > executor.context.db->NumberOfThreads()) {
+			max_threads = executor.context.db->NumberOfThreads();
 		}
 		if (max_threads <= 1) {
 			// table is too small to parallelize

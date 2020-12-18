@@ -21,5 +21,13 @@ public:
 
 	unique_ptr<ParsedExpression> condition;
 	unique_ptr<TableRef> table;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		auto result = make_unique<DeleteStatement>();
+		result->condition = condition->Copy();
+		result->table = table->Copy();
+		return move(result);
+	}
 };
 } // namespace duckdb

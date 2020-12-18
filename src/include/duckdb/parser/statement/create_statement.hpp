@@ -18,6 +18,11 @@ public:
 	CreateStatement() : SQLStatement(StatementType::CREATE_STATEMENT){};
 
 	unique_ptr<CreateInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		throw NotImplementedException("Unimplemented type for Copy");
+	}
 };
 
 } // namespace duckdb

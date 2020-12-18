@@ -341,7 +341,7 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 
 duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
 		return DuckDBError;
 	}
 	*nparams_out = wrapper->statement->n_param;
@@ -350,7 +350,7 @@ duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t 
 
 static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, Value val) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
 		return DuckDBError;
 	}
 	if (param_idx > wrapper->statement->n_param) {
@@ -401,7 +401,7 @@ duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_
 
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
 		return DuckDBError;
 	}
 	auto result = wrapper->statement->Execute(wrapper->values, false);

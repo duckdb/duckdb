@@ -18,6 +18,11 @@ public:
 	DropStatement() : SQLStatement(StatementType::DROP_STATEMENT), info(make_unique<DropInfo>()){};
 
 	unique_ptr<DropInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		throw NotImplementedException("Unimplemented type for Copy");
+	}
 };
 
 } // namespace duckdb

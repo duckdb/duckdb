@@ -16,7 +16,8 @@ using namespace std;
 
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
-	if (!context.db.config.enable_copy) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_copy) {
 		throw Exception("COPY TO is disabled by configuration");
 	}
 	BoundStatement result;
@@ -34,7 +35,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	vector<TableCatalogEntry *> tables;
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(context, [&](CatalogEntry *entry) {
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back((TableCatalogEntry *)entry);
 			}

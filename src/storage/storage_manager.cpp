@@ -6,7 +6,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -16,7 +16,7 @@
 namespace duckdb {
 using namespace std;
 
-StorageManager::StorageManager(DuckDB &db, string path, bool read_only)
+StorageManager::StorageManager(DatabaseInstance &db, string path, bool read_only)
     : database(db), path(path), wal(db), read_only(read_only) {
 }
 
@@ -24,11 +24,11 @@ StorageManager::~StorageManager() {
 }
 
 StorageManager &StorageManager::GetStorageManager(ClientContext &context) {
-	return *context.db.storage;
+	return *context.db->storage;
 }
 
 BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
-	return *context.db.storage->buffer_manager;
+	return *context.db->storage->buffer_manager;
 }
 
 void StorageManager::Initialize() {
@@ -40,30 +40,33 @@ void StorageManager::Initialize() {
 
 	// first initialize the base system catalogs
 	// these are never written to the WAL
-	ClientContext context(database);
-	context.transaction.BeginTransaction();
+	Connection con(database);
+	con.BeginTransaction();
+
+	auto &catalog = Catalog::GetCatalog(*con.context);
 
 	// create the default schema
 	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
 	info.internal = true;
-	database.catalog->CreateSchema(context, &info);
+	catalog.CreateSchema(*con.context, &info);
 
 	// initialize default functions
-	BuiltinFunctions builtin(context, *database.catalog);
+	BuiltinFunctions builtin(*con.context, catalog);
 	builtin.Initialize();
 
 	// commit transactions
-	context.transaction.Commit();
+	con.Commit();
 
 	if (!in_memory) {
 		// create or load the database from disk, if not in-memory mode
 		LoadDatabase();
 	} else {
+		auto &config = DBConfig::GetConfig(*con.context);
 		block_manager = make_unique<InMemoryBlockManager>();
 		buffer_manager =
-		    make_unique<BufferManager>(database.GetFileSystem(), *block_manager, database.config.temporary_directory,
-		                               database.config.maximum_memory);
+		    make_unique<BufferManager>(database.GetFileSystem(), *block_manager, config.temporary_directory,
+		                               config.maximum_memory);
 	}
 }
 
@@ -98,6 +101,7 @@ void StorageManager::Checkpoint(string wal_path) {
 void StorageManager::LoadDatabase() {
 	string wal_path = path + ".wal";
 	auto &fs = database.GetFileSystem();
+	auto &config = database.config;
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
 		if (read_only) {
@@ -110,17 +114,17 @@ void StorageManager::LoadDatabase() {
 			fs.RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager = make_unique<SingleFileBlockManager>(fs, path, read_only, true, database.config.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(fs, *block_manager, database.config.temporary_directory,
-		                                            database.config.maximum_memory);
+		block_manager = make_unique<SingleFileBlockManager>(fs, path, read_only, true, config.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(fs, *block_manager, config.temporary_directory,
+		                                            config.maximum_memory);
 	} else {
-		if (!database.config.checkpoint_only) {
+		if (!config.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
-		auto sf = make_unique<SingleFileBlockManager>(fs, path, read_only, false, database.config.use_direct_io);
+		auto sf = make_unique<SingleFileBlockManager>(fs, path, read_only, false, config.use_direct_io);
 		buffer_manager =
-		    make_unique<BufferManager>(fs, *sf, database.config.temporary_directory, database.config.maximum_memory);
+		    make_unique<BufferManager>(fs, *sf, config.temporary_directory, config.maximum_memory);
 		sf->LoadFreeList(*buffer_manager);
 		block_manager = move(sf);
 
@@ -131,7 +135,7 @@ void StorageManager::LoadDatabase() {
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
 			WriteAheadLog::Replay(database, wal_path);
-			if (database.config.checkpoint_only) {
+			if (config.checkpoint_only) {
 				D_ASSERT(!read_only);
 				// checkpoint the database
 				checkpointer.CreateCheckpoint();
@@ -141,7 +145,7 @@ void StorageManager::LoadDatabase() {
 		}
 	}
 	// initialize the WAL file
-	if (!database.config.checkpoint_only && !read_only) {
+	if (!config.checkpoint_only && !read_only) {
 		wal.Initialize(wal_path);
 	}
 }

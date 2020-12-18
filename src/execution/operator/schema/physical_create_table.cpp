@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_create_table.hpp"
 
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -12,7 +12,8 @@ namespace duckdb {
 void PhysicalCreateTable::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t inserted_count = 0;
 
-	auto table = (TableCatalogEntry *)schema->CreateTable(context.client, info.get());
+	auto &catalog = Catalog::GetCatalog(context.client);
+	auto table = (TableCatalogEntry *)catalog.CreateTable(context.client, schema, info.get());
 	if (table && children.size() > 0) {
 		while (true) {
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());

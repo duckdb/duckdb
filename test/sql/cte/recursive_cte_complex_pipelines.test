@@ -64,7 +64,6 @@ SELECT * FROM t ORDER BY 1 NULLS LAST;
 1000000
 NULL
 
-
 # nested aggregates
 query I
 WITH RECURSIVE t AS

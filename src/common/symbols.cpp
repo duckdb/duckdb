@@ -64,7 +64,6 @@ template class std::unique_ptr<DefaultExpression>;
 template class std::unique_ptr<FunctionExpression>;
 template class std::unique_ptr<OperatorExpression>;
 template class std::unique_ptr<ParameterExpression>;
-template class std::unique_ptr<PreparedStatementData>;
 template class std::unique_ptr<StarExpression>;
 template class std::unique_ptr<SubqueryExpression>;
 template class std::unique_ptr<WindowExpression>;
@@ -80,6 +79,7 @@ template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<TableFunctionRef>;
 template class std::unique_ptr<Pipeline>;
 template class std::shared_ptr<Pipeline>;
+template class std::shared_ptr<PreparedStatementData>;
 
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<BoundQueryNode>;

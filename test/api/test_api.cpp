@@ -16,7 +16,8 @@ TEST_CASE("Test using connection after database is gone", "[api]") {
 	// destroy the database
 	db.reset();
 	// try to use the connection
-	REQUIRE_FAIL(conn->Query("SELECT 42"));
+	// it still works: the database remains until all connections are destroyed
+	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
 
 	// now try it with an open transaction
 	db = make_unique<DuckDB>(nullptr);
@@ -28,7 +29,7 @@ TEST_CASE("Test using connection after database is gone", "[api]") {
 
 	db.reset();
 
-	REQUIRE_FAIL(conn->Query("SELECT 42"));
+	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
 }
 
 TEST_CASE("Test destroying connections with open transactions", "[api]") {
@@ -65,12 +66,13 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 	// wait a little bit
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	// destroy the database
+	conn->Interrupt();
 	db.reset();
 	// wait for the thread
 	background_thread.join();
 	REQUIRE(correct);
 	// try to use the connection
-	REQUIRE_FAIL(conn->Query("SELECT 42"));
+	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
 }
 
 TEST_CASE("Test closing result after database is gone", "[api]") {
@@ -92,6 +94,7 @@ TEST_CASE("Test closing result after database is gone", "[api]") {
 	// destroy the database
 	db.reset();
 	conn.reset();
+	REQUIRE(CHECK_COLUMN(streaming_result, 0, {42}));
 	streaming_result.reset();
 }
 
@@ -100,12 +103,18 @@ TEST_CASE("Test closing database with open prepared statements", "[api]") {
 	auto conn = make_unique<Connection>(*db);
 
 	auto p1 = conn->Prepare("CREATE TABLE a (i INTEGER)");
-	p1->Execute();
+	REQUIRE_NO_FAIL(p1->Execute());
 	auto p2 = conn->Prepare("INSERT INTO a VALUES (42)");
-	p2->Execute();
+	REQUIRE_NO_FAIL(p2->Execute());
 
 	db.reset();
 	conn.reset();
+
+	// the prepared statements are still valid
+	// the database is only destroyed when the prepared statements are destroyed
+	REQUIRE_NO_FAIL(p2->Execute());
+	p1.reset();
+	p2.reset();
 }
 
 static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
@@ -226,20 +235,20 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	auto result = conn->SendQuery("SELECT 42");
 	// close the connection
 	conn.reset();
-	// now try to fetch a chunk, this should return a nullptr
+	// now try to fetch a chunk, this should not return a nullptr
 	auto chunk = result->Fetch();
-	REQUIRE(!chunk);
+	REQUIRE(chunk);
 
 	// now close the entire database
 	conn = make_unique<Connection>(*db);
 	result = conn->SendQuery("SELECT 42");
 
 	db.reset();
-	// fetch should fail
+	// fetch should not fail
 	chunk = result->Fetch();
-	REQUIRE(!chunk);
-	// new queries on the connection should fail as well
-	REQUIRE_FAIL(conn->SendQuery("SELECT 42"));
+	REQUIRE(chunk);
+	// new queries on the connection should not fail either
+	REQUIRE_NO_FAIL(conn->SendQuery("SELECT 42"));
 
 	// override fetch result
 	db = make_unique<DuckDB>(nullptr);
@@ -250,7 +259,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	REQUIRE_NO_FAIL(*result2);
 
 	// result1 should be closed now
-	REQUIRE(!result1->Fetch());
+	REQUIRE_THROWS(result1->Fetch());
 	// result2 should work
 	REQUIRE(result2->Fetch());
 

@@ -67,8 +67,8 @@ private:
 	//! The current chunk used by the iterator
 	unique_ptr<DataChunk> iterator_chunk;
 
+private:
 	class QueryResultIterator;
-
 	class QueryResultRow {
 	public:
 		QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {

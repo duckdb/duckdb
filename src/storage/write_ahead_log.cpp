@@ -12,7 +12,7 @@
 namespace duckdb {
 using namespace std;
 
-WriteAheadLog::WriteAheadLog(DuckDB &database) : initialized(false), database(database) {
+WriteAheadLog::WriteAheadLog(DatabaseInstance &database) : initialized(false), database(database) {
 }
 
 void WriteAheadLog::Initialize(string &path) {

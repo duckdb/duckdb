@@ -20,5 +20,13 @@ public:
 
 	unique_ptr<SQLStatement> statement;
 	string name;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		auto result = make_unique<PrepareStatement>();
+		result->statement = statement->Copy();
+		result->name = name;
+		return move(result);
+	}
 };
 } // namespace duckdb

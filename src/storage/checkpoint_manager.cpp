@@ -55,8 +55,9 @@ void CheckpointManager::CreateCheckpoint() {
 	block_id_t meta_block = metadata_writer->block->id;
 
 	vector<SchemaCatalogEntry *> schemas;
+	auto &catalog = Catalog::GetCatalog(*con.context);
 	// we scan the schemas
-	database.catalog->schemas->Scan(*con.context,
+	catalog.schemas->Scan(*con.context,
 	                                [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
@@ -81,15 +82,15 @@ void CheckpointManager::LoadFromStorage() {
 		return;
 	}
 
-	ClientContext context(database);
-	context.transaction.BeginTransaction();
+	Connection con(database);
+	con.BeginTransaction();
 	// create the MetaBlockReader to read from the storage
 	MetaBlockReader reader(buffer_manager, meta_block);
 	uint32_t schema_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < schema_count; i++) {
-		ReadSchema(context, reader);
+		ReadSchema(*con.context, reader);
 	}
-	context.transaction.Commit();
+	con.Commit();
 }
 
 //===--------------------------------------------------------------------===//
@@ -101,7 +102,7 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 	// then, we fetch the tables/views/sequences information
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
-	schema.tables.Scan(context, [&](CatalogEntry *entry) {
+	schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			tables.push_back((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
@@ -111,10 +112,10 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
-	schema.sequences.Scan(context, [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
+	schema.Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
 
 	vector<MacroCatalogEntry *> macros;
-	schema.functions.Scan(context, [&](CatalogEntry *entry) {
+	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->type == CatalogType::MACRO_ENTRY) {
 			macros.push_back((MacroCatalogEntry *)entry);
 		}
@@ -147,7 +148,8 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	auto info = SchemaCatalogEntry::Deserialize(reader);
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	database.catalog->CreateSchema(context, info.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateSchema(context, info.get());
 
 	// read the sequences
 	uint32_t seq_count = reader.Read<uint32_t>();
@@ -181,7 +183,8 @@ void CheckpointManager::WriteView(ViewCatalogEntry &view) {
 void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader) {
 	auto info = ViewCatalogEntry::Deserialize(reader);
 
-	database.catalog->CreateView(context, info.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateView(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -194,7 +197,8 @@ void CheckpointManager::WriteSequence(SequenceCatalogEntry &seq) {
 void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &reader) {
 	auto info = SequenceCatalogEntry::Deserialize(reader);
 
-	database.catalog->CreateSequence(context, info.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateSequence(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -207,7 +211,8 @@ void CheckpointManager::WriteMacro(MacroCatalogEntry &macro) {
 void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
 	auto info = MacroCatalogEntry::Deserialize(reader);
 
-	database.catalog->CreateFunction(context, info.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateFunction(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -241,7 +246,8 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	data_reader.ReadTableData();
 
 	// finally create the table in the catalog
-	database.catalog->CreateTable(context, bound_info.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateTable(context, bound_info.get());
 }
 
 } // namespace duckdb

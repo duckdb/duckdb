@@ -15,24 +15,17 @@
 namespace duckdb {
 using namespace std;
 
-Connection::Connection(DuckDB &database) : db(database), context(make_unique<ClientContext>(database)) {
-	db.connection_manager->AddConnection(this);
+Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientContext>(database.shared_from_this())) {
 #ifdef DEBUG
 	EnableProfiling();
 #endif
 }
 
-Connection::~Connection() {
-	if (!context->is_invalidated) {
-		context->Destroy();
-		db.connection_manager->RemoveConnection(this);
-	}
+Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 }
 
+
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
-	if (context->is_invalidated) {
-		return "Context is invalidated.";
-	}
 	if (format == ProfilerPrintFormat::JSON) {
 		return context->profiler.ToJSON();
 	} else {
@@ -202,6 +195,14 @@ void Connection::Rollback() {
 	if (!result->success) {
 		throw Exception(result->error);
 	}
+}
+
+void Connection::SetAutoCommit(bool auto_commit) {
+	context->transaction.SetAutoCommit(auto_commit);
+}
+
+bool Connection::IsAutoCommit() {
+	return context->transaction.IsAutoCommit();
 }
 
 } // namespace duckdb

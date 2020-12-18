@@ -19,6 +19,11 @@ public:
 	ExportStatement(unique_ptr<CopyInfo> info) : SQLStatement(StatementType::EXPORT_STATEMENT), info(move(info)){};
 
 	unique_ptr<CopyInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		throw NotImplementedException("Unimplemented type for Copy");
+	}
 };
 
 } // namespace duckdb

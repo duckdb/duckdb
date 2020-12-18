@@ -8,16 +8,16 @@ using namespace std;
 
 namespace duckdb {
 
-unique_ptr<SelectStatement> SelectStatement::Copy() {
+unique_ptr<SQLStatement> SelectStatement::Copy() const {
 	auto result = make_unique<SelectStatement>();
 	for (auto &cte : cte_map) {
 		auto info = make_unique<CommonTableExpressionInfo>();
 		info->aliases = cte.second->aliases;
-		info->query = cte.second->query->Copy();
+		info->query = unique_ptr_cast<SQLStatement, SelectStatement>(cte.second->query->Copy());
 		result->cte_map[cte.first] = move(info);
 	}
 	result->node = node->Copy();
-	return result;
+	return move(result);
 }
 
 void SelectStatement::Serialize(Serializer &serializer) {

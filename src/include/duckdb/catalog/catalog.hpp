@@ -13,6 +13,7 @@
 #include "duckdb/parser/query_error_context.hpp"
 
 #include <functional>
+#include <atomic>
 
 namespace duckdb {
 struct CreateSchemaInfo;
@@ -62,6 +63,9 @@ public:
 	//! Get the ClientContext from the Catalog
 	static Catalog &GetCatalog(ClientContext &context);
 
+	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
+	idx_t GetCatalogVersion();
+
 	//! Creates a schema in the catalog.
 	CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
 	//! Creates a table in the catalog.
@@ -80,6 +84,23 @@ public:
 	CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
 	//! Creates a collation in the catalog
 	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
+
+	//! Creates a table in the catalog.
+	CatalogEntry *CreateTable(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info);
+	//! Create a table function in the catalog
+	CatalogEntry *CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateTableFunctionInfo *info);
+	//! Create a copy function in the catalog
+	CatalogEntry *CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateCopyFunctionInfo *info);
+	//! Create a pragma function in the catalog
+	CatalogEntry *CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema, CreatePragmaFunctionInfo *info);
+	//! Create a scalar or aggregate function in the catalog
+	CatalogEntry *CreateFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info);
+	//! Creates a table in the catalog.
+	CatalogEntry *CreateView(ClientContext &context, SchemaCatalogEntry *schema, CreateViewInfo *info);
+	//! Creates a table in the catalog.
+	CatalogEntry *CreateSequence(ClientContext &context, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
+	//! Creates a collation in the catalog
+	CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema, CreateCollationInfo *info);
 
 	//! Drops an entry from the catalog
 	void DropEntry(ClientContext &context, DropInfo *info);
@@ -105,7 +126,12 @@ public:
 	static void ParseRangeVar(string input, string &schema, string &name);
 
 private:
+	//! The catalog version, incremented whenever anything changes in the catalog
+	std::atomic<idx_t> catalog_version;
+
+private:
 	void DropSchema(ClientContext &context, DropInfo *info);
+	void ModifyCatalog();
 };
 
 template <>

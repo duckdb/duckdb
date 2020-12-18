@@ -19,6 +19,11 @@ public:
 	PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_unique<PragmaInfo>()) {};
 
 	unique_ptr<PragmaInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		throw NotImplementedException("Unimplemented type for Copy");
+	}
 };
 
 } // namespace duckdb

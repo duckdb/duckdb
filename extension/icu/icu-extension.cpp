@@ -118,6 +118,8 @@ void ICUExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
+	auto &catalog = Catalog::GetCatalog(*con.context);
+
 	// iterate over all the collations
 	int32_t count;
 	auto locales = icu::Collator::getAvailableLocales(count);
@@ -134,13 +136,13 @@ void ICUExtension::Load(DuckDB &db) {
 
 		CreateCollationInfo info(collation, get_icu_function(collation), false, true);
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-		db.catalog->CreateCollation(*con.context, &info);
+		catalog.CreateCollation(*con.context, &info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                        icu_collate_function, false, icu_sort_key_bind);
 
 	CreateScalarFunctionInfo sort_key_info(move(sort_key));
-	db.catalog->CreateFunction(*con.context, &sort_key_info);
+	catalog.CreateFunction(*con.context, &sort_key_info);
 
 	con.Commit();
 }

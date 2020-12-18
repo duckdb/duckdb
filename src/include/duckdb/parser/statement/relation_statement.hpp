@@ -19,6 +19,12 @@ public:
 	}
 
 	shared_ptr<Relation> relation;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override {
+		auto result = make_unique<RelationStatement>(relation);
+		return move(result);
+	}
 };
 
 } // namespace duckdb

@@ -16,6 +16,7 @@
 namespace duckdb {
 class CatalogEntry;
 class PhysicalOperator;
+class SQLStatement;
 
 class PreparedStatementData {
 public:
@@ -23,6 +24,8 @@ public:
 	~PreparedStatementData();
 
 	StatementType statement_type;
+	//! The unbound SQL statement that was prepared
+	unique_ptr<SQLStatement> unbound_statement;
 	//! The fully prepared physical plan of the prepared statement
 	unique_ptr<PhysicalOperator> plan;
 	//! The map of parameter index to the actual value entry
@@ -42,6 +45,10 @@ public:
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
 	bool allow_stream_result;
+
+	//! The catalog version of when the prepared statement was bound
+	//! If this version is lower than the current catalog version, we have to rebind the prepared statement
+	idx_t catalog_version;
 
 public:
 	//! Bind a set of values to the prepared statement data

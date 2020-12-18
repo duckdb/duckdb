@@ -6,35 +6,39 @@
 namespace duckdb {
 using namespace std;
 
-PreparedStatement::PreparedStatement(ClientContext *context, string name, string query, PreparedStatementData &data,
+PreparedStatement::PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data_p, string query,
                                      idx_t n_param)
-    : context(context), name(name), query(query), success(true), is_invalidated(false), n_param(n_param) {
-	this->type = data.statement_type;
-	this->types = data.types;
-	this->names = data.names;
+    : context(context), data(move(data_p)), query(query), success(true), n_param(n_param) {
 }
 
 PreparedStatement::PreparedStatement(string error)
-    : context(nullptr), success(false), error(error), is_invalidated(false) {
+    : context(nullptr), success(false), error(error) {
 }
 
 PreparedStatement::~PreparedStatement() {
-	if (!is_invalidated && success) {
-		D_ASSERT(context);
-		context->RemovePreparedStatement(this);
-	}
+}
+
+idx_t PreparedStatement::ColumnCount() {
+	return data ? data->types.size() : 0;
+}
+
+StatementType PreparedStatement::StatementType() {
+	return data->statement_type;
+}
+
+const vector<LogicalType> &PreparedStatement::GetTypes() {
+	return data->types;
+}
+
+const vector<string> &PreparedStatement::GetNames() {
+	return data->names;
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
 	if (!success) {
-		return make_unique<MaterializedQueryResult>("Attempting to execute an unsuccessfully prepared statement!");
+		throw InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
 	}
-	if (is_invalidated) {
-		return make_unique<MaterializedQueryResult>(
-		    "Cannot execute prepared statement: underlying database or connection has been destroyed");
-	}
-	D_ASSERT(context);
-	return context->Execute(name, values, allow_stream_result, query);
+	return context->Execute(query, data, values, allow_stream_result && data->allow_stream_result);
 }
 
 } // namespace duckdb

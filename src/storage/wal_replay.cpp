@@ -21,11 +21,11 @@ using namespace std;
 namespace duckdb {
 class ReplayState {
 public:
-	ReplayState(DuckDB &db, ClientContext &context, Deserializer &source)
+	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
 	    : db(db), context(context), source(source), current_table(nullptr) {
 	}
 
-	DuckDB &db;
+	DatabaseInstance &db;
 	ClientContext &context;
 	Deserializer &source;
 	TableCatalogEntry *current_table;
@@ -57,7 +57,7 @@ private:
 	void ReplayUpdate();
 };
 
-void WriteAheadLog::Replay(DuckDB &database, string &path) {
+void WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	BufferedFileReader reader(database.GetFileSystem(), path.c_str());
 
 	if (reader.Finished()) {
@@ -65,11 +65,11 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 		return;
 	}
 
-	ClientContext context(database);
-	context.transaction.SetAutoCommit(false);
-	context.transaction.BeginTransaction();
+	Connection con(database);
+	con.SetAutoCommit(false);
+	con.BeginTransaction();
 
-	ReplayState state(database, context, reader);
+	ReplayState state(database, *con.context, reader);
 
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
@@ -81,15 +81,15 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 			WALType entry_type = reader.Read<WALType>();
 			if (entry_type == WALType::WAL_FLUSH) {
 				// flush: commit the current transaction
-				context.transaction.Commit();
-				context.transaction.SetAutoCommit(false);
+				con.Commit();
+				con.SetAutoCommit(false);
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
 					break;
 				}
 				// otherwise we keep on reading
-				context.transaction.BeginTransaction();
+				con.BeginTransaction();
 			} else {
 				// replay the entry
 				state.ReplayEntry(entry_type);
@@ -99,7 +99,7 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 		// FIXME: this report a proper warning in the connection
 		Printer::Print(StringUtil::Format("Exception in WAL playback: %s\n", ex.what()));
 		// exception thrown in WAL replay: rollback
-		context.transaction.Rollback();
+		con.Rollback();
 	}
 }
 
@@ -171,7 +171,8 @@ void ReplayState::ReplayCreateTable() {
 	Binder binder(context);
 	auto bound_info = binder.BindCreateTableInfo(move(info));
 
-	db.catalog->CreateTable(context, bound_info.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateTable(context, bound_info.get());
 }
 
 void ReplayState::ReplayDropTable() {
@@ -181,12 +182,14 @@ void ReplayState::ReplayDropTable() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropEntry(context, &info);
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
 }
 
 void ReplayState::ReplayAlter() {
 	auto info = AlterInfo::Deserialize(source);
-	db.catalog->Alter(context, info.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.Alter(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -195,7 +198,8 @@ void ReplayState::ReplayAlter() {
 void ReplayState::ReplayCreateView() {
 	auto entry = ViewCatalogEntry::Deserialize(source);
 
-	db.catalog->CreateView(context, entry.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateView(context, entry.get());
 }
 
 void ReplayState::ReplayDropView() {
@@ -203,7 +207,8 @@ void ReplayState::ReplayDropView() {
 	info.type = CatalogType::VIEW_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
-	db.catalog->DropEntry(context, &info);
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -213,7 +218,8 @@ void ReplayState::ReplayCreateSchema() {
 	CreateSchemaInfo info;
 	info.schema = source.Read<string>();
 
-	db.catalog->CreateSchema(context, &info);
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateSchema(context, &info);
 }
 
 void ReplayState::ReplayDropSchema() {
@@ -222,7 +228,8 @@ void ReplayState::ReplayDropSchema() {
 	info.type = CatalogType::SCHEMA_ENTRY;
 	info.name = source.Read<string>();
 
-	db.catalog->DropEntry(context, &info);
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -231,7 +238,8 @@ void ReplayState::ReplayDropSchema() {
 void ReplayState::ReplayCreateSequence() {
 	auto entry = SequenceCatalogEntry::Deserialize(source);
 
-	db.catalog->CreateSequence(context, entry.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateSequence(context, entry.get());
 }
 
 void ReplayState::ReplayDropSequence() {
@@ -240,7 +248,8 @@ void ReplayState::ReplayDropSequence() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropEntry(context, &info);
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
 }
 
 void ReplayState::ReplaySequenceValue() {
@@ -250,7 +259,8 @@ void ReplayState::ReplaySequenceValue() {
 	auto counter = source.Read<int64_t>();
 
 	// fetch the sequence from the catalog
-	auto seq = db.catalog->GetEntry<SequenceCatalogEntry>(context, schema, name);
+	auto &catalog = Catalog::GetCatalog(context);
+	auto seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
 	if (usage_count > seq->usage_count) {
 		seq->usage_count = usage_count;
 		seq->counter = counter;
@@ -263,7 +273,8 @@ void ReplayState::ReplaySequenceValue() {
 void ReplayState::ReplayCreateMacro() {
 	auto entry = MacroCatalogEntry::Deserialize(source);
 
-	db.catalog->CreateFunction(context, entry.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateFunction(context, entry.get());
 }
 
 void ReplayState::ReplayDropMacro() {
@@ -272,7 +283,8 @@ void ReplayState::ReplayDropMacro() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropEntry(context, &info);
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -281,7 +293,8 @@ void ReplayState::ReplayDropMacro() {
 void ReplayState::ReplayUseTable() {
 	auto schema_name = source.Read<string>();
 	auto table_name = source.Read<string>();
-	current_table = db.catalog->GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+	auto &catalog = Catalog::GetCatalog(context);
+	current_table = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 }
 
 void ReplayState::ReplayInsert() {

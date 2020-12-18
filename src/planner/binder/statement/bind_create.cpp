@@ -54,7 +54,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	// this is because the original has
 	auto copy = base.query->Copy();
 	auto query_node = Bind(*base.query);
-	base.query = move(copy);
+	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(move(copy));
 	if (base.aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
@@ -183,11 +183,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			create_table->children.push_back(move(root));
 		}
 		result.plan = move(create_table);
-		return result;
+		break;
 	}
 	default:
 		throw Exception("Unrecognized type!");
 	}
+	this->allow_stream_result = false;
 	return result;
 }
 

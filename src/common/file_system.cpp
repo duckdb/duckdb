@@ -40,7 +40,7 @@ namespace duckdb {
 using namespace std;
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return *context.db.config.file_system;
+	return *context.db->config.file_system;
 }
 
 static void AssertValidFileFlags(uint8_t flags) {

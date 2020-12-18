@@ -25,28 +25,26 @@
 namespace duckdb {
 class Appender;
 class Catalog;
-class DuckDB;
+class DatabaseInstance;
 class PreparedStatementData;
 class Relation;
 class BufferedFileWriter;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
-class ClientContext {
+class ClientContext : public std::enable_shared_from_this<ClientContext> {
 public:
-	ClientContext(DuckDB &database);
+	ClientContext(shared_ptr<DatabaseInstance> db);
 	~ClientContext();
 
 	//! Query profiler
 	QueryProfiler profiler;
 	//! The database that this client is connected to
-	DuckDB &db;
+	shared_ptr<DatabaseInstance> db;
 	//! Data for the currently running transaction
 	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	bool interrupted;
-	//! Whether or not the ClientContext has been invalidated because the underlying database is destroyed
-	bool is_invalidated = false;
 	//! Lock on using the ClientContext in parallel
 	std::mutex context_lock;
 	//! The current query being executed by the client context
@@ -100,9 +98,6 @@ public:
 	void Cleanup();
 	//! Destroy the client context
 	void Destroy();
-	//! Invalidate the client context. The current query will be interrupted and the client context will be invalidated,
-	//! making it impossible for future queries to run.
-	void Invalidate();
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
@@ -121,13 +116,9 @@ public:
 	unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
 	//! Execute a prepared statement with the given name and set of parameters
-	unique_ptr<QueryResult> Execute(string name, vector<Value> &values, bool allow_stream_result = true,
-	                                string query = string());
-	//! Removes a prepared statement from the set of prepared statements in the client context
-	void RemovePreparedStatement(PreparedStatement *statement);
-
-	void RegisterAppender(Appender *appender);
-	void RemoveAppender(Appender *appender);
+	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
+	//! modified in between the prepared statement being bound and the prepared statement being run.
+	unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared, vector<Value> &values, bool allow_stream_result = true);
 
 	//! Register function in the temporary schema
 	void RegisterFunction(CreateFunctionInfo *info);
@@ -158,11 +149,14 @@ private:
 	//! Internally prepare and execute a prepared SQL statement. Caller must hold the context_lock.
 	unique_ptr<QueryResult> RunStatement(const string &query, unique_ptr<SQLStatement> statement,
 	                                     bool allow_stream_result);
+	unique_ptr<QueryResult> RunStatementOrPreparedStatement(const string &query, unique_ptr<SQLStatement> statement,
+	                                     shared_ptr<PreparedStatementData> &prepared, vector<Value> *values,
+	                                     bool allow_stream_result);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
-	unique_ptr<PreparedStatementData> CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement);
+	shared_ptr<PreparedStatementData> CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement);
 	//! Internally execute a prepared SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecutePreparedStatement(const string &query, PreparedStatementData &statement,
+	unique_ptr<QueryResult> ExecutePreparedStatement(const string &query, shared_ptr<PreparedStatementData> statement,
 	                                                 vector<Value> bound_values, bool allow_stream_result);
 	//! Call CreatePreparedStatement() and ExecutePreparedStatement() without any bound values
 	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
@@ -171,12 +165,8 @@ private:
 	void LogQueryInternal(string query);
 
 private:
-	idx_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;
-	//! Prepared statement objects that were created using the ClientContext::Prepare method
-	unordered_set<PreparedStatement *> prepared_statement_objects;
-	//! Appenders that were attached to this client context
-	unordered_set<Appender *> appenders;
 };
+
 } // namespace duckdb

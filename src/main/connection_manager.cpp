@@ -8,9 +8,9 @@ using namespace std;
 
 ConnectionManager::~ConnectionManager() {
 	std::lock_guard<std::mutex> lock(connections_lock);
-	for (auto &conn : connections) {
-		conn->context->Invalidate();
-	}
+	// for (auto &conn : connections) {
+	// 	conn->context->Invalidate();
+	// }
 }
 
 void ConnectionManager::AddConnection(Connection *conn) {

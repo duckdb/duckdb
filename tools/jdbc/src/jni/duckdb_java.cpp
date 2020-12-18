@@ -60,10 +60,10 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1com
                                                                                     jobject conn_ref_buf,
                                                                                     jboolean auto_commit) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
-	if (!conn_ref || !conn_ref->context || conn_ref->context->is_invalidated) {
+	if (!conn_ref || !conn_ref->context) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Invalid connection");
 	}
-	conn_ref->context->RunFunctionInTransaction([&]() { conn_ref->context->transaction.SetAutoCommit(auto_commit); });
+	conn_ref->context->RunFunctionInTransaction([&]() { conn_ref->SetAutoCommit(auto_commit); });
 }
 
 JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit(JNIEnv *env, jclass,
@@ -72,7 +72,7 @@ JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_
 	if (!conn_ref) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), "Invalid connection");
 	}
-	return conn_ref->context->transaction.IsAutoCommit();
+	return conn_ref->IsAutoCommit();
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNIEnv *env, jclass,
@@ -216,15 +216,17 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	jclass meta = env->FindClass("org/duckdb/DuckDBResultSetMetaData");
 	jmethodID meta_construct = env->GetMethodID(meta, "<init>", "(II[Ljava/lang/String;[Ljava/lang/String;)V");
 
-	auto column_count = stmt_ref->stmt->names.size();
+	auto column_count = stmt_ref->stmt->ColumnCount();
+	auto &names = stmt_ref->stmt->GetNames();
+	auto &types = stmt_ref->stmt->GetTypes();
 
 	auto name_array = env->NewObjectArray(column_count, env->FindClass("java/lang/String"), nullptr);
 	auto type_array = env->NewObjectArray(column_count, env->FindClass("java/lang/String"), nullptr);
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		env->SetObjectArrayElement(name_array, col_idx, env->NewStringUTF(stmt_ref->stmt->names[col_idx].c_str()));
+		env->SetObjectArrayElement(name_array, col_idx, env->NewStringUTF(names[col_idx].c_str()));
 		env->SetObjectArrayElement(type_array, col_idx,
-		                           env->NewStringUTF(stmt_ref->stmt->types[col_idx].ToString().c_str()));
+		                           env->NewStringUTF(types[col_idx].ToString().c_str()));
 	}
 
 	return env->NewObject(meta, meta_construct, stmt_ref->stmt->n_param, column_count, name_array, type_array);
@@ -341,5 +343,5 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1ty
 		jclass Exception = env->FindClass("java/sql/SQLException");
 		env->ThrowNew(Exception, "Invalid statement");
 	}
-	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->type).c_str());
+	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->StatementType()).c_str());
 }

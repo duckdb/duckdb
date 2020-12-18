@@ -43,14 +43,6 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	result = prepare->Execute(13);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(prepare->n_param == 1);
-
-	string prepare_name = prepare->name;
-	// we can execute the prepared statement ourselves as well using the name
-	result = con.Query("EXECUTE " + prepare_name + "(12)");
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	// if we destroy the prepared statement it goes away
-	prepare.reset();
-	REQUIRE_FAIL(con.Query("EXECUTE " + prepare_name + "(12)"));
 }
 
 TEST_CASE("Test type resolution of function with parameter expressions", "[api]") {
@@ -86,13 +78,11 @@ TEST_CASE("Test prepared statements and dependencies", "[api]") {
 	// keep a prepared statement around
 	auto prepare = con.Prepare("SELECT COUNT(*) FROM a WHERE i=$1");
 
-	// now we can't drop the table
-	REQUIRE_FAIL(con2.Query("DROP TABLE a"));
-
-	// until we delete the prepared statement
-	prepare.reset();
-
+	// we can drop the table
 	REQUIRE_NO_FAIL(con2.Query("DROP TABLE a"));
+
+	// now the prepared statement fails when executing
+	REQUIRE_FAIL(prepare->Execute(11));
 }
 
 TEST_CASE("Dropping connection with prepared statement resets dependencies", "[api]") {
@@ -111,7 +101,8 @@ TEST_CASE("Dropping connection with prepared statement resets dependencies", "[a
 	// now we can't drop the table
 	REQUIRE_FAIL(con2.Query("DROP TABLE a"));
 
-	// now drop con
+	// now drop the first connection
+	prepared.reset();
 	con.reset();
 
 	// now we can
@@ -134,8 +125,8 @@ TEST_CASE("Test destructors of prepared statements", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {8}));
 	// now destroy the connection
 	con.reset();
-	// now we can't use the prepared statement anymore
-	REQUIRE_FAIL(prepare->Execute(3, 5));
+	// we can still use the prepared statement: the connection is alive until the prepared statement is dropped
+	REQUIRE_NO_FAIL(prepare->Execute(3, 5));
 	// destroying the prepared statement is fine
 	prepare.reset();
 
@@ -148,13 +139,13 @@ TEST_CASE("Test destructors of prepared statements", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {8}));
 	// destroy the db
 	db.reset();
-	// now we can't use the prepared statement anymore
-	REQUIRE_FAIL(prepare->Execute(3, 5));
-	// neither can we use the connection
-	REQUIRE_FAIL(con->Query("SELECT 42"));
-	// or prepare new statements
+	// we can still use the prepared statement
+	REQUIRE_NO_FAIL(prepare->Execute(3, 5));
+	// and the connection
+	REQUIRE_NO_FAIL(con->Query("SELECT 42"));
+	// we can also prepare new statements
 	prepare = con->Prepare("SELECT $1::INTEGER+$2::INTEGER");
-	REQUIRE(!prepare->success);
+	REQUIRE(prepare->success);
 }
 
 TEST_CASE("Test incorrect usage of prepared statements API", "[api]") {
@@ -174,11 +165,13 @@ TEST_CASE("Test incorrect usage of prepared statements API", "[api]") {
 	// prepare an SQL string with a parse error
 	auto prepare = con.Prepare("SELEC COUNT(*) FROM a WHERE i=$1");
 	// we cannot execute this prepared statement
-	REQUIRE_FAIL(prepare->Execute(12));
+	REQUIRE(!prepare->success);
+	REQUIRE_THROWS(prepare->Execute(12));
 
 	// cannot prepare multiple statements at once
 	prepare = con.Prepare("SELECT COUNT(*) FROM a WHERE i=$1; SELECT 42+$2;");
-	REQUIRE_FAIL(prepare->Execute(12));
+	REQUIRE(!prepare->success);
+	REQUIRE_THROWS(prepare->Execute(12));
 
 	// also not in the Query syntax
 	REQUIRE_FAIL(con.Query("SELECT COUNT(*) FROM a WHERE i=$1; SELECT 42+$2", 11));
@@ -379,6 +372,7 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 
 static unique_ptr<QueryResult> TestExecutePrepared(Connection &con, string query) {
 	auto prepared = con.Prepare(query);
+	REQUIRE(prepared->success);
 	return prepared->Execute();
 }
 

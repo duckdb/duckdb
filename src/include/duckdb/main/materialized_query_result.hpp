@@ -22,6 +22,8 @@ public:
 	//! Creates an unsuccessful query result with error condition
 	MaterializedQueryResult(string error);
 
+	ChunkCollection collection;
+public:
 	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on failure.
 	//! This will consume the result (i.e. the chunks are taken directly from the ChunkCollection).
 	unique_ptr<DataChunk> Fetch() override;
@@ -35,8 +37,6 @@ public:
 		auto value = GetValue(column, index);
 		return (T)value.GetValue<int64_t>();
 	}
-
-	ChunkCollection collection;
 };
 
 } // namespace duckdb

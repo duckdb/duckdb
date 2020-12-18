@@ -16,7 +16,9 @@ namespace duckdb {
 DBConfig::~DBConfig() {
 }
 
-DuckDB::DuckDB(const char *path, DBConfig *new_config) {
+DatabaseInstance::DatabaseInstance() {}
+
+void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	if (new_config) {
 		// user-supplied configuration
 		Configure(*new_config);
@@ -51,17 +53,26 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) {
 	storage->Initialize();
 }
 
+DuckDB::DuckDB(const char *path, DBConfig *new_config) :
+	instance(make_shared<DatabaseInstance>()) {
+	instance->Initialize(path, new_config);
+}
+
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
 }
 
 DuckDB::~DuckDB() {
 }
 
-FileSystem &DuckDB::GetFileSystem() {
+FileSystem &DatabaseInstance::GetFileSystem() {
 	return *config.file_system;
 }
 
-void DuckDB::Configure(DBConfig &new_config) {
+FileSystem &DuckDB::GetFileSystem() {
+	return instance->GetFileSystem();
+}
+
+void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.access_mode != AccessMode::UNDEFINED) {
 		config.access_mode = new_config.access_mode;
 	} else {
@@ -89,11 +100,15 @@ void DuckDB::Configure(DBConfig &new_config) {
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
-	return context.db.config;
+	return context.db->config;
+}
+
+idx_t DatabaseInstance::NumberOfThreads() {
+	return scheduler->NumberOfThreads();
 }
 
 idx_t DuckDB::NumberOfThreads() {
-	return scheduler->NumberOfThreads();
+	return instance->NumberOfThreads();
 }
 
 } // namespace duckdb

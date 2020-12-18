@@ -16,10 +16,10 @@ namespace duckdb {
 //! A view catalog entry
 class PreparedStatementCatalogEntry : public CatalogEntry {
 public:
-	PreparedStatementCatalogEntry(string name, unique_ptr<PreparedStatementData> prepared_data)
+	PreparedStatementCatalogEntry(string name, shared_ptr<PreparedStatementData> prepared_data)
 	    : CatalogEntry(CatalogType::PREPARED_STATEMENT, nullptr, name), prepared(move(prepared_data)) {
 	}
 
-	unique_ptr<PreparedStatementData> prepared;
+	shared_ptr<PreparedStatementData> prepared;
 };
 } // namespace duckdb

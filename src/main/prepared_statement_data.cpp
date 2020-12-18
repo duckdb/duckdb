@@ -1,5 +1,6 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -26,7 +27,7 @@ void PreparedStatementData::Bind(vector<Value> values) {
 		if (it->second.empty()) {
 			throw BinderException("No value found for parameter with index %llu", i + 1);
 		}
-		if (values[i].type() != it->second[0]->type()) {
+		if (!values[i].TryCastAs(it->second[0]->type())) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
 			    values[i].type().ToString().c_str(), it->second[0]->type().ToString().c_str());
