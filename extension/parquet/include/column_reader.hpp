@@ -2,7 +2,6 @@
 
 #include "parquet_types.h"
 #include "thrift_tools.hpp"
-#include "miniz_wrapper.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 
 #include "duckdb/storage/statistics/string_statistics.hpp"
@@ -13,11 +12,9 @@
 namespace duckdb {
 
 using apache::thrift::protocol::TProtocol;
+
 using parquet::format::ColumnChunk;
-using parquet::format::CompressionCodec;
-using parquet::format::Encoding;
 using parquet::format::FieldRepetitionType;
-using parquet::format::PageType;
 using parquet::format::SchemaElement;
 
 typedef nullmask_t parquet_filter_t;
@@ -43,8 +40,6 @@ public:
 
 	virtual void Skip(idx_t num_values) = 0;
 
-	virtual unique_ptr<BaseStatistics> GetStatistics() = 0;
-
 protected:
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
 	                   idx_t result_offset, Vector &result) = 0;
@@ -59,13 +54,16 @@ protected:
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result) {
 	}
 
+	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
+
 	LogicalType type;
 	const parquet::format::ColumnChunk &chunk;
-	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 
 	bool can_have_nulls;
 
 private:
+	void PrepareRead(parquet_filter_t &filter);
+
 	apache::thrift::protocol::TProtocol &protocol;
 	idx_t rows_available;
 	idx_t chunk_read_offset;
@@ -79,34 +77,6 @@ private:
 	unique_ptr<RleBpDecoder> defined_decoder;
 };
 
-template <Value (*FUNC)(const_data_ptr_t input)>
-static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType &type,
-                                                              const parquet::format::Statistics &parquet_stats) {
-	auto stats = make_unique<NumericStatistics>(type);
-
-	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
-	// `max_value`. All are optional. such elegance.
-	if (parquet_stats.__isset.min) {
-		stats->min = FUNC((const_data_ptr_t)parquet_stats.min.data());
-	} else if (parquet_stats.__isset.min_value) {
-		stats->min = FUNC((const_data_ptr_t)parquet_stats.min_value.data());
-	} else {
-		stats->min.is_null = true;
-	}
-	if (parquet_stats.__isset.max) {
-		stats->max = FUNC((const_data_ptr_t)parquet_stats.max.data());
-	} else if (parquet_stats.__isset.max_value) {
-		stats->max = FUNC((const_data_ptr_t)parquet_stats.max_value.data());
-	} else {
-		stats->max.is_null = true;
-	}
-	// GCC 4.x insists on a move() here
-	return move(stats);
-}
-
-template <class T> static Value transform_statistics_plain(const_data_ptr_t input) {
-	return Value(Load<T>(input));
-}
 // TODO conversion operator template param for timestamps / decimals etc.
 template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
 
@@ -114,13 +84,6 @@ public:
 	TemplatedColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
 	                      TProtocol &protocol_p)
 	    : ColumnReader(type_p, chunk_p, schema_p, protocol_p){};
-
-	unique_ptr<BaseStatistics> GetStatistics() override {
-		if (!chunk.__isset.meta_data || !chunk.meta_data.__isset.statistics) {
-			return nullptr;
-		}
-		return templated_get_numeric_stats<transform_statistics_plain<VALUE_TYPE>>(type, chunk.meta_data.statistics);
-	}
 
 	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override {
 		dict = move(data);
@@ -136,7 +99,7 @@ public:
 				continue;
 			}
 			if (filter[row_idx + result_offset]) {
-				result_ptr[row_idx + result_offset] = DictRead(offsets[row_idx], result);
+				result_ptr[row_idx + result_offset] = DictRead(offsets[row_idx]);
 			}
 		}
 	}
@@ -150,7 +113,7 @@ public:
 				continue;
 			}
 			if (filter[row_idx + result_offset]) {
-				result_ptr[row_idx + result_offset] = PlainRead(*plain_data, result);
+				result_ptr[row_idx + result_offset] = PlainRead(*plain_data);
 			} else { // there is still some data there that we have to skip over
 				PlainSkip(*plain_data);
 			}
@@ -162,11 +125,11 @@ public:
 	}
 
 protected:
-	virtual VALUE_TYPE DictRead(uint32_t &offset, Vector &result) {
+	virtual VALUE_TYPE DictRead(uint32_t &offset) {
 		return ((VALUE_TYPE *)dict->ptr)[offset];
 	}
 
-	virtual VALUE_TYPE PlainRead(ByteBuffer &plain_data, Vector &result) {
+	virtual VALUE_TYPE PlainRead(ByteBuffer &plain_data) {
 		return plain_data.read<VALUE_TYPE>();
 	}
 
@@ -184,20 +147,72 @@ public:
 	                   TProtocol &protocol_p)
 	    : TemplatedColumnReader<string_t>(type_p, chunk_p, schema_p, protocol_p){};
 
-	unique_ptr<BaseStatistics> GetStatistics() override;
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 	void Skip(idx_t num_values) override;
 
 protected:
-	string_t PlainRead(ByteBuffer &plain_data, Vector &result) override;
+	string_t PlainRead(ByteBuffer &plain_data) override;
 	void PlainSkip(ByteBuffer &plain_data) override;
-	string_t DictRead(uint32_t &offset, Vector &result) override;
+	string_t DictRead(uint32_t &offset) override;
 
 	void DictReference(Vector &result) override;
 	void PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) override;
 
 private:
 	unique_ptr<string_t[]> dict_strings;
+};
+
+template <class PARQUET_PHYSICAL_TYPE, timestamp_t (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
+class TimestampColumnReader : public TemplatedColumnReader<timestamp_t> {
+
+public:
+	TimestampColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
+	                      TProtocol &protocol_p)
+	    : TemplatedColumnReader<timestamp_t>(type_p, chunk_p, schema_p, protocol_p){};
+
+protected:
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+		dict = make_shared<ResizeableBuffer>(num_entries * sizeof(timestamp_t));
+		auto dict_ptr = (timestamp_t *)dict->ptr;
+		for (idx_t i = 0; i < num_entries; i++) {
+			dict_ptr[i] = FUNC(dictionary_data->read<PARQUET_PHYSICAL_TYPE>());
+		}
+	}
+
+	void Skip(idx_t num_values) {
+		D_ASSERT(0);
+	}
+
+	timestamp_t PlainRead(ByteBuffer &plain_data) {
+		return FUNC(plain_data.read<PARQUET_PHYSICAL_TYPE>());
+	}
+
+	void PlainSkip(ByteBuffer &plain_data) {
+		plain_data.inc(sizeof(PARQUET_PHYSICAL_TYPE));
+	}
+};
+
+class BooleanColumnReader : public TemplatedColumnReader<bool> {
+public:
+	BooleanColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
+	                    TProtocol &protocol_p)
+	    : TemplatedColumnReader<bool>(type_p, chunk_p, schema_p, protocol_p), byte_pos(0){};
+	bool PlainRead(ByteBuffer &plain_data) override {
+		plain_data.available(1);
+		bool ret = (*plain_data.ptr >> byte_pos) & 1;
+		byte_pos++;
+		if (byte_pos == 8) {
+			byte_pos = 0;
+			plain_data.inc(1);
+		}
+		return ret;
+	}
+	void PlainSkip(ByteBuffer &plain_data) override {
+		PlainRead(plain_data);
+	}
+
+private:
+	uint8_t byte_pos;
 };
 
 } // namespace duckdb

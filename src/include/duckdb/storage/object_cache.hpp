@@ -37,6 +37,9 @@ public:
 		cache[key] = move(value);
 	}
 
+	static ObjectCache &GetObjectCache(ClientContext &context);
+	static bool ObjectCacheEnabled(ClientContext &context);
+
 private:
 	//! Object Cache
 	std::unordered_map<std::string, shared_ptr<ObjectCacheEntry>> cache;

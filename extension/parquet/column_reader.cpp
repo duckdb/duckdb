@@ -1,11 +1,130 @@
 #include "column_reader.hpp"
+#include "parquet_timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 
-#include <iostream>
+#include "snappy.h"
+#include "miniz_wrapper.hpp"
+#include "zstd.h"
 
 namespace duckdb {
 
+using parquet::format::CompressionCodec;
+using parquet::format::ConvertedType;
+using parquet::format::Encoding;
+using parquet::format::PageType;
+using parquet::format::Type;
+
+const uint32_t RleBpDecoder::BITPACK_MASKS[] = {
+    0,       1,       3,        7,        15,       31,        63,        127,       255,        511,       1023,
+    2047,    4095,    8191,     16383,    32767,    65535,     131071,    262143,    524287,     1048575,   2097151,
+    4194303, 8388607, 16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
+
+const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
+
 ColumnReader::~ColumnReader() {
+}
+
+void ColumnReader::PrepareRead(parquet_filter_t &filter) {
+	auto trans = (DuckdbFileTransport *)protocol.getTransport().get();
+
+	dict_decoder.reset();
+	defined_decoder.reset();
+	block.reset();
+
+	parquet::format::PageHeader page_hdr;
+	page_hdr.read(&protocol);
+
+	block = make_shared<ResizeableBuffer>(page_hdr.compressed_page_size);
+	trans->read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+
+	//			page_hdr.printTo(std::cout);
+	//			std::cout << '\n';
+
+	// TODO only do this when actually using compression
+	auto unpacked_block = make_shared<ResizeableBuffer>(page_hdr.uncompressed_page_size);
+
+	switch (chunk.meta_data.codec) {
+	case CompressionCodec::UNCOMPRESSED:
+		break;
+	case CompressionCodec::GZIP: {
+		MiniZStream s;
+
+		s.Decompress((const char *)block->ptr, page_hdr.compressed_page_size, (char *)unpacked_block->ptr,
+		             page_hdr.uncompressed_page_size);
+		block = move(unpacked_block);
+
+		break;
+	}
+	case CompressionCodec::SNAPPY: {
+		auto res =
+		    snappy::RawUncompress((const char *)block->ptr, page_hdr.compressed_page_size, (char *)unpacked_block->ptr);
+		if (!res) {
+			// TODO throw FormatException("Decompression failure");
+		}
+		block = move(unpacked_block);
+		break;
+	}
+	case CompressionCodec::ZSTD: {
+		auto res = duckdb_zstd::ZSTD_decompress((char *)unpacked_block->ptr, page_hdr.uncompressed_page_size,
+		                                        (const char *)block->ptr, page_hdr.compressed_page_size);
+		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)page_hdr.uncompressed_page_size) {
+			// throw FormatException("ZSTD Decompression failure");
+		}
+		block = move(unpacked_block);
+		break;
+	}
+
+	default: {
+		std::stringstream codec_name;
+		codec_name << chunk.meta_data.codec;
+		D_ASSERT(0);
+		//        throw FormatException("Unsupported compression codec \"" + codec_name.str() +
+		//                              "\". Supported options are uncompressed, gzip or snappy");
+		break;
+	}
+	}
+
+	switch (page_hdr.type) {
+	case PageType::DATA_PAGE: {
+		rows_available = page_hdr.data_page_header.num_values;
+
+		if (can_have_nulls) {
+			uint32_t def_length = block->read<uint32_t>();
+			block->available(def_length);
+			defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, 1);
+			block->inc(def_length);
+		}
+
+		switch (page_hdr.data_page_header.encoding) {
+		case Encoding::RLE_DICTIONARY:
+		case Encoding::PLAIN_DICTIONARY: {
+			auto dict_width = block->read<uint8_t>();
+			dict_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, dict_width);
+			break;
+		}
+		case Encoding::PLAIN:
+			// nothing here, see below
+			break;
+
+		default:
+			D_ASSERT(0);
+			break;
+		}
+
+		break;
+	}
+	case PageType::DICTIONARY_PAGE:
+		// TODO add some checks
+
+		Dictionary(move(block), page_hdr.dictionary_page_header.num_values);
+		block.reset(); // make sure nobody else reads this
+		break;
+	default:
+		D_ASSERT(0);
+		break;
+	}
+
+	// TODO abort when running out of column
 }
 
 void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) {
@@ -16,91 +135,15 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 	idx_t result_offset = 0;
 
 	while (to_read > 0) {
-
 		while (rows_available == 0) {
-			dict_decoder.reset();
-			defined_decoder.reset();
-			block.reset();
-
-			// TODO make this a function, read page header, buffers and unpack if req.
-			parquet::format::PageHeader page_hdr;
-			page_hdr.read(&protocol);
-
-			block = make_shared<ResizeableBuffer>(page_hdr.compressed_page_size);
-			trans->read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
-
-			//			page_hdr.printTo(std::cout);
-			//			std::cout << '\n';
-
-			switch (chunk.meta_data.codec) {
-			case CompressionCodec::UNCOMPRESSED:
-				break;
-			case CompressionCodec::GZIP: {
-				MiniZStream s;
-
-				auto unpacked_block = make_shared<ResizeableBuffer>(page_hdr.uncompressed_page_size);
-				s.Decompress((const char *)block->ptr, page_hdr.compressed_page_size, (char *)unpacked_block->ptr,
-				             page_hdr.uncompressed_page_size);
-				block = move(unpacked_block);
-
-				break;
-			}
-			default:
-				D_ASSERT(0);
-				break;
-			}
-
-			switch (page_hdr.type) {
-			case PageType::DATA_PAGE: {
-				rows_available = page_hdr.data_page_header.num_values;
-
-				if (can_have_nulls) {
-					uint32_t def_length = block->read<uint32_t>();
-					block->available(def_length);
-					defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, 1);
-					block->inc(def_length);
-				}
-
-				switch (page_hdr.data_page_header.encoding) {
-				case Encoding::RLE_DICTIONARY:
-				case Encoding::PLAIN_DICTIONARY: {
-					auto enc_length = block->read<uint8_t>();
-					// TODO fix len, its no longer accurate!
-					dict_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, enc_length);
-
-					break;
-				}
-				case Encoding::PLAIN:
-					// nothing here, see below
-					break;
-
-				default:
-					D_ASSERT(0);
-					break;
-				}
-
-				break;
-			}
-			case PageType::DICTIONARY_PAGE:
-				// TODO add some checks
-
-				Dictionary(move(block), page_hdr.dictionary_page_header.num_values);
-				block.reset(); // make sure nobody below reads this
-				break;
-			default:
-				D_ASSERT(0);
-				break;
-			}
-
-			// TODO abort when running out of column
+			PrepareRead(filter);
 		}
 
 		D_ASSERT(block);
-
 		auto read_now = MinValue<idx_t>(to_read, rows_available);
 
-		if (defined_decoder) {
-			D_ASSERT(can_have_nulls);
+		if (can_have_nulls) {
+			D_ASSERT(defined_decoder);
 			defined_buffer.resize(sizeof(uint8_t) * read_now);
 			defined_decoder->GetBatch<uint8_t>(defined_buffer.ptr, read_now);
 		}
@@ -134,36 +177,6 @@ void ColumnReader::VerifyString(LogicalTypeId id, const char *str_data, idx_t st
 	}
 }
 
-unique_ptr<BaseStatistics> StringColumnReader::GetStatistics() {
-	if (!chunk.__isset.meta_data || !chunk.meta_data.__isset.statistics) {
-		return nullptr;
-	}
-	auto &parquet_stats = chunk.meta_data.statistics;
-
-	auto string_stats = make_unique<StringStatistics>(type);
-	if (parquet_stats.__isset.min) {
-		memcpy(string_stats->min, (data_ptr_t)parquet_stats.min.data(),
-		       MinValue<idx_t>(parquet_stats.min.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
-	} else if (parquet_stats.__isset.min_value) {
-		memcpy(string_stats->min, (data_ptr_t)parquet_stats.min_value.data(),
-		       MinValue<idx_t>(parquet_stats.min_value.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
-	} else {
-		return nullptr;
-	}
-	if (parquet_stats.__isset.max) {
-		memcpy(string_stats->max, (data_ptr_t)parquet_stats.max.data(),
-		       MinValue<idx_t>(parquet_stats.max.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
-	} else if (parquet_stats.__isset.max_value) {
-		memcpy(string_stats->max, (data_ptr_t)parquet_stats.max_value.data(),
-		       MinValue<idx_t>(parquet_stats.max_value.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
-	} else {
-		return nullptr;
-	}
-
-	string_stats->has_unicode = true; // we dont know better
-	return move(string_stats);
-}
-
 void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) {
 	dict = move(data);
 	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
@@ -195,18 +208,18 @@ void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vecto
 	StringVector::AddBuffer(result, make_unique<ParquetStringVectorBuffer>(move(plain_data)));
 }
 
-string_t StringColumnReader::DictRead(uint32_t &offset, Vector &result) {
+string_t StringColumnReader::DictRead(uint32_t &offset) {
 	return dict_strings[offset];
-};
+}
 
-string_t StringColumnReader::PlainRead(ByteBuffer &plain_data, Vector &result) {
+string_t StringColumnReader::PlainRead(ByteBuffer &plain_data) {
 	uint32_t str_len = plain_data.read<uint32_t>();
 	plain_data.available(str_len);
-    VerifyString(type.id(), plain_data.ptr, str_len);
-    auto ret_str = string_t(plain_data.ptr, str_len);
+	VerifyString(type.id(), plain_data.ptr, str_len);
+	auto ret_str = string_t(plain_data.ptr, str_len);
 	plain_data.inc(str_len);
 	return ret_str;
-};
+}
 
 void StringColumnReader::PlainSkip(ByteBuffer &plain_data) {
 	uint32_t str_len = plain_data.read<uint32_t>();
