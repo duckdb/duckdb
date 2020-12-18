@@ -144,6 +144,17 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	}
 }
 
+void Pipeline::ClearParents() {
+	for(auto &parent : parents) {
+		parent->dependencies.erase(this);
+	}
+	for(auto &dep : dependencies) {
+		dep->parents.erase(this);
+	}
+	parents.clear();
+	dependencies.clear();
+}
+
 void Pipeline::Reset(ClientContext &context) {
 	sink_state = sink->GetGlobalState(context);
 	finished_tasks = 0;
@@ -223,6 +234,7 @@ void Pipeline::AddDependency(Pipeline *pipeline) {
 
 void Pipeline::CompleteDependency() {
 	idx_t current_finished = ++finished_dependencies;
+	D_ASSERT(current_finished <= dependencies.size());
 	if (current_finished == dependencies.size()) {
 		// all dependencies have been completed: schedule the pipeline
 		Schedule();
