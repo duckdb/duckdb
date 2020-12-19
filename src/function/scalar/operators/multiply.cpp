@@ -5,6 +5,8 @@
 
 #include "duckdb/common/types/hugeint.hpp"
 
+#include <limits>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -114,7 +116,7 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 	result = left * right;
 #endif
 	// FIXME: this check can be removed if we get rid of NullValue<T>
-	if (result == NumericLimits<int64_t>::Minimum()) {
+	if (result == std::numeric_limits<int64_t>::min()) {
 		return false;
 	}
 	return true;
