@@ -9,10 +9,12 @@ TEST_CASE("Test SHOW/DESCRIBE tables", "[pragma]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers (i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers2 (i INTEGER, j INTEGER, st VARCHAR)"));
 	//REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS SELECT DATE '1992-01-01' AS k"));
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 10), (2, 12), (3, 14), (4, 16), (5, NULL), (NULL, NULL)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers2 VALUES (1, 30, 'a'), (8, 12, 'b'), (3, 24, 'c'), (9, 16, 'c'), (10, NULL, 'e')"));
 
 	// SHOW and DESCRIBE are aliases
 	result = con.Query("SHOW TABLES");
