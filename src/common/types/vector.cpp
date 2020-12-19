@@ -13,6 +13,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
