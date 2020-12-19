@@ -4,7 +4,6 @@
 #include "duckdb/parser/expression_map.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class T>
 bool ExpressionUtil::ExpressionListEquals(const vector<unique_ptr<T>> &a, const vector<unique_ptr<T>> &b) {

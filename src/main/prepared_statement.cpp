@@ -4,7 +4,6 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 
 namespace duckdb {
-using namespace std;
 
 PreparedStatement::PreparedStatement(ClientContext *context, string name, string query, PreparedStatementData &data,
                                      idx_t n_param)

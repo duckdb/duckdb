@@ -9,9 +9,9 @@
 #include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
                                     vector<Value> &parameters, unordered_map<string, Value> &named_parameters,

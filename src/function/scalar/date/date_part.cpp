@@ -7,8 +7,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 DatePartSpecifier GetDatePartSpecifier(string specifier) {

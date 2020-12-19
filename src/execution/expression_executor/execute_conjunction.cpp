@@ -7,8 +7,8 @@
 #include <random>
 
 namespace duckdb {
-using namespace std;
-using namespace chrono;
+
+using namespace std::chrono;
 
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {

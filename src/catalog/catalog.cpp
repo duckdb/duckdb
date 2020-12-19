@@ -25,7 +25,6 @@
 #include "duckdb/catalog/default/default_schemas.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Catalog::Catalog(StorageManager &storage)
     : storage(storage), schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),

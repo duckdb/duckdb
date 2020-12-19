@@ -5,7 +5,7 @@
 #include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {

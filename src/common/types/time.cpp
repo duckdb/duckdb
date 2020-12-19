@@ -11,7 +11,6 @@
 #include <cctype>
 
 namespace duckdb {
-using namespace std;
 
 // string format is hh:mm:ss.microsecondsZ
 // microseconds and Z are optional
@@ -143,7 +142,7 @@ string Time::Format(int32_t hour, int32_t minute, int32_t second, int32_t micros
 
 dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
 	dtime_t result;
-	result = hour;                                            // hours
+	result = hour;                                             // hours
 	result = result * Interval::MINS_PER_HOUR + minute;        // hours -> minutes
 	result = result * Interval::SECS_PER_MINUTE + second;      // minutes -> seconds
 	result = result * Interval::MICROS_PER_SEC + microseconds; // seconds -> microseconds

@@ -1,7 +1,7 @@
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0) {

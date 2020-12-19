@@ -2,8 +2,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalFilterState : public PhysicalOperatorState {

@@ -6,7 +6,6 @@
 #include "duckdb/common/assert.hpp"
 
 namespace duckdb {
-using namespace std;
 
 VectorBuffer::VectorBuffer(idx_t data_size) : type(VectorBufferType::STANDARD_BUFFER) {
 	if (data_size > 0) {

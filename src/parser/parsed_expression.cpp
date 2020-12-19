@@ -6,7 +6,6 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool ParsedExpression::IsAggregate() const {
 	bool is_aggregate = false;

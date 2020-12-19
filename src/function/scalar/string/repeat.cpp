@@ -6,8 +6,6 @@
 #include <string.h>
 #include <ctype.h>
 
-using namespace std;
-
 namespace duckdb {
 
 static string_t repeat_scalar_function(const string_t &str, const int64_t cnt, vector<char> &result) {

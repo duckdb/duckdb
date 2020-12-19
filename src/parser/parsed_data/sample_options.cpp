@@ -2,7 +2,6 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 string SampleMethodToString(SampleMethod method) {
 	switch (method) {

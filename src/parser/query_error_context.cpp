@@ -1,6 +1,8 @@
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
+
 #include "utf8proc_wrapper.h"
 
 namespace duckdb {
@@ -88,7 +90,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 			break;
 		}
 	}
-	string line_indicator = "LINE " + std::to_string(line_number) + ": ";
+	string line_indicator = "LINE " + to_string(line_number) + ": ";
 	string begin_trunc = truncate_beginning ? "..." : "";
 	string end_trunc = truncate_end ? "..." : "";
 

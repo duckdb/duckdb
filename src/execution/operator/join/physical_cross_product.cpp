@@ -3,7 +3,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
 public:

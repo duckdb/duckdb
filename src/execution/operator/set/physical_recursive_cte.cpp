@@ -8,8 +8,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalRecursiveCTEState : public PhysicalOperatorState {

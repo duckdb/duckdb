@@ -8,7 +8,6 @@
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	BoundStatement result;

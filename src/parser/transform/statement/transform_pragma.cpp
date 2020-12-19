@@ -5,7 +5,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
@@ -22,7 +22,7 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 			auto expr = TransformExpression(node);
 
 			if (expr->type == ExpressionType::COMPARE_EQUAL) {
-                auto &comp = (ComparisonExpression &)*expr;
+				auto &comp = (ComparisonExpression &)*expr;
 				info.named_parameters[comp.left->ToString()] = comp.right->ToString();
 			} else if (node->type == T_PGAConst) {
 				auto constant = TransformConstant((PGAConst *)node);

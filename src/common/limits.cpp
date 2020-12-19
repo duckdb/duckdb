@@ -3,9 +3,9 @@
 #include "duckdb/common/exception.hpp"
 #include <limits>
 
-using namespace std;
-
 namespace duckdb {
+
+using std::numeric_limits;
 
 int8_t NumericLimits<int8_t>::Minimum() {
 	return numeric_limits<int8_t>::lowest() + 1;

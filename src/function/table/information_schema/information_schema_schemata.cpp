@@ -5,8 +5,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct InformationSchemaSchemataData : public FunctionOperatorData {

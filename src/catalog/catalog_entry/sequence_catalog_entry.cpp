@@ -9,7 +9,6 @@
 #include <sstream>
 
 namespace duckdb {
-using namespace std;
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info)
     : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info->name), usage_count(info->usage_count),
@@ -45,7 +44,7 @@ unique_ptr<CreateSequenceInfo> SequenceCatalogEntry::Deserialize(Deserializer &s
 }
 
 string SequenceCatalogEntry::ToSQL() {
-	stringstream ss;
+	std::stringstream ss;
 	ss << "CREATE SEQUENCE ";
 	ss << name;
 	ss << " INCREMENT BY " << increment;

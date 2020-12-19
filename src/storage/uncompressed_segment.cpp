@@ -10,7 +10,6 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
-using namespace std;
 
 UncompressedSegment::UncompressedSegment(BufferManager &manager, PhysicalType type, idx_t row_start)
     : manager(manager), type(type), max_vector_count(0), tuple_count(0), row_start(row_start), versions(nullptr) {

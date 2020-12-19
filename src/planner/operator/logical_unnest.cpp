@@ -1,7 +1,6 @@
 #include "duckdb/planner/operator/logical_unnest.hpp"
 
 namespace duckdb {
-using namespace std;
 
 vector<ColumnBinding> LogicalUnnest::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();

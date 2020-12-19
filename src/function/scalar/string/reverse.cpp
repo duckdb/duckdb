@@ -7,8 +7,6 @@
 
 #include <string.h>
 
-using namespace std;
-
 namespace duckdb {
 
 //! Fast ASCII string reverse, returns false if the input data is not ascii

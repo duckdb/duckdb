@@ -3,7 +3,6 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool ExpressionListRef::Equals(const TableRef *other_) const {
 	if (!TableRef::Equals(other_)) {

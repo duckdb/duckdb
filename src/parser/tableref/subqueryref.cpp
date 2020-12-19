@@ -3,8 +3,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, string alias_p)

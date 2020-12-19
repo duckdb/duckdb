@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalEmptyResult &op) {
 	D_ASSERT(op.children.size() == 0);

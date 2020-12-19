@@ -22,7 +22,6 @@
 #include <mutex>
 
 using namespace duckdb;
-using namespace std;
 
 seed_t DBGenGlobals::Seed[MAX_STREAM + 1] = {
     {PART, 1, 0, 1},                           /* P_MFG_SD     0 */

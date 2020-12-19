@@ -7,8 +7,6 @@
 
 #include <string.h>
 
-using namespace std;
-
 namespace duckdb {
 
 static void concat_function(DataChunk &args, ExpressionState &state, Vector &result) {

@@ -1,7 +1,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 string Transformer::TransformAlias(PGAlias *root, vector<string> &column_name_alias) {

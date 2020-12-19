@@ -6,8 +6,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct InformationSchemaTablesData : public FunctionOperatorData {
@@ -84,7 +82,7 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 		// finished returning values
 		return;
 	}
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
 	output.SetCardinality(next - data.offset);
 
 	// start returning values

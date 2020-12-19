@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &op) {
 	// first visit the child nodes

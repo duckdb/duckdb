@@ -12,8 +12,6 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PipelineTask : public Task {

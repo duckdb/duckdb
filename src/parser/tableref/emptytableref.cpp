@@ -3,7 +3,6 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool EmptyTableRef::Equals(const TableRef *other) const {
 	return TableRef::Equals(other);

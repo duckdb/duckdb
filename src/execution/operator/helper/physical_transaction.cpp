@@ -1,8 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
 #include "duckdb/main/client_context.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalTransaction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {

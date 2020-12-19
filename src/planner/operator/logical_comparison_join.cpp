@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperatorType logical_type)
     : LogicalJoin(join_type, logical_type) {

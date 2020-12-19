@@ -8,7 +8,6 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 //! The CSENode contains information about a common subexpression; how many times it occurs, and the column index in the
 //! underlying projection

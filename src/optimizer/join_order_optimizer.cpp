@@ -3,11 +3,11 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/common/pair.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 using JoinNode = JoinOrderOptimizer::JoinNode;
 
@@ -427,7 +427,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			best_right = smallest_index[1];
 			// the code below assumes best_right > best_left
 			if (best_left > best_right) {
-				swap(best_left, best_right);
+				std::swap(best_left, best_right);
 			}
 		}
 		// now update the to-be-checked pairs

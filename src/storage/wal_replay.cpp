@@ -16,8 +16,6 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace std;
-
 namespace duckdb {
 class ReplayState {
 public:

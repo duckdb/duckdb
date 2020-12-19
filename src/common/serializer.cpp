@@ -1,7 +1,6 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <> string Deserializer::Read() {
 	uint32_t size = Read<uint32_t>();

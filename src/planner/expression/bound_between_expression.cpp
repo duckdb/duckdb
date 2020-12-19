@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower,
                                                unique_ptr<Expression> upper, bool lower_inclusive, bool upper_inclusive)

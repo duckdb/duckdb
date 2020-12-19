@@ -6,8 +6,6 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_context.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalDelimJoinState : public PhysicalOperatorState {

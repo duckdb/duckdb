@@ -10,7 +10,6 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CleanupState::CleanupState() : current_table(nullptr), count(0) {
 }

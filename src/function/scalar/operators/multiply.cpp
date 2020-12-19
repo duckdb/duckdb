@@ -7,8 +7,6 @@
 
 #include <limits>
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -73,8 +71,8 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 		return false;
 	}
 #else
-	uint64_t left_non_negative = uint64_t(abs(left));
-	uint64_t right_non_negative = uint64_t(abs(right));
+	uint64_t left_non_negative = uint64_t(std::abs(left));
+	uint64_t right_non_negative = uint64_t(std::abs(right));
 	// split values into 2 32-bit parts
 	uint64_t left_high_bits = left_non_negative >> 32;
 	uint64_t left_low_bits = left_non_negative & 0xffffffff;
@@ -127,8 +125,7 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//
-template<class T, T min, T max>
-bool TryDecimalMultiplyTemplated(T left, T right, T &result) {
+template <class T, T min, T max> bool TryDecimalMultiplyTemplated(T left, T right, T &result) {
 	if (!TryMultiplyOperator::Operation(left, right, result) || result < min || result > max) {
 		return false;
 	}

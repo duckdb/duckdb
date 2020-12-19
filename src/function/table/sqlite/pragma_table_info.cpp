@@ -12,8 +12,6 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 struct PragmaTableFunctionData : public TableFunctionData {
@@ -97,7 +95,7 @@ static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogE
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)table->columns.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table->columns.size());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
@@ -132,7 +130,7 @@ static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEnt
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)view->types.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view->types.size());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {

@@ -2,10 +2,8 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using namespace duckdb;
-using namespace std;
 
 string LogicalDistinct::ParamsToString() const {
 	string result = LogicalOperator::ParamsToString();

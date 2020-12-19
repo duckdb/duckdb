@@ -16,8 +16,6 @@
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,

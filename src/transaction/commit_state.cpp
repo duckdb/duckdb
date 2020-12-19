@@ -13,7 +13,6 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
     : log(log), commit_id(commit_id), current_table_info(nullptr) {

@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
-using namespace std;
 
 LogicalJoin::LogicalJoin(JoinType join_type, LogicalOperatorType logical_type)
     : LogicalOperator(logical_type), join_type(join_type) {

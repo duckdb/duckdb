@@ -3,7 +3,6 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
 	auto index = ref.bind_index;

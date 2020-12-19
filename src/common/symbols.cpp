@@ -37,7 +37,7 @@
 #include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
-using namespace std;
+
 template class std::unique_ptr<SQLStatement>;
 template class std::unique_ptr<AlterStatement>;
 template class std::unique_ptr<CopyStatement>;

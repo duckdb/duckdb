@@ -3,7 +3,6 @@
 #include "duckdb/main/appender.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 DUCKDB_BENCHMARK(SELECT1Memory, "[storage]")
 void Load(DuckDBBenchmarkState *state) override {

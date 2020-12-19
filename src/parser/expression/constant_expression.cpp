@@ -5,7 +5,6 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ConstantExpression::ConstantExpression(Value val)
     : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(val) {
