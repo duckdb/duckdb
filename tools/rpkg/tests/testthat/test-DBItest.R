@@ -11,6 +11,23 @@ DBItest::test_all(c(
 
   if (packageVersion("DBItest") < "1.7.0.9004") "roundtrip_timestamp", # broken test
 
+  "send_query_params", # type of ? issue
+  "get_query_params", # type of ? issue
+
+  "bind_return_value", # multiple bind parameters
+  "bind_too_many",
+  "bind_not_enough",
+  "bind_multi_row_unequal_length",
+  "bind_unnamed_param_named_placeholders",
+  "bind_multi_row",
+  "bind_multi_row_zero_length",
+  "bind_multi_row_statement",
+  "bind_repeated",
+  "bind_integer",
+  "bind_repeated_untouched",
+  "bind_.*",
+
+
   "data_logical", # casting NULL issue
 
   "roundtrip_field_types", # strange
