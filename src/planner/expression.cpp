@@ -6,7 +6,6 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Expression::Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type)
     : BaseExpression(type, expression_class), return_type(move(return_type)) {

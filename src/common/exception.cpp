@@ -1,9 +1,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Exception::Exception(string message) : std::exception(), type(ExceptionType::INVALID) {
 	exception_message_ = message;
@@ -104,7 +104,7 @@ CastException::CastException(const LogicalType origType, const LogicalType newTy
 ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType origType,
                                                    const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
-                                               std::to_string((intmax_t)value) +
+                                               to_string((intmax_t)value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
                                                TypeIdToString(newType)) {
@@ -112,7 +112,7 @@ ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const Ph
 
 ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType origType,
                                                    const PhysicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + std::to_string(value) +
+    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + to_string(value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
                                                TypeIdToString(newType)) {
@@ -127,8 +127,8 @@ ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const 
 }
 
 ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType varType, const idx_t length)
-    : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) + "(" +
-                                                 std::to_string(length) + ")") {
+    : Exception(ExceptionType::OUT_OF_RANGE,
+                "The value is too long to fit into type " + TypeIdToString(varType) + "(" + to_string(length) + ")") {
 }
 
 ConversionException::ConversionException(string msg) : Exception(ExceptionType::CONVERSION, msg) {

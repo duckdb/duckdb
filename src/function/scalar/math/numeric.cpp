@@ -9,8 +9,6 @@
 #include <cmath>
 #include <errno.h>
 
-using namespace std;
-
 namespace duckdb {
 
 template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(LogicalType type) {
@@ -126,7 +124,7 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct BitCntOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		using TU = typename make_unsigned<TA>::type;
+		using TU = typename std::make_unsigned<TA>::type;
 		TR count = 0;
 		for (auto value = TU(input); value > 0; value >>= 1) {
 			count += TR(value & 1);

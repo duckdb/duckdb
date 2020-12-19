@@ -9,7 +9,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class T> static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
 	auto addresses = FlatVector::GetData<uintptr_t>(source);

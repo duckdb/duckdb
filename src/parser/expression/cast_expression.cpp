@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> child)
     : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(target) {

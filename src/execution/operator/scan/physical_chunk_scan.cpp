@@ -1,7 +1,5 @@
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalChunkScanState : public PhysicalOperatorState {

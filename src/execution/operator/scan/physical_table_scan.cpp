@@ -9,8 +9,6 @@
 #include "duckdb/parallel/task_context.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {

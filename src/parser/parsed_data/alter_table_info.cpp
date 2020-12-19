@@ -2,7 +2,6 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void AlterInfo::Serialize(Serializer &serializer) {
 	serializer.Write<AlterType>(type);

@@ -2,8 +2,6 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string ExpressionTypeToString(ExpressionType type) {

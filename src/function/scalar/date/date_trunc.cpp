@@ -9,8 +9,6 @@
 // TODO date_trunc function should also handle interval data type when it is implemented. See
 // https://www.postgresql.org/docs/9.1/functions-datetime.html
 
-using namespace std;
-
 namespace duckdb {
 
 struct MillenniumTruncOperator {

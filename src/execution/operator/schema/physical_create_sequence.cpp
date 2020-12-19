@@ -1,8 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_create_sequence.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalCreateSequence::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,

@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 LogicalFilter::LogicalFilter(unique_ptr<Expression> expression) : LogicalOperator(LogicalOperatorType::LOGICAL_FILTER) {
 	expressions.push_back(move(expression));

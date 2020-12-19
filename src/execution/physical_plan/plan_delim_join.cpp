@@ -9,8 +9,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void GatherDelimScans(PhysicalOperator *op, vector<PhysicalOperator *> &delim_scans) {

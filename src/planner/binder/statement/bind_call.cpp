@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(CallStatement &stmt) {
 	BoundStatement result;

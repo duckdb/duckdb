@@ -14,7 +14,6 @@
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 
 namespace duckdb {
-using namespace std;
 
 StorageManager::StorageManager(DuckDB &db, string path, bool read_only)
     : database(db), path(path), wal(db), read_only(read_only) {

@@ -3,9 +3,7 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
-#include <set>
-
-using namespace std;
+#include <unordered_set>
 
 namespace duckdb {
 
@@ -34,7 +32,7 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 
 static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	set<string> name_collision_set;
+	std::unordered_set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type
 	if (arguments.size() == 0) {

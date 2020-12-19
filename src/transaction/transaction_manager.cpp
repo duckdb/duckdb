@@ -10,7 +10,6 @@
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
-using namespace std;
 
 TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
 	// start timestamp starts at zero

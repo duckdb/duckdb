@@ -2,7 +2,6 @@
 
 #include "duckdb/common/serializer.hpp"
 
-using namespace std;
 namespace duckdb {
 
 string CheckConstraint::ToString() const {

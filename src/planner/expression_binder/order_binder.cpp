@@ -5,8 +5,6 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, unordered_map<string, idx_t> &alias_map,

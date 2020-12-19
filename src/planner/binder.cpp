@@ -9,7 +9,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
     : context(context), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {

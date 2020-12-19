@@ -9,10 +9,9 @@
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/common/pair.hpp"
 
 #include <unordered_map>
-
-using namespace std;
 
 namespace duckdb {
 constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096 * 3;

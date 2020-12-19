@@ -3,7 +3,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 MetaBlockWriter::MetaBlockWriter(BlockManager &manager) : manager(manager) {
 	block = manager.CreateBlock();

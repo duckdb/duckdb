@@ -5,7 +5,6 @@
 #include <cmath>
 
 namespace duckdb {
-using namespace std;
 
 struct stddev_state_t {
 	uint64_t count;  //  n

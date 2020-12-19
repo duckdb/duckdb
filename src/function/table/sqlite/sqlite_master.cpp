@@ -9,8 +9,6 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 struct SQLiteMasterData : public FunctionOperatorData {

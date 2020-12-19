@@ -2,8 +2,6 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalAlter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {

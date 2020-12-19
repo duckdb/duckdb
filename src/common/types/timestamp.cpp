@@ -9,8 +9,6 @@
 #include <chrono> // chrono::system_clock
 #include <ctime>
 
-using namespace std;
-
 namespace duckdb {
 
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time

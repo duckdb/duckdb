@@ -3,8 +3,6 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 class CopyToFunctionGlobalState : public GlobalOperatorState {

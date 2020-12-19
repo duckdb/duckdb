@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCrossProduct &op) {
 	D_ASSERT(op.children.size() == 2);

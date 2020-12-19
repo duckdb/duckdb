@@ -5,7 +5,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t depth) {
 	D_ASSERT(!colref.column_name.empty());

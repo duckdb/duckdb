@@ -10,8 +10,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static LogicalType ResolveWindowExpressionType(ExpressionType window_type, LogicalType child_type) {

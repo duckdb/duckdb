@@ -4,7 +4,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 ColumnSegment::ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count)
     : SegmentBase(start, count), type(type), type_size(GetTypeIdSize(type.InternalType())), segment_type(segment_type),

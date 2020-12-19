@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 WhereBinder::WhereBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);

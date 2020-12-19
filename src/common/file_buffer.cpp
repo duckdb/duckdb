@@ -7,7 +7,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
 	const int SECTOR_SIZE = Storage::SECTOR_SIZE;

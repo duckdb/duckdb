@@ -4,8 +4,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct string_agg_state_t {

@@ -6,8 +6,6 @@
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "utf8proc.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 // length returns the size in characters

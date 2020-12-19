@@ -7,7 +7,6 @@
 #include "duckdb/planner/operator/logical_distinct.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<PhysicalOperator> child,
                                                                      vector<unique_ptr<Expression>> distinct_targets) {

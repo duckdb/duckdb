@@ -2,7 +2,6 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 namespace duckdb {
-using namespace std;
 
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
                                                      CreateTableFunctionInfo *info)

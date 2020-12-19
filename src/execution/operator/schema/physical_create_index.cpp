@@ -5,8 +5,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {

@@ -3,8 +3,6 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/file_system.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct GlobFunctionBindData : public TableFunctionData {

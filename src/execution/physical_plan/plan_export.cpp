@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_export.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExport &op) {
 	auto export_node = make_unique<PhysicalExport>(op.types, op.function, move(op.copy_info));

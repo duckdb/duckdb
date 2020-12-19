@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression

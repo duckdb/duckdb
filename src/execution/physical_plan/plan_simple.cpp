@@ -11,7 +11,6 @@
 #include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op) {
 	switch (op.type) {

@@ -6,7 +6,6 @@
 #include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperator(op);

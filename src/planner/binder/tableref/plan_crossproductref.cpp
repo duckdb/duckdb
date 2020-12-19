@@ -3,7 +3,6 @@
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCrossProductRef &expr) {
 	auto cross_product = make_unique<LogicalCrossProduct>();

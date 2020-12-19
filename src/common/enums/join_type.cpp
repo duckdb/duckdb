@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/join_type.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string JoinTypeToString(JoinType type) {

@@ -8,8 +8,6 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 using ScanStructure = JoinHashTable::ScanStructure;

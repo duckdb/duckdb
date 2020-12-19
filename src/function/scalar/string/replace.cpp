@@ -8,8 +8,6 @@
 #include <ctype.h>
 #include <unordered_map>
 
-using namespace std;
-
 namespace duckdb {
 
 static idx_t next_needle(const char *input_haystack, idx_t size_haystack, const char *input_needle,

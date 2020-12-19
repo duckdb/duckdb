@@ -4,7 +4,7 @@
 #include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
