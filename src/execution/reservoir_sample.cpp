@@ -1,4 +1,5 @@
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -67,7 +68,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// we generate a random number between (min_threshold, 1)
 	double r2 = random.NextRandom(min_threshold, 1);
 	// now we insert the new weight into the reservoir
-	reservoir_weights.push(std::make_pair(-r2, min_entry));
+	reservoir_weights.push(make_pair(-r2, min_entry));
 	// we update the min entry with the new min entry in the reservoir
 	SetNextEntry();
 }
@@ -96,7 +97,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 		// we use a priority queue to extract the minimum key in O(1) time
 		for (idx_t i = 0; i < sample_count; i++) {
 			double k_i = random.NextRandom();
-			reservoir_weights.push(std::make_pair(-k_i, i));
+			reservoir_weights.push(make_pair(-k_i, i));
 		}
 		// now that we have the sample, we start our replacement strategy
 		// 4. Repeat Steps 5–10 until the population is exhausted

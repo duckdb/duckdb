@@ -11,6 +11,8 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/to_string.hpp"
+
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -26,7 +28,7 @@ static char is_newline(char c) {
 
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
-	return std::to_string(linenr + 1) + estimated;
+	return to_string(linenr + 1) + estimated;
 }
 
 static bool StartsWithNumericDate(string &separator, const string_t &value) {
@@ -203,7 +205,7 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
 	int digits = NumericHelper::UnsignedLength(col_number);
 	string leading_zeros = string("0", max_digits - digits);
-	string value = std::to_string(col_number);
+	string value = to_string(col_number);
 	return string(prefix + leading_zeros + value);
 }
 
@@ -1373,7 +1375,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					auto s = parse_data[i];
 					auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
 					if (utf_type == UnicodeType::INVALID) {
-						string col_name = std::to_string(col_idx);
+						string col_name = to_string(col_idx);
 						if (col_idx < col_names.size()) {
 							col_name = "\"" + col_names[col_idx] + "\"";
 						}
@@ -1404,7 +1406,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
 				}
 			} catch (const Exception &e) {
-				string col_name = std::to_string(col_idx);
+				string col_name = to_string(col_idx);
 				if (col_idx < col_names.size()) {
 					col_name = "\"" + col_names[col_idx] + "\"";
 				}

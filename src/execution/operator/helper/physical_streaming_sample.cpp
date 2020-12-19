@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_streaming_sample.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -76,7 +77,7 @@ unique_ptr<PhysicalOperatorState> PhysicalStreamingSample::GetOperatorState() {
 }
 
 string PhysicalStreamingSample::ParamsToString() const {
-	return SampleMethodToString(method) + ": " + std::to_string(100 * percentage) + "%";
+	return SampleMethodToString(method) + ": " + to_string(100 * percentage) + "%";
 }
 
 } // namespace duckdb

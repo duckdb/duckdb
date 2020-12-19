@@ -26,8 +26,8 @@
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-
 #include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -261,7 +261,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLState
 	auto n_param = statement->n_param;
 
 	// now write the prepared statement data into the catalog
-	string prepare_name = "____duckdb_internal_prepare_" + std::to_string(prepare_count);
+	string prepare_name = "____duckdb_internal_prepare_" + to_string(prepare_count);
 	prepare_count++;
 	// create a prepare statement out of the underlying statement
 	auto prepare = make_unique<PrepareStatement>();

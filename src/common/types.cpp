@@ -587,13 +587,13 @@ void LogicalType::Verify() const {
 }
 
 bool ApproxEqual(float ldecimal, float rdecimal) {
-	float epsilon = fabs(rdecimal) * 0.01;
-	return fabs(ldecimal - rdecimal) <= epsilon;
+	float epsilon = std::fabs(rdecimal) * 0.01;
+	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
 bool ApproxEqual(double ldecimal, double rdecimal) {
-	double epsilon = fabs(rdecimal) * 0.01;
-	return fabs(ldecimal - rdecimal) <= epsilon;
+	double epsilon = std::fabs(rdecimal) * 0.01;
+	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
 } // namespace duckdb

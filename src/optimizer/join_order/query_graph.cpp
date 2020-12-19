@@ -3,6 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -12,7 +13,7 @@ static string QueryEdgeToString(const QueryEdge *info, vector<idx_t> prefix) {
 	string result = "";
 	string source = "[";
 	for (idx_t i = 0; i < prefix.size(); i++) {
-		source += std::to_string(prefix[i]) + (i < prefix.size() - 1 ? ", " : "");
+		source += to_string(prefix[i]) + (i < prefix.size() - 1 ? ", " : "");
 	}
 	source += "]";
 	for (auto &entry : info->neighbors) {

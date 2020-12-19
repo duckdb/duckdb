@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -34,7 +35,7 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_) const {
 }
 
 string BoundColumnRefExpression::ToString() const {
-	return "#[" + std::to_string(binding.table_index) + "." + std::to_string(binding.column_index) + "]";
+	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
 }
 
 } // namespace duckdb

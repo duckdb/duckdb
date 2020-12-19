@@ -6,6 +6,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/pair.hpp"
 
 #include <algorithm>
 
@@ -33,7 +34,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 }
 
 vector<string> BindContext::GetSimilarBindings(const string &column_name) {
-	vector<std::pair<string, idx_t>> scores;
+	vector<pair<string, idx_t>> scores;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		for (auto &name : binding->names) {

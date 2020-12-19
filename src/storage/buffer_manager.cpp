@@ -1,4 +1,5 @@
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "concurrentqueue.h"
@@ -270,7 +271,7 @@ void BufferManager::SetLimit(idx_t limit) {
 }
 
 string BufferManager::GetTemporaryPath(block_id_t id) {
-	return fs.JoinPath(temp_directory, std::to_string(id) + ".block");
+	return fs.JoinPath(temp_directory, to_string(id) + ".block");
 }
 
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {

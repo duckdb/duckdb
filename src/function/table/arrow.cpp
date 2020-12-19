@@ -9,6 +9,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -117,7 +118,7 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 		}
 		auto name = string(schema.name);
 		if (name.empty()) {
-			name = string("v") + std::to_string(col_idx);
+			name = string("v") + to_string(col_idx);
 		}
 		names.push_back(name);
 	}

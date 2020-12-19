@@ -1,4 +1,5 @@
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -25,7 +26,7 @@ string MaterializedQueryResult::ToString() {
 	string result;
 	if (success) {
 		result = HeaderToString();
-		result += "[ Rows: " + std::to_string(collection.Count()) + "]\n";
+		result += "[ Rows: " + to_string(collection.Count()) + "]\n";
 		for (idx_t j = 0; j < collection.Count(); j++) {
 			for (idx_t i = 0; i < collection.ColumnCount(); i++) {
 				auto val = collection.GetValue(i, j);

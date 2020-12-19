@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -11,7 +12,7 @@ ParameterExpression::ParameterExpression()
 }
 
 string ParameterExpression::ToString() const {
-	return "$" + std::to_string(parameter_nr);
+	return "$" + to_string(parameter_nr);
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Copy() const {

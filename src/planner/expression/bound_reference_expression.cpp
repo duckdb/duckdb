@@ -2,6 +2,7 @@
 
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -14,7 +15,7 @@ BoundReferenceExpression::BoundReferenceExpression(LogicalType type, idx_t index
 }
 
 string BoundReferenceExpression::ToString() const {
-	return "#" + std::to_string(index);
+	return "#" + to_string(index);
 }
 
 bool BoundReferenceExpression::Equals(const BaseExpression *other_) const {

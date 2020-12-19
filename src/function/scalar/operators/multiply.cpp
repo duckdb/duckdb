@@ -5,8 +5,6 @@
 
 #include "duckdb/common/types/hugeint.hpp"
 
-#include <limits>
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -71,8 +69,8 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 		return false;
 	}
 #else
-	uint64_t left_non_negative = uint64_t(abs(left));
-	uint64_t right_non_negative = uint64_t(abs(right));
+	uint64_t left_non_negative = uint64_t(std::abs(left));
+	uint64_t right_non_negative = uint64_t(std::abs(right));
 	// split values into 2 32-bit parts
 	uint64_t left_high_bits = left_non_negative >> 32;
 	uint64_t left_low_bits = left_non_negative & 0xffffffff;
@@ -116,7 +114,7 @@ template <> bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int
 	result = left * right;
 #endif
 	// FIXME: this check can be removed if we get rid of NullValue<T>
-	if (result == std::numeric_limits<int64_t>::min()) {
+	if (result == NumericLimits<int64_t>::Minimum()) {
 		return false;
 	}
 	return true;

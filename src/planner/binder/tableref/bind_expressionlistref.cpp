@@ -2,6 +2,7 @@
 #include "duckdb/planner/tableref/bound_expressionlistref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 		if (result->names.size() == 0) {
 			// no names provided, generate them
 			for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-				result->names.push_back("col" + std::to_string(val_idx));
+				result->names.push_back("col" + to_string(val_idx));
 			}
 		}
 

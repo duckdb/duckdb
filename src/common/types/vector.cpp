@@ -12,6 +12,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -350,8 +351,7 @@ Value Vector::GetValue(idx_t index) const {
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
 		for (auto &struct_child : StructVector::GetEntries(*this)) {
-			ret.struct_value.push_back(
-			    std::pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
+			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
 		}
 		return ret;
 	}
@@ -386,7 +386,7 @@ string VectorTypeToString(VectorType type) {
 }
 
 string Vector::ToString(idx_t count) const {
-	string retval = VectorTypeToString(vector_type) + " " + type.ToString() + ": " + std::to_string(count) + " = [ ";
+	string retval = VectorTypeToString(vector_type) + " " + type.ToString() + ": " + to_string(count) + " = [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 	case VectorType::DICTIONARY_VECTOR:
@@ -401,7 +401,7 @@ string Vector::ToString(idx_t count) const {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			retval += std::to_string(start + increment * i) + (i == count - 1 ? "" : ", ");
+			retval += to_string(start + increment * i) + (i == count - 1 ? "" : ", ");
 		}
 		break;
 	}

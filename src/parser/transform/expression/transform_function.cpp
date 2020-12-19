@@ -6,6 +6,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -246,7 +247,7 @@ static string SQLValueOpToString(PGSQLValueFunctionOp op) {
 	case PG_SVFOP_CURRENT_SCHEMA:
 		return "current_schema";
 	default:
-		throw Exception("Could not find named SQL value function specification " + std::to_string((int)op));
+		throw Exception("Could not find named SQL value function specification " + to_string((int)op));
 	}
 }
 

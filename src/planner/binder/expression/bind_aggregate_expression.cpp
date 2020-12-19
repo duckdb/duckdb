@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -67,7 +68,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	if (entry == node.aggregate_map.end()) {
 		// new aggregate: insert into aggregate list
 		aggr_index = node.aggregates.size();
-		node.aggregate_map.insert(std::make_pair(aggregate.get(), aggr_index));
+		node.aggregate_map.insert(make_pair(aggregate.get(), aggr_index));
 		node.aggregates.push_back(move(aggregate));
 	} else {
 		// duplicate aggregate: simplify refer to this aggregate

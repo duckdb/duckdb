@@ -9,6 +9,7 @@
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/common/pair.hpp"
 
 #include <unordered_map>
 
@@ -115,13 +116,13 @@ template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
 		data_ptr_t start = current->data.get();
 		data_ptr_t end = start + current->current_position;
 		// create a vector with all nodes in this chunk
-		vector<std::pair<UndoFlags, data_ptr_t>> nodes;
+		vector<pair<UndoFlags, data_ptr_t>> nodes;
 		while (start < end) {
 			auto type = Load<UndoFlags>(start);
 			start += sizeof(UndoFlags);
 			auto len = Load<uint32_t>(start);
 			start += sizeof(uint32_t);
-			nodes.push_back(std::make_pair(type, start));
+			nodes.push_back(make_pair(type, start));
 			start += len;
 		}
 		// iterate over it in reverse order

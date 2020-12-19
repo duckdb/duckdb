@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -47,7 +48,7 @@ static unique_ptr<FunctionData> list_value_bind(ClientContext &context, ScalarFu
 	// collect names and deconflict, construct return type
 	child_list_t<LogicalType> child_types;
 	if (arguments.size() > 0) {
-		child_types.push_back(std::make_pair("", arguments[0]->return_type));
+		child_types.push_back(make_pair("", arguments[0]->return_type));
 	}
 
 	// this is more for completeness reasons

@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/common/pair.hpp"
 
 #include <algorithm>
 
@@ -477,7 +478,7 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) 
 	throw Exception("Could not find relation in parent node (?)");
 }
 
-std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
+pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node) {
 	JoinRelationSet *left_node = nullptr, *right_node = nullptr;
 	JoinRelationSet *result_relation;

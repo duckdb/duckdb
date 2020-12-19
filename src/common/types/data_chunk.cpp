@@ -12,6 +12,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -102,7 +103,7 @@ vector<LogicalType> DataChunk::GetTypes() {
 }
 
 string DataChunk::ToString() const {
-	string retval = "Chunk - [" + std::to_string(ColumnCount()) + " Columns]\n";
+	string retval = "Chunk - [" + to_string(ColumnCount()) + " Columns]\n";
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		retval += "- " + data[i].ToString(size()) + "\n";
 	}

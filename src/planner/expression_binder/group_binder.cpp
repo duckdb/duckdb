@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -57,8 +58,8 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 	auto select_entry = move(node.select_list[entry]);
 	auto binding = Bind(select_entry, nullptr, false);
 	// now replace the original expression in the select list with a reference to this group
-	group_alias_map[std::to_string(entry)] = bind_index;
-	node.select_list[entry] = make_unique<ColumnRefExpression>(std::to_string(entry));
+	group_alias_map[to_string(entry)] = bind_index;
+	node.select_list[entry] = make_unique<ColumnRefExpression>(to_string(entry));
 	// insert into the set of used aliases
 	used_aliases.insert(entry);
 	return BindResult(move(binding));

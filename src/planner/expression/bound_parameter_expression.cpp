@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -20,7 +21,7 @@ bool BoundParameterExpression::IsFoldable() const {
 }
 
 string BoundParameterExpression::ToString() const {
-	return std::to_string(parameter_nr);
+	return to_string(parameter_nr);
 }
 
 bool BoundParameterExpression::Equals(const BaseExpression *other_) const {

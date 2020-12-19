@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -144,10 +145,10 @@ unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
 
 string PhysicalTopN::ParamsToString() const {
 	string result;
-	result += "Top " + std::to_string(limit);
+	result += "Top " + to_string(limit);
 	if (offset > 0) {
 		result += "\n";
-		result += "Offset " + std::to_string(offset);
+		result += "Offset " + to_string(offset);
 	}
 	result += "\n[INFOSEPARATOR]";
 	for (idx_t i = 0; i < orders.size(); i++) {

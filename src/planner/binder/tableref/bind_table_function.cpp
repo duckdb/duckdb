@@ -9,6 +9,7 @@
 #include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -105,7 +106,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 	for (idx_t i = 0; i < return_names.size(); i++) {
 		if (return_names[i].empty()) {
-			return_names[i] = "C" + std::to_string(i);
+			return_names[i] = "C" + to_string(i);
 		}
 	}
 	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);

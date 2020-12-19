@@ -17,6 +17,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
@@ -458,9 +459,9 @@ static void fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, parqu
 			}
 
 			if (offset > col_data.dict_size) {
-				throw std::runtime_error("Offset " + std::to_string(offset) + " greater than dictionary size " +
-				                         std::to_string(col_data.dict_size) + " at " +
-				                         std::to_string(i + target_offset) + ". Corrupt file?");
+				throw std::runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
+				                         to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
+				                         ". Corrupt file?");
 			}
 			auto value = ((const T *)col_data.dict.ptr)[offset];
 			if (ValueIsValid::Operation(value)) {

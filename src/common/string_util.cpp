@@ -1,4 +1,6 @@
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -101,7 +103,7 @@ string StringUtil::FormatSize(idx_t bytes) {
 	} else if (bytes >= KB) {
 		os << std::fixed << std::setprecision(2) << (bytes / KB) << " KB";
 	} else {
-		os << std::to_string(bytes) + " bytes";
+		os << to_string(bytes) + " bytes";
 	}
 	return (os.str());
 }
@@ -153,14 +155,12 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	return source;
 }
 
-vector<string> StringUtil::TopNStrings(vector<std::pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
+vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
 	if (scores.size() == 0) {
 		return vector<string>();
 	}
 	sort(scores.begin(), scores.end(),
-	     [](const std::pair<string, idx_t> &a, const std::pair<string, idx_t> &b) -> bool {
-		     return a.second < b.second;
-	     });
+	     [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) -> bool { return a.second < b.second; });
 	vector<string> result;
 	result.push_back(scores[0].first);
 	for (idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {
@@ -226,7 +226,7 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 }
 
 vector<string> StringUtil::TopNLevenshtein(vector<string> strings, const string &target, idx_t n, idx_t threshold) {
-	vector<std::pair<string, idx_t>> scores;
+	vector<pair<string, idx_t>> scores;
 	for (auto &str : strings) {
 		scores.push_back(make_pair(str, LevenshteinDistance(str, target)));
 	}

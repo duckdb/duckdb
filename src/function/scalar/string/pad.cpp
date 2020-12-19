@@ -4,11 +4,13 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "duckdb/common/pair.hpp"
+
 #include "utf8proc.hpp"
 
 namespace duckdb {
 
-static std::pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const idx_t size) {
+static pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const idx_t size) {
 	//  Count how much of str will fit in the output
 	auto str = reinterpret_cast<const utf8proc_uint8_t *>(data);
 	idx_t nbytes = 0;
@@ -20,7 +22,7 @@ static std::pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, co
 		nbytes += bytes;
 	}
 
-	return std::pair<idx_t, idx_t>(nbytes, nchars);
+	return pair<idx_t, idx_t>(nbytes, nchars);
 }
 
 static bool insert_padding(const idx_t len, const string_t &pad, vector<char> &result) {

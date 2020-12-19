@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include <algorithm>
 
@@ -9,7 +10,7 @@ using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
 
 string JoinRelationSet::ToString() const {
 	string result = "[";
-	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return std::to_string(relation); });
+	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return to_string(relation); });
 	result += "]";
 	return result;
 }

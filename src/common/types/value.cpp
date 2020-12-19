@@ -1,6 +1,7 @@
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -567,19 +568,19 @@ string Value::ToString() const {
 	case LogicalTypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
 	case LogicalTypeId::TINYINT:
-		return std::to_string(value_.tinyint);
+		return to_string(value_.tinyint);
 	case LogicalTypeId::SMALLINT:
-		return std::to_string(value_.smallint);
+		return to_string(value_.smallint);
 	case LogicalTypeId::INTEGER:
-		return std::to_string(value_.integer);
+		return to_string(value_.integer);
 	case LogicalTypeId::BIGINT:
-		return std::to_string(value_.bigint);
+		return to_string(value_.bigint);
 	case LogicalTypeId::HUGEINT:
 		return Hugeint::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
-		return std::to_string(value_.float_);
+		return to_string(value_.float_);
 	case LogicalTypeId::DOUBLE:
-		return std::to_string(value_.double_);
+		return to_string(value_.double_);
 	case LogicalTypeId::DECIMAL: {
 		auto internal_type = type_.InternalType();
 		if (internal_type == PhysicalType::INT16) {
@@ -606,9 +607,9 @@ string Value::ToString() const {
 	case LogicalTypeId::BLOB:
 		return Blob::ToString(string_t(str_value));
 	case LogicalTypeId::POINTER:
-		return std::to_string(value_.pointer);
+		return to_string(value_.pointer);
 	case LogicalTypeId::HASH:
-		return std::to_string(value_.hash);
+		return to_string(value_.hash);
 	case LogicalTypeId::STRUCT: {
 		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {
