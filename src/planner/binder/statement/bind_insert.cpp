@@ -8,8 +8,6 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t result_columns, bool columns_provided,

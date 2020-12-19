@@ -10,8 +10,6 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static NumericSegment::append_function_t GetAppendFunction(PhysicalType type);

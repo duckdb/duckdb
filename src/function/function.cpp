@@ -20,8 +20,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 // add your initializer for new functions here

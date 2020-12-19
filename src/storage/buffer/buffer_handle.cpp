@@ -2,7 +2,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BufferHandle::BufferHandle(BufferManager &manager, shared_ptr<BlockHandle> handle, FileBuffer *node)
     : manager(manager), handle(move(handle)), node(node) {

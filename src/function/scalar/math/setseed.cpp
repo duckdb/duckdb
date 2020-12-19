@@ -7,7 +7,6 @@
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {
-using namespace std;
 
 struct SetseedBindData : public FunctionData {
 	//! The client context for the function call

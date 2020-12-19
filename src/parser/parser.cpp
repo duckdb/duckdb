@@ -13,7 +13,6 @@
 #include "parser/parser.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Parser::Parser() {
 }
@@ -43,7 +42,7 @@ void Parser::ParseQuery(string query) {
 		for (auto &statement : statements) {
 			statement->query = query;
 			if (statement->type == StatementType::CREATE_STATEMENT) {
-				auto &create = (CreateStatement &) *statement;
+				auto &create = (CreateStatement &)*statement;
 				create.info->sql = query.substr(statement->stmt_location, statement->stmt_length);
 			}
 		}
@@ -54,9 +53,9 @@ vector<SimplifiedToken> Parser::Tokenize(string query) {
 	auto pg_tokens = PostgresParser::Tokenize(query);
 	vector<SimplifiedToken> result;
 	result.reserve(pg_tokens.size());
-	for(auto &pg_token : pg_tokens) {
+	for (auto &pg_token : pg_tokens) {
 		SimplifiedToken token;
-		switch(pg_token.type) {
+		switch (pg_token.type) {
 		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_IDENTIFIER:
 			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
 			break;

@@ -13,8 +13,6 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 Executor::Executor(ClientContext &context) : context(context) {

@@ -8,6 +8,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "duckdb/function/scalar/strftime.hpp"
 
@@ -941,7 +942,8 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	}
 	if (ampm != TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE) {
 		if (result_data[3] > 12) {
-			error_message = "Invalid hour: " + std::to_string(result_data[3]) + " AM/PM, expected an hour within the range [0..12]";
+			error_message =
+			    "Invalid hour: " + to_string(result_data[3]) + " AM/PM, expected an hour within the range [0..12]";
 			return false;
 		}
 		// adjust the hours based on the AM or PM specifier

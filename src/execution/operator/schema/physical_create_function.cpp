@@ -3,8 +3,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalCreateFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,

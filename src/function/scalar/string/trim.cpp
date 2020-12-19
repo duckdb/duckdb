@@ -7,8 +7,6 @@
 
 #include <string.h>
 
-using namespace std;
-
 namespace duckdb {
 
 template <bool LTRIM, bool RTRIM>

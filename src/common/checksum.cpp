@@ -1,8 +1,6 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 uint64_t Checksum(uint8_t *buffer, size_t size) {

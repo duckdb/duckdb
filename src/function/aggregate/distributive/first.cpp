@@ -3,8 +3,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class T> struct FirstState {

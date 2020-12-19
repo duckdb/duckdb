@@ -10,7 +10,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 

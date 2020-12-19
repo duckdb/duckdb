@@ -9,7 +9,6 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
     : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {

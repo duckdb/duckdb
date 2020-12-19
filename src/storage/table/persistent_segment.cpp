@@ -10,7 +10,6 @@
 #include "duckdb/storage/string_segment.hpp"
 
 namespace duckdb {
-using namespace std;
 
 PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, LogicalType type, idx_t start,
                                      idx_t count, unique_ptr<BaseStatistics> statistics)

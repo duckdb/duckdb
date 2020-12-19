@@ -4,7 +4,6 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount);

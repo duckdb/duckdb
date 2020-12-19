@@ -4,9 +4,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "utf8proc.hpp"
+#include "duckdb/common/pair.hpp"
 
-using namespace std;
+#include "utf8proc.hpp"
 
 namespace duckdb {
 
@@ -124,7 +124,7 @@ template <class Op> static void pad_function(DataChunk &args, ExpressionState &s
 	vector<char> buffer;
 	TernaryExecutor::Execute<string_t, int32_t, string_t, string_t>(
 	    str_vector, len_vector, pad_vector, result, args.size(), [&](string_t str, int32_t len, string_t pad) {
-		    len = max(len, int32_t(0));
+		    len = MaxValue<int32_t>(len, 0);
 		    return StringVector::AddString(result, Op::Operation(str, len, pad, buffer));
 	    });
 }

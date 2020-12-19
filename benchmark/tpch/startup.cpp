@@ -4,7 +4,6 @@
 #include "duckdb_benchmark_macro.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 #define SF 1
 
@@ -16,7 +15,7 @@ using namespace std;
 			DuckDB db(db_path);                                                                                        \
 			db.LoadExtension<TPCHExtension>();                                                                         \
 			Connection con(db);                                                                                        \
-			con.Query("CALL dbgen(sf=" + to_string(SF) + ")");                                                         \
+			con.Query("CALL dbgen(sf=" + std::to_string(SF) + ")");                                                    \
 		}                                                                                                              \
 		{                                                                                                              \
 			auto config = GetConfig();                                                                                 \

@@ -2,7 +2,6 @@
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type)
     : Expression(type, ExpressionClass::BOUND_CONJUNCTION, LogicalType::BOOLEAN) {

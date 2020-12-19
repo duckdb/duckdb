@@ -1,7 +1,5 @@
 #include "duckdb/planner/expression_binder/relation_binder.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 RelationBinder::RelationBinder(Binder &binder, ClientContext &context, string op)

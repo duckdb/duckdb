@@ -9,7 +9,6 @@
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
-using namespace std;
 
 LocalTableStorage::LocalTableStorage(DataTable &table) : table(table) {
 	Clear();

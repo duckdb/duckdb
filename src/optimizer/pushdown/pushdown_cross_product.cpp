@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using Filter = FilterPushdown::Filter;
 

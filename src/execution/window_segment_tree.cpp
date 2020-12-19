@@ -6,7 +6,6 @@
 #include <cmath>
 
 namespace duckdb {
-using namespace std;
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
                                      ChunkCollection *input)
@@ -138,7 +137,7 @@ void WindowSegmentTree::ConstructTree() {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			// compute the aggregate for this entry in the segment tree
 			AggregateInit();
-			WindowSegmentValue(level_current, pos, min(level_size, pos + TREE_FANOUT));
+			WindowSegmentValue(level_current, pos, MinValue<idx_t>(level_size, pos + TREE_FANOUT));
 
 			memcpy(levels_flat_native.get() + (levels_flat_offset * state.size()), state.data(), state.size());
 

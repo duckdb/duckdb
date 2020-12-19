@@ -5,7 +5,6 @@
 #include <random>
 
 using namespace duckdb;
-using namespace std;
 
 #define RANGE_QUERY_ROW_COUNT pow(10, 7)
 #define SUM_RESULT 100
@@ -38,7 +37,7 @@ virtual std::string VerifyResult(QueryResult *result) {
 		return "Incorrect amount of columns";
 	}
 	if (materialized.GetValue<int64_t>(0, 0) != SUM_RESULT) {
-		return "Incorrect result returned, expected " + to_string(SUM_RESULT);
+		return "Incorrect result returned, expected " + std::to_string(SUM_RESULT);
 	}
 	return std::string();
 }

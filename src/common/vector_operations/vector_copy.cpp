@@ -11,7 +11,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class T>
 static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,

@@ -3,8 +3,6 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static bool suffix(const string_t &str, const string_t &suffix);

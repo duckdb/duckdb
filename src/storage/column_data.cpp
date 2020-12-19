@@ -5,7 +5,6 @@
 #include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
     : table_info(table_info), type(move(type)), manager(manager), column_idx(column_idx), persistent_rows(0) {

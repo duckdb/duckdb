@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CatalogEntry::~CatalogEntry() {
 }

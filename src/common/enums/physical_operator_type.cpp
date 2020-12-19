@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/physical_operator_type.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string PhysicalOperatorToString(PhysicalOperatorType type) {

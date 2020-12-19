@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:

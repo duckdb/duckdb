@@ -5,7 +5,7 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &select) {

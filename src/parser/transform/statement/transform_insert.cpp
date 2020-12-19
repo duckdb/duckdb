@@ -3,7 +3,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformValuesList(PGList *list) {

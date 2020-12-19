@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
 	return make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));

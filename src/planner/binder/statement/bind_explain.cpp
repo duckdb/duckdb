@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_explain.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	BoundStatement result;

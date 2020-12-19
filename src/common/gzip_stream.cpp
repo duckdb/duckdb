@@ -8,7 +8,7 @@
 
 #include "duckdb/common/limits.hpp"
 using namespace duckdb_miniz;
-using namespace std;
+
 namespace duckdb {
 
 /*
@@ -124,7 +124,7 @@ void GzipStreamBuf::initialize() {
 	is_initialized = true;
 }
 
-streambuf::int_type GzipStreamBuf::underflow() {
+std::streambuf::int_type GzipStreamBuf::underflow() {
 	if (!is_initialized) {
 		initialize();
 	}

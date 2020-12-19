@@ -2,7 +2,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class OP> static scalar_function_t GetScalarIntegerUnaryFunction(LogicalType type) {
 	scalar_function_t function;

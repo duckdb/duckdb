@@ -4,7 +4,6 @@
 #include "duckdb/main/materialized_query_result.hpp"
 
 namespace duckdb {
-using namespace std;
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, ClientContext &context, vector<LogicalType> types,
                                      vector<string> names)

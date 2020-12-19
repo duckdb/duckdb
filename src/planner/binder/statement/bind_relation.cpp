@@ -5,8 +5,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 BoundStatement Binder::Bind(RelationStatement &stmt) {

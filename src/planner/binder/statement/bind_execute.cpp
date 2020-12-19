@@ -7,7 +7,6 @@
 #include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	BoundStatement result;

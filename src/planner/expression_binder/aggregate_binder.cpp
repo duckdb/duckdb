@@ -3,7 +3,6 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 AggregateBinder::AggregateBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context, true) {
 }

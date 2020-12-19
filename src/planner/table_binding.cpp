@@ -11,7 +11,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, idx_t index)
     : alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {

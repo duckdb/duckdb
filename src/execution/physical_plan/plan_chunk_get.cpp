@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_chunk_get.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalChunkGet &op) {
 	D_ASSERT(op.children.size() == 0);

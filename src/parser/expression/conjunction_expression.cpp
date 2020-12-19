@@ -4,7 +4,6 @@
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ConjunctionExpression::ConjunctionExpression(ExpressionType type)
     : ParsedExpression(type, ExpressionClass::CONJUNCTION) {

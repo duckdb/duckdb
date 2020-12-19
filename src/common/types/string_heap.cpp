@@ -8,7 +8,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 #define MINIMUM_HEAP_SIZE 4096
 

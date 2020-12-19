@@ -11,8 +11,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct UDFWrapper {
