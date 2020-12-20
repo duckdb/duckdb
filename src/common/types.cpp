@@ -208,6 +208,9 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return 16; // offset + len
+	case PhysicalType::INVALID:
+        // Should be large enough to hold any value
+		return std::max(std::max(std::max(std::max(std::max(sizeof(hugeint_t), sizeof(double)), sizeof(hash_t)), sizeof(uintptr_t)), sizeof(string_t)), sizeof(interval_t));
 	default:
 		throw ConversionException("Invalid PhysicalType %d", (int32_t)type);
 	}
