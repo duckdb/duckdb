@@ -226,7 +226,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		// fetch a chunk
 		pStmt->current_chunk = pStmt->result->Fetch();
 		pStmt->current_row = -1;
-		if (!sqlite3_display_result(pStmt->prepared->StatementType())) {
+		if (!sqlite3_display_result(pStmt->prepared->GetStatementType())) {
 			// only SELECT statements return results
 			sqlite3_reset(pStmt);
 		}
