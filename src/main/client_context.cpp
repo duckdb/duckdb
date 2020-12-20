@@ -333,7 +333,11 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 			auto &catalog = Catalog::GetCatalog(*this);
 			if (catalog.GetCatalogVersion() != prepared->catalog_version) {
 				// catalog was modified: rebind the statement before execution
-				prepared = CreatePreparedStatement(query, prepared->unbound_statement->Copy());
+				auto new_prepared = CreatePreparedStatement(query, prepared->unbound_statement->Copy());
+				if (prepared->types != new_prepared->types) {
+					throw BinderException("Rebinding statement after catalog change resulted in change of types");
+				}
+				prepared = move(new_prepared);
 			}
 			result = ExecutePreparedStatement(query, prepared, *values, allow_stream_result);
 		}

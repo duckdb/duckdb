@@ -39,7 +39,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// set up a map of parameter number -> value entries
 	for (auto &expr : bound_parameters) {
 		// check if the type of the parameter could be resolved
-		if (expr->return_type.id() == LogicalTypeId::INVALID) {
+		if (expr->return_type.id() == LogicalTypeId::INVALID || expr->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 		}
 		auto value = make_unique<Value>(expr->return_type);
@@ -86,9 +86,14 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	// this happens if the catalog changes, since in this case e.g. tables we relied on may have been deleted
 	auto prepared = entry->second;
 	auto &catalog = Catalog::GetCatalog(context);
+	bool rebound = false;
 	if (catalog.GetCatalogVersion() != entry->second->catalog_version) {
 		// catalog was modified: rebind the statement before running the execute
 		prepared = PrepareSQLStatement(entry->second->unbound_statement->Copy());
+		if (prepared->types != entry->second->types) {
+			throw BinderException("Rebinding statement \"%s\" after catalog change resulted in change of types", stmt.name);
+		}
+		rebound = true;
 	}
 
 	// the bound prepared statement is ready: bind any supplied parameters
@@ -102,6 +107,9 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 		bind_values.push_back(move(value));
 	}
 	prepared->Bind(move(bind_values));
+	if (rebound) {
+		return;
+	}
 
 	// copy the properties of the prepared statement into the planner
 	this->read_only = prepared->read_only;

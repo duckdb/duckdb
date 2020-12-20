@@ -13,15 +13,10 @@ PREPARE v AS SELECT * FROM integers
 statement ok con2
 EXECUTE v
 
-# cannot drop table now
-statement error con1
-DROP TABLE integers
-
-# but CASCADE drop should work
 statement ok con1
 DROP TABLE integers CASCADE
 
-# after the cascade drop the prepared statement is invalidated
+# after the drop the prepared statement is invalidated
 statement error con2
 EXECUTE v
 
@@ -35,19 +30,11 @@ PREPARE v AS SELECT nextval('seq')
 statement ok con2
 EXECUTE v
 
-# cannot drop sequence now
-statement error con1
-DROP SEQUENCE seq
-
-# check that the prepared statement still works
-statement ok con2
-EXECUTE v
-
-# cascade drop
+# drop the sequence
 statement ok con1
 DROP SEQUENCE seq CASCADE
 
-# after the cascade drop the prepared statement is invalidated
+# after the drop the prepared statement is invalidated
 statement error con2
 EXECUTE v
 

@@ -106,6 +106,27 @@ TEST_CASE("Dropping connection with prepared statement resets dependencies", "[a
 	REQUIRE_FAIL(prepared->Execute(12));
 }
 
+TEST_CASE("Alter table and prepared statements", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	auto con = make_unique<Connection>(db);
+	Connection con2(db);
+
+	REQUIRE_NO_FAIL(con->Query("CREATE TABLE a(i TINYINT)"));
+	REQUIRE_NO_FAIL(con->Query("INSERT INTO a VALUES (11), (12), (13)"));
+
+	auto prepared = con->Prepare("SELECT * FROM a WHERE i=$1");
+	result = prepared->Execute(12);
+	REQUIRE(CHECK_COLUMN(result, 0, {12}));
+
+	// we can alter the type of the column
+	REQUIRE_NO_FAIL(con2.Query("ALTER TABLE a ALTER i TYPE BIGINT USING i"));
+
+	// after the table is altered, the return types change, so we fail executing the statement
+	REQUIRE_FAIL(prepared->Execute(12));
+	REQUIRE_FAIL(prepared->Execute(12));
+}
+
 TEST_CASE("Test destructors of prepared statements", "[api]") {
 	unique_ptr<DuckDB> db;
 	unique_ptr<Connection> con;

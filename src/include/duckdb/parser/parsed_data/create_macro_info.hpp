@@ -21,7 +21,11 @@ struct CreateMacroInfo : public CreateFunctionInfo {
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		throw NotImplementedException("FIXME: copy CreateMacroInfo");
+		auto result = make_unique<CreateMacroInfo>();
+		result->function = function->Copy();
+		result->name = name;
+		CopyProperties(*result);
+		return move(result);
 	}
 };
 
