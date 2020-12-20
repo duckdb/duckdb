@@ -146,7 +146,6 @@ private:
 	BoundStatement Bind(DeleteStatement &stmt);
 	BoundStatement Bind(UpdateStatement &stmt);
 	BoundStatement Bind(CreateStatement &stmt);
-	BoundStatement Bind(ExecuteStatement &stmt);
 	BoundStatement Bind(DropStatement &stmt);
 	BoundStatement Bind(AlterStatement &stmt);
 	BoundStatement Bind(TransactionStatement &stmt);

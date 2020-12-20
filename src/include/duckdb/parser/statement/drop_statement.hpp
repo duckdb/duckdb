@@ -15,14 +15,12 @@ namespace duckdb {
 
 class DropStatement : public SQLStatement {
 public:
-	DropStatement() : SQLStatement(StatementType::DROP_STATEMENT), info(make_unique<DropInfo>()){};
+	DropStatement();
 
 	unique_ptr<DropInfo> info;
 
 public:
-	unique_ptr<SQLStatement> Copy() const override {
-		throw NotImplementedException("Unimplemented type for Copy");
-	}
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

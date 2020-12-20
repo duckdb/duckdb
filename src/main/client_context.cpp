@@ -37,7 +37,7 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(move(database)), transaction(*db->transaction_manager), interrupted(false), executor(*this),
       catalog(*db->catalog),
       temporary_objects(make_unique<SchemaCatalogEntry>(db->catalog.get(), TEMP_SCHEMA, true)),
-      prepared_statements(make_unique<CatalogSet>(*db->catalog)), open_result(nullptr) {
+      open_result(nullptr) {
 	random_device rd;
 	random_engine.seed(rd());
 }
@@ -48,16 +48,12 @@ ClientContext::~ClientContext() {
 
 void ClientContext::Destroy() {
 	lock_guard<mutex> client_guard(context_lock);
-	if (!prepared_statements) {
-		return;
-	}
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 		if (!transaction.IsAutoCommit()) {
 			transaction.Rollback();
 		}
 	}
-	db->transaction_manager->AddCatalogSet(*this, move(prepared_statements));
 	CleanupInternal();
 }
 
@@ -171,7 +167,6 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	auto physical_plan = physical_planner.CreatePlan(move(plan));
 	profiler.EndPhase();
 
-	result->dependencies = move(physical_planner.dependencies);
 	result->plan = move(physical_plan);
 	return result;
 }
@@ -312,16 +307,20 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 		transaction.BeginTransaction();
 	}
 	ActiveTransaction().active_query = db->transaction_manager->GetQueryNumber();
-	if (statement && statement->type == StatementType::SELECT_STATEMENT && query_verification_enabled) {
-		// query verification is enabled:
-		// create a copy of the statement and verify the original statement
-		auto copied_statement = unique_ptr_cast<SQLStatement, SelectStatement>(statement->Copy());
-		string error = VerifyQuery(query, move(statement));
-		if (!error.empty()) {
-			// query failed: abort now
-			FinalizeQuery(false);
-			// error in verifying query
-			return make_unique<MaterializedQueryResult>(error);
+	if (statement && query_verification_enabled) {
+		// query verification is enabled
+		// create a copy of the statement, and use the copy
+		// this way we verify that the copy correctly copies all properties
+		auto copied_statement = statement->Copy();
+		if (statement->type == StatementType::SELECT_STATEMENT) {
+			// in case this is a select query, we verify the original statement
+			string error = VerifyQuery(query, move(statement));
+			if (!error.empty()) {
+				// query failed: abort now
+				FinalizeQuery(false);
+				// error in verifying query
+				return make_unique<MaterializedQueryResult>(error);
+			}
 		}
 		statement = move(copied_statement);
 	}
@@ -336,7 +335,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 				// catalog was modified: rebind the statement before execution
 				prepared = CreatePreparedStatement(query, prepared->unbound_statement->Copy());
 			}
-			result = ExecutePreparedStatement(query, move(prepared), *values, allow_stream_result);
+			result = ExecutePreparedStatement(query, prepared, *values, allow_stream_result);
 		}
 	} catch (StandardException &ex) {
 		// standard exceptions do not invalidate the current transaction

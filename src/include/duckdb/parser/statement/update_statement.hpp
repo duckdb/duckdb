@@ -17,8 +17,7 @@ namespace duckdb {
 
 class UpdateStatement : public SQLStatement {
 public:
-	UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMENT) {
-	}
+	UpdateStatement();
 
 	unique_ptr<ParsedExpression> condition;
 	unique_ptr<TableRef> table;
@@ -27,16 +26,7 @@ public:
 	vector<unique_ptr<ParsedExpression>> expressions;
 
 public:
-	unique_ptr<SQLStatement> Copy() const override {
-		auto result = make_unique<UpdateStatement>();
-		result->condition = condition->Copy();
-		result->table = table->Copy();
-		result->from_table = from_table->Copy();
-		result->columns = columns;
-		for(auto &expr : expressions) {
-			result->expressions.push_back(expr->Copy());
-		}
-		return move(result);
-	}
+	unique_ptr<SQLStatement> Copy() const override;
 };
+
 } // namespace duckdb

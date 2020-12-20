@@ -30,11 +30,23 @@ struct CopyInfo : public ParseInfo {
 	string file_path;
 	//! Whether or not this is a copy to file (false) or copy from a file (true)
 	bool is_from;
-
 	//! The file format of the external file
 	string format;
-
+	//! Set of (key, value) options
 	unordered_map<string, vector<Value>> options;
+
+public:
+	unique_ptr<CopyInfo> Copy() const {
+		auto result = make_unique<CopyInfo>();
+		result->schema = schema;
+		result->table = table;
+		result->select_list = select_list;
+		result->file_path = file_path;
+		result->is_from = is_from;
+		result->format = format;
+		result->options = options;
+		return result;
+	}
 };
 
 } // namespace duckdb

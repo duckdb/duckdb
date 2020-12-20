@@ -53,21 +53,29 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &source) {
 //===--------------------------------------------------------------------===//
 // RenameColumnInfo
 //===--------------------------------------------------------------------===//
+unique_ptr<AlterInfo> RenameColumnInfo::Copy() const {
+	return make_unique_base<AlterInfo, RenameColumnInfo>(schema, name, old_name, new_name);
+}
+
 void RenameColumnInfo::Serialize(Serializer &serializer) {
 	AlterTableInfo::Serialize(serializer);
-	serializer.WriteString(name);
+	serializer.WriteString(old_name);
 	serializer.WriteString(new_name);
 }
 
 unique_ptr<AlterInfo> RenameColumnInfo::Deserialize(Deserializer &source, string schema, string table) {
-	auto name = source.Read<string>();
+	auto old_name = source.Read<string>();
 	auto new_name = source.Read<string>();
-	return make_unique<RenameColumnInfo>(schema, table, name, new_name);
+	return make_unique<RenameColumnInfo>(schema, table, old_name, new_name);
 }
 
 //===--------------------------------------------------------------------===//
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
+unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
+	return make_unique_base<AlterInfo, RenameTableInfo>(schema, name, new_table_name);
+}
+
 void RenameTableInfo::Serialize(Serializer &serializer) {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WriteString(new_table_name);
@@ -81,6 +89,10 @@ unique_ptr<AlterInfo> RenameTableInfo::Deserialize(Deserializer &source, string 
 //===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
+unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
+	return make_unique_base<AlterInfo, AddColumnInfo>(schema, name, new_column.Copy());
+}
+
 void AddColumnInfo::Serialize(Serializer &serializer) {
 	AlterTableInfo::Serialize(serializer);
 	new_column.Serialize(serializer);
@@ -94,6 +106,10 @@ unique_ptr<AlterInfo> AddColumnInfo::Deserialize(Deserializer &source, string sc
 //===--------------------------------------------------------------------===//
 // RemoveColumnInfo
 //===--------------------------------------------------------------------===//
+unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
+	return make_unique_base<AlterInfo, RemoveColumnInfo>(schema, name, removed_column, if_exists);
+}
+
 void RemoveColumnInfo::Serialize(Serializer &serializer) {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WriteString(removed_column);
@@ -109,6 +125,10 @@ unique_ptr<AlterInfo> RemoveColumnInfo::Deserialize(Deserializer &source, string
 //===--------------------------------------------------------------------===//
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
+unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
+	return make_unique_base<AlterInfo, ChangeColumnTypeInfo>(schema, name, column_name, target_type, expression->Copy());
+}
+
 void ChangeColumnTypeInfo::Serialize(Serializer &serializer) {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WriteString(column_name);
@@ -126,6 +146,10 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &source, st
 //===--------------------------------------------------------------------===//
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
+unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
+	return make_unique_base<AlterInfo, SetDefaultInfo>(schema, name, column_name, expression->Copy());
+}
+
 void SetDefaultInfo::Serialize(Serializer &serializer) {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WriteString(column_name);
@@ -164,6 +188,10 @@ unique_ptr<AlterInfo> AlterViewInfo::Deserialize(Deserializer &source) {
 //===--------------------------------------------------------------------===//
 // RenameViewInfo
 //===--------------------------------------------------------------------===//
+unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
+	return make_unique_base<AlterInfo, RenameViewInfo>(schema, name, new_view_name);
+}
+
 void RenameViewInfo::Serialize(Serializer &serializer) {
 	AlterViewInfo::Serialize(serializer);
 	serializer.WriteString(new_view_name);

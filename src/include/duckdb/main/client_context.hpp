@@ -55,7 +55,7 @@ public:
 
 	Catalog &catalog;
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
-	unique_ptr<CatalogSet> prepared_statements;
+	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
 
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;

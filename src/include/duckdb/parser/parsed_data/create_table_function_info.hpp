@@ -26,6 +26,15 @@ struct CreateTableFunctionInfo : public CreateFunctionInfo {
 
 	//! The table functions
 	vector<TableFunction> functions;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		TableFunctionSet set(name);
+		set.functions = functions;
+		auto result = make_unique<CreateTableFunctionInfo>(move(set));
+		CopyProperties(*result);
+		return move(result);
+	}
 };
 
 } // namespace duckdb

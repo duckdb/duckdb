@@ -18,6 +18,11 @@ struct CreateMacroInfo : public CreateFunctionInfo {
 	}
 
 	unique_ptr<MacroFunction> function;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		throw NotImplementedException("FIXME: copy CreateMacroInfo");
+	}
 };
 
 } // namespace duckdb

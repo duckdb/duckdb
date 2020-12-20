@@ -30,8 +30,6 @@ public:
 	unique_ptr<PhysicalOperator> plan;
 	//! The map of parameter index to the actual value entry
 	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
-	//! Any internal catalog dependencies of the prepared statement
-	unordered_set<CatalogEntry *> dependencies;
 
 	//! The result names of the transaction
 	vector<string> names;

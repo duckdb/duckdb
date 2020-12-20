@@ -98,15 +98,12 @@ TEST_CASE("Dropping connection with prepared statement resets dependencies", "[a
 	result = prepared->Execute(12);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-	// now we can't drop the table
-	REQUIRE_FAIL(con2.Query("DROP TABLE a"));
-
-	// now drop the first connection
-	prepared.reset();
-	con.reset();
-
-	// now we can
+	// we can drop the table
 	REQUIRE_NO_FAIL(con2.Query("DROP TABLE a"));
+
+	// after the table is dropped, the prepared statement no longer succeeds when run
+	REQUIRE_FAIL(prepared->Execute(12));
+	REQUIRE_FAIL(prepared->Execute(12));
 }
 
 TEST_CASE("Test destructors of prepared statements", "[api]") {

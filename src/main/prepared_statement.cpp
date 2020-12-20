@@ -9,6 +9,7 @@ using namespace std;
 PreparedStatement::PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data_p, string query,
                                      idx_t n_param)
     : context(context), data(move(data_p)), query(query), success(true), n_param(n_param) {
+	D_ASSERT(data || !success);
 }
 
 PreparedStatement::PreparedStatement(string error)
@@ -19,18 +20,22 @@ PreparedStatement::~PreparedStatement() {
 }
 
 idx_t PreparedStatement::ColumnCount() {
+	D_ASSERT(data);
 	return data ? data->types.size() : 0;
 }
 
 StatementType PreparedStatement::StatementType() {
+	D_ASSERT(data);
 	return data->statement_type;
 }
 
 const vector<LogicalType> &PreparedStatement::GetTypes() {
+	D_ASSERT(data);
 	return data->types;
 }
 
 const vector<string> &PreparedStatement::GetNames() {
+	D_ASSERT(data);
 	return data->names;
 }
 
@@ -38,6 +43,7 @@ unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool a
 	if (!success) {
 		throw InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
 	}
+	D_ASSERT(data);
 	return context->Execute(query, data, values, allow_stream_result && data->allow_stream_result);
 }
 

@@ -3,14 +3,14 @@
 
 namespace duckdb {
 
-ColumnDefinition ColumnDefinition::Copy() {
+ColumnDefinition ColumnDefinition::Copy() const {
 	ColumnDefinition copy(name, type);
 	copy.oid = oid;
 	copy.default_value = default_value ? default_value->Copy() : nullptr;
 	return copy;
 }
 
-void ColumnDefinition::Serialize(Serializer &serializer) {
+void ColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WriteString(name);
 	type.Serialize(serializer);
 	serializer.WriteOptional(default_value);

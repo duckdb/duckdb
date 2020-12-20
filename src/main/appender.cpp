@@ -30,7 +30,13 @@ Appender::Appender(Connection &con, string table_name) : Appender(con, DEFAULT_S
 }
 
 Appender::~Appender() {
-	Close();
+	// flush any remaining chunks
+	// wrapped in a try/catch because Close() can throw if the table was dropped in the meantime
+	try {
+		Close();
+	} catch(...) {
+
+	}
 }
 
 void Appender::BeginRow() {

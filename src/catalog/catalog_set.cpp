@@ -393,6 +393,8 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 			mapping.erase(restored_entry);
 		}
 	}
+	// we mark the catalog as being modified, since this action can lead to e.g. tables being dropped
+	entry->catalog->ModifyCatalog();
 }
 
 } // namespace duckdb

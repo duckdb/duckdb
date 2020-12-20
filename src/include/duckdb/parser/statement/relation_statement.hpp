@@ -15,16 +15,12 @@ namespace duckdb {
 
 class RelationStatement : public SQLStatement {
 public:
-	RelationStatement(shared_ptr<Relation> relation) : SQLStatement(StatementType::RELATION_STATEMENT), relation(move(relation)) {
-	}
+	RelationStatement(shared_ptr<Relation> relation);
 
 	shared_ptr<Relation> relation;
 
 public:
-	unique_ptr<SQLStatement> Copy() const override {
-		auto result = make_unique<RelationStatement>(relation);
-		return move(result);
-	}
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

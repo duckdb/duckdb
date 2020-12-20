@@ -51,8 +51,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((TransactionStatement &)statement);
 	case StatementType::PRAGMA_STATEMENT:
 		return Bind((PragmaStatement &)statement);
-	case StatementType::EXECUTE_STATEMENT:
-		return Bind((ExecuteStatement &)statement);
 	case StatementType::EXPLAIN_STATEMENT:
 		return Bind((ExplainStatement &)statement);
 	case StatementType::VACUUM_STATEMENT:

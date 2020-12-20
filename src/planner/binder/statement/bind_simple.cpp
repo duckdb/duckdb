@@ -1,4 +1,4 @@
-#include "duckdb/parser/statement/alter_table_statement.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"

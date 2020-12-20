@@ -16,14 +16,12 @@ namespace duckdb {
 
 class VacuumStatement : public SQLStatement {
 public:
-	VacuumStatement() : SQLStatement(StatementType::VACUUM_STATEMENT){};
+	VacuumStatement();
 
 	unique_ptr<VacuumInfo> info;
 
 public:
-	unique_ptr<SQLStatement> Copy() const override {
-		throw NotImplementedException("Unimplemented type for Copy");
-	}
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

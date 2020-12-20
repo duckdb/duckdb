@@ -15,7 +15,7 @@ namespace duckdb {
 
 class InsertStatement : public SQLStatement {
 public:
-	InsertStatement() : SQLStatement(StatementType::INSERT_STATEMENT), schema(DEFAULT_SCHEMA){};
+	InsertStatement();
 
 	//! The select statement to insert from
 	unique_ptr<SelectStatement> select_statement;
@@ -28,14 +28,7 @@ public:
 	string schema;
 
 public:
-	unique_ptr<SQLStatement> Copy() const override {
-		auto result = make_unique<InsertStatement>();
-		result->select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(select_statement->Copy());
-		result->columns = columns;
-		result->table = table;
-		result->schema = schema;
-		return move(result);
-	}
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

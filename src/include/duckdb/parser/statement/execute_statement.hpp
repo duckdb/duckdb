@@ -16,19 +16,12 @@ namespace duckdb {
 
 class ExecuteStatement : public SQLStatement {
 public:
-	ExecuteStatement() : SQLStatement(StatementType::EXECUTE_STATEMENT){};
+	ExecuteStatement();
 
 	string name;
 	vector<unique_ptr<ParsedExpression>> values;
 
 public:
-	unique_ptr<SQLStatement> Copy() const override {
-		auto result = make_unique<ExecuteStatement>();
-		result->name = name;
-		for(auto &value : values) {
-			result->values.push_back(value->Copy());
-		}
-		return move(result);
-	}
+	unique_ptr<SQLStatement> Copy() const override;
 };
 } // namespace duckdb

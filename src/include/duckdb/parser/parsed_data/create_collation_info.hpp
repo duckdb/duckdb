@@ -27,6 +27,13 @@ struct CreateCollationInfo : public CreateInfo {
 	bool combinable;
 	//! Whether or not the collation is required for equality comparisons or not. For many collations a binary comparison for equality comparisons is correct, allowing us to skip the collation in these cases which greatly speeds up processing.
 	bool not_required_for_equality;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		auto result = make_unique<CreateCollationInfo>(name, function, combinable, not_required_for_equality);
+		CopyProperties(*result);
+		return move(result);
+	}
 };
 
 } // namespace duckdb

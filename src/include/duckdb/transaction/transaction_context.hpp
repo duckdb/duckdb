@@ -40,9 +40,7 @@ public:
 	void Commit();
 	void Rollback();
 
-	void SetAutoCommit(bool value) {
-		auto_commit = value;
-	}
+	void SetAutoCommit(bool value);
 	bool IsAutoCommit() {
 		return auto_commit;
 	}

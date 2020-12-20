@@ -35,6 +35,13 @@ void TransactionContext::Commit() {
 	}
 }
 
+void TransactionContext::SetAutoCommit(bool value) {
+	auto_commit = value;
+	if (!auto_commit && !current_transaction) {
+		BeginTransaction();
+	}
+}
+
 void TransactionContext::Rollback() {
 	D_ASSERT(current_transaction); // cannot rollback if there is no active transaction
 	auto transaction = current_transaction;

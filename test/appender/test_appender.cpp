@@ -184,11 +184,7 @@ TEST_CASE("Test incorrect usage of appender", "[appender]") {
 		appender.Append<int32_t>(1);
 		// call EndRow before all rows have been appended results in an exception
 		REQUIRE_THROWS(appender.EndRow());
-		// the appender is now invalidated: anything results in an exception
-		REQUIRE_THROWS(appender.BeginRow());
-		REQUIRE_THROWS(appender.Append<int32_t>(1));
-		REQUIRE_THROWS(appender.Flush());
-		// except we can still close the appender
+		// we can still close the appender
 		REQUIRE_NOTHROW(appender.Close());
 	}
 	{
@@ -197,22 +193,15 @@ TEST_CASE("Test incorrect usage of appender", "[appender]") {
 		appender.BeginRow();
 		appender.Append<int32_t>(1);
 		REQUIRE_THROWS(appender.Flush());
-		// and also invalidates the connection
-		REQUIRE_THROWS(appender.BeginRow());
-		REQUIRE_THROWS(appender.Append<int32_t>(1));
-		REQUIRE_THROWS(appender.Flush());
-		// except we can still close the appender
+		// we can still close the appender
 		REQUIRE_NOTHROW(appender.Close());
 	}
 	{
 		// we get the same exception when calling AppendRow with an incorrect number of arguments
 		Appender appender(con, "integers");
 		REQUIRE_THROWS(appender.AppendRow(1));
-		// and also invalidates the connection
-		REQUIRE_THROWS(appender.BeginRow());
-		REQUIRE_THROWS(appender.Append<int32_t>(1));
-		REQUIRE_THROWS(appender.Append<int32_t>(1));
-		REQUIRE_THROWS(appender.EndRow());
+		// we can still close the appender
+		REQUIRE_NOTHROW(appender.Close());
 	}
 	{
 		// we can flush an empty appender

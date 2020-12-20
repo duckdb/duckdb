@@ -130,7 +130,6 @@ template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
 template class std::unique_ptr<SingleJoinRelation>;
 template class std::shared_ptr<Relation>;
 template class std::unique_ptr<CatalogSet>;
-template class std::unique_ptr<PreparedStatementCatalogEntry>;
 template class std::unique_ptr<Binder>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
