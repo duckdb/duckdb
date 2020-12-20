@@ -174,7 +174,7 @@ string TypeIdToString(PhysicalType type) {
 	case PhysicalType::INVALID:
 		return "INVALID";
 	default:
-		throw ConversionException("Invalid PhysicalType %d", type);
+		throw ConversionException("Invalid PhysicalType %d", (int32_t)type);
 	}
 }
 
@@ -209,7 +209,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 	case PhysicalType::LIST:
 		return 16; // offset + len
 	default:
-		throw ConversionException("Invalid PhysicalType %d", type);
+		throw ConversionException("Invalid PhysicalType %d", (int32_t)type);
 	}
 }
 
