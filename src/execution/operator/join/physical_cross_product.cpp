@@ -19,6 +19,7 @@ public:
 	CrossProductGlobalState() {
 	}
 	ChunkCollection rhs_materialized;
+    std::mutex rhs_lock;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientContext &context) {
@@ -27,8 +28,8 @@ unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientConte
 
 void PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
                                 DataChunk &input) {
-	lock_guard<mutex> client_guard(rhs_lock);
 	auto &sink = (CrossProductGlobalState &)state;
+    lock_guard<mutex> client_guard(sink.rhs_lock);
 	sink.rhs_materialized.Append(input);
 }
 
