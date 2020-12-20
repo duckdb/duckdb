@@ -71,8 +71,85 @@ struct TimeConvert {
 };
 
 struct StringConvert {
+	template<class T>
+	static void convert_unicode_value_templated(T *result, int32_t *codepoints, idx_t codepoint_count, const char *data, idx_t ascii_count) {
+		for(idx_t i = 0; i < ascii_count; i++) {
+			result[i] = data[i];
+		}
+		for(idx_t i = 0; i < codepoint_count; i++) {
+			result[ascii_count + i] = codepoints[i];
+		}
+	}
+
+	static PyObject *convert_unicode_value(const char *data, idx_t len, idx_t start_pos) {
+		// slow path: check the code points
+		// we know that all characters before "start_pos" were ascii characters, so we don't need to check those
+
+		// allocate an array of code points so we only have to convert the codepoints once
+		// short-string optimization
+		// we know that the max amount of codepoints is the length of the string
+		// for short strings (less than 64 bytes) we simply statically allocate an array of 256 bytes (64x int32)
+		// this avoids memory allocation for small strings (common case)
+		idx_t remaining = len - start_pos;
+		unique_ptr<int32_t[]> allocated_codepoints;
+		int32_t static_codepoints[64];
+		int32_t *codepoints;
+		if (remaining > 64) {
+			allocated_codepoints = unique_ptr<int32_t[]>(new int32_t[remaining]);
+			codepoints = allocated_codepoints.get();
+		} else {
+			codepoints = static_codepoints;
+		}
+		// now we iterate over the remainder of the string to convert the UTF8 string into a sequence of codepoints
+		// and to find the maximum codepoint
+		int32_t max_codepoint = 127;
+		int sz;
+		idx_t pos = start_pos;
+		idx_t codepoint_count = 0;
+		while(pos < len) {
+			codepoints[codepoint_count] = Utf8Proc::UTF8ToCodepoint(data + pos, sz);
+			pos += sz;
+			if (codepoints[codepoint_count] > max_codepoint) {
+				max_codepoint = codepoints[codepoint_count];
+			}
+			codepoint_count++;
+		}
+		// based on the max codepoint, we construct the result string
+		auto result = PyUnicode_New(start_pos + codepoint_count, max_codepoint);
+		// based on the resulting unicode kind, we fill in the code points
+		auto kind = PyUnicode_KIND(result);
+		switch (kind) {
+		case PyUnicode_1BYTE_KIND:
+			convert_unicode_value_templated<Py_UCS1>(PyUnicode_1BYTE_DATA(result), codepoints, codepoint_count, data, start_pos);
+			break;
+		case PyUnicode_2BYTE_KIND:
+			convert_unicode_value_templated<Py_UCS2>(PyUnicode_2BYTE_DATA(result), codepoints, codepoint_count, data, start_pos);
+			break;
+		case PyUnicode_4BYTE_KIND:
+			convert_unicode_value_templated<Py_UCS4>(PyUnicode_4BYTE_DATA(result), codepoints, codepoint_count, data, start_pos);
+			break;
+		default:
+			throw runtime_error("Unsupported typekind for Python Unicode Compact decode");
+		}
+		return result;
+	}
+
 	template <class DUCKDB_T, class NUMPY_T> static PyObject* convert_value(string_t val) {
-		return PyUnicode_FromStringAndSize(val.GetDataUnsafe(), val.GetSize());
+		auto data = (uint8_t*) val.GetDataUnsafe();
+		auto len = val.GetSize();
+		// check if there are any non-ascii characters in there
+		for(idx_t i = 0; i < len; i++) {
+			if (data[i] > 127) {
+				// there are! fallback to slower case
+				return convert_unicode_value((const char*) data, len, i);
+			}
+		}
+		// no unicode: fast path
+		// directly construct the string and memcpy it
+		auto result = PyUnicode_New(len, 127);
+		auto target_data = PyUnicode_DATA(result);
+		memcpy(target_data, data, len);
+		return result;
 	}
 
 	template<class NUMPY_T> static NUMPY_T null_value() {
