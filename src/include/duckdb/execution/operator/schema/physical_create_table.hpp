@@ -23,8 +23,6 @@ public:
 	//! Table name to create
 	unique_ptr<BoundCreateTableInfo> info;
 
-	std::mutex append_lock;
-
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 

@@ -19,6 +19,7 @@ class CreateTableGlobalState : public GlobalOperatorState {
 public:
 	CreateTableGlobalState() {
 	}
+    std::mutex append_lock;
 	ChunkCollection materialized_child;
 };
 
@@ -28,8 +29,8 @@ unique_ptr<GlobalOperatorState> PhysicalCreateTable::GetGlobalState(ClientContex
 
 void PhysicalCreateTable::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
                                DataChunk &input) {
-	lock_guard<mutex> client_guard(append_lock);
 	auto &sink = (CreateTableGlobalState &)state;
+    lock_guard<mutex> client_guard(state.append_lock);
 	sink.materialized_child.Append(input);
 }
 
