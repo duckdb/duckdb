@@ -214,6 +214,7 @@ static void release_duckdb_arrow_array(ArrowArray *array) {
 }
 
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
+	Normalify();
 	D_ASSERT(out_array);
 
 	auto root_holder = new DuckDBArrowArrayHolder();

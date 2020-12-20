@@ -24,8 +24,11 @@ public:
 	                  vector<string> names, shared_ptr<PreparedStatementData> prepared = nullptr);
 	~StreamQueryResult() override;
 
-	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on error.
-	unique_ptr<DataChunk> Fetch() override;
+	//! Whether or not the StreamQueryResult is still open
+	bool is_open;
+public:
+	//! Fetches a DataChunk from the query result.
+	unique_ptr<DataChunk> FetchRaw() override;
 	//! Converts the QueryResult to a string
 	string ToString() override;
 	//! Materializes the query result and turns it into a materialized query result
@@ -33,9 +36,6 @@ public:
 
 	//! Closes the StreamQueryResult
 	void Close();
-
-	//! Whether or not the StreamQueryResult is still open
-	bool is_open;
 
 private:
 	//! The client context this StreamQueryResult belongs to

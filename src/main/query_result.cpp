@@ -18,6 +18,15 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vec
 QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(error) {
 }
 
+unique_ptr<DataChunk> QueryResult::Fetch() {
+	auto chunk = FetchRaw();
+	if (!chunk) {
+		return nullptr;
+	}
+	chunk->Normalify();
+	return chunk;
+}
+
 bool QueryResult::Equals(QueryResult &other) {
 	// first compare the success state of the results
 	if (success != other.success) {

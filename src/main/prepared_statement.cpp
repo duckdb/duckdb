@@ -24,7 +24,7 @@ idx_t PreparedStatement::ColumnCount() {
 	return data ? data->types.size() : 0;
 }
 
-StatementType PreparedStatement::StatementType() {
+StatementType PreparedStatement::GetStatementType() {
 	D_ASSERT(data);
 	return data->statement_type;
 }

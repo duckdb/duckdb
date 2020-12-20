@@ -343,5 +343,5 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1ty
 		jclass Exception = env->FindClass("java/sql/SQLException");
 		env->ThrowNew(Exception, "Invalid statement");
 	}
-	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->StatementType()).c_str());
+	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->GetStatementType()).c_str());
 }

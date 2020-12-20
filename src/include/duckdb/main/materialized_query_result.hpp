@@ -24,9 +24,10 @@ public:
 
 	ChunkCollection collection;
 public:
-	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on failure.
+	//! Fetches a DataChunk from the query result.
 	//! This will consume the result (i.e. the chunks are taken directly from the ChunkCollection).
 	unique_ptr<DataChunk> Fetch() override;
+	unique_ptr<DataChunk> FetchRaw() override;
 	//! Converts the QueryResult to a string
 	string ToString() override;
 

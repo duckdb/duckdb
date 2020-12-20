@@ -1262,7 +1262,7 @@ SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
 	if (!pStmt || !pStmt->prepared) {
 		return 0;
 	}
-	return pStmt->prepared->StatementType() == StatementType::EXPLAIN_STATEMENT;
+	return pStmt->prepared->GetStatementType() == StatementType::EXPLAIN_STATEMENT;
 }
 
 SQLITE_API int sqlite3_vtab_config(sqlite3 *, int op, ...) {

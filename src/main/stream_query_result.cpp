@@ -26,7 +26,7 @@ string StreamQueryResult::ToString() {
 	return result;
 }
 
-unique_ptr<DataChunk> StreamQueryResult::Fetch() {
+unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 	if (!success || !is_open) {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful or closed streaming query result");
 	}

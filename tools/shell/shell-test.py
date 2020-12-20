@@ -41,6 +41,8 @@ def tf():
 # basic test
 test('select \'asdf\' as a;', out='asdf')
 
+test('select * from range(10000);', out='9999')
+
 # test pragma
 test("""
 .mode csv
