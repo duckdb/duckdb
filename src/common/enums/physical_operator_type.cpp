@@ -77,8 +77,9 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
 	case PhysicalOperatorType::CREATE_TABLE:
+		return "CREATE_TABLE";
     case PhysicalOperatorType::CREATE_TABLE_AS:
-        return "CREATE";
+        return "CREATE_TABLE_AS";
 	case PhysicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
 	case PhysicalOperatorType::EXPLAIN:
