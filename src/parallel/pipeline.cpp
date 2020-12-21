@@ -96,14 +96,7 @@ void Pipeline::ScheduleSequentialTask() {
 
 bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	switch (op->type) {
-	case PhysicalOperatorType::CREATE: {
-		if (op->children.empty()) {
-			// CREATE TABLE
-			return false;
-		}
-		// CREATE TABLE AS
-		return ScheduleOperator(op->children[0].get());
-	}
+	case PhysicalOperatorType::CREATE_TABLE_AS:
 	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
@@ -176,8 +169,7 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
-	case PhysicalOperatorType::CREATE:
-	case PhysicalOperatorType::UNNEST:
+	case PhysicalOperatorType::CREATE_TABLE_AS:
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
