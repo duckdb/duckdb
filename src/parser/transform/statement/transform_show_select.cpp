@@ -9,7 +9,7 @@ using namespace std;
 unique_ptr<ShowStatement> Transformer::TransformShowSelect(PGNode *node) {
 	// we transform SHOW x into PRAGMA SHOW('x')
 	cout << "Here\n";
-	auto stmt = reinterpret_cast<PGVariableShowStmtSelect *>(node);
+	auto stmt = reinterpret_cast<PGVariableShowSelectStmt *>(node);
 	auto select_stmt = reinterpret_cast<PGSelectStmt *>(stmt->stmt);
 	cout << "Here222\n";
 	if(string(stmt->name) == "select"){

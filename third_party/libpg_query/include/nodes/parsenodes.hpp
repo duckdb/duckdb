@@ -1481,12 +1481,12 @@ typedef struct PGVariableShowStmt {
  * Show Statement with Select Statement
  * ----------------------
  */
-typedef struct PGVariableShowStmtSelect
+typedef struct PGVariableShowSelectStmt
 {
 	PGNodeTag		type;
 	PGNode	*stmt;
 	char	   *name;
-} PGVariableShowStmtSelect;
+} PGVariableShowSelectStmt;
 
 
 /* ----------------------

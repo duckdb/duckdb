@@ -1,6 +1,7 @@
 add_subdirectory(index)
 add_subdirectory(parallelism)
 add_subdirectory(storage)
+add_subdirectory(show_select)
 
 if(NOT WIN32 AND NOT SUN)
   add_subdirectory(tpcds)

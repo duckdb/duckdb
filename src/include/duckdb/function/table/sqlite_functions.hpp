@@ -30,6 +30,6 @@ struct PragmaVersion {
 
 struct PragmaDatabaseList {
 	static void RegisterFunction(BuiltinFunctions &set);
-};*/
+};
 
 } // namespace duckdb

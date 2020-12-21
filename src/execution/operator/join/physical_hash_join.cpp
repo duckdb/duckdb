@@ -21,19 +21,11 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		condition_types.push_back(condition.left->return_type);
 	}
 
-<<<<<<< HEAD
 	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
 		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
 	}
 }
-=======
-	bool initialized;
-	DataChunk cached_chunk;
-	DataChunk join_keys;
-	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
-};
->>>>>>> Add cache after hash table probe that re-probes and caches if there are too few matches to avoid outputting small chunks
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
@@ -110,7 +102,6 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 	return move(state);
 }
 
-<<<<<<< HEAD
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) {
 	auto state = make_unique<HashJoinLocalState>();
 	if (right_projection_map.size() > 0) {
@@ -231,41 +222,6 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 
-=======
-void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
-
-	// build the HT
-	auto right_state = children[1]->GetOperatorState();
-	auto types = children[1]->GetTypes();
-
-	DataChunk right_chunk;
-	right_chunk.Initialize(types);
-
-	state->join_keys.Initialize(hash_table->condition_types);
-	while (true) {
-		// get the child chunk
-		children[1]->GetChunk(context, right_chunk, right_state.get());
-		if (right_chunk.size() == 0) {
-			break;
-		}
-		// resolve the join keys for the right chunk
-		state->rhs_executor.Execute(right_chunk, state->join_keys);
-
-		// build the HT
-		hash_table->Build(state->join_keys, right_chunk);
-	}
-
-	if (hash_table->size() == 0 &&
-		(hash_table->join_type == JoinType::INNER || hash_table->join_type == JoinType::SEMI)) {
-		// empty hash table with INNER or SEMI join means empty result set
-		return;
-	}
-}
-
-void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
->>>>>>> Add cache after hash table probe that re-probes and caches if there are too few matches to avoid outputting small chunks
 	if (state->child_chunk.size() > 0 && state->scan_structure) {
 		// still have elements remaining from the previous probe (i.e. we got
 		// >1024 elements in the previous probe)
@@ -296,50 +252,4 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 	} while (chunk.size() == 0);
 }
 
-<<<<<<< HEAD
 } // namespace duckdb
-=======
-unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
-	return make_unique<PhysicalHashJoinState>(children[0].get(), children[1].get(), conditions);
-}
-
-void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
-	if (!state->initialized) {
-		state->cached_chunk.Initialize(types);
-		BuildHashTable(context, state_);
-		state->initialized = true;
-	}
-	do {
-		ProbeHashTable(context, chunk, state);
-		if (chunk.size() == 0) {
-			if (state->cached_chunk.size() > 0) {
-				// finished probing but cached data remains, return cached chunk
-				for(index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
-					state->cached_chunk.data[col_idx].Move(chunk.data[col_idx]);
-				}
-				chunk.sel_vector = state->cached_chunk.sel_vector;
-				state->cached_chunk.Reset();
-			}
-			return;
-		} else if (chunk.size() < 64) {
-			// small chunk: add it to chunk cache and continue
-			state->cached_chunk.Append(chunk);
-			if (state->cached_chunk.size() >= (1024 - 64)) {
-				// chunk cache full: return it
-				for(index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
-					state->cached_chunk.data[col_idx].Move(chunk.data[col_idx]);
-				}
-				chunk.sel_vector = state->cached_chunk.sel_vector;
-				state->cached_chunk.Reset();
-				return;
-			} else {
-				// chunk cache not full: probe again
-				chunk.Reset();
-			}
-		} else {
-			return;
-		}
-	} while(true);
-}
->>>>>>> Add cache after hash table probe that re-probes and caches if there are too few matches to avoid outputting small chunks

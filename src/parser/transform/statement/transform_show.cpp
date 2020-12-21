@@ -10,6 +10,9 @@ unique_ptr<PragmaStatement> Transformer::TransformShow(PGNode *node) {
 
 	auto stmt = reinterpret_cast<PGVariableShowStmt *>(node);
 
+	auto result = make_unique<PragmaStatement>();
+	auto &info = *result->info;
+
 	if (string(stmt->name) == "tables") {
 		// show all tables
 		info.name = "show_tables";

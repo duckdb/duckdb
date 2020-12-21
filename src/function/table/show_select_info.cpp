@@ -21,7 +21,7 @@ static unique_ptr<FunctionData> show_select_info_bind(ClientContext &context, ve
                                                        vector<SQLType> &return_types, vector<string> &names) {
 
 	// Because of context, probably here columns of select statement will be binded.
-	names.push_back("cid");
+	/*names.push_back("cid");
 	return_types.push_back(SQLType::INTEGER);
 
 	names.push_back("name");
@@ -37,7 +37,7 @@ static unique_ptr<FunctionData> show_select_info_bind(ClientContext &context, ve
 	return_types.push_back(SQLType::VARCHAR);
 
 	names.push_back("pk");
-	return_types.push_back(SQLType::BOOLEAN);
+	return_types.push_back(SQLType::BOOLEAN);*/
 
 	return make_unique<ShowSelectFunctionData>();
 }

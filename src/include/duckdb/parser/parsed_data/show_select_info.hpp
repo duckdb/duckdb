@@ -19,7 +19,7 @@ struct ShowSelectInfo : public ParseInfo {
 	//}
 
 	//! Return types
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	//! The QueryNode of the view
 	unique_ptr<QueryNode> query;
 	//! The set of aliases associated with the view

@@ -83,19 +83,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		CreatePlan(*statement);
 		break;
 	case StatementType::SHOW_STATEMENT: {
-		cout << "Case SHOW_STATEMENT in planner\n";
-		auto &stmt = *reinterpret_cast<ShowStatement *>(statement.get());
-		ShowSelectHandler handler(context);
-		Binder binder(context);
-		auto bound_stmt = binder.Bind(*stmt.info->query);
-		stmt.info->types = bound_stmt.types;
-		stmt.info->aliases = bound_stmt.names;
-		DataChunk output;
-		vector<TypeId> types(6, TypeId::VARCHAR);
-		output.Initialize(types);
-		show_select_info_schema(*stmt.info, output);
-		//auto new_stmt = handler.HandleShowSelect(*stmt.info);
-		//CreatePlan(move(new_stmt));
+		CreatePlan(*statement);
 		break;
 	}
 	case StatementType::PREPARE_STATEMENT: {
