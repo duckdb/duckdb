@@ -679,10 +679,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64:
 		return FindOrCreateGroupsInternal<aggr_ht_entry_64>(groups, group_hashes, addresses_out, new_groups_out);
-		break;
 	case HtEntryType::HT_WIDTH_32:
 		return FindOrCreateGroupsInternal<aggr_ht_entry_32>(groups, group_hashes, addresses_out, new_groups_out);
-		break;
 	default:
 		throw NotImplementedException("Unknown HT entry width");
 	}
