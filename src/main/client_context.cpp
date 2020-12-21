@@ -29,6 +29,8 @@
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/common/to_string.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 ClientContext::ClientContext(DuckDB &database)
@@ -212,6 +214,10 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	executor.Initialize(move(statement.plan));
 
 	auto types = executor.GetTypes();
+  for(idx_t a=0; a<types.size(); a++){
+    std::cout << types[a].ToString() << std::endl;
+    std::cout << statement.types[a].ToString() << std::endl;
+  }
 	D_ASSERT(types == statement.types);
 
 	if (create_stream_result) {
