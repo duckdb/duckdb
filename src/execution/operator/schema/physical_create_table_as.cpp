@@ -28,7 +28,7 @@ public:
 unique_ptr<GlobalOperatorState> PhysicalCreateTableAs::GetGlobalState(ClientContext &context) {
     auto sink = make_unique<CreateTableAsGlobalState>();
 	sink->table = (TableCatalogEntry *)schema->CreateTable(context, info.get());
-    return sink;
+    return move(sink);
 }
 
 void PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
