@@ -7,12 +7,9 @@ using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) {
 
-  cout << "Inside plan show\n";
   DataChunk output;
-  //vector<LogicalType> output_types(5, LogicalType::VARCHAR);
   output.Initialize(op.types);
   idx_t offset = 0;
-  cout << "Types size: " << op.types_select.size() << "\n";
 	/*if (offset >= op.types_select.size()) {
 		// finished returning values
 		return;
@@ -20,31 +17,33 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t next = min(offset + STANDARD_VECTOR_SIZE, (idx_t)op.types_select.size());
-	output.SetCardinality(next - offset);
+	//output.SetCardinality(next - offset);
 
+  auto collection = make_unique<ChunkCollection>();
 	for (idx_t i = 0; i < op.types_select.size(); i++) {
 		auto index = i - offset;
 		auto type = op.types_select[i];
 		auto &name = op.aliases[i];
-		// return values:
-		// "cid", TypeId::INT32
 
-    cout << "ID: " << i << endl;
-		//output.SetValue(0, index, Value::INTEGER(i));
 		// "name", TypeId::VARCHAR
-		output.SetValue(0, index, Value(name));
+		output.SetValue(0, output.size(), Value(name));
 		// "type", TypeId::VARCHAR
-		output.SetValue(1, index, Value(type.ToString()));
+		output.SetValue(1, output.size(), Value(type.ToString()));
 		// "notnull", TypeId::BOOL
-		output.SetValue(2, index, Value::BOOLEAN(false));
+		output.SetValue(2, output.size(), Value::BOOLEAN(false));
 		// "dflt_value", TypeId::VARCHAR
-		output.SetValue(3, index, Value());
+		output.SetValue(3, output.size(), Value());
 		// "pk", TypeId::BOOL
-		output.SetValue(4, index, Value::BOOLEAN(false));
+		output.SetValue(4, output.size(), Value::BOOLEAN(false));
+    output.SetCardinality(output.size() + 1);
+		if (output.size() == STANDARD_VECTOR_SIZE) {
+			collection->Append(output);
+			output.Reset();
+		}
 	}
 	offset = next;
 
-  auto collection = make_unique<ChunkCollection>();
+
 
   collection->Append(output);
 

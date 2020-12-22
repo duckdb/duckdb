@@ -4,8 +4,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 
-#include <iostream>
-
 namespace duckdb {
 
 string LogicalOperator::GetName() const {
@@ -35,7 +33,6 @@ void LogicalOperator::ResolveOperatorTypes() {
 	}
 	// now resolve the types for this operator
 	ResolveTypes();
-	std::cout << "Types: " << types.size() << " - " << GetColumnBindings().size() << std::endl;
 	D_ASSERT(types.size() == GetColumnBindings().size());
 }
 

@@ -4,7 +4,6 @@
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/tree_renderer.hpp"
-#include <iostream>
 
 namespace duckdb {
 
