@@ -35,8 +35,6 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
 
-	cout << "create plan with statement\n";
-
 	// now create a logical query plan from the query
 	// context.profiler.StartPhase("logical_planner");
 	// LogicalPlanGenerator logical_planner(binder, context);

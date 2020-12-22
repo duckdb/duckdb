@@ -1,0 +1,46 @@
+# name: test/sql/show_select/test_show_select.test
+# description: Test show select
+# group: [show_select]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+CREATE TABLE integers2 (i INTEGER, j INTEGER, st VARCHAR, d DATE)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (NULL, NULL)
+
+statement ok
+INSERT INTO integers2 VALUES (1, 30, 'a', '1992-01-01'), (8, 12, 'b', '1992-01-01'), (3, 24, 'c', '1992-01-01'), (9, 16, 'd', '1992-01-01'), (10, NULL, 'e', '1992-01-01')
+
+# Field | Type | Not Null | Default | Key
+query TTITI
+SHOW SELECT * FROM integers
+----
+i	INTEGER	0	NULL	0
+j	INTEGER	0	NULL	0
+
+# Field | Type | Not Null | Default | Key
+query TTITI
+SHOW SELECT i FROM integers
+----
+i	INTEGER	0	NULL	0
+
+# Field | Type | Not Null | Default | Key
+query TTITI
+SHOW SELECT integers.i, integers2.st, integers2.d FROM integers, integers2 WHERE integers.i=integers2.i
+----
+i	INTEGER	0	NULL	0
+st	VARCHAR	0	NULL	0
+d	DATE	0	NULL	0
+
+# Field | Type | Not Null | Default | Key
+query TTITI
+SHOW SELECT SUM(i) AS sum1, j FROM integers GROUP BY j HAVING j < 10
+----
+sum1	HUGEINT	0	NULL	0
+j	INTEGER	0	NULL	0

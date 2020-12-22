@@ -46,7 +46,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 
 	// then create the main physical plan
 	context.profiler.StartPhase("create_plan");
-	cout << "create plan: " << LogicalOperatorToString(op->type) << "\n";
 	auto plan = CreatePlan(*op);
 	context.profiler.EndPhase();
 	return plan;

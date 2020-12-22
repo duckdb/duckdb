@@ -41,6 +41,10 @@ TEST_CASE("Test SHOW SELECT query", "[show_select]") {
   REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value()}));
   REQUIRE(CHECK_COLUMN(result, 4, {Value::BOOLEAN(false), Value::BOOLEAN(false), Value::BOOLEAN(false)}));
 
+	result = con.Query("CREATE VIEW test AS SELECT integers.i, integers2.st, integers2.d FROM integers, integers2 WHERE integers.i=integers2.i");
+	result = con.Query("DESCRIBE test");
+  result->Print();
+
 	result = con.Query("SHOW SELECT SUM(i) AS sum1, j FROM integers GROUP BY j HAVING j < 10");
 	result->Print();
   REQUIRE(CHECK_COLUMN(result, 0, {"sum1", "j"}));

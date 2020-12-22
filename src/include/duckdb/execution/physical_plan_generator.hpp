@@ -70,7 +70,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalInsert &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyToFile &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExplain &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalShow &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUpdate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPrepare &expr);

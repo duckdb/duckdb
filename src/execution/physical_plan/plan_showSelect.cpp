@@ -3,29 +3,17 @@
 #include "duckdb/parser/parsed_data/show_select_info.hpp"
 #include "duckdb/planner/operator/logical_show.hpp"
 
-#include <iostream>
-
 using namespace duckdb;
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) {
 
-  cout << "Inside plan show\n";
   DataChunk output;
   output.Initialize(op.types);
-  idx_t offset = 0;
-	/*if (offset >= op.types_select.size()) {
-		// finished returning values
-		return;
-	}*/
-	// start returning values
-	// either fill up the chunk or return all the remaining columns
-	idx_t next = min(offset + STANDARD_VECTOR_SIZE, (idx_t)op.types_select.size());
-	//output.SetCardinality(next - offset);
+
 
   auto collection = make_unique<ChunkCollection>();
 	for (idx_t i = 0; i < op.types_select.size(); i++) {
-		auto index = i - offset;
 		auto type = op.types_select[i];
 		auto &name = op.aliases[i];
 
@@ -45,14 +33,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 			output.Reset();
 		}
 	}
-	offset = next;
 
 
 
   collection->Append(output);
 
 	// create a chunk scan to output the result
-	auto chunk_scan = make_unique<PhysicalChunkScan>(output_types, PhysicalOperatorType::CHUNK_SCAN);
+	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);
 	chunk_scan->owned_collection = move(collection);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 	return move(chunk_scan);
