@@ -80,10 +80,10 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			parent->AddDependency(pipeline.get());
 		}
 		switch (op->type) {
+		case PhysicalOperatorType::CREATE_TABLE_AS:
 		case PhysicalOperatorType::INSERT:
 		case PhysicalOperatorType::DELETE_OPERATOR:
 		case PhysicalOperatorType::UPDATE:
-		case PhysicalOperatorType::CREATE:
 		case PhysicalOperatorType::HASH_GROUP_BY:
 		case PhysicalOperatorType::SIMPLE_AGGREGATE:
 		case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:

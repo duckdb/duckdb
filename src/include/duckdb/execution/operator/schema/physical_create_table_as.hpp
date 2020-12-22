@@ -1,22 +1,22 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/schema/physical_create_table.hpp
+// duckdb/execution/operator/schema/physical_create_table_as.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 namespace duckdb {
 
-//! Physically CREATE TABLE statement
-class PhysicalCreateTable : public PhysicalOperator {
+//! Physically CREATE TABLE AS statement
+class PhysicalCreateTableAs : public PhysicalSink {
 public:
-	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info);
+	PhysicalCreateTableAs(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info);
 
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;
@@ -24,6 +24,10 @@ public:
 	unique_ptr<BoundCreateTableInfo> info;
 
 public:
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 } // namespace duckdb

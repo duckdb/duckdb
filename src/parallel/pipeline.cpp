@@ -96,6 +96,7 @@ void Pipeline::ScheduleSequentialTask() {
 
 bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	switch (op->type) {
+	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
@@ -179,6 +180,7 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::CREATE_TABLE_AS:
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
