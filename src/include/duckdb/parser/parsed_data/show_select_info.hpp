@@ -15,14 +15,11 @@ namespace duckdb {
 
 struct ShowSelectInfo : public ParseInfo {
 
-	//ShowSelectInfo() : ParseInfo() {
-	//}
-
-	//! Return types
+	//! Types of projected columns
 	vector<LogicalType> types;
-	//! The QueryNode of the view
+	//! The QueryNode of select query
 	unique_ptr<QueryNode> query;
-	//! The set of aliases associated with the view
+	//! Aliases of projected columns
 	vector<string> aliases;
 };
 
