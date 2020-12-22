@@ -78,8 +78,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EMPTY_RESULT";
 	case PhysicalOperatorType::CREATE_TABLE:
 		return "CREATE_TABLE";
-    case PhysicalOperatorType::CREATE_TABLE_AS:
-        return "CREATE_TABLE_AS";
+	case PhysicalOperatorType::CREATE_TABLE_AS:
+		return "CREATE_TABLE_AS";
 	case PhysicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
 	case PhysicalOperatorType::EXPLAIN:

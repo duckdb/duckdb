@@ -73,7 +73,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// Schema
 	// -----------------------------
 	CREATE_TABLE,
-    CREATE_TABLE_AS,
+	CREATE_TABLE_AS,
 	CREATE_INDEX,
 	ALTER,
 	CREATE_SEQUENCE,

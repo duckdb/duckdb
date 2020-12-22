@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/schema/physical_create_table.hpp
+// duckdb/execution/operator/schema/physical_create_table_as.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,18 +16,18 @@ namespace duckdb {
 //! Physically CREATE TABLE AS statement
 class PhysicalCreateTableAs : public PhysicalSink {
 public:
-    PhysicalCreateTableAs(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info);
+	PhysicalCreateTableAs(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info);
 
-    //! Schema to insert to
-    SchemaCatalogEntry *schema;
-    //! Table name to create
-    unique_ptr<BoundCreateTableInfo> info;
+	//! Schema to insert to
+	SchemaCatalogEntry *schema;
+	//! Table name to create
+	unique_ptr<BoundCreateTableInfo> info;
 
 public:
-    unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
-    void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 
-    void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 } // namespace duckdb
