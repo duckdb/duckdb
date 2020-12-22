@@ -90,7 +90,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 
         for(idx_t i=0; i < filters_expr_pullup.size(); ++i) {
             auto &expr = (Expression &)*filters_expr_pullup[i];
-            ReplaceExpressionBinding(proj.expressions, expr, proj.table_index);
+                ReplaceExpressionBinding(proj.expressions, expr, proj.table_index);
         }
     }
     return op;

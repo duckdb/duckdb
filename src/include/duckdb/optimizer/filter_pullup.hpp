@@ -55,9 +55,6 @@ private:
     // Pullup filter in a inner join
 	unique_ptr<LogicalOperator> PullupInnerJoin(unique_ptr<LogicalOperator> op);
 
-    // Pullup filter in a distinct or order_by operators
-    // unique_ptr<LogicalOperator> PullupAnyway(unique_ptr<LogicalOperator> op);
-
     // Pullup filter in LogicalIntersect op
     unique_ptr<LogicalOperator> PullupIntersect(unique_ptr<LogicalOperator> op);
 

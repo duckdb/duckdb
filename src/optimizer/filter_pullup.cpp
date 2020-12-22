@@ -18,9 +18,12 @@ unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op
             return PullupJoin(move(op));
         case LogicalOperatorType::LOGICAL_INTERSECT:
         	return PullupIntersect(move(op));
-        // case LogicalOperatorType::LOGICAL_DISTINCT:
-        // case LogicalOperatorType::LOGICAL_ORDER_BY:
-        //     return PullupAnyway(move(op));
+        case LogicalOperatorType::LOGICAL_DISTINCT:
+        case LogicalOperatorType::LOGICAL_ORDER_BY: {
+            // we can just pull directly through these operations without any rewriting
+            op->children[0] = Rewrite(move(op->children[0]));
+            return op;
+        }
         default:
 		    return FinishPullup(move(op));
     }
@@ -53,17 +56,6 @@ unique_ptr<LogicalOperator> FilterPullup::PullupCrossProduct(unique_ptr<LogicalO
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
 	return PullupBothSide(move(op));
 }
-
-// unique_ptr<LogicalOperator> FilterPullup::PullupAnyway(unique_ptr<LogicalOperator> op) {
-// 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_DISTINCT || op->type == LogicalOperatorType::LOGICAL_ORDER_BY);
-//     can_pullup = true;
-// 	op->children[0] = Rewrite(move(op->children[0]));
-//     // now pull up any existing filters
-// 	if (filters_expr_pullup.size() > 0) {
-//         return GeneratePullupFilter(move(op), filters_expr_pullup);
-//     }
-//     return op;
-// }
 
 unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<LogicalOperator> child,
                                                                vector<unique_ptr<Expression>> &expressions) {
