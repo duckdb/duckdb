@@ -9,8 +9,9 @@ unique_ptr<LogicalOperator> FilterPullup::PullupLeftJoin(unique_ptr<LogicalOpera
 	auto &join = (LogicalJoin &)*op;
 	D_ASSERT(join.join_type == JoinType::LEFT);
 	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	FilterPullup left_pullup(optimizer, root_pullup_node_ptr, true);
-	FilterPullup right_pullup(optimizer, root_pullup_node_ptr, false);
+
+	FilterPullup left_pullup(true, is_set_operation);
+	FilterPullup right_pullup(false, is_set_operation);
 
 	op->children[0] = left_pullup.Rewrite(move(op->children[0]));
 	op->children[1] = right_pullup.Rewrite(move(op->children[1]));

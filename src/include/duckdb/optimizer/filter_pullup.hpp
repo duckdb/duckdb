@@ -11,20 +11,15 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include <memory>
 #include <vector>
 
 namespace duckdb {
 
-class Optimizer;
-
 class FilterPullup {
 public:
-    FilterPullup(Optimizer &optimizer) : optimizer(optimizer) {
-    }
-
-    FilterPullup(Optimizer &optimizer, unique_ptr<LogicalOperator>::pointer root_proj, bool fork=false) : 
-                 optimizer(optimizer),  root_pullup_node_ptr(root_proj), fork(fork) {
+    FilterPullup(bool can_pullup=false, bool is_set_op=false):  can_pullup(can_pullup), is_set_operation(is_set_op) {
     }
 
     //! Perform filter pullup
@@ -32,12 +27,14 @@ public:
 
 private:
     vector<unique_ptr<Expression>> filters_expr_pullup;
-    Optimizer &optimizer;
-    // node resposible for pulling up filters
-    unique_ptr<LogicalOperator>::pointer root_pullup_node_ptr = nullptr;
-    // only pull up filters when there is a fork
-    bool fork = false;
 
+    // only pull up filters when there is a fork
+    bool can_pullup = false;
+
+    // identifiy case the branch is a set operation (INTERSECT or EXCEPT)
+    bool is_set_operation = false;
+
+private:
     // Generate logical filters pulled up
     unique_ptr<LogicalOperator> GeneratePullupFilter(unique_ptr<LogicalOperator> child, vector<unique_ptr<Expression>> &expressions);
 
@@ -58,6 +55,9 @@ private:
     // Pullup filter in a inner join
 	unique_ptr<LogicalOperator> PullupInnerJoin(unique_ptr<LogicalOperator> op);
 
+    // Pullup filter in a distinct or order_by operators
+    // unique_ptr<LogicalOperator> PullupAnyway(unique_ptr<LogicalOperator> op);
+
     // Pullup filter in LogicalIntersect op
     unique_ptr<LogicalOperator> PullupIntersect(unique_ptr<LogicalOperator> op);
 
@@ -65,6 +65,9 @@ private:
 
     // Finish pull up at this operator
 	unique_ptr<LogicalOperator> FinishPullup(unique_ptr<LogicalOperator> op);
+
+    //special treatment for SetOperations and projections
+    void ProjectSetOperation(LogicalProjection &proj);
 
 }; //end FilterPullup
 

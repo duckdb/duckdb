@@ -4,8 +4,8 @@ namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> FilterPullup::PullupBothSide(unique_ptr<LogicalOperator> op) {
-	FilterPullup left_pullup(optimizer, root_pullup_node_ptr, true);
-	FilterPullup right_pullup(optimizer, root_pullup_node_ptr, true);
+	FilterPullup left_pullup(true, is_set_operation);
+	FilterPullup right_pullup(true, is_set_operation);
 	op->children[0] = left_pullup.Rewrite(move(op->children[0]));
 	op->children[1] = right_pullup.Rewrite(move(op->children[1]));
 

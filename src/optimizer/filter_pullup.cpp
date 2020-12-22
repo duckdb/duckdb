@@ -18,6 +18,9 @@ unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op
             return PullupJoin(move(op));
         case LogicalOperatorType::LOGICAL_INTERSECT:
         	return PullupIntersect(move(op));
+        // case LogicalOperatorType::LOGICAL_DISTINCT:
+        // case LogicalOperatorType::LOGICAL_ORDER_BY:
+        //     return PullupAnyway(move(op));
         default:
 		    return FinishPullup(move(op));
     }
@@ -51,6 +54,17 @@ unique_ptr<LogicalOperator> FilterPullup::PullupCrossProduct(unique_ptr<LogicalO
 	return PullupBothSide(move(op));
 }
 
+// unique_ptr<LogicalOperator> FilterPullup::PullupAnyway(unique_ptr<LogicalOperator> op) {
+// 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_DISTINCT || op->type == LogicalOperatorType::LOGICAL_ORDER_BY);
+//     can_pullup = true;
+// 	op->children[0] = Rewrite(move(op->children[0]));
+//     // now pull up any existing filters
+// 	if (filters_expr_pullup.size() > 0) {
+//         return GeneratePullupFilter(move(op), filters_expr_pullup);
+//     }
+//     return op;
+// }
+
 unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<LogicalOperator> child,
                                                                vector<unique_ptr<Expression>> &expressions) {
     unique_ptr<LogicalFilter> filter = make_unique<LogicalFilter>();
@@ -65,10 +79,15 @@ unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<Logica
 unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperator> op) {
     // unhandled type, first perform filter pushdown in its children
 	for (idx_t i = 0; i < op->children.size(); i++) {
-		FilterPullup pullup(optimizer, root_pullup_node_ptr);
+        FilterPullup pullup;
 		op->children[i] = pullup.Rewrite(move(op->children[i]));
 	}
-    return op;
+    // now pull up any existing filters
+	if (filters_expr_pullup.size() == 0) {
+		// no filters to pull up
+		return op;
+	}
+    return GeneratePullupFilter(move(op), filters_expr_pullup);
 }
 
 } // namespace duckdb

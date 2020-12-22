@@ -20,10 +20,8 @@ static void ReplaceFilterTableIndex(Expression &expr, LogicalSetOperation &setop
 
 unique_ptr<LogicalOperator> FilterPullup::PullupIntersect(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_INTERSECT);
-    if(root_pullup_node_ptr == nullptr) {
-        root_pullup_node_ptr = op.get();
-    }
-    fork = true;
+	is_set_operation=true;
+    can_pullup = true;
 	op = PullupBothSide(move(op));
 	if(op->type == LogicalOperatorType::LOGICAL_FILTER) {
         auto &filter = (LogicalFilter &)*op;

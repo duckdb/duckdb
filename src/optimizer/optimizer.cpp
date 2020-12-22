@@ -49,7 +49,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	// perform filter pullup
 	context.profiler.StartPhase("filter_pullup");
-	FilterPullup filter_pullup(*this);
+	FilterPullup filter_pullup;
 	plan = filter_pullup.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
