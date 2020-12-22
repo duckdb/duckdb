@@ -8,14 +8,13 @@ using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) {
 
-  DataChunk output;
-  output.Initialize(op.types);
+	DataChunk output;
+	output.Initialize(op.types);
 
-
-  auto collection = make_unique<ChunkCollection>();
-	for (idx_t i = 0; i < op.types_select.size(); i++) {
-		auto type = op.types_select[i];
-		auto &name = op.aliases[i];
+	auto collection = make_unique<ChunkCollection>();
+	for (idx_t column_idx = 0; column_idx < op.types_select.size(); column_idx++) {
+		auto type = op.types_select[column_idx];
+		auto &name = op.aliases[column_idx];
 
 		// "name", TypeId::VARCHAR
 		output.SetValue(0, output.size(), Value(name));
@@ -27,16 +26,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 		output.SetValue(3, output.size(), Value());
 		// "pk", TypeId::BOOL
 		output.SetValue(4, output.size(), Value::BOOLEAN(false));
-    output.SetCardinality(output.size() + 1);
+		output.SetCardinality(output.size() + 1);
 		if (output.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(output);
 			output.Reset();
 		}
 	}
 
-
-
-  collection->Append(output);
+	collection->Append(output);
 
 	// create a chunk scan to output the result
 	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);
