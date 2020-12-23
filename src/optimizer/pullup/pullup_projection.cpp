@@ -64,7 +64,7 @@ void FilterPullup::ProjectSetOperation(LogicalProjection &proj) {
     }
 
     ///Case new columns were added into the projection
-    //we must skip filter pullup because adding new columns to set operators might change the result
+    //we must skip filter pullup because adding new columns to these operators will change the result
     if(copy_proj_expressions.size() > proj.expressions.size()) {
         RevertFilterPullup(proj, filters_expr_pullup);
         return;
@@ -82,8 +82,9 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
     op->children[0] = Rewrite(move(op->children[0]));
     if(filters_expr_pullup.size() > 0) {
         auto &proj = (LogicalProjection &)*op;
-        if(is_set_operation) {
-            //special treatment for projections from set operators
+        //INTERSECT, EXCEPT, and DISTINCT
+        if(!can_add_column) {
+            //special treatment for operators that cannot add columns, e.g., INTERSECT, EXCEPT, and DISTINCT
             ProjectSetOperation(proj);
             return op;
         }

@@ -19,7 +19,7 @@ namespace duckdb {
 
 class FilterPullup {
 public:
-    FilterPullup(bool can_pullup=false, bool is_set_op=false):  can_pullup(can_pullup), is_set_operation(is_set_op) {
+    FilterPullup(bool pullup=false, bool add_column=false):  can_pullup(pullup), can_add_column(add_column) {
     }
 
     //! Perform filter pullup
@@ -32,7 +32,7 @@ private:
     bool can_pullup = false;
 
     // identifiy case the branch is a set operation (INTERSECT or EXCEPT)
-    bool is_set_operation = false;
+    bool can_add_column = false;
 
 private:
     // Generate logical filters pulled up
@@ -50,13 +50,13 @@ private:
     unique_ptr<LogicalOperator> PullupJoin(unique_ptr<LogicalOperator> op);
 
     // PPullup filter in a left join
-	unique_ptr<LogicalOperator> PullupLeftJoin(unique_ptr<LogicalOperator> op);
+	unique_ptr<LogicalOperator> PullupFromLeft(unique_ptr<LogicalOperator> op);
 
     // Pullup filter in a inner join
 	unique_ptr<LogicalOperator> PullupInnerJoin(unique_ptr<LogicalOperator> op);
 
-    // Pullup filter in LogicalIntersect op
-    unique_ptr<LogicalOperator> PullupIntersect(unique_ptr<LogicalOperator> op);
+    // Pullup filter in LogicalIntersect or LogicalExcept op
+    unique_ptr<LogicalOperator> PullupSetOperation(unique_ptr<LogicalOperator> op);
 
     unique_ptr<LogicalOperator> PullupBothSide(unique_ptr<LogicalOperator> op);
 

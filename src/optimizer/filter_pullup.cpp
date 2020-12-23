@@ -17,7 +17,8 @@ unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op
         case LogicalOperatorType::LOGICAL_DELIM_JOIN:
             return PullupJoin(move(op));
         case LogicalOperatorType::LOGICAL_INTERSECT:
-        	return PullupIntersect(move(op));
+        case LogicalOperatorType::LOGICAL_EXCEPT:
+            return PullupSetOperation(move(op));
         case LogicalOperatorType::LOGICAL_DISTINCT:
         case LogicalOperatorType::LOGICAL_ORDER_BY: {
             // we can just pull directly through these operations without any rewriting
@@ -38,7 +39,11 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
     case JoinType::INNER:
    		return PullupInnerJoin(move(op));
 	case JoinType::LEFT:
-		return PullupLeftJoin(move(op));
+    case JoinType::ANTI:
+    case JoinType::SEMI: {
+        can_add_column = true;
+		return PullupFromLeft(move(op));
+    }
 	default:
 		// unsupported join type: call children pull up
 		return FinishPullup(move(op));

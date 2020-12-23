@@ -5,13 +5,16 @@
 namespace duckdb {
 using namespace std;
 
-unique_ptr<LogicalOperator> FilterPullup::PullupLeftJoin(unique_ptr<LogicalOperator> op) {
-	auto &join = (LogicalJoin &)*op;
-	D_ASSERT(join.join_type == JoinType::LEFT);
-	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
+unique_ptr<LogicalOperator> FilterPullup::PullupFromLeft(unique_ptr<LogicalOperator> op) {
+	if(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		auto &join = (LogicalJoin &)*op;
+		D_ASSERT(join.join_type == JoinType::LEFT || join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI);
+	} else {
+		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_EXCEPT);
+	}
 
-	FilterPullup left_pullup(true, is_set_operation);
-	FilterPullup right_pullup(false, is_set_operation);
+	FilterPullup left_pullup(true, can_add_column);
+	FilterPullup right_pullup(false, can_add_column);
 
 	op->children[0] = left_pullup.Rewrite(move(op->children[0]));
 	op->children[1] = right_pullup.Rewrite(move(op->children[1]));

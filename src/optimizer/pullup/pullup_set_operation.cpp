@@ -18,11 +18,16 @@ static void ReplaceFilterTableIndex(Expression &expr, LogicalSetOperation &setop
 	    expr, [&](Expression &child) { ReplaceFilterTableIndex(child, setop); });
 }
 
-unique_ptr<LogicalOperator> FilterPullup::PullupIntersect(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_INTERSECT);
-	is_set_operation=true;
+unique_ptr<LogicalOperator> FilterPullup::PullupSetOperation(unique_ptr<LogicalOperator> op) {
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_INTERSECT || op->type == LogicalOperatorType::LOGICAL_EXCEPT);
+	can_add_column=false;
     can_pullup = true;
-	op = PullupBothSide(move(op));
+	if(op->type == LogicalOperatorType::LOGICAL_INTERSECT) {
+		op = PullupBothSide(move(op));
+	} else {
+		//EXCEPT only pull ups from LHS
+		op = PullupFromLeft(move(op));
+	}
 	if(op->type == LogicalOperatorType::LOGICAL_FILTER) {
         auto &filter = (LogicalFilter &)*op;
 		auto &setop = (LogicalSetOperation &)*filter.children[0];
