@@ -17,6 +17,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
@@ -94,7 +95,7 @@ static unique_ptr<FileMetaData> read_metadata(duckdb::FileSystem &fs, duckdb::Fi
 
 static shared_ptr<ParquetFileMetadataCache> load_metadata(duckdb::FileSystem &fs, duckdb::FileHandle *handle,
                                                           uint32_t footer_len, uint64_t file_size) {
-	auto current_time = chrono::system_clock::to_time_t(chrono::system_clock::now());
+	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 	return make_shared<ParquetFileMetadataCache>(read_metadata(fs, handle, footer_len, file_size), current_time);
 }
 
@@ -141,10 +142,10 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	if (!context.db.config.object_cache_enable) {
 		metadata = load_metadata(fs, handle.get(), footer_len, file_size);
 	} else {
-		metadata = dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
+		metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
 		if (!metadata || (fs.GetLastModifiedTime(*handle) + 10 >= metadata->read_time)) {
 			metadata = load_metadata(fs, handle.get(), footer_len, file_size);
-			context.db.object_cache->Put(file_name, dynamic_pointer_cast<ObjectCacheEntry>(metadata));
+			context.db.object_cache->Put(file_name, std::dynamic_pointer_cast<ObjectCacheEntry>(metadata));
 		}
 	}
 
@@ -458,9 +459,9 @@ static void fill_from_dict(ParquetReaderColumnData &col_data, idx_t count, parqu
 			}
 
 			if (offset > col_data.dict_size) {
-				throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
-				                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
-				                    ". Corrupt file?");
+				throw std::runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
+				                         to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
+				                         ". Corrupt file?");
 			}
 			auto value = ((const T *)col_data.dict.ptr)[offset];
 			if (ValueIsValid::Operation(value)) {

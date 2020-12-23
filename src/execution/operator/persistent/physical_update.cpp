@@ -6,8 +6,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

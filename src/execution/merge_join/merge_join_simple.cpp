@@ -3,8 +3,6 @@
 #include "duckdb/execution/merge_join.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class T, class OP> static idx_t merge_join_simple_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
@@ -95,4 +93,4 @@ INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, LessThanEquals, ScalarMergeInfo
 INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, GreaterThan, ScalarMergeInfo, ChunkMergeInfo)
 INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, GreaterThanEquals, ScalarMergeInfo, ChunkMergeInfo)
 
-}
+} // namespace duckdb

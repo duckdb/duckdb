@@ -6,7 +6,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(DropStatement &stmt) {
 	BoundStatement result;

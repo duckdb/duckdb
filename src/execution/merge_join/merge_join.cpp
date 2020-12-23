@@ -2,8 +2,6 @@
 
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class MJ, class L_ARG, class R_ARG> static idx_t merge_join(L_ARG &l, R_ARG &r) {

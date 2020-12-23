@@ -2,7 +2,6 @@
 #include "duckdb/execution/nested_loop_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 struct InitialNestedLoopJoin {
 	template <class T, class OP>

@@ -5,7 +5,6 @@
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 
 namespace duckdb {
-using namespace std;
 
 struct BothInclusiveBetweenOperator {
 	template <class T> static inline bool Operation(T input, T lower, T upper) {

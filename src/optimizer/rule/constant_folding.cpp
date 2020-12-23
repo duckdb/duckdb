@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 //! The ConstantFoldingExpressionMatcher matches on any scalar expression (i.e. Expression::IsFoldable is true)
 class ConstantFoldingExpressionMatcher : public FoldableConstantMatcher {

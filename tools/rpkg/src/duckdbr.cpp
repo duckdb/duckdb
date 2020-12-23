@@ -1,5 +1,6 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb.hpp"
@@ -19,7 +20,8 @@ using namespace duckdb;
 using namespace std;
 
 struct RProtector {
-	RProtector() : protect_count(0) {}
+	RProtector() : protect_count(0) {
+	}
 	~RProtector() {
 		if (protect_count > 0) {
 			UNPROTECT(protect_count);
@@ -61,7 +63,7 @@ private:
 		SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
 		R_PreserveObject(out);
 		MARK_NOT_MUTABLE(out);
-    }
+	}
 };
 
 struct RStatement {
@@ -111,49 +113,47 @@ struct RDoubleType {
 
 struct RDateType : public RDoubleType {
 	static double Convert(double val) {
-		return (date_t)val + 719528; // MAGIC!
+		return (date_t)val;
 	}
 };
 
 struct RTimestampType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		date_t date = Date::EpochToDate((int64_t)val);
-		dtime_t time = (dtime_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
-		return Timestamp::FromDatetime(date, time);
+		return Timestamp::FromEpochSeconds(val);
 	}
 };
 
 struct RTimeSecondsType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val * (1000.0));
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_SEC;
 		return time;
 	}
 };
 
 struct RTimeMinutesType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val * (1000.0 * 60));
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_MINUTE;
 		return time;
 	}
 };
 
 struct RTimeHoursType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60));
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_HOUR;
 		return time;
 	}
 };
 
 struct RTimeDaysType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60 * 24));
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_DAY;
 		return time;
 	}
 };
 
 struct RTimeWeeksType : public RDoubleType {
 	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val * (1000.0 * 60 * 60 * 24 * 7));
+		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_DAY * 7;
 		return time;
 	}
 };
@@ -627,11 +627,12 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				break;
 			case LogicalTypeId::TIMESTAMP: {
 				auto &src_vec = chunk->data[col_idx];
-				auto src_data = FlatVector::GetData<int64_t>(src_vec);
+				auto src_data = FlatVector::GetData<timestamp_t>(src_vec);
 				auto &nullmask = FlatVector::Nullmask(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpoch(src_data[row_idx]);
+					dest_ptr[row_idx] =
+					    nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -645,11 +646,11 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			}
 			case LogicalTypeId::DATE: {
 				auto &src_vec = chunk->data[col_idx];
-				auto src_data = FlatVector::GetData<int32_t>(src_vec);
+				auto src_data = FlatVector::GetData<date_t>(src_vec);
 				auto &nullmask = FlatVector::Nullmask(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]) - 719528;
+					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -659,16 +660,15 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			}
 			case LogicalTypeId::TIME: {
 				auto &src_vec = chunk->data[col_idx];
-				auto src_data = FlatVector::GetData<int32_t>(src_vec);
+				auto src_data = FlatVector::GetData<dtime_t>(src_vec);
 				auto &nullmask = FlatVector::Nullmask(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-
 					if (nullmask[row_idx]) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
-						time_t n = src_data[row_idx];
-						dest_ptr[row_idx] = n / 1000.0;
+						dtime_t n = src_data[row_idx];
+						dest_ptr[row_idx] = n / 1000000.0;
 					}
 				}
 

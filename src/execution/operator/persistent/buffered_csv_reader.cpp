@@ -10,15 +10,15 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/to_string.hpp"
+
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <fstream>
-
-using namespace std;
 
 namespace duckdb {
 
@@ -28,7 +28,7 @@ static char is_newline(char c) {
 
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
-	return std::to_string(linenr + 1) + estimated;
+	return to_string(linenr + 1) + estimated;
 }
 
 static bool StartsWithNumericDate(string &separator, const string_t &value) {
@@ -135,7 +135,7 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
 }
 
 BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types,
-                                     unique_ptr<istream> ssource)
+                                     unique_ptr<std::istream> ssource)
     : options(options), source(move(ssource)), buffer_size(0), position(0), start(0) {
 	Initialize(requested_types);
 }
@@ -161,17 +161,17 @@ void BufferedCSVReader::PrepareComplexParser() {
 	quote_search = TextSearchShiftArray(options.quote);
 }
 
-unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
+unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
 	if (!FileSystem::GetFileSystem(context).FileExists(options.file_path)) {
 		throw IOException("File \"%s\" not found", options.file_path.c_str());
 	}
-	unique_ptr<istream> result;
+	unique_ptr<std::istream> result;
 	// decide based on the extension which stream to use
 	if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
 		result = make_unique<GzipStream>(options.file_path);
 		plain_file_source = false;
 	} else {
-		auto csv_local = make_unique<ifstream>();
+		auto csv_local = make_unique<std::ifstream>();
 		csv_local->open(options.file_path);
 		result = move(csv_local);
 
@@ -205,7 +205,7 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
 	int digits = NumericHelper::UnsignedLength(col_number);
 	string leading_zeros = string("0", max_digits - digits);
-	string value = std::to_string(col_number);
+	string value = to_string(col_number);
 	return string(prefix + leading_zeros + value);
 }
 
@@ -309,7 +309,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 		// seek backwards from the end in last chunk and hope to catch the end of the file
 		// TODO: actually it would be good to make sure that the end of file is being reached, because
 		// messy end-lines are quite common. For this case, however, we first need a skip_end detection anyways.
-		source->seekg(-streamoff(bytes_in_chunk), source->end);
+		source->seekg(-std::streamoff(bytes_in_chunk), source->end);
 
 		// estimate linenr
 		linenr = (idx_t)round((file_size - bytes_in_chunk) / bytes_per_line_avg);
@@ -1375,7 +1375,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					auto s = parse_data[i];
 					auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
 					if (utf_type == UnicodeType::INVALID) {
-						string col_name = std::to_string(col_idx);
+						string col_name = to_string(col_idx);
 						if (col_idx < col_names.size()) {
 							col_name = "\"" + col_names[col_idx] + "\"";
 						}
@@ -1406,7 +1406,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
 				}
 			} catch (const Exception &e) {
-				string col_name = std::to_string(col_idx);
+				string col_name = to_string(col_idx);
 				if (col_idx < col_names.size()) {
 					col_name = "\"" + col_names[col_idx] + "\"";
 				}

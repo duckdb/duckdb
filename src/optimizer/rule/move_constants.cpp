@@ -7,7 +7,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto op = make_unique<ComparisonExpressionMatcher>();

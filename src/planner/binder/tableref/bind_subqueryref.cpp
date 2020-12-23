@@ -3,7 +3,6 @@
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
 	auto binder = make_unique<Binder>(context, this);

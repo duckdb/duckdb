@@ -10,8 +10,6 @@
 
 #include <cmath>
 
-using namespace std;
-
 namespace duckdb {
 
 LogicalType::LogicalType() : id_(LogicalTypeId::INVALID), width_(0), scale_(0), collation_(string()) {
@@ -52,10 +50,10 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INT16;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
 	case LogicalTypeId::INTEGER:
 		return PhysicalType::INT32;
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 		return PhysicalType::INT64;
 	case LogicalTypeId::HUGEINT:
@@ -589,13 +587,13 @@ void LogicalType::Verify() const {
 }
 
 bool ApproxEqual(float ldecimal, float rdecimal) {
-	float epsilon = fabs(rdecimal) * 0.01;
-	return fabs(ldecimal - rdecimal) <= epsilon;
+	float epsilon = std::fabs(rdecimal) * 0.01;
+	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
 bool ApproxEqual(double ldecimal, double rdecimal) {
-	double epsilon = fabs(rdecimal) * 0.01;
-	return fabs(ldecimal - rdecimal) <= epsilon;
+	double epsilon = std::fabs(rdecimal) * 0.01;
+	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
 } // namespace duckdb

@@ -12,7 +12,6 @@
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
-using namespace std;
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
 public:

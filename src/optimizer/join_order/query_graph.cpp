@@ -3,9 +3,9 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using QueryEdge = QueryGraph::QueryEdge;
 
@@ -71,7 +71,7 @@ void QueryGraph::CreateEdge(JoinRelationSet *left, JoinRelationSet *right, Filte
 	info->neighbors.push_back(move(n));
 }
 
-void QueryGraph::EnumerateNeighbors(JoinRelationSet *node, function<bool(NeighborInfo *)> callback) {
+void QueryGraph::EnumerateNeighbors(JoinRelationSet *node, std::function<bool(NeighborInfo *)> callback) {
 	for (idx_t j = 0; j < node->count; j++) {
 		QueryEdge *info = &root;
 		for (idx_t i = j; i < node->count; i++) {

@@ -5,8 +5,6 @@
 #include <stdlib.h>
 #include <cmath>
 
-using namespace std;
-
 namespace duckdb {
 
 struct quantile_state_t {
@@ -92,7 +90,7 @@ template <class T> struct QuantileOperation {
 		auto v_t = (T *)state->v;
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		target[idx] = v_t[offset];
-    }
+	}
 
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->v) {
@@ -109,20 +107,24 @@ template <class T> struct QuantileOperation {
 AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, int16_t, int16_t, QuantileOperation<int16_t>>(
-		    LogicalType::SMALLINT, LogicalType::SMALLINT);
+		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, int16_t, int16_t,
+		                                                   QuantileOperation<int16_t>>(LogicalType::SMALLINT,
+		                                                                               LogicalType::SMALLINT);
 
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, int32_t, int32_t, QuantileOperation<int32_t>>(
-		    LogicalType::INTEGER, LogicalType::INTEGER);
+		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, int32_t, int32_t,
+		                                                   QuantileOperation<int32_t>>(LogicalType::INTEGER,
+		                                                                               LogicalType::INTEGER);
 
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, int64_t, int64_t, QuantileOperation<int64_t>>(
-		    LogicalType::BIGINT, LogicalType::BIGINT);
+		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, int64_t, int64_t,
+		                                                   QuantileOperation<int64_t>>(LogicalType::BIGINT,
+		                                                                               LogicalType::BIGINT);
 
 	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, hugeint_t, hugeint_t, QuantileOperation<hugeint_t>>(
-		    LogicalType::HUGEINT, LogicalType::HUGEINT);
+		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, hugeint_t, hugeint_t,
+		                                                   QuantileOperation<hugeint_t>>(LogicalType::HUGEINT,
+		                                                                                 LogicalType::HUGEINT);
 
 	case PhysicalType::FLOAT:
 		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, float, float, QuantileOperation<float>>(

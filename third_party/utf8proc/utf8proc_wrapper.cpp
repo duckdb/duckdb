@@ -81,6 +81,14 @@ size_t Utf8Proc::PreviousGraphemeCluster(const char *s, size_t len, size_t cpos)
 	}
 }
 
+bool Utf8Proc::CodepointToUtf8(int cp, int &sz, char *c) {
+	return utf8proc_codepoint_to_utf8(cp, sz, c);
+}
+
+int Utf8Proc::CodepointLength(int cp) {
+	return utf8proc_codepoint_length(cp);
+}
+
 }
 
 size_t utf8proc_next_grapheme_cluster(const char *s, size_t len, size_t pos) {

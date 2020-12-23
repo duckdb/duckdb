@@ -7,7 +7,6 @@
 #include "re2/re2.h"
 
 namespace duckdb {
-using namespace std;
 
 LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a FunctionExpression that has a foldable ConstantExpression

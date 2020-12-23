@@ -6,7 +6,6 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on an OperatorExpression that has a ConstantExpression as child

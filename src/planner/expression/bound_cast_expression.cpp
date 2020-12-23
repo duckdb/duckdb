@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p)
     : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type_p)),

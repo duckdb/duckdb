@@ -5,7 +5,6 @@
 #include "duckdb/parser/constraints/list.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void Constraint::Serialize(Serializer &serializer) {
 	serializer.Write<ConstraintType>(type);

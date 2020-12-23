@@ -17,8 +17,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static int64_t BindConstant(Binder &binder, ClientContext &context, string clause, unique_ptr<ParsedExpression> &expr) {

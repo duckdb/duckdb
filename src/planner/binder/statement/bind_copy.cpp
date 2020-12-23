@@ -17,7 +17,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file

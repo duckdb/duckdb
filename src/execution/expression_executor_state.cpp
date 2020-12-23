@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void ExpressionState::AddChild(Expression *expr) {
 	types.push_back(expr->return_type);

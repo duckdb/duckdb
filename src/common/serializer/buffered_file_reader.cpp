@@ -6,7 +6,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path)
     : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), read_data(0), total_read(0) {

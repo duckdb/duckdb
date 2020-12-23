@@ -7,7 +7,7 @@ require parquet
 query T
 select * from parquet_scan('test/sql/copy/parquet/data/timestamp.parquet') order by 1
 ----
-2020-10-05 17:21:49.488
+2020-10-05 17:21:49.48844
 
 query T
 select * from parquet_scan('test/sql/copy/parquet/data/timestamp-ms.parquet') order by 1

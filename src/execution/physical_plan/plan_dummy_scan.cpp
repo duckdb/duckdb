@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDummyScan &op) {
 	D_ASSERT(op.children.size() == 0);

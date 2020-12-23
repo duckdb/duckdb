@@ -2,7 +2,6 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CopyFunctionCatalogEntry::CopyFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
                                                    CreateCopyFunctionInfo *info)

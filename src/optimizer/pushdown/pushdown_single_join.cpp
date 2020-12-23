@@ -2,7 +2,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using Filter = FilterPushdown::Filter;
 

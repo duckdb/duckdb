@@ -10,8 +10,6 @@
 
 #include "duckdb/function/scalar/regexp.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options,

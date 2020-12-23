@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/list.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool ExpressionMatcher::Match(Expression *expr, vector<Expression *> &bindings) {
 	if (type && !type->Match(expr->return_type.InternalType())) {

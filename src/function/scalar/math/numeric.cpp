@@ -2,14 +2,12 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include <cmath>
 #include <errno.h>
-
-using namespace std;
 
 namespace duckdb {
 
@@ -126,7 +124,7 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct BitCntOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		using TU = typename make_unsigned<TA>::type;
+		using TU = typename std::make_unsigned<TA>::type;
 		TR count = 0;
 		for (auto value = TU(input); value > 0; value >>= 1) {
 			count += TR(value & 1);

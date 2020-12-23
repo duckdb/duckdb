@@ -10,8 +10,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static bool can_plan_index_join(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {

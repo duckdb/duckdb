@@ -1,8 +1,7 @@
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-
-using namespace std;
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 

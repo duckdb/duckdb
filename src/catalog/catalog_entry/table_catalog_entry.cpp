@@ -26,8 +26,6 @@
 #include <algorithm>
 #include <sstream>
 
-using namespace std;
-
 namespace duckdb {
 
 void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &name_map) {
@@ -429,7 +427,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 }
 
 string TableCatalogEntry::ToSQL() {
-	stringstream ss;
+	std::stringstream ss;
 	ss << "CREATE TABLE " << KeywordHelper::WriteOptionallyQuoted(name) << "(";
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns

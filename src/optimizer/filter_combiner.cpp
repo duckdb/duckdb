@@ -12,7 +12,6 @@
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
 

@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ConjunctionSimplificationRule::ConjunctionSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a ComparisonExpression that has a ConstantExpression as a check

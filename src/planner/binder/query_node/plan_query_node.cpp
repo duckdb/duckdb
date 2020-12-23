@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root) {
 	D_ASSERT(root);

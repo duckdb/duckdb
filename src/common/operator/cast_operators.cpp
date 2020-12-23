@@ -7,7 +7,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -17,8 +17,6 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
-
-using namespace std;
 
 namespace duckdb {
 
@@ -597,8 +595,9 @@ template <> string_t StringCast::Operation(double input, Vector &vector) {
 }
 
 template <> string_t StringCast::Operation(interval_t input, Vector &vector) {
-	std::string s = Interval::ToString(input);
-	return StringVector::AddString(vector, s);
+	char buffer[70];
+	idx_t length = IntervalToStringCast::Format(input, buffer);
+	return StringVector::AddString(vector, buffer, length);
 }
 
 template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
@@ -608,58 +607,6 @@ template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vect
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
-struct DateToStringCast {
-	static idx_t Length(int32_t date[], idx_t &year_length, bool &add_bc) {
-		// format is YYYY-MM-DD with optional (BC) at the end
-		// regular length is 10
-		idx_t length = 6;
-		year_length = 4;
-		add_bc = false;
-		if (date[0] <= 0) {
-			// add (BC) suffix
-			length += 5;
-			date[0] = -date[0];
-			add_bc = true;
-		}
-
-		// potentially add extra characters depending on length of year
-		year_length += date[0] >= 10000;
-		year_length += date[0] >= 100000;
-		year_length += date[0] >= 1000000;
-		year_length += date[0] >= 10000000;
-		length += year_length;
-		return length;
-	}
-
-	static void Format(char *data, int32_t date[], idx_t year_length, bool add_bc) {
-		// now we write the string, first write the year
-		auto endptr = data + year_length;
-		endptr = NumericHelper::FormatUnsigned(date[0], endptr);
-		// add optional leading zeros
-		while (endptr > data) {
-			*--endptr = '0';
-		}
-		// now write the month and day
-		auto ptr = data + year_length;
-		for (int i = 1; i <= 2; i++) {
-			ptr[0] = '-';
-			if (date[i] < 10) {
-				ptr[1] = '0';
-				ptr[2] = '0' + date[i];
-			} else {
-				auto index = static_cast<unsigned>(date[i] * 2);
-				ptr[1] = duckdb_fmt::internal::data::digits[index];
-				ptr[2] = duckdb_fmt::internal::data::digits[index + 1];
-			}
-			ptr += 3;
-		}
-		// optionally add BC to the end of the date
-		if (add_bc) {
-			memcpy(ptr, " (BC)", 5);
-		}
-	}
-};
-
 template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
 	int32_t date[3];
 	Date::Convert(input, date[0], date[1], date[2]);
@@ -691,56 +638,17 @@ template <> date_t StrictCastToDate::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//
-struct TimeToStringCast {
-	static idx_t Length(int32_t time[]) {
-		// format is HH:MM:DD
-		// regular length is 8
-		idx_t length = 8;
-		if (time[3] > 0) {
-			// if there are msecs, we add the miliseconds after the time with a period separator
-			// i.e. the format becomes HH:MM:DD.msec
-			length += 4;
-		}
-		return length;
-	}
-
-	static void Format(char *data, idx_t length, int32_t time[]) {
-		// first write hour, month and day
-		auto ptr = data;
-		for (int i = 0; i <= 2; i++) {
-			if (time[i] < 10) {
-				ptr[0] = '0';
-				ptr[1] = '0' + time[i];
-			} else {
-				auto index = static_cast<unsigned>(time[i] * 2);
-				ptr[0] = duckdb_fmt::internal::data::digits[index];
-				ptr[1] = duckdb_fmt::internal::data::digits[index + 1];
-			}
-			ptr[2] = ':';
-			ptr += 3;
-		}
-		// now optionally write ms at the end
-		if (time[3] > 0) {
-			auto start = ptr;
-			ptr = NumericHelper::FormatUnsigned(time[3], data + length);
-			while (ptr > start) {
-				*--ptr = '0';
-			}
-			*--ptr = '.';
-		}
-	}
-};
-
 template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
 	int32_t time[4];
 	Time::Convert(input, time[0], time[1], time[2], time[3]);
 
-	idx_t length = TimeToStringCast::Length(time);
+	char micro_buffer[10];
+	idx_t length = TimeToStringCast::Length(time, micro_buffer);
 
 	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetDataWriteable();
 
-	TimeToStringCast::Format(data, length, time);
+	TimeToStringCast::Format(data, length, time, micro_buffer);
 
 	result.Finalize();
 	return result;
@@ -776,8 +684,9 @@ template <> string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vec
 	// format for timestamp is DATE TIME (separated by space)
 	idx_t year_length;
 	bool add_bc;
+	char micro_buffer[6];
 	idx_t date_length = DateToStringCast::Length(date, year_length, add_bc);
-	idx_t time_length = TimeToStringCast::Length(time);
+	idx_t time_length = TimeToStringCast::Length(time, micro_buffer);
 	idx_t length = date_length + time_length + 1;
 
 	string_t result = StringVector::EmptyString(vector, length);
@@ -785,7 +694,7 @@ template <> string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vec
 
 	DateToStringCast::Format(data, date, year_length, add_bc);
 	data[date_length] = ' ';
-	TimeToStringCast::Format(data + date_length + 1, time_length, time);
+	TimeToStringCast::Format(data + date_length + 1, time_length, time, micro_buffer);
 
 	result.Finalize();
 	return result;

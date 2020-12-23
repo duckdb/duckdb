@@ -9,7 +9,6 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> *expr_ptr) {

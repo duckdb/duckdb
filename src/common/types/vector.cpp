@@ -12,8 +12,8 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-
-using namespace std;
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -167,12 +167,12 @@ void Vector::SetValue(idx_t index, Value val) {
 		((int16_t *)data)[index] = val.value_.smallint;
 		break;
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
 	case LogicalTypeId::INTEGER:
 		((int32_t *)data)[index] = val.value_.integer;
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::HASH:
+	case LogicalTypeId::TIME:
 	case LogicalTypeId::BIGINT:
 		((int64_t *)data)[index] = val.value_.bigint;
 		break;
@@ -247,7 +247,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		if (val.list_value.size() > 0) {
 			idx_t append_idx = 0;
 			while (append_idx < val.list_value.size()) {
-				idx_t this_append_len = min((idx_t)STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
+				idx_t this_append_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
 
 				DataChunk child_append_chunk;
 				child_append_chunk.SetCardinality(this_append_len);

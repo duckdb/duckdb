@@ -5,7 +5,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *node) {
@@ -16,7 +16,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	// interval 'string' year
 	// interval int year
 	unique_ptr<ParsedExpression> expr;
-	switch(node->val_type) {
+	switch (node->val_type) {
 	case T_PGAExpr:
 		expr = TransformExpression(node->eval);
 		break;
@@ -44,6 +44,8 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	constexpr int HOUR_MASK = 1 << 10;
 	constexpr int MINUTE_MASK = 1 << 11;
 	constexpr int SECOND_MASK = 1 << 12;
+	constexpr int MILLISECOND_MASK = 1 << 13;
+	constexpr int MICROSECOND_MASK = 1 << 14;
 
 	// we need to check certain combinations
 	// because certain interval masks (e.g. INTERVAL '10' HOURS TO DAYS) set multiple bits
@@ -97,6 +99,14 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 		// SECOND
 		fname = "to_seconds";
 		target_type = LogicalType::BIGINT;
+	} else if (mask & MILLISECOND_MASK) {
+		// MILLISECOND
+		fname = "to_milliseconds";
+		target_type = LogicalType::BIGINT;
+	} else if (mask & MICROSECOND_MASK) {
+		// SECOND
+		fname = "to_microseconds";
+		target_type = LogicalType::BIGINT;
 	} else {
 		throw ParserException("Unsupported interval post-fix");
 	}
@@ -108,4 +118,4 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	return make_unique<FunctionExpression>(fname, children);
 }
 
-}
+} // namespace duckdb

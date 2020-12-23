@@ -4,8 +4,6 @@
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void md5_function(DataChunk &args, ExpressionState &state, Vector &result) {

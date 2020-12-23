@@ -1,6 +1,7 @@
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -24,7 +25,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
@@ -50,7 +50,7 @@ Value Value::MinimumValue(LogicalType type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(NumericLimits<int32_t>::Minimum());
 	case LogicalTypeId::TIME:
-		return Value::TIME(NumericLimits<int32_t>::Minimum());
+		return Value::TIME(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::TIMESTAMP:
@@ -100,7 +100,7 @@ Value Value::MaximumValue(LogicalType type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(NumericLimits<int32_t>::Maximum());
 	case LogicalTypeId::TIME:
-		return Value::TIME(NumericLimits<int32_t>::Maximum());
+		return Value::TIME(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::TIMESTAMP:
@@ -278,13 +278,13 @@ Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 }
 
 Value Value::TIME(dtime_t time) {
-	auto val = Value::INTEGER(time);
+	auto val = Value::BIGINT(time);
 	val.type_ = LogicalType::TIME;
 	return val;
 }
 
-Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
-	return Value::TIME(Time::FromTime(hour, min, sec, msec));
+Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros) {
+	return Value::TIME(Time::FromTime(hour, min, sec, micros));
 }
 
 Value Value::TIMESTAMP(timestamp_t timestamp) {
@@ -299,8 +299,9 @@ Value Value::TIMESTAMP(date_t date, dtime_t time) {
 	return val;
 }
 
-Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec, int32_t msec) {
-	auto val = Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
+Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
+                       int32_t micros) {
+	auto val = Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, micros));
 	val.type_ = LogicalType::TIMESTAMP;
 	return val;
 }
@@ -335,17 +336,17 @@ Value Value::BLOB(string data) {
 	return result;
 }
 
-Value Value::INTERVAL(int32_t months, int32_t days, int64_t msecs) {
+Value Value::INTERVAL(int32_t months, int32_t days, int64_t micros) {
 	Value result(LogicalType::INTERVAL);
 	result.is_null = false;
 	result.value_.interval.months = months;
 	result.value_.interval.days = days;
-	result.value_.interval.msecs = msecs;
+	result.value_.interval.micros = micros;
 	return result;
 }
 
 Value Value::INTERVAL(interval_t interval) {
-	return Value::INTERVAL(interval.months, interval.days, interval.msecs);
+	return Value::INTERVAL(interval.months, interval.days, interval.micros);
 }
 
 //===--------------------------------------------------------------------===//
@@ -442,13 +443,13 @@ template <> int16_t Value::GetValue() const {
 	return GetValueInternal<int16_t>();
 }
 template <> int32_t Value::GetValue() const {
-	if (type_.id() == LogicalTypeId::DATE || type_.id() == LogicalTypeId::TIME) {
+	if (type_.id() == LogicalTypeId::DATE) {
 		return value_.integer;
 	}
 	return GetValueInternal<int32_t>();
 }
 template <> int64_t Value::GetValue() const {
-	if (type_.id() == LogicalTypeId::TIMESTAMP) {
+	if (type_.id() == LogicalTypeId::TIMESTAMP || type_.id() == LogicalTypeId::TIME) {
 		return value_.bigint;
 	}
 	return GetValueInternal<int64_t>();
@@ -498,7 +499,7 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
 		return Value::DATE(value);
 	case LogicalTypeId::TIME:
-		D_ASSERT(value <= NumericLimits<int32_t>::Maximum());
+		D_ASSERT(value <= NumericLimits<int64_t>::Maximum());
 		return Value::TIME(value);
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(value);
@@ -596,7 +597,7 @@ string Value::ToString() const {
 	case LogicalTypeId::DATE:
 		return Date::ToString(value_.integer);
 	case LogicalTypeId::TIME:
-		return Time::ToString(value_.integer);
+		return Time::ToString(value_.bigint);
 	case LogicalTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
 	case LogicalTypeId::INTERVAL:

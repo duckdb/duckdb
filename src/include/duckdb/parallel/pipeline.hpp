@@ -59,10 +59,7 @@ public:
 	unordered_set<Pipeline *> &GetDependencies() {
 		return dependencies;
 	}
-	void ClearParents() {
-		parents.clear();
-		dependencies.clear();
-	}
+	void ClearParents();
 
 	void IncrementTasks(idx_t amount) {
 		this->total_tasks += amount;

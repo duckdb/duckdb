@@ -5,7 +5,6 @@
 #include <random>
 
 using namespace duckdb;
-using namespace std;
 
 #define CAST_COUNT 10000000
 

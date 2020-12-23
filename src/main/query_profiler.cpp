@@ -10,12 +10,11 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include <iostream>
 #include <utility>
 #include <algorithm>
-
-using namespace std;
 
 namespace duckdb {
 
@@ -159,7 +158,7 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 }
 
 OperatorProfiler::OperatorProfiler(bool enabled_) : enabled(enabled_) {
-	execution_stack = stack<PhysicalOperator *>();
+	execution_stack = std::stack<PhysicalOperator *>();
 }
 
 void OperatorProfiler::StartOperator(PhysicalOperator *phys_op) {

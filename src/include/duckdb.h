@@ -68,7 +68,7 @@ typedef struct {
 	int8_t hour;
 	int8_t min;
 	int8_t sec;
-	int16_t msec;
+	int16_t micros;
 } duckdb_time;
 
 typedef struct {
@@ -79,7 +79,7 @@ typedef struct {
 typedef struct {
 	int32_t months;
 	int32_t days;
-	int64_t msecs;
+	int64_t micros;
 } duckdb_interval;
 
 typedef struct {

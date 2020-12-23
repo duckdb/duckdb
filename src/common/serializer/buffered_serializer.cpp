@@ -3,7 +3,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 BufferedSerializer::BufferedSerializer(idx_t maximum_size)
     : BufferedSerializer(unique_ptr<data_t[]>(new data_t[maximum_size]), maximum_size) {

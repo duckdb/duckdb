@@ -1,8 +1,8 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER,

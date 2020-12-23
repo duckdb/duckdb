@@ -32,7 +32,6 @@
 #include <sstream>
 
 namespace duckdb {
-using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name, bool internal)
     : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name),
@@ -210,7 +209,7 @@ unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &sourc
 }
 
 string SchemaCatalogEntry::ToSQL() {
-	stringstream ss;
+	std::stringstream ss;
 	ss << "CREATE SCHEMA " << name << ";";
 	return ss.str();
 }

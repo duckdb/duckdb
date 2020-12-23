@@ -6,7 +6,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 HasCorrelatedExpressions::HasCorrelatedExpressions(const vector<CorrelatedColumnInfo> &correlated)
     : has_correlated_expressions(false), correlated_columns(correlated) {

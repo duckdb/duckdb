@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundSubqueryExpression::BoundSubqueryExpression(LogicalType return_type)
     : Expression(ExpressionType::SUBQUERY, ExpressionClass::BOUND_SUBQUERY, move(return_type)) {

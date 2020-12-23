@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-using namespace std;
 
 static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
