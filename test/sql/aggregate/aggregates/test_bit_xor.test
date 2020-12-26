@@ -7,7 +7,7 @@ query II
 SELECT BIT_XOR(3), BIT_XOR(NULL)
 ----
 3
-0
+NULL
 
 # test on a sequence
 statement ok
@@ -36,13 +36,13 @@ SELECT BIT_XOR(i), BIT_XOR(1), BIT_XOR(DISTINCT i), BIT_XOR(NULL) FROM integers
 24
 0
 20
-0
+NULL
 
 # test on an empty set
 query I
 SELECT BIT_XOR(i) FROM integers WHERE i > 100
 ----
-0
+NULL
 
 # test incorrect usage
 statement error
