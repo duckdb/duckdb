@@ -3,15 +3,10 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> FilterPullup::PullupFromLeft(unique_ptr<LogicalOperator> op) {
-	if(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		auto &join = (LogicalJoin &)*op;
-		D_ASSERT(join.join_type == JoinType::LEFT || join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI);
-	} else {
-		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_EXCEPT);
-	}
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_EXCEPT);
 
 	FilterPullup left_pullup(true, can_add_column);
 	FilterPullup right_pullup(false, can_add_column);
@@ -20,7 +15,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupFromLeft(unique_ptr<LogicalOpera
 	op->children[1] = right_pullup.Rewrite(move(op->children[1]));
 
 	// check only for filters from the LHS
-	if(left_pullup.filters_expr_pullup.size() > 0 && right_pullup.filters_expr_pullup.size() == 0) {
+	if (left_pullup.filters_expr_pullup.size() > 0 && right_pullup.filters_expr_pullup.size() == 0) {
 		return GeneratePullupFilter(move(op), left_pullup.filters_expr_pullup);
 	}
 	return op;
