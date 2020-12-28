@@ -92,6 +92,8 @@ test_that("test blobs", {
   res <- dbGetQuery(con, "SELECT BLOB 'hello'")
 
   expect_equal(res[[1]][[1]], charToRaw("hello"))
+
+  dbDisconnect(con, shutdown = T)
 })
 
 test_that("various error cases for dbBind()", {

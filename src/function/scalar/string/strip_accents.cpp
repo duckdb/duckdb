@@ -2,8 +2,6 @@
 
 #include "utf8proc.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 bool StripAccentsFun::IsAscii(const char *input, idx_t n) {

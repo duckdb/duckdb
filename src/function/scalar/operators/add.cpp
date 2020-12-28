@@ -10,8 +10,6 @@
 
 #include <limits>
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -133,8 +131,7 @@ template <> bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t 
 //===--------------------------------------------------------------------===//
 // add decimal with overflow check
 //===--------------------------------------------------------------------===//
-template<class T, T min, T max>
-bool TryDecimalAddTemplated(T left, T right, T &result) {
+template <class T, T min, T max> bool TryDecimalAddTemplated(T left, T right, T &result) {
 	if (right < 0) {
 		if (min - right > left) {
 			return false;

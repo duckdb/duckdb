@@ -6,8 +6,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void BuiltinFunctions::RegisterSQLiteFunctions() {

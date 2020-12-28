@@ -1,10 +1,10 @@
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "concurrentqueue.h"
 
 namespace duckdb {
-using namespace std;
 
 BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p) : manager(manager_p) {
 	block_id = block_id_p;

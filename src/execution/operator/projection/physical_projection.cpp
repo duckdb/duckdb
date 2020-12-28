@@ -2,8 +2,6 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalProjectionState : public PhysicalOperatorState {

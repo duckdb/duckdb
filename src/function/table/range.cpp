@@ -3,8 +3,6 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/algorithm.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct RangeFunctionBindData : public TableFunctionData {
@@ -78,7 +76,7 @@ static void range_function(ClientContext &context, const FunctionData *bind_data
 	int64_t current_value = bind_data.start + (int64_t)increment * state.current_idx;
 	// set the result vector as a sequence vector
 	output.data[0].Sequence(current_value, increment);
-	idx_t remaining = min<idx_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
+	idx_t remaining = MinValue<idx_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
 	// increment the index pointer by the remaining count
 	state.current_idx += remaining;
 	output.SetCardinality(remaining);

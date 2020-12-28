@@ -14,8 +14,6 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class OP> static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
@@ -196,10 +194,10 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 	if (result_type.InternalType() != PhysicalType::INT128) {
 		if (IS_SUBTRACT) {
 			bound_function.statistics =
-				propagate_numeric_statistics<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>;
+			    propagate_numeric_statistics<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>;
 		} else {
 			bound_function.statistics =
-				propagate_numeric_statistics<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
+			    propagate_numeric_statistics<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
 		}
 	}
 	return nullptr;
@@ -478,7 +476,7 @@ unique_ptr<FunctionData> bind_decimal_multiply(ClientContext &context, ScalarFun
 	}
 	if (result_type.InternalType() != PhysicalType::INT128) {
 		bound_function.statistics =
-			propagate_numeric_statistics<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
+		    propagate_numeric_statistics<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
 	}
 	return nullptr;
 }

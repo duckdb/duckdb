@@ -5,8 +5,6 @@
 
 #include <cmath>
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

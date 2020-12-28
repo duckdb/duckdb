@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 InsertBinder::InsertBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }

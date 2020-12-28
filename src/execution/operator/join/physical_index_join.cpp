@@ -12,8 +12,6 @@
 #include <iostream>
 #include <utility>
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalIndexJoinOperatorState : public PhysicalOperatorState {

@@ -8,8 +8,6 @@
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t block_id)

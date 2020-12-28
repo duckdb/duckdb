@@ -3,7 +3,6 @@
 #include "duckdb/execution/nested_loop_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class T, class OP>
 static void mark_join_templated(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {

@@ -14,7 +14,6 @@
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
-using namespace std;
 
 //! Create a JoinCondition from a comparison
 static bool CreateJoinCondition(Expression &expr, unordered_set<idx_t> &left_bindings,

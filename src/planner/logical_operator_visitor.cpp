@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);

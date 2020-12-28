@@ -1,7 +1,6 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
-using namespace std;
 
 vector<ColumnBinding> LogicalWindow::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();

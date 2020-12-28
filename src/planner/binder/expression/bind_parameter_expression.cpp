@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t depth) {
 	auto bound_parameter = make_unique<BoundParameterExpression>(expr.parameter_nr);

@@ -13,7 +13,6 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Planner::Planner(ClientContext &context) : binder(context), context(context) {
 }

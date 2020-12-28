@@ -14,7 +14,6 @@
 #include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
-using namespace std;
 
 PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
 }

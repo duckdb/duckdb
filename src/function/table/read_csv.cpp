@@ -7,8 +7,6 @@
 
 #include <limits>
 
-using namespace std;
-
 namespace duckdb {
 
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,

@@ -18,8 +18,6 @@
 #include <cmath>
 #include <cstdlib>
 
-using namespace std;
-
 namespace duckdb {
 
 template <class SRC, class DST> static bool try_cast_with_overflow_check(SRC value, DST &result) {

@@ -3,7 +3,6 @@
 #include "duckdb/common/printer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void BaseExpression::Print() {
 	Printer::Print(ToString());

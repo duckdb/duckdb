@@ -8,7 +8,6 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
-using namespace std;
 
 EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a FunctionExpression that has a foldable ConstantExpression

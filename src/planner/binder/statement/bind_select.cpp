@@ -3,7 +3,6 @@
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(SelectStatement &stmt) {
 	// first we visit the set of CTEs and add them to the bind context

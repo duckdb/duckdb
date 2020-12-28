@@ -4,7 +4,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {

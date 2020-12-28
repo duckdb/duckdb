@@ -16,9 +16,7 @@ namespace duckdb {
 //! Physically CREATE TABLE statement
 class PhysicalCreateTable : public PhysicalOperator {
 public:
-	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
-	}
+	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info);
 
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;

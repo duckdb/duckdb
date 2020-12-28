@@ -8,8 +8,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string_t substring_empty_string(Vector &result) {
@@ -147,7 +145,7 @@ static void substring_function(DataChunk &args, ExpressionState &state, Vector &
 		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
 			    return SubstringFun::substring_scalar_function(result, input_string, offset,
-			                                                   numeric_limits<int32_t>::max());
+			                                                   NumericLimits<int32_t>::Maximum());
 		    });
 	}
 }
@@ -166,7 +164,7 @@ static void substring_function_ascii(DataChunk &args, ExpressionState &state, Ve
 	} else {
 		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
-			    return substring_ascii_only(result, input_string, offset, numeric_limits<int32_t>::max());
+			    return substring_ascii_only(result, input_string, offset, NumericLimits<int32_t>::Maximum());
 		    });
 	}
 }

@@ -2,7 +2,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 // FIXME: what is the difference between GroupBy and expression list?

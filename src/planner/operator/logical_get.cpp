@@ -6,7 +6,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<string> returned_names)

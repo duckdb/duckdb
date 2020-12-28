@@ -1,15 +1,15 @@
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/regexp.hpp"
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/pair.hpp"
+
 #include "utf8proc_wrapper.hpp"
 #include "utf8proc.hpp"
-
-#include "duckdb/function/scalar/regexp.hpp"
-
-using namespace std;
 
 namespace duckdb {
 
@@ -267,7 +267,7 @@ static void string_split_regex_function(DataChunk &args, ExpressionState &state,
 
 void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 	child_list_t<LogicalType> child_types;
-	child_types.push_back(std::make_pair("string", LogicalType::VARCHAR));
+	child_types.push_back(make_pair("string", LogicalType::VARCHAR));
 	auto varchar_list_type = LogicalType(LogicalTypeId::LIST, child_types);
 
 	set.AddFunction(

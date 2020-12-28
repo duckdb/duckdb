@@ -13,6 +13,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "duckdb/storage/object_cache.hpp"
 
@@ -238,6 +239,8 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, colu
 	}
 	return column_stats;
 }
+
+
 
 const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	auto file_meta_data = GetFileMetadata();

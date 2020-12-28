@@ -12,7 +12,6 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
 namespace duckdb {
-using namespace std;
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated)
     : binder(binder), correlated_columns(correlated) {

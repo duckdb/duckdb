@@ -9,6 +9,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -228,7 +229,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 
 				auto utf_type = Utf8Proc::Analyze(cptr, str_len);
 				if (utf_type == UnicodeType::INVALID) {
-					throw runtime_error("Invalid UTF8 string encoding");
+					throw std::runtime_error("Invalid UTF8 string encoding");
 				}
 				FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
 				    StringVector::AddString(output.data[col_idx], cptr, str_len);
@@ -258,7 +259,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 			break;
 		}
 		default:
-			throw runtime_error("Unsupported type " + output.data[col_idx].type.ToString());
+			throw std::runtime_error("Unsupported type " + output.data[col_idx].type.ToString());
 		}
 	}
 	output.Verify();

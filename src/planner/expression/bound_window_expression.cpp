@@ -2,7 +2,6 @@
 #include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
                                              unique_ptr<AggregateFunction> aggregate,

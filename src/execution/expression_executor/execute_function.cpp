@@ -2,7 +2,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {

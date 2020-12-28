@@ -5,27 +5,15 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
+PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema,
+                                         unique_ptr<BoundCreateTableInfo> info)
+    : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE, op.types), schema(schema), info(move(info)) {
+}
+
 void PhysicalCreateTable::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	int64_t inserted_count = 0;
-
-	auto table = (TableCatalogEntry *)schema->CreateTable(context.client, info.get());
-	if (table && children.size() > 0) {
-		while (true) {
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			if (state->child_chunk.size() == 0) {
-				break;
-			}
-			inserted_count += state->child_chunk.size();
-			table->storage->Append(*table, context.client, state->child_chunk);
-		}
-		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(inserted_count));
-	}
-
+	schema->CreateTable(context.client, info.get());
 	state->finished = true;
 }
 

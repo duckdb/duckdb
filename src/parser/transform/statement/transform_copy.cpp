@@ -8,7 +8,7 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 void Transformer::TransformCopyOptions(CopyInfo &info, PGList *options) {

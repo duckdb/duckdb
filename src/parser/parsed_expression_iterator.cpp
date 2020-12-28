@@ -3,20 +3,19 @@
 #include "duckdb/parser/expression/list.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expression,
-                                                 function<void(const ParsedExpression &child)> callback) {
+                                                 std::function<void(const ParsedExpression &child)> callback) {
 	EnumerateChildren((ParsedExpression &)expression, [&](unique_ptr<ParsedExpression> &child) { callback(*child); });
 }
 
 void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
-                                                 function<void(ParsedExpression &child)> callback) {
+                                                 std::function<void(ParsedExpression &child)> callback) {
 	EnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) { callback(*child); });
 }
 
 void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
-                                                 function<void(unique_ptr<ParsedExpression> &child)> callback) {
+                                                 std::function<void(unique_ptr<ParsedExpression> &child)> callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::CASE: {
 		auto &case_expr = (CaseExpression &)expr;

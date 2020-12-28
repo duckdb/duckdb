@@ -7,7 +7,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	D_ASSERT(op.children.empty());

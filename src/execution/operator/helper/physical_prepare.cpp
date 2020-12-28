@@ -2,8 +2,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalPrepare::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {

@@ -11,7 +11,6 @@
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
-using namespace std;
 
 static uint32_t RequiredBitsForValue(uint32_t n) {
 	idx_t required_bits = 0;

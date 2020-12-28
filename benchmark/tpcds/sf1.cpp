@@ -4,13 +4,12 @@
 #include "duckdb_benchmark_macro.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 #define SF 1
 
 #define TPCDS_QUERY_BODY(QNR)                                                                                          \
 	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \
-		string cached_name = "tpcds_sf" + to_string(SF);                                                               \
+		string cached_name = "tpcds_sf" + std::to_string(SF);                                                          \
 		if (!BenchmarkRunner::TryLoadDatabase(state->db, cached_name)) {                                               \
 			tpcds::dbgen(SF, state->db);                                                                               \
 			BenchmarkRunner::SaveDatabase(state->db, cached_name);                                                     \

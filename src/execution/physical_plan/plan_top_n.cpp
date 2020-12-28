@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_top_n.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalTopN &op) {
 	D_ASSERT(op.children.size() == 1);

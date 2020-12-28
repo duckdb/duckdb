@@ -4,8 +4,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-
-using namespace std;
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 

@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_streaming_sample.hpp"
 #include "duckdb/common/random_engine.hpp"
-
-using namespace std;
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 

@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string clause)
     : ExpressionBinder(binder, context), clause(clause) {

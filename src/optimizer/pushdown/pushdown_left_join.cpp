@@ -10,7 +10,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using Filter = FilterPushdown::Filter;
 

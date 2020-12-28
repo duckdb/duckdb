@@ -1,7 +1,5 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalUnionOperatorState : public PhysicalOperatorState {

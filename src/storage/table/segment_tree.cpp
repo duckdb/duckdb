@@ -2,7 +2,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 namespace duckdb {
-using namespace std;
 
 SegmentBase *SegmentTree::GetRootSegment() {
 	return root_node.get();

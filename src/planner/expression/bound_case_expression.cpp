@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> check, unique_ptr<Expression> res_if_true,
                                          unique_ptr<Expression> res_if_false)

@@ -1,8 +1,6 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,

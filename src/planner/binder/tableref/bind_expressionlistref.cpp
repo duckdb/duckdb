@@ -2,9 +2,9 @@
 #include "duckdb/planner/tableref/bound_expressionlistref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	auto result = make_unique<BoundExpressionListRef>();

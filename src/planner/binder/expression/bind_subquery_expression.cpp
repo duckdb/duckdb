@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 class BoundSubqueryNode : public QueryNode {
 public:

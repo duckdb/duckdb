@@ -825,16 +825,20 @@ jobs:
         if [[ -z "${GITHUB_HEAD_REF}" ]]; then
           export GITHUB_HEAD_REF=master
         fi
+        filename=$(basename $GITHUB_HEAD_REF)
+        dirname=$(echo $GITHUB_HEAD_REF | sed 's#/#-#g')
         echo $GITHUB_ACTOR
         echo $GITHUB_WORKSPACE
         echo $GITHUB_HEAD_REF
         echo $GITHUB_BASE_REF
+        echo $filename
+        echo $dirname
         echo $GITHUB_REF
         echo $GITHUB_SHA
         echo $GITHUB_REPOSITORY
         wget https://github.com/$GITHUB_ACTOR/duckdb/archive/$GITHUB_HEAD_REF.zip
-        unzip $GITHUB_HEAD_REF.zip
-        cd duckdb-$GITHUB_HEAD_REF/tools/pythonpkg
+        unzip $filename.zip
+        cd duckdb-$dirname/tools/pythonpkg
         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
         python3 setup.py install --user
 

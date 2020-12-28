@@ -1,8 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_reservoir_sample.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

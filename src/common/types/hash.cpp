@@ -5,8 +5,6 @@
 
 #include <functional>
 
-using namespace std;
-
 namespace duckdb {
 
 template <> hash_t Hash(uint64_t val) {

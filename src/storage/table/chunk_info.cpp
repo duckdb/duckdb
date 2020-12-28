@@ -2,7 +2,6 @@
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
-using namespace std;
 
 static bool UseVersion(Transaction &transaction, transaction_t id) {
 	return id < transaction.start_time || id == transaction.transaction_id;

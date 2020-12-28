@@ -5,13 +5,9 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-
-using namespace std;
 
 namespace duckdb {
 

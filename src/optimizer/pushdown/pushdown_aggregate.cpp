@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using Filter = FilterPushdown::Filter;
 

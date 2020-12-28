@@ -6,9 +6,9 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
