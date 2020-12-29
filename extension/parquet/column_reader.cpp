@@ -40,8 +40,10 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	//			page_hdr.printTo(std::cout);
 	//			std::cout << '\n';
 
-	// TODO only do this when actually using compression
-	auto unpacked_block = make_shared<ResizeableBuffer>(page_hdr.uncompressed_page_size);
+	shared_ptr<ResizeableBuffer> unpacked_block;
+	if (chunk.meta_data.codec != CompressionCodec::UNCOMPRESSED) {
+        unpacked_block = make_shared<ResizeableBuffer>(page_hdr.uncompressed_page_size);
+    }
 
 	switch (chunk.meta_data.codec) {
 	case CompressionCodec::UNCOMPRESSED:
