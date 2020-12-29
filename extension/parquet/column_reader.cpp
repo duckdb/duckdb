@@ -88,9 +88,12 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE: {
+		// TODO also support data page hdr v2
+        D_ASSERT(page_hdr.type == PageType::DATA_PAGE);
 		rows_available = page_hdr.data_page_header.num_values;
 
 		if (can_have_nulls) {
+			D_ASSERT(page_hdr.data_page_header.definition_level_encoding == Encoding::RLE);
 			uint32_t def_length = block->read<uint32_t>();
 			block->available(def_length);
 			defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, 1);
@@ -101,6 +104,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		case Encoding::RLE_DICTIONARY:
 		case Encoding::PLAIN_DICTIONARY: {
 			auto dict_width = block->read<uint8_t>();
+			D_ASSERT(dict_width > 0);
 			dict_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, dict_width);
 			break;
 		}
@@ -151,8 +155,17 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 		}
 
 		if (dict_decoder) {
-			offset_buffer.resize(sizeof(uint32_t) * read_now);
-			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now);
+			idx_t null_count = 0;
+            if (can_have_nulls) {
+                for (idx_t i = 0; i < read_now; i++) {
+                    if (!defined_buffer.ptr[i]) {
+                        null_count++;
+                    }
+                }
+            }
+
+			offset_buffer.resize(sizeof(uint32_t) * (read_now - null_count));
+			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			DictReference(result);
 			Offsets((uint32_t *)offset_buffer.ptr, (uint8_t *)defined_buffer.ptr, read_now, filter, result_offset,
 			        result);
