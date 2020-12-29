@@ -34,7 +34,9 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	parquet::format::PageHeader page_hdr;
 	page_hdr.read(&protocol);
 
-	block = make_shared<ResizeableBuffer>(page_hdr.compressed_page_size);
+	// add extra space to buffers so the dict decoder can use 4-byte ops
+
+	block = make_shared<ResizeableBuffer>(page_hdr.compressed_page_size + sizeof(uint32_t));
 	trans->read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
 
 	//			page_hdr.printTo(std::cout);
@@ -42,8 +44,8 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk.meta_data.codec != CompressionCodec::UNCOMPRESSED) {
-        unpacked_block = make_shared<ResizeableBuffer>(page_hdr.uncompressed_page_size);
-    }
+		unpacked_block = make_shared<ResizeableBuffer>(page_hdr.uncompressed_page_size + sizeof(uint32_t));
+	}
 
 	switch (chunk.meta_data.codec) {
 	case CompressionCodec::UNCOMPRESSED:
@@ -89,7 +91,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE: {
 		// TODO also support data page hdr v2
-        D_ASSERT(page_hdr.type == PageType::DATA_PAGE);
+		D_ASSERT(page_hdr.type == PageType::DATA_PAGE);
 		rows_available = page_hdr.data_page_header.num_values;
 
 		if (can_have_nulls) {
@@ -104,7 +106,6 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		case Encoding::RLE_DICTIONARY:
 		case Encoding::PLAIN_DICTIONARY: {
 			auto dict_width = block->read<uint8_t>();
-			D_ASSERT(dict_width > 0);
 			dict_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, dict_width);
 			break;
 		}
@@ -155,14 +156,16 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 		}
 
 		if (dict_decoder) {
+			// TODO computing this here is a wee bit ugly
+			// we need the null count because the offsets have no entries for nulls
 			idx_t null_count = 0;
-            if (can_have_nulls) {
-                for (idx_t i = 0; i < read_now; i++) {
-                    if (!defined_buffer.ptr[i]) {
-                        null_count++;
-                    }
-                }
-            }
+			if (can_have_nulls) {
+				for (idx_t i = 0; i < read_now; i++) {
+					if (!defined_buffer.ptr[i]) {
+						null_count++;
+					}
+				}
+			}
 
 			offset_buffer.resize(sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);

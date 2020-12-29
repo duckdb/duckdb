@@ -3,12 +3,12 @@
 # group: [parquet]
 
 require parquet
-require vector_size 512
 
-#statement ok
-#PRAGMA enable_verification
-
-
-query IIIIRRITTTTI
+query I
 SELECT timestampval FROM parquet_scan('test/sql/copy/parquet/data/data-types.parquet')
 ----
+NULL
+2019-11-26 20:11:42.501
+NULL
+NULL
+NULL

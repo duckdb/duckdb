@@ -240,8 +240,6 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, colu
 	return column_stats;
 }
 
-
-
 const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
@@ -544,6 +542,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			if (need_to_read[out_col_idx]) {
 				auto file_col_idx = state.column_ids[out_col_idx];
+				// TODO handle ROWID here, too
 				state.column_readers[file_col_idx]->Read(result.size(), filter_mask, result.data[out_col_idx]);
 			}
 		}
@@ -562,8 +561,13 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			auto file_col_idx = state.column_ids[out_col_idx];
 
+			if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				Value constant_42 = Value::BIGINT(42);
+				result.data[out_col_idx].Reference(constant_42);
+				continue;
+			}
+
 			state.column_readers[file_col_idx]->Read(result.size(), filter_mask, result.data[out_col_idx]);
-			// ScanColumn(state, filter_mask, result.size(), out_col_idx, result.data[out_col_idx]);
 		}
 	}
 

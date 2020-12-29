@@ -77,7 +77,6 @@ private:
 	unique_ptr<RleBpDecoder> defined_decoder;
 };
 
-// TODO conversion operator template param for timestamps / decimals etc.
 template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
 
 public:
@@ -93,13 +92,14 @@ public:
 	             idx_t result_offset, Vector &result) override {
 		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 
+		idx_t offset_idx = 0;
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (!defines[row_idx]) {
+			if (defines && !defines[row_idx]) {
 				FlatVector::SetNull(result, row_idx + result_offset, true);
 				continue;
 			}
 			if (filter[row_idx + result_offset]) {
-				result_ptr[row_idx + result_offset] = DictRead(offsets[row_idx]);
+				result_ptr[row_idx + result_offset] = DictRead(offsets[offset_idx++]);
 			}
 		}
 	}
@@ -108,7 +108,7 @@ public:
 	           idx_t result_offset, Vector &result) override {
 		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (!defines[row_idx]) {
+			if (defines && !defines[row_idx]) {
 				FlatVector::SetNull(result, row_idx + result_offset, true);
 				continue;
 			}
