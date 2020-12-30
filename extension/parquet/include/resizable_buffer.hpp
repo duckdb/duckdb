@@ -28,9 +28,14 @@ public:
 	}
 
 	template <class T> T read() {
+		T val = get<T>();
+		inc(sizeof(T));
+		return val;
+	}
+
+	template <class T> T get() {
 		available(sizeof(T));
 		T val = Load<T>((data_ptr_t)ptr);
-		inc(sizeof(T));
 		return val;
 	}
 
