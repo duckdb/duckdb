@@ -3,7 +3,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 // COALESCE(a,b,c) returns the first argument that is NOT NULL, so
@@ -13,7 +13,11 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(PGAExpr *root) {
 		return nullptr;
 	}
 	auto coalesce_args = reinterpret_cast<PGList *>(root->lexpr);
-
+	D_ASSERT(coalesce_args->length > 0); // parser ensures this already
+	if (coalesce_args->length == 1) {
+		// special case, dont need to do anything, bug #1222
+		return TransformExpression(reinterpret_cast<PGNode *>(coalesce_args->head->data.ptr_value));
+	}
 	auto exp_root = make_unique<CaseExpression>();
 	auto cur_root = exp_root.get();
 	for (auto cell = coalesce_args->head; cell && cell->next; cell = cell->next) {

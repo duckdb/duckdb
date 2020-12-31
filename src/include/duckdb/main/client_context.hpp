@@ -66,18 +66,15 @@ public:
 	bool force_parallelism = false;
 	//! Force index join independent of table cardinality, used for testing
 	bool force_index_join = false;
+	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
+	//! elements)
+	idx_t perfect_ht_threshold = 12;
 	//! The writer used to log queries (if logging is enabled)
 	unique_ptr<BufferedFileWriter> log_query_writer;
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
-
-	//! Wether or not object cache is used
-	bool object_cache_enable = false;
-
-	//! Object Cache
-	unordered_map<string, unique_ptr<ObjectCache>> cache;
 
 public:
 	Transaction &ActiveTransaction() {

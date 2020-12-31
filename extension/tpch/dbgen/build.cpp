@@ -1,3 +1,13 @@
+/*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ */
 #include <stdio.h>
 #include <string.h>
 #ifndef VMS
@@ -6,11 +16,11 @@
 #if defined(SUN)
 #include <unistd.h>
 #endif
-#include "dss.h"
-#include "dsstypes.h"
+#include "dbgen/dss.h"
+#include "dbgen/dsstypes.h"
 
 #include <math.h>
-#include "rng64.h"
+#include "dbgen/rng64.h"
 
 static tdef *tdefs = DBGenGlobals::tdefs;
 

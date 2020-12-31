@@ -3,9 +3,6 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
-#include "duckdb/common/operator/numeric_binary_operators.hpp"
-
-using namespace std;
 
 namespace duckdb {
 
@@ -46,7 +43,7 @@ struct BitAndOperation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		target[idx] = T(*state);
 	}
 
@@ -86,7 +83,7 @@ struct BitOrOperation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		target[idx] = T(*state);
 	}
 
@@ -126,7 +123,7 @@ struct BitXorOperation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		target[idx] = T(*state);
 	}
 

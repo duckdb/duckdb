@@ -10,8 +10,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static LogicalType ResolveWindowExpressionType(ExpressionType window_type, LogicalType child_type) {
@@ -87,6 +85,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	//  Determine the function type.
 	LogicalType sql_type;
 	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<FunctionData> bind_info;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
 		auto func =
@@ -106,13 +105,14 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto bound_aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children));
 		// create the aggregate
 		aggregate = make_unique<AggregateFunction>(bound_aggregate->function);
+		bind_info = move(bound_aggregate->bind_info);
 		children = move(bound_aggregate->children);
 		sql_type = bound_aggregate->return_type;
 	} else {
 		// fetch the child of the non-aggregate window function (if any)
 		sql_type = ResolveWindowExpressionType(window.type, types.empty() ? LogicalType() : types[0]);
 	}
-	auto result = make_unique<BoundWindowExpression>(window.type, sql_type, move(aggregate));
+	auto result = make_unique<BoundWindowExpression>(window.type, sql_type, move(aggregate), move(bind_info));
 	result->children = move(children);
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));

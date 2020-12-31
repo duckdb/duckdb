@@ -7,8 +7,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct CurrentBindData : public FunctionData {
@@ -29,21 +27,21 @@ static timestamp_t get_transaction_ts(ExpressionState &state) {
 }
 
 static void current_time_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.column_count() == 0);
+	D_ASSERT(input.ColumnCount() == 0);
 
 	auto val = Value::TIME(Timestamp::GetTime(get_transaction_ts(state)));
 	result.Reference(val);
 }
 
 static void current_date_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.column_count() == 0);
+	D_ASSERT(input.ColumnCount() == 0);
 
 	auto val = Value::DATE(Timestamp::GetDate(get_transaction_ts(state)));
 	result.Reference(val);
 }
 
 static void current_timestamp_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.column_count() == 0);
+	D_ASSERT(input.ColumnCount() == 0);
 
 	auto val = Value::TIMESTAMP(get_transaction_ts(state));
 	result.Reference(val);

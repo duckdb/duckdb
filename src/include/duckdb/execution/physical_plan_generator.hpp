@@ -70,6 +70,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalWindow &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExecute &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPragma &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalSample &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSimple &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUnnest &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);
@@ -77,6 +78,10 @@ protected:
 
 	unique_ptr<PhysicalOperator> CreateDistinctOn(unique_ptr<PhysicalOperator> child,
 	                                              vector<unique_ptr<Expression>> distinct_targets);
+
+	unique_ptr<PhysicalOperator> ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,
+	                                                         vector<unique_ptr<Expression>> &expressions,
+	                                                         vector<unique_ptr<Expression>> &groups);
 
 private:
 	ClientContext &context;

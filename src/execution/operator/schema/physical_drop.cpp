@@ -1,8 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_drop.hpp"
 #include "duckdb/main/client_context.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalDrop::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {

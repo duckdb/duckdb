@@ -10,7 +10,6 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), column(0) {
 	description = con.TableInfo(schema_name, table_name);
@@ -47,7 +46,7 @@ void Appender::BeginRow() {
 void Appender::EndRow() {
 	CheckInvalidated();
 	// check that all rows have been appended to
-	if (column != chunk.column_count()) {
+	if (column != chunk.ColumnCount()) {
 		InvalidateException("Call to EndRow before all rows have been appended to!");
 	}
 	column = 0;
@@ -68,7 +67,7 @@ void Appender::InvalidateException(string msg) {
 
 template <class T> void Appender::AppendValueInternal(T input) {
 	CheckInvalidated();
-	if (column >= chunk.column_count()) {
+	if (column >= chunk.ColumnCount()) {
 		InvalidateException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column];
@@ -144,14 +143,14 @@ template <> void Appender::Append(double value) {
 }
 
 template <> void Appender::Append(Value value) {
-	if (column >= chunk.column_count()) {
+	if (column >= chunk.ColumnCount()) {
 		InvalidateException("Too many appends for chunk!");
 	}
 	AppendValue(move(value));
 }
 
-template <> void Appender::Append(nullptr_t value) {
-	if (column >= chunk.column_count()) {
+template <> void Appender::Append(std::nullptr_t value) {
+	if (column >= chunk.ColumnCount()) {
 		InvalidateException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column++];
@@ -187,7 +186,7 @@ void Appender::Close() {
 	if (!invalidated_msg.empty()) {
 		return;
 	}
-	if (column == 0 || column == chunk.column_count()) {
+	if (column == 0 || column == chunk.ColumnCount()) {
 		Flush();
 	}
 	Invalidate("The appender has been closed!");

@@ -1,0 +1,64 @@
+# name: test/sql/function/generic/test_stats.test
+# description: Test stats function
+# group: [generic]
+
+# scalar stats
+query I
+SELECT STATS(5);
+----
+<REGEX>:.*5.*5.*
+
+query I
+SELECT STATS(7);
+----
+<REGEX>:.*7.*7.*
+
+query I
+SELECT STATS('hello');
+----
+<REGEX>:.*hello.*hello.*
+
+query I
+SELECT STATS('1234567ü');
+----
+<REGEX>:.*1234567.*1234567.*
+
+# arithmetic
+query I
+SELECT STATS(5+2);
+----
+<REGEX>:.*7.*7.*
+
+# non-scalar stats
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3);
+
+# read stats
+query I
+SELECT STATS(i) FROM integers LIMIT 1;
+----
+<REGEX>:.*1.*3.*
+
+# arithmetic
+query I
+SELECT STATS(i+2) FROM integers LIMIT 1;
+----
+<REGEX>:.*3.*5.*
+
+query I
+SELECT STATS(i-5) FROM integers LIMIT 1;
+----
+<REGEX>:.*-4.*-2.*
+
+query I
+SELECT STATS(i*2) FROM integers LIMIT 1;
+----
+<REGEX>:.*2.*6.*
+
+query I
+SELECT STATS(i*-1) FROM integers LIMIT 1;
+----
+<REGEX>:.*-3.*-1.*

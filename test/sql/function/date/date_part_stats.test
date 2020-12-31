@@ -1,0 +1,201 @@
+# name: test/sql/function/date/date_part_stats.test
+# description: Test date part stats on empty table
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(d DATE);
+
+# test stats propagation from empty table
+query I
+SELECT EXTRACT(year FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(month FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(day FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(decade FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(century FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(millennium FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(microseconds FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(milliseconds FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(second FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(minute FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(hour FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(epoch FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(dow FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(isodow FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(week FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(doy FROM d) FROM dates;
+----
+
+query I
+SELECT EXTRACT(quarter FROM d) FROM dates;
+----
+
+query I
+SELECT YEARWEEK(d) FROM dates;
+----
+
+query I
+SELECT DAYOFMONTH(d) FROM dates;
+----
+
+query I
+SELECT WEEKDAY(d) FROM dates;
+----
+
+query I
+SELECT WEEKOFYEAR(d) FROM dates;
+----
+
+statement ok
+PRAGMA disable_verification
+
+statement ok
+INSERT INTO dates VALUES (DATE '1992-01-01'), (DATE '2000-12-31');
+
+query I
+SELECT stats(EXTRACT(YEAR FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1992.*2000.*
+
+query I
+SELECT stats(EXTRACT(month FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1.*12.*
+
+query I
+SELECT stats(EXTRACT(day FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1.*31.*
+
+query I
+SELECT stats(EXTRACT(decade FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*199.*200.*
+
+query I
+SELECT stats(EXTRACT(century FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*20.*20.*
+
+query I
+SELECT stats(EXTRACT(millennium FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*2.*2.*
+
+query I
+SELECT stats(EXTRACT(microseconds FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*0.*60000000.*
+
+query I
+SELECT stats(EXTRACT(milliseconds FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*0.*60000.*
+
+query I
+SELECT stats(EXTRACT(second FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*0.*60.*
+
+query I
+SELECT stats(EXTRACT(minute FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*0.*60.*
+
+query I
+SELECT stats(EXTRACT(hour FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*0.*24.*
+
+query I
+SELECT stats(EXTRACT(dow FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*0.*6.*
+
+query I
+SELECT stats(EXTRACT(isodow FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1.*7.*
+
+query I
+SELECT stats(EXTRACT(week FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1.*54.*
+
+query I
+SELECT stats(EXTRACT(doy FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1.*366.*
+
+query I
+SELECT stats(EXTRACT(quarter FROM d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1.*4.*
+
+query I
+SELECT stats(YEARWEEK(d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*199201.*200052.*
+
+query I
+SELECT stats(DAYOFMONTH(d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1.*31.*
+
+query I
+SELECT stats(WEEKDAY(d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*0.*6.*
+
+query I
+SELECT stats(WEEKOFYEAR(d)) FROM dates LIMIT 1;
+----
+<REGEX>:.*1.*54.*
+

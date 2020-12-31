@@ -7,6 +7,7 @@
 #include "duckdb/common/types/null_value.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -29,7 +30,6 @@
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 
 namespace duckdb {
-using namespace std;
 
 // constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
 
@@ -112,6 +112,13 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 	vector<SequenceCatalogEntry *> sequences;
 	schema.sequences.Scan(context, [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
 
+	vector<MacroCatalogEntry *> macros;
+	schema.functions.Scan(context, [&](CatalogEntry *entry) {
+		if (entry->type == CatalogType::MACRO_ENTRY) {
+			macros.push_back((MacroCatalogEntry *)entry);
+		}
+	});
+
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
 	for (auto &seq : sequences) {
@@ -122,10 +129,15 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 	for (auto &table : tables) {
 		WriteTable(context, *table);
 	}
-	// finally write the views
+	// now write the views
 	metadata_writer->Write<uint32_t>(views.size());
 	for (auto &view : views) {
 		WriteView(*view);
+	}
+	// finally write the macro's
+	metadata_writer->Write<uint32_t>(macros.size());
+	for (auto &macro : macros) {
+		WriteMacro(*macro);
 	}
 }
 
@@ -146,10 +158,15 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	for (uint32_t i = 0; i < table_count; i++) {
 		ReadTable(context, reader);
 	}
-	// finally read the views
+	// now read the views
 	uint32_t view_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
+	}
+	// finally read the macro's
+	uint32_t macro_count = reader.Read<uint32_t>();
+	for (uint32_t i = 0; i < macro_count; i++) {
+		ReadMacro(context, reader);
 	}
 }
 
@@ -177,6 +194,19 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 	auto info = SequenceCatalogEntry::Deserialize(reader);
 
 	database.catalog->CreateSequence(context, info.get());
+}
+
+//===--------------------------------------------------------------------===//
+// Macro's
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteMacro(MacroCatalogEntry &macro) {
+	macro.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
+	auto info = MacroCatalogEntry::Deserialize(reader);
+
+	database.catalog->CreateFunction(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//

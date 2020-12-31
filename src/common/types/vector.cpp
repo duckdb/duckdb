@@ -11,8 +11,9 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
-
-using namespace std;
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -73,7 +74,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	Reference(other);
 	if (offset > 0) {
 		data = data + GetTypeIdSize(type.InternalType()) * offset;
-		nullmask <<= offset;
+		nullmask >>= offset;
 	}
 }
 
@@ -166,12 +167,12 @@ void Vector::SetValue(idx_t index, Value val) {
 		((int16_t *)data)[index] = val.value_.smallint;
 		break;
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
 	case LogicalTypeId::INTEGER:
 		((int32_t *)data)[index] = val.value_.integer;
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::HASH:
+	case LogicalTypeId::TIME:
 	case LogicalTypeId::BIGINT:
 		((int64_t *)data)[index] = val.value_.bigint;
 		break;
@@ -242,11 +243,11 @@ void Vector::SetValue(idx_t index, Value val) {
 		}
 		auto &child_cc = ListVector::GetEntry(*this);
 		// TODO optimization: in-place update if fits
-		auto offset = child_cc.count;
+		auto offset = child_cc.Count();
 		if (val.list_value.size() > 0) {
 			idx_t append_idx = 0;
 			while (append_idx < val.list_value.size()) {
-				idx_t this_append_len = min((idx_t)STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
+				idx_t this_append_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
 
 				DataChunk child_append_chunk;
 				child_append_chunk.SetCardinality(this_append_len);
@@ -344,7 +345,7 @@ Value Vector::GetValue(idx_t index) const {
 	}
 	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
-		return Value::BLOB((const_data_ptr_t) str.GetDataUnsafe(), str.GetSize());
+		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
 	case LogicalTypeId::STRUCT: {
 		Value ret(type);
@@ -777,7 +778,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify();
 				auto le = ConstantVector::GetData<list_entry_t>(*this);
-				D_ASSERT(le->offset + le->length <= ListVector::GetEntry(*this).count);
+				D_ASSERT(le->offset + le->length <= ListVector::GetEntry(*this).Count());
 			}
 		} else if (vector_type == VectorType::FLAT_VECTOR) {
 			if (ListVector::HasEntry(*this)) {
@@ -788,7 +789,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
 				if (!nullmask[idx]) {
-					D_ASSERT(le.offset + le.length <= ListVector::GetEntry(*this).count);
+					D_ASSERT(le.offset + le.length <= ListVector::GetEntry(*this).Count());
 				}
 			}
 		}
@@ -852,6 +853,15 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.EmptyString(len);
+}
+
+void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
+	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	string_buffer.AddHeapReference(make_unique<ManagedVectorBuffer>(move(handle)));
 }
 
 void StringVector::AddHeapReference(Vector &vector, Vector &other) {

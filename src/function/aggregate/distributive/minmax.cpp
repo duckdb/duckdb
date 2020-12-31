@@ -7,8 +7,6 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/planner/expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class T> struct min_max_state_t {
@@ -80,7 +78,7 @@ struct NumericMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		nullmask[idx] = !state->isset;
 		target[idx] = state->value;
 	}
@@ -150,7 +148,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->isset) {
 			nullmask[idx] = true;
 		} else {
@@ -165,7 +163,8 @@ struct StringMinMaxBase : public MinMaxBase {
 		}
 		if (!target->isset) {
 			// target is NULL, use source value directly
-			*target = source;
+			Assign(target, source.value);
+			target->isset = true;
 		} else {
 			OP::template Execute<string_t, STATE>(target, source.value);
 		}

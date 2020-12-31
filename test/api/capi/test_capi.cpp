@@ -15,7 +15,7 @@ public:
 		success = (duckdb_query(connection, query.c_str(), &result) == DuckDBSuccess);
 	}
 
-	idx_t column_count() {
+	idx_t ColumnCount() {
 		return result.column_count;
 	}
 
@@ -146,7 +146,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar value
 	result = tester.Query("SELECT CAST(42 AS BIGINT)");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 	REQUIRE(!result->IsNull(0, 0));
@@ -154,7 +154,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar NULL
 	result = tester.Query("SELECT NULL");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
 	REQUIRE(result->IsNull(0, 0));
@@ -162,7 +162,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar string
 	result = tester.Query("SELECT 'hello'");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<string>(0, 0) == "hello");
 	REQUIRE(!result->IsNull(0, 0));
@@ -256,7 +256,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	}
 	// date columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE dates(d DATE)"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO dates VALUES ('1992-09-20'), (NULL), ('1000000-09-20')"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO dates VALUES ('1992-09-20'), (NULL), ('30000-09-20')"));
 
 	result = tester.Query("SELECT * FROM dates ORDER BY d");
 	REQUIRE_NO_FAIL(*result);
@@ -267,10 +267,10 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(date.day == 20);
 	REQUIRE(result->Fetch<string>(0, 1) == Value::DATE(1992, 9, 20).ToString());
 	date = result->Fetch<duckdb_date>(0, 2);
-	REQUIRE(date.year == 1000000);
+	REQUIRE(date.year == 30000);
 	REQUIRE(date.month == 9);
 	REQUIRE(date.day == 20);
-	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(1000000, 9, 20).ToString());
+	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(30000, 9, 20).ToString());
 
 	// timestamp columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE timestamps(t TIMESTAMP)"));
@@ -286,7 +286,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(stamp.time.hour == 12);
 	REQUIRE(stamp.time.min == 1);
 	REQUIRE(stamp.time.sec == 30);
-	REQUIRE(stamp.time.msec == 0);
+	REQUIRE(stamp.time.micros == 0);
 	REQUIRE(result->Fetch<string>(0, 1) == Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString());
 
 	// boolean columns

@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 	D_ASSERT(op.children.size() == 2);

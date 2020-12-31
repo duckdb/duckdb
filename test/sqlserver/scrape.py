@@ -15,7 +15,7 @@ def transform_result_set(tblstr):
 	cols = len(re.findall(r"-{3,}( |\n)", tblstr))
 	if (cols < 1):
 		return ""
-	print("REQUIRE(result->column_count() == %d);" % cols)
+	print("REQUIRE(result->ColumnCount() == %d);" % cols)
 	lineiterator = iter(tblstr.splitlines())
 	in_data = False
 	result = []

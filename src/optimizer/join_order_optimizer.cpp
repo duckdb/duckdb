@@ -3,11 +3,11 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/common/pair.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 using JoinNode = JoinOrderOptimizer::JoinNode;
 
@@ -66,15 +66,16 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 &&
-	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION && op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET)) {
+	while (op->children.size() == 1 && (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
+	                                    op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
 		}
-		if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY || op->type == LogicalOperatorType::LOGICAL_WINDOW) {
+		if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
+		    op->type == LogicalOperatorType::LOGICAL_WINDOW) {
 			// don't push filters through projection or aggregate and group by
-			JoinOrderOptimizer optimizer;
+			JoinOrderOptimizer optimizer(context);
 			op->children[0] = optimizer.Optimize(move(op->children[0]));
 			return false;
 		}
@@ -96,18 +97,17 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		} else {
 			// non-inner join, not reorderable yet
 			non_reorderable_operation = true;
-			if (join.join_type == JoinType::LEFT &&
-			    join.right_projection_map.size() == 0) {
+			if (join.join_type == JoinType::LEFT && join.right_projection_map.size() == 0) {
 				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
 				// we convert to doing a RIGHT OUTER JOIN
 				// FIXME: for now we don't swap if the right_projection_map is not empty
 				// this can be fixed once we implement the left_projection_map properly...
-				auto lhs_cardinality = join.children[0]->EstimateCardinality();
-				auto rhs_cardinality = join.children[1]->EstimateCardinality();
+				auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+				auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
 				if (rhs_cardinality > lhs_cardinality * 2) {
 					join.join_type = JoinType::RIGHT;
 					std::swap(join.children[0], join.children[1]);
-					for(auto &cond : join.conditions) {
+					for (auto &cond : join.conditions) {
 						std::swap(cond.left, cond.right);
 					}
 				}
@@ -122,7 +122,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 		for (idx_t i = 0; i < op->children.size(); i++) {
-			JoinOrderOptimizer optimizer;
+			JoinOrderOptimizer optimizer(context);
 			op->children[i] = optimizer.Optimize(move(op->children[i]));
 		}
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
@@ -140,7 +140,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relations.push_back(move(relation));
 		return true;
 	}
-	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	    op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		// inner join or cross product
 		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
@@ -169,7 +170,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	} else if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		auto proj = (LogicalProjection *)op;
 		// we run the join order optimizer witin the subquery as well
-		JoinOrderOptimizer optimizer;
+		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(move(op->children[0]));
 		// projection, add to the set of relations
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
@@ -426,7 +427,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			best_right = smallest_index[1];
 			// the code below assumes best_right > best_left
 			if (best_left > best_right) {
-				swap(best_left, best_right);
+				std::swap(best_left, best_right);
 			}
 		}
 		// now update the to-be-checked pairs
@@ -505,9 +506,9 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				auto condition = move(filters[f->filter_index]);
 				// now create the actual join condition
 				D_ASSERT((JoinRelationSet::IsSubset(left.first, f->left_set) &&
-				        JoinRelationSet::IsSubset(right.first, f->right_set)) ||
-				       (JoinRelationSet::IsSubset(left.first, f->right_set) &&
-				        JoinRelationSet::IsSubset(right.first, f->left_set)));
+				          JoinRelationSet::IsSubset(right.first, f->right_set)) ||
+				         (JoinRelationSet::IsSubset(left.first, f->right_set) &&
+				          JoinRelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
 				D_ASSERT(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = (BoundComparisonExpression &)*condition;
@@ -640,7 +641,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	// have to move up through the relations
 	auto op = plan.get();
 	auto parent = plan.get();
-	while (op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT && op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	while (op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT &&
+	       op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		D_ASSERT(op->children.size() == 1);
 		parent = op;
 		op = op->children[0].get();
@@ -655,7 +657,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 // FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	D_ASSERT(filters.size() == 0 && relations.size() == 0); // assert that the JoinOrderOptimizer has not been used before
+	D_ASSERT(filters.size() == 0 &&
+	         relations.size() == 0); // assert that the JoinOrderOptimizer has not been used before
 	LogicalOperator *op = plan.get();
 	// now we optimize the current plan
 	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
@@ -753,7 +756,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality());
+		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality(context));
 	}
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();

@@ -12,8 +12,6 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PipelineTask : public Task {
@@ -98,9 +96,12 @@ void Pipeline::ScheduleSequentialTask() {
 
 bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	switch (op->type) {
+	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::CROSS_PRODUCT:
+	case PhysicalOperatorType::STREAMING_SAMPLE:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
 	case PhysicalOperatorType::TABLE_SCAN: {
@@ -142,6 +143,17 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	}
 }
 
+void Pipeline::ClearParents() {
+	for (auto &parent : parents) {
+		parent->dependencies.erase(this);
+	}
+	for (auto &dep : dependencies) {
+		dep->parents.erase(this);
+	}
+	parents.clear();
+	dependencies.clear();
+}
+
 void Pipeline::Reset(ClientContext &context) {
 	sink_state = sink->GetGlobalState(context);
 	finished_tasks = 0;
@@ -168,6 +180,17 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::CREATE_TABLE_AS:
+	case PhysicalOperatorType::ORDER_BY:
+	case PhysicalOperatorType::RESERVOIR_SAMPLE:
+	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
+		// perfect hash aggregate can always be parallelized
+		if (ScheduleOperator(sink->children[0].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
 	case PhysicalOperatorType::HASH_GROUP_BY: {
 		auto &hash_aggr = (PhysicalHashAggregate &)*sink;
 		if (!hash_aggr.all_combinable) {
@@ -180,9 +203,18 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::HASH_JOIN: {
 		// schedule build side of the join
 		if (ScheduleOperator(sink->children[1].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
+	case PhysicalOperatorType::WINDOW: {
+		// schedule child op
+		if (ScheduleOperator(sink->children[0].get())) {
 			// all parallel tasks have been scheduled: return
 			return;
 		}
@@ -202,6 +234,7 @@ void Pipeline::AddDependency(Pipeline *pipeline) {
 
 void Pipeline::CompleteDependency() {
 	idx_t current_finished = ++finished_dependencies;
+	D_ASSERT(current_finished <= dependencies.size());
 	if (current_finished == dependencies.size()) {
 		// all dependencies have been completed: schedule the pipeline
 		Schedule();

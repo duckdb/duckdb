@@ -2,8 +2,6 @@
 
 #include "duckdb/common/algorithm.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalLimitOperatorState : public PhysicalOperatorState {
@@ -36,7 +34,7 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 				// however we will reach it in this chunk
 				// we have to copy part of the chunk with an offset
 				idx_t start_position = offset - state->current_offset;
-				idx_t chunk_count = min(limit, state->child_chunk.size() - start_position);
+				idx_t chunk_count = MinValue<idx_t>(limit, state->child_chunk.size() - start_position);
 				SelectionVector sel(STANDARD_VECTOR_SIZE);
 				for (idx_t i = 0; i < chunk_count; i++) {
 					sel.set_index(i, start_position + i);

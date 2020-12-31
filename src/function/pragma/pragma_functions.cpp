@@ -118,12 +118,12 @@ static void pragma_disable_force_parallelism(ClientContext &context, FunctionPar
 	context.force_parallelism = false;
 }
 
-static void pragma_enable_object_cache(ClientContext &context, FunctionParameters parameters){
-	context.object_cache_enable = true;
+static void pragma_enable_object_cache(ClientContext &context, FunctionParameters parameters) {
+	context.db.config.object_cache_enable = true;
 }
 
-static void pragma_disable_object_cache(ClientContext &context, FunctionParameters parameters){
-	context.object_cache_enable = false;
+static void pragma_disable_object_cache(ClientContext &context, FunctionParameters parameters) {
+	context.db.config.object_cache_enable = false;
 }
 
 static void pragma_log_query_path(ClientContext &context, FunctionParameters parameters) {
@@ -156,6 +156,15 @@ static void pragma_enable_optimizer(ClientContext &context, FunctionParameters p
 
 static void pragma_disable_optimizer(ClientContext &context, FunctionParameters parameters) {
 	context.enable_optimizer = false;
+}
+
+static void pragma_perfect_ht_threshold(ClientContext &context, FunctionParameters parameters) {
+	auto bits = parameters.values[0].GetValue<int32_t>();
+	;
+	if (bits < 0 || bits > 32) {
+		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
+	}
+	context.perfect_ht_threshold = bits;
 }
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
@@ -197,6 +206,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", pragma_explain_output, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", pragma_enable_force_index_join));
+
+	set.AddFunction(
+	    PragmaFunction::PragmaAssignment("perfect_ht_threshold", pragma_perfect_ht_threshold, LogicalType::INTEGER));
 }
 
 idx_t ParseMemoryLimit(string arg) {

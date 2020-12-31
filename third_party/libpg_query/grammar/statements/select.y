@@ -154,7 +154,7 @@ select_clause:
 simple_select:
 			SELECT opt_all_clause opt_target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause
+			group_clause having_clause window_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->targetList = $3;
@@ -164,11 +164,12 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
+					n->sampleOptions = $10;
 					$$ = (PGNode *)n;
 				}
 			| SELECT distinct_clause target_list
 			into_clause from_clause where_clause
-			group_clause having_clause window_clause
+			group_clause having_clause window_clause sample_clause
 				{
 					PGSelectStmt *n = makeNode(PGSelectStmt);
 					n->distinctClause = $2;
@@ -179,6 +180,7 @@ simple_select:
 					n->groupClause = $7;
 					n->havingClause = $8;
 					n->windowClause = $9;
+					n->sampleOptions = $10;
 					$$ = (PGNode *)n;
 				}
 			| values_clause							{ $$ = $1; }
@@ -450,6 +452,90 @@ offset_clause:
 				{ $$ = $2; }
 		;
 
+/*
+ * SAMPLE clause
+ */
+sample_count:
+	FCONST '%'
+		{
+			$$ = makeSampleSize(makeFloat($1), true);
+		}
+	| ICONST '%'
+		{
+			$$ = makeSampleSize(makeInteger($1), true);
+		}
+	| FCONST PERCENT
+		{
+			$$ = makeSampleSize(makeFloat($1), true);
+		}
+	| ICONST PERCENT
+		{
+			$$ = makeSampleSize(makeInteger($1), true);
+		}
+	| ICONST
+		{
+			$$ = makeSampleSize(makeInteger($1), false);
+		}
+	| ICONST ROWS
+		{
+			$$ = makeSampleSize(makeInteger($1), false);
+		}
+	;
+
+sample_clause:
+			USING SAMPLE tablesample_entry
+				{
+					$$ = $3;
+				}
+			| /* EMPTY */
+				{ $$ = NULL; }
+		;
+
+/*
+ * TABLESAMPLE decoration in a FROM item
+ */
+opt_sample_func:
+			ColId					{ $$ = $1; }
+			| /*EMPTY*/				{ $$ = NULL; }
+		;
+
+tablesample_entry:
+	opt_sample_func '(' sample_count ')' opt_repeatable_clause
+				{
+					$$ = makeSampleOptions($3, $1, $5, @1);
+				}
+	| sample_count
+		{
+			$$ = makeSampleOptions($1, NULL, -1, @1);
+		}
+	| sample_count '(' ColId ')'
+		{
+			$$ = makeSampleOptions($1, $3, -1, @1);
+		}
+	| sample_count '(' ColId ',' ICONST ')'
+		{
+			$$ = makeSampleOptions($1, $3, $5, @1);
+		}
+	;
+
+tablesample_clause:
+			TABLESAMPLE tablesample_entry
+				{
+					$$ = $2;
+				}
+		;
+
+opt_tablesample_clause:
+			tablesample_clause			{ $$ = $1; }
+			| /*EMPTY*/					{ $$ = NULL; }
+		;
+
+
+opt_repeatable_clause:
+			REPEATABLE '(' ICONST ')'	{ $$ = $3; }
+			| /*EMPTY*/					{ $$ = -1; }
+		;
+
 select_limit_value:
 			a_expr									{ $$ = $1; }
 			| ALL
@@ -642,24 +728,18 @@ from_list:
 /*
  * table_ref is where an alias clause can be attached.
  */
-table_ref:	relation_expr opt_alias_clause
+table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 				{
 					$1->alias = $2;
+					$1->sample = $3;
 					$$ = (PGNode *) $1;
 				}
-			| relation_expr opt_alias_clause tablesample_clause
-				{
-					PGRangeTableSample *n = (PGRangeTableSample *) $3;
-					$1->alias = $2;
-					/* relation_expr goes inside the PGRangeTableSample node */
-					n->relation = (PGNode *) $1;
-					$$ = (PGNode *) n;
-				}
-			| func_table func_alias_clause
+			| func_table func_alias_clause opt_tablesample_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $1;
 					n->alias = (PGAlias*) linitial($2);
 					n->coldeflist = (PGList*) lsecond($2);
+					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
 			| LATERAL_P func_table func_alias_clause
@@ -670,12 +750,13 @@ table_ref:	relation_expr opt_alias_clause
 					n->coldeflist = (PGList*) lsecond($3);
 					$$ = (PGNode *) n;
 				}
-			| select_with_parens opt_alias_clause
+			| select_with_parens opt_alias_clause opt_tablesample_clause
 				{
 					PGRangeSubselect *n = makeNode(PGRangeSubselect);
 					n->lateral = false;
 					n->subquery = $1;
 					n->alias = $2;
+					n->sample = $3;
 					/*
 					 * The SQL spec does not permit a subselect
 					 * (<derived_table>) without an alias clause,
@@ -711,6 +792,7 @@ table_ref:	relation_expr opt_alias_clause
 					n->lateral = true;
 					n->subquery = $2;
 					n->alias = $3;
+					n->sample = NULL;
 					/* same comment as above */
 					if ($3 == NULL)
 					{
@@ -959,26 +1041,6 @@ relation_expr:
  * has, causing the parser to prefer to reduce, in effect assuming that the
  * SET is not an alias.
  */
-/*
- * TABLESAMPLE decoration in a FROM item
- */
-tablesample_clause:
-			TABLESAMPLE func_name '(' expr_list ')' opt_repeatable_clause
-				{
-					PGRangeTableSample *n = makeNode(PGRangeTableSample);
-					/* n->relation will be filled in later */
-					n->method = $2;
-					n->args = $4;
-					n->repeatable = $6;
-					n->location = @2;
-					$$ = (PGNode *) n;
-				}
-		;
-
-opt_repeatable_clause:
-			REPEATABLE '(' a_expr ')'	{ $$ = (PGNode *) $3; }
-			| /*EMPTY*/					{ $$ = NULL; }
-		;
 
 /*
  * func_table represents a function invocation in a FROM list. It can be
@@ -999,6 +1061,7 @@ func_table: func_expr_windowless opt_ordinality
 					n->ordinality = $2;
 					n->is_rowsfrom = false;
 					n->functions = list_make1(list_make2($1, NIL));
+					n->sample = NULL;
 					/* alias and coldeflist are set by table_ref production */
 					$$ = (PGNode *) n;
 				}
@@ -1009,6 +1072,7 @@ func_table: func_expr_windowless opt_ordinality
 					n->ordinality = $6;
 					n->is_rowsfrom = true;
 					n->functions = $4;
+					n->sample = NULL;
 					/* alias and coldeflist are set by table_ref production */
 					$$ = (PGNode *) n;
 				}
@@ -1467,77 +1531,89 @@ opt_timezone:
 			| /*EMPTY*/								{ $$ = false; }
 		;
 
+year_keyword:
+	YEAR_P | YEARS_P
+
+month_keyword:
+	MONTH_P | MONTHS_P
+
+day_keyword:
+	DAY_P | DAYS_P
+
+hour_keyword:
+	HOUR_P | HOURS_P
+
+minute_keyword:
+	MINUTE_P | MINUTES_P
+
+second_keyword:
+	SECOND_P | SECONDS_P
+
+millisecond_keyword:
+	MILLISECOND_P | MILLISECONDS_P
+
+microsecond_keyword:
+	MICROSECOND_P | MICROSECONDS_P
+
 opt_interval:
-			YEAR_P
+			year_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR), @1)); }
-			| MONTH_P
+			| month_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MONTH), @1)); }
-			| DAY_P
+			| day_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(DAY), @1)); }
-			| HOUR_P
+			| hour_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR), @1)); }
-			| MINUTE_P
+			| minute_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MINUTE), @1)); }
-			| interval_second
-				{ $$ = $1; }
-			| YEAR_P TO MONTH_P
+			| second_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(SECOND), @1)); }
+			| millisecond_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MILLISECOND), @1)); }
+			| microsecond_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MICROSECOND), @1)); }
+			| year_keyword TO month_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR) |
 												 INTERVAL_MASK(MONTH), @1));
 				}
-			| DAY_P TO HOUR_P
+			| day_keyword TO hour_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(DAY) |
 												 INTERVAL_MASK(HOUR), @1));
 				}
-			| DAY_P TO MINUTE_P
+			| day_keyword TO minute_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(DAY) |
 												 INTERVAL_MASK(HOUR) |
 												 INTERVAL_MASK(MINUTE), @1));
 				}
-			| DAY_P TO interval_second
+			| day_keyword TO second_keyword
 				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(DAY) |
-												INTERVAL_MASK(HOUR) |
-												INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
+					$$ = list_make1(makeIntConst(INTERVAL_MASK(DAY) |
+												 INTERVAL_MASK(HOUR) |
+												 INTERVAL_MASK(MINUTE) |
+												 INTERVAL_MASK(SECOND), @1));
 				}
-			| HOUR_P TO MINUTE_P
+			| hour_keyword TO minute_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR) |
 												 INTERVAL_MASK(MINUTE), @1));
 				}
-			| HOUR_P TO interval_second
+			| hour_keyword TO second_keyword
 				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(HOUR) |
-												INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
+					$$ = list_make1(makeIntConst(INTERVAL_MASK(HOUR) |
+												 INTERVAL_MASK(MINUTE) |
+												 INTERVAL_MASK(SECOND), @1));
 				}
-			| MINUTE_P TO interval_second
+			| minute_keyword TO second_keyword
 				{
-					$$ = $3;
-					linitial($$) = makeIntConst(INTERVAL_MASK(MINUTE) |
-												INTERVAL_MASK(SECOND), @1);
+					$$ = list_make1(makeIntConst(INTERVAL_MASK(MINUTE) |
+												 INTERVAL_MASK(SECOND), @1));
 				}
 			| /*EMPTY*/
 				{ $$ = NIL; }
 		;
-
-interval_second:
-			SECOND_P
-				{
-					$$ = list_make1(makeIntConst(INTERVAL_MASK(SECOND), @1));
-				}
-			| SECOND_P '(' Iconst ')'
-				{
-					$$ = list_make2(makeIntConst(INTERVAL_MASK(SECOND), @1),
-									makeIntConst($3, @3));
-				}
-		;
-
 
 /*****************************************************************************
  *
@@ -2779,14 +2855,16 @@ extract_list:
  * - thomas 2001-04-12
  */
 extract_arg:
-			IDENT									{ $$ = $1; }
-			| YEAR_P								{ $$ = (char*) "year"; }
-			| MONTH_P								{ $$ = (char*) "month"; }
-			| DAY_P									{ $$ = (char*) "day"; }
-			| HOUR_P								{ $$ = (char*) "hour"; }
-			| MINUTE_P								{ $$ = (char*) "minute"; }
-			| SECOND_P								{ $$ = (char*) "second"; }
-			| Sconst								{ $$ = $1; }
+			IDENT											{ $$ = $1; }
+			| year_keyword									{ $$ = (char*) "year"; }
+			| month_keyword									{ $$ = (char*) "month"; }
+			| day_keyword									{ $$ = (char*) "day"; }
+			| hour_keyword									{ $$ = (char*) "hour"; }
+			| minute_keyword								{ $$ = (char*) "minute"; }
+			| second_keyword								{ $$ = (char*) "second"; }
+			| millisecond_keyword							{ $$ = (char*) "millisecond"; }
+			| microsecond_keyword							{ $$ = (char*) "microsecond"; }
+			| Sconst										{ $$ = $1; }
 		;
 
 /* OVERLAY() arguments
@@ -3203,31 +3281,17 @@ AexprConst: Iconst
 				{
 					$$ = makeStringConstCast($2, @2, $1);
 				}
+			| ConstInterval '(' a_expr ')' opt_interval
+				{
+					$$ = makeIntervalNode($3, @3, $5);
+				}
+			| ConstInterval Iconst opt_interval
+				{
+					$$ = makeIntervalNode($2, @2, $3);
+				}
 			| ConstInterval Sconst opt_interval
 				{
-					PGTypeName *t = $1;
-					t->typmods = $3;
-					$$ = makeStringConstCast($2, @2, t);
-				}
-			| ConstInterval '(' Iconst ')' Sconst
-				{
-					PGTypeName *t = $1;
-					t->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
-											makeIntConst($3, @3));
-					$$ = makeStringConstCast($5, @5, t);
-				}
-      /* Version without () is handled in a_expr/b_expr logic due to ? mis-parsing as operator */
-			| ConstInterval '(' '?' ')' '?' opt_interval
-				{
-					PGTypeName *t = $1;
-					if ($6 != NIL)
-					{
-						t->typmods = lappend($6, makeParamRef(0, @3));
-					}
-					else
-						t->typmods = list_make2(makeIntConst(INTERVAL_FULL_RANGE, -1),
-												makeParamRef(0, @3));
-					$$ = makeParamRefCast(0, @5, t);
+					$$ = makeIntervalNode($2, @2, $3);
 				}
 			| TRUE_P
 				{

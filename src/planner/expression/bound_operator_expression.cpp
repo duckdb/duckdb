@@ -2,7 +2,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, LogicalType return_type)
     : Expression(type, ExpressionClass::BOUND_OPERATOR, move(return_type)) {

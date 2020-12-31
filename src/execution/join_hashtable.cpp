@@ -8,8 +8,6 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 using ScanStructure = JoinHashTable::ScanStructure;
@@ -33,7 +31,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		predicates.push_back(condition.comparison);
 		null_values_are_equal.push_back(condition.null_values_are_equal);
 		D_ASSERT(!condition.null_values_are_equal ||
-		       (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
+		         (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
 
 		condition_types.push_back(type);
 		condition_size += type_size;
@@ -48,7 +46,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
 	entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
-	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+	if (IsRightOuterJoin(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
 		entry_size += sizeof(bool);
@@ -59,15 +57,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 }
 
 JoinHashTable::~JoinHashTable() {
-	if (hash_map) {
-		auto hash_id = hash_map->block_id;
-		hash_map.reset();
-		buffer_manager.DestroyBuffer(hash_id);
-	}
-	pinned_handles.clear();
-	for (auto &block : blocks) {
-		buffer_manager.DestroyBuffer(block.block_id);
-	}
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
@@ -237,13 +226,17 @@ static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx
 }
 
 idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data,
-                                 const SelectionVector *&current_sel, SelectionVector &sel) {
+                                 const SelectionVector *&current_sel, SelectionVector &sel, bool build_side) {
 	key_data = keys.Orrify();
 
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = &FlatVector::IncrementalSelectionVector;
 	idx_t added_count = keys.size();
-	for (idx_t i = 0; i < keys.column_count(); i++) {
+	if (build_side && IsRightOuterJoin(join_type)) {
+		// in case of a right or full outer join, we cannot remove NULL keys from the build side
+		return added_count;
+	}
+	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		if (!null_values_are_equal[i]) {
 			if (!key_data[i].nullmask->any()) {
 				continue;
@@ -275,9 +268,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
 		info.payload_chunk.SetCardinality(keys);
-		for (idx_t i = 0; i < 2; i++) {
-			info.payload_chunk.data[i].Reference(keys.data[info.correlated_types.size()]);
-		}
+		info.payload_chunk.data[0].Reference(keys.data[info.correlated_types.size()]);
 		info.correlated_counts->AddChunk(info.group_chunk, info.payload_chunk);
 	}
 
@@ -285,7 +276,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	unique_ptr<VectorData[]> key_data;
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel);
+	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel, true);
 	if (added_count < keys.size()) {
 		has_null = true;
 	}
@@ -306,7 +297,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			auto &last_block = blocks.back();
 			if (last_block.count < last_block.capacity) {
 				// last block has space: pin the buffer of this block
-				auto handle = buffer_manager.Pin(last_block.block_id);
+				auto handle = buffer_manager.Pin(last_block.block);
 				// now append to the block
 				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
 				remaining -= append_count;
@@ -315,17 +306,18 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 		while (remaining > 0) {
 			// now for the remaining data, allocate new buffers to store the data and append there
-			auto handle = buffer_manager.Allocate(block_capacity * entry_size);
+			auto block = buffer_manager.RegisterMemory(block_capacity * entry_size, false);
+			auto handle = buffer_manager.Pin(block);
 
 			HTDataBlock new_block;
 			new_block.count = 0;
 			new_block.capacity = block_capacity;
-			new_block.block_id = handle->block_id;
+			new_block.block = move(block);
 
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
-			blocks.push_back(new_block);
+			blocks.push_back(move(new_block));
 		}
 	}
 	// now set up the key_locations based on the append entries
@@ -344,16 +336,16 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	Hash(keys, *current_sel, added_count, hash_values);
 
 	// serialize the keys to the key locations
-	for (idx_t i = 0; i < keys.column_count(); i++) {
+	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, key_locations);
 	}
 	// now serialize the payload
 	if (build_types.size() > 0) {
-		for (idx_t i = 0; i < payload.column_count(); i++) {
+		for (idx_t i = 0; i < payload.ColumnCount(); i++) {
 			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
 	}
-	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		initialize_outer_join(added_count, key_locations);
 	}
@@ -403,7 +395,7 @@ void JoinHashTable::Finalize() {
 	// this is so that we can keep pointers around to the blocks
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : blocks) {
-		auto handle = buffer_manager.Pin(block.block_id);
+		auto handle = buffer_manager.Pin(block.block);
 		data_ptr_t dataptr = handle->node->buffer;
 		idx_t entry = 0;
 		while (entry < block.count) {
@@ -439,7 +431,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 
 	// first prepare the keys for probing
 	const SelectionVector *current_sel;
-	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector);
+	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector, false);
 	if (ss->count == 0) {
 		return ss;
 	}
@@ -739,7 +731,7 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(result.column_count() == left.column_count() + ht.build_types.size());
+	D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.build_types.size());
 	if (this->count == 0) {
 		// no pointers left to chase
 		return;
@@ -749,7 +741,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
-		if (ht.join_type == JoinType::OUTER || ht.join_type == JoinType::RIGHT) {
+		if (IsRightOuterJoin(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
@@ -767,7 +759,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		// on the RHS, we need to fetch the data from the hash table
 		idx_t offset = ht.condition_size;
 		for (idx_t i = 0; i < ht.build_types.size(); i++) {
-			auto &vector = result.data[left.column_count() + i];
+			auto &vector = result.data[left.ColumnCount() + i];
 			D_ASSERT(vector.type == ht.build_types[i]);
 			GatherResult(vector, result_vector, result_count, offset);
 		}
@@ -797,7 +789,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 }
 
 template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(left.column_count() == result.column_count());
+	D_ASSERT(left.ColumnCount() == result.ColumnCount());
 	D_ASSERT(keys.size() == left.size());
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -839,7 +831,7 @@ void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result) {
 	// for the initial set of columns we just reference the left side
 	result.SetCardinality(child);
-	for (idx_t i = 0; i < child.column_count(); i++) {
+	for (idx_t i = 0; i < child.ColumnCount(); i++) {
 		result.data[i].Reference(child.data[i]);
 	}
 	auto &mark_vector = result.data.back();
@@ -848,7 +840,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
 	auto &nullmask = FlatVector::Nullmask(mark_vector);
-	for (idx_t col_idx = 0; col_idx < join_keys.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
 		if (ht.null_values_are_equal[col_idx]) {
 			continue;
 		}
@@ -880,7 +872,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 }
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {
-	D_ASSERT(result.column_count() == input.column_count() + 1);
+	D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
 	D_ASSERT(result.data.back().type == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
 	D_ASSERT(ht.count > 0);
@@ -892,16 +884,16 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		auto &info = ht.correlated_mark_join_info;
 		// there are correlated columns
 		// first we fetch the counts from the aggregate hashtable corresponding to these entries
-		D_ASSERT(keys.column_count() == info.group_chunk.column_count() + 1);
+		D_ASSERT(keys.ColumnCount() == info.group_chunk.ColumnCount() + 1);
 		info.group_chunk.SetCardinality(keys);
-		for (idx_t i = 0; i < info.group_chunk.column_count(); i++) {
+		for (idx_t i = 0; i < info.group_chunk.ColumnCount(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
 		info.correlated_counts->FetchAggregates(info.group_chunk, info.result_chunk);
 
 		// for the initial set of columns we just reference the left side
 		result.SetCardinality(input);
-		for (idx_t i = 0; i < input.column_count(); i++) {
+		for (idx_t i = 0; i < input.ColumnCount(); i++) {
 			result.data[i].Reference(input.data[i]);
 		}
 		// create the result matching vector
@@ -972,7 +964,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 			result.Slice(left, sel, remaining_count);
 
 			// now set the right side to NULL
-			for (idx_t i = left.column_count(); i < result.column_count(); i++) {
+			for (idx_t i = left.ColumnCount(); i < result.ColumnCount(); i++) {
 				result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
 				ConstantVector::SetNull(result.data[i], true);
 			}
@@ -1005,14 +997,14 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 		AdvancePointers(no_match_sel, no_match_count);
 	}
 	// reference the columns of the left side from the result
-	D_ASSERT(input.column_count() > 0);
-	for (idx_t i = 0; i < input.column_count(); i++) {
+	D_ASSERT(input.ColumnCount() > 0);
+	for (idx_t i = 0; i < input.ColumnCount(); i++) {
 		result.data[i].Reference(input.data[i]);
 	}
 	// now fetch the data from the RHS
 	idx_t offset = ht.condition_size;
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
-		auto &vector = result.data[input.column_count() + i];
+		auto &vector = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
 		auto &nullmask = FlatVector::Nullmask(vector);
 		nullmask.set();
@@ -1053,7 +1045,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	}
 	result.SetCardinality(found_entries);
 	if (found_entries > 0) {
-		idx_t left_column_count = result.column_count() - build_types.size();
+		idx_t left_column_count = result.ColumnCount() - build_types.size();
 		// set the left side as a constant NULL
 		for (idx_t i = 0; i < left_column_count; i++) {
 			result.data[i].vector_type = VectorType::CONSTANT_VECTOR;

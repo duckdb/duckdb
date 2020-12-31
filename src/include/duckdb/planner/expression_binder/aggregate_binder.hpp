@@ -21,7 +21,8 @@ public:
 	AggregateBinder(Binder &binder, ClientContext &context);
 
 protected:
-	BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false) override;
+	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+	                          bool root_expression = false) override;
 
 	string UnsupportedAggregateMessage() override;
 };

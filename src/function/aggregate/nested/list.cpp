@@ -1,8 +1,7 @@
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-
-using namespace std;
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -15,17 +14,13 @@ struct ListFunction {
 		state->cc = nullptr;
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-		throw NotImplementedException("COMBINE not implemented for LIST");
-	}
-
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->cc) {
 			delete state->cc;
 		}
 	}
 	static bool IgnoreNull() {
-		return true;
+		return false;
 	}
 };
 
@@ -70,37 +65,44 @@ static void list_combine(Vector &state, Vector &combined, idx_t count) {
 			combined_ptr[i]->cc = new ChunkCollection();
 		}
 		combined_ptr[i]->cc->Append(*state->cc);
-		delete state->cc;
 	}
 }
 
-static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
+static void list_finalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (list_agg_state_t **)sdata.data;
 
 	result.Initialize(LogicalType::LIST);
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
+	auto &nullmask = FlatVector::Nullmask(result);
 
 	size_t total_len = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
+		if (!state->cc) {
+			nullmask[i] = true;
+			continue;
+		}
 		D_ASSERT(state->cc);
 		auto &state_cc = *state->cc;
-		D_ASSERT(state_cc.types.size() == 1);
-		list_struct_data[i].length = state_cc.count;
+		D_ASSERT(state_cc.Types().size() == 1);
+		list_struct_data[i].length = state_cc.Count();
 		list_struct_data[i].offset = total_len;
-		total_len += state_cc.count;
+		total_len += state_cc.Count();
 	}
 
 	auto list_child = make_unique<ChunkCollection>();
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
+		if (!state->cc) {
+			continue;
+		}
 		auto &state_cc = *state->cc;
-		D_ASSERT(state_cc.chunks[0]->column_count() == 1);
+		D_ASSERT(state_cc.GetChunk(0).ColumnCount() == 1);
 		list_child->Append(state_cc);
 	}
-	D_ASSERT(list_child->count == total_len);
+	D_ASSERT(list_child->Count() == total_len);
 	ListVector::SetEntry(result, move(list_child));
 }
 

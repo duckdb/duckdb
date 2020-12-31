@@ -8,7 +8,6 @@
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class T> void templated_generate_sequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
 	D_ASSERT(result.type.IsNumeric());

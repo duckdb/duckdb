@@ -1,7 +1,17 @@
-#include "dbgen_gunk.hpp"
+/*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ */
+#include "dbgen/dbgen_gunk.hpp"
 
-#include "dss.h"
-#include "dsstypes.h"
+#include "dbgen/dss.h"
+#include "dbgen/dsstypes.h"
 
 void load_dists(void) {
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "p_cntr", &p_cntr_set);

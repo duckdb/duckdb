@@ -3,8 +3,6 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/algorithm.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct RangeFunctionBindData : public TableFunctionData {
@@ -64,7 +62,7 @@ struct RangeFunctionState : public FunctionOperatorData {
 
 static unique_ptr<FunctionOperatorData> range_function_init(ClientContext &context, const FunctionData *bind_data,
                                                             vector<column_t> &column_ids,
-                                                            unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                            TableFilterSet *table_filters) {
 	return make_unique<RangeFunctionState>();
 }
 
@@ -78,15 +76,16 @@ static void range_function(ClientContext &context, const FunctionData *bind_data
 	int64_t current_value = bind_data.start + (int64_t)increment * state.current_idx;
 	// set the result vector as a sequence vector
 	output.data[0].Sequence(current_value, increment);
-	idx_t remaining = min<idx_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
+	idx_t remaining = MinValue<idx_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
 	// increment the index pointer by the remaining count
 	state.current_idx += remaining;
 	output.SetCardinality(remaining);
 }
 
-idx_t range_cardinality(const FunctionData *bind_data_) {
+unique_ptr<NodeStatistics> range_cardinality(ClientContext &context, const FunctionData *bind_data_) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_;
-	return (bind_data.end - bind_data.start) / bind_data.increment;
+	idx_t cardinality = (bind_data.end - bind_data.start) / bind_data.increment;
+	return make_unique<NodeStatistics>(cardinality, cardinality);
 }
 
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
@@ -94,26 +93,26 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 	// single argument range: (end) - implicit start = 0 and increment = 1
 	range.AddFunction(TableFunction({LogicalType::BIGINT}, range_function, range_function_bind<false>,
-	                                range_function_init, nullptr, nullptr, range_cardinality));
+	                                range_function_init, nullptr, nullptr, nullptr, range_cardinality));
 	// two arguments range: (start, end) - implicit increment = 1
 	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, range_function,
-	                                range_function_bind<false>, range_function_init, nullptr, nullptr,
+	                                range_function_bind<false>, range_function_init, nullptr, nullptr, nullptr,
 	                                range_cardinality));
 	// three arguments range: (start, end, increment)
 	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT}, range_function,
-	                                range_function_bind<false>, range_function_init, nullptr, nullptr,
+	                                range_function_bind<false>, range_function_init, nullptr, nullptr, nullptr,
 	                                range_cardinality));
 	set.AddFunction(range);
 	// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 	TableFunctionSet generate_series("generate_series");
 	generate_series.AddFunction(TableFunction({LogicalType::BIGINT}, range_function, range_function_bind<true>,
-	                                          range_function_init, nullptr, nullptr, range_cardinality));
+	                                          range_function_init, nullptr, nullptr, nullptr, range_cardinality));
 	generate_series.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, range_function,
-	                                          range_function_bind<true>, range_function_init, nullptr, nullptr,
+	                                          range_function_bind<true>, range_function_init, nullptr, nullptr, nullptr,
 	                                          range_cardinality));
 	generate_series.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                          range_function, range_function_bind<true>, range_function_init, nullptr,
-	                                          nullptr, range_cardinality));
+	                                          nullptr, nullptr, range_cardinality));
 	set.AddFunction(generate_series);
 }
 

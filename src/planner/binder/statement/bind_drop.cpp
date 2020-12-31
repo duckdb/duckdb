@@ -6,7 +6,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(DropStatement &stmt) {
 	BoundStatement result;
@@ -23,6 +22,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		break;
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
+	case CatalogType::MACRO_ENTRY:
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::TABLE_ENTRY: {
 		auto entry = (StandardEntry *)Catalog::GetCatalog(context).GetEntry(context, stmt.info->type, stmt.info->schema,

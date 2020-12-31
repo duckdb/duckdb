@@ -16,7 +16,7 @@ add_executable(
   schema.cc
   sqlsmith.cc)
 target_link_libraries(sqlsmith duckdb tpch_extension)
-target_link_libraries(sqlsmith Threads::Threads)
+link_threads(sqlsmith)
 
 set_target_properties(
   sqlsmith

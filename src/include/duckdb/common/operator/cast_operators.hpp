@@ -23,7 +23,7 @@ struct Cast {
 
 struct TryCast {
 	template <class SRC, class DST> static inline bool Operation(SRC input, DST &target, bool strict = false) {
-		target = Cast::Operation(input);
+		target = Cast::Operation<SRC, DST>(input);
 		return true;
 	}
 };

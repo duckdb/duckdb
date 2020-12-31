@@ -4,7 +4,6 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 hash_t ValueOperations::Hash(const Value &op) {
 	if (op.is_null) {
@@ -33,8 +32,22 @@ hash_t ValueOperations::Hash(const Value &op) {
 		return duckdb::Hash(op.value_.interval);
 	case PhysicalType::VARCHAR:
 		return duckdb::Hash(op.str_value.c_str());
+	case PhysicalType::LIST: {
+		hash_t hash = 0;
+		for (auto &entry : op.list_value) {
+			hash ^= ValueOperations::Hash(entry);
+		}
+		return hash;
+	}
+	case PhysicalType::STRUCT: {
+		hash_t hash = 0;
+		for (auto &entry : op.struct_value) {
+			hash ^= ValueOperations::Hash(entry.second);
+		}
+		return hash;
+	}
 	default:
-		throw NotImplementedException("Unimplemented type for value hash");
+		throw InternalException("Unimplemented type for value hash");
 	}
 }
 

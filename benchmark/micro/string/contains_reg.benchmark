@@ -2,6 +2,9 @@
 # description: Contains word 'reg' in the l_comment
 # group: [string]
 
+name Contains ('reg')
+group string
+
 require tpch
 
 cache tpch_sf1

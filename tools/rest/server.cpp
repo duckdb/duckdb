@@ -100,7 +100,7 @@ static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json 
 
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	D_ASSERT(res);
-	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
+	for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
 		Vector &v = chunk->data[col_idx];
 		switch (v.type.id()) {
 		case LogicalTypeId::BOOLEAN:

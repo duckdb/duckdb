@@ -12,8 +12,6 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
@@ -322,10 +320,7 @@ void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<Logical
 	auto &expr = **expr_ptr;
 
 	// first visit the children of the node, if any
-	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
-		PlanSubqueries(&expr, root);
-		return expr;
-	});
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { PlanSubqueries(&expr, root); });
 
 	// check if this is a subquery node
 	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {

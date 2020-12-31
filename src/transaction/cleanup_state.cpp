@@ -10,7 +10,6 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CleanupState::CleanupState() : current_table(nullptr), count(0) {
 }
@@ -58,6 +57,7 @@ void CleanupState::CleanupUpdate(UpdateInfo *info) {
 
 void CleanupState::CleanupDelete(DeleteInfo *info) {
 	auto version_table = info->table;
+	version_table->info->cardinality -= info->count;
 	if (version_table->info->indexes.size() == 0) {
 		// this table has no indexes: no cleanup to be done
 		return;

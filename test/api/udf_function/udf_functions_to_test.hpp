@@ -263,7 +263,7 @@ static void udf_several_constant_input(DataChunk &input, ExpressionState &state,
 template <typename TYPE> static void udf_max_constant(DataChunk &args, ExpressionState &state, Vector &result) {
 	TYPE max = 0;
 	result.vector_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		auto &input = args.data[col_idx];
 		if (ConstantVector::IsNull(input)) {
 			// constant null, skip
@@ -290,7 +290,7 @@ template <typename TYPE> static void udf_max_flat(DataChunk &args, ExpressionSta
 	// Initialize the result vector with the minimum value from TYPE.
 	memset(result_data, std::numeric_limits<TYPE>::min(), args.size() * sizeof(TYPE));
 
-	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		auto &input = args.data[col_idx];
 		D_ASSERT((GetTypeId<TYPE>()) == input.type.InternalType());
 		auto input_data = FlatVector::GetData<TYPE>(input);
@@ -334,7 +334,8 @@ struct UDFAverageFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	                     idx_t idx) {
 		if (!Value::DoubleIsValid(state->sum)) {
 			throw OutOfRangeException("AVG is out of range!");
 		} else if (state->count == 0) {
@@ -414,7 +415,8 @@ struct UDFCovarOperation {
 
 struct UDFCovarPopOperation : public UDFCovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	                     idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -543,7 +545,8 @@ struct UDFSum {
 		}
 	}
 
-	template <class STATE_TYPE, class RESULT_TYPE> static void Finalize(Vector &states, Vector &result, idx_t count) {
+	template <class STATE_TYPE, class RESULT_TYPE>
+	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
 		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
 			result.vector_type = VectorType::CONSTANT_VECTOR;
 

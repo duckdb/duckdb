@@ -3,7 +3,6 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool ExpressionListRef::Equals(const TableRef *other_) const {
 	if (!TableRef::Equals(other_)) {
@@ -38,7 +37,7 @@ unique_ptr<TableRef> ExpressionListRef::Copy() {
 	}
 	result->expected_names = expected_names;
 	result->expected_types = expected_types;
-	result->alias = alias;
+	CopyProperties(*result);
 	return move(result);
 }
 

@@ -54,9 +54,9 @@ public:
 	}
 
 	//! Create the lowest possible value of a given type (numeric only)
-	static Value MinimumValue(PhysicalType type);
+	static Value MinimumValue(LogicalType type);
 	//! Create the highest possible value of a given type (numeric only)
-	static Value MaximumValue(PhysicalType type);
+	static Value MaximumValue(LogicalType type);
 	//! Create a Numeric value of the specified type with the specified value
 	static Value Numeric(LogicalType type, int64_t value);
 	static Value Numeric(LogicalType type, hugeint_t value);
@@ -84,15 +84,15 @@ public:
 	//! Create a time Value from a specified time
 	static Value TIME(dtime_t time);
 	//! Create a time Value from a specified time
-	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec);
+	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
 	static Value TIMESTAMP(date_t date, dtime_t time);
 	//! Create a timestamp Value from a specified timestamp
 	static Value TIMESTAMP(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
-	                       int32_t msec);
-	static Value INTERVAL(int32_t months, int32_t days, int64_t msecs);
+	                       int32_t micros);
+	static Value INTERVAL(int32_t months, int32_t days, int64_t micros);
 	static Value INTERVAL(interval_t interval);
 
 	// Decimal values
@@ -119,6 +119,11 @@ public:
 	}
 	template <class T> static Value CreateValue(T value) {
 		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
+	}
+	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
+	// type of the value. Only use this if you know what you are doing.
+	template <class T> T &GetValueUnsafe() {
+		throw NotImplementedException("Unimplemented template type for Value::GetValueUnsafe");
 	}
 
 	//! Return a copy of this value
@@ -243,5 +248,13 @@ template <> float Value::GetValue() const;
 template <> double Value::GetValue() const;
 template <> uintptr_t Value::GetValue() const;
 
+template <> int8_t &Value::GetValueUnsafe();
+template <> int16_t &Value::GetValueUnsafe();
+template <> int32_t &Value::GetValueUnsafe();
+template <> int64_t &Value::GetValueUnsafe();
+template <> hugeint_t &Value::GetValueUnsafe();
+template <> string &Value::GetValueUnsafe();
+template <> float &Value::GetValueUnsafe();
+template <> double &Value::GetValueUnsafe();
 
 } // namespace duckdb

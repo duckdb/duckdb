@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-using namespace std;
 
 static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
@@ -16,9 +15,8 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 		// replace the binding with a copy to the expression at the referenced index
 		return proj.expressions[colref.binding.column_index]->Copy();
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		return ReplaceProjectionBindings(proj, move(child));
-	});
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceProjectionBindings(proj, move(child)); });
 	return expr;
 }
 

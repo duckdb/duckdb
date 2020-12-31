@@ -6,8 +6,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct InformationSchemaTablesData : public FunctionOperatorData {
@@ -61,9 +59,9 @@ static unique_ptr<FunctionData> information_schema_tables_bind(ClientContext &co
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData>
-information_schema_tables_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-                               unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> information_schema_tables_init(ClientContext &context, const FunctionData *bind_data,
+                                                                vector<column_t> &column_ids,
+                                                                TableFilterSet *table_filters) {
 	auto result = make_unique<InformationSchemaTablesData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -84,7 +82,7 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 		// finished returning values
 		return;
 	}
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
 	output.SetCardinality(next - data.offset);
 
 	// start returning values

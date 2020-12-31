@@ -2,14 +2,12 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include <cmath>
 #include <errno.h>
-
-using namespace std;
 
 namespace duckdb {
 
@@ -52,7 +50,7 @@ struct UnaryDoubleWrapper {
 
 template <class T, class OP>
 static void UnaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.column_count() >= 1);
+	D_ASSERT(input.ColumnCount() >= 1);
 	errno = 0;
 	UnaryExecutor::Execute<T, T, OP, true, UnaryDoubleWrapper>(input.data[0], result, input.size());
 }
@@ -72,7 +70,7 @@ struct BinaryDoubleWrapper {
 
 template <class T, class OP>
 static void BinaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.column_count() >= 2);
+	D_ASSERT(input.ColumnCount() >= 2);
 	errno = 0;
 	BinaryExecutor::Execute<T, T, T, OP, true, BinaryDoubleWrapper>(input.data[0], input.data[1], result, input.size());
 }
@@ -126,7 +124,7 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct BitCntOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		using TU = typename make_unsigned<TA>::type;
+		using TU = typename std::make_unsigned<TA>::type;
 		TR count = 0;
 		for (auto value = TU(input); value > 0; value >>= 1) {
 			count += TR(value & 1);
@@ -624,7 +622,7 @@ void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
 // pi
 //===--------------------------------------------------------------------===//
 static void pi_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.column_count() == 0);
+	D_ASSERT(args.ColumnCount() == 0);
 	Value pi_value = Value::DOUBLE(PI);
 	result.Reference(pi_value);
 }

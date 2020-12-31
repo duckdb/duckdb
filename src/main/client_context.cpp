@@ -26,10 +26,8 @@
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-
 #include "duckdb/planner/pragma_handler.hpp"
-
-using namespace std;
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -38,7 +36,7 @@ ClientContext::ClientContext(DuckDB &database)
       catalog(*database.catalog),
       temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA, true)),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
-	random_device rd;
+	std::random_device rd;
 	random_engine.seed(rd());
 }
 
@@ -229,7 +227,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 			break;
 		}
 #ifdef DEBUG
-		for (idx_t i = 0; i < chunk->column_count(); i++) {
+		for (idx_t i = 0; i < chunk->ColumnCount(); i++) {
 			if (statement.types[i].id() == LogicalTypeId::VARCHAR) {
 				chunk->data[i].UTFVerify(chunk->size());
 			}
@@ -276,7 +274,8 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLState
 		throw Exception(result->error);
 	}
 	auto prepared_catalog = (PreparedStatementCatalogEntry *)prepared_statements->GetRootEntry(prepare_name);
-	auto prepared_object = make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared, n_param);
+	auto prepared_object =
+	    make_unique<PreparedStatement>(this, prepare_name, query, *prepared_catalog->prepared, n_param);
 	prepared_statement_objects.insert(prepared_object.get());
 	return prepared_object;
 }
@@ -290,7 +289,6 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
-
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {

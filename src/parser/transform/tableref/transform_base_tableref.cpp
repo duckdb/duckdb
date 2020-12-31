@@ -2,7 +2,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
@@ -14,6 +14,9 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
 	}
 	if (root->schemaname) {
 		result->schema_name = root->schemaname;
+	}
+	if (root->sample) {
+		result->sample = TransformSampleOptions(root->sample);
 	}
 	result->query_location = root->location;
 	return move(result);

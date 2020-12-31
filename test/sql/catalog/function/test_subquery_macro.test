@@ -1,0 +1,59 @@
+# name: test/sql/catalog/function/test_subquery_macro.test
+# description: Test Macro with subquery
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers (a INT)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+statement ok
+CREATE MACRO subquery(a) AS (SELECT a)
+
+query T
+SELECT subquery(1)
+----
+1
+
+query T
+SELECT subquery(NULL)
+----
+NULL
+
+query T
+SELECT subquery(3) + a FROM integers
+----
+4
+
+query T
+SELECT subquery(a) FROM integers
+----
+1
+
+statement ok
+CREATE MACRO a1(a) AS (SELECT a + a FROM integers)
+
+# macro parameters get priority over column references
+query T
+SELECT a1(3)
+----
+6
+
+# macro parameters should be contained within the function call (a from integers should be 1, not 3)
+query T
+SELECT a1(3) + a FROM integers
+----
+7
+
+# by specifying the table name we get can use columns with the same name as parameters
+statement ok
+CREATE MACRO a2(a) AS (SELECT i.a + a FROM integers i)
+
+query T
+SELECT a2(3)
+----
+4

@@ -1,4 +1,13 @@
 /*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ *//*
  * RANDOM.C -- Implements Park & Miller's "Minimum Standard" RNG
  *
  * (Reference:  CACM, Oct 1988, pp 1192-1201)
@@ -10,13 +19,13 @@
  *
  */
 
-#include "config.h"
+#include "dbgen/config.h"
 
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
-#include "dss.h"
-#include "rnd.h"
+#include "dbgen/dss.h"
+#include "dbgen/rnd.h"
 
 static seed_t *Seed = DBGenGlobals::Seed;
 static tdef *tdefs = DBGenGlobals::tdefs;

@@ -27,28 +27,35 @@ struct TableScanOperatorData : public FunctionOperatorData {
 	//! The current position in the scan
 	TableScanState scan_state;
 	vector<column_t> column_ids;
-	unordered_map<idx_t, vector<TableFilter>> table_filters;
 };
 
 static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                        vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	result->column_ids = column_ids;
-	result->table_filters = table_filters;
-	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
-	                                         &result->table_filters);
+	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids, table_filters);
 	return move(result);
 }
 
-static unique_ptr<FunctionOperatorData>
-table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *state,
-                         vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+static unique_ptr<BaseStatistics> table_scan_statistics(ClientContext &context, const FunctionData *bind_data_,
+                                                        column_t column_id) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_;
+	auto &transaction = Transaction::GetTransaction(context);
+	if (transaction.storage.Find(bind_data.table->storage.get())) {
+		// we don't emit any statistics for tables that have outstanding transaction-local data
+		return nullptr;
+	}
+	return bind_data.table->storage->GetStatistics(context, column_id);
+}
+
+static unique_ptr<FunctionOperatorData> table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_,
+                                                                 ParallelState *state, vector<column_t> &column_ids,
+                                                                 TableFilterSet *table_filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
-	result->table_filters = table_filters;
+	result->scan_state.table_filters = table_filters;
 	if (!table_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
 		return nullptr;
 	}
@@ -60,7 +67,7 @@ static void table_scan_function(ClientContext &context, const FunctionData *bind
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
-	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids, state.table_filters);
+	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
 }
 
 struct ParallelTableFunctionScanState : public ParallelState {
@@ -87,8 +94,8 @@ bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *
 	auto &state = (TableScanOperatorData &)*operator_state;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
-	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state, state.column_ids,
-	                                                  &state.table_filters);
+	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state,
+	                                                  state.column_ids);
 }
 
 void table_scan_dependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_) {
@@ -96,9 +103,12 @@ void table_scan_dependency(unordered_set<CatalogEntry *> &entries, const Functio
 	entries.insert(bind_data.table);
 }
 
-idx_t table_scan_cardinality(const FunctionData *bind_data_) {
+unique_ptr<NodeStatistics> table_scan_cardinality(ClientContext &context, const FunctionData *bind_data_) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
-	return bind_data.table->storage->info->cardinality;
+	auto &transaction = Transaction::GetTransaction(context);
+	idx_t estimated_cardinality =
+	    bind_data.table->storage->info->cardinality + transaction.storage.AddedRows(bind_data.table->storage.get());
+	return make_unique<NodeStatistics>(bind_data.table->storage->info->cardinality, estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -113,8 +123,7 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                        vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	auto result = make_unique<IndexScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
@@ -123,7 +132,7 @@ static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, 
 	if (bind_data.result_ids.size() > 0) {
 		FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
 	}
-	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state);
+	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state, table_filters);
 
 	result->finished = false;
 	return move(result);
@@ -307,6 +316,7 @@ string table_scan_to_string(const FunctionData *bind_data_) {
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, table_scan_function);
 	scan_function.init = table_scan_init;
+	scan_function.statistics = table_scan_statistics;
 	scan_function.dependency = table_scan_dependency;
 	scan_function.cardinality = table_scan_cardinality;
 	scan_function.pushdown_complex_filter = table_scan_pushdown_complex_filter;

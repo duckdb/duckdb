@@ -1,4 +1,4 @@
-if(NOT SUN)
+if(NOT SUN AND BUILD_SHELL)
   add_subdirectory(sqlite3_api_wrapper)
   add_subdirectory(shell)
 endif()
@@ -9,3 +9,6 @@ endif()
 if(BUILD_REST)
   add_subdirectory(rest)
 endif()
+
+# just to make CLion happier
+# add_subdirectory(nodejs)

@@ -1,13 +1,15 @@
 #include "duckdb/storage/write_ahead_log.hpp"
-#include "duckdb/main/database.hpp"
+
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 WriteAheadLog::WriteAheadLog(DuckDB &database) : initialized(false), database(database) {
 }
@@ -77,6 +79,20 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 }
 
 //===--------------------------------------------------------------------===//
+// MACRO'S
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateMacro(MacroCatalogEntry *entry) {
+	writer->Write<WALType>(WALType::CREATE_MACRO);
+	entry->Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
+	writer->Write<WALType>(WALType::DROP_MACRO);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
+}
+
+//===--------------------------------------------------------------------===//
 // VIEWS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(ViewCatalogEntry *entry) {
@@ -117,7 +133,7 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	D_ASSERT(chunk.size() > 0);
-	D_ASSERT(chunk.column_count() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
+	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
 	chunk.Verify();
 
 	writer->Write<WALType>(WALType::DELETE_TUPLE);

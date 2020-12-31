@@ -21,6 +21,7 @@ class Index;
 class MorselInfo;
 class PersistentSegment;
 class TransientSegment;
+struct TableFilterSet;
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
@@ -36,8 +37,6 @@ struct ColumnScanState {
 	idx_t vector_index;
 	//! The primary buffer handle
 	unique_ptr<BufferHandle> primary_handle;
-	//! The set of pinned block handles for this scan
-	buffer_handle_set_t handles;
 	//! The locks that are held during the scan, only used by the index scan
 	vector<unique_ptr<StorageLockKey>> locks;
 	//! Whether or not InitializeState has been called for this segment
@@ -66,6 +65,7 @@ struct LocalScanState {
 	idx_t chunk_index;
 	idx_t max_index;
 	idx_t last_chunk_count;
+	TableFilterSet *table_filters;
 
 private:
 	LocalTableStorage *storage = nullptr;
@@ -78,6 +78,7 @@ public:
 	idx_t base_row;
 	unique_ptr<ColumnScanState[]> column_scans;
 	idx_t column_count;
+	TableFilterSet *table_filters = nullptr;
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	LocalScanState local_state;
 	MorselInfo *version_info;

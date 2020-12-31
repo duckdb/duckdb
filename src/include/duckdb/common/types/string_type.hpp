@@ -25,7 +25,6 @@ public:
 	string_t() = default;
 	string_t(uint32_t len) {
 		value.inlined.length = len;
-		memset(value.inlined.inlined, 0, INLINE_LENGTH);
 	}
 	string_t(const char *data, uint32_t len) {
 		value.inlined.length = len;

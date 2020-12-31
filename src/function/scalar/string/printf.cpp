@@ -4,8 +4,6 @@
 #include "fmt/format.h"
 #include "fmt/printf.h"
 
-using namespace std;
-
 namespace duckdb {
 
 struct FMTPrintf {
@@ -56,7 +54,7 @@ template <class FORMAT_FUN, class ctx>
 static void printf_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &format_string = args.data[0];
 	result.vector_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t i = 0; i < args.column_count(); i++) {
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		switch (args.data[i].vector_type) {
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(args.data[i])) {
@@ -92,7 +90,7 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 		std::vector<duckdb_fmt::basic_format_arg<ctx>> format_args;
 		std::vector<unique_ptr<data_t[]>> string_args;
 
-		for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
+		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 			auto &col = args.data[col_idx];
 			idx_t arg_idx = col.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
 			switch (col.type.id()) {

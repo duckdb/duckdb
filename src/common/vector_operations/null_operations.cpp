@@ -8,7 +8,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <bool INVERSE> void is_null_loop(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(result.type == LogicalType::BOOLEAN);

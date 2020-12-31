@@ -11,7 +11,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
     : binder(binder), context(context), stored_binder(nullptr) {
@@ -33,30 +32,32 @@ ExpressionBinder::~ExpressionBinder() {
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
-	switch (expr.expression_class) {
+BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
+	auto &expr_ref = **expr;
+	switch (expr_ref.expression_class) {
 	case ExpressionClass::CASE:
-		return BindExpression((CaseExpression &)expr, depth);
+		return BindExpression((CaseExpression &)expr_ref, depth);
 	case ExpressionClass::CAST:
-		return BindExpression((CastExpression &)expr, depth);
+		return BindExpression((CastExpression &)expr_ref, depth);
 	case ExpressionClass::COLLATE:
-		return BindExpression((CollateExpression &)expr, depth);
+		return BindExpression((CollateExpression &)expr_ref, depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression((ColumnRefExpression &)expr, depth);
+		return BindExpression((ColumnRefExpression &)expr_ref, depth);
 	case ExpressionClass::COMPARISON:
-		return BindExpression((ComparisonExpression &)expr, depth);
+		return BindExpression((ComparisonExpression &)expr_ref, depth);
 	case ExpressionClass::CONJUNCTION:
-		return BindExpression((ConjunctionExpression &)expr, depth);
+		return BindExpression((ConjunctionExpression &)expr_ref, depth);
 	case ExpressionClass::CONSTANT:
-		return BindExpression((ConstantExpression &)expr, depth);
+		return BindExpression((ConstantExpression &)expr_ref, depth);
 	case ExpressionClass::FUNCTION:
-		return BindExpression((FunctionExpression &)expr, depth);
+		// binding function expression has extra parameter needed for macro's
+		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
 	case ExpressionClass::OPERATOR:
-		return BindExpression((OperatorExpression &)expr, depth);
+		return BindExpression((OperatorExpression &)expr_ref, depth);
 	case ExpressionClass::SUBQUERY:
-		return BindExpression((SubqueryExpression &)expr, depth);
+		return BindExpression((SubqueryExpression &)expr_ref, depth);
 	case ExpressionClass::PARAMETER:
-		return BindExpression((ParameterExpression &)expr, depth);
+		return BindExpression((ParameterExpression &)expr_ref, depth);
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}
@@ -146,7 +147,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return string();
 	}
 	// bind the expression
-	BindResult result = BindExpression(**expr, depth, root_expression);
+	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
 		return result.error;
 	} else {
@@ -167,7 +168,12 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 		auto &colref = (ColumnRefExpression &)expr;
 		if (colref.table_name.empty()) {
 			// no table name: find a binding that contains this
-			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
+			if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(colref.column_name)) {
+				// macro parameters get priority
+				colref.table_name = binder.macro_binding->alias;
+			} else {
+				colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
+			}
 		}
 		binder.bind_context.BindColumn(colref, 0);
 	}

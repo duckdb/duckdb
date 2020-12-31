@@ -21,7 +21,7 @@ static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vect
 
 static unique_ptr<FunctionOperatorData> pragma_version_init(ClientContext &context, const FunctionData *bind_data,
                                                             vector<column_t> &column_ids,
-                                                            unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                            TableFilterSet *table_filters) {
 	return make_unique<PragmaVersionData>();
 }
 
@@ -47,7 +47,7 @@ const char *DuckDB::SourceID() {
 }
 
 const char *DuckDB::LibraryVersion() {
-	return "DuckDB";
+	return DUCKDB_VERSION;
 }
 
 } // namespace duckdb

@@ -5,8 +5,6 @@
 
 #include <functional>
 
-using namespace std;
-
 namespace duckdb {
 
 template <> hash_t Hash(uint64_t val) {
@@ -30,7 +28,7 @@ template <> hash_t Hash(double val) {
 }
 
 template <> hash_t Hash(interval_t val) {
-	return Hash(val.days) ^ Hash(val.months) ^ Hash(val.msecs);
+	return Hash(val.days) ^ Hash(val.months) ^ Hash(val.micros);
 }
 
 template <> hash_t Hash(const char *str) {

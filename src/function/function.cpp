@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -19,8 +20,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 // add your initializer for new functions here
@@ -34,6 +33,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
 	RegisterNestedAggregates();
+	RegisterHolisticAggregates();
 
 	RegisterDateFunctions();
 	RegisterGenericFunctions();
@@ -45,11 +45,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterTrigonometricsFunctions();
 
 	RegisterPragmaFunctions();
-
-	// binder functions
-	// FIXME shouldn't be here
-	AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
-	AddFunction(ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
 
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
@@ -116,6 +111,14 @@ void BuiltinFunctions::AddFunction(TableFunctionSet set) {
 void BuiltinFunctions::AddFunction(CopyFunction function) {
 	CreateCopyFunctionInfo info(function);
 	catalog.CreateCopyFunction(context, &info);
+}
+
+hash_t BaseScalarFunction::Hash() const {
+	hash_t hash = return_type.Hash();
+	for (auto &arg : arguments) {
+		duckdb::CombineHash(hash, arg.Hash());
+	}
+	return hash;
 }
 
 string Function::CallToString(string name, vector<LogicalType> arguments) {
@@ -370,7 +373,10 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(Cl
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
+		// we may have lost some arguments in the bind
+		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}
+
 	// check if we need to add casts to the children
 	bound_function.CastToFunctionArguments(children);
 

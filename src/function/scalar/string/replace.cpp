@@ -8,8 +8,6 @@
 #include <ctype.h>
 #include <unordered_map>
 
-using namespace std;
-
 namespace duckdb {
 
 static idx_t next_needle(const char *input_haystack, idx_t size_haystack, const char *input_needle,
@@ -53,8 +51,9 @@ static string_t replace_scalar_function(const string_t &haystack, const string_t
 		size_haystack -= string_position;
 
 		//  Stop when we have read the entire haystack
-		if (size_haystack == 0)
+		if (size_haystack == 0) {
 			break;
+		}
 
 		//  Replace the matching characters
 		result.insert(result.end(), input_thread, input_thread + size_thread);

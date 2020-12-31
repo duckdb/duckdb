@@ -1,10 +1,19 @@
 /*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ *//*
  * permute.c -- a permutation generator for the query
  *              sequences in TPC-H and TPC-R
  */
 
-#include "config.h"
-#include "dss.h"
+#include "dbgen/config.h"
+#include "dbgen/dss.h"
 
 DSS_HUGE NextRand(DSS_HUGE seed);
 void permute(long *set, int cnt, long stream);

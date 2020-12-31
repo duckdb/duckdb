@@ -22,6 +22,9 @@ endif
 ifeq (${DISABLE_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE
 endif
+ifeq (${STATIC_LIBCPP}, 1)
+	STATIC_LIBCPP=-DSTATIC_LIBCPP=TRUE
+endif
 EXTENSIONS=-DBUILD_PARQUET_EXTENSION=TRUE
 ifeq (${BUILD_BENCHMARK}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_BENCHMARKS=1
@@ -31,6 +34,9 @@ ifeq (${BUILD_ICU}, 1)
 endif
 ifeq (${BUILD_TPCH}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCH_EXTENSION=1
+endif
+ifeq (${BUILD_FTS}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_FTS_EXTENSION=1
 endif
 ifeq (${BUILD_SQLSMITH}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_SQLSMITH=1
@@ -57,20 +63,20 @@ clean:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 ubsandebug:
 	mkdir -p build/ubsandebug && \
 	cd build/ubsandebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DENABLE_SANITIZER=0 -DENABLE_UBSAN=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS}  -DENABLE_SANITIZER=0 -DENABLE_UBSAN=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 	build/ubsandebug/test/unittest
 
 release_expanded:
 	mkdir -p build/release_expanded && \
 	cd build/release_expanded && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 cldebug:
@@ -82,7 +88,7 @@ cldebug:
 clreldebug:
 	mkdir -p build/clreldebug && \
 	cd build/clreldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 unittest: debug
@@ -102,26 +108,26 @@ doxygen: docs
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 reldebug:
 	mkdir -p build/reldebug && \
 	cd build/reldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 relassert:
 	mkdir -p build/relassert && \
 	cd build/relassert && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${EXTENSIONS} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 amaldebug:
 	mkdir -p build/amaldebug && \
 	python scripts/amalgamation.py && \
 	cd build/amaldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${EXTENSIONS} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${EXTENSIONS} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 

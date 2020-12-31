@@ -6,12 +6,10 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void age_function_standard(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.column_count() == 1);
+	D_ASSERT(input.ColumnCount() == 1);
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
 	UnaryExecutor::Execute<timestamp_t, interval_t, true>(input.data[0], result, input.size(), [&](timestamp_t input) {
@@ -20,7 +18,7 @@ static void age_function_standard(DataChunk &input, ExpressionState &state, Vect
 }
 
 static void age_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.column_count() == 2);
+	D_ASSERT(input.ColumnCount() == 2);
 
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t, true>(
 	    input.data[0], input.data[1], result, input.size(),

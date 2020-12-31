@@ -6,14 +6,14 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
     : SelectBinder(binder, context, node, info) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-BindResult HavingBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
+BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = **expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != INVALID_INDEX) {
@@ -26,7 +26,7 @@ BindResult HavingBinder::BindExpression(ParsedExpression &expr, idx_t depth, boo
 		return BindResult(StringUtil::Format(
 		    "column %s must appear in the GROUP BY clause or be used in an aggregate function", expr.ToString()));
 	default:
-		return ExpressionBinder::BindExpression(expr, depth);
+		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
 }
 

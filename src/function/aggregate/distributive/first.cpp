@@ -1,27 +1,20 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression.hpp"
-
-using namespace std;
 
 namespace duckdb {
 
 template <class T> struct FirstState {
 	T value;
 	bool is_set;
+	bool is_null;
 };
 
 struct FirstFunctionBase {
 	template <class STATE> static void Initialize(STATE *state) {
 		state->is_set = false;
-	}
-
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-		if (!target->is_set) {
-			*target = source;
-		}
+		state->is_null = false;
 	}
 
 	static bool IgnoreNull() {
@@ -35,8 +28,9 @@ struct FirstFunction : public FirstFunctionBase {
 		if (!state->is_set) {
 			state->is_set = true;
 			if (nullmask[idx]) {
-				state->value = NullValue<INPUT_TYPE>();
+				state->is_null = true;
 			} else {
+				state->is_null = false;
 				state->value = input[idx];
 			}
 		}
@@ -47,9 +41,15 @@ struct FirstFunction : public FirstFunctionBase {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
 	}
 
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (!target->is_set) {
+			*target = source;
+		}
+	}
+
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		if (!state->is_set || IsNullValue<T>(state->value)) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (!state->is_set || state->is_null) {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = state->value;
@@ -58,24 +58,28 @@ struct FirstFunction : public FirstFunctionBase {
 };
 
 struct FirstFunctionString : public FirstFunctionBase {
+	template <class STATE> static void SetValue(STATE *state, string_t value, bool is_null) {
+		state->is_set = true;
+		if (is_null) {
+			state->is_null = true;
+		} else {
+			if (value.IsInlined()) {
+				state->value = value;
+			} else {
+				// non-inlined string, need to allocate space for it
+				auto len = value.GetSize();
+				auto ptr = new char[len];
+				memcpy(ptr, value.GetDataUnsafe(), len);
+
+				state->value = string_t(ptr, len);
+			}
+		}
+	}
+
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
-			state->is_set = true;
-			if (nullmask[idx]) {
-				state->value = NullValue<INPUT_TYPE>();
-			} else {
-				if (input[idx].IsInlined()) {
-					state->value = input[idx];
-				} else {
-					// non-inlined string, need to allocate space for it
-					auto len = input[idx].GetSize();
-					auto ptr = new char[len + 1];
-					memcpy(ptr, input[idx].GetDataUnsafe(), len + 1);
-
-					state->value = string_t(ptr, len);
-				}
-			}
+			SetValue(state, input[idx], nullmask[idx]);
 		}
 	}
 
@@ -84,9 +88,15 @@ struct FirstFunctionString : public FirstFunctionBase {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
 	}
 
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (source.is_set && !target->is_set) {
+			SetValue(target, source.value, source.is_null);
+		}
+	}
+
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		if (!state->is_set || IsNullValue<T>(state->value)) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (!state->is_set || state->is_null) {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = StringVector::AddString(result, state->value);
@@ -94,7 +104,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE> static void Destroy(STATE *state) {
-		if (state->is_set && !state->value.IsInlined()) {
+		if (state->is_set && !state->is_null && !state->value.IsInlined()) {
 			delete[] state->value.GetDataUnsafe();
 		}
 	}
@@ -128,9 +138,9 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 		return GetFirstAggregateTemplated<int16_t>(type);
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
 		return GetFirstAggregateTemplated<int32_t>(type);
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 		return GetFirstAggregateTemplated<int64_t>(type);
 	case LogicalTypeId::HUGEINT:

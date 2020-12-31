@@ -137,6 +137,7 @@ static int atexit_registered = 0;   /* Register atexit just 1 time. */
 static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
 static char **history = NULL;
+static char *history_file = NULL;
 #ifndef DISABLE_HIGHLIGHT
 #include <string>
 
@@ -145,24 +146,14 @@ struct Color {
 	const char *color_name;
 	const char *highlight;
 };
-static Color terminal_colors[] = {
-	{"red", "\033[31m"},
-	{"green", "\033[32m"},
-	{"yellow", "\033[33m"},
-	{"blue", "\033[34m"},
-	{"magenta", "\033[35m"},
-	{"cyan", "\033[36m"},
-	{"white", "\033[37m"},
-	{"brightblack", "\033[90m"},
-	{"brightred", "\033[91m"},
-	{"brightgreen", "\033[92m"},
-	{"brightyellow", "\033[93m"},
-	{"brightblue", "\033[94m"},
-	{"brightmagenta", "\033[95m"},
-	{"brightcyan", "\033[96m"},
-	{"brightwhite", "\033[97m"},
-	{nullptr, nullptr}
-};
+static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033[32m"},
+                                  {"yellow", "\033[33m"},        {"blue", "\033[34m"},
+                                  {"magenta", "\033[35m"},       {"cyan", "\033[36m"},
+                                  {"white", "\033[37m"},         {"brightblack", "\033[90m"},
+                                  {"brightred", "\033[91m"},     {"brightgreen", "\033[92m"},
+                                  {"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
+                                  {"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
+                                  {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
 static std::string bold = "\033[1m";
 static std::string keyword = "\033[32m\033[1m";
 static std::string constant = "\033[33m";
@@ -481,11 +472,11 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
 	size_t len = strlen(str);
 	char *copy, **cvec;
 
-	copy = (char*) malloc(len + 1);
+	copy = (char *)malloc(len + 1);
 	if (copy == NULL)
 		return;
 	memcpy(copy, str, len + 1);
-	cvec = (char**) realloc(lc->cvec, sizeof(char *) * (lc->len + 1));
+	cvec = (char **)realloc(lc->cvec, sizeof(char *) * (lc->len + 1));
 	if (cvec == NULL) {
 		free(copy);
 		return;
@@ -511,7 +502,7 @@ static void abInit(struct abuf *ab) {
 }
 
 static void abAppend(struct abuf *ab, const char *s, int len) {
-	char *new_entry = (char*) realloc(ab->b, ab->len + len);
+	char *new_entry = (char *)realloc(ab->b, ab->len + len);
 
 	if (new_entry == NULL)
 		return;
@@ -595,7 +586,7 @@ int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *
 #ifndef DISABLE_HIGHLIGHT
 const char *getColorOption(const char *option) {
 	size_t index = 0;
-	while(terminal_colors[index].color_name) {
+	while (terminal_colors[index].color_name) {
 		if (strcmp(terminal_colors[index].color_name, option) == 0) {
 			return terminal_colors[index].highlight;
 		}
@@ -627,7 +618,9 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 				return 1;
 			}
 		}
-		*out_error = "Expected usage: .keyword [red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|brightblue|brightmagenta|brightcyan|brightwhite]";
+		*out_error = "Expected usage: .keyword "
+		             "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
+		             "brightblue|brightmagenta|brightcyan|brightwhite]";
 		return 1;
 	} else if (strcmp(azArg[0], "constant") == 0) {
 		if (nArg == 2) {
@@ -637,7 +630,9 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 				return 1;
 			}
 		}
-		*out_error = "Expected usage: .constant [red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|brightblue|brightmagenta|brightcyan|brightwhite]";
+		*out_error = "Expected usage: .constant "
+		             "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
+		             "brightblue|brightmagenta|brightcyan|brightwhite]";
 		return 1;
 	} else if (strcmp(azArg[0], "keywordcode") == 0) {
 		if (nArg == 2) {
@@ -666,8 +661,8 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 	std::string sql(buf, len);
 	auto tokens = duckdb::Parser::Tokenize(sql);
 	std::stringstream ss;
-	for(size_t i = 0; i < tokens.size(); i++) {
-		size_t next = i  + 1 < tokens.size() ? tokens[i + 1].start : len;
+	for (size_t i = 0; i < tokens.size(); i++) {
+		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
 		if (next < start_pos) {
 			// this token is not rendered at all
 			continue;
@@ -680,7 +675,7 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 			continue;
 		}
 		std::string text = std::string(buf + start, end - start);
-		switch(token.type) {
+		switch (token.type) {
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
 			ss << keyword << text << reset;
 			break;
@@ -695,7 +690,6 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 	return ss.str();
 }
 #endif
-
 
 /* Single line low level line refresh.
  *
@@ -750,7 +744,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 #ifndef DISABLE_HIGHLIGHT
 		if (enableHighlighting) {
 			highlight_buffer = highlightText(l->buf, l->len, start_pos, cpos);
-			buf = (char*) highlight_buffer.c_str();
+			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		} else
 #endif
@@ -1295,7 +1289,7 @@ static char *linenoiseNoTTY(void) {
 				maxlen = 16;
 			maxlen *= 2;
 			char *oldval = line;
-			line = (char*) realloc(line, maxlen);
+			line = (char *)realloc(line, maxlen);
 			if (line == NULL) {
 				if (oldval)
 					free(oldval);
@@ -1326,7 +1320,6 @@ static char *linenoiseNoTTY(void) {
 char *linenoise(const char *prompt) {
 	char buf[LINENOISE_MAX_LINE];
 	int count;
-
 
 	if (!isatty(STDIN_FILENO)) {
 		/* Not a tty: read from file / pipe. In this mode we don't want any
@@ -1396,7 +1389,7 @@ int linenoiseHistoryAdd(const char *line) {
 
 	/* Initialization on first call. */
 	if (history == NULL) {
-		history = (char**) malloc(sizeof(char *) * history_max_len);
+		history = (char **)malloc(sizeof(char *) * history_max_len);
 		if (history == NULL)
 			return 0;
 		memset(history, 0, (sizeof(char *) * history_max_len));
@@ -1418,6 +1411,19 @@ int linenoiseHistoryAdd(const char *line) {
 	}
 	history[history_len] = linecopy;
 	history_len++;
+	if (history_file && strlen(line) > 0) {
+		// if there is a history file that we loaded from
+		// append to the history
+		// this way we can recover history in case of a crash
+		FILE *fp;
+
+		fp = fopen(history_file, "a");
+		if (fp == NULL) {
+			return 1;
+		}
+		fprintf(fp, "%s\n", line);
+		fclose(fp);
+	}
 	return 1;
 }
 
@@ -1433,7 +1439,7 @@ int linenoiseHistorySetMaxLen(int len) {
 	if (history) {
 		int tocopy = history_len;
 
-		new_entry = (char**) malloc(sizeof(char *) * len);
+		new_entry = (char **)malloc(sizeof(char *) * len);
 		if (new_entry == NULL)
 			return 0;
 
@@ -1483,19 +1489,24 @@ int linenoiseHistoryLoad(const char *filename) {
 	FILE *fp = fopen(filename, "r");
 	char buf[LINENOISE_MAX_LINE];
 
-	if (fp == NULL)
+	if (fp == NULL) {
 		return -1;
+	}
 
 	while (fgets(buf, LINENOISE_MAX_LINE, fp) != NULL) {
 		char *p;
 
 		p = strchr(buf, '\r');
-		if (!p)
+		if (!p) {
 			p = strchr(buf, '\n');
-		if (p)
+		}
+		if (p) {
 			*p = '\0';
+		}
 		linenoiseHistoryAdd(buf);
 	}
 	fclose(fp);
+
+	history_file = strdup(filename);
 	return 0;
 }

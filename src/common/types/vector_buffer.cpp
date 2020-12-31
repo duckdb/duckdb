@@ -1,11 +1,11 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 #include "duckdb/common/assert.hpp"
 
 namespace duckdb {
-using namespace std;
 
 VectorBuffer::VectorBuffer(idx_t data_size) : type(VectorBufferType::STANDARD_BUFFER) {
 	if (data_size > 0) {
@@ -38,6 +38,13 @@ void VectorListBuffer::SetChild(unique_ptr<ChunkCollection> new_child) {
 }
 
 VectorListBuffer::~VectorListBuffer() {
+}
+
+ManagedVectorBuffer::ManagedVectorBuffer(unique_ptr<BufferHandle> handle)
+    : VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(move(handle)) {
+}
+
+ManagedVectorBuffer::~ManagedVectorBuffer() {
 }
 
 } // namespace duckdb

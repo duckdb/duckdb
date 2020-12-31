@@ -3,12 +3,13 @@
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
-using namespace std;
 
-template<class OP>
-static Value binary_value_operation(const Value &left, const Value &right) {
+template <class OP> static Value binary_value_operation(const Value &left, const Value &right) {
 	auto left_type = left.type();
 	auto right_type = right.type();
 	LogicalType result_type = left_type;
@@ -24,7 +25,7 @@ static Value binary_value_operation(const Value &left, const Value &right) {
 	if (TypeIsIntegral(result_type.InternalType())) {
 		hugeint_t left_hugeint;
 		hugeint_t right_hugeint;
-		switch(result_type.InternalType()) {
+		switch (result_type.InternalType()) {
 		case PhysicalType::INT8:
 			left_hugeint = Hugeint::Convert(left.value_.tinyint);
 			right_hugeint = Hugeint::Convert(right.value_.tinyint);
@@ -49,8 +50,8 @@ static Value binary_value_operation(const Value &left, const Value &right) {
 			throw NotImplementedException("Unimplemented type for value binary op");
 		}
 		// integer addition
-		return Value::Numeric(result_type, OP::template Operation<hugeint_t, hugeint_t, hugeint_t>(
-		                                       left_hugeint, right_hugeint));
+		return Value::Numeric(result_type,
+		                      OP::template Operation<hugeint_t, hugeint_t, hugeint_t>(left_hugeint, right_hugeint));
 	} else if (result_type.InternalType() == PhysicalType::FLOAT) {
 		return Value::FLOAT(
 		    OP::template Operation<float, float, float>(left.GetValue<float>(), right.GetValue<float>()));

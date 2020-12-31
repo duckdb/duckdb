@@ -3,7 +3,6 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool TableFunctionRef::Equals(const TableRef *other_) const {
 	if (!TableRef::Equals(other_)) {
@@ -34,8 +33,8 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 	auto copy = make_unique<TableFunctionRef>();
 
 	copy->function = function->Copy();
-	copy->alias = alias;
 	copy->column_name_alias = column_name_alias;
+	CopyProperties(*copy);
 
 	return move(copy);
 }

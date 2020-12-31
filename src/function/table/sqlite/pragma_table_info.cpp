@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
@@ -10,8 +11,6 @@
 #include "duckdb/common/limits.hpp"
 
 #include <algorithm>
-
-using namespace std;
 
 namespace duckdb {
 
@@ -49,19 +48,16 @@ static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, v
 	names.push_back("pk");
 	return_types.push_back(LogicalType::BOOLEAN);
 
-	string schema, table_name;
-	auto range_var = inputs[0].GetValue<string>();
-	Catalog::ParseRangeVar(range_var, schema, table_name);
+	auto qname = QualifiedName::Parse(inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
 	auto &catalog = Catalog::GetCatalog(context);
-	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema, table_name);
+	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, qname.schema, qname.name);
 	return make_unique<PragmaTableFunctionData>(entry);
 }
 
 unique_ptr<FunctionOperatorData> pragma_table_info_init(ClientContext &context, const FunctionData *bind_data,
-                                                        vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                        vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	return make_unique<PragmaTableOperatorData>();
 }
 
@@ -70,17 +66,17 @@ static void check_constraints(TableCatalogEntry *table, idx_t oid, bool &out_not
 	out_pk = false;
 	// check all constraints
 	// FIXME: this is pretty inefficient, it probably doesn't matter
-	for(auto &constraint : table->bound_constraints) {
-		switch(constraint->type) {
+	for (auto &constraint : table->bound_constraints) {
+		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (BoundNotNullConstraint &) *constraint;
+			auto &not_null = (BoundNotNullConstraint &)*constraint;
 			if (not_null.index == oid) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (BoundUniqueConstraint &) *constraint;
+			auto &unique = (BoundUniqueConstraint &)*constraint;
 			if (unique.is_primary_key && unique.keys.find(oid) != unique.keys.end()) {
 				out_pk = true;
 			}
@@ -99,7 +95,7 @@ static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogE
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)table->columns.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table->columns.size());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
@@ -134,7 +130,7 @@ static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEnt
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)view->types.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view->types.size());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {

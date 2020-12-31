@@ -6,7 +6,6 @@
 #include "duckdb/storage/table/append_state.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Index::Index(IndexType type, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions)
     : type(type), column_ids(column_ids), unbound_expressions(move(unbound_expressions)) {
@@ -24,7 +23,7 @@ Index::Index(IndexType type, vector<column_t> column_ids, vector<unique_ptr<Expr
 }
 
 void Index::InitializeLock(IndexLock &state) {
-	state.index_lock = unique_lock<mutex>(lock);
+	state.index_lock = std::unique_lock<mutex>(lock);
 }
 
 bool Index::Append(DataChunk &entries, Vector &row_identifiers) {
@@ -49,7 +48,7 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 		return make_unique<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
 	ExpressionIterator::EnumerateChildren(*expr,
-	                                      [&](unique_ptr<Expression> expr) { return BindExpression(move(expr)); });
+	                                      [&](unique_ptr<Expression> &expr) { expr = BindExpression(move(expr)); });
 	return expr;
 }
 

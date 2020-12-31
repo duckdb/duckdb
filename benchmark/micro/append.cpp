@@ -3,7 +3,6 @@
 #include "duckdb/main/appender.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 //////////////
 // INSERT //
@@ -16,7 +15,7 @@ using namespace std;
 		if (!AUTO_COMMIT)                                                                                              \
 			state->conn.Query("BEGIN TRANSACTION");                                                                    \
 		for (int32_t i = 0; i < 100000; i++) {                                                                         \
-			state->conn.Query("INSERT INTO integers VALUES (" + to_string(i) + ")");                                   \
+			state->conn.Query("INSERT INTO integers VALUES (" + std::to_string(i) + ")");                              \
 		}                                                                                                              \
 		if (!AUTO_COMMIT)                                                                                              \
 			state->conn.Query("COMMIT");                                                                               \

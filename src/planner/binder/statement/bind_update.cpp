@@ -16,8 +16,6 @@
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
@@ -44,7 +42,6 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.columns[check_column_id];
-			// first add
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    column.type, ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(

@@ -1,4 +1,14 @@
 /*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ */
+/*
  * text.c --- pseaudo text generator for use in DBGEN 2.0
  *
  * Defined Routines:
@@ -9,7 +19,7 @@
 #define DECLARER
 #endif /* TEST */
 
-#include "config.h"
+#include "dbgen/config.h"
 
 #include <stdlib.h>
 #if (defined(_POSIX_) || !defined(WIN32)) /* Change for Windows NT */
@@ -53,8 +63,8 @@
 
 #define TEXT_POOL_SIZE (300 * 1024 * 1024) /* 300MiB */
 
-#include "dss.h"
-#include "dsstypes.h"
+#include "dbgen/dss.h"
+#include "dbgen/dsstypes.h"
 
 /*
  * txt_vp() --

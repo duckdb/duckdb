@@ -36,7 +36,7 @@ enum class StrTimeSpecifier : uint8_t {
 	SECOND_PADDED = 19,              // %S - Second as a zero-padded decimal number. (00, 01, ..., 59)
 	SECOND_DECIMAL = 20,             // %-S - Second as a decimal number. (0, 1, ..., 59)
 	MICROSECOND_PADDED = 21,         // %f - Microsecond as a decimal number, zero-padded on the left. (000000 - 999999)
-	MILLISECOND_PADDED = 22,         // %g - Millisecond as a decimal number, zero-padded on the left. (000000 - 999999)
+	MILLISECOND_PADDED = 22,         // %g - Millisecond as a decimal number, zero-padded on the left. (000 - 999)
 	UTC_OFFSET = 23,                 // %z - UTC offset in the form +HHMM or -HHMM. ( )
 	TZ_NAME = 24,                    // %Z - Time zone name. ( )
 	DAY_OF_YEAR_PADDED = 25,         // %j - Day of the year as a zero-padded decimal number. (001, 002, ..., 366)
@@ -69,17 +69,17 @@ protected:
 	vector<string> literals;
 	//! The constant size that appears in the format string
 	idx_t constant_size;
-	//! Whether or not the specifier is a numeric specifier (i.e. is parsed as a number)
-	vector<bool> is_numeric;
+	//! The max numeric width of the specifier (if it is parsed as a number), or -1 if it is not a number
+	vector<int> numeric_width;
 	void AddLiteral(string literal);
 	virtual void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
 };
 
 struct StrfTimeFormat : public StrTimeFormat {
-	idx_t GetLength(date_t date, time_t time);
+	idx_t GetLength(date_t date, dtime_t time);
 
 	void FormatString(date_t date, int32_t data[7], char *target);
-	void FormatString(date_t date, time_t time, char *target);
+	void FormatString(date_t date, dtime_t time, char *target);
 
 protected:
 	//! The variable-length specifiers. To determine total string size, these need to be checked.
@@ -89,7 +89,7 @@ protected:
 	vector<bool> is_date_specifier;
 
 	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
-	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, time_t time);
+	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time);
 	char *WriteString(char *target, string_t &str);
 	char *Write2(char *target, uint8_t value);
 	char *WritePadded2(char *target, int32_t value);
@@ -118,7 +118,7 @@ public:
 protected:
 	string FormatStrpTimeError(string input, idx_t position);
 	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
-	bool IsNumericSpecifier(StrTimeSpecifier specifier);
+	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, string_t collection[], idx_t collection_count);
 };
 

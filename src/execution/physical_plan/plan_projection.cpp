@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection &op) {
 	D_ASSERT(op.children.size() == 1);

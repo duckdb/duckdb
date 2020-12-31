@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -41,6 +39,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "ORDER_BY";
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		return "TOP_N";
+	case LogicalOperatorType::LOGICAL_SAMPLE:
+		return "SAMPLE";
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::LOGICAL_JOIN:
@@ -69,6 +69,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_INDEX";
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return "CREATE_TABLE";
+	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+		return "CREATE_MACRO";
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return "EXPLAIN";
 	case LogicalOperatorType::LOGICAL_EXECUTE:

@@ -2,12 +2,10 @@
 
 #include "utf8proc_wrapper.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void nfc_normalize_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.column_count() == 1);
+	D_ASSERT(args.ColumnCount() == 1);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();

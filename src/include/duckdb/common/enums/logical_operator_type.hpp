@@ -17,16 +17,17 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 enum class LogicalOperatorType : uint8_t {
 	LOGICAL_INVALID = 0,
-    LOGICAL_PROJECTION = 1,
-    LOGICAL_FILTER = 2,
-    LOGICAL_AGGREGATE_AND_GROUP_BY = 3,
-    LOGICAL_WINDOW = 4,
+	LOGICAL_PROJECTION = 1,
+	LOGICAL_FILTER = 2,
+	LOGICAL_AGGREGATE_AND_GROUP_BY = 3,
+	LOGICAL_WINDOW = 4,
 	LOGICAL_UNNEST = 5,
 	LOGICAL_LIMIT = 6,
 	LOGICAL_ORDER_BY = 7,
 	LOGICAL_TOP_N = 8,
 	LOGICAL_COPY_TO_FILE = 10,
 	LOGICAL_DISTINCT = 11,
+	LOGICAL_SAMPLE = 12,
 
 	// -----------------------------
 	// Data sources
@@ -70,14 +71,15 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_CREATE_SEQUENCE = 128,
 	LOGICAL_CREATE_VIEW = 129,
 	LOGICAL_CREATE_SCHEMA = 130,
-	LOGICAL_DROP = 131,
-	LOGICAL_PRAGMA = 132,
-	LOGICAL_TRANSACTION = 133,
+	LOGICAL_CREATE_MACRO = 131,
+	LOGICAL_DROP = 132,
+	LOGICAL_PRAGMA = 133,
+	LOGICAL_TRANSACTION = 134,
 
 	// -----------------------------
 	// Explain
 	// -----------------------------
-    LOGICAL_EXPLAIN = 150,
+	LOGICAL_EXPLAIN = 150,
 
 	// -----------------------------
 	// Helpers

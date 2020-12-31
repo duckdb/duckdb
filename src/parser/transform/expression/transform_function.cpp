@@ -6,9 +6,10 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 static ExpressionType WindowToExpressionType(string &fun_name) {
@@ -63,9 +64,11 @@ void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression 
 		expr->start = WindowBoundary::EXPR_PRECEDING;
 	} else if (window_spec->frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) {
 		expr->start = WindowBoundary::EXPR_FOLLOWING;
-	} else if ((window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) && (window_spec->frameOptions & FRAMEOPTION_RANGE)) {
+	} else if ((window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
+	           (window_spec->frameOptions & FRAMEOPTION_RANGE)) {
 		expr->start = WindowBoundary::CURRENT_ROW_RANGE;
-	} else if ((window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) && (window_spec->frameOptions & FRAMEOPTION_ROWS)) {
+	} else if ((window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
+	           (window_spec->frameOptions & FRAMEOPTION_ROWS)) {
 		expr->start = WindowBoundary::CURRENT_ROW_ROWS;
 	}
 
@@ -77,9 +80,11 @@ void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression 
 		expr->end = WindowBoundary::EXPR_PRECEDING;
 	} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_FOLLOWING) {
 		expr->end = WindowBoundary::EXPR_FOLLOWING;
-	} else if ((window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) && (window_spec->frameOptions & FRAMEOPTION_RANGE)) {
+	} else if ((window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) &&
+	           (window_spec->frameOptions & FRAMEOPTION_RANGE)) {
 		expr->end = WindowBoundary::CURRENT_ROW_RANGE;
-	} else if ((window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) && (window_spec->frameOptions & FRAMEOPTION_ROWS)) {
+	} else if ((window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) &&
+	           (window_spec->frameOptions & FRAMEOPTION_ROWS)) {
 		expr->end = WindowBoundary::CURRENT_ROW_ROWS;
 	}
 
@@ -173,6 +178,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 			auto child_expr = TransformExpression((PGNode *)node->data.ptr_value);
 			children.push_back(move(child_expr));
 		}
+	}
+
+	// star gets eaten in the parser
+	if (lowercase_name == "count" && children.size() == 0) {
+		lowercase_name = "count_star";
 	}
 
 	if (lowercase_name == "if") {

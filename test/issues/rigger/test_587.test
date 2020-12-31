@@ -9,5 +9,5 @@ PRAGMA enable_verification
 query T
 SELECT (DATE '-10000-01-01')::VARCHAR;
 ----
-10000-01-01 (BC)
+10001-01-01 (BC)
 

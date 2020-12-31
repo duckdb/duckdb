@@ -6,13 +6,12 @@
 #include <random>
 
 namespace duckdb {
-using namespace std;
 
 struct RandomBindData : public FunctionData {
 	ClientContext &context;
-	uniform_real_distribution<double> dist;
+	std::uniform_real_distribution<double> dist;
 
-	RandomBindData(ClientContext &context, uniform_real_distribution<double> dist) : context(context), dist(dist) {
+	RandomBindData(ClientContext &context, std::uniform_real_distribution<double> dist) : context(context), dist(dist) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
@@ -21,7 +20,7 @@ struct RandomBindData : public FunctionData {
 };
 
 static void random_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.column_count() == 0);
+	D_ASSERT(args.ColumnCount() == 0);
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RandomBindData &)*func_expr.bind_info;
 
@@ -34,7 +33,7 @@ static void random_function(DataChunk &args, ExpressionState &state, Vector &res
 
 unique_ptr<FunctionData> random_bind(ClientContext &context, ScalarFunction &bound_function,
                                      vector<unique_ptr<Expression>> &arguments) {
-	uniform_real_distribution<double> dist(0, 1);
+	std::uniform_real_distribution<double> dist(0, 1);
 	return make_unique<RandomBindData>(context, move(dist));
 }
 

@@ -20,7 +20,7 @@ class Deserializer;
 struct interval_t {
 	int32_t months;
 	int32_t days;
-	int64_t msecs;
+	int64_t micros;
 };
 
 struct hugeint_t {
@@ -300,7 +300,7 @@ struct LogicalType {
 	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
-	bool GetDecimalProperties(int &width, int &scale) const;
+	bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
 
 	void Verify() const;
 

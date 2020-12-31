@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root) {
 	PlanSubqueries(&condition, &root);
@@ -19,6 +18,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	D_ASSERT(statement.from_table);
 	root = CreatePlan(*statement.from_table);
 	D_ASSERT(root);
+
+	// plan the sample clause
+	if (statement.sample_options) {
+		root = make_unique<LogicalSample>(move(statement.sample_options), move(root));
+	}
 
 	if (statement.where_clause) {
 		root = PlanFilter(move(statement.where_clause), move(root));
@@ -68,7 +72,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	if (statement.unnests.size() > 0) {
 		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
 		unnest->expressions = move(statement.unnests);
-		// visit the window expressions
+		// visit the unnest expressions
 		for (auto &expr : unnest->expressions) {
 			PlanSubqueries(&expr, &root);
 		}

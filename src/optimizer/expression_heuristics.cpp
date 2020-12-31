@@ -2,7 +2,6 @@
 #include "duckdb/planner/expression/list.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> ExpressionHeuristics::Rewrite(unique_ptr<LogicalOperator> op) {
 	VisitOperator(*op);

@@ -6,8 +6,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -73,16 +71,25 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			auto &info = state->hash_table->correlated_mark_join_info;
 
 			vector<LogicalType> payload_types;
-			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
-			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
-				vector<unique_ptr<Expression>> children;
-				auto aggr =
-				    AggregateFunction::BindAggregateFunction(context, aggregate_functions[i], move(children), false);
-				correlated_aggregates.push_back(&*aggr);
-				info.correlated_aggregates.push_back(move(aggr));
-				payload_types.push_back(aggregate_functions[i].return_type);
-			}
+			unique_ptr<BoundAggregateExpression> aggr;
+
+			// jury-rigging the GroupedAggregateHashTable
+			// we need a count_star and a count to get counts with and without NULLs
+			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, false);
+			correlated_aggregates.push_back(&*aggr);
+			payload_types.push_back(aggr->return_type);
+			info.correlated_aggregates.push_back(move(aggr));
+
+			auto count_fun = CountFun::GetFunction();
+			vector<unique_ptr<Expression>> children;
+			// this is a dummy but we need it to make the hash table understand whats going on
+			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
+			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), false);
+			correlated_aggregates.push_back(&*aggr);
+			payload_types.push_back(aggr->return_type);
+			info.correlated_aggregates.push_back(move(aggr));
+
 			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
 			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
@@ -182,7 +189,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 				state->cached_chunk.Reset();
 			} else
 #endif
-			    if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
+			    if (IsRightOuterJoin(join_type)) {
 				// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 				sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
 			}

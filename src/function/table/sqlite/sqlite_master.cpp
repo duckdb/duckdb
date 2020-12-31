@@ -9,8 +9,6 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 struct SQLiteMasterData : public FunctionOperatorData {
@@ -43,8 +41,7 @@ static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vecto
 }
 
 unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, const FunctionData *bind_data,
-                                                    vector<column_t> &column_ids,
-                                                    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                    vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	auto result = make_unique<SQLiteMasterData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -92,7 +89,7 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 			type_str = "view";
 			break;
 		case CatalogType::INDEX_ENTRY: {
-			auto &index = (IndexCatalogEntry &) *entry;
+			auto &index = (IndexCatalogEntry &)*entry;
 			table_name = index.info->table;
 			type_str = "index";
 			break;

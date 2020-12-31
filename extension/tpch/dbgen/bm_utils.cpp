@@ -1,4 +1,14 @@
 /*
+ * Copyright owned by the Transaction Processing Performance Council.
+ *
+ * A copy of the license is included under extension/tpch/dbgen/LICENSE
+ * in this repository.
+ *
+ * You may not use this file except in compliance with the License.
+ *
+ * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
+ */
+/*
  *
  * Various routines that handle distributions, value selections and
  * seed value management for the DSS benchmark. Current functions:
@@ -18,8 +28,8 @@
  * set_state() -- initialize the RNG
  */
 
-#include "config.h"
-#include "dss.h"
+#include "dbgen/config.h"
+#include "dbgen/dss.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -65,7 +75,7 @@
 #endif
 #endif
 /* End of lines added by Chuck McDevitt for WIN32 support */
-#include "dsstypes.h"
+#include "dbgen/dsstypes.h"
 
 static char alpha_num[65] = "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
 
@@ -225,7 +235,7 @@ long julian(long date) {
 	return (result + offset);
 }
 
-#include "dists_dss.h"
+#include "dbgen/dists_dss.h"
 
 static char read_line_into_buffer(char *buffer, size_t bufsiz, const char **src) {
 	size_t count = 0;

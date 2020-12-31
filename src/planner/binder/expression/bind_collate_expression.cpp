@@ -2,7 +2,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression

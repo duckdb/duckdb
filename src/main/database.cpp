@@ -6,9 +6,8 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/object_cache.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-
-using namespace std;
 
 namespace duckdb {
 
@@ -44,6 +43,8 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) {
 	transaction_manager = make_unique<TransactionManager>(*storage);
 	scheduler = make_unique<TaskScheduler>();
 	connection_manager = make_unique<ConnectionManager>();
+	object_cache = make_unique<ObjectCache>();
+
 	// initialize the database
 	storage->Initialize();
 }

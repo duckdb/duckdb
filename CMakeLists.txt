@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 2.8.12)
 cmake_policy(SET CMP0026 NEW)
 cmake_policy(SET CMP0051 NEW)
 # if(APPLE) # needs to be before project() SET(CMAKE_CXX_FLAGS -stdlib=libc++)
@@ -118,6 +118,35 @@ execute_process(
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE GIT_COMMIT_HASH
   OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(
+  COMMAND git describe --tags --abbrev=0
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_LAST_TAG
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(
+  COMMAND git describe --tags --long
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE GIT_ITERATION
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+string(REGEX REPLACE "v([0-9]+.[0-9]+.)[0-9]+" "\\1" DUCKDB_MAIN_VERSION
+                     "${GIT_LAST_TAG}")
+string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION
+                     "${GIT_LAST_TAG}")
+string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION
+                     "${GIT_ITERATION}")
+
+if(${DUCKDB_DEV_ITERATION}==0)
+  # on a tag; directly use the version
+  set(DUCKDB_VERSION "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}")
+else()
+  # not on a tag, increment the patch version by one and add a -devX suffix
+  math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
+
+  set(DUCKDB_VERSION
+      "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}"
+  )
+endif()
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
@@ -126,13 +155,19 @@ option(AMALGAMATION_BUILD
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
+option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
-option(ASSERT_EXCEPTION "Throw an exception on an assert failing, instead of triggering a sigabort" TRUE)
+option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
+option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
+option(
+  ASSERT_EXCEPTION
+  "Throw an exception on an assert failing, instead of triggering a sigabort"
+  TRUE)
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
@@ -152,14 +187,13 @@ if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
 endif()
 
-if (!ASSERT_EXCEPTION)
+if(!ASSERT_EXCEPTION)
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -DDUCKDB_USE_STANDARD_ASSERT")
 endif()
 
-if (FORCE_ASSERT)
-set(CMAKE_CXX_FLAGS
-    "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
+if(FORCE_ASSERT)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
 endif()
 
 if(NOT MSVC)
@@ -299,21 +333,44 @@ function(disable_target_warnings NAME)
 endfunction()
 
 function(add_extension_definitions)
-  include_directories(${CMAKE_SOURCE_DIR}/extension)
+  include_directories(${PROJECT_SOURCE_DIR}/extension)
 
   if(${BUILD_ICU_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/icu/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/icu/include)
     add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
   endif()
 
   if(${BUILD_PARQUET_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/parquet/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/parquet/include)
     add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
   endif()
 
   if(${BUILD_TPCH_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/tpch/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/tpch/include)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
+  endif()
+
+  if(${BUILD_FTS_EXTENSION})
+    include_directories(${CMAKE_SOURCE_DIR}/extension/fts/include)
+    add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
+  endif()
+endfunction()
+
+function(add_extension_dependencies LIBRARY)
+  if(${BUILD_PARQUET_EXTENSION})
+    add_dependencies(${LIBRARY} parquet_extension)
+  endif()
+
+  if(${BUILD_ICU_EXTENSION})
+    add_dependencies(${LIBRARY} icu_extension)
+  endif()
+
+  if(${BUILD_TPCH_EXTENSION})
+    add_dependencies(${LIBRARY} tpch_extension)
+  endif()
+
+  if(${BUILD_FTS_EXTENSION})
+    add_dependencies(${LIBRARY} fts_extension)
   endif()
 endfunction()
 
@@ -330,6 +387,13 @@ function(link_extension_libraries LIBRARY)
     target_link_libraries(${LIBRARY} tpch_extension)
   endif()
 
+  if(${BUILD_FTS_EXTENSION})
+    target_link_libraries(${LIBRARY} fts_extension)
+  endif()
+endfunction()
+
+function(link_threads LIBRARY)
+  target_link_libraries(${LIBRARY} Threads::Threads)
 endfunction()
 
 add_subdirectory(extension)

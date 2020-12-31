@@ -19,7 +19,7 @@ class PersistentSegment;
 
 class TransientSegment : public ColumnSegment {
 public:
-	TransientSegment(BufferManager &manager, PhysicalType type, idx_t start);
+	TransientSegment(BufferManager &manager, LogicalType type, idx_t start);
 	TransientSegment(PersistentSegment &segment);
 
 	//! The buffer manager

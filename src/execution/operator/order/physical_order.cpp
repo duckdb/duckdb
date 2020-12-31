@@ -6,8 +6,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
@@ -66,18 +64,18 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	}
 
 	ChunkCollection sort_collection;
-	for (idx_t i = 0; i < big_data.chunks.size(); i++) {
+	for (idx_t i = 0; i < big_data.ChunkCount(); i++) {
 		DataChunk sort_chunk;
 		sort_chunk.Initialize(sort_types);
 
-		executor.Execute(*big_data.chunks[i], sort_chunk);
+		executor.Execute(big_data.GetChunk(i), sort_chunk);
 		sort_collection.Append(sort_chunk);
 	}
 
-	D_ASSERT(sort_collection.count == big_data.count);
+	D_ASSERT(sort_collection.Count() == big_data.Count());
 
 	// now perform the actual sort
-	sink.sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.count]);
+	sink.sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.Count()]);
 	sort_collection.Sort(order_types, null_order_types, sink.sorted_vector.get());
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
@@ -90,7 +88,7 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	auto &sink = (OrderByGlobalOperatorState &)*this->sink_state;
 	ChunkCollection &big_data = sink.sorted_data;
-	if (state->position >= big_data.count) {
+	if (state->position >= big_data.Count()) {
 		return;
 	}
 

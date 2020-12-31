@@ -1,8 +1,8 @@
-#include "dbgen.hpp"
+#include "dbgen/dbgen.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "dbgen_gunk.hpp"
+#include "dbgen/dbgen_gunk.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "tpch_constants.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -15,14 +15,13 @@
 
 #define DECLARER /* EXTERN references get defined here */
 
-#include "dss.h"
-#include "dsstypes.h"
+#include "dbgen/dss.h"
+#include "dbgen/dsstypes.h"
 
 #include <cassert>
 #include <mutex>
 
 using namespace duckdb;
-using namespace std;
 
 seed_t DBGenGlobals::Seed[MAX_STREAM + 1] = {
     {PART, 1, 0, 1},                           /* P_MFG_SD     0 */
@@ -111,7 +110,7 @@ struct UnsafeAppender {
 	}
 
 	void EndRow() {
-		assert(col == chunk.column_count());
+		assert(col == chunk.ColumnCount());
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			Flush();
@@ -127,7 +126,7 @@ struct UnsafeAppender {
 	}
 
 	template <class T> void AppendValue(T value) {
-		assert(col < chunk.column_count());
+		assert(col < chunk.ColumnCount());
 		FlatVector::GetData<T>(chunk.data[col])[chunk.size()] = value;
 		col++;
 	}

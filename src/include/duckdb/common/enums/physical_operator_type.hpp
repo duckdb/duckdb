@@ -24,13 +24,15 @@ enum class PhysicalOperatorType : uint8_t {
 	AGGREGATE,
 	WINDOW,
 	UNNEST,
-	DISTINCT,
 	SIMPLE_AGGREGATE,
 	HASH_GROUP_BY,
+	PERFECT_HASH_GROUP_BY,
 	SORT_GROUP_BY,
 	FILTER,
 	PROJECTION,
 	COPY_TO_FILE,
+	RESERVOIR_SAMPLE,
+	STREAMING_SAMPLE,
 	// -----------------------------
 	// Scans
 	// -----------------------------
@@ -70,12 +72,14 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	// Schema
 	// -----------------------------
-	CREATE,
+	CREATE_TABLE,
+	CREATE_TABLE_AS,
 	CREATE_INDEX,
 	ALTER,
 	CREATE_SEQUENCE,
 	CREATE_VIEW,
 	CREATE_SCHEMA,
+	CREATE_MACRO,
 	DROP,
 	PRAGMA,
 	TRANSACTION,

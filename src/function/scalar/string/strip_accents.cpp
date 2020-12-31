@@ -2,8 +2,6 @@
 
 #include "utf8proc.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 bool StripAccentsFun::IsAscii(const char *input, idx_t n) {
@@ -17,7 +15,7 @@ bool StripAccentsFun::IsAscii(const char *input, idx_t n) {
 }
 
 static void strip_accents_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.column_count() == 1);
+	D_ASSERT(args.ColumnCount() == 1);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		if (StripAccentsFun::IsAscii(input.GetDataUnsafe(), input.GetSize())) {

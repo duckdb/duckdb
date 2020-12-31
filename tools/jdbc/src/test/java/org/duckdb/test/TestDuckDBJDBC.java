@@ -745,7 +745,7 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		ResultSet rs = stmt.executeQuery("SELECT '513125-08-05 (BC)'::date d");
+		ResultSet rs = stmt.executeQuery("SELECT '5131-08-05 (BC)'::date d");
 
 		assertTrue(rs.next());
 		assertNull(rs.getDate("d"));

@@ -72,7 +72,7 @@ void duckdb_disconnect(duckdb_connection *connection) {
 template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	idx_t row = 0;
 	auto target = (T *)out->columns[col].data;
-	for (auto &chunk : source.chunks) {
+	for (auto &chunk : source.Chunks()) {
 		auto source = FlatVector::GetData<T>(chunk->data[col]);
 		auto &nullmask = FlatVector::Nullmask(chunk->data[col]);
 
@@ -100,7 +100,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// copy the data
 	// first write the meta data
 	out->column_count = result->types.size();
-	out->row_count = result->collection.count;
+	out->row_count = result->collection.Count();
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) {
 		return DuckDBError;
@@ -125,7 +125,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	for (idx_t col = 0; col < out->column_count; col++) {
 		// first set the nullmask
 		idx_t row = 0;
-		for (auto &chunk : result->collection.chunks) {
+		for (auto &chunk : result->collection.Chunks()) {
 			for (idx_t k = 0; k < chunk->size(); k++) {
 				out->columns[col].nullmask[row++] = FlatVector::IsNull(chunk->data[col], k);
 			}
@@ -156,7 +156,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::VARCHAR: {
 			idx_t row = 0;
 			auto target = (const char **)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -174,7 +174,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::DATE: {
 			idx_t row = 0;
 			auto target = (duckdb_date *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<date_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -192,16 +192,16 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::TIME: {
 			idx_t row = 0;
 			auto target = (duckdb_time *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<dtime_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
-						int32_t hour, min, sec, msec;
-						Time::Convert(source[k], hour, min, sec, msec);
+						int32_t hour, min, sec, micros;
+						Time::Convert(source[k], hour, min, sec, micros);
 						target[row].hour = hour;
 						target[row].min = min;
 						target[row].sec = sec;
-						target[row].msec = msec;
+						target[row].micros = micros;
 					}
 					row++;
 				}
@@ -211,7 +211,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::TIMESTAMP: {
 			idx_t row = 0;
 			auto target = (duckdb_timestamp *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<timestamp_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -222,8 +222,8 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 						int32_t year, month, day;
 						Date::Convert(date, year, month, day);
 
-						int32_t hour, min, sec, msec;
-						Time::Convert(time, hour, min, sec, msec);
+						int32_t hour, min, sec, micros;
+						Time::Convert(time, hour, min, sec, micros);
 
 						target[row].date.year = year;
 						target[row].date.month = month;
@@ -231,7 +231,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 						target[row].time.hour = hour;
 						target[row].time.min = min;
 						target[row].time.sec = sec;
-						target[row].time.msec = msec;
+						target[row].time.micros = micros;
 					}
 					row++;
 				}
@@ -241,7 +241,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::HUGEINT: {
 			idx_t row = 0;
 			auto target = (duckdb_hugeint *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<hugeint_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -256,13 +256,13 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::INTERVAL: {
 			idx_t row = 0;
 			auto target = (duckdb_interval *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<interval_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
 						target[row].days = source[k].days;
 						target[row].months = source[k].months;
-						target[row].msecs = source[k].msecs;
+						target[row].micros = source[k].micros;
 					}
 					row++;
 				}
@@ -525,12 +525,12 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 	}
 	case DUCKDB_TYPE_TIME: {
 		auto time = UnsafeFetch<duckdb_time>(result, col, row);
-		return Value::TIME(time.hour, time.min, time.sec, time.msec);
+		return Value::TIME(time.hour, time.min, time.sec, time.micros);
 	}
 	case DUCKDB_TYPE_TIMESTAMP: {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
 		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour,
-		                        timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
+		                        timestamp.time.min, timestamp.time.sec, timestamp.time.micros);
 	}
 	case DUCKDB_TYPE_HUGEINT: {
 		hugeint_t val;
@@ -544,7 +544,7 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		auto interval = UnsafeFetch<duckdb_interval>(result, col, row);
 		val.days = interval.days;
 		val.months = interval.months;
-		val.msecs = interval.msecs;
+		val.micros = interval.micros;
 		return Value::INTERVAL(val);
 	}
 	case DUCKDB_TYPE_VARCHAR:

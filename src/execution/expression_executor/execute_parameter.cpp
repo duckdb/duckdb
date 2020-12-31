@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundParameterExpression &expr,
                                                                 ExpressionExecutorState &root) {

@@ -5,7 +5,6 @@
 #include <cmath>
 
 namespace duckdb {
-using namespace std;
 
 struct stddev_state_t {
 	uint64_t count;  //  n
@@ -64,7 +63,7 @@ struct STDDevBaseOperation {
 
 struct VarSampOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -78,7 +77,7 @@ struct VarSampOperation : public STDDevBaseOperation {
 
 struct VarPopOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -92,7 +91,7 @@ struct VarPopOperation : public STDDevBaseOperation {
 
 struct STDDevSampOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
@@ -106,7 +105,7 @@ struct STDDevSampOperation : public STDDevBaseOperation {
 
 struct STDDevPopOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {

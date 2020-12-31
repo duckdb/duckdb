@@ -26,7 +26,7 @@ public:
 	//! The fully prepared physical plan of the prepared statement
 	unique_ptr<PhysicalOperator> plan;
 	//! The map of parameter index to the actual value entry
-	unordered_map<idx_t, unique_ptr<Value>> value_map;
+	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
 	//! Any internal catalog dependencies of the prepared statement
 	unordered_set<CatalogEntry *> dependencies;
 

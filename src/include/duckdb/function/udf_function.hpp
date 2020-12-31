@@ -11,8 +11,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct UDFWrapper {
@@ -311,10 +309,10 @@ private:
 		case LogicalTypeId::SMALLINT:
 			return std::is_same<T, int16_t>();
 		case LogicalTypeId::DATE:
-		case LogicalTypeId::TIME:
 		case LogicalTypeId::INTEGER:
 			return std::is_same<T, int32_t>();
 		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIMESTAMP:
 			return std::is_same<T, int64_t>();
 		case LogicalTypeId::FLOAT:

@@ -152,7 +152,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		// if there are multiple statements here, we are dealing with an import database statement
 		// we directly execute all statements besides the final one
-		for(idx_t i = 0; i + 1 < statements.size(); i++) {
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto res = db->con->Query(move(statements[i]));
 			if (!res->success) {
 				db->last_error = res->error;
@@ -552,7 +552,11 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
 	}
-	return sqlite3_internal_bind_value(stmt, idx, Value(value));
+	try {
+		return sqlite3_internal_bind_value(stmt, idx, Value(value));
+	} catch (std::exception &ex) {
+		return SQLITE_ERROR;
+	}
 }
 
 int sqlite3_clear_bindings(sqlite3_stmt *stmt) {
@@ -797,9 +801,46 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 	return -1;
 }
 
-const char *sqlite3_column_decltype(sqlite3_stmt *stmt, int col) {
-	fprintf(stderr, "sqlite3_column_decltype: unsupported.\n");
-	return nullptr;
+const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
+	if (!pStmt || !pStmt->prepared) {
+		return NULL;
+	}
+	auto column_type = pStmt->prepared->types[iCol];
+	switch (column_type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return "BOOLEAN";
+	case LogicalTypeId::TINYINT:
+		return "TINYINT";
+	case LogicalTypeId::SMALLINT:
+		return "SMALLINT";
+	case LogicalTypeId::INTEGER:
+		return "INTEGER";
+	case LogicalTypeId::BIGINT:
+		return "BIGINT";
+	case LogicalTypeId::FLOAT:
+		return "FLOAT";
+	case LogicalTypeId::DOUBLE:
+		return "DOUBLE";
+	case LogicalTypeId::DECIMAL:
+		return "DECIMAL";
+	case LogicalTypeId::DATE:
+		return "DATE";
+	case LogicalTypeId::TIME:
+		return "TIME";
+	case LogicalTypeId::TIMESTAMP:
+		return "TIMESTAMP";
+	case LogicalTypeId::VARCHAR:
+		return "VARCHAR";
+	case LogicalTypeId::LIST:
+		return "LIST";
+	case LogicalTypeId::STRUCT:
+		return "STRUCT";
+	case LogicalTypeId::BLOB:
+		return "BLOB";
+	default:
+		return NULL;
+	}
+	return NULL;
 }
 
 int sqlite3_status64(int op, sqlite3_int64 *pCurrent, sqlite3_int64 *pHighwater, int resetFlag) {

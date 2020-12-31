@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 class Deserializer;
@@ -25,6 +26,8 @@ public:
 
 	TableReferenceType type;
 	string alias;
+	//! Sample options (if any)
+	unique_ptr<SampleOptions> sample;
 	//! The location in the query (if any)
 	idx_t query_location = INVALID_INDEX;
 
@@ -35,9 +38,7 @@ public:
 	}
 	void Print();
 
-	virtual bool Equals(const TableRef *other) const {
-		return other && type == other->type && alias == other->alias;
-	}
+	virtual bool Equals(const TableRef *other) const;
 
 	virtual unique_ptr<TableRef> Copy() = 0;
 
@@ -45,5 +46,8 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into a TableRef
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
+
+	//! Copy the properties of this table ref to the target
+	void CopyProperties(TableRef &target);
 };
 } // namespace duckdb

@@ -7,7 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
@@ -70,6 +70,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		TransformGroupBy(stmt->groupClause, result->groups);
 		// having
 		result->having = TransformExpression(stmt->havingClause);
+		// sample
+		result->sample = TransformSampleOptions(stmt->sampleOptions);
 		break;
 	}
 	case PG_SETOP_UNION:
@@ -100,6 +102,9 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		}
 		if (select_distinct) {
 			result->modifiers.push_back(make_unique<DistinctModifier>());
+		}
+		if (stmt->sampleOptions) {
+			throw ParserException("SAMPLE clause is only allowed in regular SELECT statements");
 		}
 		break;
 	}

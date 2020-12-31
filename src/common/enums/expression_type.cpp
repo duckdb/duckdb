@@ -2,8 +2,6 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string ExpressionTypeToString(ExpressionType type) {
@@ -104,8 +102,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COMPARE_NOT_BETWEEN";
 	case ExpressionType::VALUE_DEFAULT:
 		return "VALUE_DEFAULT";
-	case ExpressionType::COMMON_SUBEXPRESSION:
-		return "COMMON_SUBEXPRESSION";
 	case ExpressionType::BOUND_REF:
 		return "BOUND_REF";
 	case ExpressionType::BOUND_COLUMN_REF:

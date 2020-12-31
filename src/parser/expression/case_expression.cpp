@@ -3,7 +3,6 @@
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::CASE_EXPR, ExpressionClass::CASE) {
 }

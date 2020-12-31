@@ -2,6 +2,10 @@
 # description: Simple SUM aggregate over lineitem
 # group: [aggregate]
 
+name Lineitem Simple Sum
+group aggregate
+subgroup tpch
+
 require tpch
 
 cache tpch_sf1

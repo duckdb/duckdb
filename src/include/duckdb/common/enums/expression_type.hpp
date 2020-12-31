@@ -129,7 +129,6 @@ enum class ExpressionType : uint8_t {
 	// Miscellaneous
 	// -----------------------------
 	CAST = 225,
-	COMMON_SUBEXPRESSION = 226,
 	BOUND_REF = 227,
 	BOUND_COLUMN_REF = 228,
 	BOUND_UNNEST = 229,
@@ -182,8 +181,7 @@ enum class ExpressionClass : uint8_t {
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//
-	BOUND_EXPRESSION = 50,
-	COMMON_SUBEXPRESSION = 51
+	BOUND_EXPRESSION = 50
 };
 
 string ExpressionTypeToString(ExpressionType type);

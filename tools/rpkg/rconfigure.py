@@ -3,6 +3,7 @@ import sys
 import shutil
 import subprocess
 
+extensions = ['parquet']
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts'))
 import package_build
 
@@ -12,6 +13,10 @@ def open_utf8(fpath, flags):
         return open(fpath, flags)
     else:
         return open(fpath, flags, encoding="utf8")
+
+extension_list = ""
+for ext in extensions:
+    extension_list += ' -DBUILD_{}_EXTENSION'.format(ext.upper())
 
 # check if we are doing a build from an existing DuckDB installation
 if 'DUCKDB_R_BINDIR' in os.environ and 'DUCKDB_R_CFLAGS' in os.environ and 'DUCKDB_R_LIBS' in os.environ:
@@ -23,10 +28,11 @@ if 'DUCKDB_R_BINDIR' in os.environ and 'DUCKDB_R_CFLAGS' in os.environ and 'DUCK
     with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
         text = f.read()
 
-    compile_flags += package_build.include_flags()
+    compile_flags += package_build.include_flags(extensions)
+    compile_flags += extension_list
 
     # find libraries
-    result_libs = package_build.get_libraries(existing_duckdb_dir, libraries)
+    result_libs = package_build.get_libraries(existing_duckdb_dir, libraries, extensions)
 
     link_flags = ''
     for rlib in result_libs:
@@ -54,7 +60,7 @@ target_dir = os.path.join(os.getcwd(), 'src', 'duckdb')
 
 linenr = bool(os.getenv("DUCKDB_R_LINENR", ""))
 
-(source_list, include_list, original_sources) = package_build.build_package(target_dir, linenr)
+(source_list, include_list, original_sources) = package_build.build_package(target_dir, extensions, linenr)
 
 # object list, relative paths
 script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\','/')
@@ -64,6 +70,7 @@ object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in duckdb_sources])
 # include list
 include_list = ' '.join(['-I' + 'duckdb/' + x for x in include_list])
 include_list += ' -Iduckdb'
+include_list += extension_list
 
 # read Makevars.in and replace the {{ SOURCES }} and {{ INCLUDES }} macros
 with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:

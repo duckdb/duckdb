@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
@@ -14,14 +15,18 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/common/limits.hpp"
-
-using namespace std;
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 static int64_t BindConstant(Binder &binder, ClientContext &context, string clause, unique_ptr<ParsedExpression> &expr) {
 	ConstantBinder constant_binder(binder, context, clause);
 	auto bound_expr = constant_binder.Bind(expr);
+	if (!bound_expr->IsFoldable()) {
+		throw BinderException(
+		    "cannot use the expression \"%s\" in a %s, the expression has side-effects and is not foldable",
+		    bound_expr->ToString(), clause);
+	}
 	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr).CastAs(LogicalType::BIGINT);
 	int64_t limit_value = value.GetValue<int64_t>();
 	if (limit_value < 0) {
@@ -182,6 +187,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// first bind the FROM table statement
 	result->from_table = Bind(*statement.from_table);
+
+	// bind the sample clause
+	if (statement.sample) {
+		result->sample_options = move(statement.sample);
+	}
 
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;

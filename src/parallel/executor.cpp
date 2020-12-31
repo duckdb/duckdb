@@ -13,8 +13,6 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 Executor::Executor(ClientContext &context) : context(context) {
@@ -82,15 +80,16 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			parent->AddDependency(pipeline.get());
 		}
 		switch (op->type) {
+		case PhysicalOperatorType::CREATE_TABLE_AS:
 		case PhysicalOperatorType::INSERT:
 		case PhysicalOperatorType::DELETE_OPERATOR:
 		case PhysicalOperatorType::UPDATE:
-		case PhysicalOperatorType::CREATE:
 		case PhysicalOperatorType::HASH_GROUP_BY:
-		case PhysicalOperatorType::DISTINCT:
 		case PhysicalOperatorType::SIMPLE_AGGREGATE:
+		case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
 		case PhysicalOperatorType::WINDOW:
 		case PhysicalOperatorType::ORDER_BY:
+		case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
 			// single operator, set as child
@@ -100,6 +99,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
 		case PhysicalOperatorType::HASH_JOIN:
 		case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+		case PhysicalOperatorType::CROSS_PRODUCT:
 			// regular join, create a pipeline with RHS source that sinks into this pipeline
 			pipeline->child = op->children[1].get();
 			// on the LHS (probe child), we recurse with the current set of pipelines
@@ -107,20 +107,12 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			break;
 		case PhysicalOperatorType::DELIM_JOIN: {
 			// duplicate eliminated join
-			auto &delim_join = (PhysicalDelimJoin &)*op;
 			// create a pipeline with the duplicate eliminated path as source
 			pipeline->child = op->children[0].get();
-			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
-			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
-			for (auto &delim_scan : delim_join.delim_scans) {
-				delim_join_dependencies[delim_scan] = pipeline.get();
-			}
-			// recurse into the actual join; any pipelines in there depend on the main pipeline
-			BuildPipelines(delim_join.join.get(), parent);
 			break;
 		}
 		default:
-			throw NotImplementedException("Unimplemented sink type!");
+			throw InternalException("Unimplemented sink type!");
 		}
 		// recurse into the pipeline child
 		BuildPipelines(pipeline->child, pipeline.get());
@@ -129,6 +121,17 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			if (dependency_cte) {
 				pipeline->SetRecursiveCTE(dependency_cte);
 			}
+		}
+		if (op->type == PhysicalOperatorType::DELIM_JOIN) {
+			// for delim joins, recurse into the actual join
+			// any pipelines in there depend on the main pipeline
+			auto &delim_join = (PhysicalDelimJoin &)*op;
+			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
+			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
+			for (auto &delim_scan : delim_join.delim_scans) {
+				delim_join_dependencies[delim_scan] = pipeline.get();
+			}
+			BuildPipelines(delim_join.join.get(), parent);
 		}
 		auto pipeline_cte = pipeline->GetRecursiveCTE();
 		if (!pipeline_cte) {
@@ -144,7 +147,6 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		// first check if there is any additional action we need to do depending on the type
 		switch (op->type) {
 		case PhysicalOperatorType::DELIM_SCAN: {
-			// check if this chunk scan scans a duplicate eliminated join collection
 			auto entry = delim_join_dependencies.find(op);
 			D_ASSERT(entry != delim_join_dependencies.end());
 			// this chunk scan introduces a dependency to the current pipeline
@@ -169,13 +171,14 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 				throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
 			}
 			recursive_cte = op;
-			BuildPipelines(op->children[1].get(), nullptr);
+			BuildPipelines(op->children[1].get(), parent);
 			// re-order the pipelines such that they are executed in the correct order of dependencies
 			for (idx_t i = 0; i < cte_node.pipelines.size(); i++) {
 				auto &deps = cte_node.pipelines[i]->GetDependencies();
 				for (idx_t j = i + 1; j < cte_node.pipelines.size(); j++) {
 					if (deps.find(cte_node.pipelines[j].get()) != deps.end()) {
-						// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before pipeline "j"
+						// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before
+						// pipeline "j"
 						std::swap(cte_node.pipelines[i], cte_node.pipelines[j]);
 						i--;
 						continue;
@@ -184,6 +187,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			}
 			for (idx_t i = 0; i < cte_node.pipelines.size(); i++) {
 				cte_node.pipelines[i]->ClearParents();
+			}
+			if (parent) {
+				parent->SetRecursiveCTE(nullptr);
 			}
 
 			recursive_cte = nullptr;

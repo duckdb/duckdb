@@ -8,8 +8,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalRecursiveCTEState : public PhysicalOperatorState {
@@ -76,14 +74,9 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 				break;
 			}
 
-			working_table->count = 0;
-			working_table->chunks.clear();
-
-			working_table->count = intermediate_table.count;
-			working_table->chunks = move(intermediate_table.chunks);
-
-			intermediate_table.count = 0;
-			intermediate_table.chunks.clear();
+			working_table->Reset();
+			working_table->Merge(intermediate_table);
+			intermediate_table.Reset();
 
 			ExecuteRecursivePipelines(context);
 			state->bottom_state = children[1]->GetOperatorState();
@@ -99,6 +92,8 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 			if (match_count > 0) {
 				intermediate_table.Append(chunk);
 				state->intermediate_empty = false;
+			} else {
+				continue;
 			}
 		} else {
 			intermediate_table.Append(chunk);

@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpression &expr,
                                                                 ExpressionExecutorState &root) {

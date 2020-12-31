@@ -9,8 +9,6 @@
 // TODO date_trunc function should also handle interval data type when it is implemented. See
 // https://www.postgresql.org/docs/9.1/functions-datetime.html
 
-using namespace std;
-
 namespace duckdb {
 
 struct MillenniumTruncOperator {
@@ -99,8 +97,12 @@ template <> timestamp_t DayTruncOperator::Operation(date_t input) {
 
 struct HourTruncOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(date, Time::FromTime(Timestamp::GetHours(input), 0, 0, 0));
+		int32_t hour, min, sec, micros;
+		date_t date;
+		dtime_t time;
+		Timestamp::Convert(input, date, time);
+		Time::Convert(time, hour, min, sec, micros);
+		return Timestamp::FromDatetime(date, Time::FromTime(hour, 0, 0, 0));
 	}
 };
 template <> timestamp_t HourTruncOperator::Operation(date_t input) {
@@ -109,9 +111,12 @@ template <> timestamp_t HourTruncOperator::Operation(date_t input) {
 
 struct MinuteTruncOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(date,
-		                               Time::FromTime(Timestamp::GetHours(input), Timestamp::GetMinutes(input), 0, 0));
+		int32_t hour, min, sec, micros;
+		date_t date;
+		dtime_t time;
+		Timestamp::Convert(input, date, time);
+		Time::Convert(time, hour, min, sec, micros);
+		return Timestamp::FromDatetime(date, Time::FromTime(hour, min, 0, 0));
 	}
 };
 template <> timestamp_t MinuteTruncOperator::Operation(date_t input) {
@@ -120,9 +125,12 @@ template <> timestamp_t MinuteTruncOperator::Operation(date_t input) {
 
 struct SecondsTruncOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(date, Time::FromTime(Timestamp::GetHours(input), Timestamp::GetMinutes(input),
-		                                                    Timestamp::GetSeconds(input), 0));
+		int32_t hour, min, sec, micros;
+		date_t date;
+		dtime_t time;
+		Timestamp::Convert(input, date, time);
+		Time::Convert(time, hour, min, sec, micros);
+		return Timestamp::FromDatetime(date, Time::FromTime(hour, min, sec, 0));
 	}
 };
 template <> timestamp_t SecondsTruncOperator::Operation(date_t input) {

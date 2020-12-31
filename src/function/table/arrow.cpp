@@ -9,6 +9,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -126,8 +127,7 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 }
 
 static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, const FunctionData *bind_data,
-                                                        vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                        vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (data.is_consumed) {
 		throw NotImplementedException("FIXME: Arrow streams can only be read once");
@@ -160,14 +160,14 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 		return;
 	}
 
-	if ((idx_t)data.current_chunk_root.n_children != output.column_count()) {
+	if ((idx_t)data.current_chunk_root.n_children != output.ColumnCount()) {
 		throw InvalidInputException("arrow_scan: array column count mismatch");
 	}
 
 	output.SetCardinality(
 	    std::min((int64_t)STANDARD_VECTOR_SIZE, (int64_t)(data.current_chunk_root.length - data.chunk_offset)));
 
-	for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &array = *data.current_chunk_root.children[col_idx];
 		if (!array.release) {
 			throw InvalidInputException("arrow_scan: released array passed");
@@ -210,7 +210,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 		case LogicalTypeId::DOUBLE:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
-		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
 			FlatVector::SetData(output.data[col_idx],
 			                    (data_ptr_t)array.buffers[1] + GetTypeIdSize(output.data[col_idx].type.InternalType()) *
 			                                                       (data.chunk_offset + array.offset));
@@ -229,41 +229,37 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 
 				auto utf_type = Utf8Proc::Analyze(cptr, str_len);
 				if (utf_type == UnicodeType::INVALID) {
-					throw runtime_error("Invalid UTF8 string encoding");
+					throw std::runtime_error("Invalid UTF8 string encoding");
 				}
 				FlatVector::GetData<string_t>(output.data[col_idx])[row_idx] =
 				    StringVector::AddString(output.data[col_idx], cptr, str_len);
 			}
 
 			break;
-		} // TODO timestamps in duckdb are subject to change
+		}
+		case LogicalTypeId::TIME: {
+			// convert time from milliseconds to microseconds
+			auto src_ptr = (uint32_t *)array.buffers[1] + data.chunk_offset;
+			auto tgt_ptr = (dtime_t *)FlatVector::GetData(output.data[col_idx]);
+			for (idx_t row = 0; row < output.size(); row++) {
+				auto source_idx = data.chunk_offset + row;
+				tgt_ptr[row] = dtime_t(src_ptr[source_idx]) * 1000;
+			}
+			break;
+		}
 		case LogicalTypeId::TIMESTAMP: {
+			// convert timestamps from nanoseconds to microseconds
 			auto src_ptr = (uint64_t *)array.buffers[1] + data.chunk_offset;
 			auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
 
 			for (idx_t row = 0; row < output.size(); row++) {
 				auto source_idx = data.chunk_offset + row;
-
-				auto ms = src_ptr[source_idx] / 1000000; // nanoseconds
-				auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
-				date_t date = Date::EpochToDate(ms / 1000);
-				dtime_t time = (dtime_t)(ms % ms_per_day);
-				tgt_ptr[row] = Timestamp::FromDatetime(date, time);
-			}
-			break;
-		}
-		case LogicalTypeId::DATE: {
-			auto src_ptr = (int32_t *)array.buffers[1] + data.chunk_offset;
-			auto tgt_ptr = (date_t *)FlatVector::GetData(output.data[col_idx]);
-
-			for (idx_t row = 0; row < output.size(); row++) {
-				auto source_idx = data.chunk_offset + row;
-				tgt_ptr[row] = Date::EpochDaysToDate(src_ptr[source_idx]);
+				tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
 			}
 			break;
 		}
 		default:
-			throw runtime_error("Unsupported type " + output.data[col_idx].type.ToString());
+			throw std::runtime_error("Unsupported type " + output.data[col_idx].type.ToString());
 		}
 	}
 	output.Verify();

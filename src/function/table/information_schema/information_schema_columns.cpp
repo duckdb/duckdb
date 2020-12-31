@@ -9,8 +9,6 @@
 
 #include <set>
 
-using namespace std;
-
 namespace duckdb {
 
 struct InformationSchemaColumnsData : public FunctionOperatorData {
@@ -68,9 +66,9 @@ static unique_ptr<FunctionData> information_schema_columns_bind(ClientContext &c
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData>
-information_schema_columns_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-                                unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> information_schema_columns_init(ClientContext &context, const FunctionData *bind_data,
+                                                                 vector<column_t> &column_ids,
+                                                                 TableFilterSet *table_filters) {
 	auto result = make_unique<InformationSchemaColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -138,7 +136,7 @@ public:
 
 private:
 	TableCatalogEntry *entry;
-	set<idx_t> not_null_cols;
+	std::set<idx_t> not_null_cols;
 };
 
 class ViewColumnHelper : public ColumnHelper {

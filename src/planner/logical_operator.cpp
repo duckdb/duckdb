@@ -5,7 +5,6 @@
 #include "duckdb/common/tree_renderer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);
@@ -34,6 +33,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 	}
 	// now resolve the types for this operator
 	ResolveTypes();
+	D_ASSERT(types.size() == GetColumnBindings().size());
 }
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {

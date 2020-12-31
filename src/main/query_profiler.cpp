@@ -10,12 +10,11 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include <iostream>
 #include <utility>
 #include <algorithm>
-
-using namespace std;
 
 namespace duckdb {
 
@@ -36,12 +35,13 @@ void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	switch (op_type) {
 	case PhysicalOperatorType::ORDER_BY:
+	case PhysicalOperatorType::RESERVOIR_SAMPLE:
+	case PhysicalOperatorType::STREAMING_SAMPLE:
 	case PhysicalOperatorType::LIMIT:
 	case PhysicalOperatorType::TOP_N:
 	case PhysicalOperatorType::AGGREGATE:
 	case PhysicalOperatorType::WINDOW:
 	case PhysicalOperatorType::UNNEST:
-	case PhysicalOperatorType::DISTINCT:
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:
 	case PhysicalOperatorType::HASH_GROUP_BY:
 	case PhysicalOperatorType::SORT_GROUP_BY:
@@ -158,7 +158,7 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 }
 
 OperatorProfiler::OperatorProfiler(bool enabled_) : enabled(enabled_) {
-	execution_stack = stack<PhysicalOperator *>();
+	execution_stack = std::stack<PhysicalOperator *>();
 }
 
 void OperatorProfiler::StartOperator(PhysicalOperator *phys_op) {
@@ -306,16 +306,17 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 				}
 				ss << "┌─────────────────────────────────────┐\n";
 				ss << "│" +
-						DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
-									TOTAL_BOX_WIDTH - 2) +
-						"│\n";
+				          DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
+				                     TOTAL_BOX_WIDTH - 2) +
+				          "│\n";
 				ss << "│┌───────────────────────────────────┐│\n";
 				has_previous_phase = true;
 			} else {
 				string entry_name = StringUtil::Split(entry.first, " > ")[1];
 				ss << "││" +
-						DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second), TOTAL_BOX_WIDTH - 4) +
-						"││\n";
+				          DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second),
+				                     TOTAL_BOX_WIDTH - 4) +
+				          "││\n";
 			}
 		}
 		if (has_previous_phase) {

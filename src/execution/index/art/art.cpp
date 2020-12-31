@@ -3,10 +3,9 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include <algorithm>
 #include <ctgmath>
+#include <cstring>
 
 namespace duckdb {
-
-using namespace std;
 
 ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
     : Index(IndexType::ART, column_ids, move(unbound_expressions)), is_unique(is_unique) {
@@ -142,7 +141,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
-	for (idx_t i = 1; i < input.column_count(); i++) {
+	for (idx_t i = 1; i < input.ColumnCount(); i++) {
 		// for each of the remaining columns, concatenate
 		switch (input.data[i].type.InternalType()) {
 		case PhysicalType::BOOL:

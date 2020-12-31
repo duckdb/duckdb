@@ -21,6 +21,21 @@ public:
 	static string_t MonthNamesAbbreviated[12];
 	static string_t DayNames[7];
 	static string_t DayNamesAbbreviated[7];
+	static int32_t NormalDays[13];
+	static int32_t CumulativeDays[13];
+	static int32_t LeapDays[13];
+	static int32_t CumulativeLeapDays[13];
+	static int32_t CumulativeYearDays[401];
+	static int8_t MonthPerDayOfYear[365];
+	static int8_t LeapMonthPerDayOfYear[366];
+
+	constexpr static int32_t MinYear = -290307;
+	constexpr static int32_t MaxYear = 294247;
+	constexpr static int32_t EpochYear = 1970;
+
+	constexpr static int32_t YearInterval = 400;
+	constexpr static int32_t DaysPerYearInterval = 146097;
+
 
 public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
@@ -46,7 +61,7 @@ public:
 
 	//! Returns true if the specified (year, month, day) combination is a valid
 	//! date
-	static bool IsValidDay(int32_t year, int32_t month, int32_t day);
+	static bool IsValid(int32_t year, int32_t month, int32_t day);
 
 	//! Extract the epoch from the date (seconds since 1970-01-01)
 	static int64_t Epoch(date_t date);
@@ -60,6 +75,9 @@ public:
 
 	//! Extract year of a date entry
 	static int32_t ExtractYear(date_t date);
+	//! Extract year of a date entry, but optimized to first try the last year found
+	static int32_t ExtractYear(date_t date, int32_t *last_year);
+	static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
 	//! Extract month of a date entry
 	static int32_t ExtractMonth(date_t date);
 	//! Extract day of a date entry
@@ -81,5 +99,12 @@ public:
 	static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
 	//! Returns the date of the monday of the current week.
 	static date_t GetMondayOfCurrentWeek(date_t date);
+
+	//! Helper function to parse two digits from a string (e.g. "30" -> 30, "03" -> 3, "3" -> 3)
+	static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result);
+
+private:
+	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
+
 };
 } // namespace duckdb

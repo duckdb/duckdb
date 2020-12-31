@@ -1,16 +1,11 @@
-//===--------------------------------------------------------------------===//
-// cast_operators.cpp
-// Description: This file contains the implementation of the different casts
-//===--------------------------------------------------------------------===//
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result, idx_t count) {
 	D_ASSERT(result.type.InternalType() == PhysicalType::VARCHAR);
@@ -107,7 +102,8 @@ void decimal_scale_up_loop(Vector &source, Vector &result, idx_t count) {
 		auto limit = POWERS_SOURCE::PowersOfTen[target_width];
 		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
-				throw OutOfRangeException("Casting to %s failed", result.type.ToString());
+				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
+				                          Decimal::ToString(input, source.type.scale()), result.type.ToString());
 			}
 			return Cast::Operation<SOURCE, DEST>(input) * multiply_factor;
 		});
@@ -129,7 +125,8 @@ void decimal_scale_down_loop(Vector &source, Vector &result, idx_t count) {
 		auto limit = POWERS_SOURCE::PowersOfTen[target_width];
 		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
-				throw OutOfRangeException("Casting to %s failed", result.type.ToString());
+				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
+				                          Decimal::ToString(input, source.type.scale()), result.type.ToString());
 			}
 			return Cast::Operation<SOURCE, DEST>(input / divide_factor);
 		});
@@ -473,7 +470,6 @@ static void value_string_cast_switch(Vector &source, Vector &result, idx_t count
 			auto src_val = source.GetValue(i);
 			auto str_val = src_val.ToString();
 			result.SetValue(i, Value(str_val));
-			break;
 		}
 		break;
 	default:

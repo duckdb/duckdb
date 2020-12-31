@@ -3,7 +3,6 @@
 #include "duckdb/execution/nested_loop_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class T, class OP>
 static void mark_join_templated(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
@@ -82,8 +81,8 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
                                  vector<JoinCondition> &conditions) {
 	// initialize a new temporary selection vector for the left chunk
 	// loop over all chunks in the RHS
-	for (idx_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
-		DataChunk &right_chunk = *right.chunks[chunk_idx];
+	for (idx_t chunk_idx = 0; chunk_idx < right.ChunkCount(); chunk_idx++) {
+		DataChunk &right_chunk = right.GetChunk(chunk_idx);
 		for (idx_t i = 0; i < conditions.size(); i++) {
 			mark_join(left.data[i], right_chunk.data[i], left.size(), right_chunk.size(), found_match,
 			          conditions[i].comparison);

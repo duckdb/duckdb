@@ -1,10 +1,11 @@
 #include "duckdb/function/table/read_csv.hpp"
+
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
-using namespace std;
+#include <limits>
 
 namespace duckdb {
 
@@ -21,11 +22,6 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	if (result->files.empty()) {
 		throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 	}
-
-	options.auto_detect = false;
-	options.header = false;
-	options.delimiter = ",";
-	options.quote = "\"";
 
 	for (auto &kv : named_parameters) {
 		if (kv.first == "auto_detect") {
@@ -45,19 +41,36 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 		} else if (kv.first == "nullstr") {
 			options.null_str = kv.second.str_value;
 		} else if (kv.first == "sample_size") {
-			options.sample_size = kv.second.GetValue<int64_t>();
-			if (options.sample_size > STANDARD_VECTOR_SIZE) {
-				throw BinderException(
-				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
-				    STANDARD_VECTOR_SIZE);
-			} else if (options.sample_size < 1) {
+			int64_t sample_size = kv.second.GetValue<int64_t>();
+			if (sample_size < 1 && sample_size != -1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
-		} else if (kv.first == "num_samples") {
-			options.num_samples = kv.second.GetValue<int64_t>();
-			if (options.num_samples < 1) {
-				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
+			if (sample_size == -1) {
+				options.sample_chunks = std::numeric_limits<uint64_t>::max();
+				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
+			} else if (sample_size <= STANDARD_VECTOR_SIZE) {
+				options.sample_chunk_size = sample_size;
+				options.sample_chunks = 1;
+			} else {
+				options.sample_chunk_size = STANDARD_VECTOR_SIZE;
+				options.sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
 			}
+		} else if (kv.first == "sample_chunk_size") {
+			options.sample_chunk_size = kv.second.GetValue<int64_t>();
+			if (options.sample_chunk_size > STANDARD_VECTOR_SIZE) {
+				throw BinderException(
+				    "Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+				    STANDARD_VECTOR_SIZE);
+			} else if (options.sample_chunk_size < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
+			}
+		} else if (kv.first == "sample_chunks") {
+			options.sample_chunks = kv.second.GetValue<int64_t>();
+			if (options.sample_chunks < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
+			}
+		} else if (kv.first == "all_varchar") {
+			options.all_varchar = kv.second.value_.boolean;
 		} else if (kv.first == "dateformat") {
 			options.has_format[LogicalTypeId::DATE] = true;
 			auto &date_format = options.date_format[LogicalTypeId::DATE];
@@ -90,7 +103,8 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 		}
 	}
 	if (!options.auto_detect && return_types.size() == 0) {
-		throw BinderException("Specifying CSV options requires columns to be specified as well (for now)");
+		throw BinderException("read_csv requires columns to be specified. Use read_csv_auto or set read_csv(..., "
+		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
@@ -118,8 +132,7 @@ struct ReadCSVOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> read_csv_init(ClientContext &context, const FunctionData *bind_data_,
-                                                      vector<column_t> &column_ids,
-                                                      unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                                                      vector<column_t> &column_ids, TableFilterSet *table_filters) {
 	auto &bind_data = (ReadCSVData &)*bind_data_;
 	auto result = make_unique<ReadCSVOperatorData>();
 	if (bind_data.initial_reader) {
@@ -172,7 +185,9 @@ static void add_named_parameters(TableFunction &table_function) {
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["num_samples"] = LogicalType::BIGINT;
+	table_function.named_parameters["sample_chunk_size"] = LogicalType::BIGINT;
+	table_function.named_parameters["sample_chunks"] = LogicalType::BIGINT;
+	table_function.named_parameters["all_varchar"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;

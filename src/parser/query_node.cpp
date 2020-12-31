@@ -5,7 +5,6 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool QueryNode::Equals(const QueryNode *other) const {
 	if (!other) {

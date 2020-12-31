@@ -7,7 +7,6 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> bindings,
                                                          column_binding_set_t &unused_bindings) {

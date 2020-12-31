@@ -12,7 +12,6 @@
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
-using namespace std;
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
 public:
@@ -21,9 +20,10 @@ public:
 
 	//! The checkpoint manager
 	CheckpointManager &manager;
-	//! Block handle use for writing to
+
+	//! Temporary buffer
 	unique_ptr<BufferHandle> handle;
-	//! The current block we are writing to
+	//! The block on-disk to which we are writing
 	block_id_t block_id;
 	//! The offset within the current block
 	idx_t offset;
@@ -49,9 +49,12 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 	// allocate segments to write the table to
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
+	stats.reserve(table.columns.size());
+	column_stats.reserve(table.columns.size());
 	for (idx_t i = 0; i < table.columns.size(); i++) {
 		auto type_id = table.columns[i].type.InternalType();
-		stats.push_back(make_unique<SegmentStatistics>(type_id, GetTypeIdSize(type_id)));
+		stats.push_back(make_unique<SegmentStatistics>(table.columns[i].type, GetTypeIdSize(type_id)));
+		column_stats.push_back(BaseStatistics::CreateEmpty(table.columns[i].type));
 		CreateSegment(i);
 	}
 
@@ -71,8 +74,7 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
-		unordered_map<idx_t, vector<TableFilter>> mock;
-		table.storage->Scan(transaction, chunk, state, column_ids, mock);
+		table.storage->Scan(transaction, chunk, state, column_ids);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -127,12 +129,12 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 	}
 
 	// get the buffer of the segment and pin it
-	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block_id);
+	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block);
 
 	// get a free block id to write to
 	auto block_id = manager.block_manager.GetFreeBlockId();
 
-	// construct the data pointer, FIXME: add statistics as well
+	// construct the data pointer
 	DataPointer data_pointer;
 	data_pointer.block_id = block_id;
 	data_pointer.offset = 0;
@@ -142,13 +144,14 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	idx_t type_size = stats[col_idx]->type == PhysicalType::VARCHAR ? 8 : stats[col_idx]->type_size;
-	memcpy(&data_pointer.min_stats, stats[col_idx]->minimum.get(), type_size);
-	memcpy(&data_pointer.max_stats, stats[col_idx]->maximum.get(), type_size);
+	data_pointer.statistics = stats[col_idx]->statistics->Copy();
 	data_pointers[col_idx].push_back(move(data_pointer));
 	// write the block to disk
 	manager.block_manager.Write(*handle->node, block_id);
 
+	column_stats[col_idx]->Merge(*stats[col_idx]->statistics);
+	stats[col_idx] = make_unique<SegmentStatistics>(table.columns[col_idx].type,
+	                                                GetTypeIdSize(table.columns[col_idx].type.InternalType()));
 	handle.reset();
 	segments[col_idx] = nullptr;
 }
@@ -178,6 +181,10 @@ void TableDataWriter::VerifyDataPointers() {
 }
 
 void TableDataWriter::WriteDataPointers() {
+	for (auto &stats : column_stats) {
+		stats->Serialize(*manager.tabledata_writer);
+	}
+
 	for (idx_t i = 0; i < data_pointers.size(); i++) {
 		// get a reference to the data column
 		auto &data_pointer_list = data_pointers[i];
@@ -185,20 +192,17 @@ void TableDataWriter::WriteDataPointers() {
 		// then write the data pointers themselves
 		for (idx_t k = 0; k < data_pointer_list.size(); k++) {
 			auto &data_pointer = data_pointer_list[k];
-			manager.tabledata_writer->Write<double>(data_pointer.min);
-			manager.tabledata_writer->Write<double>(data_pointer.max);
 			manager.tabledata_writer->Write<idx_t>(data_pointer.row_start);
 			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
 			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
-			manager.tabledata_writer->WriteData(data_pointer.min_stats, 16);
-			manager.tabledata_writer->WriteData(data_pointer.max_stats, 16);
+			data_pointer.statistics->Serialize(*manager.tabledata_writer);
 		}
 	}
 }
 
 WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(CheckpointManager &manager)
-    : manager(manager), handle(nullptr), block_id(INVALID_BLOCK), offset(0) {
+    : manager(manager), block_id(INVALID_BLOCK), offset(0) {
 }
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {

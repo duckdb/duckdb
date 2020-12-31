@@ -1,4 +1,3 @@
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -7,10 +6,9 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_size.hpp"
-
-using namespace std;
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -26,7 +24,7 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(PhysicalType type);
 
-NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t row_start, block_id_t block)
+NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t row_start, block_id_t block_id)
     : UncompressedSegment(manager, type, row_start) {
 	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
@@ -41,16 +39,17 @@ NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t 
 	this->vector_size = sizeof(nullmask_t) + type_size * STANDARD_VECTOR_SIZE;
 	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
 
-	this->block_id = block;
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
-		auto handle = manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
-		this->block_id = handle->block_id;
+		this->block = manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+		auto handle = manager.Pin(block);
 		// initialize nullmasks to 0 for all vectors
 		for (idx_t i = 0; i < max_vector_count; i++) {
 			auto mask = (nullmask_t *)(handle->node->buffer + (i * vector_size));
 			mask->reset();
 		}
+	} else {
+		this->block = manager.RegisterBlock(block_id);
 	}
 }
 
@@ -64,18 +63,18 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 	if (source_nullmask->any()) {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (!(*source_nullmask)[src_idx] && OP::Operation(((T *)source)[src_idx], constant)) {
-				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
-				new_sel.set_index(result_count++, src_idx);
-			}
+			bool comparison_result = !(*source_nullmask)[src_idx] && OP::Operation(((T *)source)[src_idx], constant);
+			((T *)result_data)[src_idx] = ((T *)source)[src_idx];
+			new_sel.set_index(result_count, src_idx);
+			result_count += comparison_result;
 		}
 	} else {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (OP::Operation(((T *)source)[src_idx], constant)) {
-				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
-				new_sel.set_index(result_count++, src_idx);
-			}
+			bool comparison_result = OP::Operation(((T *)source)[src_idx], constant);
+			((T *)result_data)[src_idx] = ((T *)source)[src_idx];
+			new_sel.set_index(result_count, src_idx);
+			result_count += comparison_result;
 		}
 	}
 	sel.Initialize(new_sel);
@@ -92,20 +91,21 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 	if (source_nullmask->any()) {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (!(*source_nullmask)[src_idx] && OPL::Operation(((T *)source)[src_idx], constantLeft) &&
-			    OPR::Operation(((T *)source)[src_idx], constantRight)) {
-				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
-				new_sel.set_index(result_count++, src_idx);
-			}
+			bool comparison_result = !(*source_nullmask)[src_idx] &&
+			                         OPL::Operation(((T *)source)[src_idx], constantLeft) &&
+			                         OPR::Operation(((T *)source)[src_idx], constantRight);
+			((T *)result_data)[src_idx] = ((T *)source)[src_idx];
+			new_sel.set_index(result_count, src_idx);
+			result_count += comparison_result;
 		}
 	} else {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (OPL::Operation(((T *)source)[src_idx], constantLeft) &&
-			    OPR::Operation(((T *)source)[src_idx], constantRight)) {
-				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
-				new_sel.set_index(result_count++, src_idx);
-			}
+			bool comparison_result = OPL::Operation(((T *)source)[src_idx], constantLeft) &&
+			                         OPR::Operation(((T *)source)[src_idx], constantRight);
+			((T *)result_data)[src_idx] = ((T *)source)[src_idx];
+			new_sel.set_index(result_count, src_idx);
+			result_count += comparison_result;
 		}
 	}
 	sel.Initialize(new_sel);
@@ -204,7 +204,7 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
-	auto handle = manager.Pin(block_id);
+	auto handle = manager.Pin(block);
 	auto data = handle->node->buffer;
 	auto offset = vector_index * vector_size;
 	auto source_nullmask = (nullmask_t *)(data + offset);
@@ -213,27 +213,27 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	if (tableFilter.size() == 1) {
 		switch (tableFilter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			templated_select_operation<Equals>(sel, result, state.current->type, source_data, source_nullmask,
-			                                   tableFilter[0].constant, approved_tuple_count);
+			templated_select_operation<Equals>(sel, result, state.current->type.InternalType(), source_data,
+			                                   source_nullmask, tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
-			templated_select_operation<LessThan>(sel, result, state.current->type, source_data, source_nullmask,
-			                                     tableFilter[0].constant, approved_tuple_count);
+			templated_select_operation<LessThan>(sel, result, state.current->type.InternalType(), source_data,
+			                                     source_nullmask, tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			templated_select_operation<GreaterThan>(sel, result, state.current->type, source_data, source_nullmask,
-			                                        tableFilter[0].constant, approved_tuple_count);
+			templated_select_operation<GreaterThan>(sel, result, state.current->type.InternalType(), source_data,
+			                                        source_nullmask, tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			templated_select_operation<LessThanEquals>(sel, result, state.current->type, source_data, source_nullmask,
-			                                           tableFilter[0].constant, approved_tuple_count);
+			templated_select_operation<LessThanEquals>(sel, result, state.current->type.InternalType(), source_data,
+			                                           source_nullmask, tableFilter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			templated_select_operation<GreaterThanEquals>(sel, result, state.current->type, source_data,
+			templated_select_operation<GreaterThanEquals>(sel, result, state.current->type.InternalType(), source_data,
 			                                              source_nullmask, tableFilter[0].constant,
 			                                              approved_tuple_count);
 			break;
@@ -243,32 +243,40 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 		}
 	} else {
 		D_ASSERT(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+		         tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
 		D_ASSERT(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		       tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		         tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
 
 		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThan, LessThan>(
-				    sel, result, state.current->type, source_data, source_nullmask, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
 			} else {
 				templated_select_operation_between<GreaterThan, LessThanEquals>(
-				    sel, result, state.current->type, source_data, source_nullmask, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
 			}
 		} else {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThanEquals, LessThan>(
-				    sel, result, state.current->type, source_data, source_nullmask, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
 			} else {
 				templated_select_operation_between<GreaterThanEquals, LessThanEquals>(
-				    sel, result, state.current->type, source_data, source_nullmask, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
 			}
 		}
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
+void NumericSegment::InitializeScan(ColumnScanState &state) {
+	// pin the primary buffer
+	state.primary_handle = manager.Pin(block);
 }
 
 //===--------------------------------------------------------------------===//
@@ -278,10 +286,7 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	D_ASSERT(vector_index < max_vector_count);
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
-	// pin the buffer for this segment
-	auto handle = manager.Pin(block_id);
-	auto data = handle->node->buffer;
-
+	auto data = state.primary_handle->node->buffer;
 	auto offset = vector_index * vector_size;
 
 	idx_t count = GetVectorCount(vector_index);
@@ -324,8 +329,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
-	auto handle = manager.Pin(block_id);
-	auto data = handle->node->buffer;
+	auto data = state.primary_handle->node->buffer;
 
 	auto offset = vector_index * vector_size;
 	auto source_nullmask = (nullmask_t *)(data + offset);
@@ -372,6 +376,11 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 		                             approved_tuple_count);
 		break;
 	}
+	case PhysicalType::INTERVAL: {
+		templated_assignment<interval_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                                 approved_tuple_count);
+		break;
+	}
 	default:
 		throw InvalidTypeException(type, "Invalid type for filter scan");
 	}
@@ -385,7 +394,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
                               idx_t result_idx) {
 	auto read_lock = lock.GetSharedLock();
-	auto handle = manager.Pin(block_id);
+	auto handle = manager.Pin(block);
 
 	// get the vector index
 	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
@@ -411,7 +420,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 //===--------------------------------------------------------------------===//
 idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
 	D_ASSERT(data.type.InternalType() == type);
-	auto handle = manager.Pin(block_id);
+	auto handle = manager.Pin(block);
 
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
@@ -440,7 +449,7 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
                             row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
 	if (!node) {
-		auto handle = manager.Pin(block_id);
+		auto handle = manager.Pin(block);
 
 		// create a new node in the undo buffer for this update
 		node = CreateUpdateInfo(column_data, transaction, ids, count, vector_index, vector_offset, type_size);
@@ -448,7 +457,7 @@ void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, T
 		update_function(stats, node, handle->node->buffer + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
-		auto handle = manager.Pin(block_id);
+		auto handle = manager.Pin(block);
 
 		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids, count,
 		                      vector_offset);
@@ -458,7 +467,7 @@ void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, T
 void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
-	auto handle = manager.Pin(block_id);
+	auto handle = manager.Pin(block);
 
 	// move the data from the UpdateInfo back into the base table
 	rollback_update(info, handle->node->buffer + info->vector_index * vector_size);
@@ -469,21 +478,59 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-template <class T> static void update_min_max_numeric_segment(T value, T *__restrict min, T *__restrict max) {
-	if (LessThan::Operation(value, *min)) {
-		*min = value;
+template <class T> static inline void update_numeric_statistics_internal(T new_value, T &min, T &max) {
+	if (LessThan::Operation(new_value, min)) {
+		min = new_value;
 	}
-	if (GreaterThan::Operation(value, *max)) {
-		*max = value;
+	if (GreaterThan::Operation(new_value, max)) {
+		max = new_value;
 	}
+}
+
+template <class T> static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value);
+
+template <> inline void update_numeric_statistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
+}
+
+template <> inline void update_numeric_statistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
+}
+
+template <> inline void update_numeric_statistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
+}
+
+template <> inline void update_numeric_statistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
+}
+
+template <> inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
+}
+
+template <> inline void update_numeric_statistics<float>(SegmentStatistics &stats, float new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
+}
+
+template <> inline void update_numeric_statistics<double>(SegmentStatistics &stats, double new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
+}
+
+template <> void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
 }
 
 template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                         idx_t count) {
 	auto &nullmask = *((nullmask_t *)target);
-	auto min = (T *)stats.minimum.get();
-	auto max = (T *)stats.maximum.get();
 
 	VectorData adata;
 	source.Orrify(count, adata);
@@ -497,9 +544,9 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 			bool is_null = (*adata.nullmask)[source_idx];
 			if (is_null) {
 				nullmask[target_idx] = true;
-				stats.has_null = true;
+				stats.statistics->has_null = true;
 			} else {
-				update_min_max_numeric_segment(sdata[source_idx], min, max);
+				update_numeric_statistics<T>(stats, sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			}
 		}
@@ -507,7 +554,7 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
-			update_min_max_numeric_segment(sdata[source_idx], min, max);
+			update_numeric_statistics<T>(stats, sdata[source_idx]);
 			tdata[target_idx] = sdata[source_idx];
 		}
 	}
@@ -543,29 +590,34 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 template <class T>
 static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data,
                              nullmask_t &undo_nullmask, nullmask_t &base_nullmask, nullmask_t &new_nullmask,
-                             idx_t count, sel_t *__restrict base_sel, T *__restrict min, T *__restrict max) {
+                             idx_t count, sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
+		bool is_null = new_nullmask[i];
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
 		undo_nullmask[base_sel[i]] = base_nullmask[base_sel[i]];
 		// now move the new data in-place into the base table
 		base_data[base_sel[i]] = new_data[i];
-		base_nullmask[base_sel[i]] = new_nullmask[i];
+		base_nullmask[base_sel[i]] = is_null;
 		// update the min max with the new data
-		update_min_max_numeric_segment(new_data[i], min, max);
+		if (is_null) {
+			stats.statistics->has_null = true;
+		} else {
+			update_numeric_statistics<T>(stats, new_data[i]);
+		}
 	}
 }
 
 template <class T>
 static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data, idx_t count,
-                                sel_t *__restrict base_sel, T *__restrict min, T *__restrict max) {
+                                sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
 		// now move the new data in-place into the base table
 		base_data[base_sel[i]] = new_data[i];
 		// update the min max with the new data
-		update_min_max_numeric_segment(new_data[i], min, max);
+		update_numeric_statistics<T>(stats, new_data[i]);
 	}
 }
 
@@ -576,14 +628,12 @@ static void update_loop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t b
 	auto nullmask = (nullmask_t *)base;
 	auto base_data = (T *)(base + sizeof(nullmask_t));
 	auto undo_data = (T *)info->tuple_data;
-	auto min = (T *)stats.minimum.get();
-	auto max = (T *)stats.maximum.get();
 
 	if (update_nullmask.any() || nullmask->any()) {
 		update_loop_null(undo_data, base_data, update_data, info->nullmask, *nullmask, update_nullmask, info->N,
-		                 info->tuples, min, max);
+		                 info->tuples, stats);
 	} else {
-		update_loop_no_null(undo_data, base_data, update_data, info->N, info->tuples, min, max);
+		update_loop_no_null(undo_data, base_data, update_data, info->N, info->tuples, stats);
 	}
 }
 
@@ -622,10 +672,8 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 	auto info_data = (T *)node->tuple_data;
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
-	auto min = (T *)stats.minimum.get();
-	auto max = (T *)stats.maximum.get();
 	for (idx_t i = 0; i < count; i++) {
-		update_min_max_numeric_segment<T>(update_data[i], min, max);
+		update_numeric_statistics<T>(stats, update_data[i]);
 	}
 
 	// first we copy the old update info into a temporary structure

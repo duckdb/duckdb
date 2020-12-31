@@ -5,9 +5,10 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/numeric_helper.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "duckdb/function/scalar/strftime.hpp"
 
@@ -73,7 +74,7 @@ void StrfTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
 }
 
-idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, time_t time) {
+idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time) {
 	switch (specifier) {
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME:
 		return Date::DayNames[Date::ExtractISODayOfTheWeek(date) % 7].GetSize();
@@ -135,7 +136,7 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 }
 
 //! Returns the total length of the date formatted by this format specifier
-idx_t StrfTimeFormat::GetLength(date_t date, time_t time) {
+idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time) {
 	idx_t size = constant_size;
 	if (var_length_specifiers.size() > 0) {
 		for (auto &specifier : var_length_specifiers) {
@@ -372,7 +373,7 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[7], char *target) {
 	memcpy(target, literals[i].c_str(), literals[i].size());
 }
 
-void StrfTimeFormat::FormatString(date_t date, time_t time, char *target) {
+void StrfTimeFormat::FormatString(date_t date, dtime_t time, char *target) {
 	int32_t data[7]; // year, month, day, hour, min, sec, msec
 	Date::Convert(date, data[0], data[1], data[2]);
 	Time::Convert(time, data[3], data[4], data[5], data[6]);
@@ -383,7 +384,7 @@ void StrfTimeFormat::FormatString(date_t date, time_t time, char *target) {
 string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &format) {
 	format.specifiers.clear();
 	format.literals.clear();
-	format.is_numeric.clear();
+	format.numeric_width.clear();
 	format.constant_size = 0;
 	idx_t pos = 0;
 	string current_literal;
@@ -584,7 +585,7 @@ static void strftime_function_date(DataChunk &args, ExpressionState &state, Vect
 		return;
 	}
 
-	time_t time = 0;
+	dtime_t time = 0;
 	UnaryExecutor::Execute<date_t, string_t, true>(args.data[0], result, args.size(), [&](date_t date) {
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);
@@ -639,20 +640,20 @@ void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 	default:
 		break;
 	}
-	is_numeric.push_back(IsNumericSpecifier(specifier));
+	numeric_width.push_back(NumericSpecifierWidth(specifier));
 	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
 }
 
-bool StrpTimeFormat::IsNumericSpecifier(StrTimeSpecifier specifier) {
+int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::WEEKDAY_DECIMAL:
+		return 1;
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 	case StrTimeSpecifier::DAY_OF_MONTH:
 	case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 	case StrTimeSpecifier::MONTH_DECIMAL:
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
-	case StrTimeSpecifier::YEAR_DECIMAL:
 	case StrTimeSpecifier::HOUR_24_PADDED:
 	case StrTimeSpecifier::HOUR_24_DECIMAL:
 	case StrTimeSpecifier::HOUR_12_PADDED:
@@ -661,15 +662,19 @@ bool StrpTimeFormat::IsNumericSpecifier(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::MINUTE_DECIMAL:
 	case StrTimeSpecifier::SECOND_PADDED:
 	case StrTimeSpecifier::SECOND_DECIMAL:
-	case StrTimeSpecifier::MICROSECOND_PADDED:
+	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
+		return 2;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
-	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
-	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
-		return true;
+		return 3;
+	case StrTimeSpecifier::YEAR_DECIMAL:
+		return 4;
+	case StrTimeSpecifier::MICROSECOND_PADDED:
+		return 6;
 	default:
-		return false;
+		return -1;
 	}
 }
 
@@ -740,17 +745,12 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 			break;
 		}
 		// now parse the specifier
-		if (is_numeric[i]) {
+		if (numeric_width[i] > 0) {
 			// numeric specifier: parse a number
 			uint64_t number = 0;
 			size_t start_pos = pos;
-			while (pos < size && StringUtil::CharacterIsDigit(data[pos])) {
-				if (number > 1000000ULL) {
-					// no number bigger than this is required anywhere
-					error_message = "Number is out of range of format specifier";
-					error_position = start_pos;
-					return false;
-				}
+			size_t end_pos = start_pos + numeric_width[i];
+			while (pos < size && pos < end_pos && StringUtil::CharacterIsDigit(data[pos])) {
 				number = number * 10 + data[pos] - '0';
 				pos++;
 			}
@@ -941,7 +941,12 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 		return false;
 	}
 	if (ampm != TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE) {
-		// fixme: adjust the hours based on the AM or PM specifier
+		if (result_data[3] > 12) {
+			error_message =
+			    "Invalid hour: " + to_string(result_data[3]) + " AM/PM, expected an hour within the range [0..12]";
+			return false;
+		}
+		// adjust the hours based on the AM or PM specifier
 		if (ampm == TimeSpecifierAMOrPM::TIME_SPECIFIER_AM) {
 			// AM: 12AM=0, 1AM=1, 2AM=2, ..., 11AM=11
 			if (result_data[3] == 12) {
