@@ -5,7 +5,7 @@
 require parquet
 
 query I
-SELECT timestampval FROM parquet_scan('test/sql/copy/parquet/data/data-types.parquet')
+SELECT * FROM parquet_scan('test/sql/copy/parquet/data/list_columns.parquet')
 ----
 NULL
 2019-11-26 20:11:42.501

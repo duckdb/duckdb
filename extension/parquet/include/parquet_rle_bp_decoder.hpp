@@ -14,7 +14,6 @@ public:
 		max_val = (1 << bit_width_) - 1;
 	}
 
-	/// Gets a batch of values.  Returns the number of decoded elements.
 	template <typename T> void GetBatch(char *values_target_ptr, uint32_t batch_size) {
 		auto values = (T *)values_target_ptr;
 		uint32_t values_read = 0;

@@ -15,6 +15,7 @@ using apache::thrift::protocol::TProtocol;
 
 using parquet::format::ColumnChunk;
 using parquet::format::FieldRepetitionType;
+using parquet::format::PageHeader;
 using parquet::format::SchemaElement;
 
 typedef nullmask_t parquet_filter_t;
@@ -36,7 +37,7 @@ public:
 
 	virtual ~ColumnReader();
 
-	void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result);
+	virtual void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result);
 
 	virtual void Skip(idx_t num_values) = 0;
 
@@ -54,8 +55,6 @@ protected:
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result) {
 	}
 
-	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
-
 	LogicalType type;
 	const parquet::format::ColumnChunk &chunk;
 
@@ -63,6 +62,8 @@ protected:
 
 private:
 	void PrepareRead(parquet_filter_t &filter);
+	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
+	void PrepareDataPage(PageHeader &page_hdr);
 
 	apache::thrift::protocol::TProtocol &protocol;
 	idx_t rows_available;
@@ -160,6 +161,7 @@ protected:
 
 private:
 	unique_ptr<string_t[]> dict_strings;
+	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 };
 
 template <class PARQUET_PHYSICAL_TYPE, timestamp_t (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
@@ -213,6 +215,54 @@ public:
 
 private:
 	uint8_t byte_pos;
+};
+
+class ListColumnReader : public ColumnReader {
+public:
+	ListColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
+	                 TProtocol &protocol_p)
+	    : ColumnReader(type_p, chunk_p, schema_p, protocol_p) {
+		auto child_type = type_p.child_types()[0].second;
+		// TODO extract this into separate method, also used in ParquetReader::PrepareRowGroupBuffer
+		switch (child_type.id()) {
+		case LogicalTypeId::BIGINT:
+			child_column_reader = make_unique_base<ColumnReader, TemplatedColumnReader<int64_t>>(child_type, chunk_p,
+			                                                                                     schema_p, protocol_p);
+			break;
+		case LogicalTypeId::VARCHAR:
+			child_column_reader =
+			    make_unique_base<ColumnReader, StringColumnReader>(child_type, chunk_p, schema_p, protocol_p);
+
+			break;
+		default:
+			D_ASSERT(0);
+		}
+	};
+
+	void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) override {
+		D_ASSERT(0);
+	}
+
+	virtual void Skip(idx_t num_values) override {
+		D_ASSERT(0);
+	}
+
+protected
+	// TODO this is ugly, need to have more abstract super class
+
+	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
+	           idx_t result_offset, Vector &result) override {
+	}
+
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override {
+	}
+
+	void Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
+	             Vector &result) override {
+	}
+
+private:
+	unique_ptr<ColumnReader> child_column_reader;
 };
 
 } // namespace duckdb

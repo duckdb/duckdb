@@ -14,6 +14,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/pair.hpp"
 
 #include "duckdb/storage/object_cache.hpp"
 
@@ -21,6 +22,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <iostream>
 
 namespace duckdb {
 
@@ -38,6 +40,84 @@ static shared_ptr<ParquetFileMetadataCache> load_metadata(apache::thrift::protoc
 	auto metadata = make_unique<FileMetaData>();
 	thrift_unpack_file(proto, read_pos, metadata.get());
 	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
+}
+
+static LogicalType derive_type(const SchemaElement &s_ele) {
+	// inner node
+	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
+	switch (s_ele.type) {
+	case Type::BOOLEAN:
+		return LogicalType::BOOLEAN;
+	case Type::INT32:
+		return LogicalType::INTEGER;
+	case Type::INT64:
+		if (s_ele.__isset.converted_type) {
+			switch (s_ele.converted_type) {
+			case ConvertedType::TIMESTAMP_MICROS:
+			case ConvertedType::TIMESTAMP_MILLIS:
+				return LogicalType::TIMESTAMP;
+			default:
+				return LogicalType::BIGINT;
+			}
+		}
+		return LogicalType::BIGINT;
+
+	case Type::INT96: // always a timestamp it would seem
+		return LogicalType::TIMESTAMP;
+	case Type::FLOAT:
+		return LogicalType::FLOAT;
+	case Type::DOUBLE:
+		return LogicalType::DOUBLE;
+		//			case parquet::format::Type::FIXED_LEN_BYTE_ARRAY: {
+		// TODO some decimals yuck
+	case Type::BYTE_ARRAY:
+		if (s_ele.__isset.converted_type) {
+			switch (s_ele.converted_type) {
+			case ConvertedType::UTF8:
+				return LogicalType::VARCHAR;
+			default:
+				return LogicalType::BLOB;
+			}
+		}
+		return LogicalType::BLOB;
+	default:
+		return LogicalType::INVALID;
+	}
+}
+
+LogicalType derive_type_complex(std::vector<SchemaElement> schema, idx_t &next_child) {
+	auto &s_ele = schema[next_child];
+
+	if (!s_ele.__isset.type) { // inner node
+		D_ASSERT(s_ele.num_children > 0);
+		child_list_t<LogicalType> child_types;
+
+		idx_t c_idx = 0;
+		while (c_idx < s_ele.num_children) {
+			next_child++;
+
+			auto &child_ele = schema[next_child];
+			auto child_type = derive_type_complex(schema, next_child);
+			child_types.push_back(make_pair(child_ele.name, child_type));
+
+			c_idx++;
+		}
+		D_ASSERT(child_types.size() > 0);
+		LogicalType child_type;
+		// if we only have a single child no reason to create a struct ay
+		if (child_types.size() > 1) {
+			child_type = LogicalType(LogicalTypeId::STRUCT, child_types);
+		} else {
+			child_type = child_types[0].second;
+		}
+		// if we have a struct with only a single type, pull up
+		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+			return LogicalType(LogicalTypeId::LIST, {make_pair("", child_type)});
+		}
+		return child_type;
+	} else { // leaf node
+		return derive_type(s_ele);
+	}
 }
 
 ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<LogicalType> expected_types,
@@ -105,93 +185,68 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one column in the file");
 	}
-	if (file_meta_data->schema[0].num_children != (int32_t)(file_meta_data->schema.size() - 1)) {
-		throw FormatException("Only flat tables are supported (no nesting)");
-	}
+
+	//    file_meta_data->printTo(std::cout);
+	//    std::cout << '\n';
+
+	//	// TODO
+	//	for (auto& s_ele : file_meta_data->schema) {
+	//        s_ele.printTo(std::cout);
+	//		std::cout << '\n';
+	//	}
+
+	//	if (file_meta_data->schema[0].num_children != (int32_t)(file_meta_data->schema.size() - 1)) {
+	//		throw FormatException("Only flat tables are supported (no nesting)");
+	//	}
 
 	this->return_types = expected_types;
 	bool has_expected_types = expected_types.size() > 0;
 
-	// skip the first column its the root and otherwise useless
-	for (uint64_t col_idx = 1; col_idx < file_meta_data->schema.size(); col_idx++) {
-		auto &s_ele = file_meta_data->schema[col_idx];
-		if (!s_ele.__isset.type || s_ele.num_children > 0) {
-			throw FormatException("Only flat tables are supported (no nesting)");
-		}
-		// if this is REQUIRED, there are no defined levels in file
-		// if field is REPEATED, no bueno
-		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
-			throw FormatException("REPEATED fields are not supported");
-		}
+	idx_t next_child = 0;
+	auto type = derive_type_complex(file_meta_data->schema, next_child);
+	printf("XX %s %llu\n", type.ToString().c_str(), next_child);
 
-		LogicalType type;
-		switch (s_ele.type) {
-		case Type::BOOLEAN:
-			type = LogicalType::BOOLEAN;
-			break;
-		case Type::INT32:
-			type = LogicalType::INTEGER;
-			break;
-		case Type::INT64:
-			if (s_ele.__isset.converted_type) {
-				switch (s_ele.converted_type) {
-				case ConvertedType::TIMESTAMP_MICROS:
-				case ConvertedType::TIMESTAMP_MILLIS:
-					type = LogicalType::TIMESTAMP;
-					break;
-				default:
-					type = LogicalType::BIGINT;
-					break;
-				}
-			} else {
-				type = LogicalType::BIGINT;
-			}
-			break;
-		case Type::INT96: // always a timestamp?
-			type = LogicalType::TIMESTAMP;
-			break;
-		case Type::FLOAT:
-			type = LogicalType::FLOAT;
-			break;
-		case Type::DOUBLE:
-			type = LogicalType::DOUBLE;
-			break;
-			//			case parquet::format::Type::FIXED_LEN_BYTE_ARRAY: {
-			// TODO some decimals yuck
-		case Type::BYTE_ARRAY:
-			if (s_ele.__isset.converted_type) {
-				switch (s_ele.converted_type) {
-				case ConvertedType::UTF8:
-					type = LogicalType::VARCHAR;
-					break;
-				default:
-					type = LogicalType::BLOB;
-					break;
-				}
-			} else {
-				type = LogicalType::BLOB;
-			}
-			break;
-		default:
-			throw FormatException("Unsupported type");
-		}
-		if (has_expected_types) {
-			if (return_types[col_idx - 1] != type) {
-				if (initial_filename.empty()) {
-					throw FormatException("column \"%s\" in parquet file is of type %s, could not auto cast to "
-					                      "expected type %s for this column",
-					                      s_ele.name, type.ToString(), return_types[col_idx - 1].ToString());
-				} else {
-					throw FormatException("schema mismatch in Parquet glob: column \"%s\" in parquet file is of type "
-					                      "%s, but in the original file \"%s\" this column is of type \"%s\"",
-					                      s_ele.name, type.ToString(), initial_filename,
-					                      return_types[col_idx - 1].ToString());
-				}
-			}
-		} else {
-			names.push_back(s_ele.name);
-			return_types.push_back(type);
-		}
+	D_ASSERT(next_child == file_meta_data->schema.size() - 1);
+	/*
+
+	   // skip the first column its the root and otherwise useless
+	   for (uint64_t col_idx = 1; col_idx < file_meta_data->schema.size(); col_idx++) {
+	       auto &s_ele = file_meta_data->schema[col_idx];
+	       if (!s_ele.__isset.type || s_ele.num_children > 0) {
+	           throw FormatException("Only flat tables are supported (no nesting)");
+	       }
+	       // if this is REQUIRED, there are no defined levels in file
+	       // if field is REPEATED, no bueno
+	       if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+	           throw FormatException("REPEATED fields are not supported");
+	       }
+	       auto type = derive_type(s_ele);
+
+	       if (has_expected_types) {
+	           if (return_types[col_idx - 1] != type) {
+	               if (initial_filename.empty()) {
+	                   throw FormatException("column \"%s\" in parquet file is of type %s, could not auto cast to "
+	                                         "expected type %s for this column",
+	                                         s_ele.name, type.ToString(), return_types[col_idx - 1].ToString());
+	               } else {
+	                   throw FormatException("schema mismatch in Parquet glob: column \"%s\" in parquet file is of type
+	   "
+	                                         "%s, but in the original file \"%s\" this column is of type \"%s\"",
+	                                         s_ele.name, type.ToString(), initial_filename,
+	                                         return_types[col_idx - 1].ToString());
+	               }
+	           }
+	       } else {
+	           names.push_back(s_ele.name);
+	           return_types.push_back(type);
+	       }
+	   } */
+	// TODO deal with expected types again
+	D_ASSERT(!has_expected_types);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	for (auto &type_pair : type.child_types()) {
+		names.push_back(type_pair.first);
+		return_types.push_back(type_pair.second);
 	}
 }
 
@@ -258,9 +313,12 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 		throw FormatException("Only inlined data files are supported (no references)");
 	}
 
-	if (chunk.meta_data.path_in_schema.size() != 1) {
-		throw FormatException("Only flat tables are supported (no nesting)");
-	}
+	// TODO can we assume the columns are in the right order here?
+	// perhaps keep schema paths around
+
+	//	if (chunk.meta_data.path_in_schema.size() != 1) {
+	//		throw FormatException("Only flat tables are supported (no nesting)");
+	//	}
 
 	if (state.filters) {
 		auto stats = parquet_transform_column_statistics(schema, type, group.columns[file_col_idx]);
@@ -294,7 +352,9 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 				break;
 			}
 			default:
-				D_ASSERT(0);
+				// D_ASSERT(0);
+				break;
+				// TODO handle structs and lists here
 			}
 			if (skip_chunk) {
 				state.group_offset = group.num_rows;
@@ -355,8 +415,12 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 	case LogicalTypeId::VARCHAR:
 		state.column_readers[file_col_idx] = make_unique<StringColumnReader>(type, chunk, schema, *thrift_file_proto);
 		break;
+	case LogicalTypeId::LIST:
+		state.column_readers[file_col_idx] = make_unique<ListColumnReader>(type, chunk, schema, *thrift_file_proto);
+		break;
 
 	default:
+		// TODO meaningful error message
 		D_ASSERT(0);
 		break;
 	}
