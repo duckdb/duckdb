@@ -145,6 +145,7 @@ public:
 	bool linenr_estimated = false;
 
 	vector<idx_t> sniffed_column_counts;
+	bool row_empty = false;
 	idx_t sample_chunk_idx = 0;
 	bool jumping_samples = false;
 	bool end_of_file_reached = false;

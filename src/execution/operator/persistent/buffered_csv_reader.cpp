@@ -1271,6 +1271,12 @@ void BufferedCSVReader::ParseCSV(ParserMode parser_mode, DataChunk &insert_chunk
 }
 
 void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions) {
+	if (length == 0 && column == 0) {
+		row_empty = true;
+	} else {
+		row_empty = false;
+	}
+
 	if (sql_types.size() > 0 && column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter in last column
 		return;
@@ -1325,6 +1331,14 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 
 bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	linenr++;
+
+	if (row_empty) {
+		row_empty = false;
+		if (sql_types.size() != 1) {
+			column = 0;
+			return false;
+		}
+	}
 
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
 		throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
