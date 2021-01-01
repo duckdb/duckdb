@@ -2,6 +2,7 @@ package org.duckdb.test;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.lang.ArrayIndexOutOfBoundsException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -16,6 +17,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
@@ -88,19 +90,19 @@ public class TestDuckDBJDBC {
 		try {
 			res = rs.getInt(0);
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 		try {
 			res = rs.getInt(2);
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 		try {
 			res = rs.getInt("b");
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 		assertFalse(rs.next());
@@ -113,7 +115,7 @@ public class TestDuckDBJDBC {
 		try {
 			res = rs.getInt(1);
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 		stmt.close();
@@ -128,7 +130,7 @@ public class TestDuckDBJDBC {
 		try {
 			stmt = conn.createStatement();
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 	}
@@ -150,25 +152,25 @@ public class TestDuckDBJDBC {
 		try {
 			meta.getColumnName(0);
 			fail();
-		} catch (Exception e) {
+		} catch (ArrayIndexOutOfBoundsException e) {
 		}
 
 		try {
 			meta.getColumnTypeName(0);
 			fail();
-		} catch (Exception e) {
+		} catch (ArrayIndexOutOfBoundsException e) {
 		}
 
 		try {
 			meta.getColumnName(3);
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 		try {
 			meta.getColumnTypeName(3);
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 		assertTrue(rs.next());
@@ -218,7 +220,7 @@ public class TestDuckDBJDBC {
 		try {
 			rs.getObject(1);
 			fail();
-		} catch (Exception e) {
+		} catch (ArrayIndexOutOfBoundsException e) {
 		}
 
 		rs.close();
@@ -436,7 +438,7 @@ public class TestDuckDBJDBC {
 			Statement st = con.createStatement();
 			try {
 				st.execute(s);
-			} catch (Exception e) {
+			} catch (SQLException e) {
 				// e.printStackTrace();
 			}
 		}
@@ -636,14 +638,14 @@ public class TestDuckDBJDBC {
 			stmt2.executeQuery("SELECT 42");
 			stmt2.close();
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 		try {
 			Connection conn_dup = ((DuckDBConnection) conn_rw).duplicate();
 			conn_dup.close();
 			fail();
-		} catch (Exception e) {
+		} catch (SQLException e) {
 		}
 
 		// we can create two parallel read only connections and query them, too
@@ -1015,25 +1017,43 @@ public class TestDuckDBJDBC {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		stmt.execute("CREATE TABLE integers (a INTEGER, b LONG)");
-		DuckDBAppender appender = conn.createAppender("main", "integers");
+		// int8, int4, int2, int1, float8, float4
+		stmt.execute("CREATE TABLE numbers (a BIGINT, b INTEGER, c SMALLINT, d TINYINT, e DOUBLE, f FLOAT)");
+		DuckDBAppender appender = conn.createAppender("main", "numbers");
 
-		for (int i = 0; i < 1000; i++) {
+		for (int i = 0; i < 50; i++) {
 			appender.beginRow();
-			appender.append(i);
 			appender.append(Long.MAX_VALUE - i);
+			appender.append(Integer.MAX_VALUE - i);
+			appender.append(Short.MAX_VALUE - i);
+			appender.append(Byte.MAX_VALUE - i);
+			appender.append(i);
+			appender.append(i);
 			appender.endRow();
 		}
 		appender.close();
 
-		ResultSet rs = stmt.executeQuery("SELECT min(a), max(b) FROM integers");
+		ResultSet rs = stmt.executeQuery("SELECT max(a), max(b), max(c), max(d), max(e), max(f) FROM numbers");
 		assertFalse(rs.isClosed());
-
 		assertTrue(rs.next());
-		int resA = rs.getInt(1);
-		assertEquals(resA, 0);
-		long resB = rs.getLong(2);
-		assertEquals(resB, Long.MAX_VALUE);
+
+		long resA = rs.getLong(1);
+		assertEquals(resA, Long.MAX_VALUE);
+
+		int resB = rs.getInt(2);
+		assertEquals(resB, Integer.MAX_VALUE);
+
+		short resC = rs.getShort(3);
+		assertEquals(resC, Short.MAX_VALUE);
+
+		byte resD = rs.getByte(4);
+		assertEquals(resD, Byte.MAX_VALUE);
+
+		double resE = rs.getDouble(5);
+		assertEquals(resE, 49.0d);
+
+		float resF = rs.getFloat(6);
+		assertEquals(resF, 49.0f);
 
 		rs.close();
 		stmt.close();
@@ -1069,13 +1089,102 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
-	// TODO: more test cases
-	// - the table is deleted while the appender is open
-	// - the table doesn't exist
-	// - type mismatches
-	// - number of columns mismatches
-	// - shouldn't segfault
-	// - add strings
+	public static void test_appender_table_does_not_exist() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		try {
+			DuckDBAppender appender = conn.createAppender("main", "data");
+			fail();
+		} catch (SQLException e) {
+		}
+
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_appender_table_deleted() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (a INTEGER)");
+		DuckDBAppender appender = conn.createAppender("main", "data");
+
+		appender.beginRow();
+		appender.append(1);
+		appender.endRow();
+
+		stmt.execute("DROP TABLE data");
+
+		appender.beginRow();
+		appender.append(2);
+		appender.endRow();
+
+		try {
+			appender.close();
+			fail();
+		} catch (SQLException e) {
+		}
+
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_appender_append_too_many_columns() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (a INTEGER)");
+		stmt.close();
+		DuckDBAppender appender = conn.createAppender("main", "data");
+
+		try {
+			appender.beginRow();
+			appender.append(1);
+			appender.append(2);
+			fail();
+		} catch (SQLException e) {
+		}
+
+		conn.close();
+	}
+
+	public static void test_appender_append_too_few_columns() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (a INTEGER, b INTEGER)");
+		stmt.close();
+		DuckDBAppender appender = conn.createAppender("main", "data");
+
+		try {
+			appender.beginRow();
+			appender.append(1);
+			appender.endRow();
+			fail();
+		} catch (SQLException e) {
+		}
+
+		conn.close();
+	}
+
+	public static void test_appender_type_mismatch() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (a INTEGER)");
+		DuckDBAppender appender = conn.createAppender("main", "data");
+
+		try {
+			appender.beginRow();
+			appender.append("str");
+			fail();
+		} catch (SQLException e) {
+		}
+
+		stmt.close();
+		conn.close();
+	}
 
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
