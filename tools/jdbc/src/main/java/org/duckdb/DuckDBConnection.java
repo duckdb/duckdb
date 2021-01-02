@@ -317,4 +317,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		throw new SQLFeatureNotSupportedException();
 	}
 
+	public DuckDBAppender createAppender(String schemaName, String tableName) throws SQLException {
+		return new DuckDBAppender(this, schemaName, tableName);
+	}
 }
