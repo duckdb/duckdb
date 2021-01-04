@@ -25,6 +25,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 		output.SetValue(3, output.size(), Value());
 		// "dflt_value", TypeId::VARCHAR
 		output.SetValue(4, output.size(), Value());
+		// "extra", TypeId::VARCHAR
+		output.SetValue(5, output.size(), Value());
 
 		output.SetCardinality(output.size() + 1);
 		if (output.size() == STANDARD_VECTOR_SIZE) {

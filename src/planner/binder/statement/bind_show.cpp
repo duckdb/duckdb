@@ -18,8 +18,8 @@ BoundStatement Binder::Bind(ShowStatement &stmt) {
 
 	result.plan = move(show);
 
-	result.names = {"Field", "Type", "Null", "Key", "Default"};
+	result.names = {"Field", "Type", "Null", "Key", "Default", "Extra"};
 	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-	                LogicalType::VARCHAR};
+	                LogicalType::VARCHAR, LogicalType::VARCHAR};
 	return result;
 }
