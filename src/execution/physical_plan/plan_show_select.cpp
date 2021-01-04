@@ -7,7 +7,6 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) {
-
 	DataChunk output;
 	output.Initialize(op.types);
 

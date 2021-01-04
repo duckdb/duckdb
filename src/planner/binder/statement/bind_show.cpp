@@ -6,7 +6,6 @@ using namespace duckdb;
 using namespace std;
 
 BoundStatement Binder::Bind(ShowStatement &stmt) {
-
 	BoundStatement result;
 
 	auto plan = Bind(*stmt.info->query);

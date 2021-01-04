@@ -14,7 +14,6 @@
 namespace duckdb {
 
 struct ShowSelectInfo : public ParseInfo {
-
 	//! Types of projected columns
 	vector<LogicalType> types;
 	//! The QueryNode of select query
