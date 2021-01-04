@@ -8,9 +8,6 @@
 
 #pragma once
 
-// not sure why this is needed here for compiling
-//#include "duckdb/parser/statement/show_statement.hpp"
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
