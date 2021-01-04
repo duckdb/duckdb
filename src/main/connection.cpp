@@ -23,7 +23,6 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 }
 
-
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	if (format == ProfilerPrintFormat::JSON) {
 		return context->profiler.ToJSON();

@@ -72,7 +72,8 @@ CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFu
 	return CreateTableFunction(context, schema, info);
 }
 
-CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateTableFunctionInfo *info) {
+CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema,
+                                           CreateTableFunctionInfo *info) {
 	ModifyCatalog();
 	return schema->CreateTableFunction(context, info);
 }
@@ -82,7 +83,8 @@ CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunc
 	return CreateCopyFunction(context, schema, info);
 }
 
-CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateCopyFunctionInfo *info) {
+CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema,
+                                          CreateCopyFunctionInfo *info) {
 	ModifyCatalog();
 	return schema->CreateCopyFunction(context, info);
 }
@@ -92,7 +94,8 @@ CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, CreatePragma
 	return CreatePragmaFunction(context, schema, info);
 }
 
-CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema, CreatePragmaFunctionInfo *info) {
+CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema,
+                                            CreatePragmaFunctionInfo *info) {
 	ModifyCatalog();
 	return schema->CreatePragmaFunction(context, info);
 }

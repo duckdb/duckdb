@@ -36,7 +36,6 @@ public:
 	constexpr static int32_t YearInterval = 400;
 	constexpr static int32_t DaysPerYearInterval = 146097;
 
-
 public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromString(string str, bool strict = false);
@@ -107,6 +106,5 @@ public:
 
 private:
 	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
-
 };
 } // namespace duckdb

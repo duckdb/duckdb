@@ -314,19 +314,19 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 	unique_ptr<char[]> blob_chars(new char[num_chars]);
 	char ch = '\0';
 	idx_t buf_idx = 0;
-	for(idx_t i = 0; i < 255; ++i, ++ch) {
+	for (idx_t i = 0; i < 255; ++i, ++ch) {
 		// skip chars: '\0', new line, shift in, comma, and crtl+Z
-		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',' || ch == '\32') {
+		if (ch == '\0' || ch == '\n' || ch == '\15' || ch == ',' || ch == '\32') {
 			continue;
 		}
 		blob_chars[buf_idx] = ch;
-    	++buf_idx;
+		++buf_idx;
 	}
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
 
 	// Insert blob values through a PreparedStatement
-	Value blob_val = Value::BLOB((const_data_ptr_t) blob_chars.get(), num_chars);
+	Value blob_val = Value::BLOB((const_data_ptr_t)blob_chars.get(), num_chars);
 	unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
 	ps->Execute(blob_val);
 	REQUIRE(ps->success);

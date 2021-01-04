@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-InsertStatement::InsertStatement() : SQLStatement(StatementType::INSERT_STATEMENT), schema(DEFAULT_SCHEMA){}
+InsertStatement::InsertStatement() : SQLStatement(StatementType::INSERT_STATEMENT), schema(DEFAULT_SCHEMA) {
+}
 
 unique_ptr<SQLStatement> InsertStatement::Copy() const {
 	auto result = make_unique<InsertStatement>();
@@ -13,4 +14,4 @@ unique_ptr<SQLStatement> InsertStatement::Copy() const {
 	return move(result);
 }
 
-}
+} // namespace duckdb

@@ -63,9 +63,8 @@ void StorageManager::Initialize() {
 	} else {
 		auto &config = DBConfig::GetConfig(*con.context);
 		block_manager = make_unique<InMemoryBlockManager>();
-		buffer_manager =
-		    make_unique<BufferManager>(database.GetFileSystem(), *block_manager, config.temporary_directory,
-		                               config.maximum_memory);
+		buffer_manager = make_unique<BufferManager>(database.GetFileSystem(), *block_manager,
+		                                            config.temporary_directory, config.maximum_memory);
 	}
 }
 
@@ -114,16 +113,15 @@ void StorageManager::LoadDatabase() {
 		}
 		// initialize the block manager while creating a new db file
 		block_manager = make_unique<SingleFileBlockManager>(fs, path, read_only, true, config.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(fs, *block_manager, config.temporary_directory,
-		                                            config.maximum_memory);
+		buffer_manager =
+		    make_unique<BufferManager>(fs, *block_manager, config.temporary_directory, config.maximum_memory);
 	} else {
 		if (!config.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
 		auto sf = make_unique<SingleFileBlockManager>(fs, path, read_only, false, config.use_direct_io);
-		buffer_manager =
-		    make_unique<BufferManager>(fs, *sf, config.temporary_directory, config.maximum_memory);
+		buffer_manager = make_unique<BufferManager>(fs, *sf, config.temporary_directory, config.maximum_memory);
 		sf->LoadFreeList(*buffer_manager);
 		block_manager = move(sf);
 

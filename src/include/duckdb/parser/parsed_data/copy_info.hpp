@@ -16,8 +16,7 @@
 namespace duckdb {
 
 struct CopyInfo : public ParseInfo {
-	CopyInfo()
-	    : schema(DEFAULT_SCHEMA) {
+	CopyInfo() : schema(DEFAULT_SCHEMA) {
 	}
 
 	//! The schema name to copy to/from

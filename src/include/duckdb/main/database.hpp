@@ -22,6 +22,7 @@ class ObjectCache;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
+
 public:
 	DatabaseInstance();
 
@@ -38,6 +39,7 @@ public:
 	FileSystem &GetFileSystem();
 
 	idx_t NumberOfThreads();
+
 private:
 	void Initialize(const char *path, DBConfig *config);
 
@@ -66,7 +68,6 @@ public:
 	idx_t NumberOfThreads();
 	static const char *SourceID();
 	static const char *LibraryVersion();
-
 };
 
 } // namespace duckdb

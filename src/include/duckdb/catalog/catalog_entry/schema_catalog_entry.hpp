@@ -41,6 +41,7 @@ struct DropInfo;
 //! A schema in the catalog
 class SchemaCatalogEntry : public CatalogEntry {
 	friend class Catalog;
+
 public:
 	SchemaCatalogEntry(Catalog *catalog, string name, bool is_internal);
 
@@ -68,7 +69,7 @@ public:
 	                       QueryErrorContext error_context = QueryErrorContext());
 
 	//! Scan the specified catalog set, invoking the callback method for every entry
-	void Scan(ClientContext &context, CatalogType type, std::function<void(CatalogEntry*)> callback);
+	void Scan(ClientContext &context, CatalogType type, std::function<void(CatalogEntry *)> callback);
 
 	//! Serialize the meta information of the SchemaCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
@@ -79,6 +80,7 @@ public:
 
 	//! Creates an index with the given name in the schema
 	CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table);
+
 private:
 	//! Create a scalar or aggregate function within the given schema
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);

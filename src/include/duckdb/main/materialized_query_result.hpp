@@ -23,6 +23,7 @@ public:
 	MaterializedQueryResult(string error);
 
 	ChunkCollection collection;
+
 public:
 	//! Fetches a DataChunk from the query result.
 	//! This will consume the result (i.e. the chunks are taken directly from the ChunkCollection).

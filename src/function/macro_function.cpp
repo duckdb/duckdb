@@ -63,10 +63,10 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 
 unique_ptr<MacroFunction> MacroFunction::Copy() {
 	auto result = make_unique<MacroFunction>(expression->Copy());
-	for(auto &param : parameters) {
+	for (auto &param : parameters) {
 		result->parameters.push_back(param->Copy());
 	}
-	for(auto &kv : default_parameters) {
+	for (auto &kv : default_parameters) {
 		result->default_parameters[kv.first] = kv.second->Copy();
 	}
 	return result;

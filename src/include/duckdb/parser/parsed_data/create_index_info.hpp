@@ -39,7 +39,7 @@ public:
 		result->index_name = index_name;
 		result->unique = unique;
 		result->table = unique_ptr_cast<TableRef, BaseTableRef>(table->Copy());
-		for(auto &expr : expressions) {
+		for (auto &expr : expressions) {
 			result->expressions.push_back(expr->Copy());
 		}
 		return result;

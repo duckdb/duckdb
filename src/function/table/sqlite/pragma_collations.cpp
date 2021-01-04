@@ -30,7 +30,8 @@ unique_ptr<FunctionOperatorData> pragma_collate_init(ClientContext &context, con
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->Scan(context, CatalogType::COLLATION_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry->name); });
+		schema->Scan(context, CatalogType::COLLATION_ENTRY,
+		             [&](CatalogEntry *entry) { result->entries.push_back(entry->name); });
 	});
 
 	return move(result);

@@ -14,7 +14,8 @@ namespace duckdb {
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() {}
+DatabaseInstance::DatabaseInstance() {
+}
 
 void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	if (new_config) {
@@ -51,8 +52,7 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	storage->Initialize();
 }
 
-DuckDB::DuckDB(const char *path, DBConfig *new_config) :
-	instance(make_shared<DatabaseInstance>()) {
+DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
 	instance->Initialize(path, new_config);
 }
 

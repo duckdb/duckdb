@@ -33,8 +33,7 @@ Appender::~Appender() {
 	// wrapped in a try/catch because Close() can throw if the table was dropped in the meantime
 	try {
 		Close();
-	} catch(...) {
-
+	} catch (...) {
 	}
 }
 

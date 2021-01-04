@@ -90,11 +90,13 @@ public:
 	//! Creates a table in the catalog.
 	CatalogEntry *CreateTable(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info);
 	//! Create a table function in the catalog
-	CatalogEntry *CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateTableFunctionInfo *info);
+	CatalogEntry *CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema,
+	                                  CreateTableFunctionInfo *info);
 	//! Create a copy function in the catalog
 	CatalogEntry *CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateCopyFunctionInfo *info);
 	//! Create a pragma function in the catalog
-	CatalogEntry *CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema, CreatePragmaFunctionInfo *info);
+	CatalogEntry *CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema,
+	                                   CreatePragmaFunctionInfo *info);
 	//! Create a scalar or aggregate function in the catalog
 	CatalogEntry *CreateFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info);
 	//! Creates a table in the catalog.

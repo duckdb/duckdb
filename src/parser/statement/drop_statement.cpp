@@ -10,4 +10,4 @@ unique_ptr<SQLStatement> DropStatement::Copy() const {
 	return move(result);
 }
 
-}
+} // namespace duckdb

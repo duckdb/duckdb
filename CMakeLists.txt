@@ -75,9 +75,14 @@ endif()
 
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
-option(FORCE_SANITIZER "Forces building with sanitizers even if the Python and R modules are enabled." FALSE)
-if((BUILD_PYTHON OR BUILD_R) AND (ENABLE_SANITIZER OR ENABLE_UBSAN) AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
-  if (FORCE_SANITIZER)
+option(
+  FORCE_SANITIZER
+  "Forces building with sanitizers even if the Python and R modules are enabled."
+  FALSE)
+if((BUILD_PYTHON OR BUILD_R)
+   AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
+   AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
+  if(FORCE_SANITIZER)
     message(
       WARNING
         "FORCE_SANITIZER is set and the Python/R builds are enabled. Sanitizers will be linked as a shared library (-shared-libasan). You may need to do LD_PRELOAD tricks to load packages built in this way."

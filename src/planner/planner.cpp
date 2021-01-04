@@ -73,7 +73,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 }
 
 void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
-	auto &stmt = (ExecuteStatement &) *statement;
+	auto &stmt = (ExecuteStatement &)*statement;
 
 	// bind the prepared statement
 	auto entry = context.prepared_statements.find(stmt.name);
@@ -90,7 +90,8 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 		// catalog was modified: rebind the statement before running the execute
 		prepared = PrepareSQLStatement(entry->second->unbound_statement->Copy());
 		if (prepared->types != entry->second->types) {
-			throw BinderException("Rebinding statement \"%s\" after catalog change resulted in change of types", stmt.name);
+			throw BinderException("Rebinding statement \"%s\" after catalog change resulted in change of types",
+			                      stmt.name);
 		}
 		rebound = true;
 	}
@@ -120,7 +121,7 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 }
 
 void Planner::PlanPrepare(unique_ptr<SQLStatement> statement) {
-	auto &stmt = (PrepareStatement &) *statement;
+	auto &stmt = (PrepareStatement &)*statement;
 	auto prepared_data = PrepareSQLStatement(move(stmt.statement));
 
 	auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));

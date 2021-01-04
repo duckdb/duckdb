@@ -168,7 +168,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 
 bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
-		auto &stream = (StreamQueryResult &) *result;
+		auto &stream = (StreamQueryResult &)*result;
 		result = stream.Materialize();
 	}
 	return CHECK_COLUMN(*result, column_number, values);

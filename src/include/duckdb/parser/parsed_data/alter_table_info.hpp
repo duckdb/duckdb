@@ -70,8 +70,8 @@ public:
 //===--------------------------------------------------------------------===//
 struct RenameColumnInfo : public AlterTableInfo {
 	RenameColumnInfo(string schema, string table, string old_name_p, string new_name_p)
-	    : AlterTableInfo(AlterTableType::RENAME_COLUMN, move(schema), move(table)),
-	      old_name(move(old_name_p)), new_name(move(new_name_p)) {
+	    : AlterTableInfo(AlterTableType::RENAME_COLUMN, move(schema), move(table)), old_name(move(old_name_p)),
+	      new_name(move(new_name_p)) {
 	}
 	~RenameColumnInfo() override {
 	}

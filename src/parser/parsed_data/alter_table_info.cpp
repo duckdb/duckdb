@@ -125,7 +125,8 @@ unique_ptr<AlterInfo> RemoveColumnInfo::Deserialize(Deserializer &source, string
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
-	return make_unique_base<AlterInfo, ChangeColumnTypeInfo>(schema, name, column_name, target_type, expression->Copy());
+	return make_unique_base<AlterInfo, ChangeColumnTypeInfo>(schema, name, column_name, target_type,
+	                                                         expression->Copy());
 }
 
 void ChangeColumnTypeInfo::Serialize(Serializer &serializer) {

@@ -18,7 +18,8 @@ class PreparedStatementData;
 class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
-	PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data, string query, idx_t n_param);
+	PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data, string query,
+	                  idx_t n_param);
 	//! Create a prepared statement that was not successfully prepared
 	PreparedStatement(string error);
 

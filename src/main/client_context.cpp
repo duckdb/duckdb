@@ -32,10 +32,8 @@
 namespace duckdb {
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(database), transaction(*db->transaction_manager), interrupted(false), executor(*this),
-      catalog(*db->catalog),
-      temporary_objects(make_unique<SchemaCatalogEntry>(db->catalog.get(), TEMP_SCHEMA, true)),
-      open_result(nullptr) {
+    : db(database), transaction(*db->transaction_manager), interrupted(false), executor(*this), catalog(*db->catalog),
+      temporary_objects(make_unique<SchemaCatalogEntry>(db->catalog.get(), TEMP_SCHEMA, true)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
 }
@@ -169,7 +167,8 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query, shared_ptr<PreparedStatementData> statement_p,
+unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query,
+                                                                shared_ptr<PreparedStatementData> statement_p,
                                                                 vector<Value> bound_values, bool allow_stream_result) {
 	auto &statement = *statement_p;
 	if (ActiveTransaction().is_invalidated && statement.requires_valid_transaction) {
@@ -195,7 +194,8 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		return make_unique<StreamQueryResult>(statement.statement_type, shared_from_this(), statement.types, statement.names, move(statement_p));
+		return make_unique<StreamQueryResult>(statement.statement_type, shared_from_this(), statement.types,
+		                                      statement.names, move(statement_p));
 	}
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(statement.statement_type, statement.types, statement.names);
@@ -237,9 +237,8 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLState
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
-	RunFunctionInTransactionInternal([&]() {
-		prepared_data = CreatePreparedStatement(statement_query, move(statement));
-	}, false);
+	RunFunctionInTransactionInternal(
+	    [&]() { prepared_data = CreatePreparedStatement(statement_query, move(statement)); }, false);
 	prepared_data->unbound_statement = move(unbound_statement);
 	return make_unique<PreparedStatement>(shared_from_this(), move(prepared_data), move(statement_query), n_param);
 }
@@ -275,7 +274,8 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 	}
 }
 
-unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared, vector<Value> &values, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
+                                               vector<Value> &values, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
 	try {
 		InitialCleanup();
@@ -295,8 +295,11 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query,
 	return ExecutePreparedStatement(query, move(prepared), move(bound_values), allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const string &query, unique_ptr<SQLStatement> statement,
-                                                    shared_ptr<PreparedStatementData> &prepared, vector<Value> *values, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const string &query,
+                                                                       unique_ptr<SQLStatement> statement,
+                                                                       shared_ptr<PreparedStatementData> &prepared,
+                                                                       vector<Value> *values,
+                                                                       bool allow_stream_result) {
 	this->query = query;
 
 	unique_ptr<QueryResult> result;
@@ -620,7 +623,8 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 }
 
 void ClientContext::RunFunctionInTransactionInternal(std::function<void(void)> fun, bool requires_valid_transaction) {
-	if (requires_valid_transaction && transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated) {
+	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
+	    transaction.ActiveTransaction().is_invalidated) {
 		throw Exception("Failed: transaction has been invalidated!");
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction

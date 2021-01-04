@@ -118,7 +118,8 @@ public:
 	//! Execute a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
-	unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared, vector<Value> &values, bool allow_stream_result = true);
+	unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
+	                                vector<Value> &values, bool allow_stream_result = true);
 
 	//! Register function in the temporary schema
 	void RegisterFunction(CreateFunctionInfo *info);
@@ -150,8 +151,8 @@ private:
 	unique_ptr<QueryResult> RunStatement(const string &query, unique_ptr<SQLStatement> statement,
 	                                     bool allow_stream_result);
 	unique_ptr<QueryResult> RunStatementOrPreparedStatement(const string &query, unique_ptr<SQLStatement> statement,
-	                                     shared_ptr<PreparedStatementData> &prepared, vector<Value> *values,
-	                                     bool allow_stream_result);
+	                                                        shared_ptr<PreparedStatementData> &prepared,
+	                                                        vector<Value> *values, bool allow_stream_result);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData> CreatePreparedStatement(const string &query, unique_ptr<SQLStatement> statement);

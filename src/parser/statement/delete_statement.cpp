@@ -14,4 +14,4 @@ unique_ptr<SQLStatement> DeleteStatement::Copy() const {
 	return move(result);
 }
 
-}
+} // namespace duckdb

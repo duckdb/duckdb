@@ -56,8 +56,7 @@ void CheckpointManager::CreateCheckpoint() {
 	vector<SchemaCatalogEntry *> schemas;
 	auto &catalog = Catalog::GetCatalog(*con.context);
 	// we scan the schemas
-	catalog.schemas->Scan(*con.context,
-	                                [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	catalog.schemas->Scan(*con.context, [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());
@@ -111,7 +110,8 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
-	schema.Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
+	schema.Scan(context, CatalogType::SEQUENCE_ENTRY,
+	            [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
 
 	vector<MacroCatalogEntry *> macros;
 	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {

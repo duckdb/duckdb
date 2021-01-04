@@ -35,10 +35,10 @@ public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateTableInfo>(schema, table);
 		CopyProperties(*result);
-		for(auto &column : columns) {
+		for (auto &column : columns) {
 			result->columns.push_back(column.Copy());
 		}
-		for(auto &constraint : constraints) {
+		for (auto &constraint : constraints) {
 			result->constraints.push_back(constraint->Copy());
 		}
 		if (query) {

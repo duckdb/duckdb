@@ -13,4 +13,4 @@ unique_ptr<SQLStatement> CopyStatement::Copy() const {
 	return result;
 }
 
-}
+} // namespace duckdb

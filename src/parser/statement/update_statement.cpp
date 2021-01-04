@@ -15,10 +15,10 @@ unique_ptr<SQLStatement> UpdateStatement::Copy() const {
 		result->from_table = from_table->Copy();
 	}
 	result->columns = columns;
-	for(auto &expr : expressions) {
+	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
 	}
 	return move(result);
 }
 
-}
+} // namespace duckdb

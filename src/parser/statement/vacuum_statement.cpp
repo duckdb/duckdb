@@ -8,4 +8,4 @@ unique_ptr<SQLStatement> VacuumStatement::Copy() const {
 	return make_unique<VacuumStatement>();
 }
 
-}
+} // namespace duckdb

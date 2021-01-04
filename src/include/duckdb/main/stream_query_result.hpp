@@ -26,6 +26,7 @@ public:
 
 	//! Whether or not the StreamQueryResult is still open
 	bool is_open;
+
 public:
 	//! Fetches a DataChunk from the query result.
 	unique_ptr<DataChunk> FetchRaw() override;
