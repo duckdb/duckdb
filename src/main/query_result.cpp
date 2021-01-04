@@ -47,6 +47,12 @@ bool QueryResult::Equals(QueryResult &other) {
 	while (true) {
 		auto lchunk = Fetch();
 		auto rchunk = other.Fetch();
+		if (!lchunk && !rchunk) {
+			return true;
+		}
+		if (!lchunk || !rchunk) {
+			return false;
+		}
 		if (lchunk->size() == 0 && rchunk->size() == 0) {
 			return true;
 		}
