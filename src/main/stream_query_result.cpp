@@ -32,6 +32,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 	auto chunk = context->Fetch();
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		Close();
+		return nullptr;
 	}
 	return chunk;
 }

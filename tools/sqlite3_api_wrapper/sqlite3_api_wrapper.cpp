@@ -231,7 +231,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 			sqlite3_reset(pStmt);
 		}
 	}
-	if (!pStmt->current_chunk) {
+	if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
 		return SQLITE_DONE;
 	}
 	pStmt->current_row++;
