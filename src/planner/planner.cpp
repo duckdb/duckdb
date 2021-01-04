@@ -11,7 +11,6 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
-#include "duckdb/parser/statement/show_statement.hpp"
 
 namespace duckdb {
 

@@ -18,15 +18,17 @@ public:
 		children.push_back(move(plan));
 	}
 
-  vector<LogicalType> types_select;
+	vector<LogicalType> types_select;
 	vector<string> aliases;
 
 protected:
 	void ResolveTypes() override {
-		types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::VARCHAR, LogicalType::BOOLEAN};
+		types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
+		         LogicalType::VARCHAR};
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
-		return {ColumnBinding(0, 0), ColumnBinding(0, 1), ColumnBinding(0, 2), ColumnBinding(0, 3), ColumnBinding(0, 4)};
+		return {ColumnBinding(0, 0), ColumnBinding(0, 1), ColumnBinding(0, 2), ColumnBinding(0, 3),
+		        ColumnBinding(0, 4)};
 	}
 };
 } // namespace duckdb

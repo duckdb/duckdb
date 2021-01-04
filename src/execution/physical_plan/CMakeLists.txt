@@ -29,7 +29,7 @@ add_library_unity(
   plan_projection.cpp
   plan_set_operation.cpp
   plan_sample.cpp
-  plan_showSelect.cpp
+  plan_show_select.cpp
   plan_simple.cpp
   plan_top_n.cpp
   plan_update.cpp

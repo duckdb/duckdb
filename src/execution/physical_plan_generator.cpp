@@ -5,9 +5,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-//Why is this needed here for compile?
-#include "duckdb/planner/operator/logical_show.hpp"
-
 namespace duckdb {
 
 class DependencyExtractor : public LogicalOperatorVisitor {

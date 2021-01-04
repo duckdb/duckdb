@@ -16,12 +16,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
-//Why is this needed here for compile?
-#include "duckdb/planner/operator/logical_show.hpp"
-
-//Why is this include needed here?
-#include "duckdb/planner/operator/logical_show.hpp"
-
 namespace duckdb {
 class ClientContext;
 

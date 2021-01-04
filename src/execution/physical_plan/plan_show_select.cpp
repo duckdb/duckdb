@@ -20,12 +20,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 		output.SetValue(0, output.size(), Value(name));
 		// "type", TypeId::VARCHAR
 		output.SetValue(1, output.size(), Value(type.ToString()));
-		// "notnull", TypeId::BOOL
-		output.SetValue(2, output.size(), Value::BOOLEAN(false));
-		// "dflt_value", TypeId::VARCHAR
-		output.SetValue(3, output.size(), Value());
+		// "null", TypeId::VARCHAR
+		output.SetValue(2, output.size(), Value("YES"));
 		// "pk", TypeId::BOOL
-		output.SetValue(4, output.size(), Value::BOOLEAN(false));
+		output.SetValue(3, output.size(), Value());
+		// "dflt_value", TypeId::VARCHAR
+		output.SetValue(4, output.size(), Value());
+
 		output.SetCardinality(output.size() + 1);
 		if (output.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(output);
