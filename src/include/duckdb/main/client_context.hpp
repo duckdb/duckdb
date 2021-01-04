@@ -128,9 +128,9 @@ public:
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
-	void RunFunctionInTransaction(std::function<void(void)> fun);
+	void RunFunctionInTransaction(std::function<void(void)> fun, bool requires_valid_transaction = true);
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
-	void RunFunctionInTransactionInternal(std::function<void(void)> fun);
+	void RunFunctionInTransactionInternal(std::function<void(void)> fun, bool requires_valid_transaction = true);
 
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is

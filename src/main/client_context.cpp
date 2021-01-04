@@ -239,7 +239,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLState
 	auto unbound_statement = statement->Copy();
 	RunFunctionInTransactionInternal([&]() {
 		prepared_data = CreatePreparedStatement(statement_query, move(statement));
-	});
+	}, false);
 	prepared_data->unbound_statement = move(unbound_statement);
 	return make_unique<PreparedStatement>(shared_from_this(), move(prepared_data), move(statement_query), n_param);
 }
@@ -619,8 +619,8 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	});
 }
 
-void ClientContext::RunFunctionInTransactionInternal(std::function<void(void)> fun) {
-	if (transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated) {
+void ClientContext::RunFunctionInTransactionInternal(std::function<void(void)> fun, bool requires_valid_transaction) {
+	if (requires_valid_transaction && transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated) {
 		throw Exception("Failed: transaction has been invalidated!");
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
@@ -642,9 +642,9 @@ void ClientContext::RunFunctionInTransactionInternal(std::function<void(void)> f
 	}
 }
 
-void ClientContext::RunFunctionInTransaction(std::function<void(void)> fun) {
+void ClientContext::RunFunctionInTransaction(std::function<void(void)> fun, bool requires_valid_transaction) {
 	lock_guard<mutex> client_guard(context_lock);
-	RunFunctionInTransactionInternal(fun);
+	RunFunctionInTransactionInternal(fun, requires_valid_transaction);
 }
 
 unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
