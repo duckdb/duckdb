@@ -5,6 +5,7 @@
 #include "snappy.h"
 #include "miniz_wrapper.hpp"
 #include "zstd.h"
+#include <iostream>
 
 namespace duckdb {
 
@@ -32,6 +33,9 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 
 	PageHeader page_hdr;
 	page_hdr.read(&protocol);
+
+	page_hdr.printTo(std::cout);
+	std::cout << '\n';
 
 	PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
 
@@ -117,11 +121,18 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	auto page_encoding = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.encoding
 	                                                          : page_hdr.data_page_header_v2.encoding;
 
-	if (can_have_nulls) {
-		D_ASSERT(page_hdr.data_page_header.definition_level_encoding == Encoding::RLE);
+    if (true) {
+        uint32_t rep_length = block->read<uint32_t>();
+        block->available(rep_length);
+        repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, 1);
+        block->inc(rep_length);
+    }
+
+    if (can_have_nulls) {
 		uint32_t def_length = block->read<uint32_t>();
 		block->available(def_length);
-		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, 1);
+		// TODO figure out bit width correctly
+		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, 2);
 		block->inc(def_length);
 	}
 
@@ -159,13 +170,25 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 		D_ASSERT(block);
 		auto read_now = MinValue<idx_t>(to_read, rows_available);
 
+        if (true) {
+            D_ASSERT(repeated_decoder);
+            repeated_buffer.resize(sizeof(uint8_t) * read_now);
+            repeated_decoder->GetBatch<uint8_t>(repeated_buffer.ptr, read_now);
+        }
+
 		if (can_have_nulls) {
 			D_ASSERT(defined_decoder);
 			defined_buffer.resize(sizeof(uint8_t) * read_now);
 			defined_decoder->GetBatch<uint8_t>(defined_buffer.ptr, read_now);
 		}
 
-		if (dict_decoder) {
+
+        for (idx_t i = 0; i < 6; i++) {
+            printf("r:%d\td:%d\n", repeated_buffer.ptr[i], defined_buffer.ptr[i]);
+        }
+
+
+        if (dict_decoder) {
 			// TODO computing this here is a wee bit ugly
 			// we need the null count because the offsets have no entries for nulls
 			idx_t null_count = 0;

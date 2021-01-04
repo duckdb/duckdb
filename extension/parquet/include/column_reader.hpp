@@ -8,6 +8,7 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 
@@ -73,9 +74,12 @@ private:
 
 	ResizeableBuffer offset_buffer;
 	ResizeableBuffer defined_buffer;
+    ResizeableBuffer repeated_buffer;
 
 	unique_ptr<RleBpDecoder> dict_decoder;
 	unique_ptr<RleBpDecoder> defined_decoder;
+    unique_ptr<RleBpDecoder> repeated_decoder;
+
 };
 
 template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
@@ -83,10 +87,11 @@ template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
 public:
 	TemplatedColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
 	                      TProtocol &protocol_p)
-	    : ColumnReader(type_p, chunk_p, schema_p, protocol_p){};
+	    : ColumnReader(type_p, chunk_p, schema_p, protocol_p), dict_size(0){};
 
 	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override {
 		dict = move(data);
+		dict_size = num_entries;
 	}
 
 	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
@@ -127,6 +132,7 @@ public:
 
 protected:
 	virtual VALUE_TYPE DictRead(uint32_t &offset) {
+		D_ASSERT(offset < dict_size);
 		return ((VALUE_TYPE *)dict->ptr)[offset];
 	}
 
@@ -139,6 +145,7 @@ protected:
 	}
 
 	shared_ptr<ByteBuffer> dict;
+	idx_t dict_size;
 };
 
 class StringColumnReader : public TemplatedColumnReader<string_t> {
@@ -240,14 +247,26 @@ public:
 	};
 
 	void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) override {
-		D_ASSERT(0);
+		auto ptr = FlatVector::GetData<list_entry_t>(result);
+		Vector child_vector;
+		child_vector.Initialize(result.type.child_types()[0].second);
+		child_column_reader->Read(6, filter, child_vector);
+		child_vector.Print(6);
+		for (idx_t i = 0; i < num_values; i++) {
+			ptr[i].length = 0;
+			ptr[i].offset = 0;
+		}
+        auto list_child = make_unique<ChunkCollection>();
+
+        ListVector::SetEntry(result, move(list_child));
+		//D_ASSERT(0);
 	}
 
 	virtual void Skip(idx_t num_values) override {
 		D_ASSERT(0);
 	}
 
-protected
+protected:
 	// TODO this is ugly, need to have more abstract super class
 
 	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,

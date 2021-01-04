@@ -5,10 +5,13 @@
 require parquet
 
 query I
-SELECT * FROM parquet_scan('test/sql/copy/parquet/data/list_columns.parquet')
+SELECT int64_list FROM parquet_scan('test/sql/copy/parquet/data/list_columns.parquet')
 ----
-NULL
-2019-11-26 20:11:42.501
-NULL
-NULL
-NULL
+[]
+[]
+[]
+
+#
+#0  [1.0, 2.0, 3.0]        [abc, efg, hij]
+#1       [nan, 1.0]                   None
+#2            [4.0]  [efg, None, hij, xyz]
