@@ -73,9 +73,11 @@ struct TimeConvert {
 struct StringConvert {
 	template<class T>
 	static void convert_unicode_value_templated(T *result, int32_t *codepoints, idx_t codepoint_count, const char *data, idx_t ascii_count) {
+		// we first fill in the batch of ascii characters directly
 		for(idx_t i = 0; i < ascii_count; i++) {
 			result[i] = data[i];
 		}
+		// then we fill in the remaining codepoints from our codepoint array
 		for(idx_t i = 0; i < codepoint_count; i++) {
 			result[ascii_count + i] = codepoints[i];
 		}
@@ -135,6 +137,8 @@ struct StringConvert {
 	}
 
 	template <class DUCKDB_T, class NUMPY_T> static PyObject* convert_value(string_t val) {
+		// we could use PyUnicode_FromStringAndSize here, but it does a lot of verification that we don't need
+		// because of that it is a lot slower than it needs to be
 		auto data = (uint8_t*) val.GetDataUnsafe();
 		auto len = val.GetSize();
 		// check if there are any non-ascii characters in there
