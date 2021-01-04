@@ -281,7 +281,7 @@ static void VerifyStreamResult(unique_ptr<QueryResult> result) {
 	size_t expected_rows = 500 * 5;
 	while (true) {
 		auto chunk = result->Fetch();
-		if (chunk->size() == 0) {
+		if (!chunk || chunk->size() == 0) {
 			break;
 		}
 		auto col1_data = FlatVector::GetData<int>(chunk->data[0]);
