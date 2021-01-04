@@ -45,6 +45,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	rewriter.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
+    // remove redundant duplicate-eliminated joins and/or delim gets
+//    context.profiler.StartPhase("deliminator");
+//    Deliminator deliminator(*this);
+//    plan = deliminator.Rewrite(move(plan));
+//    context.profiler.EndPhase();
+
 	// perform filter pushdown
 	context.profiler.StartPhase("filter_pushdown");
 	FilterPushdown filter_pushdown(*this);

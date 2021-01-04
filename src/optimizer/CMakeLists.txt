@@ -9,6 +9,7 @@ add_library_unity(
   OBJECT
   common_aggregate_optimizer.cpp
   cse_optimizer.cpp
+  deliminator.cpp
   column_lifetime_analyzer.cpp
   expression_heuristics.cpp
   filter_combiner.cpp
