@@ -7,8 +7,6 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/planner/expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class T> struct min_max_state_t {

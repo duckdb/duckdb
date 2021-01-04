@@ -83,44 +83,6 @@ DROP SEQUENCE seq1
 statement ok
 DROP SEQUENCE seq2
 
-# create two pairs of identical sequences
-statement ok
-CREATE SEQUENCE seq1
-
-statement ok
-CREATE SEQUENCE seq2 INCREMENT BY 2 START WITH 2
-
-statement ok
-CREATE SEQUENCE seq1m
-
-statement ok
-CREATE SEQUENCE seq2m INCREMENT BY 2 START WITH 2
-
-# insert the second pair into a table
-statement ok
-CREATE TABLE sequences (s VARCHAR)
-
-statement ok
-INSERT INTO sequences VALUES ('seq1m'), ('seq2m')
-
-# these should be equal to each other in each iteration, because the sequences are equal
-loop i 0 5
-
-query T
-SELECT
-        (SELECT (SELECT test(s, s, i1.i) + i FROM integers) FROM sequences)
-    =
-        (SELECT (SELECT nextval('seq1') + nextval('seq1') + i1.i) + i FROM integers
-    UNION ALL
-        SELECT (SELECT nextval('seq2') + nextval('seq2') + i1.i) + i FROM integers)
-FROM
-    integers i1
-----
-1
-1
-
-endloop
-
 # argument with side-effects not allowed
 statement ok
 CREATE MACRO add(a, b) AS a + b

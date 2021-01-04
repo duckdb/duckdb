@@ -4,7 +4,6 @@
 #include "duckdb/main/connection.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ConnectionManager::~ConnectionManager() {
 	std::lock_guard<std::mutex> lock(connections_lock);

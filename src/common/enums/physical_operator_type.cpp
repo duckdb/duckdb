@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/physical_operator_type.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string PhysicalOperatorToString(PhysicalOperatorType type) {
@@ -78,8 +76,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT_EXTERNAL_FILE";
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
-	case PhysicalOperatorType::CREATE:
-		return "CREATE";
+	case PhysicalOperatorType::CREATE_TABLE:
+		return "CREATE_TABLE";
+	case PhysicalOperatorType::CREATE_TABLE_AS:
+		return "CREATE_TABLE_AS";
 	case PhysicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
 	case PhysicalOperatorType::EXPLAIN:

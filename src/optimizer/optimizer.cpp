@@ -17,7 +17,6 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));

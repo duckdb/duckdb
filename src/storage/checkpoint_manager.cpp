@@ -30,7 +30,6 @@
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 
 namespace duckdb {
-using namespace std;
 
 // constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
 

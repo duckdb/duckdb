@@ -3,7 +3,6 @@
 #include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
-using namespace std;
 
 PreparedStatementData::PreparedStatementData(StatementType type)
     : statement_type(type), read_only(true), requires_valid_transaction(true), allow_stream_result(false) {

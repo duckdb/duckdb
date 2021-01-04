@@ -9,8 +9,6 @@
 
 #include <cmath>
 
-using namespace std;
-
 namespace duckdb {
 
 class WindowGlobalState : public GlobalOperatorState {

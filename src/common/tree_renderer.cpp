@@ -2,6 +2,9 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/to_string.hpp"
+
 #include "utf8proc_wrapper.h"
 
 #include <sstream>
@@ -89,12 +92,12 @@ void TreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y
 string AdjustTextForRendering(string source, idx_t max_render_width) {
 	idx_t cpos = 0;
 	idx_t render_width = 0;
-	vector<std::pair<idx_t, idx_t>> render_widths;
+	vector<pair<idx_t, idx_t>> render_widths;
 	while (cpos < source.size()) {
 		idx_t char_render_width = utf8proc_render_width(source.c_str(), source.size(), cpos);
 		cpos = utf8proc_next_grapheme_cluster(source.c_str(), source.size(), cpos);
 		render_width += char_render_width;
-		render_widths.push_back(std::make_pair(cpos, render_width));
+		render_widths.push_back(make_pair(cpos, render_width));
 		if (render_width > max_render_width) {
 			break;
 		}
@@ -396,7 +399,7 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
 	auto result = TreeRenderer::CreateRenderNode(op.name, op.extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";
-	result->extra_text += "\n" + std::to_string(op.info.elements);
+	result->extra_text += "\n" + to_string(op.info.elements);
 	string timing = StringUtil::Format("%.2f", op.info.time);
 	result->extra_text += "\n(" + timing + "s)";
 	return result;

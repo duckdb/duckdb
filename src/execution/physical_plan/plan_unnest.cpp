@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_unnest.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUnnest &op) {
 	D_ASSERT(op.children.size() == 1);

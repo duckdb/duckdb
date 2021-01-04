@@ -10,7 +10,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	query = move(info->query);

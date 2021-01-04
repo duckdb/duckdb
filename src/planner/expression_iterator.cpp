@@ -7,9 +7,9 @@
 #include "duckdb/planner/tableref/list.hpp"
 
 namespace duckdb {
-using namespace std;
 
-void ExpressionIterator::EnumerateChildren(const Expression &expr, function<void(const Expression &child)> callback) {
+void ExpressionIterator::EnumerateChildren(const Expression &expr,
+                                           std::function<void(const Expression &child)> callback) {
 	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> &child) { callback(*child); });
 }
 
@@ -17,7 +17,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr, std::function<void(
 	EnumerateChildren(expr, [&](unique_ptr<Expression> &child) { callback(*child); });
 }
 
-void ExpressionIterator::EnumerateChildren(Expression &expr, function<void(unique_ptr<Expression> &child)> callback) {
+void ExpressionIterator::EnumerateChildren(Expression &expr,
+                                           std::function<void(unique_ptr<Expression> &child)> callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = (BoundAggregateExpression &)expr;

@@ -7,7 +7,6 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
-using namespace std;
 
 DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// we match on an OR expression within a LogicalFilter node

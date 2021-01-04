@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations

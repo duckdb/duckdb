@@ -5,7 +5,6 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonExpression &expr,
                                                                 ExpressionExecutorState &root) {

@@ -12,13 +12,12 @@
 #include <queue>
 #endif
 
-using namespace std;
-
 namespace duckdb {
 
 struct SchedulerThread {
 #ifndef DUCKDB_NO_THREADS
-	SchedulerThread(unique_ptr<thread> thread_p) : thread_(move(thread_p)) {}
+	SchedulerThread(unique_ptr<thread> thread_p) : thread_(move(thread_p)) {
+	}
 
 	unique_ptr<thread> thread_;
 #endif

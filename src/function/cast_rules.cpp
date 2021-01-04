@@ -2,7 +2,6 @@
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
-using namespace std;
 
 //! The target type determines the preferred implicit casts
 static int64_t TargetTypeCost(LogicalType type) {

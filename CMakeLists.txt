@@ -128,18 +128,23 @@ execute_process(
   OUTPUT_VARIABLE GIT_ITERATION
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-string(REGEX REPLACE "v([0-9]+.[0-9]+.)[0-9]+" "\\1" DUCKDB_MAIN_VERSION "${GIT_LAST_TAG}")
-string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
-string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
+string(REGEX REPLACE "v([0-9]+.[0-9]+.)[0-9]+" "\\1" DUCKDB_MAIN_VERSION
+                     "${GIT_LAST_TAG}")
+string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION
+                     "${GIT_LAST_TAG}")
+string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION
+                     "${GIT_ITERATION}")
 
 if(${DUCKDB_DEV_ITERATION}==0)
   # on a tag; directly use the version
   set(DUCKDB_VERSION "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}")
 else()
   # not on a tag, increment the patch version by one and add a -devX suffix
-  MATH(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
+  math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
 
-  set(DUCKDB_VERSION "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
+  set(DUCKDB_VERSION
+      "${DUCKDB_MAIN_VERSION}${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}"
+  )
 endif()
 
 option(AMALGAMATION_BUILD
@@ -149,6 +154,7 @@ option(AMALGAMATION_BUILD
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
+option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -164,7 +170,6 @@ option(
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
-
 
 if(BUILD_PYTHON
    OR BUILD_R
@@ -343,34 +348,46 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/tpch/include)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
   endif()
-endfunction()
 
+  if(${BUILD_FTS_EXTENSION})
+    include_directories(${CMAKE_SOURCE_DIR}/extension/fts/include)
+    add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
+  endif()
+endfunction()
 
 function(add_extension_dependencies LIBRARY)
   if(${BUILD_PARQUET_EXTENSION})
-   add_dependencies(${LIBRARY} parquet_extension)
+    add_dependencies(${LIBRARY} parquet_extension)
   endif()
 
   if(${BUILD_ICU_EXTENSION})
-   add_dependencies(${LIBRARY} icu_extension)
+    add_dependencies(${LIBRARY} icu_extension)
   endif()
 
   if(${BUILD_TPCH_EXTENSION})
-   add_dependencies(${LIBRARY} tpch_extension)
+    add_dependencies(${LIBRARY} tpch_extension)
+  endif()
+
+  if(${BUILD_FTS_EXTENSION})
+    add_dependencies(${LIBRARY} fts_extension)
   endif()
 endfunction()
 
 function(link_extension_libraries LIBRARY)
   if(${BUILD_PARQUET_EXTENSION})
-   target_link_libraries(${LIBRARY} parquet_extension)
+    target_link_libraries(${LIBRARY} parquet_extension)
   endif()
 
   if(${BUILD_ICU_EXTENSION})
-   target_link_libraries(${LIBRARY} icu_extension)
+    target_link_libraries(${LIBRARY} icu_extension)
   endif()
 
   if(${BUILD_TPCH_EXTENSION})
-   target_link_libraries(${LIBRARY} tpch_extension)
+    target_link_libraries(${LIBRARY} tpch_extension)
+  endif()
+
+  if(${BUILD_FTS_EXTENSION})
+    target_link_libraries(${LIBRARY} fts_extension)
   endif()
 endfunction()
 

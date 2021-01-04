@@ -4,8 +4,6 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/limits.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 unique_ptr<SQLStatement> SelectStatement::Copy() const {

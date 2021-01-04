@@ -3,7 +3,6 @@
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimGet &op) {
 	D_ASSERT(op.children.size() == 0);

@@ -4,7 +4,6 @@
 #include "duckdb/execution/operator/helper/physical_prepare.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
 	D_ASSERT(op.children.size() == 1);

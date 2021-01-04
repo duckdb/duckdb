@@ -5,7 +5,6 @@
 #include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
-using namespace std;
 
 FunctionExpression::FunctionExpression(string schema, string function_name,
                                        vector<unique_ptr<ParsedExpression>> &children, bool distinct, bool is_operator)

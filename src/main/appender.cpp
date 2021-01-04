@@ -10,7 +10,6 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Appender::Appender(Connection &con, string schema_name, string table_name) : context(con.context), column(0) {
 	description = con.TableInfo(schema_name, table_name);
@@ -141,7 +140,7 @@ template <> void Appender::Append(Value value) {
 	AppendValue(move(value));
 }
 
-template <> void Appender::Append(nullptr_t value) {
+template <> void Appender::Append(std::nullptr_t value) {
 	if (column >= chunk.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}

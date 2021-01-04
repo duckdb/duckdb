@@ -5,7 +5,6 @@
 #include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
-using namespace std;
 
 //! Specify both the column and table name
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)

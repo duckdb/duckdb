@@ -9,8 +9,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include <limits>
 
-using namespace std;
-
 namespace duckdb {
 
 void SubstringDetection(string &str_1, string &str_2, string name_str_1, string name_str_2) {

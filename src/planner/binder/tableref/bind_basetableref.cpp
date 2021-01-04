@@ -10,7 +10,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);

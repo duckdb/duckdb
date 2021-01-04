@@ -13,7 +13,6 @@
 #include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientContext>(database.shared_from_this())) {
 #ifdef DEBUG

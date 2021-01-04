@@ -9,7 +9,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 //===--------------------------------------------------------------------===//
 // In-Place Addition

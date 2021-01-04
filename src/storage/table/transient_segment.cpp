@@ -8,7 +8,6 @@
 #include "duckdb/storage/table/persistent_segment.hpp"
 
 namespace duckdb {
-using namespace std;
 
 TransientSegment::TransientSegment(BufferManager &manager, LogicalType type, idx_t start)
     : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {

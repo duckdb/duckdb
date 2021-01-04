@@ -11,7 +11,6 @@
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {

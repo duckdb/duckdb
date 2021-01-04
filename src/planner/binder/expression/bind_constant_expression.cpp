@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ConstantExpression &expr, idx_t depth) {
 	return BindResult(make_unique<BoundConstantExpression>(expr.value));

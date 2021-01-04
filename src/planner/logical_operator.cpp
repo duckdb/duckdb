@@ -5,7 +5,6 @@
 #include "duckdb/common/tree_renderer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);

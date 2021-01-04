@@ -5,8 +5,6 @@
 
 #include <cstring>
 
-using namespace std;
-
 namespace duckdb {
 
 bool IsNullValue(data_ptr_t ptr, PhysicalType type) {

@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using Filter = FilterPushdown::Filter;
 

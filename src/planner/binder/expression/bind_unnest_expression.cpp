@@ -10,7 +10,6 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	// bind the children of the function expression

@@ -6,7 +6,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);

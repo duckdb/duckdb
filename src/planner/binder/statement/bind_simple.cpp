@@ -6,8 +6,6 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
 
-using namespace std;
-
 //! This file contains the binder definitions for statements that do not need to be bound at all and only require a
 //! straightforward conversion
 

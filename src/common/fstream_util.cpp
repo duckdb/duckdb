@@ -1,6 +1,5 @@
 #include "duckdb/common/fstream_util.hpp"
 
-using namespace std;
 namespace duckdb {
 
 void FstreamUtil::OpenFile(const string &file_path, fstream &new_file, ios_base::openmode mode) {

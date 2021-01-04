@@ -3,7 +3,6 @@
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(SelectStatement &stmt) {
 	this->allow_stream_result = true;

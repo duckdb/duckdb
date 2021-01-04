@@ -9,8 +9,6 @@
 
 #include <limits>
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -111,8 +109,7 @@ template <> bool TrySubtractOperator::Operation(int64_t left, int64_t right, int
 //===--------------------------------------------------------------------===//
 // subtract decimal with overflow check
 //===--------------------------------------------------------------------===//
-template<class T, T min, T max>
-bool TryDecimalSubtractTemplated(T left, T right, T &result) {
+template <class T, T min, T max> bool TryDecimalSubtractTemplated(T left, T right, T &result) {
 	if (right < 0) {
 		if (max + right < left) {
 			return false;

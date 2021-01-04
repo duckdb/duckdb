@@ -4,7 +4,7 @@
 
 # this test is related to test/sql/storage/test_large_interleaved_transactions.test_slow
 # but verifies that deletes/updates made to interleaved sections fail on commit
-# this test should be deleted once that behavior isf ixed
+# this test should be deleted once that behavior is fixed
 
 # load the DB from disk
 load __TEST_DIR__/test_large_interleaved.db

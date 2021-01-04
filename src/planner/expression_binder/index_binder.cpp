@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 
 namespace duckdb {
-using namespace std;
 
 IndexBinder::IndexBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }

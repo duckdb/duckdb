@@ -3,7 +3,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
+
 using namespace duckdb_libpgquery;
 
 // COALESCE(a,b,c) returns the first argument that is NOT NULL, so

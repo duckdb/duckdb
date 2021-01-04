@@ -152,7 +152,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		// if there are multiple statements here, we are dealing with an import database statement
 		// we directly execute all statements besides the final one
-		for(idx_t i = 0; i + 1 < statements.size(); i++) {
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto res = db->con->Query(move(statements[i]));
 			if (!res->success) {
 				db->last_error = res->error;
@@ -554,7 +554,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	}
 	try {
 		return sqlite3_internal_bind_value(stmt, idx, Value(value));
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		return SQLITE_ERROR;
 	}
 }

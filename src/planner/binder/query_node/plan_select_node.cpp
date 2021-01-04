@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root) {
 	PlanSubqueries(&condition, &root);

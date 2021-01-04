@@ -1,8 +1,6 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 template <class OP> struct LeastOperator {

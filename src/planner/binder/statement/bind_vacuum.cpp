@@ -2,8 +2,6 @@
 #include "duckdb/parser/statement/vacuum_statement.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 BoundStatement Binder::Bind(VacuumStatement &stmt) {

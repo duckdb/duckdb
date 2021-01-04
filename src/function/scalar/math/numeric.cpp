@@ -9,8 +9,6 @@
 #include <cmath>
 #include <errno.h>
 
-using namespace std;
-
 namespace duckdb {
 
 template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(LogicalType type) {
@@ -126,7 +124,7 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct BitCntOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		using TU = typename make_unsigned<TA>::type;
+		using TU = typename std::make_unsigned<TA>::type;
 		TR count = 0;
 		for (auto value = TU(input); value > 0; value >>= 1) {
 			count += TR(value & 1);
@@ -181,7 +179,7 @@ void SignFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct CeilOperator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
-		return ceil(left);
+		return std::ceil(left);
 	}
 };
 
@@ -269,7 +267,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct FloorOperator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
-		return floor(left);
+		return std::floor(left);
 	}
 };
 
@@ -521,7 +519,7 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct ExpOperator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
-		return exp(left);
+		return std::exp(left);
 	}
 };
 
@@ -535,7 +533,7 @@ void ExpFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct PowOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA base, TB exponent) {
-		return pow(base, exponent);
+		return std::pow(base, exponent);
 	}
 };
 
@@ -554,7 +552,7 @@ void PowFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct SqrtOperator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
-		return sqrt(left);
+		return std::sqrt(left);
 	}
 };
 
@@ -568,7 +566,7 @@ void SqrtFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct CbRtOperator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
-		return cbrt(left);
+		return std::cbrt(left);
 	}
 };
 
@@ -583,7 +581,7 @@ void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
 
 struct LnOperator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
-		return log(left);
+		return std::log(left);
 	}
 };
 
@@ -597,7 +595,7 @@ void LnFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct Log10Operator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
-		return log10(left);
+		return std::log10(left);
 	}
 };
 
@@ -611,7 +609,7 @@ void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct Log2Operator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
-		return log2(left);
+		return std::log2(left);
 	}
 };
 
@@ -666,7 +664,7 @@ void RadiansFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct SinOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return sin(input);
+		return std::sin(input);
 	}
 };
 
@@ -680,7 +678,7 @@ void SinFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct CosOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return (double)cos(input);
+		return (double)std::cos(input);
 	}
 };
 
@@ -694,7 +692,7 @@ void CosFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct TanOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return (double)tan(input);
+		return (double)std::tan(input);
 	}
 };
 
@@ -711,7 +709,7 @@ struct ASinOperator {
 		if (input < -1 || input > 1) {
 			throw Exception("ASIN is undefined outside [-1,1]");
 		}
-		return (double)asin(input);
+		return (double)std::asin(input);
 	}
 };
 
@@ -725,7 +723,7 @@ void AsinFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct ATanOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return (double)atan(input);
+		return (double)std::atan(input);
 	}
 };
 
@@ -739,7 +737,7 @@ void AtanFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct ATan2 {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return (double)atan2(left, right);
+		return (double)std::atan2(left, right);
 	}
 };
 
@@ -753,7 +751,7 @@ void Atan2Fun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct ACos {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return (double)acos(input);
+		return (double)std::acos(input);
 	}
 };
 
@@ -767,13 +765,41 @@ void AcosFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct CotOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return 1.0 / (double)tan(input);
+		return 1.0 / (double)std::tan(input);
 	}
 };
 
 void CotFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("cot", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                               UnaryDoubleFunctionWrapper<double, CotOperator>));
+}
+
+//===--------------------------------------------------------------------===//
+// gamma
+//===--------------------------------------------------------------------===//
+struct GammaOperator {
+	template <class TA, class TR> static inline TR Operation(TA left) {
+		return std::tgamma(left);
+	}
+};
+
+void GammaFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("gamma", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, GammaOperator>));
+}
+
+//===--------------------------------------------------------------------===//
+// gamma
+//===--------------------------------------------------------------------===//
+struct LogGammaOperator {
+	template <class TA, class TR> static inline TR Operation(TA left) {
+		return std::lgamma(left);
+	}
+};
+
+void LogGammaFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("lgamma", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, LogGammaOperator>));
 }
 
 } // namespace duckdb

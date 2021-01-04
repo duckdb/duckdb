@@ -9,7 +9,8 @@
 #include <sstream>
 
 namespace duckdb {
-using namespace std;
+
+using std::stringstream;
 
 static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entries) {
 	for (auto &entry : entries) {

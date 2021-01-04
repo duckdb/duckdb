@@ -3,8 +3,6 @@
 #include "duckdb/planner/table_filter.hpp"
 #include <vector>
 
-using namespace std;
-
 namespace duckdb {
 
 AdaptiveFilter::AdaptiveFilter(Expression &expr)
@@ -39,7 +37,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			// keep swap if runtime decreased, else reverse swap
 			if (prev_mean - (runtime_sum / iteration_count) <= 0) {
 				// reverse swap because runtime didn't decrease
-				swap(permutation[swap_idx], permutation[swap_idx + 1]);
+				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
 
 				// decrease swap likeliness, but make sure there is always a small likeliness left
 				if (swap_likeliness[swap_idx] > 1) {
@@ -59,7 +57,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			prev_mean = runtime_sum / iteration_count;
 
 			// get swap index and swap likeliness
-			uniform_int_distribution<int> distribution(1, right_random_border); // a <= i <= b
+			std::uniform_int_distribution<int> distribution(1, right_random_border); // a <= i <= b
 			idx_t random_number = distribution(generator) - 1;
 
 			swap_idx = random_number / 100;                    // index to be swapped
@@ -68,7 +66,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			// check if swap is going to happen
 			if (swap_likeliness[swap_idx] > likeliness) { // always true for the first swap of an index
 				// swap
-				swap(permutation[swap_idx], permutation[swap_idx + 1]);
+				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
 
 				// observe whether swap will be applied
 				observe = true;

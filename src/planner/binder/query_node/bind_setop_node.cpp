@@ -9,8 +9,6 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &aliases,

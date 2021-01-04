@@ -13,7 +13,6 @@
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
-using namespace std;
 
 TableDataReader::TableDataReader(CheckpointManager &manager, MetaBlockReader &reader, BoundCreateTableInfo &info)
     : manager(manager), reader(reader), info(info) {

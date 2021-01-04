@@ -9,8 +9,6 @@
 
 #include <set>
 
-using namespace std;
-
 namespace duckdb {
 
 struct InformationSchemaColumnsData : public FunctionOperatorData {
@@ -138,7 +136,7 @@ public:
 
 private:
 	TableCatalogEntry *entry;
-	set<idx_t> not_null_cols;
+	std::set<idx_t> not_null_cols;
 };
 
 class ViewColumnHelper : public ColumnHelper {

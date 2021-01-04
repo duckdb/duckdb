@@ -9,8 +9,6 @@
 
 #include <string.h>
 
-using namespace std;
-
 namespace duckdb {
 
 uint8_t UpperFun::ASCIIToUpperMap[] = {
@@ -45,15 +43,14 @@ template <bool IS_UPPER> static string_t strcase_ascii(Vector &result, const cha
 	auto result_str = StringVector::EmptyString(result, output_length);
 	auto result_data = result_str.GetDataWriteable();
 	for (idx_t i = 0; i < input_length; i++) {
-		result_data[i] =
-		    IS_UPPER ? UpperFun::ASCIIToUpperMap[uint8_t(input_data[i])] : LowerFun::ASCIIToLowerMap[uint8_t(input_data[i])];
+		result_data[i] = IS_UPPER ? UpperFun::ASCIIToUpperMap[uint8_t(input_data[i])]
+		                          : LowerFun::ASCIIToLowerMap[uint8_t(input_data[i])];
 	}
 	result_str.Finalize();
 	return result_str;
 }
 
-template<bool IS_UPPER>
-static idx_t GetResultLength(const char *input_data, idx_t input_length) {
+template <bool IS_UPPER> static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 	idx_t output_length = 0;
 	for (idx_t i = 0; i < input_length;) {
 		if (input_data[i] & 0x80) {
@@ -74,8 +71,7 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 	return output_length;
 }
 
-template<bool IS_UPPER>
-static void CaseConvert(const char *input_data, idx_t input_length, char *result_data) {
+template <bool IS_UPPER> static void CaseConvert(const char *input_data, idx_t input_length, char *result_data) {
 	for (idx_t i = 0; i < input_length;) {
 		if (input_data[i] & 0x80) {
 			// non-ascii character
@@ -89,8 +85,8 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 			i += sz;
 		} else {
 			// ascii
-			*result_data =
-			    IS_UPPER ? UpperFun::ASCIIToUpperMap[uint8_t(input_data[i])] : LowerFun::ASCIIToLowerMap[uint8_t(input_data[i])];
+			*result_data = IS_UPPER ? UpperFun::ASCIIToUpperMap[uint8_t(input_data[i])]
+			                        : LowerFun::ASCIIToLowerMap[uint8_t(input_data[i])];
 			result_data++;
 			i++;
 		}

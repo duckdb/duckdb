@@ -37,7 +37,6 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #endif
 
 namespace duckdb {
-using namespace std;
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 	return *context.db->config.file_system;
@@ -285,7 +284,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
+bool FileSystem::ListFiles(const string &directory, std::function<void(string, bool)> callback) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -500,7 +499,6 @@ time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	// 100-nanosecond intervals since January 1, 1601 (UTC).
 	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
 
-
 	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
 	const auto WINDOWS_TICK = 10000000;
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
@@ -592,7 +590,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	DeleteFileA(filename.c_str());
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
+bool FileSystem::ListFiles(const string &directory, std::function<void(string, bool)> callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	WIN32_FIND_DATA ffd;
@@ -714,7 +712,7 @@ void FileHandle::Truncate(int64_t new_size) {
 
 static bool HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
-		switch(str[i]) {
+		switch (str[i]) {
 		case '*':
 		case '?':
 		case '[':

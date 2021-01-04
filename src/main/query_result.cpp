@@ -3,7 +3,6 @@
 #include "duckdb/common/arrow.hpp"
 
 namespace duckdb {
-using namespace std;
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
     : type(type), statement_type(statement_type), success(true) {

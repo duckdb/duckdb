@@ -1,7 +1,6 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 
 namespace duckdb {
-using namespace std;
 
 LogicalCrossProduct::LogicalCrossProduct() : LogicalOperator(LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 }

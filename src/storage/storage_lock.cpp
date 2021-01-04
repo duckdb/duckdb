@@ -3,7 +3,6 @@
 #include "duckdb/common/assert.hpp"
 
 namespace duckdb {
-using namespace std;
 
 StorageLockKey::StorageLockKey(StorageLock &lock, StorageLockType type) : lock(lock), type(type) {
 }

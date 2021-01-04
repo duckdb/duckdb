@@ -2,8 +2,6 @@
 
 #include "utf8proc_wrapper.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void nfc_normalize_function(DataChunk &args, ExpressionState &state, Vector &result) {

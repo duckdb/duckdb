@@ -8,7 +8,6 @@
 #include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class OP> static Value binary_value_operation(const Value &left, const Value &right) {
 	auto left_type = left.type();

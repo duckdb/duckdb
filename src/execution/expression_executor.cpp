@@ -4,7 +4,6 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ExpressionExecutor::ExpressionExecutor() {
 }

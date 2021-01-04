@@ -10,7 +10,6 @@
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
 WriteAheadLog::WriteAheadLog(DatabaseInstance &database) : initialized(false), database(database) {
 }

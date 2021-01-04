@@ -2,7 +2,6 @@
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void BuiltinFunctions::RegisterMathFunctions() {
 	Register<AbsFun>();
@@ -28,6 +27,9 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<PiFun>();
 
 	Register<BitCountFun>();
+
+	Register<GammaFun>();
+	Register<LogGammaFun>();
 }
 
 } // namespace duckdb

@@ -1,8 +1,6 @@
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/common/algorithm.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct RepeatFunctionData : public TableFunctionData {
@@ -38,7 +36,7 @@ static void repeat_function(ClientContext &context, const FunctionData *bind_dat
 	auto &bind_data = (RepeatFunctionData &)*bind_data_;
 	auto &state = (RepeatOperatorData &)*operator_state;
 
-	idx_t remaining = min<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
+	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
 	output.data[0].Reference(bind_data.value);
 	output.SetCardinality(remaining);
 	state.current_count += remaining;

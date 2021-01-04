@@ -64,6 +64,20 @@ SELECT * FROM t ORDER BY 1 NULLS LAST;
 1000000
 NULL
 
+# the same but with a hash join
+query I
+WITH RECURSIVE t AS
+(
+	SELECT 1 AS x
+UNION
+	SELECT SUM(x) AS x
+	FROM t, a
+	WHERE x < 1000000 AND t.x=a.i
+)
+SELECT * FROM t ORDER BY 1 NULLS LAST;
+----
+1
+
 # nested aggregates
 query I
 WITH RECURSIVE t AS

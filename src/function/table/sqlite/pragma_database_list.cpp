@@ -2,8 +2,6 @@
 
 #include "duckdb/storage/storage_manager.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct PragmaDatabaseListData : public FunctionOperatorData {

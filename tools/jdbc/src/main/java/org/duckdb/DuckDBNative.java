@@ -83,4 +83,31 @@ public class DuckDBNative {
 	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref);
 	
 	protected static native int duckdb_jdbc_fetch_size();
+
+	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name);
+
+	protected static native void duckdb_jdbc_appender_begin_row(ByteBuffer appender_ref);
+
+	protected static native void duckdb_jdbc_appender_end_row(ByteBuffer appender_ref);
+
+	protected static native void duckdb_jdbc_appender_flush(ByteBuffer appender_ref);
+
+	protected static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref);
+
+	protected static native void duckdb_jdbc_appender_append_boolean(ByteBuffer appender_ref, boolean value);
+
+	protected static native void duckdb_jdbc_appender_append_byte(ByteBuffer appender_ref, byte value);
+
+	protected static native void duckdb_jdbc_appender_append_short(ByteBuffer appender_ref, short value);
+
+	protected static native void duckdb_jdbc_appender_append_int(ByteBuffer appender_ref, int value);
+
+	protected static native void duckdb_jdbc_appender_append_long(ByteBuffer appender_ref, long value);
+
+	protected static native void duckdb_jdbc_appender_append_float(ByteBuffer appender_ref, float value);
+
+	protected static native void duckdb_jdbc_appender_append_double(ByteBuffer appender_ref, double value);
+
+	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value);
+
 }

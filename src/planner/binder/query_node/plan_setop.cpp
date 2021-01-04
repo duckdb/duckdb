@@ -6,7 +6,6 @@
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
                                                                vector<LogicalType> &target_types,

@@ -10,7 +10,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 struct ComparisonExecutor {
 private:

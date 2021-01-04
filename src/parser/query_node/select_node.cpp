@@ -2,7 +2,6 @@
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool SelectNode::Equals(const QueryNode *other_) const {
 	if (!QueryNode::Equals(other_)) {

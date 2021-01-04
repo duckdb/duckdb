@@ -7,7 +7,6 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	auto result = make_unique<BoundRecursiveCTENode>();

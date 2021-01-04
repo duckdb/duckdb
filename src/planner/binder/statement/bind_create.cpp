@@ -23,7 +23,6 @@
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
-using namespace std;
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (info.schema == INVALID_SCHEMA) {
