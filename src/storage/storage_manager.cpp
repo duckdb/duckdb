@@ -7,6 +7,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
