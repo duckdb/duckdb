@@ -29,6 +29,7 @@ namespace duckdb {
 Catalog::Catalog(StorageManager &storage)
     : storage(storage), schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
       dependency_manager(make_unique<DependencyManager>(*this)) {
+	catalog_version = 0;
 }
 Catalog::~Catalog() {
 }

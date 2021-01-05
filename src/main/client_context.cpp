@@ -339,6 +339,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 				if (prepared->types != new_prepared->types) {
 					throw BinderException("Rebinding statement after catalog change resulted in change of types");
 				}
+				new_prepared->unbound_statement = move(prepared->unbound_statement);
 				prepared = move(new_prepared);
 			}
 			result = ExecutePreparedStatement(query, prepared, *values, allow_stream_result);
