@@ -335,7 +335,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 			if (prepared->unbound_statement && catalog.GetCatalogVersion() != prepared->catalog_version) {
 				D_ASSERT(prepared->unbound_statement.get());
 				// catalog was modified: rebind the statement before execution
-				auto new_prepared = CreatePreparedStatement(query, move(prepared->unbound_statement));
+				auto new_prepared = CreatePreparedStatement(query, prepared->unbound_statement->Copy());
 				if (prepared->types != new_prepared->types) {
 					throw BinderException("Rebinding statement after catalog change resulted in change of types");
 				}
