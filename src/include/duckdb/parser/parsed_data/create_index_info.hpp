@@ -42,7 +42,7 @@ public:
 		for (auto &expr : expressions) {
 			result->expressions.push_back(expr->Copy());
 		}
-		return result;
+		return move(result);
 	}
 };
 
