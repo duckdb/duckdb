@@ -104,3 +104,14 @@ select grp, sum(val), round(var_pop(val), 2), min(val) from stddev_test where va
 1	85.000000	0.250000	42
 2	1042.000000	229441.000000	42
 
+statement ok
+create table stddev_test_alias(val integer, grp integer)
+
+statement ok
+insert into stddev_test_alias values (42, 1), (43, 1), (42, 2), (1000, 2), (NULL, 1), (NULL, 3)
+
+# stddev_samp
+query R
+select round(stddev(val), 1) from stddev_test_alias
+----
+478.800000
