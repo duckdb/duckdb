@@ -32,9 +32,10 @@ struct UpdateInfo;
 
 class Transaction {
 public:
-	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp)
+	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp, idx_t catalog_version)
 	    : start_time(start_time), transaction_id(transaction_id), commit_id(0), highest_active_query(0),
-	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), storage(*this), is_invalidated(false) {
+	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), catalog_version(catalog_version),
+		  storage(*this), is_invalidated(false) {
 	}
 
 	//! The start timestamp of this transaction
