@@ -437,29 +437,6 @@ jobs:
     - name: Test
       run: valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
 
-
-  ubsan:
-    name: UBSAN
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get install ninja-build
-
-    - name: Test
-      run: make ubsandebug
-
-
 # borked somehow. needs investigation.
 #  codecov:
 #    name: Code Coverage
