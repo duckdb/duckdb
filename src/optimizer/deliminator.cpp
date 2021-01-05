@@ -9,7 +9,7 @@ unique_ptr<LogicalOperator> Deliminator::Rewrite(unique_ptr<LogicalOperator> op)
 	root = op.get();
     op = FindDelimGets(move(op));
 	op = RemoveDelimJoins(move(op));
-    return move(op);
+    return op;
 
 }
 
@@ -29,10 +29,10 @@ unique_ptr<LogicalOperator> Deliminator::FindDelimGets(unique_ptr<LogicalOperato
 					from.push_back(i == 0 ? left.binding : right.binding);
                     to.push_back(i == 0 ? right.binding : left.binding);
 				}
-                // replace all occurrences of the duplicate eliminated column with the original value
-				LogicalOperatorVisitor::EnumerateExpressions(*root, [&](unique_ptr<Expression> *child) {
-					Replace(**child, from, to);
-				});
+//                // replace all occurrences of the duplicate eliminated column with the original value
+//				LogicalOperatorVisitor::EnumerateExpressions(*root, [&](unique_ptr<Expression> *child) {
+//					Replace(**child, from, to);
+//				});
 				// now replace the operator
                 op = i == 0 ? move(op->children[1]) : move(op->children[0]);
                 return FindDelimGets(move(op));
@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> Deliminator::FindDelimGets(unique_ptr<LogicalOperato
     for (idx_t i = 0; i < op->children.size(); i++) {
         op->children[i] = FindDelimGets(move(op->children[i]));
     }
-    return move(op);
+    return op;
 }
 
 void Deliminator::Replace(Expression &expr, vector<ColumnBinding> &from, vector<ColumnBinding> &to) {
@@ -59,15 +59,15 @@ void Deliminator::Replace(Expression &expr, vector<ColumnBinding> &from, vector<
 
 unique_ptr<LogicalOperator> Deliminator::RemoveDelimJoins(unique_ptr<LogicalOperator> op) {
     if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-        auto delim_join = (LogicalDelimJoin &)*op;
-		if (delim_join.duplicate_eliminated_columns.empty()) {
-			op->type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
-		}
+//        auto delim_join = (LogicalDelimJoin &)*op;
+//		if (delim_join.duplicate_eliminated_columns.empty()) {
+//			op->type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+//		}
 	}
     for (idx_t i = 0; i < op->children.size(); i++) {
         op->children[i] = RemoveDelimJoins(move(op->children[i]));
     }
-    return move(op);
+    return op;
 }
 
 } // namespace duckdb
