@@ -332,7 +332,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 			result = RunStatementInternal(query, move(statement), allow_stream_result);
 		} else {
 			auto &catalog = Catalog::GetCatalog(*this);
-			if (catalog.GetCatalogVersion() != prepared->catalog_version) {
+			if (prepared->unbound_statement && catalog.GetCatalogVersion() != prepared->catalog_version) {
 				D_ASSERT(prepared->unbound_statement.get());
 				// catalog was modified: rebind the statement before execution
 				auto new_prepared = CreatePreparedStatement(query, move(prepared->unbound_statement));
