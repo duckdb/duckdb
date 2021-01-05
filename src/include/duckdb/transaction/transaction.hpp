@@ -50,6 +50,8 @@ public:
 	transaction_t active_query;
 	//! The timestamp when the transaction started
 	timestamp_t start_timestamp;
+	//! The catalog version when the transaction was started
+	idx_t catalog_version;
 	//! The set of uncommitted appends for the transaction
 	LocalStorage storage;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction

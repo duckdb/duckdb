@@ -147,7 +147,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = move(planner.value_map);
-	result->catalog_version = Catalog::GetCatalog(*this).GetCatalogVersion();
+	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
 
 	if (enable_optimizer) {
 		profiler.StartPhase("optimizer");
@@ -333,6 +333,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 		} else {
 			auto &catalog = Catalog::GetCatalog(*this);
 			if (catalog.GetCatalogVersion() != prepared->catalog_version) {
+				D_ASSERT(prepared->unbound_statement.get());
 				// catalog was modified: rebind the statement before execution
 				auto new_prepared = CreatePreparedStatement(query, prepared->unbound_statement->Copy());
 				if (prepared->types != new_prepared->types) {

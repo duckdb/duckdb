@@ -11,7 +11,8 @@
 
 namespace duckdb {
 
-TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
+TransactionManager::TransactionManager(StorageManager &storage, Catalog &catalog) :
+    storage(storage), catalog(catalog) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
 	// transaction ID starts very high:
@@ -43,6 +44,7 @@ Transaction *TransactionManager::StartTransaction() {
 	// create the actual transaction
 	auto transaction = make_unique<Transaction>(start_time, transaction_id, start_timestamp);
 	auto transaction_ptr = transaction.get();
+	transaction->catalog_version = catalog.GetCatalogVersion();
 
 	// store it in the set of active transactions
 	active_transactions.push_back(move(transaction));

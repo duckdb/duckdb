@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -68,7 +69,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->read_only = this->read_only;
 	prepared_data->requires_valid_transaction = this->requires_valid_transaction;
 	prepared_data->allow_stream_result = this->allow_stream_result;
-	prepared_data->catalog_version = Catalog::GetCatalog(context).GetCatalogVersion();
+	prepared_data->catalog_version = Transaction::GetTransaction(context).catalog_version;
 	return prepared_data;
 }
 

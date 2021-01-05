@@ -43,7 +43,7 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	storage =
 	    make_unique<StorageManager>(*this, path ? string(path) : string(), config.access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*storage);
-	transaction_manager = make_unique<TransactionManager>(*storage);
+	transaction_manager = make_unique<TransactionManager>(*storage, *catalog);
 	scheduler = make_unique<TaskScheduler>();
 	connection_manager = make_unique<ConnectionManager>();
 	object_cache = make_unique<ObjectCache>();
