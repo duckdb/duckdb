@@ -45,12 +45,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	rewriter.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
-    // remove redundant duplicate-eliminated joins and/or delim gets
-//    context.profiler.StartPhase("deliminator");
-//    Deliminator deliminator(*this);
-//    plan = deliminator.Rewrite(move(plan));
-//    context.profiler.EndPhase();
-
 	// perform filter pushdown
 	context.profiler.StartPhase("filter_pushdown");
 	FilterPushdown filter_pushdown(*this);
@@ -73,6 +67,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	JoinOrderOptimizer optimizer(context);
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
+
+    // remove redundant duplicate-eliminated joins and/or delim gets
+    context.profiler.StartPhase("deliminator");
+    Deliminator deliminator(*this);
+    plan = deliminator.Rewrite(move(plan));
+    context.profiler.EndPhase();
 
 	context.profiler.StartPhase("unused_columns");
 	RemoveUnusedColumns unused(binder, context, true);
