@@ -10,7 +10,7 @@ unique_ptr<SQLStatement> CopyStatement::Copy() const {
 	if (select_statement) {
 		result->select_statement = select_statement->Copy();
 	}
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb
