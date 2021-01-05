@@ -601,7 +601,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	uint64_t dest_offset = 0;
 	while (true) {
 		auto chunk = result->Fetch();
-		if (chunk->size() == 0) {
+		if (chunk && chunk->size() == 0) {
 			break;
 		}
 		D_ASSERT(chunk->ColumnCount() == ncols);

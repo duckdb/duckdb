@@ -241,6 +241,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	}
 
 	res_ref->chunk = res_ref->res->Fetch();
+	if (!res_ref->chunk) {
+		res_ref->chunk = make_unique<DataChunk>();
+	}
 	auto row_count = res_ref->chunk->size();
 
 	auto vec_array = (jobjectArray)env->NewObjectArray(res_ref->chunk->ColumnCount(),
