@@ -1883,6 +1883,10 @@ a_expr:		c_expr									{ $$ = $1; }
 											   list_concat($1, $3),
 											   @2);
 				}
+		    | row {
+					PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+					$$ = (PGNode *) n;
+		    }
 			| a_expr IS TRUE_P							%prec IS
 				{
 					PGBooleanTest *b = makeNode(PGBooleanTest);

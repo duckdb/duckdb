@@ -487,16 +487,23 @@ static void struct_cast_switch(Vector &source, Vector &result, idx_t count) {
 		auto &source_children = StructVector::GetEntries(source);
 		D_ASSERT(source_children.size() == source.type.child_types().size());
 
+		bool is_constant = true;
 		for (idx_t c_idx = 0; c_idx < result.type.child_types().size(); c_idx++) {
 			auto &child_type = result.type.child_types()[c_idx];
 			auto result_child_vector = make_unique<Vector>(child_type.second);
 			auto &source_child_vector = *source_children[c_idx].second;
+			if (source_child_vector.vector_type != VectorType::CONSTANT_VECTOR) {
+				is_constant = false;
+			}
 			if (child_type.second != source_child_vector.type) {
 				VectorOperations::Cast(source_child_vector, *result_child_vector, count, false);
 			} else {
 				result_child_vector->Reference(source_child_vector);
 			}
 			StructVector::AddEntry(result, child_type.first, move(result_child_vector));
+		}
+		if (is_constant) {
+			result.vector_type = VectorType::CONSTANT_VECTOR;
 		}
 
 		break;
