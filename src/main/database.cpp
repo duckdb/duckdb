@@ -50,20 +50,6 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	storage->Initialize();
 }
 
-void DatabaseInstance::Shutdown() {
-	if (IsShutdown()) {
-		return;
-	}
-}
-
-bool DatabaseInstance::IsShutdown() {
-	return !storage;
-}
-
-void DuckDB::Shutdown() {
-	instance->Shutdown();
-}
-
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
 	instance->Initialize(path, new_config);
 }

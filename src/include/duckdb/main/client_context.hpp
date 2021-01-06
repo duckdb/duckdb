@@ -169,6 +169,7 @@ private:
 	void LogQueryInternal(ClientContextLock &lock, string query);
 
 	unique_ptr<ClientContextLock> LockContext();
+
 private:
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;

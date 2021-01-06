@@ -34,7 +34,10 @@ namespace duckdb {
 class ClientContextLock {
 public:
 	ClientContextLock(mutex &context_lock) :
-		client_guard(context_lock) {}
+		client_guard(context_lock) {
+	}
+	~ClientContextLock() {
+	}
 
 private:
 	lock_guard<mutex> client_guard;

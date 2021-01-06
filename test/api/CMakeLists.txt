@@ -10,7 +10,6 @@ set(TEST_API_OBJECTS
     test_appender_api.cpp
     test_relation_api.cpp
     test_query_profiler.cpp
-    test_shutdown.cpp
     test_dbdir.cpp)
 
 if(NOT WIN32)

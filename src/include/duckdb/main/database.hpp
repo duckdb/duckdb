@@ -10,6 +10,7 @@
 
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class StorageManager;
@@ -37,11 +38,6 @@ public:
 	FileSystem &GetFileSystem();
 
 	idx_t NumberOfThreads();
-
-	//! Shutdown the database system, destroying it and invalidating any connections or clients
-	void Shutdown();
-	//! Returns true if the database system has been shut down
-	bool IsShutdown();
 
 private:
 	void Initialize(const char *path, DBConfig *config);
@@ -74,8 +70,6 @@ public:
 	}
 
 	FileSystem &GetFileSystem();
-	//! Shutdown the database system, destroying it and invalidating any connections or clients
-	void Shutdown();
 
 	idx_t NumberOfThreads();
 	static const char *SourceID();
