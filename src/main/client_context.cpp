@@ -212,6 +212,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	executor.Initialize(move(statement.plan));
 
 	auto types = executor.GetTypes();
+
 	D_ASSERT(types == statement.types);
 
 	if (create_stream_result) {

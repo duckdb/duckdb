@@ -537,6 +537,8 @@ std::string Transformer::NodetypeToString(PGNodeTag type) {
 		return "T_VariableSetStmt";
 	case T_PGVariableShowStmt:
 		return "T_VariableShowStmt";
+	case T_PGVariableShowSelectStmt:
+		return "T_VariableShowSelectStmt";
 	case T_PGDiscardStmt:
 		return "T_DiscardStmt";
 	case T_PGCreateTrigStmt:
