@@ -26,6 +26,7 @@ import java.util.Properties;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDriver;
+import org.duckdb.DuckDBDatabase;
 
 public class TestDuckDBJDBC {
 
@@ -631,7 +632,9 @@ public class TestDuckDBJDBC {
 		}
 
 		// hard shutdown to not have to wait on gc
-		((DuckDBConnection) conn_rw).getDatabase().shutdown();
+		DuckDBDatabase db = ((DuckDBConnection) conn_rw).getDatabase();
+		conn_rw.close();
+		db.shutdown();
 
 		try {
 			Statement stmt2 = conn_rw.createStatement();
