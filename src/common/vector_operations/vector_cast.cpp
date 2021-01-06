@@ -478,6 +478,48 @@ static void value_string_cast_switch(Vector &source, Vector &result, idx_t count
 	}
 }
 
+static void struct_cast_switch(Vector &source, Vector &result, idx_t count) {
+	switch (result.type.id()) {
+	case LogicalTypeId::STRUCT: {
+		if (source.type.child_types().size() != result.type.child_types().size()) {
+			throw TypeMismatchException(source.type, result.type, "Cannot cast STRUCTs of different size");
+		}
+		auto &source_children = StructVector::GetEntries(source);
+		D_ASSERT(source_children.size() == source.type.child_types().size());
+
+		for (idx_t c_idx = 0; c_idx < result.type.child_types().size(); c_idx++) {
+			auto &child_type = result.type.child_types()[c_idx];
+			auto result_child_vector = make_unique<Vector>(child_type.second);
+			auto &source_child_vector = *source_children[c_idx].second;
+			if (child_type.second != source_child_vector.type) {
+				VectorOperations::Cast(source_child_vector, *result_child_vector, count, false);
+			} else {
+				result_child_vector->Reference(source_child_vector);
+			}
+			StructVector::AddEntry(result, child_type.first, move(result_child_vector));
+		}
+
+		break;
+	}
+	case LogicalTypeId::VARCHAR:
+		if (source.vector_type == VectorType::CONSTANT_VECTOR) {
+			result.vector_type = source.vector_type;
+		} else {
+			result.vector_type = VectorType::FLAT_VECTOR;
+		}
+		for (idx_t i = 0; i < count; i++) {
+			auto src_val = source.GetValue(i);
+			auto str_val = src_val.ToString();
+			result.SetValue(i, Value(str_val));
+		}
+		break;
+
+	default:
+		null_cast(source, result, count);
+		break;
+	}
+}
+
 void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool strict) {
 	D_ASSERT(source.type != result.type);
 	// first switch on source type
@@ -534,6 +576,8 @@ void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool st
 		break;
 	}
 	case LogicalTypeId::STRUCT:
+		struct_cast_switch(source, result, count);
+		break;
 	case LogicalTypeId::LIST:
 		value_string_cast_switch(source, result, count);
 		break;

@@ -1154,6 +1154,16 @@ opt_collate_clause:
  *
  *****************************************************************************/
 
+colid_type_list:
+            ColId Typename   {
+             $$ = list_make1(list_make2(makeString($1), $2));
+            }
+            | colid_type_list ',' ColId Typename {
+             $$ = lappend($1, list_make2(makeString($3), $4));
+            }
+
+RowOrStruct: ROW | STRUCT
+
 Typename:	SimpleTypename opt_array_bounds
 				{
 					$$ = $1;
@@ -1188,6 +1198,11 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
+			| RowOrStruct '(' colid_type_list ')' {
+               $$ = SystemTypeName("struct");
+               $$->typmods = $3;
+               $$->location = @1;
+			}
 		;
 
 opt_array_bounds:

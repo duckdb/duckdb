@@ -378,6 +378,8 @@ LogicalType TransformStringToLogicalType(string str) {
 		return LogicalType::INTERVAL;
 	} else if (lower_str == "hugeint" || lower_str == "int128") {
 		return LogicalType::HUGEINT;
+	} else if (lower_str == "struct" || lower_str == "row") {
+		return LogicalType::STRUCT;
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}

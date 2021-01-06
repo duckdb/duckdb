@@ -2,8 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-
-#include <unordered_set>
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -21,7 +20,7 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 		}
 		// same holds for this
 		D_ASSERT(args.data[i].type == info.stype.child_types()[i].second);
-		auto new_child = make_unique<Vector>();
+		auto new_child = make_unique<Vector>(info.stype.child_types()[i].second);
 		new_child->Reference(args.data[i]);
 		StructVector::AddEntry(result, info.stype.child_types()[i].first, move(new_child));
 	}
@@ -32,7 +31,7 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 
 static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	std::unordered_set<string> name_collision_set;
+	unordered_set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type
 	if (arguments.size() == 0) {
