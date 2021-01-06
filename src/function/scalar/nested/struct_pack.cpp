@@ -40,8 +40,11 @@ static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarF
 	child_list_t<LogicalType> struct_children;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
-		if (child->alias.size() == 0) {
+		if (child->alias.size() == 0 && bound_function.name == "struct_pack") {
 			throw Exception("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
+		}
+		if (child->alias.size() == 0 && bound_function.name == "row") {
+			child->alias = "v" + std::to_string(i + 1);
 		}
 		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
 			throw Exception("Duplicate struct entry name");
@@ -59,6 +62,8 @@ void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun("struct_pack", {}, LogicalType::STRUCT, struct_pack_fun, false, struct_pack_bind);
 	fun.varargs = LogicalType::ANY;
+	set.AddFunction(fun);
+	fun.name = "row";
 	set.AddFunction(fun);
 }
 

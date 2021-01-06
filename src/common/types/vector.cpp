@@ -764,6 +764,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (type.InternalType() == PhysicalType::STRUCT) {
+		D_ASSERT(type.child_types().size() > 0);
 		if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(children.size() > 0);
@@ -774,6 +775,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (type.InternalType() == PhysicalType::LIST) {
+		D_ASSERT(type.child_types().size() == 1);
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify();

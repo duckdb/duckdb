@@ -308,7 +308,12 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 
 Value Value::STRUCT(child_list_t<Value> values) {
 	Value result;
-	result.type_ = LogicalType(LogicalTypeId::STRUCT);
+	child_list_t<LogicalType> child_types;
+	for (auto &child : values) {
+		child_types.push_back(make_pair(child.first, child.second.type()));
+	}
+	result.type_ = LogicalType(LogicalTypeId::STRUCT, child_types);
+
 	result.struct_value = move(values);
 	result.is_null = false;
 	return result;

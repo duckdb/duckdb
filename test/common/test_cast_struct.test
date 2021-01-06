@@ -46,6 +46,7 @@ select ROW(42, 'asdf');
 ----
 <v1: 42, v2: asdf>
 
+
 statement error
 select ROW();
 
@@ -59,3 +60,14 @@ select ROW(NULL, NULL);
 ----
 <v1: NULL, v2: NULL>
 
+# MB example
+query I
+SELECT CAST(ROW(1, 2) AS ROW(a INTEGER, b INTEGER))
+----
+<a: 1, b: 2>
+
+query I
+select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fdsa'))) s(a);
+----
+<a: 1, b: asdf>
+<a: 4, b: fdsa>
