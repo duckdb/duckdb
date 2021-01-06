@@ -22553,7 +22553,7 @@ yyreduce:
     {
 				PGVariableShowSelectStmt *n = makeNode(PGVariableShowSelectStmt);
 				n->stmt = (yyvsp[(2) - (2)].node);
-				n->name="select";
+				n->name = (char*) "select";
 				(yyval.node) = (PGNode *) n;
 			;}
     break;
