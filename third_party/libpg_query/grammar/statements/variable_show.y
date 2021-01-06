@@ -3,7 +3,7 @@ VariableShowStmt:
 			show_or_describe SelectStmt {
 				PGVariableShowSelectStmt *n = makeNode(PGVariableShowSelectStmt);
 				n->stmt = $2;
-				n->name="select";
+				n->name = (char*) "select";
 				$$ = (PGNode *) n;
 			}
 

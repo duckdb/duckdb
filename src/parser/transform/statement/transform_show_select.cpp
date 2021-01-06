@@ -2,8 +2,9 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
-using namespace std;
+namespace duckdb {
+
+using namespace duckdb_libpgquery;
 
 unique_ptr<ShowStatement> Transformer::TransformShowSelect(PGNode *node) {
 	// we capture the select statement of SHOW
@@ -17,3 +18,5 @@ unique_ptr<ShowStatement> Transformer::TransformShowSelect(PGNode *node) {
 
 	return result;
 }
+
+} // namespace duckdb
