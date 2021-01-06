@@ -101,7 +101,7 @@ public:
 		if (bind_data.files.size() < 2) {
 			return overall_stats;
 		} else if (config.object_cache_enable) {
-			auto &cache = *context.db->object_cache;
+			auto &cache = ObjectCache::GetObjectCache(context);
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);

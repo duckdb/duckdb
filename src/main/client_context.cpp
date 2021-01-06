@@ -31,6 +31,15 @@
 
 namespace duckdb {
 
+class ClientContextLock {
+public:
+	ClientContextLock(mutex &context_lock) :
+		client_guard(context_lock) {}
+
+private:
+	lock_guard<mutex> client_guard;
+};
+
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(database), transaction(*db->transaction_manager), interrupted(false), executor(*this), catalog(*db->catalog),
       temporary_objects(make_unique<SchemaCatalogEntry>(db->catalog.get(), TEMP_SCHEMA, true)), open_result(nullptr) {
@@ -42,31 +51,35 @@ ClientContext::~ClientContext() {
 	Destroy();
 }
 
+unique_ptr<ClientContextLock> ClientContext::LockContext() {
+	return make_unique<ClientContextLock>(context_lock);
+}
+
 void ClientContext::Destroy() {
-	lock_guard<mutex> client_guard(context_lock);
+	auto lock = LockContext();
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 		if (!transaction.IsAutoCommit()) {
 			transaction.Rollback();
 		}
 	}
-	CleanupInternal();
+	CleanupInternal(*lock);
 }
 
 void ClientContext::Cleanup() {
-	lock_guard<mutex> client_guard(context_lock);
-	CleanupInternal();
+	auto lock = LockContext();
+	CleanupInternal(*lock);
 }
 
 unique_ptr<DataChunk> ClientContext::Fetch() {
-	lock_guard<mutex> client_guard(context_lock);
+	auto lock = LockContext();
 	if (!open_result) {
 		// no result to fetch from
 		throw Exception("Fetch was called, but there is no open result (or the result was previously closed)");
 	}
 	try {
 		// fetch the chunk and return it
-		auto chunk = FetchInternal();
+		auto chunk = FetchInternal(*lock);
 		return chunk;
 	} catch (Exception &ex) {
 		open_result->error = ex.what();
@@ -74,11 +87,11 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 		open_result->error = "Unhandled exception in Fetch";
 	}
 	open_result->success = false;
-	CleanupInternal();
+	CleanupInternal(*lock);
 	return nullptr;
 }
 
-string ClientContext::FinalizeQuery(bool success) {
+string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 	profiler.EndQuery();
 
 	executor.Reset();
@@ -105,13 +118,13 @@ string ClientContext::FinalizeQuery(bool success) {
 	return error;
 }
 
-void ClientContext::CleanupInternal() {
+void ClientContext::CleanupInternal(ClientContextLock &lock) {
 	if (!open_result) {
 		// no result currently open
 		return;
 	}
 
-	auto error = FinalizeQuery(open_result->success);
+	auto error = FinalizeQuery(lock, open_result->success);
 	if (open_result->success) {
 		// if an error occurred while committing report it in the result
 		open_result->error = error;
@@ -124,11 +137,11 @@ void ClientContext::CleanupInternal() {
 	this->query = string();
 }
 
-unique_ptr<DataChunk> ClientContext::FetchInternal() {
+unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &) {
 	return executor.FetchChunk();
 }
 
-shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query,
+shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
                                                                          unique_ptr<SQLStatement> statement) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
@@ -167,11 +180,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &query,
+unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLock &lock, const string &query,
                                                                 shared_ptr<PreparedStatementData> statement_p,
                                                                 vector<Value> bound_values, bool allow_stream_result) {
 	auto &statement = *statement_p;
-	if (ActiveTransaction().is_invalidated && statement.requires_valid_transaction) {
+	if (ActiveTransaction().IsInvalidated() && statement.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
 	auto &config = DBConfig::GetConfig(*this);
@@ -200,7 +213,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(statement.statement_type, statement.types, statement.names);
 	while (true) {
-		auto chunk = FetchInternal();
+		auto chunk = FetchInternal(lock);
 		if (chunk->size() == 0) {
 			break;
 		}
@@ -216,59 +229,71 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	return move(result);
 }
 
-void ClientContext::InitialCleanup() {
+void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	//! Cleanup any open results and reset the interrupted flag
-	CleanupInternal();
+	CleanupInternal(lock);
 	interrupted = false;
 }
 
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(string query) {
+vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &query) {
+	auto lock = LockContext();
+	return ParseStatementsInternal(*lock, query);
+}
+
+vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	Parser parser;
 	parser.ParseQuery(query);
 
 	PragmaHandler handler(*this);
-	handler.HandlePragmaStatements(parser.statements);
+	handler.HandlePragmaStatements(lock, parser.statements);
 
 	return move(parser.statements);
 }
 
-unique_ptr<PreparedStatement> ClientContext::PrepareInternal(unique_ptr<SQLStatement> statement) {
+void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
+	auto lock = LockContext();
+
+	PragmaHandler handler(*this);
+	handler.HandlePragmaStatements(*lock, statements);
+}
+
+unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement) {
 	auto n_param = statement->n_param;
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
-	RunFunctionInTransactionInternal(
-	    [&]() { prepared_data = CreatePreparedStatement(statement_query, move(statement)); }, false);
+	RunFunctionInTransactionInternal(lock,
+	    [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, move(statement)); }, false);
 	prepared_data->unbound_statement = move(unbound_statement);
 	return make_unique<PreparedStatement>(shared_from_this(), move(prepared_data), move(statement_query), n_param);
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
-	lock_guard<mutex> client_guard(context_lock);
+	auto lock = LockContext();
 	// prepare the query
 	try {
-		InitialCleanup();
-		return PrepareInternal(move(statement));
+		InitialCleanup(*lock);
+		return PrepareInternal(*lock, move(statement));
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
 }
 
-unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
-	lock_guard<mutex> client_guard(context_lock);
+unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
+	auto lock = LockContext();
 	// prepare the query
 	try {
-		InitialCleanup();
+		InitialCleanup(*lock);
 
 		// first parse the query
-		auto statements = ParseStatements(query);
+		auto statements = ParseStatementsInternal(*lock, query);
 		if (statements.size() == 0) {
 			throw Exception("No statement to prepare!");
 		}
 		if (statements.size() > 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
-		return PrepareInternal(move(statements[0]));
+		return PrepareInternal(*lock, move(statements[0]));
 	} catch (Exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
@@ -276,26 +301,27 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
                                                vector<Value> &values, bool allow_stream_result) {
-	lock_guard<mutex> client_guard(context_lock);
+	auto lock = LockContext();
 	try {
-		InitialCleanup();
+		InitialCleanup(*lock);
 	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
-	return RunStatementOrPreparedStatement(query, nullptr, prepared, &values, allow_stream_result);
+	return RunStatementOrPreparedStatement(*lock, query, nullptr, prepared, &values, allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
+unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
                                                             bool allow_stream_result) {
 	// prepare the query for execution
-	auto prepared = CreatePreparedStatement(query, move(statement));
+	auto prepared = CreatePreparedStatement(lock, query, move(statement));
 	// by default, no values are bound
 	vector<Value> bound_values;
 	// execute the prepared statement
-	return ExecutePreparedStatement(query, move(prepared), move(bound_values), allow_stream_result);
+	return ExecutePreparedStatement(lock, query, move(prepared), move(bound_values), allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const string &query,
+unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientContextLock &lock,
+                                                                       const string &query,
                                                                        unique_ptr<SQLStatement> statement,
                                                                        shared_ptr<PreparedStatementData> &prepared,
                                                                        vector<Value> *values,
@@ -315,10 +341,10 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 		auto copied_statement = statement->Copy();
 		if (statement->type == StatementType::SELECT_STATEMENT) {
 			// in case this is a select query, we verify the original statement
-			string error = VerifyQuery(query, move(statement));
+			string error = VerifyQuery(lock, query, move(statement));
 			if (!error.empty()) {
 				// query failed: abort now
-				FinalizeQuery(false);
+				FinalizeQuery(lock, false);
 				// error in verifying query
 				return make_unique<MaterializedQueryResult>(error);
 			}
@@ -329,20 +355,20 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 	profiler.StartQuery(query);
 	try {
 		if (statement) {
-			result = RunStatementInternal(query, move(statement), allow_stream_result);
+			result = RunStatementInternal(lock, query, move(statement), allow_stream_result);
 		} else {
 			auto &catalog = Catalog::GetCatalog(*this);
 			if (prepared->unbound_statement && catalog.GetCatalogVersion() != prepared->catalog_version) {
 				D_ASSERT(prepared->unbound_statement.get());
 				// catalog was modified: rebind the statement before execution
-				auto new_prepared = CreatePreparedStatement(query, prepared->unbound_statement->Copy());
+				auto new_prepared = CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy());
 				if (prepared->types != new_prepared->types) {
 					throw BinderException("Rebinding statement after catalog change resulted in change of types");
 				}
 				new_prepared->unbound_statement = move(prepared->unbound_statement);
 				prepared = move(new_prepared);
 			}
-			result = ExecutePreparedStatement(query, prepared, *values, allow_stream_result);
+			result = ExecutePreparedStatement(lock, query, prepared, *values, allow_stream_result);
 		}
 	} catch (StandardException &ex) {
 		// standard exceptions do not invalidate the current transaction
@@ -350,7 +376,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 	} catch (std::exception &ex) {
 		// other types of exceptions do invalidate the current transaction
 		if (transaction.HasActiveTransaction()) {
-			ActiveTransaction().is_invalidated = true;
+			ActiveTransaction().Invalidate();
 		}
 		result = make_unique<MaterializedQueryResult>(ex.what());
 	}
@@ -358,7 +384,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 		// initial failures should always be reported as MaterializedResult
 		D_ASSERT(result->type != QueryResultType::STREAM_RESULT);
 		// query failed: abort now
-		FinalizeQuery(false);
+		FinalizeQuery(lock, false);
 		return result;
 	}
 	// query succeeded, append to list of results
@@ -367,7 +393,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 		this->open_result = (StreamQueryResult *)result.get();
 	} else {
 		// finalize the query if it is not a stream result
-		string error = FinalizeQuery(true);
+		string error = FinalizeQuery(lock, true);
 		if (!error.empty()) {
 			// failure in committing transaction
 			return make_unique<MaterializedQueryResult>(error);
@@ -376,13 +402,13 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(const str
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatement(const string &query, unique_ptr<SQLStatement> statement,
+unique_ptr<QueryResult> ClientContext::RunStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
                                                     bool allow_stream_result) {
 	shared_ptr<PreparedStatementData> prepared;
-	return RunStatementOrPreparedStatement(query, move(statement), prepared, nullptr, allow_stream_result);
+	return RunStatementOrPreparedStatement(lock, query, move(statement), prepared, nullptr, allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector<unique_ptr<SQLStatement>> &statements,
+unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &statements,
                                                      bool allow_stream_result) {
 	// now we have a list of statements
 	// iterate over them and execute them one by one
@@ -391,7 +417,7 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto &statement = statements[i];
 		bool is_last_statement = i + 1 == statements.size();
-		auto current_result = RunStatement(query, move(statement), allow_stream_result && is_last_statement);
+		auto current_result = RunStatement(lock, query, move(statement), allow_stream_result && is_last_statement);
 		// now append the result to the list of results
 		if (!last_result) {
 			// first result of the query
@@ -406,7 +432,7 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 	return result;
 }
 
-void ClientContext::LogQueryInternal(string query) {
+void ClientContext::LogQueryInternal(ClientContextLock &, string query) {
 	if (!log_query_writer) {
 		return;
 	}
@@ -417,26 +443,26 @@ void ClientContext::LogQueryInternal(string query) {
 }
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	lock_guard<mutex> client_guard(context_lock);
+	auto lock = LockContext();
 	if (log_query_writer) {
-		LogQueryInternal(statement->query.substr(statement->stmt_location, statement->stmt_length));
+		LogQueryInternal(*lock, statement->query.substr(statement->stmt_location, statement->stmt_length));
 	}
 
 	vector<unique_ptr<SQLStatement>> statements;
 	statements.push_back(move(statement));
 
-	return RunStatements(query, statements, allow_stream_result);
+	return RunStatements(*lock, query, statements, allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
-	lock_guard<mutex> client_guard(context_lock);
-	LogQueryInternal(query);
+unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
+	auto lock = LockContext();
+	LogQueryInternal(*lock, query);
 
 	vector<unique_ptr<SQLStatement>> statements;
 	try {
-		InitialCleanup();
+		InitialCleanup(*lock);
 		// parse the query and transform it into a set of statements
-		statements = ParseStatements(query);
+		statements = ParseStatementsInternal(*lock, query);
 	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
@@ -446,7 +472,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
 	}
 
-	return RunStatements(query, statements, allow_stream_result);
+	return RunStatements(*lock, query, statements, allow_stream_result);
 }
 
 void ClientContext::Interrupt() {
@@ -454,16 +480,16 @@ void ClientContext::Interrupt() {
 }
 
 void ClientContext::EnableProfiling() {
-	lock_guard<mutex> client_guard(context_lock);
+	auto lock = LockContext();
 	profiler.Enable();
 }
 
 void ClientContext::DisableProfiling() {
-	lock_guard<mutex> client_guard(context_lock);
+	auto lock = LockContext();
 	profiler.Disable();
 }
 
-string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
+string ClientContext::VerifyQuery(ClientContextLock &lock, string query, unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// aggressive query verification
 
@@ -539,7 +565,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 
 	// execute the original statement
 	try {
-		auto result = RunStatementInternal(query, move(statement), false);
+		auto result = RunStatementInternal(lock, query, move(statement), false);
 		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (std::exception &ex) {
 		original_result->error = ex.what();
@@ -552,7 +578,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
 		try {
-			RunStatementInternal(explain_q, move(explain_stmt), false);
+			RunStatementInternal(lock, explain_q, move(explain_stmt), false);
 		} catch (std::exception &ex) {
 			return "EXPLAIN failed but query did not (" + string(ex.what()) + ")";
 		}
@@ -560,7 +586,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 
 	// now execute the copied statement
 	try {
-		auto result = RunStatementInternal(query, move(copied_stmt), false);
+		auto result = RunStatementInternal(lock, query, move(copied_stmt), false);
 		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (std::exception &ex) {
 		copied_result->error = ex.what();
@@ -569,7 +595,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	}
 	// now execute the deserialized statement
 	try {
-		auto result = RunStatementInternal(query, move(deserialized_stmt), false);
+		auto result = RunStatementInternal(lock, query, move(deserialized_stmt), false);
 		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (std::exception &ex) {
 		deserialized_result->error = ex.what();
@@ -579,7 +605,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// now execute the unoptimized statement
 	enable_optimizer = false;
 	try {
-		auto result = RunStatementInternal(query, move(unoptimized_stmt), false);
+		auto result = RunStatementInternal(lock, query, move(unoptimized_stmt), false);
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (std::exception &ex) {
 		unoptimized_result->error = ex.what();
@@ -624,9 +650,9 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	});
 }
 
-void ClientContext::RunFunctionInTransactionInternal(std::function<void(void)> fun, bool requires_valid_transaction) {
+void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, std::function<void(void)> fun, bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
-	    transaction.ActiveTransaction().is_invalidated) {
+	    transaction.ActiveTransaction().IsInvalidated()) {
 		throw Exception("Failed: transaction has been invalidated!");
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
@@ -639,7 +665,7 @@ void ClientContext::RunFunctionInTransactionInternal(std::function<void(void)> f
 		if (transaction.IsAutoCommit()) {
 			transaction.Rollback();
 		} else {
-			transaction.Invalidate();
+			ActiveTransaction().Invalidate();
 		}
 		throw ex;
 	}
@@ -649,15 +675,16 @@ void ClientContext::RunFunctionInTransactionInternal(std::function<void(void)> f
 }
 
 void ClientContext::RunFunctionInTransaction(std::function<void(void)> fun, bool requires_valid_transaction) {
-	lock_guard<mutex> client_guard(context_lock);
-	RunFunctionInTransactionInternal(fun, requires_valid_transaction);
+	auto lock = LockContext();
+	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
+unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// obtain the table info
-		auto table = db->catalog->GetEntry<TableCatalogEntry>(*this, schema_name, table_name, true);
+		auto &catalog = Catalog::GetCatalog(*this);
+		auto table = catalog.GetEntry<TableCatalogEntry>(*this, schema_name, table_name, true);
 		if (!table) {
 			return;
 		}
@@ -674,7 +701,8 @@ unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string
 
 void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 	RunFunctionInTransaction([&]() {
-		auto table_entry = db->catalog->GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
+		auto &catalog = Catalog::GetCatalog(*this);
+		auto table_entry = catalog.GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
 		// verify that the table columns and types match up
 		if (description.columns.size() != table_entry->columns.size()) {
 			throw Exception("Failed to append: table entry has different number of columns!");
@@ -701,6 +729,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
+	auto lock = LockContext();
 	string query;
 	if (query_verification_enabled) {
 		// run the ToString method of any relation we run, mostly to ensure it doesn't crash
@@ -709,12 +738,12 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 			// verify read only statements by running a select statement
 			auto select = make_unique<SelectStatement>();
 			select->node = relation->GetQueryNode();
-			RunStatement(query, move(select), false);
+			RunStatement(*lock, query, move(select), false);
 		}
 	}
 	auto &expected_columns = relation->Columns();
 	auto relation_stmt = make_unique<RelationStatement>(relation);
-	auto result = RunStatement(query, move(relation_stmt), false);
+	auto result = RunStatement(*lock, query, move(relation_stmt), false);
 	if (!result->success) {
 		return result;
 	}

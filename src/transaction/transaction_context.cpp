@@ -7,9 +7,6 @@
 namespace duckdb {
 
 TransactionContext::~TransactionContext() {
-	if (is_invalidated) {
-		return;
-	}
 	if (current_transaction) {
 		try {
 			Rollback();

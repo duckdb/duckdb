@@ -18,6 +18,7 @@ add_library_unity(
   numeric_segment.cpp
   storage_manager.cpp
   write_ahead_log.cpp
+  object_cache.cpp
   uncompressed_segment.cpp
   single_file_block_manager.cpp
   string_segment.cpp

@@ -4,7 +4,6 @@ add_library_unity(duckdb_main
                   appender.cpp
                   client_context.cpp
                   connection.cpp
-                  connection_manager.cpp
                   database.cpp
                   duckdb-c.cpp
                   materialized_query_result.cpp

@@ -77,6 +77,13 @@ public:
 		undo_buffer.Cleanup();
 	}
 
+	void Invalidate() {
+		is_invalidated = true;
+	}
+	bool IsInvalidated() {
+		return is_invalidated;
+	}
+
 	timestamp_t GetCurrentTransactionStartTimestamp() {
 		return start_timestamp;
 	}

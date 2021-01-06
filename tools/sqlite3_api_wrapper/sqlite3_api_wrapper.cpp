@@ -2,7 +2,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -147,8 +147,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		vector<unique_ptr<SQLStatement>> statements;
 		statements.push_back(move(parser.statements[0]));
 
-		PragmaHandler handler(*db->con->context);
-		handler.HandlePragmaStatements(statements);
+		db->con->context->HandlePragmaStatements(statements);
 
 		// if there are multiple statements here, we are dealing with an import database statement
 		// we directly execute all statements besides the final one

@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -45,11 +44,24 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	catalog = make_unique<Catalog>(*storage);
 	transaction_manager = make_unique<TransactionManager>(*storage, *catalog);
 	scheduler = make_unique<TaskScheduler>();
-	connection_manager = make_unique<ConnectionManager>();
 	object_cache = make_unique<ObjectCache>();
 
 	// initialize the database
 	storage->Initialize();
+}
+
+void DatabaseInstance::Shutdown() {
+	if (IsShutdown()) {
+		return;
+	}
+}
+
+bool DatabaseInstance::IsShutdown() {
+	return !storage;
+}
+
+void DuckDB::Shutdown() {
+	instance->Shutdown();
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {

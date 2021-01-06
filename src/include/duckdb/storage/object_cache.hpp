@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 //! ObjectCache is the base class for objects caches in DuckDB
 class ObjectCacheEntry {
@@ -36,6 +37,8 @@ public:
 		lock_guard<mutex> glock(lock);
 		cache[key] = move(value);
 	}
+
+	static ObjectCache &GetObjectCache(ClientContext &context);
 
 private:
 	//! Object Cache

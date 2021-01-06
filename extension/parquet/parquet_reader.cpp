@@ -143,7 +143,7 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	if (!config.object_cache_enable) {
 		metadata = load_metadata(fs, handle.get(), footer_len, file_size);
 	} else {
-		auto &cache = *context.db->object_cache;
+		auto &cache = ObjectCache::GetObjectCache(context);
 		metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(cache.Get(file_name));
 		if (!metadata || (fs.GetLastModifiedTime(*handle) + 10 >= metadata->read_time)) {
 			metadata = load_metadata(fs, handle.get(), footer_len, file_size);

@@ -99,12 +99,12 @@ bool BlockHandle::CanUnload() {
 }
 
 struct BufferEvictionNode {
-	BufferEvictionNode(std::weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
+	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
 	    : handle(move(handle_p)), timestamp(timestamp_p) {
 		D_ASSERT(!handle.expired());
 	}
 
-	std::weak_ptr<BlockHandle> handle;
+	weak_ptr<BlockHandle> handle;
 	idx_t timestamp;
 
 	bool CanUnload(BlockHandle &handle) {
