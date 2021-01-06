@@ -68,16 +68,22 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
 
-    // remove redundant duplicate-eliminated joins and/or delim gets
+//    Printer::Print("### BEFORE ###");
+//    plan->Print();
+
+    // removes any redundant DelimGets/DelimJoins
     context.profiler.StartPhase("deliminator");
-    Deliminator deliminator(*this);
-    plan = deliminator.Rewrite(move(plan));
+    Deliminator deliminator;
+    plan = deliminator.Optimize(move(plan));
     context.profiler.EndPhase();
 
 	context.profiler.StartPhase("unused_columns");
 	RemoveUnusedColumns unused(binder, context, true);
 	unused.VisitOperator(*plan);
 	context.profiler.EndPhase();
+
+//    Printer::Print("### AFTER ###");
+//    plan->Print();
 
 	// perform statistics propagation
 	context.profiler.StartPhase("statistics_propagation");

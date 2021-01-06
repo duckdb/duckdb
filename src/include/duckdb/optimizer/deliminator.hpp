@@ -12,22 +12,21 @@ namespace duckdb {
 
 class Optimizer;
 
+//! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins
 class Deliminator {
 public:
-	Deliminator(Optimizer &optimizer) : optimizer(optimizer) {
+	Deliminator() {
 	}
-	//! Remove redundant duplicate-eliminated joins and/or delim gets
-	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
+
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
 private:
-	Optimizer &optimizer;
-	LogicalOperator *root;
+	//! Find DelimGets and remove them if they prove to be redundant
+	void RemoveRedundantDelims(unique_ptr<LogicalOperator> *op_ptr);
+	//! Replace references to a removed DelimGet, remove DelimJoins if all their DelimGets are gone
+	void UpdatePlan(LogicalOperator &op, vector<unique_ptr<Expression>> &from, vector<unique_ptr<Expression>> &to);
 
-	//! TODO
-	void RemoveRedundantDelimGets(unique_ptr<LogicalOperator> *op_ptr);
-	//! TODO
-	void ReplaceRemovedBindings(LogicalOperator &op, vector<unique_ptr<Expression>> &from,
-	                            vector<unique_ptr<Expression>> &to);
+	LogicalOperator *root;
 };
 
 } // namespace duckdb
