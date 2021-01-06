@@ -9,8 +9,10 @@
 
 #pragma once
 
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#endif
 #include "duckdb.hpp"
 
 namespace duckdb {
