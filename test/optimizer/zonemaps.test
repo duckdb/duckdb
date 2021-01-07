@@ -1,0 +1,73 @@
+# name: test/optimizer/zonemaps.test
+# description: Test if zonemaps are correctly used
+# group: [optimizer]
+
+#    1) In-clause based on in-clause range/boundary zonemap check
+statement ok
+create temporary table t as select range a, length(range) b, mod(range,10000) c, 5 d, 10000 e from range(100000);
+
+query I
+select count(*) from t where b in (1,2,3) ;                       /* no data skipping */
+----
+1000
+
+query I
+select count(*) from t where b in (1,2,3) and b <= 3;    /* data skipping occurs */
+----
+1000
+
+#   2) In-clause based on in-clause range/boundary zonemap check
+query I
+select count(*) from t where b in (1, 3) ;                         /* no data skipping */
+----
+910
+
+query I
+select count(*) from t where b in (1, 3) and (b=1 or b=3);    /* data skipping should occur */
+----
+910
+
+#   3) Transitive Filters
+query I
+select count(*) from t where b < 5 and d = 5;     /* data skipping occurs */
+----
+10000
+
+query I
+select count(*) from t where b < d and d = 5;     /* no data skipping */
+----
+10000
+
+#   4)  Check zonemap before joins
+statement ok
+create temporary table t1 as select range a, length(range) nationkey from range(100000);
+
+statement ok
+create table t2 as select range  nationkey, concat('Nation_',range) n_name from range(25);
+
+query I
+select count(*) from t1 join t2 using (nationkey)
+where t2.n_name = 'Nation_1' and t1.nationkey =1;    /* data skipping occurs */
+----
+10
+
+query I
+select count(*) from t1 join t2 using (nationkey)
+where t2.n_name = 'Nation_1' and t2.nationkey =1;  /* data skipping occurs with help of transitive behavior */
+----
+10
+
+query I
+select count(*) from t1 join t2 using (nationkey) where t2.n_name = 'Nation_1';                               /* data skipping possible */
+----
+10
+
+query I
+select count(*) from t1 join t2 using (nationkey) where t2.n_name in ( 'Nation_1', 'Nation_2');        /* data skipping possible */
+----
+100
+
+query I
+select count(*) from t1 join t2 using (nationkey) where t2.nationkey =2 or n_name= 'Nation_2';   /* data skipping possible */
+----
+90
