@@ -1,5 +1,6 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
