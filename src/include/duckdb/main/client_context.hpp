@@ -18,7 +18,6 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/common/enums/output_type.hpp"
-#include "duckdb/storage/object_cache.hpp"
 
 #include <random>
 
