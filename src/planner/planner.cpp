@@ -81,6 +81,10 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PRAGMA_STATEMENT:
 		CreatePlan(*statement);
 		break;
+	case StatementType::SHOW_STATEMENT: {
+		CreatePlan(*statement);
+		break;
+	}
 	case StatementType::PREPARE_STATEMENT: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;

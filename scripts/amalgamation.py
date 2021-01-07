@@ -44,7 +44,26 @@ main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'table_function.hpp'),
     os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_table_function_info.hpp'),
     os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_copy_function_info.hpp')]
+if '--extended' in sys.argv:
+    def add_include_dir(dirpath):
+        return [os.path.join(dirpath, x) for x in os.listdir(dirpath)]
 
+
+    main_header_files += [os.path.join(include_dir, x) for x in [
+        'duckdb/planner/expression/bound_constant_expression.hpp',
+        'duckdb/planner/expression/bound_function_expression.hpp',
+        'duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp',
+        'duckdb/parser/parsed_data/create_table_info.hpp',
+        'duckdb/planner/parsed_data/bound_create_table_info.hpp',
+        'duckdb/parser/constraints/not_null_constraint.hpp',
+        'duckdb/storage/data_table.hpp',
+        'duckdb/function/pragma_function.hpp',
+        'duckdb/parser/qualified_name.hpp',
+        'duckdb/parser/parser.hpp',
+        'duckdb/planner/binder.hpp']]
+    main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
+    main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
+    main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))
 # include paths for where to search for include files during amalgamation
 include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir]
 # paths of where to look for files to compile and include to the final amalgamation

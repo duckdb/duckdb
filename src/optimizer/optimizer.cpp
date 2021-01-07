@@ -7,6 +7,7 @@
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
@@ -43,6 +44,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	context.profiler.StartPhase("expression_rewriter");
 	rewriter.VisitOperator(*plan);
+	context.profiler.EndPhase();
+
+	// perform filter pullup
+	context.profiler.StartPhase("filter_pullup");
+	FilterPullup filter_pullup;
+	plan = filter_pullup.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
 	// perform filter pushdown

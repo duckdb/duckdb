@@ -4,15 +4,14 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/to_string.hpp"
-
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -796,6 +795,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					chunk->Initialize(parse_chunk_types);
 					chunk->Reference(parse_chunk);
 					cached_chunks.push(move(chunk));
+				} else {
+					while (!cached_chunks.empty()) cached_chunks.pop();
 				}
 			}
 		}
@@ -1428,7 +1429,8 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				if (options.auto_detect) {
 					throw InvalidInputException(
 					    "%s in column %s, between line %llu and %llu. Parser "
-					    "options: %s. Consider either increasing the sample size (using SAMPLE_SIZE=X) "
+					    "options: %s. Consider either increasing the sample size "
+						"(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
 					    "or skipping column conversion (ALL_VARCHAR=1)",
 					    e.what(), col_name, linenr - parse_chunk.size() + 1, linenr, options.toString());
 				} else {

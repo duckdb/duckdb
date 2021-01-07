@@ -1478,6 +1478,18 @@ typedef struct PGVariableShowStmt {
 } PGVariableShowStmt;
 
 /* ----------------------
+ * Show Statement with Select Statement
+ * ----------------------
+ */
+typedef struct PGVariableShowSelectStmt
+{
+	PGNodeTag		type;
+	PGNode	*stmt;
+	char	   *name;
+} PGVariableShowSelectStmt;
+
+
+/* ----------------------
  *		Create Table Statement
  *
  * NOTE: in the raw gram.y output, PGColumnDef and PGConstraint nodes are

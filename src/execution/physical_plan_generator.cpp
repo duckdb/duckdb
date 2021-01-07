@@ -106,6 +106,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalCreateIndex &)op);
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return CreatePlan((LogicalExplain &)op);
+	case LogicalOperatorType::LOGICAL_SHOW:
+		return CreatePlan((LogicalShow &)op);
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		return CreatePlan((LogicalDistinct &)op);
 	case LogicalOperatorType::LOGICAL_PREPARE:
