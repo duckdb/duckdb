@@ -278,7 +278,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 	try {
 		InitialCleanup(*lock);
 		return PrepareInternal(*lock, move(statement));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
 }
@@ -298,7 +298,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
 		return PrepareInternal(*lock, move(statements[0]));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
 }
