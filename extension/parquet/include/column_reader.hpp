@@ -8,7 +8,6 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 
@@ -33,7 +32,7 @@ public:
 			// this assumes the data pages follow the dict pages directly.
 			chunk_read_offset = chunk.meta_data.dictionary_page_offset;
 		}
-		can_have_nulls = schema_p.repetition_type == FieldRepetitionType::OPTIONAL;
+		can_have_nulls = true; // FIXME schema_p.repetition_type == FieldRepetitionType::OPTIONAL;
 	};
 
 	virtual ~ColumnReader();
@@ -41,6 +40,8 @@ public:
 	virtual void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result);
 
 	virtual void Skip(idx_t num_values) = 0;
+	// FIXME
+	bool is_list = false;
 
 protected:
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
@@ -56,10 +57,19 @@ protected:
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result) {
 	}
 
+	bool IsNull(idx_t row_idx) {
+		if (!is_list) {
+			return !defined_buffer.ptr[row_idx];
+		}
+		// FIXME D_ASSERT(defined_buffer.len < row_idx);
+		return defined_buffer.ptr[row_idx] != defined_here_val;
+	}
+
 	LogicalType type;
 	const parquet::format::ColumnChunk &chunk;
 
 	bool can_have_nulls;
+	idx_t defined_here_val = 3; // FIXME
 
 private:
 	void PrepareRead(parquet_filter_t &filter);
@@ -74,12 +84,11 @@ private:
 
 	ResizeableBuffer offset_buffer;
 	ResizeableBuffer defined_buffer;
-    ResizeableBuffer repeated_buffer;
+	ResizeableBuffer repeated_buffer;
 
 	unique_ptr<RleBpDecoder> dict_decoder;
 	unique_ptr<RleBpDecoder> defined_decoder;
-    unique_ptr<RleBpDecoder> repeated_decoder;
-
+	unique_ptr<RleBpDecoder> repeated_decoder;
 };
 
 template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
@@ -100,7 +109,7 @@ public:
 
 		idx_t offset_idx = 0;
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (defines && !defines[row_idx]) {
+			if (IsNull(row_idx)) {
 				FlatVector::SetNull(result, row_idx + result_offset, true);
 				continue;
 			}
@@ -114,10 +123,11 @@ public:
 	           idx_t result_offset, Vector &result) override {
 		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (defines && !defines[row_idx]) {
+			if (IsNull(row_idx)) {
 				FlatVector::SetNull(result, row_idx + result_offset, true);
 				continue;
 			}
+			// TODO add IsFiltered() method
 			if (filter[row_idx + result_offset]) {
 				result_ptr[row_idx + result_offset] = PlainRead(*plain_data);
 			} else { // there is still some data there that we have to skip over
@@ -186,6 +196,7 @@ protected:
 		for (idx_t i = 0; i < num_entries; i++) {
 			dict_ptr[i] = FUNC(dictionary_data->read<PARQUET_PHYSICAL_TYPE>());
 		}
+		dict_size = num_entries;
 	}
 
 	void Skip(idx_t num_values) {
@@ -236,6 +247,10 @@ public:
 			child_column_reader = make_unique_base<ColumnReader, TemplatedColumnReader<int64_t>>(child_type, chunk_p,
 			                                                                                     schema_p, protocol_p);
 			break;
+		case LogicalTypeId::INTEGER:
+			child_column_reader = make_unique_base<ColumnReader, TemplatedColumnReader<int32_t>>(child_type, chunk_p,
+			                                                                                     schema_p, protocol_p);
+			break;
 		case LogicalTypeId::VARCHAR:
 			child_column_reader =
 			    make_unique_base<ColumnReader, StringColumnReader>(child_type, chunk_p, schema_p, protocol_p);
@@ -244,22 +259,11 @@ public:
 		default:
 			D_ASSERT(0);
 		}
+		child_column_reader->is_list = true;
 	};
 
 	void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) override {
-		auto ptr = FlatVector::GetData<list_entry_t>(result);
-		Vector child_vector;
-		child_vector.Initialize(result.type.child_types()[0].second);
-		child_column_reader->Read(6, filter, child_vector);
-		child_vector.Print(6);
-		for (idx_t i = 0; i < num_values; i++) {
-			ptr[i].length = 0;
-			ptr[i].offset = 0;
-		}
-        auto list_child = make_unique<ChunkCollection>();
-
-        ListVector::SetEntry(result, move(list_child));
-		//D_ASSERT(0);
+		child_column_reader->Read(num_values, filter, result);
 	}
 
 	virtual void Skip(idx_t num_values) override {

@@ -7,6 +7,8 @@
 #include "zstd.h"
 #include <iostream>
 
+#include "duckdb/common/types/chunk_collection.hpp"
+
 namespace duckdb {
 
 using parquet::format::CompressionCodec;
@@ -34,8 +36,8 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	PageHeader page_hdr;
 	page_hdr.read(&protocol);
 
-	page_hdr.printTo(std::cout);
-	std::cout << '\n';
+	//	page_hdr.printTo(std::cout);
+	//	std::cout << '\n';
 
 	PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
 
@@ -121,18 +123,18 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	auto page_encoding = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.encoding
 	                                                          : page_hdr.data_page_header_v2.encoding;
 
-    if (true) {
-        uint32_t rep_length = block->read<uint32_t>();
-        block->available(rep_length);
-        repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, 1);
-        block->inc(rep_length);
-    }
+	if (is_list) {
+		uint32_t rep_length = block->read<uint32_t>();
+		block->available(rep_length);
+		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, 1);
+		block->inc(rep_length);
+	}
 
-    if (can_have_nulls) {
+	if (can_have_nulls) {
 		uint32_t def_length = block->read<uint32_t>();
 		block->available(def_length);
 		// TODO figure out bit width correctly
-		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, 2);
+		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, is_list ? 2 : 1);
 		block->inc(def_length);
 	}
 
@@ -158,11 +160,32 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) {
 	auto trans = (DuckdbFileTransport *)protocol.getTransport().get();
 	trans->SetLocation(chunk_read_offset);
-
-	idx_t to_read = num_values;
+	idx_t to_read = 0;
 	idx_t result_offset = 0;
 
+	Vector *read_vec = &result;
+	Vector list_child_vec;
+
+	if (is_list) {
+		D_ASSERT(result.type.id() == LogicalTypeId::LIST);
+		list_child_vec.Initialize(type);
+		read_vec = &list_child_vec;
+
+		if (!ListVector::HasEntry(result)) {
+			ListVector::SetEntry(result, make_unique<ChunkCollection>());
+		}
+		to_read = STANDARD_VECTOR_SIZE;
+	} else {
+		to_read = num_values;
+	}
+
+	// TODO this might need to go into the class
+	idx_t list_idx = 0;
+
 	while (to_read > 0) {
+
+		// TODO check for leftovers in child vector? not sure we can consume all of it
+
 		while (rows_available == 0) {
 			PrepareRead(filter);
 		}
@@ -170,11 +193,13 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 		D_ASSERT(block);
 		auto read_now = MinValue<idx_t>(to_read, rows_available);
 
-        if (true) {
-            D_ASSERT(repeated_decoder);
-            repeated_buffer.resize(sizeof(uint8_t) * read_now);
-            repeated_decoder->GetBatch<uint8_t>(repeated_buffer.ptr, read_now);
-        }
+		D_ASSERT(read_now < STANDARD_VECTOR_SIZE);
+
+		if (is_list) {
+			D_ASSERT(repeated_decoder);
+			repeated_buffer.resize(sizeof(uint8_t) * read_now);
+			repeated_decoder->GetBatch<uint8_t>(repeated_buffer.ptr, read_now);
+		}
 
 		if (can_have_nulls) {
 			D_ASSERT(defined_decoder);
@@ -182,19 +207,13 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 			defined_decoder->GetBatch<uint8_t>(defined_buffer.ptr, read_now);
 		}
 
-
-        for (idx_t i = 0; i < 6; i++) {
-            printf("r:%d\td:%d\n", repeated_buffer.ptr[i], defined_buffer.ptr[i]);
-        }
-
-
-        if (dict_decoder) {
+		if (dict_decoder) {
 			// TODO computing this here is a wee bit ugly
-			// we need the null count because the offsets have no entries for nulls
+			// we need the null count because the offsets and plain values have no entries for nulls
 			idx_t null_count = 0;
 			if (can_have_nulls) {
 				for (idx_t i = 0; i < read_now; i++) {
-					if (!defined_buffer.ptr[i]) {
+					if (IsNull(i)) {
 						null_count++;
 					}
 				}
@@ -202,16 +221,62 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 
 			offset_buffer.resize(sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
-			DictReference(result);
-			Offsets((uint32_t *)offset_buffer.ptr, (uint8_t *)defined_buffer.ptr, read_now, filter, result_offset,
-			        result);
+			DictReference(*read_vec);
+			Offsets((uint32_t *)offset_buffer.ptr, nullptr, read_now, filter, result_offset, *read_vec);
 		} else {
-			PlainReference(block, result);
-			Plain(block, (uint8_t *)defined_buffer.ptr, read_now, filter, result_offset, result);
+			PlainReference(block, *read_vec);
+			Plain(block, nullptr, read_now, filter, result_offset, *read_vec);
 		}
-		result_offset += read_now;
-		rows_available -= read_now;
-		to_read -= read_now;
+
+		if (is_list) {
+			auto ptr = FlatVector::GetData<list_entry_t>(result);
+
+			D_ASSERT(ListVector::HasEntry(result));
+			auto &list_cc = ListVector::GetEntry(result);
+
+			// TODO deal with offsetting and state here?
+			ptr[list_idx].offset = 0;
+			ptr[list_idx].length = 0;
+
+			DataChunk append_chunk;
+			vector<LogicalType> append_chunk_types;
+			append_chunk_types.push_back(type);
+			append_chunk.Initialize(append_chunk_types);
+			append_chunk.data[0].Reference(*read_vec);
+			append_chunk.SetCardinality(read_now);
+			list_cc.Append(append_chunk);
+			list_cc.Verify();
+			//         list_cc.Print();
+
+			for (idx_t child_idx = 0; child_idx < read_now; child_idx++) {
+				// printf("c %llu %llu\n",repeated_buffer.ptr[child_idx], defined_buffer.ptr[child_idx]);
+
+				if (child_idx > 0 && repeated_buffer.ptr[child_idx] == 0) {
+					list_idx++;
+					ptr[list_idx].offset = child_idx;
+					ptr[list_idx].length = 0;
+				}
+				if (defined_buffer.ptr[child_idx] == 0) {
+					FlatVector::Nullmask(result)[list_idx] = true;
+					ptr[list_idx].offset = child_idx;
+					ptr[list_idx].length = 0;
+					continue;
+				}
+				ptr[list_idx].length++;
+			}
+
+			//			for (idx_t i = 0; i < 3; i++) {
+			//				printf("l %llu %llu\n", ptr[i].offset, ptr[i].length);
+			//			}
+
+			//			result.Print(3);
+			to_read = 0; // FIXME
+
+		} else {
+			result_offset += read_now;
+			rows_available -= read_now;
+			to_read -= read_now;
+		}
 	}
 	chunk_read_offset = trans->GetLocation();
 }
@@ -240,6 +305,7 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 		dict_strings[dict_idx] = string_t(dict->ptr, str_len);
 		dict->inc(str_len);
 	}
+	dict_size = num_entries;
 }
 
 class ParquetStringVectorBuffer : public VectorBuffer {

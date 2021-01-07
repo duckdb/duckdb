@@ -204,7 +204,7 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 
 	idx_t next_child = 0;
 	auto type = derive_type_complex(file_meta_data->schema, next_child);
-	printf("XX %s %llu\n", type.ToString().c_str(), next_child);
+	// printf("XX %s %llu\n", type.ToString().c_str(), next_child);
 
 	D_ASSERT(next_child == file_meta_data->schema.size() - 1);
 	/*
