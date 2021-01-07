@@ -95,7 +95,16 @@ void Deliminator::UpdatePlan(LogicalOperator &op, vector<unique_ptr<Expression>>
 		auto decs = &delim_join.duplicate_eliminated_columns;
 		for (idx_t from_idx = 0; from_idx < from.size(); from_idx++) {
 			for (auto &cond : delim_join.conditions) {
-				cond.null_values_are_equal = true;
+				if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+					continue;
+				}
+				// TODO: we want to set cond.null_values_are_equal to true because we already set a filter
+				//  however, we only want to do this for the columns that are not actually duplicate eliminated anymore
+				//  it would make sense to do this within the nested 'if' below
+				//  but this doesn't cover all cases because columns may be projected, changing their ColumnBinding
+				//  we could collect 'projection aliases' of the 'from's, and add them to this loop
+                // we already applied an IS NOT NULL filter
+                cond.null_values_are_equal = true;
 				if (cond.left->Equals(from[from_idx].get()) || cond.right->Equals(from[from_idx].get())) {
 					// expression in 'from' appears in a condition of the delim join
 					for (idx_t dec_idx = 0; dec_idx < decs->size(); dec_idx++) {
