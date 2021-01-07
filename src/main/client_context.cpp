@@ -669,14 +669,14 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, st
 		if (transaction.IsAutoCommit()) {
 			transaction.Rollback();
 		}
-		throw ex;
+		throw;
 	} catch (std::exception &ex) {
 		if (transaction.IsAutoCommit()) {
 			transaction.Rollback();
 		} else {
 			ActiveTransaction().Invalidate();
 		}
-		throw ex;
+		throw;
 	}
 	if (transaction.IsAutoCommit()) {
 		transaction.Commit();
