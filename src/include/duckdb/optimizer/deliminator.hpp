@@ -21,12 +21,12 @@ public:
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
 private:
-	//! Find DelimGets and remove them if they prove to be redundant
-	void RemoveRedundantDelims(unique_ptr<LogicalOperator> *op_ptr);
+	//! TODO
+    void FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<unique_ptr<LogicalOperator> *> &candidates);
+	//! TODO
+    bool RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, column_binding_map_t<unique_ptr<Expression>> &mapping);
 	//! Replace references to a removed DelimGet, remove DelimJoins if all their DelimGets are gone
-	void UpdatePlan(LogicalOperator &op, vector<unique_ptr<Expression>> &from, vector<unique_ptr<Expression>> &to);
-
-	LogicalOperator *root;
+	void UpdatePlan(LogicalOperator &op, column_binding_map_t<unique_ptr<Expression>> &cb_map);
 };
 
 } // namespace duckdb

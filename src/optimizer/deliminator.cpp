@@ -5,135 +5,113 @@
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op) {
-	root = op.get();
-	RemoveRedundantDelims(&op);
+    vector<unique_ptr<LogicalOperator> *> candidates;
+	FindCandidates(&op, candidates);
+	
+	for (auto candidate : candidates) {
+        auto cb_map = column_binding_map_t<unique_ptr<Expression>>();
+		if (RemoveCandidate(candidate, cb_map)) {
+			UpdatePlan(*op, cb_map);
+		}
+	}
 	return op;
 }
 
-void Deliminator::RemoveRedundantDelims(unique_ptr<LogicalOperator> *op_ptr) {
-	auto &op = *op_ptr->get();
-	// comparison joins with a DelimGet as a child can be redundant
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		for (idx_t i = 0; i < op.children.size(); i++) {
-			if (op.children[i]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
-				auto &join = (LogicalComparisonJoin &)op;
-				auto &delim_get = (LogicalDelimGet &)*op.children[i];
-				if (join.conditions.size() != delim_get.chunk_types.size()) {
-					// joining with DelimGet adds new information
-					continue;
-				}
-				// collect information from the join conditions
-				bool new_information = false;
-				vector<unique_ptr<Expression>> from;
-				vector<unique_ptr<Expression>> to;
-				vector<unique_ptr<Expression>> not_null_to;
-				for (auto &cond : join.conditions) {
-					if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
-						// one of the join conditions is not equality, therefore new information is introduced
-						new_information = true;
-						break;
-					}
-					from.push_back(i == 0 ? cond.left->Copy() : cond.right->Copy());
-					to.push_back(i == 0 ? cond.right->Copy() : cond.left->Copy());
-					if (!cond.null_values_are_equal) {
-						not_null_to.push_back(i == 0 ? cond.right->Copy() : cond.left->Copy());
-					}
-					if (from.back()->type != ExpressionType::BOUND_COLUMN_REF) {
-						// FIXME: remove properly deal with non-colref e.g. operator -(4, 1) in 4-i=j
-						new_information = true;
-						break;
-					}
-				}
-				if (new_information) {
-					// we cannot discard the operator because it introduces new information
-					break;
-				}
-				// the operator is redundant, so we can discard it. However, we may need an IS NOT NULL filter
-				// because comparing equality to a NULL in the DelimGet evaluates to NULL, adding new information
-				if (not_null_to.empty()) {
-                    // replace the operator with its child (discarding the join with DelimGet)
-					*op_ptr = move(i == 0 ? move(op.children[1]) : move(op.children[0]));
-				} else {
-					auto filter_expr = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL,
-					                                                        LogicalType::BOOLEAN);
-					for (auto &to_expr : not_null_to) {
-						filter_expr->children.push_back(to_expr->Copy());
-					}
-					auto not_null_filter = make_unique<LogicalFilter>(move(filter_expr));
-					not_null_filter->children.push_back(i == 0 ? move(op.children[1]) : move(op.children[0]));
-					// replace the operator with its filtered child (discarding the join with DelimGet)
-					*op_ptr = move(not_null_filter);
-				}
-                // replace columns from the DelimGet with corresponding ones from the other side of the join
-				UpdatePlan(*root, from, to);
-				// continue at the replaced operator
-				RemoveRedundantDelims(op_ptr);
-				return;
-			}
-		}
-	}
-	// continue searching for DelimGets in children
-	for (auto &child : op.children) {
-		RemoveRedundantDelims(&child);
+void Deliminator::FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<unique_ptr<LogicalOperator> *> &candidates) {
+    auto op = op_ptr->get();
+	// search children before adding, so the deepest candidates get added first
+    for (auto &child : op->children) {
+        FindCandidates(&child, candidates);
+    }
+	if (op->type == LogicalOperatorType::LOGICAL_PROJECTION &&
+	    op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	    op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+        candidates.push_back(op_ptr);
 	}
 }
 
-void Deliminator::UpdatePlan(LogicalOperator &op, vector<unique_ptr<Expression>> &from,
-                             vector<unique_ptr<Expression>> &to) {
-	// update delim joins
+bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, column_binding_map_t<unique_ptr<Expression>> &cb_map) {
+    auto &projection = (LogicalProjection &)**op_ptr;
+	auto &join = (LogicalComparisonJoin &)*projection.children[0];
+	auto &delim_get = (LogicalDelimGet &)*join.children[0];
+    if (join.conditions.size() != delim_get.chunk_types.size()) {
+        // joining with DelimGet adds new information
+        return false;
+    }
+
+	// check if redundant, and collect relevant column information
+    vector<unique_ptr<Expression>> nulls_are_equal_exprs;
+    for (auto &cond : join.conditions) {
+		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+			// non-equality join condition
+			return false;
+		}
+		if (cond.left->type != ExpressionType::BOUND_COLUMN_REF) {
+            // FIXME: properly deal with non-colref e.g. operator -(4, 1) in 4-i=j where i is from DelimGet
+            return false;
+		}
+        auto &left = (BoundColumnRefExpression &)*cond.left;
+		cb_map[left.binding] = cond.right->Copy();
+		if (!cond.null_values_are_equal) {
+            nulls_are_equal_exprs.push_back(cond.right->Copy());
+		}
+	}
+	// replace the redundant join
+	if (!nulls_are_equal_exprs.empty()) {
+        auto filter_expr = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL,
+                                                                LogicalType::BOOLEAN);
+        for (auto &expr : nulls_are_equal_exprs) {
+            filter_expr->children.push_back(expr->Copy());
+        }
+        auto filter_op = make_unique<LogicalFilter>(move(filter_expr));
+		filter_op->children.push_back(move(join.children[0]));
+		join.children[0] = move(filter_op);
+	}
+	projection.children[0] = move(join.children[0]);
+    // TODO: collect aliases from the projection somewhere here
+	return true;
+}
+
+void Deliminator::UpdatePlan(LogicalOperator &op, column_binding_map_t<unique_ptr<Expression>> &cb_map) {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		auto &delim_join = (LogicalDelimJoin &)op;
-		// if an expression in 'from' appears in a condition of the delim join
-		// AND an expression in 'to' appears in the duplicate-eliminated columns
-		// ONLY THEN can it be removed
-		auto decs = &delim_join.duplicate_eliminated_columns;
-		for (idx_t from_idx = 0; from_idx < from.size(); from_idx++) {
-			for (auto &cond : delim_join.conditions) {
-				if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
-					continue;
-				}
-				// TODO: we want to set cond.null_values_are_equal to true because we already set a filter
-				//  however, we only want to do this for the columns that are not actually duplicate eliminated anymore
-				//  it would make sense to do this within the nested 'if' below
-				//  but this doesn't cover all cases because columns may be projected, changing their ColumnBinding
-				//  we could collect 'projection aliases' of the 'from's, and add them to this loop
-                // we already applied an IS NOT NULL filter
-                cond.null_values_are_equal = true;
-				if (cond.left->Equals(from[from_idx].get()) || cond.right->Equals(from[from_idx].get())) {
-					// expression in 'from' appears in a condition of the delim join
-					for (idx_t dec_idx = 0; dec_idx < decs->size(); dec_idx++) {
-						if (decs->at(dec_idx)->Equals(from[from_idx].get())) {
-							// corresponding expression in 'to' appears in the duplicate-eliminated columns, remove it
-							decs->erase(decs->begin() + dec_idx);
-							break;
-						}
-					}
-					break;
+        auto &delim_join = (LogicalDelimJoin &)op;
+        auto decs = &delim_join.duplicate_eliminated_columns;
+        for (auto &cond : delim_join.conditions) {
+			if (cond.comparison != ExpressionType::COMPARE_EQUAL || cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
+				continue;
+			}
+            cond.null_values_are_equal = true;
+			auto &colref = (BoundColumnRefExpression &)*cond.right;
+			if (cb_map.find(colref.binding) != cb_map.end()) {
+				auto dec_pos = std::find(decs->begin(), decs->end(), cb_map[colref.binding]);
+				if (dec_pos != decs->end()) {
+					decs->erase(dec_pos);
 				}
 			}
 		}
-		// if there are no duplicate eliminated columns left, the delim join can be a regular join
 		if (decs->empty()) {
-			op.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 		}
 	}
-	// replace occurrences of 'from' with 'to'
+	// replace occurrences of removed DelimGet bindings
 	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) {
-        for (idx_t i = 0; i < from.size(); i++) {
-            if (child->get()->Equals(from[i].get())) {
-              *child = to[i]->Copy();
-            }
-        }
+        if (child->get()->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &colref = (BoundColumnRefExpression &)**child;
+            if (cb_map.find(colref.binding) != cb_map.end()) {
+                *child = cb_map[colref.binding]->Copy();
+			}
+		}
 	});
 	// continue in children
 	for (auto &child : op.children) {
-        UpdatePlan(*child, from, to);
+        UpdatePlan(*child, cb_map);
 	}
 }
 
