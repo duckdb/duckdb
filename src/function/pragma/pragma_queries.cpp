@@ -20,6 +20,10 @@ string pragma_collations(ClientContext &context, FunctionParameters parameters) 
 	return "SELECT * FROM pragma_collations() ORDER BY 1";
 }
 
+string pragma_functions(ClientContext &context, FunctionParameters parameters) {
+	return "SELECT * FROM pragma_functions() ORDER BY 1";
+}
+
 string pragma_show(ClientContext &context, FunctionParameters parameters) {
 	// PRAGMA table_info but with some aliases
 	return StringUtil::Format(
@@ -56,6 +60,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", pragma_collations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", pragma_show, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", pragma_version));
+	set.AddFunction(PragmaFunction::PragmaStatement("functions", pragma_functions));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", pragma_import_database, {LogicalType::VARCHAR}));
 }
 
