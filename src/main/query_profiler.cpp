@@ -12,7 +12,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/to_string.hpp"
 
-#include <iostream>
 #include <utility>
 #include <algorithm>
 

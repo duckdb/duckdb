@@ -213,3 +213,16 @@ text3
 statement ok
 DROP TABLE test;
 
+
+# CSV file with trailing empty lines 
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_1254.csv');
+
+query II
+SELECT a, b FROM test;
+----
+1	2
+1	2
+
+statement ok
+DROP TABLE test;

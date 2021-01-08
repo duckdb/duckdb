@@ -22,6 +22,7 @@ add_library_unity(
   transform_select_node.cpp
   transform_prepare.cpp
   transform_show.cpp
+  transform_show_select.cpp
   transform_transaction.cpp
   transform_update.cpp
   transform_create_sequence.cpp

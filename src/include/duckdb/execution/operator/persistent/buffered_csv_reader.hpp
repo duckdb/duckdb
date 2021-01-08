@@ -81,7 +81,7 @@ struct BufferedCSVReaderOptions {
 	//! Number of sample chunks used for type detection
 	idx_t sample_chunks = 10;
 	//! Number of samples to buffer
-	idx_t buffer_size = STANDARD_VECTOR_SIZE * 10;
+	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
 	//! The date format to use (if any is specified)
@@ -94,7 +94,7 @@ struct BufferedCSVReaderOptions {
 		       ", QUOTE='" + quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
 		       ", ESCAPE='" + escape + (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
 		       ", HEADER=" + std::to_string(header) +
-		       (has_header ? "" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+		       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 		       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
 		       ", ALL_VARCHAR=" + std::to_string(all_varchar);
 	}
@@ -145,6 +145,7 @@ public:
 	bool linenr_estimated = false;
 
 	vector<idx_t> sniffed_column_counts;
+	bool row_empty = false;
 	idx_t sample_chunk_idx = 0;
 	bool jumping_samples = false;
 	bool end_of_file_reached = false;
