@@ -108,6 +108,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 		throw Exception("Unsupported bound query node type");
 	}
 }
+
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	unique_ptr<BoundTableRef> result;
 	switch (ref.type) {
@@ -197,6 +198,16 @@ CommonTableExpressionInfo *Binder::FindCTE(const string &name, bool skip) {
 		return parent->FindCTE(name, name == alias);
 	}
 	return nullptr;
+}
+
+bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo* cte) {
+	if (bound_ctes.find(cte) != bound_ctes.end()) {
+		return true;
+	}
+	if (parent && inherit_ctes) {
+		return parent->CTEIsAlreadyBound(cte);
+	}
+	return false;
 }
 
 idx_t Binder::GenerateTableIndex() {
