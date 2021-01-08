@@ -20,6 +20,14 @@ struct ShowSelectInfo : public ParseInfo {
 	unique_ptr<QueryNode> query;
 	//! Aliases of projected columns
 	vector<string> aliases;
+
+	unique_ptr<ShowSelectInfo> Copy() {
+		auto result = make_unique<ShowSelectInfo>();
+		result->types = types;
+		result->query = query->Copy();
+		result->aliases = aliases;
+		return result;
+	}
 };
 
 } // namespace duckdb

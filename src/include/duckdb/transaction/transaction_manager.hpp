@@ -18,6 +18,7 @@
 namespace duckdb {
 
 class ClientContext;
+class Catalog;
 class StorageManager;
 class Transaction;
 
@@ -32,7 +33,7 @@ struct StoredCatalogSet {
 //! transactions
 class TransactionManager {
 public:
-	TransactionManager(StorageManager &storage);
+	TransactionManager(StorageManager &storage, Catalog &catalog);
 	~TransactionManager();
 
 	//! Start a new transaction
@@ -70,6 +71,8 @@ private:
 	mutex transaction_lock;
 	//! The storage manager
 	StorageManager &storage;
+	//! The catalog
+	Catalog &catalog;
 };
 
 } // namespace duckdb

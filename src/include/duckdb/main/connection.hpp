@@ -22,6 +22,7 @@
 namespace duckdb {
 
 class ClientContext;
+class DatabaseInstance;
 class DuckDB;
 
 typedef void (*warning_callback)(std::string);
@@ -31,10 +32,9 @@ typedef void (*warning_callback)(std::string);
 class Connection {
 public:
 	Connection(DuckDB &database);
-	~Connection();
+	Connection(DatabaseInstance &database);
 
-	DuckDB &db;
-	unique_ptr<ClientContext> context;
+	shared_ptr<ClientContext> context;
 	warning_callback warning_cb;
 
 public:
@@ -111,6 +111,8 @@ public:
 	void BeginTransaction();
 	void Commit();
 	void Rollback();
+	void SetAutoCommit(bool auto_commit);
+	bool IsAutoCommit();
 
 	template <typename TR, typename... Args> void CreateScalarFunction(string name, TR (*udf_func)(Args...)) {
 		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, udf_func);

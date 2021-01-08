@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_create_table.hpp"
 
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -13,7 +13,8 @@ PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry
 }
 
 void PhysicalCreateTable::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	schema->CreateTable(context.client, info.get());
+	auto &catalog = Catalog::GetCatalog(context.client);
+	catalog.CreateTable(context.client, schema, info.get());
 	state->finished = true;
 }
 

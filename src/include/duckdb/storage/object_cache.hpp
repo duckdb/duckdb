@@ -8,11 +8,15 @@
 
 #pragma once
 
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 //! ObjectCache is the base class for objects caches in DuckDB
 class ObjectCacheEntry {
@@ -35,6 +39,10 @@ public:
 	void Put(std::string key, shared_ptr<ObjectCacheEntry> value) {
 		lock_guard<mutex> glock(lock);
 		cache[key] = move(value);
+	}
+
+	static ObjectCache &GetObjectCache(duckdb::ClientContext &context) {
+		return *context.db->object_cache;
 	}
 
 private:

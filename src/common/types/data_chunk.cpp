@@ -214,6 +214,7 @@ static void release_duckdb_arrow_array(ArrowArray *array) {
 }
 
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
+	Normalify();
 	D_ASSERT(out_array);
 
 	auto root_holder = new DuckDBArrowArrayHolder();
@@ -249,8 +250,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 
 		switch (vector.vector_type) {
 			// TODO support other vector types
-		case VectorType::FLAT_VECTOR:
-
+		case VectorType::FLAT_VECTOR: {
 			switch (GetTypes()[col_idx].id()) {
 				// TODO support other data types
 			case LogicalTypeId::BOOLEAN:
@@ -328,10 +328,23 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				throw std::runtime_error("Unsupported type " + GetTypes()[col_idx].ToString());
 			}
 
-			child.null_count = FlatVector::Nullmask(vector).count();
-			child.buffers[0] = (void *)&FlatVector::Nullmask(vector).flip();
-
+			auto &nullmask = FlatVector::Nullmask(vector);
+			if (child.length == STANDARD_VECTOR_SIZE) {
+				// vector is completely full; null count is equal to the number of bits set in the mask
+				child.null_count = nullmask.count();
+			} else {
+				// vector is not completely full; we cannot easily figure out the exact null count
+				if (nullmask.any()) {
+					// any bits are set: might have nulls
+					child.null_count = -1;
+				} else {
+					// no bits are set; we know there are no nulls
+					child.null_count = 0;
+				}
+			}
+			child.buffers[0] = (void *)&nullmask.flip();
 			break;
+		}
 		default:
 			throw NotImplementedException(VectorTypeToString(vector.vector_type));
 		}

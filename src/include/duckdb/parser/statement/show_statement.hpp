@@ -15,9 +15,12 @@ namespace duckdb {
 
 class ShowStatement : public SQLStatement {
 public:
-	ShowStatement() : SQLStatement(StatementType::SHOW_STATEMENT), info(make_unique<ShowSelectInfo>()){};
+	ShowStatement();
 
 	unique_ptr<ShowSelectInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

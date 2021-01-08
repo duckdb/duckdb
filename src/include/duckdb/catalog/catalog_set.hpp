@@ -36,7 +36,7 @@ struct MappingValue {
 	MappingValue *parent;
 };
 
-//! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
+//! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
 	friend class DependencyManager;
 
@@ -51,10 +51,9 @@ public:
 	bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
 
 	bool DropEntry(ClientContext &context, const string &name, bool cascade);
+
 	//! Returns the entry with the specified name
 	CatalogEntry *GetEntry(ClientContext &context, const string &name);
-	//! Returns the root entry with the specified name regardless of transaction (or nullptr if there are none)
-	CatalogEntry *GetRootEntry(const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found
@@ -83,6 +82,9 @@ public:
 	idx_t GetEntryIndex(CatalogEntry *entry);
 	CatalogEntry *GetEntryFromIndex(idx_t index);
 	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
+
+	//! Returns the root entry with the specified name regardless of transaction (or nullptr if there are none)
+	CatalogEntry *GetRootEntry(const string &name);
 
 private:
 	//! Given a root entry, gets the entry valid for this transaction

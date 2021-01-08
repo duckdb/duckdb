@@ -21,15 +21,13 @@ class Connection;
 //! The Appender class can be used to append elements to a table.
 class Appender {
 	//! A reference to a database connection that created this appender
-	Connection &con;
+	shared_ptr<ClientContext> context;
 	//! The table description (including column names)
 	unique_ptr<TableDescription> description;
 	//! Internal chunk used for appends
 	DataChunk chunk;
 	//! The current column to append to
 	idx_t column = 0;
-	//! Message explaining why the Appender is invalidated (if any)
-	string invalidated_msg;
 
 public:
 	Appender(Connection &con, string schema_name, string table_name);
@@ -70,16 +68,9 @@ public:
 		return column;
 	}
 
-	void Invalidate(string msg, bool close = true);
-
 private:
-	//! Invalidate the appender with a specific message and throw an exception with the same message
-	void InvalidateException(string msg);
-
 	template <class T> void AppendValueInternal(T value);
 	template <class SRC, class DST> void AppendValueInternal(Vector &vector, SRC input);
-
-	void CheckInvalidated();
 
 	void AppendRowRecursive() {
 		EndRow();

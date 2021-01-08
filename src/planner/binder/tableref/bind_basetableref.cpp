@@ -21,7 +21,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
 		if (!ctebinding) {
 			// Move CTE to subquery and bind recursively
-			SubqueryRef subquery(cte->query->Copy());
+			SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte->query->Copy()));
 			subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			subquery.column_name_alias = cte->aliases;
 			for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
@@ -85,7 +85,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// for the view and for the current query
 		bool inherit_ctes = false;
 		Binder view_binder(context, this, inherit_ctes);
-		SubqueryRef subquery(view_catalog_entry->query->Copy());
+		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry->query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		subquery.column_name_alias =
 		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);

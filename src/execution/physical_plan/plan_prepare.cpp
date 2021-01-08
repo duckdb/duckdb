@@ -12,7 +12,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &o
 	auto plan = CreatePlan(*op.children[0]);
 	op.prepared->types = plan->types;
 	op.prepared->plan = move(plan);
-	op.prepared->dependencies = move(dependencies);
 
 	return make_unique<PhysicalPrepare>(op.name, move(op.prepared));
 }

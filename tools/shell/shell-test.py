@@ -35,11 +35,17 @@ def test(cmd, out=None, err=None, extra_commands=None):
      if not err and stderr != '':
           test_exception(command, cmd, stdout, stderr, 'got err test failed')
 
+     if err is None and res.returncode != 0:
+          test_exception(command, cmd, stdout, stderr, 'process returned non-zero exit code but no error was specified')
+
+
 def tf():
 	return tempfile.mktemp().replace('\\','/')
 
 # basic test
 test('select \'asdf\' as a;', out='asdf')
+
+test('select * from range(10000);', out='9999')
 
 # test pragma
 test("""
@@ -183,7 +189,7 @@ CREATE TABLE asdf (i INTEGER);
 .schema as%
 ''', err="subquery in FROM must have an alias")
 
-test('.fullschema')
+test('.fullschema', 'No STAT tables available', '')
 
 test('''
 CREATE TABLE asda (i INTEGER);
@@ -365,6 +371,13 @@ CREATE TABLE a (I INTEGER);
 INSERT INTO a VALUES (42);
 .dump
 ''', 'CREATE TABLE a(i INTEGER)')
+
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump
+''', 'COMMIT')
 
 # .dump a specific table
 test('''

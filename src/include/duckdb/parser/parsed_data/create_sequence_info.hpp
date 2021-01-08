@@ -33,6 +33,20 @@ struct CreateSequenceInfo : public CreateInfo {
 	int64_t start_value;
 	//! Whether or not the sequence cycles
 	bool cycle;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		auto result = make_unique<CreateSequenceInfo>();
+		CopyProperties(*result);
+		result->name = name;
+		result->usage_count = usage_count;
+		result->increment = increment;
+		result->min_value = min_value;
+		result->max_value = max_value;
+		result->start_value = start_value;
+		result->cycle = cycle;
+		return move(result);
+	}
 };
 
 } // namespace duckdb

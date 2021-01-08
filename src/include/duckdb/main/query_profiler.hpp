@@ -86,7 +86,7 @@ public:
 		return enabled;
 	}
 
-	void StartQuery(string query, SQLStatement &statement);
+	void StartQuery(string query);
 	void EndQuery();
 
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler

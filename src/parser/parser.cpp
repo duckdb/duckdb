@@ -17,7 +17,7 @@ namespace duckdb {
 Parser::Parser() {
 }
 
-void Parser::ParseQuery(string query) {
+void Parser::ParseQuery(const string &query) {
 	Transformer transformer;
 	{
 		PostgresParser parser;

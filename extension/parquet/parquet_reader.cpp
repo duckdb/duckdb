@@ -139,13 +139,15 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
-	if (!context.db.config.object_cache_enable) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.object_cache_enable) {
 		metadata = load_metadata(fs, handle.get(), footer_len, file_size);
 	} else {
-		metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
+		auto &cache = ObjectCache::GetObjectCache(context);
+		metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(cache.Get(file_name));
 		if (!metadata || (fs.GetLastModifiedTime(*handle) + 10 >= metadata->read_time)) {
 			metadata = load_metadata(fs, handle.get(), footer_len, file_size);
-			context.db.object_cache->Put(file_name, std::dynamic_pointer_cast<ObjectCacheEntry>(metadata));
+			cache.Put(file_name, std::dynamic_pointer_cast<ObjectCacheEntry>(metadata));
 		}
 	}
 

@@ -92,7 +92,7 @@ public:
 
 	unique_ptr<DataChunk> Fetch() {
 		if (ChunkCount() == 0) {
-			return make_unique<DataChunk>();
+			return nullptr;
 		}
 
 		auto res = move(chunks[0]);

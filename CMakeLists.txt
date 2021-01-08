@@ -74,31 +74,35 @@ if(${FORCE_COLORED_OUTPUT})
 endif()
 
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
-if(${ENABLE_SANITIZER})
-  if(BUILD_PYTHON OR BUILD_R)
-    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-      message(
-        WARNING
-          "Sanitizers are not supported for the Python/R builds. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled"
-      )
-    endif()
+option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
+option(
+  FORCE_SANITIZER
+  "Forces building with sanitizers even if the Python and R modules are enabled."
+  FALSE)
+if((BUILD_PYTHON OR BUILD_R)
+   AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
+   AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
+  if(FORCE_SANITIZER)
+    message(
+      WARNING
+        "FORCE_SANITIZER is set and the Python/R builds are enabled. Sanitizers will be linked as a shared library (-shared-libasan). You may need to do LD_PRELOAD tricks to load packages built in this way."
+    )
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -shared-libasan")
   else()
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+    message(
+      WARNING
+        "Sanitizers are not enabled but will not be built because the Python/R builds are enabled. Use FORCE_SANITIZER to force building of the sanitizers even when building these packages."
+    )
+    set(ENABLE_SANITIZER FALSE)
+    set(ENABLE_UBSAN FALSE)
   endif()
 endif()
+if(${ENABLE_SANITIZER})
+  set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+endif()
 
-option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
 if(${ENABLE_UBSAN})
-  if(BUILD_PYTHON OR BUILD_R)
-    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-      message(
-        WARNING
-          "Sanitizers are not supported for the Python/R builds. This is because sanitizers need to be compiled into the entire program, they cannot be added using dlopen, hence they do not work inside Python packages unless Python itself is compiled with sanitizer flags enabled"
-      )
-    endif()
-  else()
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined")
-  endif()
+  set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined")
 endif()
 
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)

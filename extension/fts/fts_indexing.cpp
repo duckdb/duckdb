@@ -228,13 +228,8 @@ static string indexing_script(string input_schema, string input_table, string in
 }
 
 void check_exists(ClientContext &context, QualifiedName &qname) {
-	if (!context.catalog.schemas->GetEntry(context, qname.schema)) {
-		throw CatalogException("No such schema: '%s'", qname.schema);
-	}
-	auto schema = (SchemaCatalogEntry *)context.catalog.schemas->GetEntry(context, qname.schema);
-	if (!schema->tables.GetEntry(context, qname.name)) {
-		throw CatalogException("No such table: '%s.%s'", qname.schema, qname.name);
-	}
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.GetEntry<TableCatalogEntry>(context, qname.schema, qname.name);
 }
 
 string create_fts_index_query(ClientContext &context, FunctionParameters parameters) {
@@ -284,8 +279,7 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 	// positional parameters
 	auto doc_id = parameters.values[1].str_value;
 	// check all specified columns
-	auto schema = (SchemaCatalogEntry *)context.catalog.schemas->GetEntry(context, qname.schema);
-	auto table = (TableCatalogEntry *)schema->tables.GetEntry(context, qname.name);
+	auto table = context.catalog.GetEntry<TableCatalogEntry>(context, qname.schema, qname.name);
 	vector<string> doc_values;
 	for (idx_t i = 2; i < parameters.values.size(); i++) {
 		string col_name = parameters.values[i].str_value;

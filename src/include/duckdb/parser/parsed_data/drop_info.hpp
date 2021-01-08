@@ -28,6 +28,17 @@ struct DropInfo : public ParseInfo {
 	//! Cascade drop (drop all dependents instead of throwing an error if there
 	//! are any)
 	bool cascade = false;
+
+public:
+	unique_ptr<DropInfo> Copy() const {
+		auto result = make_unique<DropInfo>();
+		result->type = type;
+		result->schema = schema;
+		result->name = name;
+		result->if_exists = if_exists;
+		result->cascade = cascade;
+		return result;
+	}
 };
 
 } // namespace duckdb
