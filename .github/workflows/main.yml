@@ -744,7 +744,7 @@ jobs:
 
 
   rstats-linux:
-    name: R Package
+    name: R Package Linux
     runs-on: ubuntu-20.04
     needs: linux-debug
 
@@ -781,10 +781,10 @@ jobs:
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
 
-rstats-windows:
-    name: R Package
+  rstats-windows:
+    name: R Package Windows
     runs-on: windows-latest
-   # needs: linux-debug
+    # needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
