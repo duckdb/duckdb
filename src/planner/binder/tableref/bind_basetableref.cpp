@@ -20,6 +20,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// Check if there is a CTE binding in the BindContext
 		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
 		if (!ctebinding) {
+			if (CTEIsAlreadyBound(cte)) {
+				throw BinderException("Circular reference to CTE \"%s\", use WITH RECURSIVE to use recursive CTEs", ref.table_name);
+			}
 			// Move CTE to subquery and bind recursively
 			SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte->query->Copy()));
 			subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
@@ -31,7 +34,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					subquery.column_name_alias.push_back(ref.column_name_alias[i]);
 				}
 			}
-			return Bind(subquery);
+			return Bind(subquery, cte);
 		} else {
 			// There is a CTE binding in the BindContext.
 			// This can only be the case if there is a recursive CTE present.
