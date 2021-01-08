@@ -235,11 +235,11 @@ private:
 	uint8_t byte_pos;
 };
 
-class ListColumnReader : public ColumnReader {
+class ListColumnReader : public TemplatedColumnReader<list_entry_t> {
 public:
 	ListColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
 	                 TProtocol &protocol_p)
-	    : ColumnReader(type_p, chunk_p, schema_p, protocol_p) {
+	    : TemplatedColumnReader<list_entry_t>(type_p, chunk_p, schema_p, protocol_p) {
 		auto child_type = type_p.child_types()[0].second;
 		// TODO extract this into separate method, also used in ParquetReader::PrepareRowGroupBuffer
 		switch (child_type.id()) {
