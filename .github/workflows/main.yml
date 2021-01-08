@@ -816,7 +816,6 @@ rstats-windows:
         if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
 
-
   linux-tarball:
     name: Python 3 Tarball
     runs-on: ubuntu-20.04
