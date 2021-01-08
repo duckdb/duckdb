@@ -799,8 +799,6 @@ jobs:
       with:
         r-version: 'devel'
 
-    - uses: r-lib/actions/setup-tinytex@v1
-
     - name: Install
       run: |
         R -f tools/rpkg/dependencies.R
@@ -812,7 +810,7 @@ jobs:
         R CMD build .
         R CMD INSTALL duckdb_*.tar.gz
         (cd tests && R -f testthat.R)
-        R CMD check --as-cran -o /tmp duckdb_*.tar.gz
+        R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
         if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
 
