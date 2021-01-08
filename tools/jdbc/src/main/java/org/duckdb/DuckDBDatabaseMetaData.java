@@ -4,7 +4,6 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
@@ -190,7 +189,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public String getSearchStringEscape() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return null;
 	}
 
 	@Override
@@ -638,7 +637,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
-		if (catalog != null) {
+		if (catalog != null && !catalog.isEmpty()) {
 			throw new SQLException("catalog argument is not supported");
 		}
 		PreparedStatement ps = conn.prepareStatement(
@@ -656,11 +655,19 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern, String[] types)
 			throws SQLException {
-		if (catalog != null) {
-			throw new SQLException("catalog argument is not supported");
+		if (catalog != null && !catalog.isEmpty()) {
+			throw new SQLException("Actual catalog argument is not supported, got " + catalog);
 		}
-		if (types != null) {
-			throw new SQLException("types argument is not supported");
+		String table_type_str = "";
+		if (types != null && types.length > 0) {
+			table_type_str = "table_type IN (";
+			for (int i = 0; i < types.length; i++) {
+				table_type_str += "'" + types[i] + "'";
+				if (i < types.length - 1) {
+					table_type_str += ',';
+				}
+			}
+			table_type_str +=  ") AND ";
 		}
 		if (schemaPattern == null) {
 			schemaPattern = "%";
@@ -669,7 +676,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			tableNamePattern = "%";
 		}
 		PreparedStatement ps = conn.prepareStatement(
-				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema_tables() WHERE table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
+				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema_tables() WHERE "+ table_type_str +" table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
 		ps.setString(1, schemaPattern);
 		ps.setString(2, tableNamePattern);
 		return ps.executeQuery();
@@ -679,7 +686,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern)
 			throws SQLException {
-		if (catalog != null) {
+		if (catalog != null && !catalog.isEmpty()) {
 			throw new SQLException("catalog argument is not supported");
 		}
 		if (schemaPattern == null) {
@@ -731,13 +738,13 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getProcedures(String catalog, String schemaPattern, String procedureNamePattern)
 			throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return conn.createStatement().executeQuery("SELECT NULL WHERE FALSE");
 	}
 
 	@Override
 	public ResultSet getProcedureColumns(String catalog, String schemaPattern, String procedureNamePattern,
 			String columnNamePattern) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return conn.createStatement().executeQuery("SELECT NULL WHERE FALSE");
 	}
 
 	@Override
@@ -958,13 +965,13 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getFunctions(String catalog, String schemaPattern, String functionNamePattern)
 			throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return conn.createStatement().executeQuery("SELECT NULL WHERE FALSE");
 	}
 
 	@Override
 	public ResultSet getFunctionColumns(String catalog, String schemaPattern, String functionNamePattern,
 			String columnNamePattern) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return conn.createStatement().executeQuery("SELECT NULL WHERE FALSE");
 	}
 
 	@Override
