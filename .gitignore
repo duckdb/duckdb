@@ -224,11 +224,13 @@ io_file
 # Compiled Dynamic libraries
 *.so
 *.dylib
+*.dll
 
 # Compiled Static libraries
 *.lai
 *.la
 *.a
+*.lib
 
 # Compiled protocol buffers
 *.pb.h
@@ -317,3 +319,4 @@ duckdb.hpp.tmp
 tools/duckdb.Rcheck/
 tools/*.tar.gz
 .Rhistory
+ub_*.cpp
