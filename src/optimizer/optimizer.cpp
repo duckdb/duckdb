@@ -75,9 +75,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = optimizer.Optimize(move(plan));
 	context.profiler.EndPhase();
 
-	Printer::Print("### BEFORE ###");
-	plan->Print();
-
 	// removes any redundant DelimGets/DelimJoins
 	context.profiler.StartPhase("deliminator");
 	Deliminator deliminator;
@@ -88,9 +85,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RemoveUnusedColumns unused(binder, context, true);
 	unused.VisitOperator(*plan);
 	context.profiler.EndPhase();
-
-	Printer::Print("### AFTER ###");
-	plan->Print();
 
 	// perform statistics propagation
 	context.profiler.StartPhase("statistics_propagation");
