@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/main/table_description.hpp"
 
 namespace duckdb {
@@ -30,23 +31,23 @@ class Appender {
 	idx_t column = 0;
 
 public:
-	Appender(Connection &con, string schema_name, string table_name);
-	Appender(Connection &con, string table_name);
-	~Appender();
+	DUCKDB_API Appender(Connection &con, string schema_name, string table_name);
+	DUCKDB_API Appender(Connection &con, string table_name);
+	DUCKDB_API ~Appender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions
 	//! should be called the correct amount of times. After that,
 	//! EndRow() should be called.
-	void BeginRow();
+	DUCKDB_API void BeginRow();
 	//! Finishes appending the current row.
-	void EndRow();
+	DUCKDB_API void EndRow();
 
 	// Append functions
 	template <class T> void Append(T value) {
 		throw Exception("Undefined type for Appender::Append!");
 	}
 
-	void Append(const char *value, uint32_t length);
+	DUCKDB_API void Append(const char *value, uint32_t length);
 
 	// prepared statements
 	template <typename... Args> void AppendRow(Args... args) {
@@ -55,16 +56,16 @@ public:
 	}
 
 	//! Commit the changes made by the appender.
-	void Flush();
+	DUCKDB_API void Flush();
 	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
-	void Close();
+	DUCKDB_API void Close();
 
 	//! Obtain a reference to the internal vector that is used to append to the table
-	DataChunk &GetAppendChunk() {
+	DUCKDB_API DataChunk &GetAppendChunk() {
 		return chunk;
 	}
 
-	idx_t CurrentColumn() {
+	DUCKDB_API idx_t CurrentColumn() {
 		return column;
 	}
 
@@ -84,15 +85,15 @@ private:
 	void AppendValue(Value value);
 };
 
-template <> void Appender::Append(bool value);
-template <> void Appender::Append(int8_t value);
-template <> void Appender::Append(int16_t value);
-template <> void Appender::Append(int32_t value);
-template <> void Appender::Append(int64_t value);
-template <> void Appender::Append(float value);
-template <> void Appender::Append(double value);
-template <> void Appender::Append(const char *value);
-template <> void Appender::Append(Value value);
-template <> void Appender::Append(std::nullptr_t value);
+template <> void DUCKDB_API Appender::Append(bool value);
+template <> void DUCKDB_API Appender::Append(int8_t value);
+template <> void DUCKDB_API Appender::Append(int16_t value);
+template <> void DUCKDB_API Appender::Append(int32_t value);
+template <> void DUCKDB_API Appender::Append(int64_t value);
+template <> void DUCKDB_API Appender::Append(float value);
+template <> void DUCKDB_API Appender::Append(double value);
+template <> void DUCKDB_API Appender::Append(const char *value);
+template <> void DUCKDB_API Appender::Append(Value value);
+template <> void DUCKDB_API Appender::Append(std::nullptr_t value);
 
 } // namespace duckdb
