@@ -1,6 +1,5 @@
 package org.duckdb.test;
 
-import java.io.File;
 import java.lang.reflect.Method;
 import java.lang.ArrayIndexOutOfBoundsException;
 import java.math.BigDecimal;
@@ -12,7 +11,6 @@ import java.sql.DatabaseMetaData;
 import java.sql.Date;
 import java.sql.Driver;
 import java.sql.DriverManager;
-import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -41,6 +39,9 @@ public class TestDuckDBJDBC {
 	}
 
 	private static void assertEquals(Object a, Object b) throws Exception {
+		if (a == null && b == null) {
+			return;
+		}
 		assertTrue(a.equals(b));
 	}
 
@@ -962,6 +963,29 @@ public class TestDuckDBJDBC {
 		assertFalse(rs.next());
 		rs.close();
 
+		// try with catalog as well
+		rs = md.getColumns(conn.getCatalog(), "main", "a", "i");
+		assertTrue(rs.next());
+		assertNull(rs.getObject("TABLE_CAT"));
+		assertNull(rs.getObject(1));
+		assertEquals(rs.getString("TABLE_SCHEM"), "main");
+		assertEquals(rs.getString(2), "main");
+		assertEquals(rs.getString("TABLE_NAME"), "a");
+		assertEquals(rs.getString(3), "a");
+		assertEquals(rs.getString("COLUMN_NAME"), "i");
+		assertEquals(rs.getString(4), "i");
+		assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
+		assertEquals(rs.getInt(5), Types.INTEGER);
+		assertEquals(rs.getString("TYPE_NAME"), "INTEGER");
+		assertEquals(rs.getString(6), "INTEGER");
+		assertNull(rs.getObject("COLUMN_SIZE"));
+		assertNull(rs.getObject(7));
+		assertNull(rs.getObject("BUFFER_LENGTH"));
+		assertNull(rs.getObject(8));
+
+		assertFalse(rs.next());
+		rs.close();
+
 		rs = md.getColumns(null, "xxx", "a", "i");
 		assertFalse(rs.next());
 		rs.close();
@@ -1006,8 +1030,7 @@ public class TestDuckDBJDBC {
 	public static void test_explain_bug958() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
-		ResultSet rs = stmt
-				.executeQuery("EXPLAIN SELECT 42");
+		ResultSet rs = stmt.executeQuery("EXPLAIN SELECT 42");
 		assertTrue(rs.next());
 		assertTrue(rs.getString(1) != null);
 		assertTrue(rs.getString(2) != null);
@@ -1098,6 +1121,7 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 
 		try {
+			@SuppressWarnings("unused")
 			DuckDBAppender appender = conn.createAppender("main", "data");
 			fail();
 		} catch (SQLException e) {
@@ -1187,6 +1211,75 @@ public class TestDuckDBJDBC {
 		}
 
 		stmt.close();
+		conn.close();
+	}
+
+	public static void test_get_catalog() throws Exception {
+		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		ResultSet rs = conn.getMetaData().getCatalogs();
+		assertTrue(rs.next());
+		String catalog = rs.getString(1);
+		assertFalse(rs.next());
+		rs.close();
+		assertEquals(conn.getCatalog(), catalog);
+		conn.close();
+	}
+
+	public static void test_get_table_types_bug1258() throws Exception {
+		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE a1 (i INTEGER)");
+		stmt.execute("CREATE TABLE a2 (i INTEGER)");
+		stmt.execute("CREATE TEMPORARY TABLE b (i INTEGER)");
+		stmt.execute("CREATE VIEW c AS SELECT * FROM a1");
+		stmt.close();
+
+		ResultSet rs = conn.getMetaData().getTables(null, null, null, null);
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "a1");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "a2");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "b");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "c");
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = conn.getMetaData().getTables(null, null, null, new String[] {});
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "a1");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "a2");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "b");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "c");
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = conn.getMetaData().getTables(null, null, null, new String[] { "BASE TABLE" });
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "a1");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "a2");
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = conn.getMetaData().getTables(null, null, null, new String[] { "BASE TABLE", "VIEW" });
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "a1");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "a2");
+		assertTrue(rs.next());
+		assertEquals(rs.getString("TABLE_NAME"), "c");
+		assertFalse(rs.next());
+		rs.close();
+
+		rs = conn.getMetaData().getTables(null, null, null, new String[] { "XXXX" });
+		assertFalse(rs.next());
+		rs.close();
+
 		conn.close();
 	}
 

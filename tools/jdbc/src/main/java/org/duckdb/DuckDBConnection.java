@@ -161,7 +161,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public String getCatalog() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return null;
 	}
 
 	public void setSchema(String schema) throws SQLException {
