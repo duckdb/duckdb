@@ -350,9 +350,9 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		} else {
 			// complex CSV
 			// check for quote or escape separately
-			if (strstr(str, options.quote.c_str())) {
+			if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.quote.c_str(), options.quote.size()) != INVALID_INDEX) {
 				requires_escape = true;
-			} else if (strstr(str, options.escape.c_str())) {
+			} else if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.escape.c_str(), options.escape.size()) != INVALID_INDEX) {
 				requires_escape = true;
 			}
 		}
