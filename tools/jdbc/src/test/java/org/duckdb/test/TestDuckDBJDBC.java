@@ -1283,6 +1283,22 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_utf_string_bug1271() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery("SELECT 'Mühleisen', '🦆', '🦄ྀི123456789'");
+		assertTrue(rs.next());
+
+		assertEquals(rs.getString(1), "Mühleisen");
+		assertEquals(rs.getString(2), "🦆");
+		assertEquals(rs.getString(3), "🦄ྀི123456789");
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();

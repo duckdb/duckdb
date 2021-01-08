@@ -246,6 +246,18 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	}
 	auto row_count = res_ref->chunk->size();
 
+	// ugh
+	jclass charset_class = env->FindClass("java/nio/charset/Charset");
+	jclass charbuffer_class = env->FindClass("java/nio/CharBuffer");
+	jmethodID for_name =
+	    env->GetStaticMethodID(charset_class, "forName", "(Ljava/lang/String;)Ljava/nio/charset/Charset;");
+	jobject charset = env->CallStaticObjectMethod(charset_class, for_name, env->NewStringUTF("UTF-8"));
+	jmethodID charset_decode =
+	    env->GetMethodID(charset_class, "decode", "(Ljava/nio/ByteBuffer;)Ljava/nio/CharBuffer;");
+	jmethodID charbuffer_to_string = env->GetMethodID(charbuffer_class, "toString", "()Ljava/lang/String;");
+	jclass string_class = env->FindClass("java/lang/String");
+	// eough
+
 	auto vec_array = (jobjectArray)env->NewObjectArray(res_ref->chunk->ColumnCount(),
 	                                                   env->FindClass("org/duckdb/DuckDBVector"), nullptr);
 	for (idx_t col_idx = 0; col_idx < res_ref->chunk->ColumnCount(); col_idx++) {
@@ -307,14 +319,18 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			// fall through on purpose
 		}
 		case LogicalTypeId::VARCHAR:
-			varlen_data = env->NewObjectArray(row_count, env->FindClass("java/lang/String"), nullptr);
+			varlen_data = env->NewObjectArray(row_count, string_class, nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 				if (FlatVector::Nullmask(vec)[row_idx]) {
 					continue;
 				}
-				env->SetObjectArrayElement(
-				    varlen_data, row_idx,
-				    env->NewStringUTF(((string_t *)FlatVector::GetData(vec))[row_idx].GetString().c_str()));
+				// omg
+				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
+				auto bb = env->NewDirectByteBuffer((void *)d_str.GetDataUnsafe(), d_str.GetSize());
+				auto j_cb = env->CallObjectMethod(charset, charset_decode, bb);
+				auto j_str = env->CallObjectMethod(j_cb, charbuffer_to_string);
+
+				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 			}
 			break;
 		default:
