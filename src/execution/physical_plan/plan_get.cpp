@@ -12,7 +12,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	D_ASSERT(op.children.empty());
 
 	unique_ptr<TableFilterSet> table_filters;
-	if (op.tableFilters.size() > 0) {
+	if (!op.tableFilters.empty()) {
 		// create the table filter map
 		table_filters = make_unique<TableFilterSet>();
 		for (auto &tableFilter : op.tableFilters) {

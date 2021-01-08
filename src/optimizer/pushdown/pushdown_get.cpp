@@ -14,14 +14,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	if (get.function.pushdown_complex_filter) {
 		// for the remaining filters, check if we can push any of them into the scan as well
 		vector<unique_ptr<Expression>> expressions;
-		for (idx_t i = 0; i < filters.size(); i++) {
-			expressions.push_back(move(filters[i]->filter));
+		for (auto & filter : filters) {
+			expressions.push_back(move(filter->filter));
 		}
 		filters.clear();
 
 		get.function.pushdown_complex_filter(optimizer.context, get, get.bind_data.get(), expressions);
 
-		if (expressions.size() == 0) {
+		if (expressions.empty()) {
 			return op;
 		}
 		// re-generate the filters

@@ -86,7 +86,7 @@ FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 }
 
 void FilterPushdown::GenerateFilters() {
-	if (filters.size() > 0) {
+	if (!filters.empty()) {
 		D_ASSERT(!combiner.HasFilters());
 		return;
 	}

@@ -41,6 +41,7 @@ public:
 
 private:
 	FilterResult AddFilter(Expression *expr);
+	FilterResult AddBoundComparisonFilter(Expression *expr);
 	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison);
 	unique_ptr<Expression> FindTransitiveFilter(Expression *expr);
 

@@ -2,19 +2,32 @@
 # description: Test if zonemaps are correctly used
 # group: [optimizer]
 
-#    1) In-clause based on in-clause range/boundary zonemap check
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
 statement ok
 create temporary table t as select range a, length(range) b, mod(range,10000) c, 5 d, 10000 e from range(100000);
 
-query I
-select count(*) from t where b in (1,2,3) ;                       /* no data skipping */
+# 0) Or-Clause
+query II
+explain select count(*) from t where b = 1 or b =2 ;
 ----
-1000
+physical_plan	<REGEX>:.*Filters:.*
 
-query I
-select count(*) from t where b in (1,2,3) and b <= 3;    /* data skipping occurs */
+
+# 1) In-clause based on in-clause range/boundary zonemap check
+
+
+query II
+explain select count(*) from t where b in (1,2,3) ;
 ----
-1000
+physical_plan	<REGEX>:.*Filters:.*
+
+query II
+explain select count(*) from t where b <=3 and b>=0;
+----
+physical_plan	<REGEX>:.*Filters:.*
+
 
 #   2) In-clause based on in-clause range/boundary zonemap check
 query I
