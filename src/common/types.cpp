@@ -229,7 +229,7 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
-void LogicalType::Serialize(Serializer &serializer) {
+void LogicalType::Serialize(Serializer &serializer) const {
 	serializer.Write<LogicalTypeId>(id_);
 	serializer.Write<uint8_t>(width_);
 	serializer.Write<uint8_t>(scale_);

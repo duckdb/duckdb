@@ -21,7 +21,7 @@ class TransactionManager;
 class TransactionContext {
 public:
 	TransactionContext(TransactionManager &transaction_manager)
-	    : transaction_manager(transaction_manager), auto_commit(true), is_invalidated(false),
+	    : transaction_manager(transaction_manager), auto_commit(true),
 	      current_transaction(nullptr) {
 	}
 	~TransactionContext();
@@ -40,21 +40,14 @@ public:
 	void Commit();
 	void Rollback();
 
-	void SetAutoCommit(bool value) {
-		auto_commit = value;
-	}
+	void SetAutoCommit(bool value);
 	bool IsAutoCommit() {
 		return auto_commit;
-	}
-
-	void Invalidate() {
-		is_invalidated = true;
 	}
 
 private:
 	TransactionManager &transaction_manager;
 	bool auto_commit;
-	bool is_invalidated;
 
 	Transaction *current_transaction;
 

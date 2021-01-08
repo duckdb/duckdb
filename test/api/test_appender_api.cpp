@@ -26,20 +26,23 @@ TEST_CASE("Test using appender after connection is gone", "[api]") {
 	result = conn->Query("SELECT * FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-	// removing the connection invalidates the appender
+	// removing the connection does not invalidate the appender
+	// the appender can still be used
 	conn.reset();
-	REQUIRE_THROWS(appender->BeginRow());
+	appender->BeginRow();
+	appender->Append<int32_t>(2);
+	appender->EndRow();
+
+	appender->Flush();
+
+	// clearing the appender clears the connection
 	appender.reset();
 
-	// now create the appender and connection again
+	// if we re-create the connection we can verify the data was actually inserted
 	conn = make_unique<Connection>(*db);
-	appender = make_unique<Appender>(*conn, "integers");
 
-	// removing the database invalidates both the connection and the appender
-	db.reset();
-
-	REQUIRE_FAIL(conn->Query("SELECT * FROM integers"));
-	REQUIRE_THROWS(appender->BeginRow());
+	result = conn->Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 }
 
 TEST_CASE("Test appender and connection destruction order", "[api]") {

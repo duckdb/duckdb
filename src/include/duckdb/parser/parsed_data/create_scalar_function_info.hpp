@@ -28,6 +28,15 @@ struct CreateScalarFunctionInfo : public CreateFunctionInfo {
 	}
 
 	vector<ScalarFunction> functions;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		ScalarFunctionSet set(name);
+		set.functions = functions;
+		auto result = make_unique<CreateScalarFunctionInfo>(move(set));
+		CopyProperties(*result);
+		return move(result);
+	}
 };
 
 } // namespace duckdb

@@ -24,6 +24,15 @@ struct PragmaInfo : public ParseInfo {
 	vector<Value> parameters;
 	//! Named parameter list (if any)
 	unordered_map<string, Value> named_parameters;
+
+public:
+	unique_ptr<PragmaInfo> Copy() const {
+		auto result = make_unique<PragmaInfo>();
+		result->name = name;
+		result->parameters = parameters;
+		result->named_parameters = named_parameters;
+		return result;
+	}
 };
 
 } // namespace duckdb

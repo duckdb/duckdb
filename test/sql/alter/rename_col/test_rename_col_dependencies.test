@@ -5,25 +5,23 @@
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
 
-# add a prepared statement that depends on test
+# create two prepared statements
+# one uses specific columns (i, j)
+# the other uses select *
 statement ok
-PREPARE v AS SELECT * FROM test
+PREPARE v1 AS SELECT i, j FROM test
 
-# we don't allow altering of tables when there are dependencies
+statement ok
+PREPARE v2 AS SELECT * FROM test
+
+# now rename "i" to "k"
+statement ok
+ALTER TABLE test RENAME COLUMN i TO k
+
+# v1 does not work anymore: "i" does not exist
 statement error
-ALTER TABLE test RENAME COLUMN i TO k
+EXECUTE v1
 
-# remove the prepared statement again
+# v2 still works
 statement ok
-DEALLOCATE v
-
-# now we can alter the table
-statement ok
-ALTER TABLE test RENAME COLUMN i TO k
-
-statement ok
-SELECT j, k FROM test
-
-statement ok
-DROP TABLE IF EXISTS test
-
+EXECUTE v2

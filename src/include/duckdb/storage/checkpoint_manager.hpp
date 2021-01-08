@@ -50,7 +50,7 @@ public:
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The database this storagemanager belongs to
-	DuckDB &database;
+	DatabaseInstance &database;
 	//! The metadata writer is responsible for writing schema information
 	unique_ptr<MetaBlockWriter> metadata_writer;
 	//! The table data writer is responsible for writing the DataPointers used by the table chunks

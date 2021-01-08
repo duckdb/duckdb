@@ -19,7 +19,7 @@ enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, R
 
 // this is optional and only used in tests at the moment
 struct DBConfig {
-	friend class DuckDB;
+	friend class DatabaseInstance;
 	friend class StorageManager;
 
 public:

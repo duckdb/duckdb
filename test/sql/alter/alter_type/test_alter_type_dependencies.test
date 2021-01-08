@@ -1,0 +1,25 @@
+# name: test/sql/alter/alter_type/test_alter_type_dependencies.test
+# description: Test ALTER TABLE ALTER TYPE and dependencies
+# group: [alter_type]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# prepare a statement that depends on test
+statement ok
+PREPARE v1 AS SELECT * FROM test
+
+# we can run the statement
+statement ok
+EXECUTE v1
+
+# now change the type of "i" to varchar
+statement ok
+ALTER TABLE test ALTER i TYPE VARCHAR USING i::VARCHAR
+
+# executing the prepared statement now results in an error: the return types have changed
+statement error
+EXECUTE v1

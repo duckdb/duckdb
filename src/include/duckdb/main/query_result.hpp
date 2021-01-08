@@ -47,8 +47,11 @@ public:
 	unique_ptr<QueryResult> next;
 
 public:
-	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on failure.
-	virtual unique_ptr<DataChunk> Fetch() = 0;
+	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
+	//! Returns nullptr if there are no more results to fetch.
+	virtual unique_ptr<DataChunk> Fetch();
+	//! Fetches a DataChunk from the query result. The vector types
+	virtual unique_ptr<DataChunk> FetchRaw() = 0;
 	// Converts the QueryResult to a string
 	virtual string ToString() = 0;
 	//! Prints the QueryResult to the console
@@ -67,8 +70,8 @@ private:
 	//! The current chunk used by the iterator
 	unique_ptr<DataChunk> iterator_chunk;
 
+private:
 	class QueryResultIterator;
-
 	class QueryResultRow {
 	public:
 		QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {

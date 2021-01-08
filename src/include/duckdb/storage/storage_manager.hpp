@@ -16,7 +16,7 @@
 namespace duckdb {
 class BlockManager;
 class Catalog;
-class DuckDB;
+class DatabaseInstance;
 class TransactionManager;
 class TableCatalogEntry;
 
@@ -24,7 +24,7 @@ class TableCatalogEntry;
 //! database on disk
 class StorageManager {
 public:
-	StorageManager(DuckDB &database, string path, bool read_only);
+	StorageManager(DatabaseInstance &database, string path, bool read_only);
 	~StorageManager();
 
 	static StorageManager &GetStorageManager(ClientContext &context);
@@ -36,7 +36,7 @@ public:
 		return wal.initialized ? &wal : nullptr;
 	}
 
-	DuckDB &GetDatabase() {
+	DatabaseInstance &GetDatabase() {
 		return database;
 	}
 
@@ -48,7 +48,7 @@ public:
 	//! The BufferManager of the database
 	unique_ptr<BufferManager> buffer_manager;
 	//! The database this storagemanager belongs to
-	DuckDB &database;
+	DatabaseInstance &database;
 
 private:
 	//! Load the database from a directory

@@ -58,7 +58,7 @@ public:
 		}
 	}
 
-	template <class T> void WriteOptional(unique_ptr<T> &element) {
+	template <class T> void WriteOptional(const unique_ptr<T> &element) {
 		Write<bool>(element ? true : false);
 		if (element) {
 			element->Serialize(*this);
