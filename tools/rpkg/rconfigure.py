@@ -17,6 +17,8 @@ def open_utf8(fpath, flags):
 extension_list = ""
 for ext in extensions:
     extension_list += ' -DBUILD_{}_EXTENSION'.format(ext.upper())
+    extension_list += " -DDUCKDB_BUILD_LIBRARY"
+    
 
 # check if we are doing a build from an existing DuckDB installation
 if 'DUCKDB_R_BINDIR' in os.environ and 'DUCKDB_R_CFLAGS' in os.environ and 'DUCKDB_R_LIBS' in os.environ:
