@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
@@ -27,7 +28,10 @@ static unique_ptr<FunctionData> pragma_functions_bind(ClientContext &context, ve
 	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("parameters");
-	return_types.push_back(LogicalType::VARCHAR);
+	child_list_t<LogicalType> child_types;
+	child_types.push_back(std::make_pair("", LogicalType::VARCHAR));
+	LogicalType param_types(LogicalTypeId::LIST, move(child_types));
+	return_types.push_back(move(param_types));
 
 	names.push_back("varargs");
 	return_types.push_back(LogicalType::VARCHAR);
@@ -59,14 +63,28 @@ unique_ptr<FunctionOperatorData> pragma_functions_init(ClientContext &context, c
 void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is_aggregate) {
 	output.SetValue(0, count, Value(f.name));
 	output.SetValue(1, count, Value(is_aggregate ? "AGGREGATE" : "SCALAR"));
-	string parameters;
-	for(idx_t i = 0; i < f.arguments.size(); i++) {
-		if (i > 0) {
-			parameters += ", ";
-		}
-		parameters += f.arguments[i].ToString();
+	if (!ListVector::HasEntry(output.data[2])) {
+		ListVector::SetEntry(output.data[2], make_unique<ChunkCollection>());
 	}
-	output.SetValue(2, count, parameters);
+	auto &cc = ListVector::GetEntry(output.data[2]);
+	auto result_data = FlatVector::GetData<list_entry_t>(output.data[2]);
+	result_data[count].offset = cc.Count();
+	result_data[count].length = f.arguments.size();
+	string parameters;
+	vector<LogicalType> types { LogicalType::VARCHAR };
+	DataChunk chunk;
+	chunk.Initialize(types);
+	for(idx_t i = 0; i < f.arguments.size(); i++) {
+		chunk.data[0].SetValue(chunk.size(), f.arguments[i].ToString());
+		chunk.SetCardinality(chunk.size() + 1);
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+			cc.Append(chunk);
+			chunk.Reset();
+		}
+	}
+	if (chunk.size() > 0) {
+		cc.Append(chunk);
+	}
 	output.SetValue(3, count, f.varargs.id() != LogicalTypeId::INVALID ? Value(f.varargs.ToString()) : Value());
 	output.SetValue(4, count, f.return_type.ToString());
 	output.SetValue(5, count, Value::BOOLEAN(f.has_side_effects));
