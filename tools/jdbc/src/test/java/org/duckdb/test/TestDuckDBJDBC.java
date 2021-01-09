@@ -1288,6 +1288,10 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 
 		ResultSet rs = stmt.executeQuery("SELECT 'Mühleisen', '🦆', '🦄ྀི123456789'");
+		assertEquals(rs.getMetaData().getColumnName(1), "Mühleisen");
+		assertEquals(rs.getMetaData().getColumnName(2), "🦆");
+		assertEquals(rs.getMetaData().getColumnName(3), "🦄ྀི123456789");
+
 		assertTrue(rs.next());
 
 		assertEquals(rs.getString(1), "Mühleisen");
