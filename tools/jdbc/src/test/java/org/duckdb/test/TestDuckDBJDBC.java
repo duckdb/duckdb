@@ -1303,6 +1303,32 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_statement_creation_bug1268() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt;
+
+		stmt = conn.createStatement();
+		stmt.close();
+
+		stmt = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+		stmt.close();
+
+		stmt = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY, 0);
+		stmt.close();
+
+		PreparedStatement pstmt;
+		pstmt = conn.prepareStatement("SELECT 42");
+		pstmt.close();
+
+		pstmt = conn.prepareStatement("SELECT 42", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+		pstmt.close();
+
+		pstmt = conn.prepareStatement("SELECT 42", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY, 0);
+		pstmt.close();
+
+		conn.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
