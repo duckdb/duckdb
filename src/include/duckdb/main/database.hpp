@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension.hpp"
-#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class StorageManager;
@@ -30,7 +31,7 @@ class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class TaskScheduler;
 
 public:
-	DatabaseInstance();
+	DUCKDB_API DatabaseInstance();
 
 	DBConfig config;
 
@@ -56,9 +57,9 @@ private:
 //! database-specific meta information.
 class DuckDB {
 public:
-	DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
-	DuckDB(const string &path, DBConfig *config = nullptr);
-	~DuckDB();
+	DUCKDB_API DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
+	DUCKDB_API DuckDB(const string &path, DBConfig *config = nullptr);
+	DUCKDB_API ~DuckDB();
 
 	//! Reference to the actual database instance
 	shared_ptr<DatabaseInstance> instance;
@@ -69,11 +70,11 @@ public:
 		extension.Load(*this);
 	}
 
-	FileSystem &GetFileSystem();
+	DUCKDB_API FileSystem &GetFileSystem();
 
-	idx_t NumberOfThreads();
-	static const char *SourceID();
-	static const char *LibraryVersion();
+	DUCKDB_API idx_t NumberOfThreads();
+	DUCKDB_API static const char *SourceID();
+	DUCKDB_API static const char *LibraryVersion();
 };
 
 } // namespace duckdb

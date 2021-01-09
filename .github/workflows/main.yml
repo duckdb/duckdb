@@ -84,6 +84,11 @@ jobs:
           duckdb_cli-windows-amd64.zip
           tools/jdbc/duckdb_jdbc.jar
 
+    - uses: ilammy/msvc-dev-cmd@v1
+    - name: Duckdb.dll export symbols with C++ on Windows
+      run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
+
+
 
   win-release-32:
     name: Windows (32 Bit)

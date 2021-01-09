@@ -175,6 +175,8 @@ option(
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
+option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
+
 
 if(BUILD_PYTHON
    OR BUILD_R
@@ -399,6 +401,11 @@ endfunction()
 function(link_threads LIBRARY)
   target_link_libraries(${LIBRARY} Threads::Threads)
 endfunction()
+
+if(${EXPORT_DLL_SYMBOLS})
+  # For Windows DLL export symbols
+  add_definitions(-DDUCKDB_BUILD_LIBRARY)
+endif()
 
 add_subdirectory(extension)
 add_subdirectory(src)

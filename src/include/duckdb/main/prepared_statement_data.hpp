@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -20,8 +21,8 @@ class SQLStatement;
 
 class PreparedStatementData {
 public:
-	PreparedStatementData(StatementType type);
-	~PreparedStatementData();
+	DUCKDB_API PreparedStatementData(StatementType type);
+	DUCKDB_API ~PreparedStatementData();
 
 	StatementType statement_type;
 	//! The unbound SQL statement that was prepared
@@ -50,9 +51,9 @@ public:
 
 public:
 	//! Bind a set of values to the prepared statement data
-	void Bind(vector<Value> values);
+	DUCKDB_API void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter
-	LogicalType GetType(idx_t param_index);
+	DUCKDB_API LogicalType GetType(idx_t param_index);
 };
 
 } // namespace duckdb
