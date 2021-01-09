@@ -35,7 +35,10 @@ if(AMALGAMATION_BUILD)
   link_threads(duckdb_static)
 
   install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
+                "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
           DESTINATION "${INSTALL_INCLUDE_DIR}")
+  install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb/common/winapi.hpp"
+          DESTINATION "${INSTALL_INCLUDE_DIR}/duckdb/common")
 
 else()
 
