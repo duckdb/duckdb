@@ -33,10 +33,10 @@ struct MyArrowArrayStream {
 			return -1;
 		}
 		auto chunk = my_stream->duckdb_result->Fetch();
-		chunk->ToArrowArray(out);
-		if (chunk->size() == 0) {
-			out->release(out);
+		if (!chunk || chunk->size() == 0) {
+			return 0;
 		}
+		chunk->ToArrowArray(out);
 		return 0;
 	}
 
@@ -77,7 +77,7 @@ static void test_arrow_round_trip(string q) {
 	values.resize(column_count);
 	while (true) {
 		auto chunk = result2->Fetch();
-		if (chunk->size() == 0) {
+		if (!chunk || chunk->size() == 0) {
 			break;
 		}
 		for (idx_t c = 0; c < column_count; c++) {

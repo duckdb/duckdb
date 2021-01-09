@@ -57,7 +57,7 @@ static idx_t ParseMemoryLimit(string arg);
 static void pragma_memory_limit(ClientContext &context, FunctionParameters parameters) {
 	idx_t new_limit = ParseMemoryLimit(parameters.values[0].ToString());
 	// set the new limit in the buffer manager
-	context.db.storage->buffer_manager->SetLimit(new_limit);
+	BufferManager::GetBufferManager(context).SetLimit(new_limit);
 }
 
 static void pragma_collation(ClientContext &context, FunctionParameters parameters) {
@@ -119,11 +119,11 @@ static void pragma_disable_force_parallelism(ClientContext &context, FunctionPar
 }
 
 static void pragma_enable_object_cache(ClientContext &context, FunctionParameters parameters) {
-	context.db.config.object_cache_enable = true;
+	DBConfig::GetConfig(context).object_cache_enable = true;
 }
 
 static void pragma_disable_object_cache(ClientContext &context, FunctionParameters parameters) {
-	context.db.config.object_cache_enable = false;
+	DBConfig::GetConfig(context).object_cache_enable = false;
 }
 
 static void pragma_log_query_path(ClientContext &context, FunctionParameters parameters) {

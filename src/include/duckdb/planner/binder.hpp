@@ -63,6 +63,8 @@ public:
 	ClientContext &context;
 	//! A mapping of names to common table expressions
 	unordered_map<string, CommonTableExpressionInfo *> CTE_bindings;
+	//! The CTEs that have already been bound
+	unordered_set<CommonTableExpressionInfo*> bound_ctes;
 	//! The bind context
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
@@ -73,7 +75,9 @@ public:
 	//! Whether or not the bound statement is read-only
 	bool read_only;
 	//! Whether or not the statement requires a valid transaction to run
-	bool requires_valid_transaction = true;
+	bool requires_valid_transaction;
+	//! Whether or not the statement can be streamed to the client
+	bool allow_stream_result;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
@@ -102,6 +106,8 @@ public:
 	void AddCTE(const string &name, CommonTableExpressionInfo *cte);
 	//! Find a common table expression by name; returns nullptr if none exists
 	CommonTableExpressionInfo *FindCTE(const string &name, bool skip = false);
+
+	bool CTEIsAlreadyBound(CommonTableExpressionInfo* cte);
 
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();
@@ -148,7 +154,6 @@ private:
 	BoundStatement Bind(DeleteStatement &stmt);
 	BoundStatement Bind(UpdateStatement &stmt);
 	BoundStatement Bind(CreateStatement &stmt);
-	BoundStatement Bind(ExecuteStatement &stmt);
 	BoundStatement Bind(DropStatement &stmt);
 	BoundStatement Bind(AlterStatement &stmt);
 	BoundStatement Bind(TransactionStatement &stmt);
@@ -174,7 +179,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(CrossProductRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
-	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
+	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, CommonTableExpressionInfo *cte = nullptr);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);

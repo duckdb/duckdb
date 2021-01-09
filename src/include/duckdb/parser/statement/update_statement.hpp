@@ -17,13 +17,16 @@ namespace duckdb {
 
 class UpdateStatement : public SQLStatement {
 public:
-	UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMENT) {
-	}
+	UpdateStatement();
 
 	unique_ptr<ParsedExpression> condition;
 	unique_ptr<TableRef> table;
 	unique_ptr<TableRef> from_table;
 	vector<string> columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
+
 } // namespace duckdb

@@ -32,7 +32,7 @@ public:
 	//! whether or not the parsing was successful. If the parsing was
 	//! successful, the parsed statements will be stored in the statements
 	//! variable.
-	void ParseQuery(string query);
+	void ParseQuery(const string &query);
 
 	//! Tokenize a query, returning the raw tokens together with their locations
 	static vector<SimplifiedToken> Tokenize(string query);

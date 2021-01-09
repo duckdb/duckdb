@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 #include <stack>
@@ -36,10 +37,10 @@ class OperatorProfiler {
 	friend class QueryProfiler;
 
 public:
-	OperatorProfiler(bool enabled);
+	DUCKDB_API OperatorProfiler(bool enabled);
 
-	void StartOperator(PhysicalOperator *phys_op);
-	void EndOperator(DataChunk *chunk);
+	DUCKDB_API void StartOperator(PhysicalOperator *phys_op);
+	DUCKDB_API void EndOperator(DataChunk *chunk);
 
 private:
 	void AddTiming(PhysicalOperator *op, double time, idx_t elements);
@@ -71,38 +72,38 @@ private:
 	static void Render(TreeNode &node, std::ostream &str);
 
 public:
-	QueryProfiler() : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), running(false) {
+	DUCKDB_API QueryProfiler() : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), running(false) {
 	}
 
-	void Enable() {
+	DUCKDB_API void Enable() {
 		enabled = true;
 	}
 
-	void Disable() {
+	DUCKDB_API void Disable() {
 		enabled = false;
 	}
 
-	bool IsEnabled() {
+	DUCKDB_API bool IsEnabled() {
 		return enabled;
 	}
 
-	void StartQuery(string query, SQLStatement &statement);
-	void EndQuery();
+	DUCKDB_API void StartQuery(string query);
+	DUCKDB_API void EndQuery();
 
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
-	void Flush(OperatorProfiler &profiler);
+	DUCKDB_API void Flush(OperatorProfiler &profiler);
 
-	void StartPhase(string phase);
-	void EndPhase();
+	DUCKDB_API void StartPhase(string phase);
+	DUCKDB_API void EndPhase();
 
-	void Initialize(PhysicalOperator *root);
+	DUCKDB_API void Initialize(PhysicalOperator *root);
 
-	string ToString(bool print_optimizer_output = false) const;
-	void ToStream(std::ostream &str, bool print_optimizer_output = false) const;
-	void Print();
+	DUCKDB_API string ToString(bool print_optimizer_output = false) const;
+	DUCKDB_API void ToStream(std::ostream &str, bool print_optimizer_output = false) const;
+	DUCKDB_API void Print();
 
-	string ToJSON() const;
-	void WriteToFile(const char *path, string &info) const;
+	DUCKDB_API string ToJSON() const;
+	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 
 	//! The format to automatically print query profiling information in (default: disabled)
 	ProfilerPrintFormat automatic_print_format;

@@ -20,6 +20,7 @@
 #include "utf8proc_wrapper.hpp"
 
 #include <random>
+#include <stdlib.h>
 
 namespace py = pybind11;
 
@@ -32,41 +33,161 @@ struct RegularConvert {
 	template <class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(DUCKDB_T val) {
 		return (NUMPY_T)val;
 	}
+
+	template <class NUMPY_T> static NUMPY_T null_value() {
+		return 0;
+	}
 };
 
 struct TimestampConvert {
 	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(timestamp_t val) {
-		return val / 1000.0;
+		return Timestamp::GetEpochNanoSeconds(val);
+	}
+
+	template <class NUMPY_T> static NUMPY_T null_value() {
+		return 0;
 	}
 };
 
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(date_t val) {
-		return Date::Epoch(val);
+		return Date::EpochNanoseconds(val);
+	}
+
+	template <class NUMPY_T> static NUMPY_T null_value() {
+		return 0;
 	}
 };
 
 struct TimeConvert {
-	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(dtime_t val) {
-		return py::str(duckdb::Time::ToString(val).c_str());
+	template <class DUCKDB_T, class NUMPY_T> static PyObject *convert_value(dtime_t val) {
+		auto str = duckdb::Time::ToString(val);
+		return PyUnicode_FromStringAndSize(str.c_str(), str.size());
+	}
+
+	template <class NUMPY_T> static NUMPY_T null_value() {
+		return nullptr;
 	}
 };
 
 struct StringConvert {
-	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
-		return py::str(val.GetString());
+#if PY_MAJOR_VERSION >= 3
+	template <class T>
+	static void convert_unicode_value_templated(T *result, int32_t *codepoints, idx_t codepoint_count, const char *data,
+	                                            idx_t ascii_count) {
+		// we first fill in the batch of ascii characters directly
+		for (idx_t i = 0; i < ascii_count; i++) {
+			result[i] = data[i];
+		}
+		// then we fill in the remaining codepoints from our codepoint array
+		for (idx_t i = 0; i < codepoint_count; i++) {
+			result[ascii_count + i] = codepoints[i];
+		}
+	}
+
+	static PyObject *convert_unicode_value(const char *data, idx_t len, idx_t start_pos) {
+		// slow path: check the code points
+		// we know that all characters before "start_pos" were ascii characters, so we don't need to check those
+
+		// allocate an array of code points so we only have to convert the codepoints once
+		// short-string optimization
+		// we know that the max amount of codepoints is the length of the string
+		// for short strings (less than 64 bytes) we simply statically allocate an array of 256 bytes (64x int32)
+		// this avoids memory allocation for small strings (common case)
+		idx_t remaining = len - start_pos;
+		unique_ptr<int32_t[]> allocated_codepoints;
+		int32_t static_codepoints[64];
+		int32_t *codepoints;
+		if (remaining > 64) {
+			allocated_codepoints = unique_ptr<int32_t[]>(new int32_t[remaining]);
+			codepoints = allocated_codepoints.get();
+		} else {
+			codepoints = static_codepoints;
+		}
+		// now we iterate over the remainder of the string to convert the UTF8 string into a sequence of codepoints
+		// and to find the maximum codepoint
+		int32_t max_codepoint = 127;
+		int sz;
+		idx_t pos = start_pos;
+		idx_t codepoint_count = 0;
+		while (pos < len) {
+			codepoints[codepoint_count] = Utf8Proc::UTF8ToCodepoint(data + pos, sz);
+			pos += sz;
+			if (codepoints[codepoint_count] > max_codepoint) {
+				max_codepoint = codepoints[codepoint_count];
+			}
+			codepoint_count++;
+		}
+		// based on the max codepoint, we construct the result string
+		auto result = PyUnicode_New(start_pos + codepoint_count, max_codepoint);
+		// based on the resulting unicode kind, we fill in the code points
+		auto kind = PyUnicode_KIND(result);
+		switch (kind) {
+		case PyUnicode_1BYTE_KIND:
+			convert_unicode_value_templated<Py_UCS1>(PyUnicode_1BYTE_DATA(result), codepoints, codepoint_count, data,
+			                                         start_pos);
+			break;
+		case PyUnicode_2BYTE_KIND:
+			convert_unicode_value_templated<Py_UCS2>(PyUnicode_2BYTE_DATA(result), codepoints, codepoint_count, data,
+			                                         start_pos);
+			break;
+		case PyUnicode_4BYTE_KIND:
+			convert_unicode_value_templated<Py_UCS4>(PyUnicode_4BYTE_DATA(result), codepoints, codepoint_count, data,
+			                                         start_pos);
+			break;
+		default:
+			throw runtime_error("Unsupported typekind for Python Unicode Compact decode");
+		}
+		return result;
+	}
+
+	template <class DUCKDB_T, class NUMPY_T> static PyObject *convert_value(string_t val) {
+		// we could use PyUnicode_FromStringAndSize here, but it does a lot of verification that we don't need
+		// because of that it is a lot slower than it needs to be
+		auto data = (uint8_t *)val.GetDataUnsafe();
+		auto len = val.GetSize();
+		// check if there are any non-ascii characters in there
+		for (idx_t i = 0; i < len; i++) {
+			if (data[i] > 127) {
+				// there are! fallback to slower case
+				return convert_unicode_value((const char *)data, len, i);
+			}
+		}
+		// no unicode: fast path
+		// directly construct the string and memcpy it
+		auto result = PyUnicode_New(len, 127);
+		auto target_data = PyUnicode_DATA(result);
+		memcpy(target_data, data, len);
+		return result;
+	}
+#else
+	template <class DUCKDB_T, class NUMPY_T> static PyObject* convert_value(string_t val) {
+		return py::str(val.GetString()).release().ptr();
+	}
+#endif
+
+	template <class NUMPY_T> static NUMPY_T null_value() {
+		return nullptr;
 	}
 };
 
 struct BlobConvert {
-	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
-		return py::bytes(val.GetString());
+	template <class DUCKDB_T, class NUMPY_T> static PyObject *convert_value(string_t val) {
+		return PyByteArray_FromStringAndSize(val.GetDataUnsafe(), val.GetSize());
+	}
+
+	template <class NUMPY_T> static NUMPY_T null_value() {
+		return nullptr;
 	}
 };
 
 struct IntegralConvert {
 	template <class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(DUCKDB_T val) {
 		return NUMPY_T(val);
+	}
+
+	template <class NUMPY_T> static NUMPY_T null_value() {
+		return 0;
 	}
 };
 
@@ -76,75 +197,376 @@ template <> double IntegralConvert::convert_value(hugeint_t val) {
 	return result;
 }
 
-template <class DUCKDB_T, class NUMPY_T, class CONVERT>
-static py::array fetch_column(string numpy_type, ChunkCollection &collection, idx_t column) {
-	auto out = py::array(py::dtype(numpy_type), collection.Count());
-	auto out_ptr = (NUMPY_T *)out.mutable_data();
+} // namespace duckdb_py_convert
 
-	idx_t out_offset = 0;
-	for (auto &data_chunk : collection.Chunks()) {
-		auto &src = data_chunk->data[column];
-		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
-		auto &nullmask = FlatVector::Nullmask(src);
-		for (idx_t i = 0; i < data_chunk->size(); i++) {
-			if (nullmask[i]) {
-				continue;
+template <class DUCKDB_T, class NUMPY_T, class CONVERT>
+static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, VectorData &idata,
+                          idx_t count) {
+	auto src_ptr = (DUCKDB_T *)idata.data;
+	auto out_ptr = (NUMPY_T *)target_data;
+	if (idata.nullmask && idata.nullmask->any()) {
+		auto &nullmask = *idata.nullmask;
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			if (nullmask[src_idx]) {
+				target_mask[offset] = true;
+				out_ptr[offset] = CONVERT::template null_value<NUMPY_T>();
+			} else {
+				out_ptr[offset] = CONVERT::template convert_value<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+				target_mask[offset] = false;
 			}
-			out_ptr[i + out_offset] = CONVERT::template convert_value<DUCKDB_T, NUMPY_T>(src_ptr[i]);
 		}
-		out_offset += data_chunk->size();
+		return true;
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			out_ptr[offset] = CONVERT::template convert_value<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+			target_mask[offset] = false;
+		}
+		return false;
 	}
-	return out;
 }
 
-template <class T> static py::array fetch_column_regular(string numpy_type, ChunkCollection &collection, idx_t column) {
-	return fetch_column<T, T, RegularConvert>(numpy_type, collection, column);
+template <class T>
+static bool ConvertColumnRegular(idx_t target_offset, data_ptr_t target_data, bool *target_mask, VectorData &idata,
+                                 idx_t count) {
+	return ConvertColumn<T, T, duckdb_py_convert::RegularConvert>(target_offset, target_data, target_mask, idata,
+	                                                              count);
 }
 
 template <class DUCKDB_T>
-static void decimal_convert_internal(ChunkCollection &collection, idx_t column, double *out_ptr, double division) {
-	idx_t out_offset = 0;
-	for (auto &data_chunk : collection.Chunks()) {
-		auto &src = data_chunk->data[column];
-		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
-		auto &nullmask = FlatVector::Nullmask(src);
-		for (idx_t i = 0; i < data_chunk->size(); i++) {
-			if (nullmask[i]) {
-				continue;
+static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, bool *target_mask, VectorData &idata,
+                                   idx_t count, double division) {
+	auto src_ptr = (DUCKDB_T *)idata.data;
+	auto out_ptr = (double *)target_data;
+	if (idata.nullmask && idata.nullmask->any()) {
+		auto &nullmask = *idata.nullmask;
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			if (nullmask[src_idx]) {
+				target_mask[offset] = true;
+			} else {
+				out_ptr[offset] =
+				    duckdb_py_convert::IntegralConvert::convert_value<DUCKDB_T, double>(src_ptr[src_idx]) / division;
+				target_mask[offset] = false;
 			}
-			out_ptr[i + out_offset] = IntegralConvert::convert_value<DUCKDB_T, double>(src_ptr[i]) / division;
 		}
-		out_offset += data_chunk->size();
+		return true;
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			out_ptr[offset] =
+			    duckdb_py_convert::IntegralConvert::convert_value<DUCKDB_T, double>(src_ptr[src_idx]) / division;
+			target_mask[offset] = false;
+		}
+		return false;
 	}
 }
 
-static py::array fetch_column_decimal(string numpy_type, ChunkCollection &collection, idx_t column,
-                                      LogicalType &decimal_type) {
-	auto out = py::array(py::dtype(numpy_type), collection.Count());
-	auto out_ptr = (double *)out.mutable_data();
-
+static bool ConvertDecimal(LogicalType &decimal_type, idx_t target_offset, data_ptr_t target_data, bool *target_mask,
+                           VectorData &idata, idx_t count) {
 	auto dec_scale = decimal_type.scale();
 	double division = pow(10, dec_scale);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
-		decimal_convert_internal<int16_t>(collection, column, out_ptr, division);
-		break;
+		return ConvertDecimalInternal<int16_t>(target_offset, target_data, target_mask, idata, count, division);
 	case PhysicalType::INT32:
-		decimal_convert_internal<int32_t>(collection, column, out_ptr, division);
-		break;
+		return ConvertDecimalInternal<int32_t>(target_offset, target_data, target_mask, idata, count, division);
 	case PhysicalType::INT64:
-		decimal_convert_internal<int64_t>(collection, column, out_ptr, division);
-		break;
+		return ConvertDecimalInternal<int64_t>(target_offset, target_data, target_mask, idata, count, division);
 	case PhysicalType::INT128:
-		decimal_convert_internal<hugeint_t>(collection, column, out_ptr, division);
-		break;
+		return ConvertDecimalInternal<hugeint_t>(target_offset, target_data, target_mask, idata, count, division);
 	default:
 		throw NotImplementedException("Unimplemented internal type for DECIMAL");
 	}
-	return out;
 }
 
-} // namespace duckdb_py_convert
+struct RawArrayWrapper {
+	RawArrayWrapper(LogicalType type);
+
+	py::array array;
+	data_ptr_t data;
+	LogicalType type;
+	idx_t type_width;
+	idx_t count;
+
+public:
+	void Initialize(idx_t capacity);
+	void Resize(idx_t new_capacity);
+	void Append(idx_t current_offset, Vector &input, idx_t count);
+};
+
+struct ArrayWrapper {
+	ArrayWrapper(LogicalType type);
+
+	unique_ptr<RawArrayWrapper> data;
+	unique_ptr<RawArrayWrapper> mask;
+	bool requires_mask;
+
+public:
+	void Initialize(idx_t capacity);
+	void Resize(idx_t new_capacity);
+	void Append(idx_t current_offset, Vector &input, idx_t count);
+	py::object ToArray(idx_t count);
+};
+
+class NumpyResultConversion {
+public:
+	NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity);
+
+	void Append(DataChunk &chunk);
+
+	py::object ToArray(idx_t col_idx) {
+		return owned_data[col_idx].ToArray(count);
+	}
+
+private:
+	void Resize(idx_t new_capacity);
+
+private:
+	vector<ArrayWrapper> owned_data;
+	idx_t count;
+	idx_t capacity;
+};
+
+RawArrayWrapper::RawArrayWrapper(LogicalType type) : data(nullptr), type(type), count(0) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		type_width = sizeof(bool);
+		break;
+	case LogicalTypeId::TINYINT:
+		type_width = sizeof(int8_t);
+		break;
+	case LogicalTypeId::SMALLINT:
+		type_width = sizeof(int16_t);
+		break;
+	case LogicalTypeId::INTEGER:
+		type_width = sizeof(int32_t);
+		break;
+	case LogicalTypeId::BIGINT:
+		type_width = sizeof(int64_t);
+		break;
+	case LogicalTypeId::HUGEINT:
+		type_width = sizeof(double);
+		break;
+	case LogicalTypeId::FLOAT:
+		type_width = sizeof(float);
+		break;
+	case LogicalTypeId::DOUBLE:
+		type_width = sizeof(double);
+		break;
+	case LogicalTypeId::DECIMAL:
+		type_width = sizeof(double);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		type_width = sizeof(int64_t);
+		break;
+	case LogicalTypeId::DATE:
+		type_width = sizeof(int64_t);
+		break;
+	case LogicalTypeId::TIME:
+		type_width = sizeof(PyObject *);
+		break;
+	case LogicalTypeId::VARCHAR:
+		type_width = sizeof(PyObject *);
+		break;
+	case LogicalTypeId::BLOB:
+		type_width = sizeof(PyObject *);
+		break;
+	default:
+		throw runtime_error("Unsupported type " + type.ToString() + " for DuckDB -> NumPy conversion");
+	}
+}
+
+void RawArrayWrapper::Initialize(idx_t capacity) {
+	string dtype;
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		dtype = "bool";
+		break;
+	case LogicalTypeId::TINYINT:
+		dtype = "int8";
+		break;
+	case LogicalTypeId::SMALLINT:
+		dtype = "int16";
+		break;
+	case LogicalTypeId::INTEGER:
+		dtype = "int32";
+		break;
+	case LogicalTypeId::BIGINT:
+		dtype = "int64";
+		break;
+	case LogicalTypeId::FLOAT:
+		dtype = "float32";
+		break;
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		dtype = "float64";
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		dtype = "datetime64[ns]";
+		break;
+	case LogicalTypeId::DATE:
+		dtype = "datetime64[ns]";
+		break;
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		dtype = "object";
+		break;
+	default:
+		throw runtime_error("unsupported type " + type.ToString());
+	}
+	array = py::array(py::dtype(dtype), capacity);
+	data = (data_ptr_t)array.mutable_data();
+}
+
+void RawArrayWrapper::Resize(idx_t new_capacity) {
+	vector<ssize_t> new_shape{ssize_t(new_capacity)};
+	array.resize(new_shape, false);
+	data = (data_ptr_t)array.mutable_data();
+}
+
+ArrayWrapper::ArrayWrapper(LogicalType type) : requires_mask(false) {
+	data = make_unique<RawArrayWrapper>(type);
+	mask = make_unique<RawArrayWrapper>(LogicalType::BOOLEAN);
+}
+
+void ArrayWrapper::Initialize(idx_t capacity) {
+	data->Initialize(capacity);
+	mask->Initialize(capacity);
+}
+
+void ArrayWrapper::Resize(idx_t new_capacity) {
+	data->Resize(new_capacity);
+	mask->Resize(new_capacity);
+}
+
+void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
+	auto dataptr = data->data;
+	auto maskptr = (bool *)mask->data;
+	D_ASSERT(dataptr);
+	D_ASSERT(maskptr);
+	D_ASSERT(input.type == data->type);
+	bool may_have_null;
+
+	VectorData idata;
+	input.Orrify(count, idata);
+	switch (input.type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		may_have_null = ConvertColumnRegular<bool>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::TINYINT:
+		may_have_null = ConvertColumnRegular<int8_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::SMALLINT:
+		may_have_null = ConvertColumnRegular<int16_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::INTEGER:
+		may_have_null = ConvertColumnRegular<int32_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::BIGINT:
+		may_have_null = ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::HUGEINT:
+		may_have_null = ConvertColumn<hugeint_t, double, duckdb_py_convert::IntegralConvert>(current_offset, dataptr,
+		                                                                                     maskptr, idata, count);
+		break;
+	case LogicalTypeId::FLOAT:
+		may_have_null = ConvertColumnRegular<float>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::DOUBLE:
+		may_have_null = ConvertColumnRegular<double>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::DECIMAL:
+		may_have_null = ConvertDecimal(input.type, current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
+		    current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::DATE:
+		may_have_null = ConvertColumn<date_t, int64_t, duckdb_py_convert::DateConvert>(current_offset, dataptr, maskptr,
+		                                                                               idata, count);
+		break;
+	case LogicalTypeId::TIME:
+		may_have_null = ConvertColumn<dtime_t, PyObject *, duckdb_py_convert::TimeConvert>(current_offset, dataptr,
+		                                                                                   maskptr, idata, count);
+		break;
+	case LogicalTypeId::VARCHAR:
+		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::StringConvert>(current_offset, dataptr,
+		                                                                                      maskptr, idata, count);
+		break;
+	case LogicalTypeId::BLOB:
+		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
+		                                                                                    maskptr, idata, count);
+		break;
+	default:
+		throw runtime_error("unsupported type " + input.type.ToString());
+	}
+	if (may_have_null) {
+		requires_mask = true;
+	}
+	data->count += count;
+	mask->count += count;
+}
+
+py::object ArrayWrapper::ToArray(idx_t count) {
+	D_ASSERT(data->array && mask->array);
+	data->Resize(data->count);
+	if (!requires_mask) {
+		return move(data->array);
+	}
+	mask->Resize(mask->count);
+	// construct numpy arrays from the data and the mask
+	auto values = move(data->array);
+	auto nullmask = move(mask->array);
+
+	// create masked array and return it
+	auto masked_array = py::module::import("numpy.ma").attr("masked_array")(values, nullmask);
+	return masked_array;
+}
+
+NumpyResultConversion::NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity)
+    : count(0), capacity(0) {
+	owned_data.reserve(types.size());
+	for (auto &type : types) {
+		owned_data.push_back(ArrayWrapper(type));
+	}
+	Resize(initial_capacity);
+}
+
+void NumpyResultConversion::Resize(idx_t new_capacity) {
+	if (capacity == 0) {
+		for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
+			owned_data[col_idx].Initialize(new_capacity);
+		}
+	} else {
+		for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
+			owned_data[col_idx].Resize(new_capacity);
+		}
+	}
+	capacity = new_capacity;
+}
+
+void NumpyResultConversion::Append(DataChunk &chunk) {
+	if (count + chunk.size() > capacity) {
+		Resize(capacity * 2);
+	}
+	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
+		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
+	}
+	count += chunk.size();
+	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
+		D_ASSERT(owned_data[col_idx].data->count == count);
+		D_ASSERT(owned_data[col_idx].mask->count == count);
+	}
+}
 
 namespace random_string {
 static std::random_device rd;
@@ -509,7 +931,7 @@ struct PandasScanFunction : public TableFunction {
 					if (Utf8Proc::Analyze(dataptr, size) == UnicodeType::INVALID) {
 						throw runtime_error("String does contains invalid UTF8! Please encode as UTF8 first");
 					}
-					tgt_ptr[row] = string_t(dataptr, size);
+					tgt_ptr[row] = string_t(dataptr, uint32_t(size));
 				} else if (PyUnicode_CheckExact(val)) {
 					throw std::runtime_error("Unicode is only supported in Python 3 and up.");
 				} else {
@@ -567,7 +989,13 @@ template <> bool PandasScanFunction::ValueIsNull(double value) {
 }
 
 struct DuckDBPyResult {
+public:
+	idx_t chunk_offset = 0;
 
+	unique_ptr<QueryResult> result;
+	unique_ptr<DataChunk> current_chunk;
+
+public:
 	template <class SRC> static SRC fetch_scalar(Vector &src_vec, idx_t offset) {
 		auto src_ptr = FlatVector::GetData<SRC>(src_vec);
 		return src_ptr[offset];
@@ -581,7 +1009,7 @@ struct DuckDBPyResult {
 			current_chunk = result->Fetch();
 			chunk_offset = 0;
 		}
-		if (current_chunk->size() == 0) {
+		if (!current_chunk || current_chunk->size() == 0) {
 			return py::none();
 		}
 		py::tuple res(result->types.size());
@@ -685,90 +1113,37 @@ struct DuckDBPyResult {
 		if (!result) {
 			throw runtime_error("result closed");
 		}
-		// need to materialize the result if it was streamed because we need the count :/
-		MaterializedQueryResult *mres = nullptr;
-		unique_ptr<QueryResult> mat_res_holder;
-		if (result->type == QueryResultType::STREAM_RESULT) {
-			mat_res_holder = ((StreamQueryResult *)result.get())->Materialize();
-			mres = (MaterializedQueryResult *)mat_res_holder.get();
-		} else {
-			mres = (MaterializedQueryResult *)result.get();
+
+		// iterate over the result to materialize the data needed for the NumPy arrays
+		idx_t initial_capacity = STANDARD_VECTOR_SIZE * 2;
+		if (result->type == QueryResultType::MATERIALIZED_RESULT) {
+			// materialized query result: we know exactly how much space we need
+			auto &materialized = (MaterializedQueryResult &)*result;
+			initial_capacity = materialized.collection.Count();
 		}
-		D_ASSERT(mres);
 
-		py::dict res;
-		for (idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
-			// convert the actual payload
-			py::array col_res;
-			switch (mres->types[col_idx].id()) {
-			case LogicalTypeId::BOOLEAN:
-				col_res = duckdb_py_convert::fetch_column_regular<bool>("bool", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::TINYINT:
-				col_res = duckdb_py_convert::fetch_column_regular<int8_t>("int8", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::SMALLINT:
-				col_res = duckdb_py_convert::fetch_column_regular<int16_t>("int16", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::INTEGER:
-				col_res = duckdb_py_convert::fetch_column_regular<int32_t>("int32", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::BIGINT:
-				col_res = duckdb_py_convert::fetch_column_regular<int64_t>("int64", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::HUGEINT:
-				col_res = duckdb_py_convert::fetch_column<hugeint_t, double, duckdb_py_convert::IntegralConvert>(
-				    "float64", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::FLOAT:
-				col_res = duckdb_py_convert::fetch_column_regular<float>("float32", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::DOUBLE:
-				col_res = duckdb_py_convert::fetch_column_regular<double>("float64", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::DECIMAL:
-				col_res =
-				    duckdb_py_convert::fetch_column_decimal("float64", mres->collection, col_idx, mres->types[col_idx]);
-				break;
-			case LogicalTypeId::TIMESTAMP:
-				col_res = duckdb_py_convert::fetch_column<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
-				    "datetime64[ms]", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::DATE:
-				col_res = duckdb_py_convert::fetch_column<date_t, int64_t, duckdb_py_convert::DateConvert>(
-				    "datetime64[s]", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::TIME:
-				col_res = duckdb_py_convert::fetch_column<dtime_t, py::str, duckdb_py_convert::TimeConvert>(
-				    "object", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::VARCHAR:
-				col_res = duckdb_py_convert::fetch_column<string_t, py::str, duckdb_py_convert::StringConvert>(
-				    "object", mres->collection, col_idx);
-				break;
-			case LogicalTypeId::BLOB:
-				col_res = duckdb_py_convert::fetch_column<string_t, py::bytes, duckdb_py_convert::BlobConvert>(
-				    "object", mres->collection, col_idx);
-				break;
-			default:
-				throw runtime_error("unsupported type " + mres->types[col_idx].ToString());
+		NumpyResultConversion conversion(result->types, initial_capacity);
+		if (result->type == QueryResultType::MATERIALIZED_RESULT) {
+			auto &materialized = (MaterializedQueryResult &)*result;
+			for (auto &chunk : materialized.collection.Chunks()) {
+				conversion.Append(*chunk);
 			}
-
-			// convert the nullmask
-			auto nullmask = py::array(py::dtype("bool"), mres->collection.Count());
-			auto nullmask_ptr = (bool *)nullmask.mutable_data();
-			idx_t out_offset = 0;
-			for (auto &data_chunk : mres->collection.Chunks()) {
-				auto &src_nm = FlatVector::Nullmask(data_chunk->data[col_idx]);
-				for (idx_t i = 0; i < data_chunk->size(); i++) {
-					nullmask_ptr[i + out_offset] = src_nm[i];
+			materialized.collection.Reset();
+		} else {
+			while (true) {
+				auto chunk = result->FetchRaw();
+				if (!chunk || chunk->size() == 0) {
+					// finished
+					break;
 				}
-				out_offset += data_chunk->size();
+				conversion.Append(*chunk);
 			}
+		}
 
-			// create masked array and assign to output
-			auto masked_array = py::module::import("numpy.ma").attr("masked_array")(col_res, nullmask);
-			res[mres->names[col_idx].c_str()] = masked_array;
+		// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays
+		py::dict res;
+		for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
+			res[result->names[col_idx].c_str()] = conversion.ToArray(col_idx);
 		}
 		return res;
 	}
@@ -794,7 +1169,7 @@ struct DuckDBPyResult {
 		py::list batches;
 		while (true) {
 			auto data_chunk = result->Fetch();
-			if (data_chunk->size() == 0) {
+			if (!data_chunk || data_chunk->size() == 0) {
 				break;
 			}
 			ArrowArray data;
@@ -825,10 +1200,6 @@ struct DuckDBPyResult {
 	void close() {
 		result = nullptr;
 	}
-	idx_t chunk_offset = 0;
-
-	unique_ptr<QueryResult> result;
-	unique_ptr<DataChunk> current_chunk;
 };
 
 struct DuckDBPyRelation;
@@ -881,7 +1252,7 @@ struct DuckDBPyConnection {
 
 		for (pybind11::handle single_query_params : params_set) {
 			if (prep->n_param != py::len(single_query_params)) {
-				throw runtime_error("Prepared statments needs " + to_string(prep->n_param) + " parameters, " +
+				throw runtime_error("Prepared statement needs " + to_string(prep->n_param) + " parameters, " +
 				                    to_string(py::len(single_query_params)) + " given");
 			}
 			auto args = DuckDBPyConnection::transform_python_param_list(single_query_params);
@@ -1092,6 +1463,7 @@ struct DuckDBPyConnection {
 	}
 
 	void close() {
+		result = nullptr;
 		connection = nullptr;
 		database = nullptr;
 		for (auto &cur : cursors) {

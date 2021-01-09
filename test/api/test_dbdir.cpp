@@ -18,9 +18,6 @@ static void test_in_memory_initialization(string dbdir) {
 	// cannot create an in-memory database using ":memory:" argument
 	REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir));
 
-	// WAL is not null, which indicates that data is being persisted somewhere
-	REQUIRE(db->storage->GetWriteAheadLog() == 0);
-
 	// the temporary folder .tmp should be created in in-memory mode, but was not
 	REQUIRE(fs.DirectoryExists(in_memory_tmp));
 

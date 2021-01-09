@@ -2,7 +2,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -147,8 +147,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		vector<unique_ptr<SQLStatement>> statements;
 		statements.push_back(move(parser.statements[0]));
 
-		PragmaHandler handler(*db->con->context);
-		handler.HandlePragmaStatements(statements);
+		db->con->context->HandlePragmaStatements(statements);
 
 		// if there are multiple statements here, we are dealing with an import database statement
 		// we directly execute all statements besides the final one
@@ -216,7 +215,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
 		// no result yet! call Execute()
-		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values);
+		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
 		if (!pStmt->result->success) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->error;
@@ -226,12 +225,12 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		// fetch a chunk
 		pStmt->current_chunk = pStmt->result->Fetch();
 		pStmt->current_row = -1;
-		if (!sqlite3_display_result(pStmt->prepared->type)) {
+		if (!sqlite3_display_result(pStmt->prepared->GetStatementType())) {
 			// only SELECT statements return results
 			sqlite3_reset(pStmt);
 		}
 	}
-	if (!pStmt->current_chunk) {
+	if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
 		return SQLITE_DONE;
 	}
 	pStmt->current_row++;
@@ -360,10 +359,10 @@ const char *sqlite3_sql(sqlite3_stmt *pStmt) {
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
-	if (!pStmt) {
+	if (!pStmt || !pStmt->prepared) {
 		return 0;
 	}
-	return (int)pStmt->prepared->types.size();
+	return (int)pStmt->prepared->ColumnCount();
 }
 
 ////////////////////////////
@@ -404,10 +403,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	if (!pStmt) {
+	if (!pStmt || !pStmt->prepared) {
 		return nullptr;
 	}
-	return pStmt->prepared->names[N].c_str();
+	return pStmt->prepared->GetNames()[N].c_str();
 }
 
 static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType target_type, Value &val) {
@@ -805,7 +804,7 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->prepared) {
 		return NULL;
 	}
-	auto column_type = pStmt->prepared->types[iCol];
+	auto column_type = pStmt->prepared->GetTypes()[iCol];
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";
@@ -1262,7 +1261,7 @@ SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
 	if (!pStmt || !pStmt->prepared) {
 		return 0;
 	}
-	return pStmt->prepared->type == StatementType::EXPLAIN_STATEMENT;
+	return pStmt->prepared->GetStatementType() == StatementType::EXPLAIN_STATEMENT;
 }
 
 SQLITE_API int sqlite3_vtab_config(sqlite3 *, int op, ...) {

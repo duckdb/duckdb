@@ -43,7 +43,7 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 	statements = move(new_statements);
 }
 
-void PragmaHandler::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
+void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements) {
 	// first check if there are any pragma statements
 	bool found_pragma = false;
 	for (idx_t i = 0; i < statements.size(); i++) {
@@ -56,7 +56,7 @@ void PragmaHandler::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 		// no pragmas: skip this step
 		return;
 	}
-	context.RunFunctionInTransactionInternal([&]() { HandlePragmaStatementsInternal(statements); });
+	context.RunFunctionInTransactionInternal(lock, [&]() { HandlePragmaStatementsInternal(statements); });
 }
 
 string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &info

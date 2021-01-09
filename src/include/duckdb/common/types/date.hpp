@@ -36,7 +36,6 @@ public:
 	constexpr static int32_t YearInterval = 400;
 	constexpr static int32_t DaysPerYearInterval = 146097;
 
-
 public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromString(string str, bool strict = false);
@@ -65,6 +64,8 @@ public:
 
 	//! Extract the epoch from the date (seconds since 1970-01-01)
 	static int64_t Epoch(date_t date);
+	//! Extract the epoch from the date (nanoseconds since 1970-01-01)
+	static int64_t EpochNanoseconds(date_t date);
 	//! Convert the epoch (seconds since 1970-01-01) to a date_t
 	static date_t EpochToDate(int64_t epoch);
 
@@ -105,6 +106,5 @@ public:
 
 private:
 	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
-
 };
 } // namespace duckdb

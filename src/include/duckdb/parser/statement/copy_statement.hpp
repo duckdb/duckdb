@@ -16,10 +16,13 @@ namespace duckdb {
 
 class CopyStatement : public SQLStatement {
 public:
-	CopyStatement() : SQLStatement(StatementType::COPY_STATEMENT), info(make_unique<CopyInfo>()){};
+	CopyStatement();
 
 	unique_ptr<CopyInfo> info;
 	// The SQL statement used instead of a table when copying data out to a file
 	unique_ptr<QueryNode> select_statement;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
 } // namespace duckdb

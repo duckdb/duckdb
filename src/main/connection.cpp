@@ -1,7 +1,6 @@
 #include "duckdb/main/connection.hpp"
 
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
@@ -14,24 +13,16 @@
 
 namespace duckdb {
 
-Connection::Connection(DuckDB &database) : db(database), context(make_unique<ClientContext>(database)) {
-	db.connection_manager->AddConnection(this);
+Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientContext>(database.shared_from_this())) {
 #ifdef DEBUG
 	EnableProfiling();
 #endif
 }
 
-Connection::~Connection() {
-	if (!context->is_invalidated) {
-		context->Cleanup();
-		db.connection_manager->RemoveConnection(this);
-	}
+Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 }
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
-	if (context->is_invalidated) {
-		return "Context is invalidated.";
-	}
 	if (format == ProfilerPrintFormat::JSON) {
 		return context->profiler.ToJSON();
 	} else {
@@ -92,7 +83,7 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Va
 	if (!statement->success) {
 		return make_unique<MaterializedQueryResult>(statement->error);
 	}
-	return statement->Execute(values);
+	return statement->Execute(values, false);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(string table_name) {
@@ -201,6 +192,14 @@ void Connection::Rollback() {
 	if (!result->success) {
 		throw Exception(result->error);
 	}
+}
+
+void Connection::SetAutoCommit(bool auto_commit) {
+	context->transaction.SetAutoCommit(auto_commit);
+}
+
+bool Connection::IsAutoCommit() {
+	return context->transaction.IsAutoCommit();
 }
 
 } // namespace duckdb

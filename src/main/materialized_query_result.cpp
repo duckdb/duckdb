@@ -43,10 +43,13 @@ string MaterializedQueryResult::ToString() {
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
-	if (!success) {
-		return nullptr;
-	}
+	return FetchRaw();
+}
 
+unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
+	if (!success) {
+		throw InvalidInputException("Attempting to fetch from an unsuccessful query result");
+	}
 	return collection.Fetch();
 }
 

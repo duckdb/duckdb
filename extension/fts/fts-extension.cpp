@@ -43,7 +43,6 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 		    auto output = StringVector::AddString(result, output_data, output_size);
 
 		    sb_stemmer_delete(s);
-
 		    return output;
 	    });
 }
@@ -67,11 +66,12 @@ void FTSExtension::Load(DuckDB &db) {
 	CreatePragmaFunctionInfo drop_fts_index_info(drop_fts_index_func);
 
 	Connection conn(db);
-	conn.context->transaction.BeginTransaction();
-	db.catalog->CreateFunction(*conn.context, &stem_info);
-	db.catalog->CreatePragmaFunction(*conn.context, &create_fts_index_info);
-	db.catalog->CreatePragmaFunction(*conn.context, &drop_fts_index_info);
-	conn.context->transaction.Commit();
+	conn.BeginTransaction();
+	auto &catalog = Catalog::GetCatalog(*conn.context);
+	catalog.CreateFunction(*conn.context, &stem_info);
+	catalog.CreatePragmaFunction(*conn.context, &create_fts_index_info);
+	catalog.CreatePragmaFunction(*conn.context, &drop_fts_index_info);
+	conn.Commit();
 }
 
 } // namespace duckdb
