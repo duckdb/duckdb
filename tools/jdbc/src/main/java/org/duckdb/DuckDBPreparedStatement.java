@@ -251,7 +251,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setEscapeProcessing(boolean enable) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
