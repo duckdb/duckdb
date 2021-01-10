@@ -1388,7 +1388,6 @@ SQLITE_API void *sqlite3_aggregate_context(sqlite3_context *, int nBytes) {
 
 SQLITE_API int sqlite3_create_collation(sqlite3 *, const char *zName, int eTextRep, void *pArg,
                                         int (*xCompare)(void *, int, const void *, int, const void *)) {
-
 	return SQLITE_ERROR;
 }
 
