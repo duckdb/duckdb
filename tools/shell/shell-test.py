@@ -465,3 +465,22 @@ SELECT * FROM a;
 # CREATE INDEX a_idx ON a(i);
 # .imposter a_idx a_idx_imp
 # ''')
+
+
+# test that sqlite3_complete works somewhat correctly
+
+test('''/*
+;
+*/
+select 42;
+''', out='42')
+
+test('''-- this is a comment ;
+select 42;
+''', out='42')
+
+test('''--;;;;;;
+select 42;
+''', out='42')
+
+test('/* ;;;;;; */ select 42;', out='42')
