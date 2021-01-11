@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 
 namespace duckdb {
@@ -18,12 +19,12 @@ class PreparedStatementData;
 class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
-	PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data, string query,
-	                  idx_t n_param);
+	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
+	                             string query, idx_t n_param);
 	//! Create a prepared statement that was not successfully prepared
-	PreparedStatement(string error);
+	DUCKDB_API PreparedStatement(string error);
 
-	~PreparedStatement();
+	DUCKDB_API ~PreparedStatement();
 
 public:
 	//! The client context this prepared statement belongs to
@@ -56,7 +57,7 @@ public:
 	}
 
 	//! Execute the prepared statement with the given set of values
-	unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
+	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
 
 private:
 	unique_ptr<QueryResult> ExecuteRecursive(vector<Value> &values) {

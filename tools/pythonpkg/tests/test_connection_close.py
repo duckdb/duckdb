@@ -23,3 +23,17 @@ class TestConnectionClose(object):
         cursor.execute("insert into a values (42)")
         con.close()
         check_exception(lambda :cursor.execute("select * from a"))
+
+    def test_reopen_connection(self, duckdb_cursor):
+        fd, db = tempfile.mkstemp()
+        os.close(fd)
+        os.remove(db)
+        con = duckdb.connect(db)
+        cursor = con.cursor()
+        cursor.execute("create table a (i integer)")
+        cursor.execute("insert into a values (42)")
+        con.close()
+        con = duckdb.connect(db)
+        cursor = con.cursor()
+        results = cursor.execute("select * from a").fetchall()
+        assert results == [(42,)]

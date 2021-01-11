@@ -114,3 +114,14 @@ query II
 explain select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= '1994-01-01' and l_shipdate < '1995-01-01'  and l_discount between 0.05 and 0.07 and l_quantity < 24
 ----
 logical_opt	<!REGEX>:.*FILTER.*
+
+statement ok
+create temporary table t as select range a, range % 10 b, mod(range,10000) c, 5 d, 10000 e from range(100);
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+query II
+explain select count(*) from t where b <=3 and b>=0;
+----
+physical_plan	<REGEX>:.*b<=3.*

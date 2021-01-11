@@ -1463,6 +1463,7 @@ struct DuckDBPyConnection {
 	}
 
 	void close() {
+		result = nullptr;
 		connection = nullptr;
 		database = nullptr;
 		for (auto &cur : cursors) {

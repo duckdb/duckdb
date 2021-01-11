@@ -247,12 +247,10 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setMaxRows(int max) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public void setEscapeProcessing(boolean enable) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
@@ -308,7 +306,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			throw new SQLException("Prepare something first");
 		}
 
-		if (!is_update) {
+		if (!is_update || update_result == 0) {
 			return -1;
 		}
 		return update_result;
@@ -321,6 +319,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setFetchDirection(int direction) throws SQLException {
+		if (direction == ResultSet.FETCH_FORWARD) {
+			return;
+		}
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -331,7 +332,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setFetchSize(int rows) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override

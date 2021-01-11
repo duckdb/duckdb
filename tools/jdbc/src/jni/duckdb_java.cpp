@@ -22,6 +22,22 @@ static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
 	return ret;
 }
 
+static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str_len) {
+	jclass charset_class = env->FindClass("java/nio/charset/Charset");
+	jclass charbuffer_class = env->FindClass("java/nio/CharBuffer");
+	jmethodID for_name =
+		env->GetStaticMethodID(charset_class, "forName", "(Ljava/lang/String;)Ljava/nio/charset/Charset;");
+	jobject charset = env->CallStaticObjectMethod(charset_class, for_name, env->NewStringUTF("UTF-8"));
+	jmethodID charset_decode =
+		env->GetMethodID(charset_class, "decode", "(Ljava/nio/ByteBuffer;)Ljava/nio/CharBuffer;");
+	jmethodID charbuffer_to_string = env->GetMethodID(charbuffer_class, "toString", "()Ljava/lang/String;");
+
+	auto bb = env->NewDirectByteBuffer((void *)d_str, d_str_len);
+	auto j_cb = env->CallObjectMethod(charset, charset_decode, bb);
+	auto j_str = env->CallObjectMethod(j_cb, charbuffer_to_string);
+	return j_str;
+}
+
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass, jbyteArray database_j,
                                                                              jboolean read_only) {
 	auto database = byte_array_to_string(env, database_j);
@@ -225,7 +241,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	auto type_array = env->NewObjectArray(column_count, env->FindClass("java/lang/String"), nullptr);
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		env->SetObjectArrayElement(name_array, col_idx, env->NewStringUTF(names[col_idx].c_str()));
+		env->SetObjectArrayElement(name_array, col_idx, decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length()));
 		env->SetObjectArrayElement(type_array, col_idx, env->NewStringUTF(types[col_idx].ToString().c_str()));
 	}
 
@@ -312,9 +328,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 				if (FlatVector::Nullmask(vec)[row_idx]) {
 					continue;
 				}
-				env->SetObjectArrayElement(
-				    varlen_data, row_idx,
-				    env->NewStringUTF(((string_t *)FlatVector::GetData(vec))[row_idx].GetString().c_str()));
+				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
+				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetDataUnsafe(), d_str.GetSize());
+				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 			}
 			break;
 		default:

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 class DuckDB;
@@ -16,8 +17,8 @@ class DuckDB;
 //! The Extension class is the base class used to define extensions
 class Extension {
 public:
-	virtual void Load(DuckDB &db) = 0;
-	virtual ~Extension() = default;
+	DUCKDB_API virtual void Load(DuckDB &db) = 0;
+	DUCKDB_API virtual ~Extension() = default;
 };
 
 } // namespace duckdb
