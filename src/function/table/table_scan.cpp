@@ -52,10 +52,11 @@ static unique_ptr<BaseStatistics> table_scan_statistics(ClientContext &context, 
 
 static unique_ptr<FunctionOperatorData> table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_,
                                                                  ParallelState *state, vector<column_t> &column_ids,
-                                                                 TableFilterSet *table_filters) {
+                                                                 TableFilterSet *table_filters, TableFilterSet *zonemaps_checks) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
 	result->scan_state.table_filters = table_filters;
+	result->scan_state.zonemaps_checks = zonemaps_checks;
 	if (!table_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
 		return nullptr;
 	}
@@ -182,7 +183,7 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 	if (bind_data.is_index_scan) {
 		return;
 	}
-	if (filters.size() == 0 || storage.info->indexes.size() == 0) {
+	if (filters.empty() || storage.info->indexes.empty()) {
 		// no indexes or no filters: skip the pushdown
 		return;
 	}
@@ -205,8 +206,8 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 		Value low_value, high_value, equal_value;
 		ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
 		// try to find a matching index for any of the filter expressions
-		for (idx_t i = 0; i < filters.size(); i++) {
-			auto expr = filters[i].get();
+		for (auto & filter : filters) {
+			auto expr = filter.get();
 
 			// create a matcher for a comparison with a constant
 			ComparisonExpressionMatcher matcher;

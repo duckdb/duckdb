@@ -11,11 +11,11 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	D_ASSERT(op.children.empty());
 
-	unique_ptr<TableFilterSet> table_filters;
-	if (!op.tableFilters.empty()) {
+	unique_ptr<TableFilterSet> table_filters, zonemap_checks ;
+	if (!op.table_filters.empty()) {
 		// create the table filter map
 		table_filters = make_unique<TableFilterSet>();
-		for (auto &tableFilter : op.tableFilters) {
+		for (auto &tableFilter : op.table_filters) {
 			// find the relative column index from the absolute column index into the table
 			idx_t column_index = INVALID_INDEX;
 			for (idx_t i = 0; i < op.column_ids.size(); i++) {
@@ -36,6 +36,30 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			}
 		}
 	}
+	if (!op.zonemap_checks.empty()) {
+		// create the zonemap check filter map
+		zonemap_checks = make_unique<TableFilterSet>();
+		for (auto &tableFilter : op.zonemap_checks) {
+			// find the relative column index from the absolute column index into the table
+			idx_t column_index = INVALID_INDEX;
+			for (idx_t i = 0; i < op.column_ids.size(); i++) {
+				if (tableFilter.column_index == op.column_ids[i]) {
+					column_index = i;
+					break;
+				}
+			}
+			if (column_index == INVALID_INDEX) {
+				throw InternalException("Could not find column index for table filter");
+			}
+			tableFilter.column_index = column_index;
+			auto filter = zonemap_checks->filters.find(column_index);
+			if (filter != zonemap_checks->filters.end()) {
+				filter->second.push_back(tableFilter);
+			} else {
+				zonemap_checks->filters.insert(make_pair(column_index, vector<TableFilter>{tableFilter}));
+			}
+		}
+	}
 
 	if (op.function.dependency) {
 		op.function.dependency(dependencies, op.bind_data.get());
@@ -44,7 +68,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
 		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data), op.column_ids,
-		                                           op.names, move(table_filters));
+		                                           op.names, move(table_filters), move(zonemap_checks));
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -78,7 +102,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		return move(projection);
 	} else {
 		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids, op.names,
-		                                      move(table_filters));
+		                                      move(table_filters), move(zonemap_checks));
 	}
 }
 

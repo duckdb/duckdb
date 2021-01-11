@@ -19,7 +19,7 @@ string LogicalGet::GetName() const {
 
 string LogicalGet::ParamsToString() const {
 	string result;
-	for (auto &filter : tableFilters) {
+	for (auto &filter : table_filters) {
 		result +=
 		    names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
 		result += "\n";

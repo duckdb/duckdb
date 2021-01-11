@@ -5,16 +5,15 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/constraints/list.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/morsel_info.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/storage/table/transient_segment.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
-
-#include "duckdb/storage/table/morsel_info.hpp"
 
 namespace duckdb {
 
@@ -349,10 +348,13 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		// exceeded the amount of rows to scan
 		return false;
 	}
-	idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
+	auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
 	//! first check the zonemap if we have to scan this partition
 	if (!CheckZonemap(state, state.table_filters, current_row)) {
+		return true;
+	}
+	if (!CheckZonemap(state, state.zonemaps_checks, current_row)) {
 		return true;
 	}
 	// second, scan the version chunk manager to figure out which tuples to load for this transaction
@@ -370,7 +372,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		return true;
 	}
 	idx_t approved_tuple_count = count;
-	if (count == max_count && !state.table_filters) {
+	if (count == max_count && !state.table_filters && !state.zonemaps_checks) {
 		//! If we don't have any deleted tuples or filters we can just run a regular scan
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto column = column_ids[i];
@@ -401,6 +403,17 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 				                         approved_tuple_count, state.table_filters->filters[tf_idx]);
 			}
 			for (auto &table_filter : state.table_filters->filters) {
+				result.data[table_filter.first].Slice(sel, approved_tuple_count);
+			}
+		}
+		if (state.zonemaps_checks) {
+			for (idx_t i = 0; i < state.zonemaps_checks->filters.size(); i++) {
+				auto tf_idx = state.adaptive_filter->permutation[i];
+				auto col_idx = column_ids[tf_idx];
+				columns[col_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
+				                         approved_tuple_count, state.zonemaps_checks->filters[tf_idx]);
+			}
+			for (auto &table_filter : state.zonemaps_checks->filters) {
 				result.data[table_filter.first].Slice(sel, approved_tuple_count);
 			}
 		}

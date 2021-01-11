@@ -1,13 +1,12 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
-#include <utility>
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/transaction/transaction.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parallel/task_context.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/transaction/transaction.hpp"
+
+#include <utility>
 
 namespace duckdb {
 
@@ -24,10 +23,11 @@ public:
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_,
                                      unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
-                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p)
+                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
+                                     unique_ptr<TableFilterSet> zonemap_checks_p)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
       bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
-      table_filters(move(table_filters_p)) {
+      table_filters(move(table_filters_p)), zonemap_checks(move(zonemap_checks_p)) {
 }
 
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -46,7 +46,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 				// parallel scan init
 				state.parallel_state = task_info->second;
 				state.operator_data = function.parallel_init(context.client, bind_data.get(), state.parallel_state,
-				                                             column_ids, table_filters.get());
+				                                             column_ids, table_filters.get(),zonemap_checks.get());
 			} else {
 				// sequential scan init
 				state.operator_data = function.init(context.client, bind_data.get(), column_ids, table_filters.get());
@@ -114,8 +114,21 @@ string PhysicalTableScan::ParamsToString() const {
 			for (auto &filter : f.second) {
 				if (filter.column_index < names.size()) {
 					result += "\n";
-					result += names[column_ids[filter.column_index]] + ExpressionTypeToOperator(filter.comparison_type) +
-					          filter.constant.ToString();
+					result += names[column_ids[filter.column_index]] +
+					          ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
+				}
+			}
+		}
+	}
+	if (zonemap_checks) {
+		result += "\n[INFOSEPARATOR]\n";
+		result += "Zonemaps Checks: ";
+		for (auto &f : zonemap_checks->filters) {
+			for (auto &filter : f.second) {
+				if (filter.column_index < names.size()) {
+					result += "\n";
+					result += names[column_ids[filter.column_index]] +
+					          ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
 				}
 			}
 		}

@@ -44,7 +44,8 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(Clien
                                                                            const FunctionData *bind_data,
                                                                            ParallelState *state,
                                                                            vector<column_t> &column_ids,
-                                                                           TableFilterSet *table_filters);
+                                                                           TableFilterSet *table_filters,
+                                                                           TableFilterSet *zonemaps_checks);
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
