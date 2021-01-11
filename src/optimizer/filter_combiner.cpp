@@ -382,6 +382,10 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 					break;
 				}
 			}
+			else{
+				//! Is not integer, we execute filter normally
+				break;
+			}
 
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}

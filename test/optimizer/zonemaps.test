@@ -47,9 +47,9 @@ explain select count(*) from t where b < 5 and d = 5;     /* data skipping occur
 physical_plan	<REGEX>:.*Filters:.*b<5.*d=5.*
 
 query II
-explain select count(*) from t where b < d and d = 5;     /* no data skipping */
+explain select count(*) from t where  d = 5 and b < d;
 ----
-physical_plan	<REGEX>:.*Filters:.*b<5.*d=5.*
+physical_plan	<REGEX>:.*Filters:.*d=5.*b<5.*
 
 #   4)  Check zonemap before joins
 statement ok
@@ -58,29 +58,29 @@ create temporary table t1 as select range a, length(range) nationkey from range(
 statement ok
 create table t2 as select range  nationkey, concat('Nation_',range) n_name from range(25);
 
-query I
-select count(*) from t1 join t2 using (nationkey)
-where t2.n_name = 'Nation_1' and t1.nationkey =1;    /* data skipping occurs */
+query II
+explain select count(*) from t1 join t2 using (nationkey)
+where t2.n_name = 'Nation_1' and t1.nationkey =1;
 ----
-10
+physical_plan	<REGEX>:.*Filters:.*nationkey=1.*Filters:.*n_name=Nation_1.*nationkey=1.*
 
-query I
-select count(*) from t1 join t2 using (nationkey)
-where t2.n_name = 'Nation_1' and t2.nationkey =1;  /* data skipping occurs with help of transitive behavior */
+query II
+explain select count(*) from t1 join t2 using (nationkey)
+where t2.n_name = 'Nation_1' and t2.nationkey =1;
 ----
-10
+physical_plan	<REGEX>:.*Filters:.*nationkey=1.*Filters:.*n_name=Nation_1.*nationkey=1.*
 
-query I
-select count(*) from t1 join t2 using (nationkey) where t2.n_name = 'Nation_1';                               /* data skipping possible */
+query II
+explain select count(*) from t1 join t2 using (nationkey) where t2.n_name = 'Nation_1';
 ----
-10
+physical_plan	<REGEX>:.*Filters:.*n_name=Nation_1.*
 
-query I
-select count(*) from t1 join t2 using (nationkey) where t2.n_name in ( 'Nation_1', 'Nation_2');        /* data skipping possible */
+query II
+explain select count(*) from t1 join t2 using (nationkey) where t2.nationkey =2 or n_name= 'Nation_2';
 ----
-100
+physical_plan	<REGEX>:.*Zonemaps Checks:.*nationkey>=2.*nationkey<=2.*n_name>=Nation_2.*n_name<=Nation_2.*
 
-query I
-select count(*) from t1 join t2 using (nationkey) where t2.nationkey =2 or n_name= 'Nation_2';   /* data skipping possible */
+query II
+explain select count(*) from t1 join t2 using (nationkey) where t2.n_name in ( 'Nation_1', 'Nation_2');
 ----
-90
+physical_plan	<REGEX>:.*Zonemaps Checks:.*n_name>=Nation_1.*n_name<=Nation_2.*
