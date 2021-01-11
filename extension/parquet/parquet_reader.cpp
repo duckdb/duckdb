@@ -85,6 +85,45 @@ static LogicalType derive_type(const SchemaElement &s_ele) {
 	}
 }
 
+/*
+
+unique_ptr<ColumnReader> create_readers(std::vector<SchemaElement> schema, idx_t &next_child) {
+    auto &s_ele = schema[next_child];
+    idx_t this_child = next_child;
+    if (!s_ele.__isset.type) { // inner node
+        D_ASSERT(s_ele.num_children > 0);
+        child_list_t<LogicalType> child_types;
+
+        idx_t c_idx = 0;
+        while (c_idx < s_ele.num_children) {
+            next_child++;
+
+            auto &child_ele = schema[next_child];
+            auto child_type = derive_type_complex(schema, next_child);
+            child_types.push_back(make_pair(child_ele.name, child_type));
+
+            c_idx++;
+        }
+        D_ASSERT(child_types.size() > 0);
+        LogicalType child_type;
+        // if we only have a single child no reason to create a struct ay
+        if (child_types.size() > 1) {
+            child_type = LogicalType(LogicalTypeId::STRUCT, child_types);
+        } else {
+            child_type = child_types[0].second;
+        }
+        // if we have a struct with only a single type, pull up
+        if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+            return LogicalType(LogicalTypeId::LIST, {make_pair("", child_type)});
+        }
+        return ColumnReader::CreateReader(child_type, s_ele, this_child);
+        //return child_type;
+    } else { // leaf node
+        return ColumnReader::CreateReader(child_type, s_ele, this_child);
+    }
+}
+*/
+
 LogicalType derive_type_complex(std::vector<SchemaElement> schema, idx_t &next_child) {
 	auto &s_ele = schema[next_child];
 
@@ -307,6 +346,10 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 	auto &schema = GetFileMetadata()->schema[file_col_idx + 1];
 
 	auto &group = GetGroup(state);
+
+	//    group.printTo(std::cout);
+	//	std::cout << "\n";
+	// FIXME this needs to be handled differently. Perhaps we need to annotate types with the physical column id?
 	auto &chunk = group.columns[file_col_idx];
 
 	if (chunk.__isset.file_path) {
@@ -320,110 +363,55 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 	//		throw FormatException("Only flat tables are supported (no nesting)");
 	//	}
 
+	/* FIXME
 	if (state.filters) {
-		auto stats = parquet_transform_column_statistics(schema, type, group.columns[file_col_idx]);
-		auto filter_entry = state.filters->filters.find(file_col_idx);
-		if (stats && filter_entry != state.filters->filters.end()) {
-			bool skip_chunk = false;
-			switch (type.id()) {
-			case LogicalTypeId::INTEGER:
-			case LogicalTypeId::BIGINT:
-			case LogicalTypeId::FLOAT:
-			case LogicalTypeId::TIMESTAMP:
-			case LogicalTypeId::DOUBLE: {
-				auto num_stats = (NumericStatistics &)*stats;
-				for (auto &filter : filter_entry->second) {
-					skip_chunk = !num_stats.CheckZonemap(filter.comparison_type, filter.constant);
-					if (skip_chunk) {
-						break;
-					}
-				}
-				break;
-			}
-			case LogicalTypeId::BLOB:
-			case LogicalTypeId::VARCHAR: {
-				auto str_stats = (StringStatistics &)*stats;
-				for (auto &filter : filter_entry->second) {
-					skip_chunk = !str_stats.CheckZonemap(filter.comparison_type, filter.constant.str_value);
-					if (skip_chunk) {
-						break;
-					}
-				}
-				break;
-			}
-			default:
-				// D_ASSERT(0);
-				break;
-				// TODO handle structs and lists here
-			}
-			if (skip_chunk) {
-				state.group_offset = group.num_rows;
-				return;
-				// this effectively will skip this chunk
-			}
-		}
+	    auto stats = parquet_transform_column_statistics(schema, type, chunk);
+	    auto filter_entry = state.filters->filters.find(file_col_idx);
+	    if (stats && filter_entry != state.filters->filters.end()) {
+	        bool skip_chunk = false;
+	        switch (type.id()) {
+	        case LogicalTypeId::INTEGER:
+	        case LogicalTypeId::BIGINT:
+	        case LogicalTypeId::FLOAT:
+	        case LogicalTypeId::TIMESTAMP:
+	        case LogicalTypeId::DOUBLE: {
+	            auto num_stats = (NumericStatistics &)*stats;
+	            for (auto &filter : filter_entry->second) {
+	                skip_chunk = !num_stats.CheckZonemap(filter.comparison_type, filter.constant);
+	                if (skip_chunk) {
+	                    break;
+	                }
+	            }
+	            break;
+	        }
+	        case LogicalTypeId::BLOB:
+	        case LogicalTypeId::VARCHAR: {
+	            auto str_stats = (StringStatistics &)*stats;
+	            for (auto &filter : filter_entry->second) {
+	                skip_chunk = !str_stats.CheckZonemap(filter.comparison_type, filter.constant.str_value);
+	                if (skip_chunk) {
+	                    break;
+	                }
+	            }
+	            break;
+	        }
+	        default:
+	            // D_ASSERT(0);
+	            break;
+	            // TODO handle structs and lists here
+	        }
+	        if (skip_chunk) {
+	            state.group_offset = group.num_rows;
+	            return;
+	            // this effectively will skip this chunk
+	        }
+	    }
 	}
+*/
 
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		state.column_readers[file_col_idx] = make_unique<BooleanColumnReader>(type, chunk, schema, *thrift_file_proto);
-		break;
-	case LogicalTypeId::INTEGER:
-		state.column_readers[file_col_idx] =
-		    make_unique<TemplatedColumnReader<int32_t>>(type, chunk, schema, *thrift_file_proto);
-		break;
-	case LogicalTypeId::BIGINT:
-		state.column_readers[file_col_idx] =
-		    make_unique<TemplatedColumnReader<int64_t>>(type, chunk, schema, *thrift_file_proto);
-		break;
-	case LogicalTypeId::FLOAT:
-		state.column_readers[file_col_idx] =
-		    make_unique<TemplatedColumnReader<float>>(type, chunk, schema, *thrift_file_proto);
-		break;
-	case LogicalTypeId::DOUBLE:
-		state.column_readers[file_col_idx] =
-		    make_unique<TemplatedColumnReader<double>>(type, chunk, schema, *thrift_file_proto);
-		break;
-	case LogicalTypeId::TIMESTAMP:
-		switch (schema.type) {
-		case Type::INT96:
-			state.column_readers[file_col_idx] =
-			    make_unique<TimestampColumnReader<Int96, impala_timestamp_to_timestamp_t>>(type, chunk, schema,
-			                                                                               *thrift_file_proto);
-			break;
-		case Type::INT64:
-			switch (schema.converted_type) {
-			case ConvertedType::TIMESTAMP_MICROS:
-				state.column_readers[file_col_idx] =
-				    make_unique<TimestampColumnReader<int64_t, parquet_timestamp_micros_to_timestamp>>(
-				        type, chunk, schema, *thrift_file_proto);
-				break;
-			case ConvertedType::TIMESTAMP_MILLIS:
-				state.column_readers[file_col_idx] =
-				    make_unique<TimestampColumnReader<int64_t, parquet_timestamp_ms_to_timestamp>>(type, chunk, schema,
-				                                                                                   *thrift_file_proto);
-				break;
-			default:
-				D_ASSERT(0);
-			}
-			break;
-		default:
-			D_ASSERT(0);
-		}
-		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR:
-		state.column_readers[file_col_idx] = make_unique<StringColumnReader>(type, chunk, schema, *thrift_file_proto);
-		break;
-	case LogicalTypeId::LIST:
-		state.column_readers[file_col_idx] = make_unique<ListColumnReader>(type, chunk, schema, *thrift_file_proto);
-		break;
-
-	default:
-		// TODO meaningful error message
-		D_ASSERT(0);
-		break;
-	}
+	// FIXME move to constructor or Initialize
+	state.column_readers[file_col_idx] = ColumnReader::CreateReader(type, schema, file_col_idx);
+	state.column_readers[file_col_idx]->IntializeRead(group.columns, *thrift_file_proto);
 
 	// TODO figure out what to do wrt file io
 	// auto &fs = FileSystem::GetFileSystem(context);
@@ -542,6 +530,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 
+			// TODO we know this type, and dont have to pass it down. but we should verify.
 			PrepareRowGroupBuffer(state, file_col_idx, result.GetTypes()[out_col_idx]);
 		}
 		return true;

@@ -32,6 +32,15 @@ class ClientContext;
 class ChunkCollection;
 class BaseStatistics;
 struct TableFilterSet;
+//
+// struct ParquetColumn;
+//
+// struct ParquetColumn {
+//    LogicalType type;
+//	idx_t file_column_idx;
+//	vector<string> schema_path;
+//	vector<struct ParquetColumn> children;
+//};
 
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;

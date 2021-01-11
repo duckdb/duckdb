@@ -22,6 +22,15 @@ SELECT * FROM parquet_scan('test/sql/copy/parquet/data/list_columns.parquet')
 [NULL, 1]	NULL
 [4]	[efg, NULL, hij, xyz]
 
+#
+#query II
+#SELECT * FROM parquet_scan('/Users/hannes/Desktop/parquet-nested-examples/0_0_8.parquet') LIMIT 10
+#----
+#[1, 2, 3]	[abc, efg, hij]
+#[NULL, 1]	NULL
+#[4]	[efg, NULL, hij, xyz]
+
+
 
 # Something strange happening here
 #query II

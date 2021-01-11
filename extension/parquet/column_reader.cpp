@@ -27,6 +27,53 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 ColumnReader::~ColumnReader() {
 }
 
+unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const SchemaElement &schema_p,
+                                                    idx_t schema_idx_p) {
+	switch (type_p.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return make_unique<BooleanColumnReader>(type_p, schema_p, schema_idx_p);
+	case LogicalTypeId::INTEGER:
+		return make_unique<TemplatedColumnReader<int32_t>>(type_p, schema_p, schema_idx_p);
+	case LogicalTypeId::BIGINT:
+		return make_unique<TemplatedColumnReader<int64_t>>(type_p, schema_p, schema_idx_p);
+	case LogicalTypeId::FLOAT:
+		return make_unique<TemplatedColumnReader<float>>(type_p, schema_p, schema_idx_p);
+	case LogicalTypeId::DOUBLE:
+		return make_unique<TemplatedColumnReader<double>>(type_p, schema_p, schema_idx_p);
+	case LogicalTypeId::TIMESTAMP:
+		switch (schema_p.type) {
+		case Type::INT96:
+			return make_unique<TimestampColumnReader<Int96, impala_timestamp_to_timestamp_t>>(type_p, schema_p,
+			                                                                                  schema_idx_p);
+		case Type::INT64:
+			switch (schema_p.converted_type) {
+			case ConvertedType::TIMESTAMP_MICROS:
+				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_micros_to_timestamp>>(
+				    type_p, schema_p, schema_idx_p);
+			case ConvertedType::TIMESTAMP_MILLIS:
+				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_ms_to_timestamp>>(type_p, schema_p,
+				                                                                                      schema_idx_p);
+			default:
+				break;
+			}
+		default:
+			break;
+		}
+		break;
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+		return make_unique<StringColumnReader>(type_p, schema_p, schema_idx_p);
+	case LogicalTypeId::LIST:
+		return make_unique<ListColumnReader>(type_p, schema_p, schema_idx_p);
+
+	case LogicalTypeId::STRUCT:
+		return make_unique_base<ColumnReader, StructColumnReader>(type_p, schema_p, schema_idx_p);
+
+	default:
+		throw NotImplementedException(type_p.ToString());
+	}
+}
+
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 
 	dict_decoder.reset();
@@ -34,7 +81,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	block.reset();
 
 	PageHeader page_hdr;
-	page_hdr.read(&protocol);
+	page_hdr.read(protocol);
 
 	//	page_hdr.printTo(std::cout);
 	//	std::cout << '\n';
@@ -55,7 +102,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 }
 
 void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size) {
-	auto trans = (DuckdbFileTransport *)protocol.getTransport().get();
+	auto trans = (DuckdbFileTransport *)protocol->getTransport().get();
 
 	block = make_shared<ResizeableBuffer>(compressed_page_size + 1);
 	trans->read((uint8_t *)block->ptr, compressed_page_size);
@@ -64,11 +111,11 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	//			std::cout << '\n';
 
 	shared_ptr<ResizeableBuffer> unpacked_block;
-	if (chunk.meta_data.codec != CompressionCodec::UNCOMPRESSED) {
+	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
 		unpacked_block = make_shared<ResizeableBuffer>(uncompressed_page_size + 1);
 	}
 
-	switch (chunk.meta_data.codec) {
+	switch (chunk->meta_data.codec) {
 	case CompressionCodec::UNCOMPRESSED:
 		break;
 	case CompressionCodec::GZIP: {
@@ -100,7 +147,7 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 
 	default: {
 		std::stringstream codec_name;
-		codec_name << chunk.meta_data.codec;
+		codec_name << chunk->meta_data.codec;
 		D_ASSERT(0);
 		//        throw FormatException("Unsupported compression codec \"" + codec_name.str() +
 		//                              "\". Supported options are uncompressed, gzip or snappy");
@@ -158,7 +205,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 }
 
 void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) {
-	auto trans = (DuckdbFileTransport *)protocol.getTransport().get();
+	auto trans = (DuckdbFileTransport *)protocol->getTransport().get();
 	trans->SetLocation(chunk_read_offset);
 	idx_t to_read = 0;
 	idx_t result_offset = 0;
@@ -193,7 +240,7 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 		D_ASSERT(block);
 		auto read_now = MinValue<idx_t>(to_read, rows_available);
 
-		D_ASSERT(read_now < STANDARD_VECTOR_SIZE);
+		D_ASSERT(read_now <= STANDARD_VECTOR_SIZE);
 
 		if (is_list) {
 			D_ASSERT(repeated_decoder);

@@ -23,17 +23,22 @@ typedef nullmask_t parquet_filter_t;
 class ColumnReader {
 
 public:
-	ColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p, TProtocol &protocol_p)
-	    : type(type_p), chunk(chunk_p), protocol(protocol_p), rows_available(0) {
-
-		// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
-		chunk_read_offset = chunk.meta_data.data_page_offset;
-		if (chunk.meta_data.__isset.dictionary_page_offset && chunk.meta_data.dictionary_page_offset >= 4) {
-			// this assumes the data pages follow the dict pages directly.
-			chunk_read_offset = chunk.meta_data.dictionary_page_offset;
-		}
+	ColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
+	    : type(type_p), rows_available(0), schema_idx(schema_idx_p) {
 		can_have_nulls = true; // FIXME schema_p.repetition_type == FieldRepetitionType::OPTIONAL;
 	};
+
+	virtual void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+		chunk = &columns[schema_idx];
+		protocol = &protocol_p;
+		D_ASSERT(chunk);
+		// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
+		chunk_read_offset = chunk->meta_data.data_page_offset;
+		if (chunk->meta_data.__isset.dictionary_page_offset && chunk->meta_data.dictionary_page_offset >= 4) {
+			// this assumes the data pages follow the dict pages directly.
+			chunk_read_offset = chunk->meta_data.dictionary_page_offset;
+		}
+	}
 
 	virtual ~ColumnReader();
 
@@ -42,6 +47,12 @@ public:
 	virtual void Skip(idx_t num_values) = 0;
 	// FIXME
 	bool is_list = false;
+
+	static unique_ptr<ColumnReader> CreateReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p);
+
+	LogicalType Type() {
+		return type;
+	}
 
 protected:
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
@@ -66,17 +77,19 @@ protected:
 	}
 
 	LogicalType type;
-	const parquet::format::ColumnChunk &chunk;
+	const parquet::format::ColumnChunk *chunk;
 
 	bool can_have_nulls;
 	idx_t defined_here_val = 3; // FIXME
+
+	idx_t schema_idx;
 
 private:
 	void PrepareRead(parquet_filter_t &filter);
 	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
 	void PrepareDataPage(PageHeader &page_hdr);
 
-	apache::thrift::protocol::TProtocol &protocol;
+	apache::thrift::protocol::TProtocol *protocol;
 	idx_t rows_available;
 	idx_t chunk_read_offset;
 
@@ -94,9 +107,8 @@ private:
 template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
 
 public:
-	TemplatedColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
-	                      TProtocol &protocol_p)
-	    : ColumnReader(type_p, chunk_p, schema_p, protocol_p), dict_size(0){};
+	TemplatedColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
+	    : ColumnReader(type_p, schema_p, schema_idx_p), dict_size(0){};
 
 	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override {
 		dict = move(data);
@@ -161,9 +173,8 @@ protected:
 class StringColumnReader : public TemplatedColumnReader<string_t> {
 
 public:
-	StringColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
-	                   TProtocol &protocol_p)
-	    : TemplatedColumnReader<string_t>(type_p, chunk_p, schema_p, protocol_p){};
+	StringColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
+	    : TemplatedColumnReader<string_t>(type_p, schema_p, schema_idx_p){};
 
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 	void Skip(idx_t num_values) override;
@@ -185,9 +196,8 @@ template <class PARQUET_PHYSICAL_TYPE, timestamp_t (*FUNC)(const PARQUET_PHYSICA
 class TimestampColumnReader : public TemplatedColumnReader<timestamp_t> {
 
 public:
-	TimestampColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
-	                      TProtocol &protocol_p)
-	    : TemplatedColumnReader<timestamp_t>(type_p, chunk_p, schema_p, protocol_p){};
+	TimestampColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
+	    : TemplatedColumnReader<timestamp_t>(type_p, schema_p, schema_idx_p){};
 
 protected:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
@@ -214,9 +224,8 @@ protected:
 
 class BooleanColumnReader : public TemplatedColumnReader<bool> {
 public:
-	BooleanColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
-	                    TProtocol &protocol_p)
-	    : TemplatedColumnReader<bool>(type_p, chunk_p, schema_p, protocol_p), byte_pos(0){};
+	BooleanColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
+	    : TemplatedColumnReader<bool>(type_p, schema_p, schema_idx_p), byte_pos(0){};
 	bool PlainRead(ByteBuffer &plain_data) override {
 		plain_data.available(1);
 		bool ret = (*plain_data.ptr >> byte_pos) & 1;
@@ -235,30 +244,56 @@ private:
 	uint8_t byte_pos;
 };
 
+class StructColumnReader : public TemplatedColumnReader<bool> {
+
+public:
+	StructColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
+	    : TemplatedColumnReader<bool>(type_p, schema_p, schema_idx_p) {
+		D_ASSERT(type_p.id() == LogicalTypeId::STRUCT);
+		D_ASSERT(!type_p.child_types().empty());
+		for (auto &child_type : type_p.child_types()) {
+			child_readers.push_back(ColumnReader::CreateReader(child_type.second, schema_p, schema_idx_p));
+		}
+	};
+
+	void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) override {
+		result.Initialize(type);
+
+		for (idx_t i = 0; i < type.child_types().size(); i++) {
+			auto child_read = make_unique<Vector>();
+			child_read->Initialize(type.child_types()[i].second);
+			child_readers[i]->Read(num_values, filter, *child_read);
+			StructVector::AddEntry(result, type.child_types()[i].first, move(child_read));
+		}
+	}
+
+	virtual void Skip(idx_t num_values) override {
+		D_ASSERT(0);
+	}
+
+protected:
+	// TODO this is ugly, need to have more abstract super class
+
+	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
+	           idx_t result_offset, Vector &result) override {
+	}
+
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override {
+	}
+
+	void Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
+	             Vector &result) override {
+	}
+	// TODO this should perhaps be a map
+	vector<unique_ptr<ColumnReader>> child_readers;
+};
+
 class ListColumnReader : public TemplatedColumnReader<list_entry_t> {
 public:
-	ListColumnReader(LogicalType type_p, const ColumnChunk &chunk_p, const SchemaElement &schema_p,
-	                 TProtocol &protocol_p)
-	    : TemplatedColumnReader<list_entry_t>(type_p, chunk_p, schema_p, protocol_p) {
+	ListColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
+	    : TemplatedColumnReader<list_entry_t>(type_p, schema_p, schema_idx_p) {
 		auto child_type = type_p.child_types()[0].second;
-		// TODO extract this into separate method, also used in ParquetReader::PrepareRowGroupBuffer
-		switch (child_type.id()) {
-		case LogicalTypeId::BIGINT:
-			child_column_reader = make_unique_base<ColumnReader, TemplatedColumnReader<int64_t>>(child_type, chunk_p,
-			                                                                                     schema_p, protocol_p);
-			break;
-		case LogicalTypeId::INTEGER:
-			child_column_reader = make_unique_base<ColumnReader, TemplatedColumnReader<int32_t>>(child_type, chunk_p,
-			                                                                                     schema_p, protocol_p);
-			break;
-		case LogicalTypeId::VARCHAR:
-			child_column_reader =
-			    make_unique_base<ColumnReader, StringColumnReader>(child_type, chunk_p, schema_p, protocol_p);
-
-			break;
-		default:
-			D_ASSERT(0);
-		}
+		child_column_reader = ColumnReader::CreateReader(child_type, schema_p, schema_idx_p);
 		child_column_reader->is_list = true;
 	};
 
@@ -268,6 +303,10 @@ public:
 
 	virtual void Skip(idx_t num_values) override {
 		D_ASSERT(0);
+	}
+
+	void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+		child_column_reader->IntializeRead(columns, protocol_p);
 	}
 
 protected:
