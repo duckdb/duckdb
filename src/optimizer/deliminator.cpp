@@ -100,7 +100,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 	if (!nulls_are_not_equal_exprs.empty() || filter != nullptr) {
 		auto filter_op = make_unique<LogicalFilter>();
 		if (!nulls_are_not_equal_exprs.empty()) {
-			// IS NOT NULL filter that was in JoinCondition::null_values_are_equal before
+			// add an IS NOT NULL filter that was implicitly in JoinCondition::null_values_are_equal
 			auto is_not_null_expr =
 			    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 			for (auto &expr : nulls_are_not_equal_exprs) {
@@ -109,13 +109,14 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 			filter_op->expressions.push_back(move(is_not_null_expr));
 		}
 		if (filter != nullptr) {
-            LogicalOperatorVisitor::EnumerateExpressions(*filter, [&](unique_ptr<Expression> *child) {
-              if (expr_map.find(child->get()) != expr_map.end()) {
-                  *child = expr_map[child->get()]->Copy();
-              }
-            });
-
-			// from the filter above the DelimGet
+            // rewrite and add filters from the filter above the DelimGet
+			for (auto &expr : filter->expressions) {
+                ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+                  if (expr_map.find(child.get()) != expr_map.end()) {
+                      child = expr_map[child.get()]->Copy();
+                  }
+                });
+			}
 			for (auto &expr : filter->expressions) {
 				filter_op->expressions.push_back(move(expr));
 			}
