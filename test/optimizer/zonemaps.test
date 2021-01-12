@@ -44,12 +44,12 @@ physical_plan	<REGEX>:.*Zonemaps Checks:.*b>=1.*b<=3.*
 query II
 explain select count(*) from t where b < 5 and d = 5;     /* data skipping occurs */
 ----
-physical_plan	<REGEX>:.*Filters:.*b<5.*d=5.*
+physical_plan	<REGEX>:.*Filters:.*d=5.*b<5.*
 
 query II
 explain select count(*) from t where  d = 5 and b < d;
 ----
-physical_plan	<REGEX>:.*Filters:.*d=5.*b<5.*
+physical_plan	<REGEX>:.*Filters:.*b<5.*d=5.*
 
 #   4)  Check zonemap before joins
 statement ok
@@ -62,13 +62,13 @@ query II
 explain select count(*) from t1 join t2 using (nationkey)
 where t2.n_name = 'Nation_1' and t1.nationkey =1;
 ----
-physical_plan	<REGEX>:.*Filters:.*nationkey=1.*Filters:.*n_name=Nation_1.*nationkey=1.*
+physical_plan	<REGEX>:.*Filters:.*nationkey=1.*Filters:.*nationkey=1.*n_name=Nation_1.*
 
 query II
 explain select count(*) from t1 join t2 using (nationkey)
 where t2.n_name = 'Nation_1' and t2.nationkey =1;
 ----
-physical_plan	<REGEX>:.*Filters:.*nationkey=1.*Filters:.*n_name=Nation_1.*nationkey=1.*
+physical_plan	<REGEX>:.*Filters:.*nationkey=1.*Filters:.*nationkey=1.*n_name=Nation_1.*
 
 query II
 explain select count(*) from t1 join t2 using (nationkey) where t2.n_name = 'Nation_1';

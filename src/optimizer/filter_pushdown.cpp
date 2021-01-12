@@ -77,8 +77,8 @@ FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	expressions.push_back(move(expr));
 	LogicalFilter::SplitPredicates(expressions);
 	// push the filters into the combiner
-	for (auto &expr : expressions) {
-		if (combiner.AddFilter(move(expr)) == FilterResult::UNSATISFIABLE) {
+	for (auto &expr_ : expressions) {
+		if (combiner.AddFilter(move(expr_)) == FilterResult::UNSATISFIABLE) {
 			return FilterResult::UNSATISFIABLE;
 		}
 	}

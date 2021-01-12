@@ -157,42 +157,45 @@ bool FilterCombiner::HasFilters() {
 	return has_filters;
 }
 
-void FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids,unordered_map<idx_t, std::pair<Value, Value>> &checks,
+void FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_map<idx_t, std::pair<Value, Value>> &checks,
                                        unordered_set<idx_t> &not_constants, Expression *filter) {
 	switch (filter->type) {
 	case ExpressionType::CONJUNCTION_OR: {
 		auto &or_exp = (BoundConjunctionExpression &)*filter;
 		for (auto &child : or_exp.children) {
-			FindZonemapChecks(column_ids,checks, not_constants, child.get());
+			FindZonemapChecks(column_ids, checks, not_constants, child.get());
 		}
 		break;
 	}
 	case ExpressionType::CONJUNCTION_AND: {
 		auto &and_exp = (BoundConjunctionExpression &)*filter;
 		for (auto &child : and_exp.children) {
-			FindZonemapChecks(column_ids,checks, not_constants, child.get());
+			FindZonemapChecks(column_ids, checks, not_constants, child.get());
 		}
 		break;
 	}
 	case ExpressionType::COMPARE_IN: {
 		auto &comp_in_exp = (BoundOperatorExpression &)*filter;
-		auto &column_ref = (BoundColumnRefExpression &)*comp_in_exp.children[0].get();
-		for (size_t i{1}; i < comp_in_exp.children.size(); i++) {
-			if (comp_in_exp.children[i]->type != ExpressionType::VALUE_CONSTANT) {
-				//! This indicates the column has a comparison that is not with a constant
-				not_constants.insert(column_ids[column_ref.binding.column_index]);
-				break;
-			} else {
-				auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
-				auto it = checks.find(column_ids[column_ref.binding.column_index]);
-				if (it == checks.end()) {
-					checks[column_ids[column_ref.binding.column_index]] = {const_value_expr.value, const_value_expr.value};
+		if (comp_in_exp.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &column_ref = (BoundColumnRefExpression &)*comp_in_exp.children[0].get();
+			for (size_t i{1}; i < comp_in_exp.children.size(); i++) {
+				if (comp_in_exp.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+					//! This indicates the column has a comparison that is not with a constant
+					not_constants.insert(column_ids[column_ref.binding.column_index]);
+					break;
 				} else {
-					if (it->second.first > const_value_expr.value) {
-						it->second.first = const_value_expr.value;
-					}
-					if (it->second.second < const_value_expr.value) {
-						it->second.second = const_value_expr.value;
+					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
+					auto it = checks.find(column_ids[column_ref.binding.column_index]);
+					if (it == checks.end()) {
+						checks[column_ids[column_ref.binding.column_index]] = {const_value_expr.value,
+						                                                       const_value_expr.value};
+					} else {
+						if (it->second.first > const_value_expr.value) {
+							it->second.first = const_value_expr.value;
+						}
+						if (it->second.second < const_value_expr.value) {
+							it->second.second = const_value_expr.value;
+						}
 					}
 				}
 			}
@@ -211,7 +214,8 @@ void FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids,unordered_map<i
 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
 			auto it = checks.find(column_ids[column_ref.binding.column_index]);
 			if (it == checks.end()) {
-				checks[column_ids[column_ref.binding.column_index]] = {constant_value_expr.value, constant_value_expr.value};
+				checks[column_ids[column_ref.binding.column_index]] = {constant_value_expr.value,
+				                                                       constant_value_expr.value};
 			} else {
 				if (it->second.first > constant_value_expr.value) {
 					it->second.first = constant_value_expr.value;
@@ -227,16 +231,19 @@ void FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids,unordered_map<i
 		}
 		break;
 	}
+	default:
+		break;
 	}
 }
 
-vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_ids,vector<TableFilter> &pushed_filters) {
+vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_ids,
+                                                          vector<TableFilter> &pushed_filters) {
 	vector<TableFilter> zonemap_checks;
 	unordered_map<idx_t, std::pair<Value, Value>> checks;
 	unordered_set<idx_t> not_constants;
 	//! We go through the remaining filters and capture their min max
 	for (auto &filter : remaining_filters) {
-		FindZonemapChecks(column_ids,checks, not_constants, filter.get());
+		FindZonemapChecks(column_ids, checks, not_constants, filter.get());
 	}
 	//! We construct the equivalent filters
 	for (auto not_constant : not_constants) {
@@ -350,44 +357,56 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
 			auto &func = (BoundOperatorExpression &)*remaining_filter;
 			D_ASSERT(func.children.size() > 1);
-			auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
-			auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
-
-			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
-			if (fst_const_value_expr.value.type() == LogicalType::BIGINT ||
-			    fst_const_value_expr.value.type() == LogicalType::INTEGER ||
-			    fst_const_value_expr.value.type() == LogicalType::SMALLINT ||
-			    fst_const_value_expr.value.type() == LogicalType::TINYINT ||
-			    fst_const_value_expr.value.type() == LogicalType::HUGEINT) {
-				vector<Value> in_values;
+			if (func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
+				//! check if all children are const expr
+				bool children_constant = true;
 				for (size_t i{1}; i < func.children.size(); i++) {
-					auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
-					in_values.push_back(const_value_expr.value);
-				}
-				Value one(1);
-				bool is_consecutive = true;
-				sort(in_values.begin(), in_values.end());
-				for (size_t in_val_idx{1}; in_val_idx < in_values.size(); in_val_idx++) {
-					if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one) {
-						is_consecutive = false;
+					if (func.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+						children_constant = false;
 					}
 				}
-				if (is_consecutive) {
-					tableFilters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-					                          column_ref.binding.column_index);
-					tableFilters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
-					                          column_ref.binding.column_index);
+				if (children_constant) {
+					auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
+					//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
+					if (fst_const_value_expr.value.type() == LogicalType::BIGINT ||
+					    fst_const_value_expr.value.type() == LogicalType::INTEGER ||
+					    fst_const_value_expr.value.type() == LogicalType::SMALLINT ||
+					    fst_const_value_expr.value.type() == LogicalType::TINYINT ||
+					    fst_const_value_expr.value.type() == LogicalType::HUGEINT) {
+						vector<Value> in_values;
+						for (size_t i{1}; i < func.children.size(); i++) {
+							auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
+							in_values.push_back(const_value_expr.value);
+						}
+						Value one(1);
+						bool is_consecutive = true;
+						sort(in_values.begin(), in_values.end());
+						for (size_t in_val_idx{1}; in_val_idx < in_values.size(); in_val_idx++) {
+							if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one ||
+							    in_values[in_val_idx - 1].is_null) {
+								is_consecutive = false;
+							}
+						}
+						if (is_consecutive) {
+							tableFilters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+							                          column_ref.binding.column_index);
+							tableFilters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
+							                          column_ref.binding.column_index);
+						} else {
+							//! Is not consecutive, we execute filter normally
+							continue;
+						}
+					} else {
+						//! Is not integer, we execute filter normally
+						continue;
+					}
 				} else {
-					//! Is not consecutive, we execute filter normally
-					break;
+					//! Not all values are constant, we execute filter normally
+					continue;
 				}
+				remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 			}
-			else{
-				//! Is not integer, we execute filter normally
-				break;
-			}
-
-			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}
 	}
 
@@ -552,7 +571,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		AddBoundComparisonFilter(expr);
+		return AddBoundComparisonFilter(expr);
 	}
 	// only comparisons supported for now
 	return FilterResult::UNSUPPORTED;
@@ -585,7 +604,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	// read every constant filters already inserted for the right scalar variable
 	// and see if we can create new transitive filters, e.g., there is already a filter i > 10,
 	// suppose that we have now the j >= i, then we can infer a new filter j > 10
-	for (auto right_constant : right_constants) {
+	for (const auto &right_constant : right_constants) {
 		ExpressionValueInformation info;
 		info.constant = right_constant.constant;
 		// there is already an equality filter, e.g., i = 10
@@ -637,10 +656,9 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	if (isSuccessful) {
 		// now check for remaining trasitive filters from the left column
 		auto transitive_filter = FindTransitiveFilter(comparison.left.get());
-		if (transitive_filter.get() != nullptr) {
+		if (transitive_filter != nullptr) {
 			// try to add transitive filters
-			if (AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter.get()) ==
-			    FilterResult::UNSUPPORTED) {
+			if (AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter) == FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
 				remaining_filters.push_back(move(transitive_filter));
 			}
