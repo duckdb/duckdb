@@ -28,11 +28,12 @@ void get_equality_constant_filters(Expression *filter, unordered_map<idx_t, uniq
 		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
-			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
 			cons_eq_filters[column_ref.binding.column_index] = comp_exp.right->Copy();
 		}
 		break;
 	}
+	default:
+		break;
 	}
 }
 
@@ -80,6 +81,8 @@ void replace_column_constants(Expression *filter, unordered_map<idx_t, unique_pt
 		}
 		break;
 	}
+	default:
+		break;
 	}
 }
 

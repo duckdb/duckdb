@@ -171,7 +171,7 @@ public:
 
 	static unique_ptr<FunctionOperatorData>
 	parquet_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *parallel_state_,
-	                           vector<column_t> &column_ids, TableFilterSet *table_filters) {
+	                           vector<column_t> &column_ids, TableFilterSet *table_filters, TableFilterSet *zonemaps_checks) {
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;
