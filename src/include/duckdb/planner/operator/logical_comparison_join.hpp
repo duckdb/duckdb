@@ -22,6 +22,8 @@ public:
 
 	//! The conditions of the join
 	vector<JoinCondition> conditions;
+	//! Used for duplicate-eliminated TODO
+	vector<LogicalType> delim_types;
 
 public:
 	string ParamsToString() const override;

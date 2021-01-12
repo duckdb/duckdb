@@ -44,11 +44,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 		delim_types.push_back(bound_ref.return_type);
 		distinct_groups.push_back(make_unique<BoundReferenceExpression>(bound_ref.return_type, bound_ref.index));
 	}
-	if (op.join_type == JoinType::MARK) {
-		D_ASSERT(plan->type == PhysicalOperatorType::HASH_JOIN);
-		auto &hash_join = (PhysicalHashJoin &)*plan;
-		hash_join.delim_types = delim_types;
-	}
 	// now create the duplicate eliminated join
 	auto delim_join = make_unique<PhysicalDelimJoin>(op.types, move(plan), delim_scans);
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
