@@ -6,6 +6,7 @@
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
+using Filter = FilterPushdown::Filter;
 
 void get_equality_constant_filters(Expression *filter, unordered_map<idx_t, unique_ptr<Expression>> &cons_eq_filters) {
 	switch (filter->type) {

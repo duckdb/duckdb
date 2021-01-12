@@ -62,7 +62,7 @@ query II
 explain select count(*) from t1 join t2 using (nationkey)
 where t2.n_name = 'Nation_1' and t1.nationkey =1;
 ----
-physical_plan	<REGEX>:.*Filters:.*nationkey=1.*Filters:.*nationkey=1.*n_name=Nation_1.*
+physical_plan	<REGEX>:.*Filters:.*Filters:.*
 
 query II
 explain select count(*) from t1 join t2 using (nationkey)

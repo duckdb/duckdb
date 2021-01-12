@@ -406,17 +406,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 				result.data[table_filter.first].Slice(sel, approved_tuple_count);
 			}
 		}
-		if (state.zonemaps_checks) {
-			for (idx_t i = 0; i < state.zonemaps_checks->filters.size(); i++) {
-				auto tf_idx = state.adaptive_filter->permutation[i];
-				auto col_idx = column_ids[tf_idx];
-				columns[col_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
-				                         approved_tuple_count, state.zonemaps_checks->filters[tf_idx]);
-			}
-			for (auto &table_filter : state.zonemaps_checks->filters) {
-				result.data[table_filter.first].Slice(sel, approved_tuple_count);
-			}
-		}
+
 		//! Now we use the selection vector to fetch data for the other columns.
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			if (!state.table_filters || state.table_filters->filters.find(i) == state.table_filters->filters.end()) {
@@ -933,8 +923,8 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 	// update should not be called for indexed columns!
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
-	for (idx_t i = 0; i < info->indexes.size(); i++) {
-		D_ASSERT(!info->indexes[i]->IndexIsUpdated(column_ids));
+	for (auto &indexe : info->indexes) {
+		D_ASSERT(!indexe->IndexIsUpdated(column_ids));
 	}
 #endif
 }
