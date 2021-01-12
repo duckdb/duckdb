@@ -372,7 +372,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		return true;
 	}
 	idx_t approved_tuple_count = count;
-	if (count == max_count && !state.table_filters && !state.zonemaps_checks) {
+	if (count == max_count && !state.table_filters) {
 		//! If we don't have any deleted tuples or filters we can just run a regular scan
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto column = column_ids[i];
@@ -406,7 +406,6 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 				result.data[table_filter.first].Slice(sel, approved_tuple_count);
 			}
 		}
-
 		//! Now we use the selection vector to fetch data for the other columns.
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			if (!state.table_filters || state.table_filters->filters.find(i) == state.table_filters->filters.end()) {
