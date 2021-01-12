@@ -354,11 +354,15 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 					                          column_ref.binding.column_index);
 				}
 			}
-		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
+		}
+		else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
 			auto &func = (BoundOperatorExpression &)*remaining_filter;
 			D_ASSERT(func.children.size() > 1);
 			if (func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
+				if (column_ids[column_ref.binding.column_index] == COLUMN_IDENTIFIER_ROW_ID) {
+						break;
+				}
 				//! check if all children are const expr
 				bool children_constant = true;
 				for (size_t i{1}; i < func.children.size(); i++) {
@@ -388,7 +392,7 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 								is_consecutive = false;
 							}
 						}
-						if (is_consecutive) {
+						if (is_consecutive && !in_values.empty()) {
 							tableFilters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 							                          column_ref.binding.column_index);
 							tableFilters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
