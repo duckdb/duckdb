@@ -71,10 +71,14 @@ public:
 	//! We need this to correctly bind recursive CTEs with multiple references.
 	void AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types);
 
-	//! Hide a binding
-	void HideBinding(const string &binding_name, const string &column_name);
-	//! Returns true if the given column is hidden from the given binding
-	bool BindingIsHidden(const string &binding_name, const string &column_name);
+	//! Add an implicit join condition (e.g. USING (x))
+	void AddUsingCondition(const string &column_name, const string &binding);
+	void MergeUsingCondition(const string &column_name, BindContext &context);
+
+	bool IsUsingBinding(const string &column_name);
+	bool IsUsingBinding(const string &column_name, const string &binding_name);
+
+	vector<string> &UsingBindings(const string &column_name);
 
 	unordered_map<string, std::shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
@@ -103,8 +107,8 @@ private:
 	unordered_map<string, unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
-	//! The set of hidden columns from the result
-	qualified_column_set_t hidden_columns;
+	//! The set of columns used in USING join conditions
+	unordered_map<string, vector<string>> using_columns;
 
 	//! The set of CTE bindings
 	unordered_map<string, std::shared_ptr<Binding>> cte_bindings;

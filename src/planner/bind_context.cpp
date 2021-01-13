@@ -14,15 +14,17 @@ namespace duckdb {
 
 string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
+	auto using_entry = using_columns.find(column_name);
+	bool is_using_binding = using_entry != using_columns.end();
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
-		if (binding->HasMatchingBinding(column_name)) {
-			// check if the binding is ignored
-			if (BindingIsHidden(kv.first, column_name)) {
+		if (is_using_binding) {
+			if (std::find(using_entry->second.begin(), using_entry->second.end(), kv.first) != using_entry->second.end()) {
 				continue;
 			}
-
-			if (!result.empty()) {
+		}
+		if (binding->HasMatchingBinding(column_name)) {
+			if (!result.empty() || is_using_binding) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
 				                      column_name, result, column_name, kv.first, column_name);
@@ -45,14 +47,28 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	return StringUtil::TopNStrings(scores);
 }
 
-void BindContext::HideBinding(const string &binding_name, const string &column_name) {
-	hidden_columns.insert(QualifiedColumnName(binding_name, column_name));
+void BindContext::AddUsingCondition(const string &column_name, const string &binding) {
+	using_columns[column_name].push_back(binding);
 }
 
-bool BindContext::BindingIsHidden(const string &binding_name, const string &column_name) {
-	QualifiedColumnName qcolumn(binding_name, column_name);
-	return hidden_columns.find(qcolumn) != hidden_columns.end();
+void BindContext::MergeUsingCondition(const string &column_name, BindContext &context) {
+	for(auto &entry : context.using_columns[column_name]) {
+		using_columns[column_name].push_back(entry);
+	}
 }
+
+bool BindContext::IsUsingBinding(const string &column_name) {
+	return using_columns.find(column_name) != using_columns.end();
+}
+
+vector<string> &BindContext::UsingBindings(const string &column_name) {
+	return using_columns[column_name];
+}
+
+// bool BindContext::BindingIsHidden(const string &binding_name, const string &column_name) {
+// 	QualifiedColumnName qcolumn(binding_name, column_name);
+// 	return hidden_columns.find(qcolumn) != hidden_columns.end();
+// }
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
 	unordered_set<string> result;
@@ -106,7 +122,11 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
                                                Binding *binding) {
 	for (auto &column_name : binding->names) {
 		D_ASSERT(!column_name.empty());
-		if (BindingIsHidden(binding->alias, column_name)) {
+		auto using_entry = using_columns.find(column_name);
+		if (using_entry != using_columns.end()) {
+			if (binding->alias == using_entry->second[0]) {
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name));
+			}
 			continue;
 		}
 		new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
@@ -199,8 +219,10 @@ void BindContext::AddContext(BindContext other) {
 	for (auto &binding : other.bindings_list) {
 		bindings_list.push_back(move(binding));
 	}
-	for (auto &hidden_column : other.hidden_columns) {
-		hidden_columns.insert(hidden_column);
+	for (auto &entry : other.using_columns) {
+		for(auto &alias : entry.second) {
+			using_columns[entry.first].push_back(alias);
+		}
 	}
 }
 
