@@ -29,14 +29,14 @@ SELECT * FROM parquet_scan('test/sql/copy/parquet/data/list_columns.parquet')
 #[1, 2, 3]	[abc, efg, hij]
 #[NULL, 1]	NULL
 #[4]	[efg, NULL, hij, xyz]
+#
 
 
-
-# Something strange happening here
+## Something strange happening here
 #query II
 #SELECT * FROM parquet_scan('test/sql/copy/parquet/data/datapage_v2.snappy.parquet')
 #----
-
+#
 # spark and arrow say:
 #
 #0  [1.0, 2.0, 3.0]        [abc, efg, hij]

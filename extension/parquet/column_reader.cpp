@@ -28,31 +28,31 @@ ColumnReader::~ColumnReader() {
 }
 
 unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const SchemaElement &schema_p,
-                                                    idx_t schema_idx_p) {
+                                                    idx_t file_idx_p) {
 	switch (type_p.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_unique<BooleanColumnReader>(type_p, schema_p, schema_idx_p);
+		return make_unique<BooleanColumnReader>(type_p, schema_p, file_idx_p);
 	case LogicalTypeId::INTEGER:
-		return make_unique<TemplatedColumnReader<int32_t>>(type_p, schema_p, schema_idx_p);
+		return make_unique<TemplatedColumnReader<int32_t>>(type_p, schema_p, file_idx_p);
 	case LogicalTypeId::BIGINT:
-		return make_unique<TemplatedColumnReader<int64_t>>(type_p, schema_p, schema_idx_p);
+		return make_unique<TemplatedColumnReader<int64_t>>(type_p, schema_p, file_idx_p);
 	case LogicalTypeId::FLOAT:
-		return make_unique<TemplatedColumnReader<float>>(type_p, schema_p, schema_idx_p);
+		return make_unique<TemplatedColumnReader<float>>(type_p, schema_p, file_idx_p);
 	case LogicalTypeId::DOUBLE:
-		return make_unique<TemplatedColumnReader<double>>(type_p, schema_p, schema_idx_p);
+		return make_unique<TemplatedColumnReader<double>>(type_p, schema_p, file_idx_p);
 	case LogicalTypeId::TIMESTAMP:
 		switch (schema_p.type) {
 		case Type::INT96:
 			return make_unique<TimestampColumnReader<Int96, impala_timestamp_to_timestamp_t>>(type_p, schema_p,
-			                                                                                  schema_idx_p);
+			                                                                                  file_idx_p);
 		case Type::INT64:
 			switch (schema_p.converted_type) {
 			case ConvertedType::TIMESTAMP_MICROS:
 				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_micros_to_timestamp>>(
-				    type_p, schema_p, schema_idx_p);
+				    type_p, schema_p, file_idx_p);
 			case ConvertedType::TIMESTAMP_MILLIS:
 				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_ms_to_timestamp>>(type_p, schema_p,
-				                                                                                      schema_idx_p);
+				                                                                                      file_idx_p);
 			default:
 				break;
 			}
@@ -62,13 +62,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		return make_unique<StringColumnReader>(type_p, schema_p, schema_idx_p);
-	case LogicalTypeId::LIST:
-		return make_unique<ListColumnReader>(type_p, schema_p, schema_idx_p);
-
-	case LogicalTypeId::STRUCT:
-		return make_unique_base<ColumnReader, StructColumnReader>(type_p, schema_p, schema_idx_p);
-
+		return make_unique<StringColumnReader>(type_p, schema_p, file_idx_p);
 	default:
 		throw NotImplementedException(type_p.ToString());
 	}
@@ -171,6 +165,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	                                                          : page_hdr.data_page_header_v2.encoding;
 
 	if (is_list) {
+		// TODO there seems to be some confusion whether this is in the bytes for v2
 		uint32_t rep_length = block->read<uint32_t>();
 		block->available(rep_length);
 		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, 1);
@@ -178,6 +173,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 
 	if (can_have_nulls) {
+		// TODO there seems to be some confusion whether this is in the bytes for v2
 		uint32_t def_length = block->read<uint32_t>();
 		block->available(def_length);
 		// TODO figure out bit width correctly
@@ -188,6 +184,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	switch (page_encoding) {
 	case Encoding::RLE_DICTIONARY:
 	case Encoding::PLAIN_DICTIONARY: {
+		// TODO there seems to be some confusion whether this is in the bytes for v2
+		// where is it otherwise??
 		auto dict_width = block->read<uint8_t>();
 		// TODO somehow dict_width can be 0 ?
 		dict_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, dict_width);

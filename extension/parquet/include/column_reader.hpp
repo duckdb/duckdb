@@ -23,13 +23,14 @@ typedef nullmask_t parquet_filter_t;
 class ColumnReader {
 
 public:
-	ColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
-	    : type(type_p), rows_available(0), schema_idx(schema_idx_p) {
+	ColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p)
+	    : type(type_p), schema(schema_p), rows_available(0), file_idx(file_idx_p) {
 		can_have_nulls = true; // FIXME schema_p.repetition_type == FieldRepetitionType::OPTIONAL;
 	};
 
 	virtual void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
-		chunk = &columns[schema_idx];
+		D_ASSERT(file_idx < columns.size());
+		chunk = &columns[file_idx];
 		protocol = &protocol_p;
 		D_ASSERT(chunk);
 		// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
@@ -82,7 +83,9 @@ protected:
 	bool can_have_nulls;
 	idx_t defined_here_val = 3; // FIXME
 
-	idx_t schema_idx;
+	idx_t file_idx;
+
+	const SchemaElement &schema;
 
 private:
 	void PrepareRead(parquet_filter_t &filter);
@@ -196,8 +199,8 @@ template <class PARQUET_PHYSICAL_TYPE, timestamp_t (*FUNC)(const PARQUET_PHYSICA
 class TimestampColumnReader : public TemplatedColumnReader<timestamp_t> {
 
 public:
-	TimestampColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
-	    : TemplatedColumnReader<timestamp_t>(type_p, schema_p, schema_idx_p){};
+	TimestampColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p)
+	    : TemplatedColumnReader<timestamp_t>(type_p, schema_p, file_idx_p){};
 
 protected:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
@@ -247,14 +250,25 @@ private:
 class StructColumnReader : public TemplatedColumnReader<bool> {
 
 public:
-	StructColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
-	    : TemplatedColumnReader<bool>(type_p, schema_p, schema_idx_p) {
+	StructColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
+	                   vector<unique_ptr<ColumnReader>> child_readers_p)
+	    : TemplatedColumnReader<bool>(type_p, schema_p, schema_idx_p), child_readers(move(child_readers_p)) {
 		D_ASSERT(type_p.id() == LogicalTypeId::STRUCT);
 		D_ASSERT(!type_p.child_types().empty());
-		for (auto &child_type : type_p.child_types()) {
-			child_readers.push_back(ColumnReader::CreateReader(child_type.second, schema_p, schema_idx_p));
-		}
 	};
+
+	ColumnReader *GetChildReader(idx_t child_idx) {
+		return child_readers[child_idx].get();
+	}
+
+	void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+
+		for (auto &child : child_readers) {
+			// FIXME
+			child->is_list = is_list;
+			child->IntializeRead(columns, protocol_p);
+		}
+	}
 
 	void Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) override {
 		result.Initialize(type);
@@ -290,10 +304,11 @@ protected:
 
 class ListColumnReader : public TemplatedColumnReader<list_entry_t> {
 public:
-	ListColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p)
-	    : TemplatedColumnReader<list_entry_t>(type_p, schema_p, schema_idx_p) {
+	ListColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
+	                 unique_ptr<ColumnReader> child_column_reader_p)
+	    : TemplatedColumnReader<list_entry_t>(type_p, schema_p, schema_idx_p),
+	      child_column_reader(move(child_column_reader_p)) {
 		auto child_type = type_p.child_types()[0].second;
-		child_column_reader = ColumnReader::CreateReader(child_type, schema_p, schema_idx_p);
 		child_column_reader->is_list = true;
 	};
 

@@ -32,22 +32,13 @@ class ClientContext;
 class ChunkCollection;
 class BaseStatistics;
 struct TableFilterSet;
-//
-// struct ParquetColumn;
-//
-// struct ParquetColumn {
-//    LogicalType type;
-//	idx_t file_column_idx;
-//	vector<string> schema_path;
-//	vector<struct ParquetColumn> children;
-//};
 
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
 	vector<column_t> column_ids;
 	idx_t group_offset;
-	vector<unique_ptr<ColumnReader>> column_readers;
+	vector<ColumnReader *> column_readers;
 
 	bool finished;
 	TableFilterSet *filters;
@@ -64,6 +55,7 @@ public:
 
 	string file_name;
 	vector<LogicalType> return_types;
+	unique_ptr<ColumnReader> root_reader;
 	vector<string> names;
 
 	shared_ptr<ParquetFileMetadataCache> metadata;

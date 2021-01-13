@@ -85,77 +85,47 @@ static LogicalType derive_type(const SchemaElement &s_ele) {
 	}
 }
 
-/*
-
-unique_ptr<ColumnReader> create_readers(std::vector<SchemaElement> schema, idx_t &next_child) {
-    auto &s_ele = schema[next_child];
-    idx_t this_child = next_child;
-    if (!s_ele.__isset.type) { // inner node
-        D_ASSERT(s_ele.num_children > 0);
-        child_list_t<LogicalType> child_types;
-
-        idx_t c_idx = 0;
-        while (c_idx < s_ele.num_children) {
-            next_child++;
-
-            auto &child_ele = schema[next_child];
-            auto child_type = derive_type_complex(schema, next_child);
-            child_types.push_back(make_pair(child_ele.name, child_type));
-
-            c_idx++;
-        }
-        D_ASSERT(child_types.size() > 0);
-        LogicalType child_type;
-        // if we only have a single child no reason to create a struct ay
-        if (child_types.size() > 1) {
-            child_type = LogicalType(LogicalTypeId::STRUCT, child_types);
-        } else {
-            child_type = child_types[0].second;
-        }
-        // if we have a struct with only a single type, pull up
-        if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
-            return LogicalType(LogicalTypeId::LIST, {make_pair("", child_type)});
-        }
-        return ColumnReader::CreateReader(child_type, s_ele, this_child);
-        //return child_type;
-    } else { // leaf node
-        return ColumnReader::CreateReader(child_type, s_ele, this_child);
-    }
-}
-*/
-
-LogicalType derive_type_complex(std::vector<SchemaElement> schema, idx_t &next_child) {
+unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t &next_child, idx_t &next_file_idx) {
+	D_ASSERT(next_child < schema.size());
 	auto &s_ele = schema[next_child];
+	auto this_idx = next_child;
 
 	if (!s_ele.__isset.type) { // inner node
 		D_ASSERT(s_ele.num_children > 0);
 		child_list_t<LogicalType> child_types;
+		vector<unique_ptr<ColumnReader>> child_readers;
 
 		idx_t c_idx = 0;
 		while (c_idx < s_ele.num_children) {
 			next_child++;
 
 			auto &child_ele = schema[next_child];
-			auto child_type = derive_type_complex(schema, next_child);
-			child_types.push_back(make_pair(child_ele.name, child_type));
+			auto child_reader = create_reader(schema, next_child, next_file_idx);
+			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
+			child_readers.push_back(move(child_reader));
 
 			c_idx++;
 		}
 		D_ASSERT(child_types.size() > 0);
-		LogicalType child_type;
+		unique_ptr<ColumnReader> result;
+		LogicalType result_type;
 		// if we only have a single child no reason to create a struct ay
 		if (child_types.size() > 1) {
-			child_type = LogicalType(LogicalTypeId::STRUCT, child_types);
+			result_type = LogicalType(LogicalTypeId::STRUCT, child_types);
+			result = make_unique<StructColumnReader>(result_type, s_ele, this_idx, move(child_readers));
 		} else {
-			child_type = child_types[0].second;
+			// if we have a struct with only a single type, pull up
+			result_type = child_types[0].second;
+			result = move(child_readers[0]);
 		}
-		// if we have a struct with only a single type, pull up
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
-			return LogicalType(LogicalTypeId::LIST, {make_pair("", child_type)});
+			result_type = LogicalType(LogicalTypeId::LIST, {make_pair("", result_type)});
+			return make_unique<ListColumnReader>(result_type, s_ele, this_idx, move(result));
 		}
-		return child_type;
+		return result;
 	} else { // leaf node
-		return derive_type(s_ele);
+		// TODO check return value of derive type or should we only do this on read()
+		return ColumnReader::CreateReader(derive_type(s_ele), s_ele, next_file_idx++);
 	}
 }
 
@@ -164,6 +134,7 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
     : file_name(move(file_name_)), context(context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 
+	// todo move this gunk to separate function so this is cleaned up a bit
 	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 
 	ResizeableBuffer buf;
@@ -238,14 +209,20 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	//		throw FormatException("Only flat tables are supported (no nesting)");
 	//	}
 
-	this->return_types = expected_types;
+	//	this->return_types = expected_types;
 	bool has_expected_types = expected_types.size() > 0;
 
-	idx_t next_child = 0;
-	auto type = derive_type_complex(file_meta_data->schema, next_child);
+	idx_t next_child_idx = 0;
+	idx_t next_file_idx = 0;
+
+	// auto type = derive_type_complex(file_meta_data->schema, next_child);
 	// printf("XX %s %llu\n", type.ToString().c_str(), next_child);
 
-	D_ASSERT(next_child == file_meta_data->schema.size() - 1);
+	//	next_child = 0;
+	this->root_reader = create_reader(file_meta_data->schema, next_child_idx, next_file_idx);
+	D_ASSERT(next_child_idx == file_meta_data->schema.size() - 1);
+	D_ASSERT(next_file_idx == file_meta_data->row_groups[0].columns.size());
+
 	/*
 
 	   // skip the first column its the root and otherwise useless
@@ -282,8 +259,9 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	   } */
 	// TODO deal with expected types again
 	D_ASSERT(!has_expected_types);
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
-	for (auto &type_pair : type.child_types()) {
+	auto root_type = root_reader->Type();
+	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
+	for (auto &type_pair : root_type.child_types()) {
 		names.push_back(type_pair.first);
 		return_types.push_back(type_pair.second);
 	}
@@ -410,7 +388,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 */
 
 	// FIXME move to constructor or Initialize
-	state.column_readers[file_col_idx] = ColumnReader::CreateReader(type, schema, file_col_idx);
+	state.column_readers[file_col_idx] = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
 	state.column_readers[file_col_idx]->IntializeRead(group.columns, *thrift_file_proto);
 
 	// TODO figure out what to do wrt file io
