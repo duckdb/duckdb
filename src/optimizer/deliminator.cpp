@@ -35,12 +35,12 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	    op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 	    // DelimGet as direct child (left or right)
 	    (op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
-         op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
+	     op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
 	     // Filter + DelimGet as a child (left or right)
 	     (op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_FILTER &&
 	      op->children[0]->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) ||
-         (op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_FILTER &&
-          op->children[0]->children[1]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET))) {
+	     (op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_FILTER &&
+	      op->children[0]->children[1]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET))) {
 		candidates.push_back(op_ptr);
 	}
 }
@@ -50,17 +50,17 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 	auto &proj_or_agg = **op_ptr;
 	auto &join = (LogicalComparisonJoin &)*proj_or_agg.children[0];
 	// get the index (left or right) of the DelimGet side of the join
-    idx_t delim_idx = join.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
-                     (join.children[0]->type == LogicalOperatorType::LOGICAL_FILTER &&
-                      join.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) ?
-                      0 : 1;
-    // get the filter (if any)
-	auto filter =
-	    (LogicalFilter *)(join.children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER ? join.children[delim_idx].get()
-	                                                                                    : nullptr);
-	auto &delim_get = (LogicalDelimGet &)*(filter != nullptr
-	                                           ? join.children[delim_idx]->children[0]
-	                                           : join.children[delim_idx]);
+	idx_t delim_idx = join.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
+	                          (join.children[0]->type == LogicalOperatorType::LOGICAL_FILTER &&
+	                           join.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET)
+	                      ? 0
+	                      : 1;
+	// get the filter (if any)
+	auto filter = (LogicalFilter *)(join.children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER
+	                                    ? join.children[delim_idx].get()
+	                                    : nullptr);
+	auto &delim_get =
+	    (LogicalDelimGet &)*(filter != nullptr ? join.children[delim_idx]->children[0] : join.children[delim_idx]);
 	if (join.conditions.size() != delim_get.chunk_types.size()) {
 		// joining with DelimGet adds new information
 		return false;
@@ -73,7 +73,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 			return false;
 		}
 		auto delim_side = delim_idx == 0 ? cond.left.get() : cond.right.get();
-        auto other_side = delim_idx == 0 ? cond.right.get() : cond.left.get();
+		auto other_side = delim_idx == 0 ? cond.right.get() : cond.left.get();
 		if (delim_side->type != ExpressionType::BOUND_COLUMN_REF) {
 			// non-colref e.g. expression -(4, 1) in 4-i=j where i is from DelimGet
 			// FIXME: might be possible to also eliminate these
@@ -121,13 +121,13 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 			filter_op->expressions.push_back(move(is_not_null_expr));
 		}
 		if (filter != nullptr) {
-            // rewrite and add filters from the filter above the DelimGet
+			// rewrite and add filters from the filter above the DelimGet
 			for (auto &expr : filter->expressions) {
-                ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-                  if (expr_map.find(child.get()) != expr_map.end()) {
-                      child = expr_map[child.get()]->Copy();
-                  }
-                });
+				ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+					if (expr_map.find(child.get()) != expr_map.end()) {
+						child = expr_map[child.get()]->Copy();
+					}
+				});
 			}
 			for (auto &expr : filter->expressions) {
 				filter_op->expressions.push_back(move(expr));
@@ -145,16 +145,16 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 
 void Deliminator::UpdatePlan(LogicalOperator &op, expression_map_t<Expression *> &expr_map,
                              column_binding_map_t<bool> &projection_map) {
-    // replace occurrences of removed DelimGet bindings
-    LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) {
-      if (expr_map.find(child->get()) != expr_map.end()) {
-          *child = expr_map[child->get()]->Copy();
-      }
-    });
-    // update children
-    for (auto &child : op.children) {
-        UpdatePlan(*child, expr_map, projection_map);
-    }
+	// replace occurrences of removed DelimGet bindings
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) {
+		if (expr_map.find(child->get()) != expr_map.end()) {
+			*child = expr_map[child->get()]->Copy();
+		}
+	});
+	// update children
+	for (auto &child : op.children) {
+		UpdatePlan(*child, expr_map, projection_map);
+	}
 	// now check if this is a delim join that can be removed
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && !HasChildDelimGet(op)) {
 		auto &delim_join = (LogicalDelimJoin &)op;

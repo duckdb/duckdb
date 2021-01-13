@@ -30,7 +30,7 @@ private:
 	void UpdatePlan(LogicalOperator &op, expression_map_t<Expression *> &expr_map,
 	                column_binding_map_t<bool> &projection_map);
 	//! Whether the operator has one or more children of type DELIM_GET
-    bool HasChildDelimGet(LogicalOperator &op);
+	bool HasChildDelimGet(LogicalOperator &op);
 };
 
 } // namespace duckdb
