@@ -43,7 +43,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 					}
 				}
 				// whether we applied an IS NOT NULL filter
-				cond.null_values_are_equal = true; //projection_map[colref.binding];
+				cond.null_values_are_equal = true; // projection_map[colref.binding];
 			}
 		}
 		// change type if there are no more duplicate-eliminated columns
