@@ -22,7 +22,7 @@ public:
 
 	//! The conditions of the join
 	vector<JoinCondition> conditions;
-	//! Used for duplicate-eliminated TODO
+	//! Used for duplicate-eliminated joins
 	vector<LogicalType> delim_types;
 
 public:
