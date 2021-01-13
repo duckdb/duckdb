@@ -6,16 +6,84 @@
 
 namespace duckdb {
 
+class DeliminatorPlanUpdater : LogicalOperatorVisitor {
+public:
+    DeliminatorPlanUpdater() {
+	}
+    //! Update the plan after a DelimGet has been removed
+    void VisitOperator(LogicalOperator &op) override;
+    void VisitExpression(unique_ptr<Expression> *expression) override;
+    //! Whether the operator has one or more children of type DELIM_GET
+    bool HasChildDelimGet(LogicalOperator &op);
+
+    expression_map_t<Expression *> expr_map;
+    column_binding_map_t<bool> projection_map;
+    unique_ptr<LogicalOperator> temp_ptr;
+};
+
+void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
+    VisitOperatorChildren(op);
+	VisitOperatorExpressions(op);
+    // now check if this is a delim join that can be removed
+    if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && !HasChildDelimGet(op)) {
+        auto &delim_join = (LogicalDelimJoin &)op;
+        if (delim_join.join_type == JoinType::SINGLE) {
+            return;
+        }
+        auto decs = &delim_join.duplicate_eliminated_columns;
+        for (auto &cond : delim_join.conditions) {
+            if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+                continue;
+            }
+            auto &colref = (BoundColumnRefExpression &)*cond.right;
+            if (projection_map.find(colref.binding) != projection_map.end()) {
+                // value on the right is a projection of removed DelimGet
+                for (idx_t i = 0; i < decs->size(); i++) {
+                    if (decs->at(i)->Equals(cond.left.get())) {
+                        // the value on the left no longer needs to be a duplicate-eliminated column
+                        decs->erase(decs->begin() + i);
+                        break;
+                    }
+                }
+                // whether we applied an IS NOT NULL filter
+                cond.null_values_are_equal = projection_map[colref.binding];
+            }
+        }
+        // change type if there are no more duplicate-eliminated columns
+        if (decs->empty()) {
+            delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+        }
+    }
+}
+
+void DeliminatorPlanUpdater::VisitExpression(unique_ptr<Expression> *expression) {
+    if (expr_map.find(expression->get()) != expr_map.end()) {
+        *expression = expr_map[expression->get()]->Copy();
+    } else {
+        VisitExpressionChildren(**expression);
+    }
+}
+
+bool DeliminatorPlanUpdater::HasChildDelimGet(LogicalOperator &op) {
+    if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+        return true;
+    }
+    for (auto &child : op.children) {
+        if (HasChildDelimGet(*child)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op) {
 	vector<unique_ptr<LogicalOperator> *> candidates;
 	FindCandidates(&op, candidates);
 
 	for (auto candidate : candidates) {
-		auto expr_map = expression_map_t<Expression *>();
-		column_binding_map_t<bool> projection_map;
-		unique_ptr<LogicalOperator> temp_ptr = nullptr;
-		if (RemoveCandidate(candidate, expr_map, projection_map, &temp_ptr)) {
-			UpdatePlan(*op, expr_map, projection_map);
+		DeliminatorPlanUpdater updater;
+		if (RemoveCandidate(candidate, updater)) {
+			updater.VisitOperator(*op);
 		}
 	}
 	return op;
@@ -45,8 +113,7 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	}
 }
 
-bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expression_map_t<Expression *> &expr_map,
-                                  column_binding_map_t<bool> &projection_map, unique_ptr<LogicalOperator> *temp_ptr) {
+bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, DeliminatorPlanUpdater &updater) {
 	auto &proj_or_agg = **op_ptr;
 	auto &join = (LogicalComparisonJoin &)*proj_or_agg.children[0];
 	// get the index (left or right) of the DelimGet side of the join
@@ -79,7 +146,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 			// FIXME: might be possible to also eliminate these
 			return false;
 		}
-		expr_map[delim_side] = other_side;
+		updater.expr_map[delim_side] = other_side;
 		if (!cond.null_values_are_equal) {
 			nulls_are_not_equal_exprs.push_back(other_side);
 		}
@@ -87,10 +154,10 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 	// removed DelimGet columns are assigned a new ColumnBinding by Projection/Aggregation, keep track here
 	if (proj_or_agg.type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		for (auto &cb : proj_or_agg.GetColumnBindings()) {
-			projection_map[cb] = true;
+            updater.projection_map[cb] = true;
 			for (auto &expr : nulls_are_not_equal_exprs) {
 				if (proj_or_agg.expressions[cb.column_index]->Equals(expr)) {
-					projection_map[cb] = false;
+                    updater.projection_map[cb] = false;
 					break;
 				}
 			}
@@ -98,11 +165,11 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 	} else {
 		auto &agg = (LogicalAggregate &)proj_or_agg;
 		for (auto &cb : agg.GetColumnBindings()) {
-			projection_map[cb] = true;
+            updater.projection_map[cb] = true;
 			for (auto &expr : nulls_are_not_equal_exprs) {
 				if ((cb.table_index == agg.group_index && agg.groups[cb.column_index]->Equals(expr)) ||
 				    (cb.table_index == agg.aggregate_index && agg.expressions[cb.column_index]->Equals(expr))) {
-					projection_map[cb] = false;
+                    updater.projection_map[cb] = false;
 					break;
 				}
 			}
@@ -121,14 +188,6 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 			filter_op->expressions.push_back(move(is_not_null_expr));
 		}
 		if (filter != nullptr) {
-			// rewrite and add filters from the filter above the DelimGet
-			for (auto &expr : filter->expressions) {
-				ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-					if (expr_map.find(child.get()) != expr_map.end()) {
-						child = expr_map[child.get()]->Copy();
-					}
-				});
-			}
 			for (auto &expr : filter->expressions) {
 				filter_op->expressions.push_back(move(expr));
 			}
@@ -137,63 +196,10 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, expressio
 		join.children[1 - delim_idx] = move(filter_op);
 	}
 	// temporarily save deleted operator so its expressions are still available
-	*temp_ptr = move(proj_or_agg.children[0]);
+    updater.temp_ptr = move(proj_or_agg.children[0]);
 	// replace the redundant join
 	proj_or_agg.children[0] = move(join.children[1 - delim_idx]);
 	return true;
-}
-
-void Deliminator::UpdatePlan(LogicalOperator &op, expression_map_t<Expression *> &expr_map,
-                             column_binding_map_t<bool> &projection_map) {
-	// replace occurrences of removed DelimGet bindings
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *child) {
-		if (expr_map.find(child->get()) != expr_map.end()) {
-			*child = expr_map[child->get()]->Copy();
-		}
-	});
-	// update children
-	for (auto &child : op.children) {
-		UpdatePlan(*child, expr_map, projection_map);
-	}
-	// now check if this is a delim join that can be removed
-	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && !HasChildDelimGet(op)) {
-		auto &delim_join = (LogicalDelimJoin &)op;
-		auto decs = &delim_join.duplicate_eliminated_columns;
-		for (auto &cond : delim_join.conditions) {
-			if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
-				continue;
-			}
-			auto &colref = (BoundColumnRefExpression &)*cond.right;
-			if (projection_map.find(colref.binding) != projection_map.end()) {
-				// value on the right is a projection of removed DelimGet
-				for (idx_t i = 0; i < decs->size(); i++) {
-					if (decs->at(i)->Equals(cond.left.get())) {
-						// the value on the left no longer needs to be a duplicate-eliminated column
-						decs->erase(decs->begin() + i);
-						break;
-					}
-				}
-				// whether we applied an IS NOT NULL filter
-				cond.null_values_are_equal = projection_map[colref.binding];
-			}
-		}
-		// change type if there are no more duplicate-eliminated columns
-		if (decs->empty()) {
-			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
-		}
-	}
-}
-
-bool Deliminator::HasChildDelimGet(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
-		return true;
-	}
-	for (auto &child : op.children) {
-		if (HasChildDelimGet(*child)) {
-			return true;
-		}
-	}
-	return false;
 }
 
 } // namespace duckdb
