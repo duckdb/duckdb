@@ -13,6 +13,9 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	for (idx_t i = 0; i < func.children.size(); i++) {
 		stats.push_back(PropagateExpression(func.children[i]));
 	}
+    if (!func.function.statistics){
+        return nullptr;
+    }
 	return func.function.statistics(context, func, func.bind_info.get(), stats);
 }
 

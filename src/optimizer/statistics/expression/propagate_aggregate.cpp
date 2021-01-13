@@ -13,6 +13,9 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		stats.push_back(PropagateExpression(aggr.children[i]));
 	}
+	if (!aggr.function.statistics){
+		return nullptr;
+	}
 	return aggr.function.statistics(context, aggr, aggr.bind_info.get(), stats, node_stats.get());
 }
 
