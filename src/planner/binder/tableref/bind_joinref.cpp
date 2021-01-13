@@ -2,23 +2,26 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
 
 namespace duckdb {
 
-static unique_ptr<Expression> BindColumn(Binder &binder, ClientContext &context, const string &alias, const string &column_name) {
+static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const string &alias, const string &column_name) {
 	auto expr = make_unique_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
-	return expr_binder.Bind(expr);
+	auto result = expr_binder.Bind(expr);
+	return make_unique<BoundExpression>(move(result), nullptr);
 }
 
-static unique_ptr<Expression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder, const string &left_alias, const string &right_alias, const string &column_name) {
+static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder, const string &left_alias, const string &right_alias, const string &column_name) {
+	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
-	return make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left), move(right));
+	return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left), move(right));
 }
 
 bool Binder::TryFindBinding(const string &using_column, const string &join_side, string &result) {
@@ -70,7 +73,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	result->left = left_binder.Bind(*ref.left);
 	result->right = right_binder.Bind(*ref.right);
 
-	vector<unique_ptr<Expression>> extra_conditions;
+	vector<unique_ptr<ParsedExpression>> extra_conditions;
 	if (ref.is_natural) {
 		// natural join, figure out which column names are present in both sides of the join
 		// first bind the left hand side and get a list of all the tables and column names
@@ -173,16 +176,16 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	bind_context.AddContext(move(right_binder.bind_context));
 	MoveCorrelatedExpressions(left_binder);
 	MoveCorrelatedExpressions(right_binder);
+	for(auto &condition : extra_conditions) {
+		if (ref.condition) {
+			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(ref.condition), move(condition));
+		} else {
+			ref.condition = move(condition);
+		}
+	}
 	if (ref.condition) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
-	}
-	for(auto &condition : extra_conditions) {
-		if (result->condition) {
-			result->condition = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(result->condition), move(condition));
-		} else {
-			result->condition = move(condition);
-		}
 	}
 	D_ASSERT(result->condition);
 	return move(result);
