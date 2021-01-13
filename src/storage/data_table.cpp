@@ -922,8 +922,8 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 	// update should not be called for indexed columns!
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
-	for (auto &indexe : info->indexes) {
-		D_ASSERT(!indexe->IndexIsUpdated(column_ids));
+	for (auto &index : info->indexes) {
+		D_ASSERT(!index->IndexIsUpdated(column_ids));
 	}
 #endif
 }

@@ -61,7 +61,7 @@ static unique_ptr<FunctionData> information_schema_tables_bind(ClientContext &co
 
 unique_ptr<FunctionOperatorData> information_schema_tables_init(ClientContext &context, const FunctionData *bind_data,
                                                                 vector<column_t> &column_ids,
-                                                                TableFilterSet *table_filters) {
+                                                                TableFilterCollection* filters) {
 	auto result = make_unique<InformationSchemaTablesData>();
 
 	// scan all the schemas for tables and views and collect them

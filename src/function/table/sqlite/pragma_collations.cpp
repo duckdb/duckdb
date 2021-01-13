@@ -25,7 +25,7 @@ static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vect
 }
 
 unique_ptr<FunctionOperatorData> pragma_collate_init(ClientContext &context, const FunctionData *bind_data,
-                                                     vector<column_t> &column_ids, TableFilterSet *table_filters) {
+                                                     vector<column_t> &column_ids, TableFilterCollection* filters) {
 	auto result = make_unique<PragmaCollateData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {

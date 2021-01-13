@@ -1,0 +1,25 @@
+# name: test/sql/filter/test_zonemap.test_slow
+# description: Test expressions with transitive filters
+# group: [filter]
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+create temporary table t as select range a, length(range) b from range(100000000);
+
+query I
+select count(*) from t where a > 500 or a <= 700
+----
+100000000
+
+query II
+explain select count(*) from t where (a > 500 and b = 3) or (a > 7000 and b = 2)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*b>=2.*b<=3.*
+
+query I
+select count(*) from t where (a > 500 and b = 3) or (a > 7000 and b = 2)
+----
+499
+

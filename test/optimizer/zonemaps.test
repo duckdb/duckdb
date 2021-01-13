@@ -15,7 +15,6 @@ explain select count(*) from t where a >=2 and a < 7 or a in (1,3,8);
 ----
 physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=1.*a<=8.*
 
-
 # 1) In-clause based on in-clause range/boundary zonemap check
 query II
 explain select count(*) from t where b in (1,2,3) ;

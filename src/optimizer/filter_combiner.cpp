@@ -35,8 +35,7 @@ Expression *FilterCombiner::GetNode(Expression *expr) {
 idx_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
 	D_ASSERT(stored_expressions.find(expr) != stored_expressions.end());
 	D_ASSERT(stored_expressions.find(expr)->second.get() == expr);
-
-	auto entry = equivalence_set_map.find(expr);
+    auto entry = equivalence_set_map.find(expr);
 	if (entry == equivalence_set_map.end()) {
 		idx_t index = set_index++;
 		equivalence_set_map[expr] = index;
@@ -157,26 +156,118 @@ bool FilterCombiner::HasFilters() {
 	return has_filters;
 }
 
-void FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_map<idx_t, std::pair<Value, Value>> &checks,
-                                       unordered_set<idx_t> &not_constants, Expression *filter) {
+unordered_map<idx_t, std::pair<Value *, Value *>> merge_and(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
+                                                            unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
+	unordered_map<idx_t, std::pair<Value *, Value *>> result;
+	for (auto &f : f_1) {
+		auto it = f_2.find(f.first);
+		if (it == f_2.end()) {
+			result[f.first] = f.second;
+		} else {
+			Value *min = nullptr, *max = nullptr;
+			if (it->second.first && f.second.first) {
+				if (*f.second.first > *it->second.first) {
+					min = f.second.first;
+				} else {
+					min = it->second.first;
+				}
+
+			} else if (it->second.first) {
+				min = it->second.first;
+			} else if (f.second.first) {
+				min = f.second.first;
+			} else {
+				min = nullptr;
+			}
+			if (it->second.second && f.second.second) {
+				if (*f.second.second < *it->second.second) {
+					max = f.second.second;
+				} else {
+					max = it->second.second;
+				}
+			} else if (it->second.second) {
+				max = it->second.second;
+			} else if (f.second.second) {
+				max = f.second.second;
+			} else {
+				max = nullptr;
+			}
+			result[f.first] = {min, max};
+			f_2.erase(f.first);
+		}
+	}
+	for (auto &f : f_2) {
+		result[f.first] = f.second;
+	}
+	return result;
+}
+
+unordered_map<idx_t, std::pair<Value *, Value *>> merge_or(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
+                                                           unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
+	unordered_map<idx_t, std::pair<Value *, Value *>> result;
+	for (auto &f : f_1) {
+		auto it = f_2.find(f.first);
+		if (it == f_2.end()) {
+			if (f.second.first && f.second.second) {
+				result[f.first] = f.second;
+			}
+		} else {
+			Value *min = nullptr, *max = nullptr;
+			if (it->second.first && f.second.first) {
+				if (*f.second.first < *it->second.first) {
+					min = f.second.first;
+				} else {
+					min = it->second.first;
+				}
+			}
+			if (it->second.second && f.second.second) {
+				if (*f.second.second > *it->second.second) {
+					max = f.second.second;
+				} else {
+					max = it->second.second;
+				}
+			}
+			if (min && max) {
+				result[f.first] = {min, max};
+			}
+			f_2.erase(f.first);
+		}
+	}
+	for (auto &f : f_2) {
+		if (f.second.first && f.second.second) {
+			result[f.first] = f.second;
+		}
+	}
+	return result;
+}
+
+unordered_map<idx_t, std::pair<Value *, Value *>>
+FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t> &not_constants, Expression *filter) {
+	unordered_map<idx_t, std::pair<Value *, Value *>> checks;
 	switch (filter->type) {
 	case ExpressionType::CONJUNCTION_OR: {
+		//! For a filter to
 		auto &or_exp = (BoundConjunctionExpression &)*filter;
-		for (auto &child : or_exp.children) {
-			FindZonemapChecks(column_ids, checks, not_constants, child.get());
+		checks = FindZonemapChecks(column_ids, not_constants, or_exp.children[0].get());
+		for (size_t i = 1; i < or_exp.children.size(); ++i) {
+			auto child_check = FindZonemapChecks(column_ids, not_constants, or_exp.children[i].get());
+			checks = merge_or(checks, child_check);
 		}
-		break;
+		return checks;
 	}
 	case ExpressionType::CONJUNCTION_AND: {
 		auto &and_exp = (BoundConjunctionExpression &)*filter;
-		for (auto &child : and_exp.children) {
-			FindZonemapChecks(column_ids, checks, not_constants, child.get());
+		checks = FindZonemapChecks(column_ids, not_constants, and_exp.children[0].get());
+		for (size_t i = 1; i < and_exp.children.size(); ++i) {
+			auto child_check = FindZonemapChecks(column_ids, not_constants, and_exp.children[i].get());
+			checks = merge_and(checks, child_check);
 		}
-		break;
+		return checks;
 	}
 	case ExpressionType::COMPARE_IN: {
 		auto &comp_in_exp = (BoundOperatorExpression &)*filter;
 		if (comp_in_exp.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
+			Value *min = nullptr, *max = nullptr;
 			auto &column_ref = (BoundColumnRefExpression &)*comp_in_exp.children[0].get();
 			for (size_t i{1}; i < comp_in_exp.children.size(); i++) {
 				if (comp_in_exp.children[i]->type != ExpressionType::VALUE_CONSTANT) {
@@ -185,26 +276,45 @@ void FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_map<
 					break;
 				} else {
 					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
-					auto it = checks.find(column_ids[column_ref.binding.column_index]);
-					if (it == checks.end()) {
-						checks[column_ids[column_ref.binding.column_index]] = {const_value_expr.value,
-						                                                       const_value_expr.value};
+					if (!min && !max) {
+						min = &const_value_expr.value;
+						max = min;
 					} else {
-						if (it->second.first > const_value_expr.value) {
-							it->second.first = const_value_expr.value;
+						if (*min > const_value_expr.value) {
+							min = &const_value_expr.value;
 						}
-						if (it->second.second < const_value_expr.value) {
-							it->second.second = const_value_expr.value;
+						if (*max < const_value_expr.value) {
+							max = &const_value_expr.value;
 						}
 					}
 				}
 			}
+			checks[column_ids[column_ref.binding.column_index]] = {min, max};
 		}
-		break;
+		return checks;
 	}
-	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_EQUAL: {
+		auto &comp_exp = (BoundComparisonExpression &)*filter;
+		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
+			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
+			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
+			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value,
+			                                                       &constant_value_expr.value};
+		}
+		return checks;
+	}
 	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+		auto &comp_exp = (BoundComparisonExpression &)*filter;
+		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
+			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
+			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
+			checks[column_ids[column_ref.binding.column_index]] = {nullptr, &constant_value_expr.value};
+		}
+		return checks;
+	}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN: {
 		auto &comp_exp = (BoundComparisonExpression &)*filter;
@@ -212,38 +322,29 @@ void FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_map<
 		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
-			auto it = checks.find(column_ids[column_ref.binding.column_index]);
-			if (it == checks.end()) {
-				checks[column_ids[column_ref.binding.column_index]] = {constant_value_expr.value,
-				                                                       constant_value_expr.value};
-			} else {
-				if (it->second.first > constant_value_expr.value) {
-					it->second.first = constant_value_expr.value;
-				}
-				if (it->second.second < constant_value_expr.value) {
-					it->second.second = constant_value_expr.value;
-				}
-			}
-		} else if (comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-			//! This indicates the column has a comparison that is not with a constant
-			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
-			not_constants.insert(column_ids[column_ref.binding.column_index]);
+			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value, nullptr};
 		}
-		break;
+		return checks;
 	}
 	default:
-		break;
+		return checks;
 	}
+	return checks;
 }
 
 vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_ids,
                                                           vector<TableFilter> &pushed_filters) {
 	vector<TableFilter> zonemap_checks;
-	unordered_map<idx_t, std::pair<Value, Value>> checks;
 	unordered_set<idx_t> not_constants;
 	//! We go through the remaining filters and capture their min max
-	for (auto &filter : remaining_filters) {
-		FindZonemapChecks(column_ids, checks, not_constants, filter.get());
+	if (remaining_filters.empty()) {
+		return zonemap_checks;
+	}
+
+	auto checks = FindZonemapChecks(column_ids, not_constants, remaining_filters[0].get());
+	for (size_t i = 1; i < remaining_filters.size(); ++i) {
+		auto child_check = FindZonemapChecks(column_ids, not_constants, remaining_filters[i].get());
+		checks = merge_and(checks, child_check);
 	}
 	//! We construct the equivalent filters
 	for (auto not_constant : not_constants) {
@@ -253,8 +354,14 @@ vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_
 		checks.erase(column_ids[pushed_filter.column_index]);
 	}
 	for (const auto &check : checks) {
-		zonemap_checks.emplace_back(check.second.first, ExpressionType::COMPARE_GREATERTHANOREQUALTO, check.first);
-		zonemap_checks.emplace_back(check.second.second, ExpressionType::COMPARE_LESSTHANOREQUALTO, check.first);
+		if (check.second.first) {
+			zonemap_checks.emplace_back(check.second.first->Copy(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                            check.first);
+		}
+		if (check.second.second) {
+			zonemap_checks.emplace_back(check.second.second->Copy(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                            check.first);
+		}
 	}
 	return zonemap_checks;
 }
@@ -354,63 +461,56 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 					                          column_ref.binding.column_index);
 				}
 			}
-		}
-		else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
+		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
 			auto &func = (BoundOperatorExpression &)*remaining_filter;
+			vector<Value> in_values;
 			D_ASSERT(func.children.size() > 1);
-			if (func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
-				if (column_ids[column_ref.binding.column_index] == COLUMN_IDENTIFIER_ROW_ID) {
-						break;
-				}
-				//! check if all children are const expr
-				bool children_constant = true;
-				for (size_t i{1}; i < func.children.size(); i++) {
-					if (func.children[i]->type != ExpressionType::VALUE_CONSTANT) {
-						children_constant = false;
-					}
-				}
-				if (children_constant) {
-					auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
-					//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
-					if (fst_const_value_expr.value.type() == LogicalType::BIGINT ||
-					    fst_const_value_expr.value.type() == LogicalType::INTEGER ||
-					    fst_const_value_expr.value.type() == LogicalType::SMALLINT ||
-					    fst_const_value_expr.value.type() == LogicalType::TINYINT ||
-					    fst_const_value_expr.value.type() == LogicalType::HUGEINT) {
-						vector<Value> in_values;
-						for (size_t i{1}; i < func.children.size(); i++) {
-							auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
-							in_values.push_back(const_value_expr.value);
-						}
-						Value one(1);
-						bool is_consecutive = true;
-						sort(in_values.begin(), in_values.end());
-						for (size_t in_val_idx{1}; in_val_idx < in_values.size(); in_val_idx++) {
-							if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one ||
-							    in_values[in_val_idx - 1].is_null) {
-								is_consecutive = false;
-							}
-						}
-						if (is_consecutive && !in_values.empty()) {
-							tableFilters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-							                          column_ref.binding.column_index);
-							tableFilters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
-							                          column_ref.binding.column_index);
-						} else {
-							//! Is not consecutive, we execute filter normally
-							continue;
-						}
-					} else {
-						//! Is not integer, we execute filter normally
-						continue;
-					}
-				} else {
-					//! Not all values are constant, we execute filter normally
-					continue;
-				}
-				remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+			if (func.children[0]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
 			}
+			auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
+			if (column_ids[column_ref.binding.column_index] == COLUMN_IDENTIFIER_ROW_ID) {
+				break;
+			}
+			//! check if all children are const expr
+			bool children_constant = true;
+			for (size_t i{1}; i < func.children.size(); i++) {
+				if (func.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+					children_constant = false;
+				}
+			}
+			if (!children_constant) {
+				continue;
+			}
+			auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
+			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
+			if (!fst_const_value_expr.value.type().IsIntegral()) {
+				continue;
+			}
+
+			for (size_t i{1}; i < func.children.size(); i++) {
+				auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
+				in_values.push_back(const_value_expr.value);
+			}
+			Value one(1);
+
+			sort(in_values.begin(), in_values.end());
+
+			bool is_consecutive = true;
+			for (size_t in_val_idx{1}; in_val_idx < in_values.size(); in_val_idx++) {
+				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].is_null) {
+					is_consecutive = false;
+				}
+			}
+			if (!is_consecutive || in_values.empty()) {
+				continue;
+			}
+			tableFilters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                          column_ref.binding.column_index);
+			tableFilters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                          column_ref.binding.column_index);
+
+			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}
 	}
 
@@ -590,6 +690,23 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	// get the LHS and RHS nodes
 	Expression *left_node = GetNode(comparison.left.get());
 	Expression *right_node = GetNode(comparison.right.get());
+    if (right_node->type == ExpressionType::OPERATOR_CAST) {
+		auto &bound_cast_expr = (BoundCastExpression &)*right_node;
+		if (bound_cast_expr.child->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &col_ref = (BoundColumnRefExpression &)*bound_cast_expr.child;
+			for (auto &stored_exp : stored_expressions) {
+				if (stored_exp.first->type == ExpressionType::BOUND_COLUMN_REF) {
+					auto &st_col_ref = (BoundColumnRefExpression &)*stored_exp.second;
+					if (st_col_ref.alias == col_ref.alias) {
+						bound_cast_expr.child = stored_exp.second->Copy();
+						right_node = GetNode(bound_cast_expr.child.get());
+						break;
+					}
+				}
+			}
+		}
+	}
+
 	if (BaseExpression::Equals(left_node, right_node)) {
 		return FilterResult::UNSUPPORTED;
 	}
