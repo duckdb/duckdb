@@ -287,7 +287,7 @@ struct LogicalType {
 	}
 
 	//! Serializes a LogicalType to a stand-alone binary blob
-	void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) const;
 	//! Deserializes a blob back into an LogicalType
 	static LogicalType Deserialize(Deserializer &source);
 

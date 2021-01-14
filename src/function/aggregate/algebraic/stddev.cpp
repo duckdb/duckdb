@@ -122,6 +122,10 @@ void StdDevSampFun::RegisterFunction(BuiltinFunctions &set) {
 	stddev_samp.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, STDDevSampOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(stddev_samp);
+	AggregateFunctionSet stddev("stddev");
+	stddev.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, STDDevSampOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	set.AddFunction(stddev);
 }
 
 void StdDevPopFun::RegisterFunction(BuiltinFunctions &set) {

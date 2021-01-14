@@ -27,7 +27,7 @@ public:
 	idx_t query_location;
 
 public:
-	static string Format(string &query, string error_message, int error_location);
+	static string Format(const string &query, const string &error_message, int error_location);
 
 	string FormatErrorRecursive(string msg, vector<ExceptionFormatValue> &values);
 	template <class T, typename... Args>

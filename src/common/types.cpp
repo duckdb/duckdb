@@ -174,7 +174,7 @@ string TypeIdToString(PhysicalType type) {
 	case PhysicalType::INVALID:
 		return "INVALID";
 	default:
-		throw ConversionException("Invalid PhysicalType %d", type);
+		throw ConversionException("Invalid PhysicalType %s", type);
 	}
 }
 
@@ -209,7 +209,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 	case PhysicalType::LIST:
 		return 16; // offset + len
 	default:
-		throw ConversionException("Invalid PhysicalType %d", type);
+		throw ConversionException("Invalid PhysicalType %s", type);
 	}
 }
 
@@ -229,7 +229,7 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
-void LogicalType::Serialize(Serializer &serializer) {
+void LogicalType::Serialize(Serializer &serializer) const {
 	serializer.Write<LogicalTypeId>(id_);
 	serializer.Write<uint8_t>(width_);
 	serializer.Write<uint8_t>(scale_);

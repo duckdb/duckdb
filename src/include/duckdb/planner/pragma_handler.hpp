@@ -14,6 +14,7 @@
 
 namespace duckdb {
 class ClientContext;
+class ClientContextLock;
 class SQLStatement;
 struct PragmaInfo;
 
@@ -22,7 +23,7 @@ class PragmaHandler {
 public:
 	PragmaHandler(ClientContext &context);
 
-	void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
+	void HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements);
 
 private:
 	ClientContext &context;

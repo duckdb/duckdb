@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/schema/physical_create_table_as.hpp"
 
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -27,7 +26,8 @@ public:
 
 unique_ptr<GlobalOperatorState> PhysicalCreateTableAs::GetGlobalState(ClientContext &context) {
 	auto sink = make_unique<CreateTableAsGlobalState>();
-	sink->table = (TableCatalogEntry *)schema->CreateTable(context, info.get());
+	auto &catalog = Catalog::GetCatalog(context);
+	sink->table = (TableCatalogEntry *)catalog.CreateTable(context, schema, info.get());
 	return move(sink);
 }
 

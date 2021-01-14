@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -19,11 +20,11 @@ enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, R
 
 // this is optional and only used in tests at the moment
 struct DBConfig {
-	friend class DuckDB;
+	friend class DatabaseInstance;
 	friend class StorageManager;
 
 public:
-	~DBConfig();
+	DUCKDB_API ~DBConfig();
 
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
@@ -52,7 +53,7 @@ public:
 	bool object_cache_enable = false;
 
 public:
-	static DBConfig &GetConfig(ClientContext &context);
+	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 
 private:
 	// FIXME: don't set this as a user: used internally (only for now)

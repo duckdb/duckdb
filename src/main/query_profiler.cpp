@@ -12,13 +12,12 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/to_string.hpp"
 
-#include <iostream>
 #include <utility>
 #include <algorithm>
 
 namespace duckdb {
 
-void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
+void QueryProfiler::StartQuery(string query) {
 	if (!enabled) {
 		return;
 	}

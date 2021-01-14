@@ -7,6 +7,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -316,11 +317,11 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 		}
 
 		// check for delimiter
-		if (strstr(str, options.delimiter.c_str())) {
+		if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.delimiter.c_str(), options.delimiter.size()) != INVALID_INDEX) {
 			return true;
 		}
 		// check for quote
-		if (strstr(str, options.quote.c_str())) {
+		if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.quote.c_str(), options.quote.size()) != INVALID_INDEX) {
 			return true;
 		}
 		return false;
@@ -349,9 +350,9 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		} else {
 			// complex CSV
 			// check for quote or escape separately
-			if (strstr(str, options.quote.c_str())) {
+			if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.quote.c_str(), options.quote.size()) != INVALID_INDEX) {
 				requires_escape = true;
-			} else if (strstr(str, options.escape.c_str())) {
+			} else if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.escape.c_str(), options.escape.size()) != INVALID_INDEX) {
 				requires_escape = true;
 			}
 		}

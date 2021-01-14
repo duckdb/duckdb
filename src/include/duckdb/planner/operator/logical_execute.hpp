@@ -15,13 +15,13 @@ namespace duckdb {
 
 class LogicalExecute : public LogicalOperator {
 public:
-	LogicalExecute(PreparedStatementData *prepared)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXECUTE), prepared(prepared) {
+	LogicalExecute(shared_ptr<PreparedStatementData> prepared_p)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXECUTE), prepared(move(prepared_p)) {
 		D_ASSERT(prepared);
 		types = prepared->types;
 	}
 
-	PreparedStatementData *prepared;
+	shared_ptr<PreparedStatementData> prepared;
 
 protected:
 	void ResolveTypes() override {

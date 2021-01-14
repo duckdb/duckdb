@@ -97,16 +97,17 @@ public:
 		}
 
 		// if there is only one file in the glob (quite common case), we are done
+		auto &config = DBConfig::GetConfig(context);
 		if (bind_data.files.size() < 2) {
 			return overall_stats;
-		} else if (context.db.config.object_cache_enable) {
+		} else if (config.object_cache_enable) {
+			auto &cache = ObjectCache::GetObjectCache(context);
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);
 			for (idx_t file_idx = 1; file_idx < bind_data.files.size(); file_idx++) {
 				auto &file_name = bind_data.files[file_idx];
-				auto metadata =
-				    std::dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
+				auto metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(cache.Get(file_name));
 				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 				// but we need to check if the metadata cache entries are current
 				if (!metadata || (fs.GetLastModifiedTime(*handle) >= metadata->read_time)) {
@@ -384,13 +385,14 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.extension = "parquet";
 	CreateCopyFunctionInfo info(function);
 
-	Connection conn(db);
-	conn.context->transaction.BeginTransaction();
-	db.catalog->CreateCopyFunction(*conn.context, &info);
-	db.catalog->CreateTableFunction(*conn.context, &cinfo);
-	db.catalog->CreateTableFunction(*conn.context, &pq_scan);
-
-	conn.context->transaction.Commit();
+	Connection con(db);
+	con.BeginTransaction();
+	auto &context = *con.context;
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateCopyFunction(context, &info);
+	catalog.CreateTableFunction(context, &cinfo);
+	catalog.CreateTableFunction(context, &pq_scan);
+	con.Commit();
 }
 
 } // namespace duckdb

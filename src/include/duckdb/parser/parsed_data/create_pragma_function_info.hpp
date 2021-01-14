@@ -27,6 +27,13 @@ struct CreatePragmaFunctionInfo : public CreateFunctionInfo {
 	}
 
 	vector<PragmaFunction> functions;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		auto result = make_unique<CreatePragmaFunctionInfo>(functions[0].name, functions);
+		CopyProperties(*result);
+		return move(result);
+	}
 };
 
 } // namespace duckdb

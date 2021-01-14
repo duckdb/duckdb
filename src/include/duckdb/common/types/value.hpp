@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 
@@ -132,7 +133,7 @@ public:
 	}
 
 	//! Convert this value to a string
-	string ToString() const;
+	DUCKDB_API string ToString() const;
 
 	//! Cast this value to another type
 	Value CastAs(LogicalType target_type, bool strict = false) const;
@@ -224,18 +225,18 @@ private:
 	template <class OP> static bool _templated_boolean_operation(const Value &left, const Value &right);
 };
 
-template <> Value Value::CreateValue(bool value);
-template <> Value Value::CreateValue(int8_t value);
-template <> Value Value::CreateValue(int16_t value);
-template <> Value Value::CreateValue(int32_t value);
-template <> Value Value::CreateValue(int64_t value);
-template <> Value Value::CreateValue(hugeint_t value);
-template <> Value Value::CreateValue(const char *value);
-template <> Value Value::CreateValue(string value);
-template <> Value Value::CreateValue(string_t value);
-template <> Value Value::CreateValue(float value);
-template <> Value Value::CreateValue(double value);
-template <> Value Value::CreateValue(Value value);
+template <> Value DUCKDB_API Value::CreateValue(bool value);
+template <> Value DUCKDB_API Value::CreateValue(int8_t value);
+template <> Value DUCKDB_API Value::CreateValue(int16_t value);
+template <> Value DUCKDB_API Value::CreateValue(int32_t value);
+template <> Value DUCKDB_API Value::CreateValue(int64_t value);
+template <> Value DUCKDB_API Value::CreateValue(hugeint_t value);
+template <> Value DUCKDB_API Value::CreateValue(const char *value);
+template <> Value DUCKDB_API Value::CreateValue(string value);
+template <> Value DUCKDB_API Value::CreateValue(string_t value);
+template <> Value DUCKDB_API Value::CreateValue(float value);
+template <> Value DUCKDB_API Value::CreateValue(double value);
+template <> Value DUCKDB_API Value::CreateValue(Value value);
 
 template <> bool Value::GetValue() const;
 template <> int8_t Value::GetValue() const;

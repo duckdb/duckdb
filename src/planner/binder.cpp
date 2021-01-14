@@ -11,7 +11,8 @@
 namespace duckdb {
 
 Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
-    : context(context), read_only(true), parent(parent_), bound_tables(0), inherit_ctes(inherit_ctes_) {
+    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false), parent(parent_),
+      bound_tables(0), inherit_ctes(inherit_ctes_) {
 	if (parent_) {
 		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
 		macro_binding = parent_->macro_binding;
@@ -49,12 +50,12 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((TransactionStatement &)statement);
 	case StatementType::PRAGMA_STATEMENT:
 		return Bind((PragmaStatement &)statement);
-	case StatementType::EXECUTE_STATEMENT:
-		return Bind((ExecuteStatement &)statement);
 	case StatementType::EXPLAIN_STATEMENT:
 		return Bind((ExplainStatement &)statement);
 	case StatementType::VACUUM_STATEMENT:
 		return Bind((VacuumStatement &)statement);
+  case StatementType::SHOW_STATEMENT:
+    return Bind((ShowStatement &)statement);
 	case StatementType::CALL_STATEMENT:
 		return Bind((CallStatement &)statement);
 	case StatementType::EXPORT_STATEMENT:
@@ -107,6 +108,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 		throw Exception("Unsupported bound query node type");
 	}
 }
+
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	unique_ptr<BoundTableRef> result;
 	switch (ref.type) {
@@ -196,6 +198,16 @@ CommonTableExpressionInfo *Binder::FindCTE(const string &name, bool skip) {
 		return parent->FindCTE(name, name == alias);
 	}
 	return nullptr;
+}
+
+bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo* cte) {
+	if (bound_ctes.find(cte) != bound_ctes.end()) {
+		return true;
+	}
+	if (parent && inherit_ctes) {
+		return parent->CTEIsAlreadyBound(cte);
+	}
+	return false;
 }
 
 idx_t Binder::GenerateTableIndex() {

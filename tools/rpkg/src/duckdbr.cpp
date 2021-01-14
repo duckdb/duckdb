@@ -343,15 +343,15 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 	SET_VECTOR_ELT(retlist, 0, querysexp);
 	SET_VECTOR_ELT(retlist, 1, stmtsexp);
 
-	SEXP stmt_type = cpp_str_to_strsexp({StatementTypeToString(stmtholder->stmt->type)});
+	SEXP stmt_type = cpp_str_to_strsexp({StatementTypeToString(stmtholder->stmt->GetStatementType())});
 	SET_VECTOR_ELT(retlist, 2, stmt_type);
 
-	SEXP col_names = cpp_str_to_strsexp(stmtholder->stmt->names);
+	SEXP col_names = cpp_str_to_strsexp(stmtholder->stmt->GetNames());
 	SET_VECTOR_ELT(retlist, 3, col_names);
 
 	vector<string> rtypes;
 
-	for (auto &stype : stmtholder->stmt->types) {
+	for (auto &stype : stmtholder->stmt->GetTypes()) {
 		string rtype = "";
 		switch (stype.id()) {
 		case LogicalTypeId::BOOLEAN:
@@ -601,7 +601,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	uint64_t dest_offset = 0;
 	while (true) {
 		auto chunk = result->Fetch();
-		if (chunk->size() == 0) {
+		if (!chunk || chunk->size() == 0) {
 			break;
 		}
 		D_ASSERT(chunk->ColumnCount() == ncols);

@@ -12,7 +12,7 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(PGColumnRef *root) 
 	auto fields = root->fields;
 	switch ((reinterpret_cast<PGNode *>(fields->head->data.ptr_value))->type) {
 	case T_PGString: {
-		if (fields->length < 1 || fields->length > 2) {
+		if (fields->length < 1) {
 			throw ParserException("Unexpected field length");
 		}
 		string column_name, table_name;
@@ -21,7 +21,7 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(PGColumnRef *root) 
 			auto colref = make_unique<ColumnRefExpression>(column_name, table_name);
 			colref->query_location = root->location;
 			return move(colref);
-		} else {
+		} else if (fields->length == 2) {
 			table_name = string(reinterpret_cast<PGValue *>(fields->head->data.ptr_value)->val.str);
 			auto col_node = reinterpret_cast<PGNode *>(fields->head->next->data.ptr_value);
 			switch (col_node->type) {
@@ -37,7 +37,9 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(PGColumnRef *root) 
 			default:
 				throw NotImplementedException("ColumnRef not implemented!");
 			}
-		}
+		} else {
+                    throw NotImplementedException("ColumnRef not implemented!");   
+                }
 	}
 	case T_PGAStar: {
 		return make_unique<StarExpression>();

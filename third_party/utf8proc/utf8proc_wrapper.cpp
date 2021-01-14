@@ -89,6 +89,10 @@ int Utf8Proc::CodepointLength(int cp) {
 	return utf8proc_codepoint_length(cp);
 }
 
+int32_t Utf8Proc::UTF8ToCodepoint(const char *c, int &sz) {
+	return utf8proc_codepoint(c, sz);
+}
+
 }
 
 size_t utf8proc_next_grapheme_cluster(const char *s, size_t len, size_t pos) {

@@ -4,15 +4,14 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/to_string.hpp"
-
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -796,6 +795,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					chunk->Initialize(parse_chunk_types);
 					chunk->Reference(parse_chunk);
 					cached_chunks.push(move(chunk));
+				} else {
+					while (!cached_chunks.empty()) cached_chunks.pop();
 				}
 			}
 		}
@@ -1271,6 +1272,12 @@ void BufferedCSVReader::ParseCSV(ParserMode parser_mode, DataChunk &insert_chunk
 }
 
 void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions) {
+	if (length == 0 && column == 0) {
+		row_empty = true;
+	} else {
+		row_empty = false;
+	}
+
 	if (sql_types.size() > 0 && column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter in last column
 		return;
@@ -1325,6 +1332,14 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 
 bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	linenr++;
+
+	if (row_empty) {
+		row_empty = false;
+		if (sql_types.size() != 1) {
+			column = 0;
+			return false;
+		}
+	}
 
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
 		throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
@@ -1414,7 +1429,8 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				if (options.auto_detect) {
 					throw InvalidInputException(
 					    "%s in column %s, between line %llu and %llu. Parser "
-					    "options: %s. Consider either increasing the sample size (using SAMPLE_SIZE=X) "
+					    "options: %s. Consider either increasing the sample size "
+						"(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
 					    "or skipping column conversion (ALL_VARCHAR=1)",
 					    e.what(), col_name, linenr - parse_chunk.size() + 1, linenr, options.toString());
 				} else {

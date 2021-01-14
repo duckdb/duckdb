@@ -20,7 +20,7 @@ struct AlterInfo;
 
 class BufferedSerializer;
 class Catalog;
-class DuckDB;
+class DatabaseInstance;
 class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class MacroCatalogEntry;
@@ -35,14 +35,14 @@ class TransactionManager;
 //! server crashes or is shut down.
 class WriteAheadLog {
 public:
-	WriteAheadLog(DuckDB &database);
+	WriteAheadLog(DatabaseInstance &database);
 
 	//! Whether or not the WAL has been initialized
 	bool initialized;
 
 public:
 	//! Replay the WAL
-	static void Replay(DuckDB &database, string &path);
+	static void Replay(DatabaseInstance &database, string &path);
 
 	//! Initialize the WAL in the specified directory
 	void Initialize(string &path);
@@ -79,7 +79,7 @@ public:
 	void Flush();
 
 private:
-	DuckDB &database;
+	DatabaseInstance &database;
 	unique_ptr<BufferedFileWriter> writer;
 };
 

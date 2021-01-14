@@ -22,6 +22,13 @@ struct CreateCopyFunctionInfo : public CreateInfo {
 	string name;
 	//! The table function
 	CopyFunction function;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		auto result = make_unique<CreateCopyFunctionInfo>(function);
+		CopyProperties(*result);
+		return move(result);
+	}
 };
 
 } // namespace duckdb
