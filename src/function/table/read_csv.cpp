@@ -88,6 +88,9 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
 		} else if (kv.first == "columns") {
+			if (kv.second.type().id() != LogicalTypeId::STRUCT) {
+				throw BinderException("read_csv columns requires a a struct as input");
+			}
 			for (auto &val : kv.second.struct_value) {
 				names.push_back(val.first);
 				if (val.second.type().id() != LogicalTypeId::VARCHAR) {
@@ -181,7 +184,7 @@ static void add_named_parameters(TableFunction &table_function) {
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
 	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
 	table_function.named_parameters["nullstr"] = LogicalType::VARCHAR;
-	table_function.named_parameters["columns"] = LogicalType::STRUCT;
+	table_function.named_parameters["columns"] = LogicalType::ANY;
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
