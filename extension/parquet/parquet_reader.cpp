@@ -96,8 +96,7 @@ unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t 
 			max_define = depth;
 		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
-			max_repeat = depth - 1;
-			// TODO is the -1 here appropriate??
+			max_repeat++;
 		}
 	}
 
@@ -213,11 +212,11 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	//    file_meta_data->printTo(std::cout);
 	//    std::cout << '\n';
 
-	// TODO
-	for (auto &s_ele : file_meta_data->schema) {
-		s_ele.printTo(std::cout);
-		std::cout << '\n';
-	}
+	//	// TODO
+	//	for (auto &s_ele : file_meta_data->schema) {
+	//		s_ele.printTo(std::cout);
+	//		std::cout << '\n';
+	//	}
 
 	//	if (file_meta_data->schema[0].num_children != (int32_t)(file_meta_data->schema.size() - 1)) {
 	//		throw FormatException("Only flat tables are supported (no nesting)");
