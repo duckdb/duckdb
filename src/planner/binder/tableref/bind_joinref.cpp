@@ -123,6 +123,21 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			extra_conditions.push_back(AddCondition(context, left_binder, right_binder, left_binding, right_binding, column_name));
 			AddUsingCondition(bind_context, column_name, left_binding, left_binder.bind_context, left_is_using);
 			AddUsingCondition(bind_context, column_name, right_binding, right_binder.bind_context, right_is_using);
+			string result_binding;
+			switch(ref.type) {
+			case JoinType::LEFT:
+			case JoinType::INNER:
+			case JoinType::SEMI:
+			case JoinType::ANTI:
+				result_binding = left_binding;
+				break;
+			case JoinType::RIGHT:
+				result_binding = right_binding;
+				break;
+			default:
+				break;
+			}
+			bind_context.SetPrimaryUsingBinding(column_name, result_binding);
 		}
 		if (extra_conditions.size() == 0) {
 			// no matching bindings found in natural join: throw an exception
@@ -163,13 +178,32 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			bool right_is_using = right_binder.bind_context.IsUsingBinding(using_column);
 			if (!left_is_using) {
 				left_binding = left_binder.FindBinding(using_column, "left");
+			} else {
+				left_binding = left_binder.bind_context.GetPrimaryUsingBinding(using_column);
 			}
 			if (!right_is_using) {
 				right_binding = right_binder.FindBinding(using_column, "right");
+			} else {
+				right_binding = right_binder.bind_context.GetPrimaryUsingBinding(using_column);
 			}
 			extra_conditions.push_back(AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column));
 			AddUsingCondition(bind_context, using_column, left_binding, left_binder.bind_context, left_is_using);
 			AddUsingCondition(bind_context, using_column, right_binding, right_binder.bind_context, right_is_using);
+			string result_binding;
+			switch(ref.type) {
+			case JoinType::LEFT:
+			case JoinType::INNER:
+			case JoinType::SEMI:
+			case JoinType::ANTI:
+				result_binding = left_binding;
+				break;
+			case JoinType::RIGHT:
+				result_binding = right_binding;
+				break;
+			default:
+				break;
+			}
+			bind_context.SetPrimaryUsingBinding(using_column, result_binding);
 		}
 	}
 	bind_context.AddContext(move(left_binder.bind_context));

@@ -19,7 +19,7 @@ select i, a.i, b.i from a inner join b using (i);
 ----
 
 query III
-	select i, a.i, b.i from a left outer join b using (i);
+select i, a.i, b.i from a left outer join b using (i);
 ----
 42	42	NULL
 

@@ -77,6 +77,8 @@ public:
 
 	bool IsUsingBinding(const string &column_name);
 	bool IsUsingBinding(const string &column_name, const string &binding_name);
+	const string &GetPrimaryUsingBinding(const string &column_name);
+	void SetPrimaryUsingBinding(const string &column_name, const string &binding_name);
 
 	vector<string> &UsingBindings(const string &column_name);
 
@@ -109,6 +111,8 @@ private:
 	vector<std::pair<string, Binding *>> bindings_list;
 	//! The set of columns used in USING join conditions
 	unordered_map<string, vector<string>> using_columns;
+	//! The using binding we should use when referencing the using column
+	unordered_map<string, string> using_bindings;
 
 	//! The set of CTE bindings
 	unordered_map<string, std::shared_ptr<Binding>> cte_bindings;

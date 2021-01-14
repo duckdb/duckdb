@@ -65,10 +65,13 @@ vector<string> &BindContext::UsingBindings(const string &column_name) {
 	return using_columns[column_name];
 }
 
-// bool BindContext::BindingIsHidden(const string &binding_name, const string &column_name) {
-// 	QualifiedColumnName qcolumn(binding_name, column_name);
-// 	return hidden_columns.find(qcolumn) != hidden_columns.end();
-// }
+const string &BindContext::GetPrimaryUsingBinding(const string &column_name) {
+	return using_bindings[column_name];
+}
+
+void BindContext::SetPrimaryUsingBinding(const string &column_name, const string &binding_name) {
+	using_bindings[column_name] = binding_name;
+}
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
 	unordered_set<string> result;
