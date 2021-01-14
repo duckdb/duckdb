@@ -8,6 +8,11 @@
 
 #pragma once
 
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/parser/expression_map.hpp"
+
 namespace duckdb {
 
 class Optimizer;
