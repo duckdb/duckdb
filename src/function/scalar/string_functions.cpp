@@ -30,6 +30,8 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<UnicodeFun>();
 	Register<NFCNormalizeFun>();
 	Register<StringSplitFun>();
+	Register<ASCII>();
+	Register<CHR>();
 
 	// blob functions
 	Register<Base64Fun>();
