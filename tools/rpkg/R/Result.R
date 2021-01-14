@@ -112,22 +112,29 @@ setMethod(
       res@env$rows_fetched <- 0
     }
     if (res@env$rows_fetched >= nrow(res@env$resultset)) {
-      return(fix_rownames(res@env$resultset[F, , drop = F]))
+      df <- fix_rownames(res@env$resultset[F, , drop = F])
+      df <- set_output_tz(df, res@connection@timezone_out)
+      return(df)
     }
     # special case, return everything
     if (n == -1 && res@env$rows_fetched == 0) {
       res@env$rows_fetched <- nrow(res@env$resultset)
-      return(res@env$resultset)
+      df <- res@env$resultset
+      df <- set_output_tz(df, res@connection@timezone_out)
+      return(df)
     }
     if (n > -1) {
       n <- min(n, nrow(res@env$resultset) - res@env$rows_fetched)
       res@env$rows_fetched <- res@env$rows_fetched + n
       df <- res@env$resultset[(res@env$rows_fetched - n + 1):(res@env$rows_fetched), , drop = F]
+      df <- set_output_tz(df, res@connection@timezone_out)
       return(fix_rownames(df))
     }
     start <- res@env$rows_fetched + 1
     res@env$rows_fetched <- nrow(res@env$resultset)
     df <- res@env$resultset[nrow(res@env$resultset), , drop = F]
+
+    df <- set_output_tz(df, res@connection@timezone_out)
     return(fix_rownames(df))
   }
 )
@@ -235,3 +242,13 @@ setMethod(
     duckdb_execute(res)
   }
 )
+
+set_output_tz <- function(x, timezone) {
+  if (timezone == "UTC") return(x)
+
+  is_datetime <- which(vapply(x, inherits, "POSIXt", FUN.VALUE = logical(1)))
+  if (length(is_datetime) > 0) {
+    x[is_datetime] <- lapply(x[is_datetime], lubridate::with_tz, timezone)
+  }
+  x
+}

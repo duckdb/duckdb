@@ -12,7 +12,8 @@
   dbdir = DBDIR_MEMORY,
   ...,
   debug = getOption("duckdb.debug", FALSE),
-  read_only = FALSE
+  read_only = FALSE,
+  timezone_out = "UTC"
 )
 
 \S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
@@ -33,6 +34,12 @@ data is kept in RAM}
 \item{debug}{Print additional debug information such as queries}
 
 \item{read_only}{Set to \code{TRUE} for read-only operation}
+
+\item{timezone_out}{The time zone returned to R, defaults to \code{"UTC"}, which
+is the timezone of the duckdb database.
+If you want to display datetime values in the local timezone,
+set to \code{\link[=Sys.timezone]{Sys.timezone()}} or \code{""}.
+This setting does not change the time values returned, only their display.}
 
 \item{conn}{A \code{duckdb_connection} object}
 

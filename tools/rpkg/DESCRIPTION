@@ -42,13 +42,15 @@ Depends:
     R (>= 3.5.0)
 Imports:
     methods,
-    utils
+    utils,
+    lubridate
 Suggests:
     callr,
     DBItest,
     dbplyr,
     nycflights13,
-    testthat
+    testthat,
+    withr
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)

@@ -40,6 +40,11 @@ setMethod(
 #' @param ... Ignored
 #' @param debug Print additional debug information such as queries
 #' @param read_only Set to `TRUE` for read-only operation
+#' @param timezone_out The time zone returned to R, defaults to `"UTC"`, which
+#'   is the timezone of the duckdb database.
+#'   If you want to display datetime values in the local timezone,
+#'   set to [Sys.timezone()] or `""`.
+#'   This setting does not change the time values returned, only their display.
 #'
 #' @return `dbConnect()` returns an object of class
 #'   \linkS4class{duckdb_connection}.
@@ -61,13 +66,15 @@ setMethod(
 #' dbDisconnect(con, shutdown = TRUE)
 setMethod(
   "dbConnect", "duckdb_driver",
-  function(drv, dbdir = DBDIR_MEMORY, ..., debug = getOption("duckdb.debug", FALSE), read_only = FALSE) {
+  function(drv, dbdir = DBDIR_MEMORY, ...,
+           debug = getOption("duckdb.debug", FALSE),
+           read_only = FALSE,
+           timezone_out = "UTC") {
 
     check_flag(debug)
 
     missing_dbdir <- missing(dbdir)
     dbdir <- path.expand(as.character(dbdir))
-
 
     # aha, a late comer. let's make a new instance.
     if (!missing_dbdir && dbdir != drv@dbdir) {
@@ -75,7 +82,15 @@ setMethod(
       drv <- duckdb(dbdir, read_only)
     }
 
-    duckdb_connection(drv, debug = debug)
+    conn <- duckdb_connection(drv, debug = debug)
+    on.exit(dbDisconnect(conn))
+
+    if (is.null(timezone_out) || timezone_out != "UTC") {
+      timezone_out <- check_tz(timezone_out)
+      conn@timezone_out <- timezone_out
+    }
+    on.exit(NULL)
+    conn
   }
 )
 
@@ -205,4 +220,22 @@ duckdb_shutdown <- function(drv) {
 
 is_installed <- function(pkg) {
   as.logical(requireNamespace(pkg, quietly = TRUE)) == TRUE
+}
+
+check_tz <- function(timezone) {
+
+  tryCatch(
+    lubridate::force_tz(as.POSIXct("2021-03-01 10:40"), timezone),
+    error = function(e) {
+      warning(
+        "Invalid time zone '", timezone, "', ",
+        "falling back to UTC.\n",
+        "Set the `timezone_out` argument to a valid time zone.\n",
+        conditionMessage(e),
+        call. = FALSE
+      )
+      timezone <<- "UTC"
+    }
+  )
+  timezone
 }
