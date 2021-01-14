@@ -838,10 +838,7 @@ jobs:
 
     - name: Build
       run: |
-        if [[ -z "${GITHUB_HEAD_REF}" ]]; then
-          export GITHUB_HEAD_REF=master
-        fi
-        git archive --format zip --output test-tarball.zip $GITHUB_HEAD_REF
+        git archive --format zip --output test-tarball.zip HEAD
         mkdir duckdb-test-tarball
         mv test-tarball.zip duckdb-test-tarball
         cd duckdb-test-tarball
