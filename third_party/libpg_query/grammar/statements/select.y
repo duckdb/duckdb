@@ -1162,7 +1162,7 @@ colid_type_list:
              $$ = lappend($1, list_make2(makeString($3), $4));
             }
 
-RowOrStruct: ROW
+RowOrStruct: ROW | STRUCT
 
 Typename:	SimpleTypename opt_array_bounds
 				{
