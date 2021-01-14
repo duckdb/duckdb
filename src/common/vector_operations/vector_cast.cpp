@@ -478,6 +478,47 @@ static void value_string_cast_switch(Vector &source, Vector &result, idx_t count
 	}
 }
 
+static void list_cast_switch(Vector &source, Vector &result, idx_t count) {
+	switch (result.type.id()) {
+	case LogicalTypeId::LIST: {
+		// only handle constant and flat vectors here for now
+		if (source.vector_type == VectorType::CONSTANT_VECTOR) {
+			result.vector_type = source.vector_type;
+			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+		} else {
+			source.Normalify(count);
+			result.vector_type = VectorType::FLAT_VECTOR;
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(source));
+		}
+		auto list_child = make_unique<ChunkCollection>();
+		if (ListVector::HasEntry(source)) {
+			auto &source_cc = ListVector::GetEntry(source);
+			auto &target_cc = *list_child;
+			// convert the entire chunk collection
+			vector<LogicalType> result_types;
+			result_types.push_back(result.type.child_types()[0].second);
+			DataChunk append_chunk;
+			append_chunk.Initialize(result_types);
+			for(auto &chunk : source_cc.Chunks()) {
+				VectorOperations::Cast(chunk->data[0], append_chunk.data[0], chunk->size());
+				append_chunk.SetCardinality(chunk->size());
+				target_cc.Append(append_chunk);
+			}
+		}
+		ListVector::SetEntry(result, move(list_child));
+		auto ldata = FlatVector::GetData<list_entry_t>(source);
+		auto tdata = FlatVector::GetData<list_entry_t>(result);
+		for (idx_t i = 0; i < count; i++) {
+			tdata[i] = ldata[i];
+		}
+		break;
+	}
+	default:
+		value_string_cast_switch(source, result, count);
+		break;
+	}
+}
+
 static void struct_cast_switch(Vector &source, Vector &result, idx_t count) {
 	switch (result.type.id()) {
 	case LogicalTypeId::STRUCT: {
@@ -586,7 +627,7 @@ void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool st
 		struct_cast_switch(source, result, count);
 		break;
 	case LogicalTypeId::LIST:
-		value_string_cast_switch(source, result, count);
+		list_cast_switch(source, result, count);
 		break;
 	default:
 		throw UnimplementedCast(source.type, result.type);
