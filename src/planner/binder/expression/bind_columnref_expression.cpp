@@ -13,6 +13,11 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 	// resolve to either a base table or a subquery expression
 	if (colref.table_name.empty()) {
 		if (binder.bind_context.IsUsingBinding(colref.column_name)) {
+			// FIXME: can optimize this
+			// INNER join -> can use either column (doesn't matter)
+			// LEFT join -> can use left column
+			// RIGHT join -> can use right column
+			// FULL OUTER join (need to do coalesce)
 			auto &entry = binder.bind_context.UsingBindings(colref.column_name);
 			// using column, bind this as a coalesce between the LHS and RHS
 			auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
