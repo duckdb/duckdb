@@ -16,7 +16,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 		result->AddChild(child.get());
 	}
 	result->Finalize();
-	result->arguments.InitializeEmpty(result->types);
+    if (result->types.size() > 0) {
+		result->arguments.InitializeEmpty(result->types);
+	}
 	return move(result);
 }
 
