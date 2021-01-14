@@ -2,6 +2,13 @@
 # description: Test hugeint casting structs
 # group: [common]
 
+
+# struct to struct casts with different names
+query I
+select struct_extract(struct_pack(b=>42)::struct(a integer), 'a');
+----
+42
+
 # this all also works with the row type
 query I
 select struct_extract(struct_pack(b=>42)::row(a integer), 'a');
@@ -10,27 +17,27 @@ select struct_extract(struct_pack(b=>42)::row(a integer), 'a');
 
 # struct to struct casts with different names AND different types
 query I
-select struct_extract(struct_pack(b=>42::double)::row(a integer), 'a');
+select struct_extract(struct_pack(b=>42::double)::struct(a integer), 'a');
 ----
 42
 
 query I
-select struct_extract(struct_pack(b=>'42'::double)::row(a integer), 'a');
+select struct_extract(struct_pack(b=>'42'::double)::struct(a integer), 'a');
 ----
 42
 
 statement error
-select struct_pack(b=>'42'::double)::row(a integer, c string)
+select struct_pack(b=>'42'::double)::struct(a integer, c string)
 
 statement error
-select struct_pack(b=>'hello'::string)::row(b integer)
+select struct_pack(b=>'hello'::string)::struct(b integer)
 
 statement error
-select struct_pack(b=>'hello'::string)::row(a integer)
+select struct_pack(b=>'hello'::string)::struct(a integer)
 
 
 query I
-select struct_pack(b=>'42'::double, c => 'asdf'::string)::row(a1 integer, a2 string);
+select struct_pack(b=>'42'::double, c => 'asdf'::string)::struct(a1 integer, a2 string);
 ----
 <a1: 42, a2: asdf>
 
