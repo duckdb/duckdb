@@ -207,11 +207,7 @@ unordered_map<idx_t, std::pair<Value *, Value *>> merge_or(unordered_map<idx_t, 
 	unordered_map<idx_t, std::pair<Value *, Value *>> result;
 	for (auto &f : f_1) {
 		auto it = f_2.find(f.first);
-		if (it == f_2.end()) {
-			if (f.second.first && f.second.second) {
-				result[f.first] = f.second;
-			}
-		} else {
+		if (it != f_2.end()) {
 			Value *min = nullptr, *max = nullptr;
 			if (it->second.first && f.second.first) {
 				if (*f.second.first < *it->second.first) {
@@ -227,15 +223,8 @@ unordered_map<idx_t, std::pair<Value *, Value *>> merge_or(unordered_map<idx_t, 
 					max = it->second.second;
 				}
 			}
-			if (min && max) {
-				result[f.first] = {min, max};
-			}
+			result[f.first] = {min, max};
 			f_2.erase(f.first);
-		}
-	}
-	for (auto &f : f_2) {
-		if (f.second.first && f.second.second) {
-			result[f.first] = f.second;
 		}
 	}
 	return result;
@@ -690,6 +679,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	// get the LHS and RHS nodes
 	Expression *left_node = GetNode(comparison.left.get());
 	Expression *right_node = GetNode(comparison.right.get());
+	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
     if (right_node->type == ExpressionType::OPERATOR_CAST) {
 		auto &bound_cast_expr = (BoundCastExpression &)*right_node;
 		if (bound_cast_expr.child->type == ExpressionType::BOUND_COLUMN_REF) {
@@ -697,7 +687,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			for (auto &stored_exp : stored_expressions) {
 				if (stored_exp.first->type == ExpressionType::BOUND_COLUMN_REF) {
 					auto &st_col_ref = (BoundColumnRefExpression &)*stored_exp.second;
-					if (st_col_ref.alias == col_ref.alias) {
+					if (st_col_ref.binding == col_ref.binding) {
 						bound_cast_expr.child = stored_exp.second->Copy();
 						right_node = GetNode(bound_cast_expr.child.get());
 						break;
