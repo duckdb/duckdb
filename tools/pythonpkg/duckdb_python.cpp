@@ -751,7 +751,7 @@ struct PandasScanFunction : public TableFunction {
 
 	static unique_ptr<FunctionOperatorData>
 	pandas_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *state,
-	                          vector<column_t> &column_ids, TableFilterCollection filters) {
+	                          vector<column_t> &column_ids, TableFilterCollection* filters) {
 		auto result = make_unique<PandasScanState>(0, 0);
 		result->column_ids = column_ids;
 		if (!pandas_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
