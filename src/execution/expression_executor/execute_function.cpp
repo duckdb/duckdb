@@ -3,21 +3,28 @@
 
 namespace duckdb {
 
+struct FunctionExpressionState : public ExpressionState {
+	FunctionExpressionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+	}
+
+	DataChunk arguments;
+};
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<ExpressionState>(expr, root);
+	auto result = make_unique<FunctionExpressionState>(expr, root);
 	for (auto &child : expr.children) {
 		result->AddChild(child.get());
 	}
 	result->Finalize();
-	return result;
+	result->arguments.InitializeEmpty(result->types);
+	return move(result);
 }
 
 void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	DataChunk arguments;
+	auto &fstate = (FunctionExpressionState &) *state;
+	auto &arguments = fstate.arguments;
 	if (state->types.size() > 0) {
-		arguments.InitializeEmpty(state->types);
 		arguments.Reference(state->intermediate_chunk);
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);

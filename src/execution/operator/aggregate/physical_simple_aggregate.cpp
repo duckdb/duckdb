@@ -79,8 +79,12 @@ public:
 			}
 		}
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
-			payload_chunk.Initialize(payload_types);
+			payload_chunk_base.Initialize(payload_types);
+			payload_chunk.InitializeEmpty(payload_types);
 		}
+	}
+	void Reset() {
+		payload_chunk.Reference(payload_chunk_base);
 	}
 
 	//! The local aggregate state
@@ -89,6 +93,8 @@ public:
 	ExpressionExecutor child_executor;
 	//! The payload chunk
 	DataChunk payload_chunk;
+	//! The payload chunk
+	DataChunk payload_chunk_base;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalSimpleAggregate::GetGlobalState(ClientContext &context) {
@@ -104,8 +110,9 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
 	idx_t payload_idx = 0, payload_expr_idx = 0;
+	sink.Reset();
+
 	DataChunk &payload_chunk = sink.payload_chunk;
-	payload_chunk.Reset();
 	sink.child_executor.SetChunk(input);
 	payload_chunk.SetCardinality(input);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
