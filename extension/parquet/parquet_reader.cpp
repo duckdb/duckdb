@@ -334,8 +334,6 @@ const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 }
 
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t file_col_idx, LogicalType &type) {
-	auto &schema = GetFileMetadata()->schema[file_col_idx + 1];
-
 	auto &group = GetGroup(state);
 
 	//    group.printTo(std::cout);

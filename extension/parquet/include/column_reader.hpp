@@ -26,8 +26,8 @@ class ColumnReader {
 public:
 	ColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
 	             idx_t max_repeat_p)
-	    : type(type_p), schema(schema_p), page_rows_available(0), file_idx(file_idx_p), max_define(max_define_p),
-	      max_repeat(max_repeat_p){};
+	    : type(type_p), schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p),
+	      page_rows_available(0){};
 
 	virtual void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 		D_ASSERT(file_idx < columns.size());
@@ -64,19 +64,22 @@ public:
 		return group_rows_available;
 	}
 
-	// fixme
-	idx_t max_define;
-	idx_t max_repeat;
-
 protected:
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
-	                   idx_t result_offset, Vector &result) = 0;
+	                   idx_t result_offset, Vector &result) {
+		throw NotImplementedException("Plain");
+	}
 
-	virtual void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) = 0;
+	virtual void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+		throw NotImplementedException("Dictionary");
+	}
 
 	virtual void Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
-	                     idx_t result_offset, Vector &result) = 0;
+	                     idx_t result_offset, Vector &result) {
+		throw NotImplementedException("Offsets");
+	}
 
+	// these are nops for most types, but not for strings
 	virtual void DictReference(Vector &result) {
 	}
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result) {
@@ -93,9 +96,11 @@ protected:
 		return max_repeat > 0;
 	}
 
-	idx_t file_idx;
-
 	const SchemaElement &schema;
+
+	idx_t file_idx;
+	idx_t max_define;
+	idx_t max_repeat;
 
 private:
 	void PrepareRead(parquet_filter_t &filter);
@@ -298,19 +303,6 @@ public:
 		D_ASSERT(0);
 	}
 
-protected:
-	// TODO this is ugly, need to have more abstract super class
-
-	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
-	           idx_t result_offset, Vector &result) override {
-	}
-
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override {
-	}
-
-	void Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
-	             Vector &result) override {
-	}
 	// TODO this should perhaps be a map
 	vector<unique_ptr<ColumnReader>> child_readers;
 };
@@ -320,95 +312,25 @@ public:
 	ListColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
 	                 idx_t max_repeat_p, unique_ptr<ColumnReader> child_column_reader_p)
 	    : ColumnReader(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p),
-	      child_column_reader(move(child_column_reader_p)){};
+	      child_column_reader(move(child_column_reader_p)) {
 
-	void Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-	          Vector &result_out) override {
-		// child_column_reader->Read(num_values, filter, result);
-		auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
-		if (!ListVector::HasEntry(result_out)) {
-			auto list_child = make_unique<ChunkCollection>();
-			ListVector::SetEntry(result_out, move(list_child));
-		}
+		child_defines.resize(STANDARD_VECTOR_SIZE);
+		child_repeats.resize(STANDARD_VECTOR_SIZE);
+		child_defines_ptr = (uint8_t *)child_defines.ptr;
+		child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 
-		idx_t result_offset = 0;
-
-		result_ptr[result_offset].offset = 0;
-		result_ptr[result_offset].length = 0;
-
-		auto &list_cc = ListVector::GetEntry(result_out);
-
-		parquet_filter_t child_filter;
-		child_filter.set();
-
-		Vector child_result;
 		auto child_type = type.child_types()[0].second;
 		child_result.Initialize(child_type);
 
-		DataChunk append_chunk;
 		vector<LogicalType> append_chunk_types;
 		append_chunk_types.push_back(child_type);
 		append_chunk.Initialize(append_chunk_types);
 
-		// TODO use vectors for this?
-		// TODO this uuugly, have method for this gunk
-		ResizeableBuffer child_defines;
-		ResizeableBuffer child_repeats;
-		child_defines.resize(STANDARD_VECTOR_SIZE);
-		child_defines.zero();
-		child_repeats.resize(STANDARD_VECTOR_SIZE);
-		child_repeats.zero();
-		auto child_defines_ptr = (uint8_t *)child_defines.ptr;
-		auto child_repeats_ptr = (uint8_t *)child_repeats.ptr;
+		child_filter.set();
+	};
 
-		while (result_offset < num_values) {
-			auto child_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
-
-			if (child_num_values == 0) {
-				break;
-			}
-
-			child_column_reader->Read(child_num_values, child_filter, child_defines_ptr, child_repeats_ptr,
-			                          child_result);
-
-			append_chunk.data[0].Reference(child_result);
-			append_chunk.SetCardinality(child_num_values);
-			append_chunk.Verify();
-
-			idx_t current_chunk_offset = list_cc.Count();
-			list_cc.Append(append_chunk);
-
-			//			for (idx_t i = 0; i < child_num_values; i++) {
-			//				printf("def=%d rep=%d val=%s\n", child_defines_ptr[i], child_repeats_ptr[i],
-			//				       child_result.GetValue(i).ToString().c_str());
-			//			}
-			//			printf("\n");
-
-			for (idx_t child_idx = 0; child_idx < child_num_values; child_idx++) {
-				if (child_idx > 0 && child_repeats_ptr[child_idx] == 0) {
-					result_offset++;
-					if (result_offset >= num_values) {
-						break;
-					}
-					result_ptr[result_offset].offset = child_idx + current_chunk_offset;
-					result_ptr[result_offset].length = 0;
-				}
-				if (child_defines_ptr[child_idx] == 0) {
-					FlatVector::Nullmask(result_out)[result_offset] = true;
-					result_ptr[result_offset].offset = child_idx + current_chunk_offset;
-					result_ptr[result_offset].length = 0;
-					continue;
-				}
-				result_ptr[result_offset].length++;
-			}
-
-			// result_out.Print(num_values);
-			result_out.Verify(num_values);
-			// TODO we need to copy the defines up
-			// TODO we need to handle the case where we have read too little or too many child values
-		}
-		// D_ASSERT(result_offset == num_values - 1);
-	}
+	void Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+	          Vector &result_out) override;
 
 	virtual void Skip(idx_t num_values) override {
 		D_ASSERT(0);
@@ -418,22 +340,16 @@ public:
 		child_column_reader->IntializeRead(columns, protocol_p);
 	}
 
-protected:
-	// TODO this is ugly, need to have more abstract super class
-
-	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
-	           idx_t result_offset, Vector &result) override {
-	}
-
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override {
-	}
-
-	void Offsets(uint32_t *offsets, uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
-	             Vector &result) override {
-	}
-
 private:
 	unique_ptr<ColumnReader> child_column_reader;
+	ResizeableBuffer child_defines;
+	ResizeableBuffer child_repeats;
+	uint8_t *child_defines_ptr;
+	uint8_t *child_repeats_ptr;
+
+	Vector child_result;
+	parquet_filter_t child_filter;
+	DataChunk append_chunk;
 };
 
 } // namespace duckdb

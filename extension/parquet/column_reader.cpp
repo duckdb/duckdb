@@ -335,4 +335,70 @@ void StringColumnReader::Skip(idx_t num_values) {
 	D_ASSERT(0);
 }
 
+void ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+                            Vector &result_out) {
+	// child_column_reader->Read(num_values, filter, result);
+	if (!ListVector::HasEntry(result_out)) {
+		auto list_child = make_unique<ChunkCollection>();
+		ListVector::SetEntry(result_out, move(list_child));
+	}
+
+	idx_t result_offset = 0;
+	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
+	auto &list_cc = ListVector::GetEntry(result_out);
+
+	result_ptr[result_offset].offset = 0;
+	result_ptr[result_offset].length = 0;
+
+	while (result_offset < num_values) {
+		auto child_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
+
+		if (child_num_values == 0) {
+			break;
+		}
+
+		child_defines.zero();
+		child_repeats.zero();
+
+		child_column_reader->Read(child_num_values, child_filter, child_defines_ptr, child_repeats_ptr, child_result);
+
+		append_chunk.data[0].Reference(child_result);
+		append_chunk.SetCardinality(child_num_values);
+		append_chunk.Verify();
+
+		idx_t current_chunk_offset = list_cc.Count();
+		list_cc.Append(append_chunk);
+
+		//						for (idx_t i = 0; i < child_num_values; i++) {
+		//							printf("def=%d rep=%d val=%s\n", child_defines_ptr[i], child_repeats_ptr[i],
+		//							       child_result.GetValue(i).ToString().c_str());
+		//						}
+		//						printf("\n");
+
+		for (idx_t child_idx = 0; child_idx < child_num_values; child_idx++) {
+			if (child_idx > 0 && child_repeats_ptr[child_idx] == 0) {
+				result_offset++;
+				if (result_offset >= num_values) {
+					break;
+				}
+				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
+				result_ptr[result_offset].length = 0;
+			}
+			if (child_defines_ptr[child_idx] == 0) {
+				FlatVector::Nullmask(result_out)[result_offset] = true;
+				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
+				result_ptr[result_offset].length = 0;
+				continue;
+			}
+			result_ptr[result_offset].length++;
+		}
+
+		// TODO we need to copy the defines up, if so, how?
+		// TODO we need to handle the case where we have read too little or too many child values
+	}
+	// result_out.Print(num_values);
+	result_out.Verify(num_values);
+	// D_ASSERT(result_offset == num_values - 1);
+}
+
 } // namespace duckdb

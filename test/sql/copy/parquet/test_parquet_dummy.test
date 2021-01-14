@@ -4,6 +4,29 @@
 
 require parquet
 
+query II
+SELECT id, STRUCT_EXTRACT(UNLIST(fos), 'w') FROM parquet_scan('/Users/hannes/Desktop/parquet-nested-examples/0_0_8.parquet') LIMIT 20
+----
+114560181	0.266690
+114560181	0.354220
+114560201	0.313320
+114560201	0.352330
+114560201	0.299870
+114560221	0.000000
+114560221	0.557900
+114560221	0.000000
+114560221	0.484860
+114560221	0.422420
+114560221	0.000000
+114560221	0.358470
+114560221	0.000000
+114560221	0.000000
+114560223	0.402420
+114560223	0.503100
+114560223	0.510450
+114560223	0.472910
+114560223	0.517500
+114560223	0.349290
 
 query IIIIRRITTTTI
 SELECT * FROM parquet_scan('test/sql/copy/parquet/data/data-types.parquet')
@@ -23,19 +46,30 @@ SELECT * FROM parquet_scan('test/sql/copy/parquet/data/list_columns.parquet')
 [4]	[efg, NULL, hij, xyz]
 
 
-query I
-SELECT STRUCT_EXTRACT(UNLIST(authors), 'name') FROM parquet_scan('/Users/hannes/Desktop/parquet-nested-examples/0_0_8.parquet') LIMIT 10
+query III
+SELECT id, STRUCT_EXTRACT(UNLIST(authors), 'name'), STRUCT_EXTRACT(venue, 'name') FROM parquet_scan('/Users/hannes/Desktop/parquet-nested-examples/0_0_8.parquet') LIMIT 20
 ----
-S. Sidrach
-P. Guzmán
-B. Saldaña
-M. V. Kimiaeitalab
-A. Perez-Bonilla
-Javier Garcia Alonso
-Gonzalo Gonzalez Mateos
-Eva van der Haar
-N. J. R. George
-Jüri Siigur
+114560181	S. Sidrach	Actas ITEA, XV Jornadas sobre Producción Animal, Tomo I. | ITEA, XV Jornadas sobre Producción Animal. Tomo I. | 14/05/2013 - 15/05/2013 | Zaragoza
+114560181	P. Guzmán	Actas ITEA, XV Jornadas sobre Producción Animal, Tomo I. | ITEA, XV Jornadas sobre Producción Animal. Tomo I. | 14/05/2013 - 15/05/2013 | Zaragoza
+114560181	B. Saldaña	Actas ITEA, XV Jornadas sobre Producción Animal, Tomo I. | ITEA, XV Jornadas sobre Producción Animal. Tomo I. | 14/05/2013 - 15/05/2013 | Zaragoza
+114560181	M. V. Kimiaeitalab	Actas ITEA, XV Jornadas sobre Producción Animal, Tomo I. | ITEA, XV Jornadas sobre Producción Animal. Tomo I. | 14/05/2013 - 15/05/2013 | Zaragoza
+114560181	A. Perez-Bonilla	Actas ITEA, XV Jornadas sobre Producción Animal, Tomo I. | ITEA, XV Jornadas sobre Producción Animal. Tomo I. | 14/05/2013 - 15/05/2013 | Zaragoza
+114560181	Javier Garcia Alonso	Actas ITEA, XV Jornadas sobre Producción Animal, Tomo I. | ITEA, XV Jornadas sobre Producción Animal. Tomo I. | 14/05/2013 - 15/05/2013 | Zaragoza
+114560181	Gonzalo Gonzalez Mateos	Actas ITEA, XV Jornadas sobre Producción Animal, Tomo I. | ITEA, XV Jornadas sobre Producción Animal. Tomo I. | 14/05/2013 - 15/05/2013 | Zaragoza
+114560201	Eva van der Haar	NULL
+114560221	N. J. R. George	NULL
+114560223	Jüri Siigur	NULL
+114560223	Ene Siigur	NULL
+114560227	雄二 伊藤	語研ジャーナル
+114560252	Ulrich von Alemann	NULL
+114560252	Heribert Schatz	NULL
+114560280	登美雄 黒田	日本地質学会学術大会講演要旨
+114560280	康明 小宮	日本地質学会学術大会講演要旨
+114560280	博恭 古川	日本地質学会学術大会講演要旨
+114560298	L.M. Viertelhauzen	NULL
+114560312	Creighton Heaukulani	international conference on machine learning
+114560312	Zoubin Ghahramani	international conference on machine learning
+
 
 
 
