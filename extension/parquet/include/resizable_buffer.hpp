@@ -41,7 +41,11 @@ public:
 
 	void copy_to(char *dest, uint64_t len) {
 		available(len);
-		memcpy(dest, ptr, len);
+		std::memcpy(dest, ptr, len);
+	}
+
+	void zero() {
+		std::memset(ptr, 0, len);
 	}
 
 	void available(uint64_t req_len) {

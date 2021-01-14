@@ -85,10 +85,21 @@ static LogicalType derive_type(const SchemaElement &s_ele) {
 	}
 }
 
-unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t &next_child, idx_t &next_file_idx) {
-	D_ASSERT(next_child < schema.size());
-	auto &s_ele = schema[next_child];
-	auto this_idx = next_child;
+unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t depth, idx_t max_define,
+                                       idx_t max_repeat, idx_t &next_schema_idx, idx_t &next_file_idx) {
+	D_ASSERT(next_schema_idx < schema.size());
+	auto &s_ele = schema[next_schema_idx];
+	auto this_idx = next_schema_idx;
+
+	if (s_ele.__isset.repetition_type) {
+		if (s_ele.repetition_type == FieldRepetitionType::OPTIONAL) {
+			max_define = depth;
+		}
+		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+			max_repeat = depth - 1;
+			// TODO is the -1 here appropriate??
+		}
+	}
 
 	if (!s_ele.__isset.type) { // inner node
 		D_ASSERT(s_ele.num_children > 0);
@@ -97,10 +108,12 @@ unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t 
 
 		idx_t c_idx = 0;
 		while (c_idx < s_ele.num_children) {
-			next_child++;
+			next_schema_idx++;
 
-			auto &child_ele = schema[next_child];
-			auto child_reader = create_reader(schema, next_child, next_file_idx);
+			auto &child_ele = schema[next_schema_idx];
+
+			auto child_reader =
+			    create_reader(schema, depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
 			child_readers.push_back(move(child_reader));
 
@@ -112,7 +125,8 @@ unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t 
 		// if we only have a single child no reason to create a struct ay
 		if (child_types.size() > 1) {
 			result_type = LogicalType(LogicalTypeId::STRUCT, child_types);
-			result = make_unique<StructColumnReader>(result_type, s_ele, this_idx, move(child_readers));
+			result = make_unique<StructColumnReader>(result_type, s_ele, this_idx, max_define, max_repeat,
+			                                         move(child_readers));
 		} else {
 			// if we have a struct with only a single type, pull up
 			result_type = child_types[0].second;
@@ -120,12 +134,12 @@ unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t 
 		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			result_type = LogicalType(LogicalTypeId::LIST, {make_pair("", result_type)});
-			return make_unique<ListColumnReader>(result_type, s_ele, this_idx, move(result));
+			return make_unique<ListColumnReader>(result_type, s_ele, this_idx, max_define, max_repeat, move(result));
 		}
 		return result;
 	} else { // leaf node
 		// TODO check return value of derive type or should we only do this on read()
-		return ColumnReader::CreateReader(derive_type(s_ele), s_ele, next_file_idx++);
+		return ColumnReader::CreateReader(derive_type(s_ele), s_ele, next_file_idx++, max_define, max_repeat);
 	}
 }
 
@@ -199,11 +213,11 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	//    file_meta_data->printTo(std::cout);
 	//    std::cout << '\n';
 
-	//	// TODO
-	//	for (auto& s_ele : file_meta_data->schema) {
-	//        s_ele.printTo(std::cout);
-	//		std::cout << '\n';
-	//	}
+	// TODO
+	for (auto &s_ele : file_meta_data->schema) {
+		s_ele.printTo(std::cout);
+		std::cout << '\n';
+	}
 
 	//	if (file_meta_data->schema[0].num_children != (int32_t)(file_meta_data->schema.size() - 1)) {
 	//		throw FormatException("Only flat tables are supported (no nesting)");
@@ -212,15 +226,15 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	//	this->return_types = expected_types;
 	bool has_expected_types = expected_types.size() > 0;
 
-	idx_t next_child_idx = 0;
+	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
 
 	// auto type = derive_type_complex(file_meta_data->schema, next_child);
 	// printf("XX %s %llu\n", type.ToString().c_str(), next_child);
 
 	//	next_child = 0;
-	this->root_reader = create_reader(file_meta_data->schema, next_child_idx, next_file_idx);
-	D_ASSERT(next_child_idx == file_meta_data->schema.size() - 1);
+	this->root_reader = create_reader(file_meta_data->schema, 0, 0, 0, next_schema_idx, next_file_idx);
+	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(next_file_idx == file_meta_data->row_groups[0].columns.size());
 
 	/*
@@ -527,6 +541,16 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	parquet_filter_t filter_mask;
 	filter_mask.set();
 
+	ResizeableBuffer define_buf;
+	ResizeableBuffer repeat_buf;
+	define_buf.resize(this_output_chunk_rows);
+	repeat_buf.resize(this_output_chunk_rows);
+	define_buf.zero();
+	repeat_buf.zero();
+
+	auto define_ptr = (uint8_t *)define_buf.ptr;
+	auto repeat_ptr = (uint8_t *)repeat_buf.ptr;
+
 	if (state.filters) {
 		vector<bool> need_to_read(result.ColumnCount(), true);
 
@@ -537,7 +561,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 
 			auto file_col_idx = state.column_ids[filter_col.first];
-			state.column_readers[file_col_idx]->Read(result.size(), filter_mask, result.data[filter_col.first]);
+			state.column_readers[file_col_idx]->Read(result.size(), filter_mask, define_ptr, repeat_ptr,
+			                                         result.data[filter_col.first]);
 
 			need_to_read[filter_col.first] = false;
 
@@ -574,7 +599,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			if (need_to_read[out_col_idx]) {
 				auto file_col_idx = state.column_ids[out_col_idx];
 				// TODO handle ROWID here, too
-				state.column_readers[file_col_idx]->Read(result.size(), filter_mask, result.data[out_col_idx]);
+				state.column_readers[file_col_idx]->Read(result.size(), filter_mask, define_ptr, repeat_ptr,
+				                                         result.data[out_col_idx]);
 			}
 		}
 
@@ -598,7 +624,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 
-			state.column_readers[file_col_idx]->Read(result.size(), filter_mask, result.data[out_col_idx]);
+			state.column_readers[file_col_idx]->Read(result.size(), filter_mask, define_ptr, repeat_ptr,
+			                                         result.data[out_col_idx]);
 		}
 	}
 

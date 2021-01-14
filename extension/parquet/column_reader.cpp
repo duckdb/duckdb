@@ -27,32 +27,32 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 ColumnReader::~ColumnReader() {
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const SchemaElement &schema_p,
-                                                    idx_t file_idx_p) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
+                                                    idx_t max_define, idx_t max_repeat) {
 	switch (type_p.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_unique<BooleanColumnReader>(type_p, schema_p, file_idx_p);
+		return make_unique<BooleanColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::INTEGER:
-		return make_unique<TemplatedColumnReader<int32_t>>(type_p, schema_p, file_idx_p);
+		return make_unique<TemplatedColumnReader<int32_t>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::BIGINT:
-		return make_unique<TemplatedColumnReader<int64_t>>(type_p, schema_p, file_idx_p);
+		return make_unique<TemplatedColumnReader<int64_t>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::FLOAT:
-		return make_unique<TemplatedColumnReader<float>>(type_p, schema_p, file_idx_p);
+		return make_unique<TemplatedColumnReader<float>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::DOUBLE:
-		return make_unique<TemplatedColumnReader<double>>(type_p, schema_p, file_idx_p);
+		return make_unique<TemplatedColumnReader<double>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TIMESTAMP:
 		switch (schema_p.type) {
 		case Type::INT96:
-			return make_unique<TimestampColumnReader<Int96, impala_timestamp_to_timestamp_t>>(type_p, schema_p,
-			                                                                                  file_idx_p);
+			return make_unique<TimestampColumnReader<Int96, impala_timestamp_to_timestamp_t>>(
+			    type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
 			switch (schema_p.converted_type) {
 			case ConvertedType::TIMESTAMP_MICROS:
 				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_micros_to_timestamp>>(
-				    type_p, schema_p, file_idx_p);
+				    type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIMESTAMP_MILLIS:
-				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_ms_to_timestamp>>(type_p, schema_p,
-				                                                                                      file_idx_p);
+				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_ms_to_timestamp>>(
+				    type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;
 			}
@@ -62,7 +62,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		return make_unique<StringColumnReader>(type_p, schema_p, file_idx_p);
+		return make_unique<StringColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	default:
 		throw NotImplementedException(type_p.ToString());
 	}
@@ -150,6 +150,17 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	}
 }
 
+static uint8_t bit_width(idx_t val) {
+	if (val == 0) {
+		return 0;
+	}
+	uint8_t ret = 1;
+	while ((1 << ret) - 1 < val) {
+		ret++;
+	}
+	return ret;
+}
+
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 
 	if (page_hdr.type == PageType::DATA_PAGE) {
@@ -159,25 +170,24 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		D_ASSERT(page_hdr.__isset.data_page_header_v2);
 	}
 
-	rows_available = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.num_values
-	                                                      : page_hdr.data_page_header_v2.num_values;
+	page_rows_available = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.num_values
+	                                                           : page_hdr.data_page_header_v2.num_values;
 	auto page_encoding = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.encoding
 	                                                          : page_hdr.data_page_header_v2.encoding;
 
-	if (is_list) {
+	if (HasRepeats()) {
 		// TODO there seems to be some confusion whether this is in the bytes for v2
 		uint32_t rep_length = block->read<uint32_t>();
 		block->available(rep_length);
-		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, 1);
+		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, bit_width(max_repeat));
 		block->inc(rep_length);
 	}
 
-	if (can_have_nulls) {
+	if (HasDefines()) {
 		// TODO there seems to be some confusion whether this is in the bytes for v2
 		uint32_t def_length = block->read<uint32_t>();
 		block->available(def_length);
-		// TODO figure out bit width correctly
-		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, is_list ? 2 : 1);
+		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, bit_width(max_define));
 		block->inc(def_length);
 	}
 
@@ -202,63 +212,40 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &result) {
+void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+                        Vector &result) {
 	auto trans = (DuckdbFileTransport *)protocol->getTransport().get();
 	trans->SetLocation(chunk_read_offset);
-	idx_t to_read = 0;
+
 	idx_t result_offset = 0;
-
-	Vector *read_vec = &result;
-	Vector list_child_vec;
-
-	if (is_list) {
-		D_ASSERT(result.type.id() == LogicalTypeId::LIST);
-		list_child_vec.Initialize(type);
-		read_vec = &list_child_vec;
-
-		if (!ListVector::HasEntry(result)) {
-			ListVector::SetEntry(result, make_unique<ChunkCollection>());
-		}
-		to_read = STANDARD_VECTOR_SIZE;
-	} else {
-		to_read = num_values;
-	}
-
-	// TODO this might need to go into the class
-	idx_t list_idx = 0;
+	auto to_read = num_values;
 
 	while (to_read > 0) {
-
-		// TODO check for leftovers in child vector? not sure we can consume all of it
-
-		while (rows_available == 0) {
+		while (page_rows_available == 0) {
 			PrepareRead(filter);
 		}
 
 		D_ASSERT(block);
-		auto read_now = MinValue<idx_t>(to_read, rows_available);
+		auto read_now = MinValue<idx_t>(to_read, page_rows_available);
 
 		D_ASSERT(read_now <= STANDARD_VECTOR_SIZE);
 
-		if (is_list) {
+		if (HasRepeats()) {
 			D_ASSERT(repeated_decoder);
-			repeated_buffer.resize(sizeof(uint8_t) * read_now);
-			repeated_decoder->GetBatch<uint8_t>(repeated_buffer.ptr, read_now);
+			repeated_decoder->GetBatch<uint8_t>((char *)repeat_out + result_offset, read_now);
 		}
 
-		if (can_have_nulls) {
+		if (HasDefines()) {
 			D_ASSERT(defined_decoder);
-			defined_buffer.resize(sizeof(uint8_t) * read_now);
-			defined_decoder->GetBatch<uint8_t>(defined_buffer.ptr, read_now);
+			defined_decoder->GetBatch<uint8_t>((char *)define_out + result_offset, read_now);
 		}
 
 		if (dict_decoder) {
-			// TODO computing this here is a wee bit ugly
 			// we need the null count because the offsets and plain values have no entries for nulls
 			idx_t null_count = 0;
-			if (can_have_nulls) {
+			if (HasDefines()) {
 				for (idx_t i = 0; i < read_now; i++) {
-					if (IsNull(i)) {
+					if (define_out[i + result_offset] != max_define) {
 						null_count++;
 					}
 				}
@@ -266,63 +253,18 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, Vector &r
 
 			offset_buffer.resize(sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
-			DictReference(*read_vec);
-			Offsets((uint32_t *)offset_buffer.ptr, nullptr, read_now, filter, result_offset, *read_vec);
+			DictReference(result);
+			Offsets((uint32_t *)offset_buffer.ptr, define_out, read_now, filter, result_offset, result);
 		} else {
-			PlainReference(block, *read_vec);
-			Plain(block, nullptr, read_now, filter, result_offset, *read_vec);
+			PlainReference(block, result);
+			Plain(block, define_out, read_now, filter, result_offset, result);
 		}
 
-		if (is_list) {
-			auto ptr = FlatVector::GetData<list_entry_t>(result);
-
-			D_ASSERT(ListVector::HasEntry(result));
-			auto &list_cc = ListVector::GetEntry(result);
-
-			// TODO deal with offsetting and state here?
-			ptr[list_idx].offset = 0;
-			ptr[list_idx].length = 0;
-
-			DataChunk append_chunk;
-			vector<LogicalType> append_chunk_types;
-			append_chunk_types.push_back(type);
-			append_chunk.Initialize(append_chunk_types);
-			append_chunk.data[0].Reference(*read_vec);
-			append_chunk.SetCardinality(read_now);
-			list_cc.Append(append_chunk);
-			list_cc.Verify();
-			//         list_cc.Print();
-
-			for (idx_t child_idx = 0; child_idx < read_now; child_idx++) {
-				// printf("c %llu %llu\n",repeated_buffer.ptr[child_idx], defined_buffer.ptr[child_idx]);
-
-				if (child_idx > 0 && repeated_buffer.ptr[child_idx] == 0) {
-					list_idx++;
-					ptr[list_idx].offset = child_idx;
-					ptr[list_idx].length = 0;
-				}
-				if (defined_buffer.ptr[child_idx] == 0) {
-					FlatVector::Nullmask(result)[list_idx] = true;
-					ptr[list_idx].offset = child_idx;
-					ptr[list_idx].length = 0;
-					continue;
-				}
-				ptr[list_idx].length++;
-			}
-
-			//			for (idx_t i = 0; i < 3; i++) {
-			//				printf("l %llu %llu\n", ptr[i].offset, ptr[i].length);
-			//			}
-
-			//			result.Print(3);
-			to_read = 0; // FIXME
-
-		} else {
-			result_offset += read_now;
-			rows_available -= read_now;
-			to_read -= read_now;
-		}
+		result_offset += read_now;
+		page_rows_available -= read_now;
+		to_read -= read_now;
 	}
+	group_rows_available -= num_values;
 	chunk_read_offset = trans->GetLocation();
 }
 
