@@ -94,6 +94,7 @@ static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, Scal
 	}
 
 	bound_function.return_type = return_type;
+	bound_function.arguments[0] = arguments[0]->return_type;
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 

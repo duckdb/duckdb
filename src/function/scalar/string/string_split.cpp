@@ -215,7 +215,7 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 	args.data[1].Orrify(args.size(), delim_data);
 	auto delims = (string_t *)delim_data.data;
 
-	result.Initialize(LogicalType::LIST);
+	D_ASSERT(result.type.id() == LogicalTypeId::LIST);
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 
 	auto list_child = make_unique<ChunkCollection>();
