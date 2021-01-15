@@ -290,7 +290,7 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 		uint32_t str_len = dict->read<uint32_t>();
 		dict->available(str_len);
 
-		VerifyString(type.id(), dict->ptr, str_len);
+		VerifyString(Type().id(), dict->ptr, str_len);
 		dict_strings[dict_idx] = string_t(dict->ptr, str_len);
 		dict->inc(str_len);
 	}
@@ -321,7 +321,7 @@ string_t StringColumnReader::DictRead(uint32_t &offset) {
 string_t StringColumnReader::PlainRead(ByteBuffer &plain_data) {
 	uint32_t str_len = plain_data.read<uint32_t>();
 	plain_data.available(str_len);
-	VerifyString(type.id(), plain_data.ptr, str_len);
+	VerifyString(Type().id(), plain_data.ptr, str_len);
 	auto ret_str = string_t(plain_data.ptr, str_len);
 	plain_data.inc(str_len);
 	return ret_str;
@@ -339,7 +339,6 @@ void StringColumnReader::Skip(idx_t num_values) {
 
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
-	// child_column_reader->Read(num_values, filter, result);
 	if (!ListVector::HasEntry(result_out)) {
 		auto list_child = make_unique<ChunkCollection>();
 		ListVector::SetEntry(result_out, move(list_child));
@@ -348,9 +347,6 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
 	auto &list_cc = ListVector::GetEntry(result_out);
-
-	//	result_ptr[result_offset].offset = 0;
-	//	result_ptr[result_offset].length = child_defines_ptr[0] == max_define ? 1 : 0;
 
 	while (result_offset < num_values) {
 		auto child_req_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());

@@ -24,6 +24,9 @@ typedef nullmask_t parquet_filter_t;
 class ColumnReader {
 
 public:
+	static unique_ptr<ColumnReader> CreateReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
+	                                             idx_t max_define, idx_t max_repeat);
+
 	ColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
 	             idx_t max_repeat_p)
 	    : type(type_p), schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p),
@@ -49,12 +52,8 @@ public:
 
 	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	                   Vector &result_out);
-	//    virtual void DefineRepeat(uint64_t num_values, uint8_t* repeat_out, uint8_t define_out);
 
 	virtual void Skip(idx_t num_values) = 0;
-
-	static unique_ptr<ColumnReader> CreateReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                                             idx_t max_define, idx_t max_repeat);
 
 	LogicalType Type() {
 		return type;
@@ -65,6 +64,7 @@ public:
 	}
 
 protected:
+	// readers that use the default Read() need to implement those
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t &filter,
 	                   idx_t result_offset, Vector &result) {
 		throw NotImplementedException("Plain");
@@ -85,9 +85,6 @@ protected:
 	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result) {
 	}
 
-	LogicalType type;
-	const parquet::format::ColumnChunk *chunk;
-
 	bool HasDefines() {
 		return max_define > 0;
 	}
@@ -106,6 +103,9 @@ private:
 	void PrepareRead(parquet_filter_t &filter);
 	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
 	void PrepareDataPage(PageHeader &page_hdr);
+
+	LogicalType type;
+	const parquet::format::ColumnChunk *chunk;
 
 	apache::thrift::protocol::TProtocol *protocol;
 	idx_t page_rows_available;
@@ -139,7 +139,7 @@ public:
 
 		idx_t offset_idx = 0;
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (defines[row_idx + result_offset] != max_define) {
+			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
 				FlatVector::SetNull(result, row_idx + result_offset, true);
 				continue;
 			}
@@ -153,7 +153,7 @@ public:
 	           idx_t result_offset, Vector &result) override {
 		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (defines[row_idx + result_offset] != max_define) {
+			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
 				FlatVector::SetNull(result, row_idx + result_offset, true);
 				continue;
 			}
@@ -288,15 +288,15 @@ public:
 
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	           Vector &result) override {
-		result.Initialize(type);
+		result.Initialize(Type());
 
-		for (idx_t i = 0; i < type.child_types().size(); i++) {
+		for (idx_t i = 0; i < Type().child_types().size(); i++) {
 			auto child_read = make_unique<Vector>();
-			child_read->Initialize(type.child_types()[i].second);
-			// TODO should we only read defines and repeats for the first child? matters little...
+			child_read->Initialize(Type().child_types()[i].second);
+			// TODO should we only read defines and repeats for the first child? it matters little...
 			auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *child_read);
 			D_ASSERT(child_num_values == num_values);
-			StructVector::AddEntry(result, type.child_types()[i].first, move(child_read));
+			StructVector::AddEntry(result, Type().child_types()[i].first, move(child_read));
 		}
 
 		return num_values;
@@ -326,7 +326,7 @@ public:
 		child_defines_ptr = (uint8_t *)child_defines.ptr;
 		child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 
-		auto child_type = type.child_types()[0].second;
+		auto child_type = Type().child_types()[0].second;
 		child_result.Initialize(child_type);
 
 		vector<LogicalType> append_chunk_types;
