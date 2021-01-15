@@ -4,6 +4,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
@@ -14,14 +15,11 @@ namespace duckdb {
 
 string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
-	auto using_entry = using_columns.find(column_name);
-	bool is_using_binding = using_entry != using_columns.end();
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
+		auto is_using_binding = GetUsingBinding(column_name, kv.first);
 		if (is_using_binding) {
-			if (std::find(using_entry->second.begin(), using_entry->second.end(), kv.first) != using_entry->second.end()) {
-				continue;
-			}
+			continue;
 		}
 		if (binding->HasMatchingBinding(column_name)) {
 			if (!result.empty() || is_using_binding) {
@@ -47,30 +45,67 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	return StringUtil::TopNStrings(scores);
 }
 
-void BindContext::AddUsingCondition(const string &column_name, const string &binding) {
-	using_columns[column_name].push_back(binding);
+void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet set) {
+	using_columns[column_name].push_back(move(set));
 }
 
-void BindContext::MergeUsingCondition(const string &column_name, BindContext &context) {
-	for(auto &entry : context.using_columns[column_name]) {
-		using_columns[column_name].push_back(entry);
+UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
+	auto entry = using_columns.find(column_name);
+	if (entry == using_columns.end()) {
+		return nullptr;
 	}
+	if (entry->second.size() > 1) {
+		string error = "Ambiguous column reference: column \"" + column_name + "\" can refer to either:\n";
+		for(auto &using_set : entry->second) {
+			string result_bindings;
+			for(auto &binding : using_set.bindings) {
+				if (result_bindings.empty()) {
+					result_bindings = "[";
+				} else {
+					result_bindings += ", ";
+				}
+				result_bindings += binding + "." + column_name;
+			}
+			error += result_bindings + "]";
+		}
+		throw BinderException(error);
+	}
+	return &entry->second[0];
 }
 
-bool BindContext::IsUsingBinding(const string &column_name) {
-	return using_columns.find(column_name) != using_columns.end();
+UsingColumnSet *BindContext::GetUsingBinding(const string &column_name, const string &binding_name) {
+	if (binding_name.empty()) {
+		return GetUsingBinding(column_name);
+	}
+	auto entry = using_columns.find(column_name);
+	if (entry == using_columns.end()) {
+		return nullptr;
+	}
+	for(auto &using_set : entry->second) {
+		auto &bindings = using_set.bindings;
+		if (bindings.find(binding_name) != bindings.end()) {
+			return &using_set;
+		}
+	}
+	return nullptr;
 }
 
-vector<string> &BindContext::UsingBindings(const string &column_name) {
-	return using_columns[column_name];
-}
-
-const string &BindContext::GetPrimaryUsingBinding(const string &column_name) {
-	return using_bindings[column_name];
-}
-
-void BindContext::SetPrimaryUsingBinding(const string &column_name, const string &binding_name) {
-	using_bindings[column_name] = binding_name;
+void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *set) {
+	if (!set) {
+		return;
+	}
+	auto entry = using_columns.find(column_name);
+	D_ASSERT(entry != using_columns.end());
+	auto &bindings = entry->second;
+	for(size_t i = 0; i < bindings.size(); i++) {
+		if (&bindings[i] == set) {
+			bindings.erase(bindings.begin() + i);
+			break;
+		}
+	}
+	if (bindings.empty()) {
+		using_columns.erase(column_name);
+	}
 }
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
@@ -122,30 +157,42 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 }
 
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
-                                               Binding *binding) {
-	for (auto &column_name : binding->names) {
-		D_ASSERT(!column_name.empty());
-		auto using_entry = using_columns.find(column_name);
-		if (using_entry != using_columns.end()) {
-			if (binding->alias == using_entry->second[0]) {
-				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name));
-			}
-			continue;
-		}
-		new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
-	}
-}
-
-void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
                                                string relation_name) {
 	if (bindings_list.size() == 0) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
 	if (relation_name == "") { // SELECT * case
-		// we have to bind the tables and subqueries in order of table_index
+		// bind all expressions of each table in-order
+		unordered_set<UsingColumnSet*> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
-			GenerateAllColumnExpressions(new_select_list, binding);
+			for (auto &column_name : binding->names) {
+				// check if this column is a USING column
+				auto using_binding = GetUsingBinding(column_name, binding->alias);
+				if (using_binding) {
+					// it is!
+					// check if we have already emitted the using column
+					if (handled_using_columns.find(using_binding) != handled_using_columns.end()) {
+						// we have! bail out
+						continue;
+					}
+					// we have not! output the using column
+					if (using_binding->primary_binding.empty()) {
+						// no primary binding: output a coalesce
+						auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+						for(auto &child_binding : using_binding->bindings) {
+							coalesce->children.push_back(make_unique<ColumnRefExpression>(column_name, child_binding));
+						}
+						new_select_list.push_back(move(coalesce));
+					} else {
+						// primary binding: output the qualified column ref
+						new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, using_binding->primary_binding));
+					}
+					handled_using_columns.insert(using_binding);
+					continue;
+				}
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+			}
 		}
 	} else { // SELECT tbl.* case
 		string error;
@@ -153,7 +200,9 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 		if (!binding) {
 			throw BinderException(error);
 		}
-		GenerateAllColumnExpressions(new_select_list, binding);
+		for (auto &column_name : binding->names) {
+			new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+		}
 	}
 }
 
@@ -224,6 +273,13 @@ void BindContext::AddContext(BindContext other) {
 	}
 	for (auto &entry : other.using_columns) {
 		for(auto &alias : entry.second) {
+#ifdef DEBUG
+			for(auto &other_alias : using_columns[entry.first]) {
+				for(auto &col : alias.bindings) {
+					D_ASSERT(other_alias.bindings.find(col) == other_alias.bindings.end());
+				}
+			}
+#endif
 			using_columns[entry.first].push_back(alias);
 		}
 	}

@@ -12,21 +12,20 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	if (colref.table_name.empty()) {
-		if (binder.bind_context.IsUsingBinding(colref.column_name)) {
+		auto using_binding = binder.bind_context.GetUsingBinding(colref.column_name);
+		if (using_binding) {
 			// we are referencing a USING column
 			// check if we can refer to one of the base columns directly
-			auto &binding = binder.bind_context.GetPrimaryUsingBinding(colref.column_name);
 			unique_ptr<Expression> expression;
-			if (!binding.empty()) {
+			if (!using_binding->primary_binding.empty()) {
 				// we can! just assign the table name and re-bind
-				colref.table_name = binding;
+				colref.table_name = using_binding->primary_binding;
 				return BindExpression(colref, depth);
 			} else {
 				// we cannot! we need to bind this as a coalesce between all the relevant columns
-				auto &entry = binder.bind_context.UsingBindings(colref.column_name);
 				auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-				for(size_t i = 0; i < entry.size(); i++) {
-					coalesce->children.push_back(make_unique<ColumnRefExpression>(colref.column_name, entry[i]));
+				for(auto &entry : using_binding->bindings) {
+					coalesce->children.push_back(make_unique<ColumnRefExpression>(colref.column_name, entry));
 				}
 				return BindExpression(*coalesce, depth);
 			}

@@ -54,11 +54,30 @@ string Binder::FindBinding(const string &using_column, const string &join_side) 
 	return result;
 }
 
-void AddUsingCondition(BindContext &target, const string &column_name, const string &binding, BindContext &child, bool is_using_column) {
-	if (is_using_column) {
-		target.MergeUsingCondition(column_name, child);
+
+static void AddUsingBindings(UsingColumnSet &set, UsingColumnSet *input_set, const string &input_binding) {
+	if (input_set) {
+		for(auto &entry : input_set->bindings) {
+			set.bindings.insert(entry);
+		}
 	} else {
-		target.AddUsingCondition(column_name, binding);
+		set.bindings.insert(input_binding);
+	}
+}
+
+static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const string &left_binding, const string &right_binding) {
+	switch(join_type) {
+	case JoinType::LEFT:
+	case JoinType::INNER:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+		set.primary_binding = left_binding;
+		break;
+	case JoinType::RIGHT:
+		set.primary_binding = right_binding;
+		break;
+	default:
+		break;
 	}
 }
 
@@ -81,10 +100,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
 			for (auto &column_name : binding.second->names) {
-				bool is_using_column = left_binder.bind_context.IsUsingBinding(column_name);
-				if (is_using_column) {
-					lhs_columns[column_name] = string();
-				} else if (lhs_columns.find(column_name) == lhs_columns.end()) {
+				if (lhs_columns.find(column_name) == lhs_columns.end()) {
 					// new column candidate: add it to the set
 					lhs_columns[column_name] = binding.first;
 				} else {
@@ -100,12 +116,12 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			auto &column_name = column.first;
 			auto &left_binding = column.second;
 
-			bool left_is_using = left_binder.bind_context.IsUsingBinding(column_name);
-			bool right_is_using = right_binder.bind_context.IsUsingBinding(column_name);
+			auto left_using_binding = left_binder.bind_context.GetUsingBinding(column_name, left_binding);
+			auto right_using_binding = right_binder.bind_context.GetUsingBinding(column_name);
 
 			string right_binding;
 			// loop over the set of lhs columns, and figure out if there is a table in the rhs with the same name
-			if (!right_is_using) {
+			if (!right_using_binding) {
 				if (!right_binder.TryFindBinding(column_name, "right", right_binding)) {
 					// no match found for this column on the rhs: skip
 					continue;
@@ -114,30 +130,21 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			// found this column name in both the LHS and the RHS of this join
 			// add it to the natural join!
 			// first check if the binding is ambiguous on the LHS
-			if (!left_is_using && left_binding.empty()) {
+			if (!left_using_binding && left_binding.empty()) {
 				// binding is ambiguous on left or right side: throw an exception
 				string error_msg = "Column name \"" + column_name + "\" is ambiguous: it exists more than once on the left side of the join.";
 				throw BinderException(FormatError(ref, error_msg));
 			}
 			// there is a match! create the join condition
 			extra_conditions.push_back(AddCondition(context, left_binder, right_binder, left_binding, right_binding, column_name));
-			AddUsingCondition(bind_context, column_name, left_binding, left_binder.bind_context, left_is_using);
-			AddUsingCondition(bind_context, column_name, right_binding, right_binder.bind_context, right_is_using);
-			string result_binding;
-			switch(ref.type) {
-			case JoinType::LEFT:
-			case JoinType::INNER:
-			case JoinType::SEMI:
-			case JoinType::ANTI:
-				result_binding = left_binding;
-				break;
-			case JoinType::RIGHT:
-				result_binding = right_binding;
-				break;
-			default:
-				break;
-			}
-			bind_context.SetPrimaryUsingBinding(column_name, result_binding);
+
+			UsingColumnSet set;
+			AddUsingBindings(set, left_using_binding, left_binding);
+			AddUsingBindings(set, right_using_binding, right_binding);
+			SetPrimaryBinding(set, ref.type, left_binding, right_binding);
+			left_binder.bind_context.RemoveUsingBinding(column_name, left_using_binding);
+			right_binder.bind_context.RemoveUsingBinding(column_name, right_using_binding);
+			bind_context.AddUsingBinding(column_name, move(set));
 		}
 		if (extra_conditions.size() == 0) {
 			// no matching bindings found in natural join: throw an exception
@@ -174,36 +181,27 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			auto &using_column = ref.using_columns[i];
 			string left_binding;
 			string right_binding;
-			bool left_is_using = left_binder.bind_context.IsUsingBinding(using_column);
-			bool right_is_using = right_binder.bind_context.IsUsingBinding(using_column);
-			if (!left_is_using) {
+			auto left_using_binding = left_binder.bind_context.GetUsingBinding(using_column);
+			auto right_using_binding = right_binder.bind_context.GetUsingBinding(using_column);
+			if (!left_using_binding) {
 				left_binding = left_binder.FindBinding(using_column, "left");
 			} else {
-				left_binding = left_binder.bind_context.GetPrimaryUsingBinding(using_column);
+				left_binding = left_using_binding->primary_binding;
 			}
-			if (!right_is_using) {
+			if (!right_using_binding) {
 				right_binding = right_binder.FindBinding(using_column, "right");
 			} else {
-				right_binding = right_binder.bind_context.GetPrimaryUsingBinding(using_column);
+				right_binding = right_using_binding->primary_binding;
 			}
 			extra_conditions.push_back(AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column));
-			AddUsingCondition(bind_context, using_column, left_binding, left_binder.bind_context, left_is_using);
-			AddUsingCondition(bind_context, using_column, right_binding, right_binder.bind_context, right_is_using);
-			string result_binding;
-			switch(ref.type) {
-			case JoinType::LEFT:
-			case JoinType::INNER:
-			case JoinType::SEMI:
-			case JoinType::ANTI:
-				result_binding = left_binding;
-				break;
-			case JoinType::RIGHT:
-				result_binding = right_binding;
-				break;
-			default:
-				break;
-			}
-			bind_context.SetPrimaryUsingBinding(using_column, result_binding);
+
+			UsingColumnSet set;
+			AddUsingBindings(set, left_using_binding, left_binding);
+			AddUsingBindings(set, right_using_binding, right_binding);
+			SetPrimaryBinding(set, ref.type, left_binding, right_binding);
+			left_binder.bind_context.RemoveUsingBinding(using_column, left_using_binding);
+			right_binder.bind_context.RemoveUsingBinding(using_column, right_using_binding);
+			bind_context.AddUsingBinding(using_column, move(set));
 		}
 	}
 	bind_context.AddContext(move(left_binder.bind_context));

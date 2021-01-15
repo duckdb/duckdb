@@ -25,6 +25,11 @@ class Binder;
 class LogicalGet;
 class BoundQueryNode;
 
+struct UsingColumnSet {
+	string primary_binding;
+	unordered_set<string> bindings;
+};
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -72,15 +77,14 @@ public:
 	void AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types);
 
 	//! Add an implicit join condition (e.g. USING (x))
-	void AddUsingCondition(const string &column_name, const string &binding);
-	void MergeUsingCondition(const string &column_name, BindContext &context);
+	void AddUsingBinding(const string &column_name, UsingColumnSet set);
 
-	bool IsUsingBinding(const string &column_name);
-	bool IsUsingBinding(const string &column_name, const string &binding_name);
-	const string &GetPrimaryUsingBinding(const string &column_name);
-	void SetPrimaryUsingBinding(const string &column_name, const string &binding_name);
-
-	vector<string> &UsingBindings(const string &column_name);
+	//! Returns any using column set for the given column name, or nullptr if there is none. On conflict (multiple using column sets with the same name) throw an exception.
+	UsingColumnSet *GetUsingBinding(const string &column_name);
+	//! Returns any using column set for the given column name, or nullptr if there is none
+	UsingColumnSet *GetUsingBinding(const string &column_name, const string &binding_name);
+	//! Erase a using binding from the set of using bindings
+	void RemoveUsingBinding(const string &column_name, UsingColumnSet *set);
 
 	unordered_map<string, std::shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
@@ -102,7 +106,6 @@ private:
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding);
 
 private:
 	//! The set of bindings
@@ -110,9 +113,7 @@ private:
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
 	//! The set of columns used in USING join conditions
-	unordered_map<string, vector<string>> using_columns;
-	//! The using binding we should use when referencing the using column
-	unordered_map<string, string> using_bindings;
+	unordered_map<string, vector<UsingColumnSet>> using_columns;
 
 	//! The set of CTE bindings
 	unordered_map<string, std::shared_ptr<Binding>> cte_bindings;
