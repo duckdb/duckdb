@@ -2,6 +2,7 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -31,11 +32,11 @@ BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
 }
 
 ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
-	return *context.db.object_cache;
+	return *context.db->object_cache;
 }
 
 bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
-	return context.db.config.object_cache_enable;
+	return context.db->config.object_cache_enable;
 }
 
 void StorageManager::Initialize() {

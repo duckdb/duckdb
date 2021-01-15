@@ -212,8 +212,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-                        Vector &result) {
+idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+                         Vector &result) {
 	auto trans = (DuckdbFileTransport *)protocol->getTransport().get();
 	trans->SetLocation(chunk_read_offset);
 
@@ -266,6 +266,8 @@ void ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *
 	}
 	group_rows_available -= num_values;
 	chunk_read_offset = trans->GetLocation();
+
+	return num_values;
 }
 
 void StringColumnReader::VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len) {
@@ -335,8 +337,8 @@ void StringColumnReader::Skip(idx_t num_values) {
 	D_ASSERT(0);
 }
 
-void ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-                            Vector &result_out) {
+idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+                             Vector &result_out) {
 	// child_column_reader->Read(num_values, filter, result);
 	if (!ListVector::HasEntry(result_out)) {
 		auto list_child = make_unique<ChunkCollection>();
@@ -347,58 +349,67 @@ void ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
 	auto &list_cc = ListVector::GetEntry(result_out);
 
-	result_ptr[result_offset].offset = 0;
-	result_ptr[result_offset].length = 0;
+	//	result_ptr[result_offset].offset = 0;
+	//	result_ptr[result_offset].length = child_defines_ptr[0] == max_define ? 1 : 0;
 
 	while (result_offset < num_values) {
-		auto child_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
+		auto child_req_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
 
-		if (child_num_values == 0) {
+		if (child_req_num_values == 0) {
 			break;
 		}
 
 		child_defines.zero();
 		child_repeats.zero();
 
-		child_column_reader->Read(child_num_values, child_filter, child_defines_ptr, child_repeats_ptr, child_result);
+		auto child_actual_num_values = child_column_reader->Read(child_req_num_values, child_filter, child_defines_ptr,
+		                                                         child_repeats_ptr, child_result);
 
 		append_chunk.data[0].Reference(child_result);
-		append_chunk.SetCardinality(child_num_values);
+		append_chunk.SetCardinality(child_actual_num_values);
 		append_chunk.Verify();
 
 		idx_t current_chunk_offset = list_cc.Count();
 		list_cc.Append(append_chunk);
 
-		//						for (idx_t i = 0; i < child_num_values; i++) {
-		//							printf("def=%d rep=%d val=%s\n", child_defines_ptr[i], child_repeats_ptr[i],
-		//							       child_result.GetValue(i).ToString().c_str());
-		//						}
-		//						printf("\n");
+		//		printf("\n");
+		//		for (idx_t i = 0; i < child_actual_num_values; i++) {
+		//			printf("def=%d rep=%d val=%s\n", child_defines_ptr[i], child_repeats_ptr[i],
+		//			       child_result.GetValue(i).ToString().c_str());
+		//		}
+		//		printf("\n");
 
-		for (idx_t child_idx = 0; child_idx < child_num_values; child_idx++) {
-			if (child_idx > 0 && child_repeats_ptr[child_idx] == 0) {
-				result_offset++;
-				if (result_offset >= num_values) {
-					break;
-				}
-				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
-				result_ptr[result_offset].length = 0;
-			}
-			if (child_defines_ptr[child_idx] == 0) {
-				FlatVector::Nullmask(result_out)[result_offset] = true;
-				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
-				result_ptr[result_offset].length = 0;
+		// D_ASSERT(child_repeats_ptr[0] == 0); // this holds?
+		// hard-won piece of code this, modify at your own risk
+		for (idx_t child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
+			if (child_repeats_ptr[child_idx] == max_repeat) {
+				D_ASSERT(result_offset > 0);
+				result_ptr[result_offset - 1].length++;
 				continue;
 			}
-			result_ptr[result_offset].length++;
-		}
+			if (result_offset >= num_values) {
+				break;
+			}
+			if (child_defines_ptr[child_idx] > max_define) {
+				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
+				result_ptr[result_offset].length = 1;
+			} else {
+				FlatVector::Nullmask(result_out)[result_offset] = true;
+				result_ptr[result_offset].offset = 0;
+				result_ptr[result_offset].length = 0;
+			}
 
-		// TODO we need to copy the defines up, if so, how?
+			repeat_out[result_offset] = child_repeats_ptr[child_idx];
+			define_out[result_offset] = child_defines_ptr[child_idx];
+
+			result_offset++;
+		}
 		// TODO we need to handle the case where we have read too little or too many child values
 	}
-	// result_out.Print(num_values);
-	result_out.Verify(num_values);
-	// D_ASSERT(result_offset == num_values - 1);
+	//	 result_out.Print(result_offset + 1);
+	result_out.Verify(result_offset);
+	return result_offset;
+	D_ASSERT(result_offset == num_values);
 }
 
 } // namespace duckdb

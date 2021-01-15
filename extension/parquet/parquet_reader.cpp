@@ -92,7 +92,7 @@ unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t 
 	auto this_idx = next_schema_idx;
 
 	if (s_ele.__isset.repetition_type) {
-		if (s_ele.repetition_type == FieldRepetitionType::OPTIONAL) {
+		if (s_ele.repetition_type == FieldRepetitionType::OPTIONAL /*|| max_define > 0*/) {
 			max_define = depth;
 		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {

@@ -47,8 +47,8 @@ public:
 
 	virtual ~ColumnReader();
 
-	virtual void Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-	                  Vector &result_out);
+	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+	                   Vector &result_out);
 	//    virtual void DefineRepeat(uint64_t num_values, uint8_t* repeat_out, uint8_t define_out);
 
 	virtual void Skip(idx_t num_values) = 0;
@@ -60,7 +60,7 @@ public:
 		return type;
 	}
 
-	idx_t GroupRowsAvailable() {
+	virtual idx_t GroupRowsAvailable() {
 		return group_rows_available;
 	}
 
@@ -286,21 +286,28 @@ public:
 		}
 	}
 
-	void Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-	          Vector &result) override {
+	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+	           Vector &result) override {
 		result.Initialize(type);
 
 		for (idx_t i = 0; i < type.child_types().size(); i++) {
 			auto child_read = make_unique<Vector>();
 			child_read->Initialize(type.child_types()[i].second);
 			// TODO should we only read defines and repeats for the first child? matters little...
-			child_readers[i]->Read(num_values, filter, define_out, repeat_out, *child_read);
+			auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *child_read);
+			D_ASSERT(child_num_values == num_values);
 			StructVector::AddEntry(result, type.child_types()[i].first, move(child_read));
 		}
+
+		return num_values;
 	}
 
 	virtual void Skip(idx_t num_values) override {
 		D_ASSERT(0);
+	}
+
+	idx_t GroupRowsAvailable() override {
+		return child_readers[0]->GroupRowsAvailable();
 	}
 
 	// TODO this should perhaps be a map
@@ -329,8 +336,8 @@ public:
 		child_filter.set();
 	};
 
-	void Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-	          Vector &result_out) override;
+	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+	           Vector &result_out) override;
 
 	virtual void Skip(idx_t num_values) override {
 		D_ASSERT(0);
@@ -338,6 +345,10 @@ public:
 
 	void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
 		child_column_reader->IntializeRead(columns, protocol_p);
+	}
+
+	idx_t GroupRowsAvailable() override {
+		return child_column_reader->GroupRowsAvailable();
 	}
 
 private:

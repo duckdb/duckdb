@@ -4,6 +4,37 @@
 
 require parquet
 
+query I
+SELECT b FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parquet')
+----
+1
+1
+1
+
+query I
+SELECT a FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parquet')
+----
+[[[a, b], [c]], [NULL, [d]]]
+[[[a, b], [c, d]], [NULL, [e]]]
+[[[a, b], [c, d], [e]], [NULL, [f]]]
+
+query I
+SELECT unlist(a) FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parquet')
+----
+[[a, b], [c]]
+[NULL, [d]]
+[[a, b], [c, d]]
+[NULL, [e]]
+[[a, b], [c, d], [e]]
+[NULL, [f]]
+
+
+
+#                                      a  b
+#0          [[[a, b], [c]], [None, [d]]]  1
+#1       [[[a, b], [c, d]], [None, [e]]]  1
+#2  [[[a, b], [c, d], [e]], [None, [f]]]  1
+
 query II
 SELECT id, STRUCT_EXTRACT(UNLIST(fos), 'w') FROM parquet_scan('/Users/hannes/Desktop/parquet-nested-examples/0_0_8.parquet') LIMIT 20
 ----
