@@ -37,10 +37,9 @@ data is kept in RAM}
 \item{read_only}{Set to \code{TRUE} for read-only operation}
 
 \item{timezone_out}{The time zone returned to R, defaults to \code{"UTC"}, which
-is the timezone of the duckdb database.
+is currently the only timezone supported by duckdb.
 If you want to display datetime values in the local timezone,
-set to \code{\link[=Sys.timezone]{Sys.timezone()}} or \code{""}.
-This setting does not change the time values returned, only their display.}
+set to \code{\link[=Sys.timezone]{Sys.timezone()}} or \code{""}.}
 
 \item{tz_out_convert}{How to convert timestamp columns to the timezone specified
 in \code{timezone_out}. There are two options: \code{"with"}, and \code{"force"}. If \code{"with"}

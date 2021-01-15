@@ -41,10 +41,9 @@ setMethod(
 #' @param debug Print additional debug information such as queries
 #' @param read_only Set to `TRUE` for read-only operation
 #' @param timezone_out The time zone returned to R, defaults to `"UTC"`, which
-#'   is the timezone of the duckdb database.
+#'   is currently the only timezone supported by duckdb.
 #'   If you want to display datetime values in the local timezone,
 #'   set to [Sys.timezone()] or `""`.
-#'   This setting does not change the time values returned, only their display.
 #' @param tz_out_convert How to convert timestamp columns to the timezone specified
 #'   in `timezone_out`. There are two options: `"with"`, and `"force"`. If `"with"`
 #'   is chosen, the timestamp will be returned as it would appear in the specified time zone.
