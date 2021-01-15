@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
+#include "duckdb/planner/expression/bound_filter_expression.hpp"
 
 #include <functional>
 
@@ -47,6 +48,7 @@ protected:
 	virtual unique_ptr<Expression> VisitReplace(BoundConjunctionExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundConstantExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundDefaultExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(BoundFilterExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr);

@@ -9,10 +9,12 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
+
+#include "duckdb/parser/expression/filter_expression.hpp"
 
 namespace duckdb {
 
@@ -85,6 +87,7 @@ protected:
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(StarExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
+	BindResult BindExpression(FilterExpression &expr, idx_t depth);
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
 

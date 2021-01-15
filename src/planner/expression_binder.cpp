@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/parser/expression/filter_expression.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindExpression((ConjunctionExpression &)expr_ref, depth);
 	case ExpressionClass::CONSTANT:
 		return BindExpression((ConstantExpression &)expr_ref, depth);
+	case ExpressionClass::FILTER:
+		return BindExpression((FilterExpression &)expr_ref, depth);
 	case ExpressionClass::FUNCTION:
 		// binding function expression has extra parameter needed for macro's
 		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
@@ -87,7 +90,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 }
 
 void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
-	if (expr.get()) {
+	if (expr) {
 		string bind_error = Bind(&expr, depth);
 		if (error.empty()) {
 			error = bind_error;

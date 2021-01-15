@@ -70,6 +70,8 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 		return ConstantExpression::Equals((ConstantExpression *)this, (ConstantExpression *)other);
 	case ExpressionClass::DEFAULT:
 		return true;
+	case ExpressionClass::FILTER:
+		return FilterExpression::Equals((FilterExpression *)this, (FilterExpression *)other);
 	case ExpressionClass::FUNCTION:
 		return FunctionExpression::Equals((FunctionExpression *)this, (FunctionExpression *)other);
 	case ExpressionClass::OPERATOR:
@@ -131,6 +133,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 		break;
 	case ExpressionClass::DEFAULT:
 		result = DefaultExpression::Deserialize(type, source);
+		break;
+	case ExpressionClass::FILTER:
+		result = FilterExpression::Deserialize(type,source);
 		break;
 	case ExpressionClass::FUNCTION:
 		result = FunctionExpression::Deserialize(type, source);

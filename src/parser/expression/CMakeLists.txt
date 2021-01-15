@@ -8,6 +8,7 @@ add_library_unity(duckdb_expression
                   comparison_expression.cpp
                   constant_expression.cpp
                   default_expression.cpp
+                  filter_expression.cpp
                   function_expression.cpp
                   operator_expression.cpp
                   parameter_expression.cpp

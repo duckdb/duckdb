@@ -6,6 +6,7 @@ add_library_unity(duckdb_expression_executor
                   execute_comparison.cpp
                   execute_conjunction.cpp
                   execute_constant.cpp
+                  execute_filter.cpp
                   execute_function.cpp
                   execute_operator.cpp
                   execute_parameter.cpp
