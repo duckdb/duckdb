@@ -45,6 +45,11 @@ setMethod(
 #'   If you want to display datetime values in the local timezone,
 #'   set to [Sys.timezone()] or `""`.
 #'   This setting does not change the time values returned, only their display.
+#' @param tz_out_convert How to convert timestamp columns to the timezone specified
+#'   in `timezone_out`. There are two options: `"with"`, and `"force"`. If `"with"`
+#'   is chosen, the timestamp will be returned as it would appear in the specified time zone.
+#'   If `"force"` is chosen, the timestamp will have the same clock
+#'   time as the timestamp in the database, but with the new time zone.
 #'
 #' @return `dbConnect()` returns an object of class
 #'   \linkS4class{duckdb_connection}.
@@ -69,9 +74,12 @@ setMethod(
   function(drv, dbdir = DBDIR_MEMORY, ...,
            debug = getOption("duckdb.debug", FALSE),
            read_only = FALSE,
-           timezone_out = "UTC") {
+           timezone_out = "UTC",
+           tz_out_convert = c("with", "force")) {
 
     check_flag(debug)
+    timezone_out <- check_tz(timezone_out)
+    tz_out_convert <- match.arg(tz_out_convert)
 
     missing_dbdir <- missing(dbdir)
     dbdir <- path.expand(as.character(dbdir))
@@ -85,10 +93,9 @@ setMethod(
     conn <- duckdb_connection(drv, debug = debug)
     on.exit(dbDisconnect(conn))
 
-    if (is.null(timezone_out) || timezone_out != "UTC") {
-      timezone_out <- check_tz(timezone_out)
-      conn@timezone_out <- timezone_out
-    }
+    conn@timezone_out <- timezone_out
+    conn@tz_out_convert <- tz_out_convert
+
     on.exit(NULL)
     conn
   }

@@ -13,7 +13,8 @@
   ...,
   debug = getOption("duckdb.debug", FALSE),
   read_only = FALSE,
-  timezone_out = "UTC"
+  timezone_out = "UTC",
+  tz_out_convert = c("with", "force")
 )
 
 \S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
@@ -40,6 +41,12 @@ is the timezone of the duckdb database.
 If you want to display datetime values in the local timezone,
 set to \code{\link[=Sys.timezone]{Sys.timezone()}} or \code{""}.
 This setting does not change the time values returned, only their display.}
+
+\item{tz_out_convert}{How to convert timestamp columns to the timezone specified
+in \code{timezone_out}. There are two options: \code{"with"}, and \code{"force"}. If \code{"with"}
+is chosen, the timestamp will be returned as it would appear in the specified time zone.
+If \code{"force"} is chosen, the timestamp will have the same clock
+time as the timestamp in the database, but with the new time zone.}
 
 \item{conn}{A \code{duckdb_connection} object}
 

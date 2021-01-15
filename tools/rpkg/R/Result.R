@@ -104,6 +104,9 @@ setMethod(
       return(data.frame())
     }
 
+    timezone_out <- res@connection@timezone_out
+    tz_out_convert <- res@connection@tz_out_convert
+
     # FIXME this is ugly
     if (n == 0) {
       return(utils::head(res@env$resultset, 0))
@@ -113,28 +116,28 @@ setMethod(
     }
     if (res@env$rows_fetched >= nrow(res@env$resultset)) {
       df <- fix_rownames(res@env$resultset[F, , drop = F])
-      df <- set_output_tz(df, res@connection@timezone_out)
+      df <- set_output_tz(df, timezone_out, tz_out_convert)
       return(df)
     }
     # special case, return everything
     if (n == -1 && res@env$rows_fetched == 0) {
       res@env$rows_fetched <- nrow(res@env$resultset)
       df <- res@env$resultset
-      df <- set_output_tz(df, res@connection@timezone_out)
+      df <- set_output_tz(df, timezone_out, tz_out_convert)
       return(df)
     }
     if (n > -1) {
       n <- min(n, nrow(res@env$resultset) - res@env$rows_fetched)
       res@env$rows_fetched <- res@env$rows_fetched + n
       df <- res@env$resultset[(res@env$rows_fetched - n + 1):(res@env$rows_fetched), , drop = F]
-      df <- set_output_tz(df, res@connection@timezone_out)
+      df <- set_output_tz(df, timezone_out, tz_out_convert)
       return(fix_rownames(df))
     }
     start <- res@env$rows_fetched + 1
     res@env$rows_fetched <- nrow(res@env$resultset)
     df <- res@env$resultset[nrow(res@env$resultset), , drop = F]
 
-    df <- set_output_tz(df, res@connection@timezone_out)
+    df <- set_output_tz(df, timezone_out, tz_out_convert)
     return(fix_rownames(df))
   }
 )
@@ -243,12 +246,16 @@ setMethod(
   }
 )
 
-set_output_tz <- function(x, timezone) {
+set_output_tz <- function(x, timezone, convert) {
   if (timezone == "UTC") return(x)
+
+  tz_convert <- switch(convert,
+                       with = lubridate::with_tz,
+                       force = lubridate::force_tz)
 
   is_datetime <- which(vapply(x, inherits, "POSIXt", FUN.VALUE = logical(1)))
   if (length(is_datetime) > 0) {
-    x[is_datetime] <- lapply(x[is_datetime], lubridate::with_tz, timezone)
+    x[is_datetime] <- lapply(x[is_datetime], tz_convert, timezone)
   }
   x
 }
