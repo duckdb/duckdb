@@ -291,6 +291,13 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value,
 			                                                       &constant_value_expr.value};
 		}
+		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
+		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
+			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
+			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
+			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value,
+			                                                       &constant_value_expr.value};
+		}
 		return checks;
 	}
 	case ExpressionType::COMPARE_LESSTHAN:
@@ -302,6 +309,12 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
 			checks[column_ids[column_ref.binding.column_index]] = {nullptr, &constant_value_expr.value};
 		}
+		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
+		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
+			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
+			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
+			checks[column_ids[column_ref.binding.column_index]] = { &constant_value_expr.value, nullptr};
+		}
 		return checks;
 	}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
@@ -312,6 +325,12 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
 			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value, nullptr};
+		}
+		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
+		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
+			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
+			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
+			checks[column_ids[column_ref.binding.column_index]] = {nullptr, &constant_value_expr.value};
 		}
 		return checks;
 	}
