@@ -114,7 +114,7 @@ string PhysicalTableScan::ParamsToString() const {
 			for (auto &filter : f.second) {
 				if (filter.column_index < names.size()) {
 					result += "\n";
-					result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
+					result += names[column_ids[filter.column_index]] + ExpressionTypeToOperator(filter.comparison_type) +
 					          filter.constant.ToString();
 				}
 			}

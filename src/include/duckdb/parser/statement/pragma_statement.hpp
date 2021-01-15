@@ -16,9 +16,12 @@ namespace duckdb {
 
 class PragmaStatement : public SQLStatement {
 public:
-	PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_unique<PragmaInfo>()) {};
+	PragmaStatement();
 
 	unique_ptr<PragmaInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

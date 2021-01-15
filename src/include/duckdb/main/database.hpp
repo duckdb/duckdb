@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension.hpp"
 
@@ -20,24 +22,47 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 
-//! The database object. This object holds the catalog and all the
-//! database-specific meta information.
-class Connection;
-class DuckDB {
-public:
-	DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
-	DuckDB(const string &path, DBConfig *config = nullptr);
+class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
+	friend class BufferManager;
+	friend class ClientContext;
+	friend class ObjectCache;
+	friend class StorageManager;
+	friend class DuckDB;
+	friend class TaskScheduler;
 
-	~DuckDB();
+public:
+	DUCKDB_API DatabaseInstance();
 
 	DBConfig config;
 
+public:
+	FileSystem &GetFileSystem();
+
+	idx_t NumberOfThreads();
+
+private:
+	void Initialize(const char *path, DBConfig *config);
+
+	void Configure(DBConfig &config);
+
+private:
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;
 	unique_ptr<TaskScheduler> scheduler;
-	unique_ptr<ConnectionManager> connection_manager;
 	unique_ptr<ObjectCache> object_cache;
+};
+
+//! The database object. This object holds the catalog and all the
+//! database-specific meta information.
+class DuckDB {
+public:
+	DUCKDB_API DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
+	DUCKDB_API DuckDB(const string &path, DBConfig *config = nullptr);
+	DUCKDB_API ~DuckDB();
+
+	//! Reference to the actual database instance
+	shared_ptr<DatabaseInstance> instance;
 
 public:
 	template <class T> void LoadExtension() {
@@ -45,14 +70,11 @@ public:
 		extension.Load(*this);
 	}
 
-	FileSystem &GetFileSystem();
+	DUCKDB_API FileSystem &GetFileSystem();
 
-	idx_t NumberOfThreads();
-	static const char *SourceID();
-	static const char *LibraryVersion();
-
-private:
-	void Configure(DBConfig &config);
+	DUCKDB_API idx_t NumberOfThreads();
+	DUCKDB_API static const char *SourceID();
+	DUCKDB_API static const char *LibraryVersion();
 };
 
 } // namespace duckdb

@@ -74,11 +74,12 @@ unique_ptr<FunctionOperatorData> information_schema_columns_init(ClientContext &
 	// scan all the schemas for tables and views and collect them
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	// check the temp schema as well
-	context.temporary_objects->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
+	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 

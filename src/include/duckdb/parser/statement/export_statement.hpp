@@ -16,9 +16,12 @@ namespace duckdb {
 
 class ExportStatement : public SQLStatement {
 public:
-	ExportStatement(unique_ptr<CopyInfo> info) : SQLStatement(StatementType::EXPORT_STATEMENT), info(move(info)){};
+	ExportStatement(unique_ptr<CopyInfo> info);
 
 	unique_ptr<CopyInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

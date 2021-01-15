@@ -36,7 +36,7 @@ public:
 	ClientContext &context;
 
 public:
-	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
+	void Initialize(PhysicalOperator *physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
 
 	void Reset();
@@ -52,7 +52,7 @@ public:
 	void Flush(ThreadContext &context);
 
 private:
-	unique_ptr<PhysicalOperator> physical_plan;
+	PhysicalOperator *physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
 
 	mutex executor_lock;

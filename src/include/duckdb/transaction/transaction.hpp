@@ -32,9 +32,10 @@ struct UpdateInfo;
 
 class Transaction {
 public:
-	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp)
+	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp, idx_t catalog_version)
 	    : start_time(start_time), transaction_id(transaction_id), commit_id(0), highest_active_query(0),
-	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), storage(*this), is_invalidated(false) {
+	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), catalog_version(catalog_version),
+		  storage(*this), is_invalidated(false) {
 	}
 
 	//! The start timestamp of this transaction
@@ -50,6 +51,8 @@ public:
 	transaction_t active_query;
 	//! The timestamp when the transaction started
 	timestamp_t start_timestamp;
+	//! The catalog version when the transaction was started
+	idx_t catalog_version;
 	//! The set of uncommitted appends for the transaction
 	LocalStorage storage;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
@@ -72,6 +75,13 @@ public:
 	//! Cleanup the undo buffer
 	void Cleanup() {
 		undo_buffer.Cleanup();
+	}
+
+	void Invalidate() {
+		is_invalidated = true;
+	}
+	bool IsInvalidated() {
+		return is_invalidated;
 	}
 
 	timestamp_t GetCurrentTransactionStartTimestamp() {

@@ -31,6 +31,9 @@ public:
 	vector<unique_ptr<ParsedExpression>> parameters;
 	//! The default parameters and their associated values
 	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
+
+public:
+	unique_ptr<MacroFunction> Copy();
 };
 
 } // namespace duckdb

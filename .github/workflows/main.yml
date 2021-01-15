@@ -84,6 +84,11 @@ jobs:
           duckdb_cli-windows-amd64.zip
           tools/jdbc/duckdb_jdbc.jar
 
+    - uses: ilammy/msvc-dev-cmd@v1
+    - name: Duckdb.dll export symbols with C++ on Windows
+      run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
+
+
 
   win-release-32:
     name: Windows (32 Bit)
@@ -437,29 +442,6 @@ jobs:
     - name: Test
       run: valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
 
-
-  ubsan:
-    name: UBSAN
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get install ninja-build
-
-    - name: Test
-      run: make ubsandebug
-
-
 # borked somehow. needs investigation.
 #  codecov:
 #    name: Code Coverage
@@ -766,8 +748,8 @@ jobs:
         fi
 
 
-  rstats:
-    name: R Package
+  rstats-linux:
+    name: R Package Linux
     runs-on: ubuntu-20.04
     needs: linux-debug
 
@@ -803,6 +785,40 @@ jobs:
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
+
+  rstats-windows:
+    name: R Package Windows
+    runs-on: windows-latest
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: 'devel'
+
+    - name: Install
+      run: |
+        R -f tools/rpkg/dependencies.R
+
+    - name: Build
+      run: |
+        cd tools/rpkg
+        ./configure
+        R CMD build .
+        R CMD INSTALL duckdb_*.tar.gz
+        (cd tests && R -f testthat.R)
+        R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
+        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+
+
   linux-tarball:
     name: Python 3 Tarball
     runs-on: ubuntu-20.04
@@ -822,23 +838,12 @@ jobs:
 
     - name: Build
       run: |
-        if [[ -z "${GITHUB_HEAD_REF}" ]]; then
-          export GITHUB_HEAD_REF=master
-        fi
-        filename=$(basename $GITHUB_HEAD_REF)
-        dirname=$(echo $GITHUB_HEAD_REF | sed 's#/#-#g')
-        echo $GITHUB_ACTOR
-        echo $GITHUB_WORKSPACE
-        echo $GITHUB_HEAD_REF
-        echo $GITHUB_BASE_REF
-        echo $filename
-        echo $dirname
-        echo $GITHUB_REF
-        echo $GITHUB_SHA
-        echo $GITHUB_REPOSITORY
-        wget https://github.com/$GITHUB_ACTOR/duckdb/archive/$GITHUB_HEAD_REF.zip
-        unzip $filename.zip
-        cd duckdb-$dirname/tools/pythonpkg
+        git archive --format zip --output test-tarball.zip HEAD
+        mkdir duckdb-test-tarball
+        mv test-tarball.zip duckdb-test-tarball
+        cd duckdb-test-tarball
+        unzip test-tarball.zip
+        cd tools/pythonpkg
         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
         python3 setup.py install --user
 

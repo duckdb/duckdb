@@ -30,6 +30,7 @@ struct AlterInfo : public ParseInfo {
 
 public:
 	virtual CatalogType GetCatalogType() = 0;
+	virtual unique_ptr<AlterInfo> Copy() const = 0;
 	virtual void Serialize(Serializer &serializer);
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
@@ -68,18 +69,20 @@ public:
 // RenameColumnInfo
 //===--------------------------------------------------------------------===//
 struct RenameColumnInfo : public AlterTableInfo {
-	RenameColumnInfo(string schema, string table, string name, string new_name)
-	    : AlterTableInfo(AlterTableType::RENAME_COLUMN, schema, table), name(name), new_name(new_name) {
+	RenameColumnInfo(string schema, string table, string old_name_p, string new_name_p)
+	    : AlterTableInfo(AlterTableType::RENAME_COLUMN, move(schema), move(table)), old_name(move(old_name_p)),
+	      new_name(move(new_name_p)) {
 	}
 	~RenameColumnInfo() override {
 	}
 
 	//! Column old name
-	string name;
+	string old_name;
 	//! Column new name
 	string new_name;
 
 public:
+	unique_ptr<AlterInfo> Copy() const override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
 };
@@ -98,6 +101,7 @@ struct RenameTableInfo : public AlterTableInfo {
 	string new_table_name;
 
 public:
+	unique_ptr<AlterInfo> Copy() const override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
 };
@@ -116,6 +120,7 @@ struct AddColumnInfo : public AlterTableInfo {
 	ColumnDefinition new_column;
 
 public:
+	unique_ptr<AlterInfo> Copy() const override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
 };
@@ -137,6 +142,7 @@ struct RemoveColumnInfo : public AlterTableInfo {
 	bool if_exists;
 
 public:
+	unique_ptr<AlterInfo> Copy() const override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
 };
@@ -161,6 +167,7 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 	unique_ptr<ParsedExpression> expression;
 
 public:
+	unique_ptr<AlterInfo> Copy() const override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
 };
@@ -182,6 +189,7 @@ struct SetDefaultInfo : public AlterTableInfo {
 	unique_ptr<ParsedExpression> expression;
 
 public:
+	unique_ptr<AlterInfo> Copy() const override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
 };
@@ -222,6 +230,7 @@ struct RenameViewInfo : public AlterViewInfo {
 	string new_view_name;
 
 public:
+	unique_ptr<AlterInfo> Copy() const override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
 };
