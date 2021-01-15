@@ -56,7 +56,7 @@ public:
 	                            unordered_set<uint64_t> &right_bindings);
 	static JoinSide GetJoinSide(Expression &expression, unordered_set<idx_t> &left_bindings,
 	                            unordered_set<idx_t> &right_bindings);
-	static JoinSide GetJoinSide(unordered_set<idx_t> bindings, unordered_set<idx_t> &left_bindings,
+	static JoinSide GetJoinSide(const unordered_set<idx_t>& bindings, unordered_set<idx_t> &left_bindings,
 	                            unordered_set<idx_t> &right_bindings);
 
 private:

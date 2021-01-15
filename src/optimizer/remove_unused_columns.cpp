@@ -186,7 +186,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			auto &get = (LogicalGet &)op;
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
-			for (auto &filter : get.tableFilters) {
+			for (auto &filter : get.table_filters) {
 				idx_t index = INVALID_INDEX;
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
 					if (get.column_ids[i] == filter.column_index) {
@@ -205,7 +205,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// table scan: figure out which columns are referenced
 			ClearUnusedExpressions(get.column_ids, get.table_index);
 
-			if (get.column_ids.size() == 0) {
+			if (get.column_ids.empty()) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.
 				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 				// need to read any of the columns
