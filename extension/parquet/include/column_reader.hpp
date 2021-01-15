@@ -319,7 +319,7 @@ public:
 	ListColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
 	                 idx_t max_repeat_p, unique_ptr<ColumnReader> child_column_reader_p)
 	    : ColumnReader(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p),
-	      child_column_reader(move(child_column_reader_p)) {
+	      child_column_reader(move(child_column_reader_p)), overflow_child_count(0) {
 
 		child_defines.resize(STANDARD_VECTOR_SIZE);
 		child_repeats.resize(STANDARD_VECTOR_SIZE);
@@ -361,6 +361,9 @@ private:
 	Vector child_result;
 	parquet_filter_t child_filter;
 	DataChunk append_chunk;
+
+	Vector overflow_child_vector;
+	idx_t overflow_child_count;
 };
 
 } // namespace duckdb

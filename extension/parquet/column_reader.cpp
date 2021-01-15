@@ -362,8 +362,16 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		child_defines.zero();
 		child_repeats.zero();
 
-		auto child_actual_num_values = child_column_reader->Read(child_req_num_values, child_filter, child_defines_ptr,
-		                                                         child_repeats_ptr, child_result);
+		idx_t child_actual_num_values = 0;
+
+		if (overflow_child_count == 0) {
+			child_actual_num_values = child_column_reader->Read(child_req_num_values, child_filter, child_defines_ptr,
+			                                                    child_repeats_ptr, child_result);
+		} else {
+			child_actual_num_values = overflow_child_count;
+			overflow_child_count = 0;
+			child_result.Reference(overflow_child_vector);
+		}
 
 		append_chunk.data[0].Reference(child_result);
 		append_chunk.SetCardinality(child_actual_num_values);
@@ -372,28 +380,24 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		idx_t current_chunk_offset = list_cc.Count();
 		list_cc.Append(append_chunk);
 
-		//		printf("\n");
-		//		for (idx_t i = 0; i < child_actual_num_values; i++) {
-		//			printf("def=%d rep=%d val=%s\n", child_defines_ptr[i], child_repeats_ptr[i],
-		//			       child_result.GetValue(i).ToString().c_str());
-		//		}
-		//		printf("\n");
-
-		// D_ASSERT(child_repeats_ptr[0] == 0); // this holds?
 		// hard-won piece of code this, modify at your own risk
-		for (idx_t child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
-			if (child_repeats_ptr[child_idx] == max_repeat) {
+		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
+		// the rest is pretty much handed up as-is as a single-valued list or NULL
+		idx_t child_idx;
+		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
+			if (child_repeats_ptr[child_idx] == max_repeat) { // value repeats on this level, append
 				D_ASSERT(result_offset > 0);
 				result_ptr[result_offset - 1].length++;
 				continue;
 			}
-			if (result_offset >= num_values) {
+			if (result_offset >= num_values) { // we ran out of output space
 				break;
 			}
-			if (child_defines_ptr[child_idx] > max_define) {
+			if (child_defines_ptr[child_idx] >
+			    max_define) { // value has been defined down the stack, hence its NOT NULL
 				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
 				result_ptr[result_offset].length = 1;
-			} else {
+			} else { // value is NULL somewhere up the stack
 				FlatVector::Nullmask(result_out)[result_offset] = true;
 				result_ptr[result_offset].offset = 0;
 				result_ptr[result_offset].length = 0;
@@ -404,12 +408,23 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 
 			result_offset++;
 		}
-		// TODO we need to handle the case where we have read too little or too many child values
+
+		// we have read more values from the child reader than we can fit into the result for this read
+		// we have to pass everything from child_idx to child_actual_num_values into the next call
+		if (child_idx < child_actual_num_values && result_offset == num_values) {
+			overflow_child_vector.Slice(child_result, child_idx);
+			overflow_child_count = child_actual_num_values - child_idx;
+			overflow_child_vector.Verify(overflow_child_count);
+
+			// move values in the child repeats and defines *backward* by child_idx
+			for (idx_t repdef_idx = 0; repdef_idx < overflow_child_count; repdef_idx++) {
+				child_defines_ptr[repdef_idx] = child_defines_ptr[child_idx + repdef_idx];
+				child_repeats_ptr[repdef_idx] = child_repeats_ptr[child_idx + repdef_idx];
+			}
+		}
 	}
-	//	 result_out.Print(result_offset + 1);
 	result_out.Verify(result_offset);
 	return result_offset;
-	D_ASSERT(result_offset == num_values);
 }
 
 } // namespace duckdb
