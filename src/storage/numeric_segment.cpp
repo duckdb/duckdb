@@ -195,6 +195,11 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 		                         constantRight.value_.double_, approved_tuple_count);
 		break;
 	}
+	case PhysicalType::BOOL: {
+		Select<bool, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.boolean,
+		                         constantRight.value_.boolean, approved_tuple_count);
+		break;
+	}
 	default:
 		throw InvalidTypeException(type, "Invalid type for filter pushed down to table comparison");
 	}
