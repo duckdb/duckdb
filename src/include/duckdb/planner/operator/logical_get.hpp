@@ -35,8 +35,6 @@ public:
 	//! Filters pushed down for table scan
 	vector<TableFilter> table_filters;
 
-	//! Zonemap Checks
-    vector<TableFilter> zonemap_checks;
 	string GetName() const override;
 	string ParamsToString() const override;
 

@@ -37,7 +37,6 @@ static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, 
 	auto &bind_data = (const TableScanBindData &)*bind_data_;
 	result->column_ids = column_ids;
 	result->scan_state.table_filters = filters->table_filters;
-	result->scan_state.zonemaps_checks = filters->zonemaps_checks;
 	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids, filters->table_filters);
 	return move(result);
 }
@@ -58,7 +57,6 @@ static unique_ptr<FunctionOperatorData> table_scan_parallel_init(ClientContext &
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
 	result->scan_state.table_filters = filters->table_filters;
-	result->scan_state.zonemaps_checks = filters->zonemaps_checks;
 	if (!table_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
 		return nullptr;
 	}

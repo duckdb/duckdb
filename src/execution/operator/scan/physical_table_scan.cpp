@@ -23,11 +23,10 @@ public:
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_,
                                      unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
-                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     unique_ptr<TableFilterSet> zonemap_checks_p)
+                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
       bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
-      table_filters(move(table_filters_p)), zonemap_checks(move(zonemap_checks_p)) {
+      table_filters(move(table_filters_p)) {
 }
 
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -42,7 +41,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			// check if there is any parallel state to fetch
 			state.parallel_state = nullptr;
 			auto task_info = task.task_info.find(this);
-			TableFilterCollection filters (table_filters.get(),zonemap_checks.get());
+			TableFilterCollection filters (table_filters.get());
 			if (task_info != task.task_info.end()) {
 				// parallel scan init
 				state.parallel_state = task_info->second;
@@ -112,19 +111,6 @@ string PhysicalTableScan::ParamsToString() const {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
 		for (auto &f : table_filters->filters) {
-			for (auto &filter : f.second) {
-				if (filter.column_index < names.size()) {
-					result += "\n";
-					result += names[column_ids[filter.column_index]] +
-					          ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
-				}
-			}
-		}
-	}
-	if (zonemap_checks) {
-		result += "\n[INFOSEPARATOR]\n";
-		result += "Zonemaps Checks: ";
-		for (auto &f : zonemap_checks->filters) {
 			for (auto &filter : f.second) {
 				if (filter.column_index < names.size()) {
 					result += "\n";

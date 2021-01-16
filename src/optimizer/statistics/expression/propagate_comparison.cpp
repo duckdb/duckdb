@@ -22,6 +22,19 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	switch (right.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+		break;
+	default:
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 	auto &lstats = (NumericStatistics &)left;
 	auto &rstats = (NumericStatistics &)right;
 	if (lstats.min.is_null || lstats.max.is_null || rstats.min.is_null || rstats.max.is_null) {

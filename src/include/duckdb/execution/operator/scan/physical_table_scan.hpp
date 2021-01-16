@@ -19,8 +19,7 @@ namespace duckdb {
 class PhysicalTableScan : public PhysicalOperator {
 public:
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
-	                  vector<column_t> column_ids, vector<string> names, unique_ptr<TableFilterSet> table_filters,
-	                  unique_ptr<TableFilterSet> zonemap_checks);
+	                  vector<column_t> column_ids, vector<string> names, unique_ptr<TableFilterSet> table_filters);
 
 	//! The table function
 	TableFunction function;
@@ -32,8 +31,7 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
-    //! The zonemap checks (i.e., pre-filtering is done but the filter is not completely pushed-down)
-    unique_ptr<TableFilterSet> zonemap_checks;
+
 public:
 	string GetName() const override;
 	string ParamsToString() const override;

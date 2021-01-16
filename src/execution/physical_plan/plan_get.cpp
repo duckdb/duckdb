@@ -36,12 +36,9 @@ unique_ptr<TableFilterSet> find_column_index(vector<TableFilter>& table_filters,
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	D_ASSERT(op.children.empty());
 
-	unique_ptr<TableFilterSet> table_filters, zonemap_checks ;
+	unique_ptr<TableFilterSet> table_filters ;
 	if (!op.table_filters.empty()) {
         table_filters = find_column_index(op.table_filters,op.column_ids);
-	}
-	if (!op.zonemap_checks.empty()) {
-		zonemap_checks = find_column_index(op.zonemap_checks,op.column_ids);
 	}
 
 	if (op.function.dependency) {
@@ -51,7 +48,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
 		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data), op.column_ids,
-		                                           op.names, move(table_filters), move(zonemap_checks));
+		                                           op.names, move(table_filters));
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -85,7 +82,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		return move(projection);
 	} else {
 		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids, op.names,
-		                                      move(table_filters), move(zonemap_checks));
+		                                      move(table_filters));
 	}
 }
 
