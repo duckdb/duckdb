@@ -123,7 +123,6 @@ static void templated_select_operation(SelectionVector &sel, Vector &result, Phy
 	}
 	case PhysicalType::INT16: {
 		Select<int16_t, OP>(sel, result, source, source_mask, constant.value_.smallint, approved_tuple_count);
-		;
 		break;
 	}
 	case PhysicalType::INT32: {
@@ -144,6 +143,10 @@ static void templated_select_operation(SelectionVector &sel, Vector &result, Phy
 	}
 	case PhysicalType::DOUBLE: {
 		Select<double, OP>(sel, result, source, source_mask, constant.value_.double_, approved_tuple_count);
+		break;
+	}
+	case PhysicalType::BOOL: {
+		Select<bool, OP>(sel, result, source, source_mask, constant.value_.boolean, approved_tuple_count);
 		break;
 	}
 	default:
