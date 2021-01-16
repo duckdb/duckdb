@@ -1,6 +1,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
-#include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
 
