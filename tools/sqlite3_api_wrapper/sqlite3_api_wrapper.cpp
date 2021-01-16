@@ -197,6 +197,7 @@ bool sqlite3_display_result(StatementType type) {
 	case StatementType::EXPLAIN_STATEMENT:
 	case StatementType::PRAGMA_STATEMENT:
 	case StatementType::SELECT_STATEMENT:
+	case StatementType::SHOW_STATEMENT:
 		return true;
 	default:
 		return false;
