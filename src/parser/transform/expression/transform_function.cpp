@@ -187,7 +187,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 	}
 
 	// star gets eaten in the parser
-	if (lowercase_name == "count" && children.size() == 0) {
+	if (lowercase_name == "count" && children.empty()) {
 		lowercase_name = "count_star";
 	}
 

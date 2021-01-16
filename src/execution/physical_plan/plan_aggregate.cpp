@@ -23,7 +23,7 @@ static uint32_t RequiredBitsForValue(uint32_t n) {
 
 static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate &op, vector<idx_t> &bits_per_group) {
 	idx_t perfect_hash_bits = 0;
-	if (op.group_stats.size() == 0) {
+	if (op.group_stats.empty()) {
 		op.group_stats.resize(op.groups.size());
 	}
 	for (idx_t group_idx = 0; group_idx < op.groups.size(); group_idx++) {
@@ -104,8 +104,8 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			return false;
 		}
 	}
-	for (idx_t i = 0; i < op.expressions.size(); i++) {
-		auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
+	for (auto & expression : op.expressions) {
+		auto &aggregate = (BoundAggregateExpression &)*expression;
 		if (aggregate.distinct || !aggregate.function.combine) {
 			// distinct aggregates are not supported in perfect hash aggregates
 			return false;
@@ -119,8 +119,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 	D_ASSERT(op.children.size() == 1);
 
 	bool all_combinable = true;
-	for (idx_t i = 0; i < op.expressions.size(); i++) {
-		auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
+	for (auto & expression : op.expressions) {
+		auto &aggregate = (BoundAggregateExpression &)*expression;
 		if (!aggregate.function.combine) {
 			// unsupported aggregate for simple aggregation: use hash aggregation
 			all_combinable = false;
@@ -132,12 +132,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 
 	plan = ExtractAggregateExpressions(move(plan), op.expressions, op.groups);
 
-	if (op.groups.size() == 0) {
+	if (op.groups.empty()) {
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
 		bool use_simple_aggregation = true;
-		for (idx_t i = 0; i < op.expressions.size(); i++) {
-			auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
+		for (auto & expression : op.expressions) {
+			auto &aggregate = (BoundAggregateExpression &)*expression;
 			if (!aggregate.function.simple_update || aggregate.distinct) {
 				// unsupported aggregate for simple aggregation: use hash aggregation
 				use_simple_aggregation = false;
@@ -146,7 +146,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		}
 		if (use_simple_aggregation) {
 			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
-			                                                                      all_combinable);
+			                                                                      all_combinable, move(op.filter));
 		} else {
 			groupby =
 			    make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions));
@@ -174,22 +174,20 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 	vector<unique_ptr<Expression>> expressions;
 	vector<LogicalType> types;
 
-	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
-		auto &group = groups[group_idx];
+	for (auto & group : groups) {
 		auto ref = make_unique<BoundReferenceExpression>(group->return_type, expressions.size());
 		types.push_back(group->return_type);
 		expressions.push_back(move(group));
-		groups[group_idx] = move(ref);
+		group = move(ref);
 	}
 
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
-		for (idx_t child_idx = 0; child_idx < bound_aggr.children.size(); child_idx++) {
-			auto &child = bound_aggr.children[child_idx];
+		for (auto & child : bound_aggr.children) {
 			auto ref = make_unique<BoundReferenceExpression>(child->return_type, expressions.size());
 			types.push_back(child->return_type);
 			expressions.push_back(move(child));
-			bound_aggr.children[child_idx] = move(ref);
+			child = move(ref);
 		}
 	}
 	if (expressions.empty()) {

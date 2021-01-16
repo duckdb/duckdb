@@ -29,6 +29,8 @@ public:
 	//! Group statistics (optional)
 	vector<unique_ptr<BaseStatistics>> group_stats;
 
+	unique_ptr<Expression> filter;
+
 public:
 	string ParamsToString() const override;
 

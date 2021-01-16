@@ -8,9 +8,9 @@
 namespace duckdb {
 
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-                                                 bool all_combinable)
+                                                 bool all_combinable, unique_ptr<Expression> filter)
     : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)),
-      all_combinable(all_combinable) {
+      all_combinable(all_combinable) , filter(move(filter)){
 }
 
 //===--------------------------------------------------------------------===//
@@ -71,10 +71,10 @@ public:
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			// initialize the payload chunk
-			if (aggr.children.size()) {
-				for (idx_t i = 0; i < aggr.children.size(); ++i) {
-					payload_types.push_back(aggr.children[i]->return_type);
-					child_executor.AddExpression(*aggr.children[i]);
+			if (!aggr.children.empty()) {
+				for (auto & child : aggr.children) {
+					payload_types.push_back(child->return_type);
+					child_executor.AddExpression(*child);
 				}
 			}
 		}
@@ -112,7 +112,7 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 		idx_t payload_cnt = 0;
 		// resolve the child expressions of the aggregate (if any)
-		if (aggregate.children.size() > 0) {
+		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
 				sink.child_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx + payload_cnt]);
 				payload_expr_idx++;

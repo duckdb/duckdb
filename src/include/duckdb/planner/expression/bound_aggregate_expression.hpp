@@ -26,6 +26,9 @@ public:
 	//! True to aggregate on distinct values
 	bool distinct;
 
+	//! Filter for this aggregate
+	unique_ptr<Expression> filter;
+
 public:
 	bool IsAggregate() const override {
 		return true;

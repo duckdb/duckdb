@@ -6,6 +6,13 @@ namespace duckdb {
 LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, move(select_list)), group_index(group_index),
       aggregate_index(aggregate_index) {
+	for (idx_t i {}; i< select_list.size(); i++){
+		if (select_list[i]->type == ExpressionType::FILTER_EXPR){
+			filter = move(select_list[i]);
+			select_list.erase(select_list.begin() + i);
+			break;
+		}
+	}
 }
 
 void LogicalAggregate::ResolveTypes() {
@@ -21,10 +28,10 @@ void LogicalAggregate::ResolveTypes() {
 vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	vector<ColumnBinding> result;
 	for (idx_t i = 0; i < groups.size(); i++) {
-		result.push_back(ColumnBinding(group_index, i));
+		result.emplace_back(group_index, i);
 	}
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		result.push_back(ColumnBinding(aggregate_index, i));
+		result.emplace_back(aggregate_index, i);
 	}
 	return result;
 }
@@ -38,7 +45,7 @@ string LogicalAggregate::ParamsToString() const {
 		result += groups[i]->GetName();
 	}
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		if (i > 0 || groups.size() > 0) {
+		if (i > 0 || !groups.empty()) {
 			result += "\n";
 		}
 		result += expressions[i]->GetName();

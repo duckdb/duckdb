@@ -8,14 +8,14 @@ PRAGMA enable_verification
 statement ok
 create temporary table t as select range i, mod(range,10) j from range(1000);
 
-
-query II
-SELECT
-  COUNT(*) AS unfiltered,
-  SUM( CASE WHEN i < 5 THEN 1 ELSE 0 END ) AS filtered
-FROM t;
-----
-1000	5
+#
+#query II
+#SELECT
+#  COUNT(*) AS unfiltered,
+#  SUM( CASE WHEN i < 5 THEN 1 ELSE 0 END ) AS filtered
+#FROM t;
+#----
+#1000	5
 
 query II
 SELECT

@@ -17,12 +17,12 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFilterExpre
 void ExpressionExecutor::Execute(BoundFilterExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t &count, Vector &result) {
 
-	result.Reference(chunk->data[0]);
-
-	SelectionVector true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE);
-	count = Select(*expr.filter, state->child_states[0].get(), sel, count, &true_sel, &false_sel);
-	result.Slice(true_sel,count);
-	expr.return_type = result.type;
+//	result.Reference(chunk->data[0]);
+//
+//	SelectionVector true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE);
+//	count = Select(*expr.filter, state->child_states[0].get(), sel, count, &true_sel, &false_sel);
+//	result.Slice(true_sel,count);
+//	expr.return_type = result.type;
 
 }
 
