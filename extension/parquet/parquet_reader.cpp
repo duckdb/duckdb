@@ -209,29 +209,12 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		throw FormatException("Need at least one column in the file");
 	}
 
-	//    file_meta_data->printTo(std::cout);
-	//    std::cout << '\n';
-
-	//	// TODO
-	//	for (auto &s_ele : file_meta_data->schema) {
-	//		s_ele.printTo(std::cout);
-	//		std::cout << '\n';
-	//	}
-
-	//	if (file_meta_data->schema[0].num_children != (int32_t)(file_meta_data->schema.size() - 1)) {
-	//		throw FormatException("Only flat tables are supported (no nesting)");
-	//	}
-
 	//	this->return_types = expected_types;
 	bool has_expected_types = expected_types.size() > 0;
 
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
 
-	// auto type = derive_type_complex(file_meta_data->schema, next_child);
-	// printf("XX %s %llu\n", type.ToString().c_str(), next_child);
-
-	//	next_child = 0;
 	this->root_reader = create_reader(file_meta_data->schema, 0, 0, 0, next_schema_idx, next_file_idx);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(next_file_idx == file_meta_data->row_groups[0].columns.size());
@@ -335,22 +318,11 @@ const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t file_col_idx, LogicalType &type) {
 	auto &group = GetGroup(state);
-
-	//    group.printTo(std::cout);
-	//	std::cout << "\n";
-	// FIXME this needs to be handled differently. Perhaps we need to annotate types with the physical column id?
 	auto &chunk = group.columns[file_col_idx];
 
 	if (chunk.__isset.file_path) {
 		throw FormatException("Only inlined data files are supported (no references)");
 	}
-
-	// TODO can we assume the columns are in the right order here?
-	// perhaps keep schema paths around
-
-	//	if (chunk.meta_data.path_in_schema.size() != 1) {
-	//		throw FormatException("Only flat tables are supported (no nesting)");
-	//	}
 
 	/* FIXME
 	if (state.filters) {
@@ -591,6 +563,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 		}
 
+		// TODO call Skip() if everything is filtered
+
 		// we still may have to read some cols
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			if (need_to_read[out_col_idx]) {
@@ -611,7 +585,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		result.Slice(state.sel, sel_size);
 		result.Verify();
 
-	} else { // just fricking load the data
+	} else { // #nofilter, just fricking load the data
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			auto file_col_idx = state.column_ids[out_col_idx];
 
@@ -627,7 +601,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	}
 
 	state.group_offset += this_output_chunk_rows;
-	return true; // thank you scan again
+	return true;
 }
 
 } // namespace duckdb

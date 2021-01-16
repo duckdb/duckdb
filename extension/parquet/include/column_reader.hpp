@@ -29,7 +29,7 @@ public:
 
 	ColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
 	             idx_t max_repeat_p)
-	    : type(type_p), schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p),
+	    : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), type(type_p),
 	      page_rows_available(0){};
 
 	virtual void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {

@@ -66,6 +66,8 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 	default:
 		throw NotImplementedException(type_p.ToString());
 	}
+	D_ASSERT(false);
+	return nullptr;
 }
 
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {
