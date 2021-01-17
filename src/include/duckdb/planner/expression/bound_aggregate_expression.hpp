@@ -14,7 +14,7 @@
 namespace duckdb {
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,
+	BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,unique_ptr<Expression> filter,
 	                         unique_ptr<FunctionData> bind_info, bool distinct);
 
 	//! The bound function expression

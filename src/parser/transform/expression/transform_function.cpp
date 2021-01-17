@@ -3,7 +3,6 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/filter_expression.hpp"
 
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -180,10 +179,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 			children.push_back(move(child_expr));
 		}
 	}
+	unique_ptr<ParsedExpression> filter_expr;
 	if (root->agg_filter) {
-		auto agg_filter = make_unique<FilterExpression>();
-		agg_filter->filter = TransformExpression(root->agg_filter);
-		children.push_back(move(agg_filter));
+		filter_expr  = TransformExpression(root->agg_filter);
 	}
 
 	// star gets eaten in the parser
@@ -215,7 +213,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		return move(expr);
 	}
 
-	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
+	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children,move(filter_expr), root->agg_distinct);
 	function->query_location = root->location;
 	return move(function);
 }

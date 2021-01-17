@@ -14,4 +14,3 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
-#include "duckdb/parser/expression/filter_expression.hpp"

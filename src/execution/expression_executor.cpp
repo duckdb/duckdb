@@ -98,6 +98,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_REF:
 		return InitializeState((BoundReferenceExpression &)expr, state);
+	case ExpressionClass::BOUND_COLUMN_REF:
+		return InitializeState((BoundColumnRefExpression &)expr, state);
 	case ExpressionClass::BOUND_BETWEEN:
 		return InitializeState((BoundBetweenExpression &)expr, state);
 	case ExpressionClass::BOUND_CASE:
@@ -134,6 +136,9 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 		break;
 	case ExpressionClass::BOUND_REF:
 		Execute((BoundReferenceExpression &)expr, state, sel, count, result);
+		break;
+	case ExpressionClass::BOUND_COLUMN_REF:
+		Execute((BoundColumnRefExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CASE:
 		Execute((BoundCaseExpression &)expr, state, sel, count, result);

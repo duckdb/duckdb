@@ -9,7 +9,6 @@ add_library_unity(
   bind_comparison_expression.cpp
   bind_conjunction_expression.cpp
   bind_constant_expression.cpp
-        bind_filter_expression.cpp
   bind_function_expression.cpp
   bind_macro_expression.cpp
   bind_operator_expression.cpp

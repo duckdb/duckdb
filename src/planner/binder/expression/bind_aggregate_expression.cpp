@@ -13,11 +13,15 @@ namespace duckdb {
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
-
+    unique_ptr<Expression> bound_filter;
 	AggregateBinder aggregate_binder(binder, context);
 	string error;
-	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		aggregate_binder.BindChild(aggr.children[i], 0, error);
+	for (auto & child : aggr.children) {
+		aggregate_binder.BindChild(child, 0, error);
+	}
+	if (aggr.filter){
+		auto bind_res = aggregate_binder.BindExpression(&aggr.filter,0);
+		bound_filter = move(bind_res.expression);
 	}
 	if (!error.empty()) {
 		// failed to bind child
@@ -58,7 +62,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
-	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children), aggr.distinct);
+	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),move(bound_filter), aggr.distinct);
 
 	auto return_type = aggregate->return_type;
 

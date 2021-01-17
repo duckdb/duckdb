@@ -57,13 +57,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			auto &aggr = (LogicalAggregate &)op;
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
 
-			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
-				// removed all expressions from the aggregate: push a COUNT(*)
-				auto count_star_fun = CountStarFun::GetFunction();
-				aggr.expressions.push_back(
-				    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, false));
-			}
-		}
+            if (aggr.expressions.size() != 0 || aggr.groups.size() != 0) {
+            } else {
+                // removed all expressions from the aggregate: push a COUNT(*)
+                auto count_star_fun = CountStarFun::GetFunction();
+                aggr.expressions.push_back(
+                    AggregateFunction::BindAggregateFunction(context, count_star_fun, {},move(aggr.filter), false));
+            }
+        }
 
 		// then recurse into the children of the aggregate
 		RemoveUnusedColumns remove(binder, context);

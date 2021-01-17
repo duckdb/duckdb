@@ -34,7 +34,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		}
 
 		// checks distinct clause
-		if (stmt->distinctClause != NULL) {
+		if (stmt->distinctClause != nullptr) {
 			auto modifier = make_unique<DistinctModifier>();
 			// checks distinct on clause
 			auto target = reinterpret_cast<PGNode *>(stmt->distinctClause->head->data.ptr_value);

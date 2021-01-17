@@ -47,11 +47,6 @@ void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
 		}
 		break;
 	}
-	case ExpressionClass::FILTER:{
-		auto &case_expr = (FilterExpression &)expr;
-		callback(case_expr.filter);
-		break;
-	}
 
 	case ExpressionClass::FUNCTION: {
 		auto &func_expr = (FunctionExpression &)expr;

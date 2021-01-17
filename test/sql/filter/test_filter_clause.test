@@ -1,0 +1,52 @@
+# name: test/sql/filter/test_filter_clause.test
+# description: Test aggregation with filter clause
+# group: [filter]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create temporary table t as select range i, mod(range,10) j from range(1000);
+
+
+query II
+SELECT
+  COUNT(*) AS unfiltered,
+  COUNT(*) FILTER (WHERE i < 5) AS filtered
+FROM t;
+----
+1000	5
+
+
+
+query II
+SELECT
+  COUNT(*) AS unfiltered,
+  COUNT(*) FILTER (WHERE i > 5 and i < 10) AS filtered
+FROM t;
+----
+1000	4
+
+query II
+SELECT
+  SUM(i) AS unfiltered,
+  SUM(i) FILTER (WHERE i < 5) AS filtered
+FROM t;
+----
+499500	10
+
+query II
+SELECT
+  SUM(i) AS unfiltered,
+  SUM(i) FILTER (WHERE i between 5 and 10) AS filtered
+FROM t;
+----
+499500	45
+
+query II
+SELECT
+  SUM(i) AS unfiltered,
+  SUM(j) FILTER (WHERE j < 2) AS filtered
+FROM t;
+----
+499500	100

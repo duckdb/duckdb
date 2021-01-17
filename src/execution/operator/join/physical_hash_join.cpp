@@ -76,7 +76,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 
 			// jury-rigging the GroupedAggregateHashTable
 			// we need a count_star and a count to get counts with and without NULLs
-			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, false);
+			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, nullptr, false);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
@@ -85,7 +85,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), false);
+			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), nullptr, false);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));

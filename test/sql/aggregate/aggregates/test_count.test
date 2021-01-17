@@ -33,10 +33,6 @@ SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), C
 statement error
 SELECT COUNT(1 ORDER BY 1)
 
-# FILTER clause not supported
-statement error
-SELECT COUNT(1) FILTER (WHERE false)
-
 # cannot do DISTINCT *
 statement error
 SELECT COUNT(DISTINCT *) FROM integers

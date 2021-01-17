@@ -146,7 +146,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		}
 		if (use_simple_aggregation) {
 			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
-			                                                                      all_combinable, move(op.filter));
+			                                                                      all_combinable);
 		} else {
 			groupby =
 			    make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions));

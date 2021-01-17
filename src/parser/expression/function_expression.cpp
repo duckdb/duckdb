@@ -1,4 +1,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
+
+#include <utility>
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
@@ -6,18 +8,18 @@
 
 namespace duckdb {
 
-FunctionExpression::FunctionExpression(string schema, string function_name,
-                                       vector<unique_ptr<ParsedExpression>> &children, bool distinct, bool is_operator)
-    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema),
-      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct) {
+FunctionExpression::FunctionExpression(string schema, const string& function_name,
+                                       vector<unique_ptr<ParsedExpression>> &children,unique_ptr<ParsedExpression> filter, bool distinct, bool is_operator)
+    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
+      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct), filter(move(filter)) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
 }
 
-FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children,
-                                       bool distinct, bool is_operator)
-    : FunctionExpression(INVALID_SCHEMA, function_name, children, distinct, is_operator) {
+FunctionExpression::FunctionExpression(const string& function_name, vector<unique_ptr<ParsedExpression>> &children,
+                                       unique_ptr<ParsedExpression> filter,bool distinct, bool is_operator)
+    : FunctionExpression(INVALID_SCHEMA, function_name, children, move(filter), distinct, is_operator) {
 }
 
 string FunctionExpression::ToString() const {
@@ -61,10 +63,14 @@ hash_t FunctionExpression::Hash() const {
 
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	vector<unique_ptr<ParsedExpression>> copy_children;
+	unique_ptr<ParsedExpression> filter_copy;
 	for (auto &child : children) {
 		copy_children.push_back(child->Copy());
 	}
-	auto copy = make_unique<FunctionExpression>(function_name, copy_children, distinct, is_operator);
+	if (filter){
+		filter_copy = filter->Copy();
+	}
+	auto copy = make_unique<FunctionExpression>(function_name, copy_children,move(filter_copy), distinct, is_operator);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
 	return move(copy);
@@ -72,22 +78,36 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 
 void FunctionExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
+	vector<unique_ptr<ParsedExpression>> filter_list;
+	if (filter){
+		filter_list.push_back(move(filter));
+	}
 	serializer.WriteString(function_name);
 	serializer.WriteString(schema);
 	serializer.WriteList(children);
+	serializer.WriteList(filter_list);
 	serializer.Write<bool>(distinct);
 	serializer.Write<bool>(is_operator);
+	if (!filter_list.empty()){
+		filter = move(filter_list[0]);
+	}
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	vector<unique_ptr<ParsedExpression>> children;
+	vector<unique_ptr<ParsedExpression>> filter_list;
 	auto function_name = source.Read<string>();
 	auto schema = source.Read<string>();
 	source.ReadList<ParsedExpression>(children);
+    source.ReadList<ParsedExpression>(filter_list);
 	auto distinct = source.Read<bool>();
 	auto is_operator = source.Read<bool>();
-
-	auto function = make_unique<FunctionExpression>(function_name, children, distinct, is_operator);
+	unique_ptr<FunctionExpression> function;
+    if (!filter_list.empty()){
+		function = make_unique<FunctionExpression>(function_name, children, move(filter_list[0]), distinct, is_operator);
+	} else{
+		function = make_unique<FunctionExpression>(function_name, children, move(nullptr), distinct, is_operator);
+	}
 	function->schema = schema;
 	return move(function);
 }

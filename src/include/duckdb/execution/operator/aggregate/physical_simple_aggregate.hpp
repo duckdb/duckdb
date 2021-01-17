@@ -9,14 +9,13 @@
 #pragma once
 
 #include "duckdb/execution/physical_sink.hpp"
-
 namespace duckdb {
 
 //! PhysicalSimpleAggregate is an aggregate operator that can only perform aggregates (1) without any groups, and (2)
 //! without any DISTINCT aggregates
 class PhysicalSimpleAggregate : public PhysicalSink {
 public:
-	PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions, bool all_combinable, unique_ptr<Expression> filter);
+	PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions, bool all_combinable);
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
@@ -24,8 +23,6 @@ public:
 	//! parallelized.
 	bool all_combinable;
 
-	//! If a filter clause is executed in this aggregate
-	unique_ptr<Expression> filter;
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;

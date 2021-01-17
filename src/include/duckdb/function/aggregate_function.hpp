@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "duckdb/function/function.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "macro_function.hpp"
 
 namespace duckdb {
 
@@ -94,6 +95,7 @@ public:
 	static unique_ptr<BoundAggregateExpression> BindAggregateFunction(ClientContext &context,
 	                                                                  AggregateFunction bound_function,
 	                                                                  vector<unique_ptr<Expression>> children,
+	                                                                  unique_ptr<Expression> filter = nullptr,
 	                                                                  bool is_distinct = false);
 
 public:

@@ -8,9 +8,9 @@
 namespace duckdb {
 
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-                                                 bool all_combinable, unique_ptr<Expression> filter)
+                                                 bool all_combinable)
     : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)),
-      all_combinable(all_combinable) , filter(move(filter)){
+      all_combinable(all_combinable){
 }
 
 //===--------------------------------------------------------------------===//
@@ -111,6 +111,15 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 		idx_t payload_cnt = 0;
+		// resolve the filter (if any)
+		if (aggregate.filter) {
+			ExpressionExecutor filter_execution (aggregate.filter.get());
+			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+			auto count = filter_execution.SelectExpression(input,true_sel);
+            input.Slice(true_sel,count);
+			sink.child_executor.SetChunk(input);
+	        payload_chunk.SetCardinality(input);
+		}
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {

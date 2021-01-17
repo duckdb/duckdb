@@ -79,6 +79,7 @@ protected:
 	static unique_ptr<ExpressionState> InitializeState(BoundConjunctionExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundConstantExpression &expr, ExpressionExecutorState &state);
+	static unique_ptr<ExpressionState> InitializeState(BoundColumnRefExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundFunctionExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundOperatorExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundParameterExpression &expr, ExpressionExecutorState &state);
@@ -91,6 +92,8 @@ protected:
 	void Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
+	             Vector &result);
+	void Execute(BoundColumnRefExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
