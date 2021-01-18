@@ -144,7 +144,14 @@ public:
 				continue;
 			}
 			if (filter[row_idx + result_offset]) {
-				result_ptr[row_idx + result_offset] = DictRead(offsets[offset_idx++]);
+				VALUE_TYPE val = DictRead(offsets[offset_idx++]);
+				if (!IsValid(val)) {
+					FlatVector::SetNull(result, row_idx + result_offset, true);
+					continue;
+				}
+				result_ptr[row_idx + result_offset] = val;
+			} else {
+				offset_idx++;
 			}
 		}
 	}
@@ -157,9 +164,13 @@ public:
 				FlatVector::SetNull(result, row_idx + result_offset, true);
 				continue;
 			}
-			// TODO add IsFiltered() method
 			if (filter[row_idx + result_offset]) {
-				result_ptr[row_idx + result_offset] = PlainRead(*plain_data);
+				VALUE_TYPE val = PlainRead(*plain_data);
+				if (!IsValid(val)) {
+					FlatVector::SetNull(result, row_idx + result_offset, true);
+					continue;
+				}
+				result_ptr[row_idx + result_offset] = val;
 			} else { // there is still some data there that we have to skip over
 				PlainSkip(*plain_data);
 			}
@@ -186,6 +197,19 @@ protected:
 
 	shared_ptr<ByteBuffer> dict;
 	idx_t dict_size;
+
+private:
+	template <class T> static bool IsValid(T value) {
+		return true;
+	}
+
+	template <> bool IsValid(float value) {
+		return Value::FloatIsValid(value);
+	}
+
+	template <> bool IsValid(double value) {
+		return Value::DoubleIsValid(value);
+	}
 };
 
 class StringColumnReader : public TemplatedColumnReader<string_t> {

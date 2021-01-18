@@ -1,6 +1,7 @@
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
 #include "parquet_statistics.hpp"
+#include "column_reader.hpp"
 
 #include "thrift_tools.hpp"
 
@@ -122,7 +123,7 @@ unique_ptr<ColumnReader> create_reader(std::vector<SchemaElement> schema, idx_t 
 		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
 		// if we only have a single child no reason to create a struct ay
-		if (child_types.size() > 1) {
+		if (child_types.size() > 1 || depth == 0) {
 			result_type = LogicalType(LogicalTypeId::STRUCT, child_types);
 			result = make_unique<StructColumnReader>(result_type, s_ele, this_idx, max_define, max_repeat,
 			                                         move(child_readers));
@@ -270,21 +271,6 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 	D_ASSERT(metadata);
 	D_ASSERT(metadata->metadata);
 	return metadata->metadata.get();
-}
-
-// TODO move to column reader
-struct ValueIsValid {
-	template <class T> static bool Operation(T value) {
-		return true;
-	}
-};
-
-template <> bool ValueIsValid::Operation(float value) {
-	return Value::FloatIsValid(value);
-}
-
-template <> bool ValueIsValid::Operation(double value) {
-	return Value::DoubleIsValid(value);
 }
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, column_t column_index,
