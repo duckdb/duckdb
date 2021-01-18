@@ -185,10 +185,14 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 string PhysicalSimpleAggregate::ParamsToString() const {
 	string result;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 		if (i > 0) {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
+		if (aggregate.filter){
+			result += aggregate.filter->GetName();
+		}
 	}
 	return result;
 }

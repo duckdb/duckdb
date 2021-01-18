@@ -9,7 +9,7 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/main/client_context.hpp"
-
+#include "duckdb/parser/expression/comparison_expression.hpp"
 namespace duckdb {
 
 static uint32_t RequiredBitsForValue(uint32_t n) {
@@ -167,6 +167,70 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 	return groupby;
 }
 
+void ExtractColumnRef(Expression *filter, vector<unique_ptr<Expression>> & expressions, vector<LogicalType>& types){
+	switch(filter->expression_class) {
+	case ExpressionClass::BOUND_REF:{
+		auto &column_ref = (BoundReferenceExpression &)*filter;
+		auto ref = make_unique<BoundReferenceExpression>(column_ref.return_type, column_ref.index);
+		types.push_back(column_ref.return_type);
+		expressions.push_back(move(ref));
+		break;
+	}
+	case ExpressionClass::BOUND_CONSTANT:
+		break;
+	case ExpressionClass::BOUND_CAST:{
+		auto &cast = (BoundCastExpression &)*filter;
+		ExtractColumnRef(cast.child.get(),expressions,types);
+		break;
+	}
+	case ExpressionClass::BOUND_COMPARISON:{
+		auto &comparison = (BoundComparisonExpression &)*filter;
+		ExtractColumnRef(comparison.left.get(),expressions,types);
+		ExtractColumnRef(comparison.right.get(),expressions,types);
+//		if (comparison.left->type == ExpressionType::BOUND_REF || comparison.left->type == ExpressionType::OPERATOR_CAST){
+//			auto &column_ref = (BoundReferenceExpression &)*comparison.left;
+//			auto ref = make_unique<BoundReferenceExpression>(column_ref.return_type, column_ref.index);
+//			types.push_back(column_ref.return_type);
+//			expressions.push_back(move(comparison.left));
+//			comparison.left = move(ref);
+//		}
+//		if (comparison.right->type == ExpressionType::BOUND_REF || comparison.right->type == ExpressionType::OPERATOR_CAST){
+//			auto &column_ref = (BoundReferenceExpression &)*comparison.right;
+//			auto ref = make_unique<BoundReferenceExpression>(column_ref.return_type, column_ref.index);
+//			types.push_back(column_ref.return_type);
+//			expressions.push_back(move(comparison.right));
+//			comparison.right = move(ref);
+//		}
+//		if (comparison.left->type == ExpressionType::OPERATOR_CAST){
+//			auto &cast_ref = (BoundReferenceExpression &)*comparison.left;
+//			auto ref = make_unique<BoundReferenceExpression>(cast_ref.return_type, cast_ref.index);
+//			types.push_back(cast_ref.return_type);
+//			expressions.push_back(move(comparison.left));
+//			comparison.left = move(ref);
+//		}
+//		if (comparison.right->type == ExpressionType::OPERATOR_CAST){
+//			auto &cast_ref = (BoundReferenceExpression &)*comparison.right;
+//			auto ref = make_unique<BoundReferenceExpression>(cast_ref.return_type, expressions.size());
+//			types.push_back(cast_ref.return_type);
+//			expressions.push_back(move(comparison.right));
+//			comparison.right = move(ref);
+//		}
+		break;
+	}
+	case ExpressionClass::BOUND_CONJUNCTION:{
+		auto &conj = (BoundConjunctionExpression &)*filter;
+		for (auto &child : conj.children){
+			ExtractColumnRef(child.get(),expressions,types);
+		}
+		break;
+	}
+		default:
+			throw NotImplementedException("Filter not implemented within aggregation");
+
+}
+
+}
+
 unique_ptr<PhysicalOperator>
 PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,
                                                    vector<unique_ptr<Expression>> &aggregates,
@@ -189,7 +253,11 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 			expressions.push_back(move(child));
 			child = move(ref);
 		}
+		if (bound_aggr.filter){
+			ExtractColumnRef(bound_aggr.filter.get(),expressions,types);
+		}
 	}
+
 	if (expressions.empty()) {
 		return child;
 	}

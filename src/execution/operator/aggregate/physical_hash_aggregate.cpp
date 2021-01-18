@@ -24,7 +24,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
     : PhysicalSink(type, types), groups(move(groups_p)), all_combinable(true), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
-	if (this->groups.size() == 0) {
+	if (this->groups.empty()) {
 		group_types.push_back(LogicalType::TINYINT);
 		is_implicit_aggr = true;
 	} else {
@@ -45,8 +45,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 
 		aggregate_return_types.push_back(aggr.return_type);
-		for (idx_t i = 0; i < aggr.children.size(); ++i) {
-			payload_types.push_back(aggr.children[i]->return_type);
+		for (auto & child : aggr.children) {
+			payload_types.push_back(child->return_type);
 		}
 		if (!aggr.function.combine) {
 			all_combinable = false;
@@ -130,8 +130,8 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggr = (BoundAggregateExpression &)*aggregates[i];
+	for (auto & aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
@@ -151,7 +151,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	if (ForceSingleHT(state)) {
 		lock_guard<mutex> glock(gstate.lock);
 		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
-		if (gstate.finalized_hts.size() == 0) {
+		if (gstate.finalized_hts.empty()) {
 			gstate.finalized_hts.push_back(
 			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client), group_types,
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64));
@@ -430,12 +430,17 @@ string PhysicalHashAggregate::ParamsToString() const {
 		result += groups[i]->GetName();
 	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		if (i > 0 || groups.size() > 0) {
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		if (i > 0 || !groups.empty()) {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
+		if (aggregate.filter){
+			result += aggregate.filter->GetName();
+		}
 	}
 	return result;
 }
+
 
 } // namespace duckdb

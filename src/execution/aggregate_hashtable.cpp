@@ -1,16 +1,18 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 #include <cmath>
+
 #include <map>
 
 namespace duckdb {
@@ -274,6 +276,12 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggr.child_count;
+		if (aggr.filter){
+			ExpressionExecutor filter_execution(aggr.filter);
+			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+			auto count = filter_execution.SelectExpression(payload, true_sel);
+			payload.Slice(true_sel, count);
+		}
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(group_types);

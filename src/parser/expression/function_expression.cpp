@@ -50,6 +50,9 @@ bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpre
 			return false;
 		}
 	}
+	if (!BaseExpression::Equals(a->filter.get(),b->filter.get())){
+		return false;
+	}
 	return true;
 }
 
@@ -78,36 +81,24 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 
 void FunctionExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
-	vector<unique_ptr<ParsedExpression>> filter_list;
-	if (filter){
-		filter_list.push_back(move(filter));
-	}
 	serializer.WriteString(function_name);
 	serializer.WriteString(schema);
 	serializer.WriteList(children);
-	serializer.WriteList(filter_list);
+	serializer.WriteOptional(filter);
 	serializer.Write<bool>(distinct);
 	serializer.Write<bool>(is_operator);
-	if (!filter_list.empty()){
-		filter = move(filter_list[0]);
-	}
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	vector<unique_ptr<ParsedExpression>> children;
-	vector<unique_ptr<ParsedExpression>> filter_list;
 	auto function_name = source.Read<string>();
 	auto schema = source.Read<string>();
 	source.ReadList<ParsedExpression>(children);
-    source.ReadList<ParsedExpression>(filter_list);
+	auto filter = source.ReadOptional<ParsedExpression>();
 	auto distinct = source.Read<bool>();
 	auto is_operator = source.Read<bool>();
 	unique_ptr<FunctionExpression> function;
-    if (!filter_list.empty()){
-		function = make_unique<FunctionExpression>(function_name, children, move(filter_list[0]), distinct, is_operator);
-	} else{
-		function = make_unique<FunctionExpression>(function_name, children, move(nullptr), distinct, is_operator);
-	}
+	function = make_unique<FunctionExpression>(function_name, children, move(filter), distinct, is_operator);
 	function->schema = schema;
 	return move(function);
 }

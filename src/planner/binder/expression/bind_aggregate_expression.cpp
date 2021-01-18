@@ -19,10 +19,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	for (auto & child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
 	}
-	if (aggr.filter){
-		auto bind_res = aggregate_binder.BindExpression(&aggr.filter,0);
-		bound_filter = move(bind_res.expression);
-	}
+
 	if (!error.empty()) {
 		// failed to bind child
 		if (aggregate_binder.BoundColumns()) {
@@ -53,6 +50,12 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		types.push_back(child.expr->return_type);
 		arguments.push_back(child.expr->return_type);
 		children.push_back(move(child.expr));
+	}
+
+	// Now we bind the filter (if any)
+	if (aggr.filter){
+		auto bind_res = aggregate_binder.BindExpression(&aggr.filter,0);
+		bound_filter = move(bind_res.expression);
 	}
 
 	// bind the aggregate

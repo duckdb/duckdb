@@ -9,44 +9,203 @@ statement ok
 create temporary table t as select range i, mod(range,10) j from range(1000);
 
 
-query II
-SELECT
-  COUNT(*) AS unfiltered,
-  COUNT(*) FILTER (WHERE i < 5) AS filtered
-FROM t;
-----
-1000	5
+#query II
+#SELECT
+#  COUNT(*) AS unfiltered,
+#  COUNT(*) FILTER (WHERE i < 5) AS filtered
+#FROM t;
+#----
+#1000	5
+#
+#query II
+#SELECT
+#  COUNT(*) AS unfiltered,
+#  COUNT(*) FILTER (WHERE i > 5 and i < 10) AS filtered
+#FROM t;
+#----
+#1000	4
+#
+#query II
+#SELECT
+#  SUM(i) AS unfiltered,
+#  SUM(i) FILTER (WHERE i < 5) AS filtered
+#FROM t;
+#----
+#499500	10
+#
+#query II
+#SELECT
+#  SUM(i) AS unfiltered,
+#  SUM(i) FILTER (WHERE i between 5 and 10) AS filtered
+#FROM t;
+#----
+#499500	45
+#
+#query II
+#SELECT
+#  SUM(i) AS unfiltered,
+#  SUM(j) FILTER (WHERE j < 2) AS filtered
+#FROM t;
+#----
+#499500	100
+#
+#
+#query I
+#SELECT
+#  SUM(j) FILTER (WHERE i < 10)
+#FROM t;
+#----
+#45
+#
+#query I
+#SELECT
+#  SUM(j) FILTER (WHERE i < (select 10))
+#FROM t;
+#----
+#45
+#
+#query I
+#SELECT
+#  SUM(i) FILTER (WHERE i < (select i from t as t2 where t.i = t2.i))
+#FROM t;
+#----
+#NULL
+#
+## use it inside subquery
+#query I
+#SELECT
+# (select sum(t2.i) FILTER (where t2.i < 10)  from t as t2)
+#FROM t
+#limit 5;
+#----
+#45
+#45
+#45
+#45
+#45
+#
+## multiple filters
+#query II
+#SELECT
+# SUM(j) FILTER (WHERE i < 10),
+#  SUM(i) FILTER (WHERE i < 5)
+#FROM t;
+#----
+#45	10
+
+# use correlated expression inside the filter itself
+#query I
+# SELECT
+# (select sum(t.i) FILTER (where t.i = t2.i)  from t as t2)
+#FROM t
+#where i < 5
+#----
+#NULL
 
 
+#query II
+# SELECT
+#  sum(i) AS unfiltered,
+#  sum(i) FILTER (WHERE i < 5) AS filtered
+#FROM t
+#group by j;
+#----
+#49500	0
+#49600	1
+#49700	2
+#49800	3
+#49900	4
+#50000	NULL
+#50100	NULL
+#50200	NULL
+#50300	NULL
+#50400	NULL
 
-query II
-SELECT
-  COUNT(*) AS unfiltered,
-  COUNT(*) FILTER (WHERE i > 5 and i < 10) AS filtered
-FROM t;
-----
-1000	4
+#query II
+# SELECT
+#  COUNT(*) AS unfiltered,
+#  COUNT(*) FILTER (WHERE i > 5 and i < 10) AS filtered
+#FROM t
+#group by j;
+#----
+#1000	4
 
-query II
-SELECT
-  SUM(i) AS unfiltered,
-  SUM(i) FILTER (WHERE i < 5) AS filtered
-FROM t;
-----
-499500	10
+
 
 query II
 SELECT
   SUM(i) AS unfiltered,
   SUM(i) FILTER (WHERE i between 5 and 10) AS filtered
-FROM t;
+FROM t
+group by j;
 ----
-499500	45
+49500	5
+49600	6
+49700	7
+49800	8
+49900	9
+50000	10
+50100	NULL
+50200	NULL
+50300	NULL
+50400	NULL
+
 
 query II
 SELECT
   SUM(i) AS unfiltered,
-  SUM(j) FILTER (WHERE j < 2) AS filtered
-FROM t;
+  SUM(j) FILTER (WHERE j = 1) AS filtered,
+  j
+FROM t
+group by j;
 ----
 499500	100
+
+
+query I
+SELECT
+  SUM(j) FILTER (WHERE i < 10)
+FROM t
+group by j;
+----
+45
+
+query I
+SELECT
+  SUM(j) FILTER (WHERE i < (select 10))
+FROM t;
+group by j;
+----
+45
+
+query I
+SELECT
+  SUM(i) FILTER (WHERE i < (select i from t as t2 where t.i = t2.i))
+FROM t;
+group by j;
+----
+NULL
+
+# use it inside subquery
+query I
+SELECT
+ (select sum(t2.i) FILTER (where t2.i < 10)  from t as t2)
+FROM t
+group by j;
+limit 5;
+----
+45
+45
+45
+45
+45
+
+# multiple filters
+query II
+SELECT
+ SUM(j) FILTER (WHERE i < 10),
+  SUM(i) FILTER (WHERE i < 5)
+FROM t
+group by j;
+----
+45	10

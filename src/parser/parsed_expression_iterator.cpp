@@ -53,6 +53,9 @@ void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
 		for (auto &child : func_expr.children) {
 			callback(child);
 		}
+		if (func_expr.filter){
+			callback(func_expr.filter);
+		}
 		break;
 	}
 	case ExpressionClass::OPERATOR: {

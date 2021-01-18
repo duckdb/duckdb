@@ -35,8 +35,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 
 		D_ASSERT(!aggr.distinct);
 		D_ASSERT(aggr.function.combine);
-		for (idx_t i = 0; i < aggr.children.size(); ++i) {
-			payload_types.push_back(aggr.children[i]->return_type);
+		for (auto & child : aggr.children) {
+			payload_types.push_back(child->return_type);
 		}
 	}
 	aggregate_objects = AggregateObject::CreateAggregateObjects(move(bindings));
@@ -67,7 +67,7 @@ public:
 	PerfectHashAggregateLocalState(PhysicalPerfectHashAggregate &op, ClientContext &context)
 	    : ht(op.CreateHT(context)) {
 		group_chunk.InitializeEmpty(op.group_types);
-		if (op.payload_types.size() > 0) {
+		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
 		}
 	}
@@ -99,8 +99,8 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggr = (BoundAggregateExpression &)*aggregates[i];
+	for (auto & aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
@@ -109,6 +109,7 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 	}
 
 	group_chunk.SetCardinality(input.size());
+
 	aggregate_input_chunk.SetCardinality(input.size());
 
 	group_chunk.Verify();
@@ -163,10 +164,14 @@ string PhysicalPerfectHashAggregate::ParamsToString() const {
 		result += groups[i]->GetName();
 	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		if (i > 0 || groups.size() > 0) {
+		if (i > 0 || !groups.empty()) {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		if (aggregate.filter){
+			result += aggregate.filter->GetName();
+		}
 	}
 	return result;
 }
