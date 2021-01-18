@@ -5,6 +5,7 @@
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
+#include "duckdb/optimizer/deliminator.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
@@ -73,6 +74,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("join_order");
 	JoinOrderOptimizer optimizer(context);
 	plan = optimizer.Optimize(move(plan));
+	context.profiler.EndPhase();
+
+	// removes any redundant DelimGets/DelimJoins
+	context.profiler.StartPhase("deliminator");
+	Deliminator deliminator;
+	plan = deliminator.Optimize(move(plan));
 	context.profiler.EndPhase();
 
 	context.profiler.StartPhase("unused_columns");
