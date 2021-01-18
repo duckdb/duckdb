@@ -161,4 +161,12 @@ struct StringSplitFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ASCII {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CHR {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

@@ -29,7 +29,7 @@ SELECT STRUCT_EXTRACT(struct, 'orderkey') l_orderkey,
        STRUCT_EXTRACT(struct, 'shipmode') l_shipmode,
        STRUCT_EXTRACT(struct, 'comment') l_comment
 FROM
-  (SELECT STRUCT_PACK(quantity := l_quantity , extendedprice := l_extendedprice , discount := l_discount , tax := l_tax , returnflag := l_returnflag , linestatus := l_linestatus , shipdate := l_shipdate , commitdate := l_commitdate , receiptdate := l_receiptdate , shipinstruct := l_shipinstruct , shipmode := l_shipmode , COMMENT := l_comment , orderkey := l_orderkey , partkey := l_partkey , suppkey := l_suppkey , linenumber := l_linenumber) struct
+  (SELECT STRUCT_PACK(quantity := l_quantity , extendedprice := l_extendedprice , discount := l_discount , tax := l_tax , returnflag := l_returnflag , linestatus := l_linestatus , shipdate := l_shipdate , commitdate := l_commitdate , receiptdate := l_receiptdate , shipinstruct := l_shipinstruct , shipmode := l_shipmode , COMMENT := l_comment , orderkey := l_orderkey , partkey := l_partkey , suppkey := l_suppkey , linenumber := l_linenumber) as struct
    FROM lineitem_org) structs
 
 query I

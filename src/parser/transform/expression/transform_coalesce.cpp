@@ -1,4 +1,3 @@
-#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -14,31 +13,14 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(PGAExpr *root) {
 	}
 	auto coalesce_args = reinterpret_cast<PGList *>(root->lexpr);
 	D_ASSERT(coalesce_args->length > 0); // parser ensures this already
-	if (coalesce_args->length == 1) {
-		// special case, dont need to do anything, bug #1222
-		return TransformExpression(reinterpret_cast<PGNode *>(coalesce_args->head->data.ptr_value));
-	}
-	auto exp_root = make_unique<CaseExpression>();
-	auto cur_root = exp_root.get();
-	for (auto cell = coalesce_args->head; cell && cell->next; cell = cell->next) {
+
+	auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+	for (auto cell = coalesce_args->head; cell; cell = cell->next) {
 		// get the value of the COALESCE
 		auto value_expr = TransformExpression(reinterpret_cast<PGNode *>(cell->data.ptr_value));
-		// perform an IS NOT NULL comparison with the value here
-		cur_root->check = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, value_expr->Copy());
-		// if IS NOT NULL, we output the value
-		cur_root->result_if_true = move(value_expr);
-		if (cell->next->next == nullptr) {
-			// if there is no next in the chain, the COALESCE ends there
-			cur_root->result_if_false = TransformExpression(reinterpret_cast<PGNode *>(cell->next->data.ptr_value));
-		} else {
-			// more COALESCE parameters remain, create a nested CASE statement
-			auto next_case = make_unique<CaseExpression>();
-			auto case_ptr = next_case.get();
-			cur_root->result_if_false = move(next_case);
-			cur_root = case_ptr;
-		}
+		coalesce_op->children.push_back(move(value_expr));
 	}
-	return move(exp_root);
+	return move(coalesce_op);
 }
 
 } // namespace duckdb

@@ -1,0 +1,173 @@
+# name: test/optimizer/zonemaps.test
+# description: Test if zonemaps are correctly used
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# 5) More General Tests
+statement ok
+CREATE TABLE test(a tinyint, b smallint, c integer, d bigint, e double, f real, g varchar);
+
+# 5.1) Flipping filters
+query II
+explain select count(*) from test where (2 < a and 7 > a) or (a >5 and a < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=2.*a<=7.*
+
+query II
+explain select count(*) from test where (2 < a and a < 7) or (a >5 and a < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=2.*a<=7.*
+
+query II
+explain select count(*) from test where (a >=2 and 7 > a)  or (a >5 and a < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=2.*a<=7.*
+
+query II
+explain select count(*) from test where (4=a) or (a >5 and a < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=4.*a<=6.*
+
+# 5.2) Different Data Types
+
+query II
+explain select count(*) from test where (a >=2 and a < 7) or (a >5 and a < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=2.*a<=7.*
+
+query II
+explain select count(*) from test where a >2 and a < 7 or (a >5 and a < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=2.*a<=7.*
+
+query II
+explain select count(*) from test where a >2 and a <= 7 or (a >5 and a < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=2.*a<=7.*
+
+query II
+explain select count(*) from test where a >=2 and a <= 7 or (a >5 and a < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=2.*a<=7.*
+
+query II
+explain select count(*) from test where (b >=2 and b < 7) or (b >5 and b < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*b>=2.*b<=7.*
+
+query II
+explain select count(*) from test where b >2 and b < 7 or (b >5 and b < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*b>=2.*b<=7.*
+
+query II
+explain select count(*) from test where b >2 and b <= 7 or (b >5 and b < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*b>=2.*b<=7.*
+
+query II
+explain select count(*) from test where b >=2 and b <= 7 or (b >5 and b < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*b>=2.*b<=7.*
+
+query II
+explain select count(*) from test where (c >=2 and c < 7) or (c >5 and c < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*c>=2.*c<=7.*
+
+query II
+explain select count(*) from test where c >2 and c < 7 or (c >5 and c < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*c>=2.*c<=7.*
+
+query II
+explain select count(*) from test where c >2 and c <= 7 or (c >5 and c < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*c>=2.*c<=7.*
+
+query II
+explain select count(*) from test where c >=2 and c <= 7 or (c >5 and c < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*c>=2.*c<=7.*
+
+query II
+explain select count(*) from test where (d >=2 and d < 7) or (d >5 and d < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*d>=2.*d<=7.*
+
+query II
+explain select count(*) from test where d >2 and d < 7 or (d >5 and d < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*d>=2.*d<=7.*
+
+query II
+explain select count(*) from test where d >2 and d <= 7 or (d >5 and d < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*d>=2.*d<=7.*
+
+query II
+explain select count(*) from test where d >=2 and d <= 7 or (d >5 and d < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*d>=2.*d<=7.*
+
+query II
+explain select count(*) from test where (e >=2 and e < 7) or (e >5 and e < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*e>=2.*e<=7.*
+
+query II
+explain select count(*) from test where e >2 and e < 7 or (e >5 and e < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*e>=2.*e<=7.*
+
+query II
+explain select count(*) from test where e >2 and e <= 7 or (e >5 and e < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*e>=2.*e<=7.*
+
+query II
+explain select count(*) from test where e >=2 and e <= 7 or (e >5 and e < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*e>=2.*e<=7.*
+
+query II
+explain select count(*) from test where (f >=2 and f < 7) or (f >5 and f < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*f>=2.*f<=7.*
+
+query II
+explain select count(*) from test where f >2 and f < 7 or (f >5 and f < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*f>=2.*f<=7.*
+
+query II
+explain select count(*) from test where f >2 and f <= 7 or (f >5 and f < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*f>=2.*f<=7.*
+
+query II
+explain select count(*) from test where f >=2 and f <= 7 or (f >5 and f < 6)
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*f>=2.*f<=7.*
+
+query II
+explain select count(*) from test where (g >='2' and g < '7') or (g >'5' and g < '6')
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*g>=2.*g<=7.*
+
+query II
+explain select count(*) from test where g >'2' and g < '7' or (g >'5' and g < '6')
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*g>=2.*g<=7.*
+
+query II
+explain select count(*) from test where g >'2' and g <= '7' or (g >'5' and g < '6')
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*g>=2.*g<=7.*
+
+query II
+explain select count(*) from test where g >='2' and g <= '7' or (g >'5' and g < '6')
+----
+physical_plan	<REGEX>:.* Zonemaps Checks: .*g>=2.*g<=7.*

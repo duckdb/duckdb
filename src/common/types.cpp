@@ -378,6 +378,8 @@ LogicalType TransformStringToLogicalType(string str) {
 		return LogicalType::INTERVAL;
 	} else if (lower_str == "hugeint" || lower_str == "int128") {
 		return LogicalType::HUGEINT;
+	} else if (lower_str == "struct" || lower_str == "row") {
+		return LogicalType::STRUCT;
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
@@ -569,6 +571,11 @@ LogicalType LogicalType::MaxLogicalType(LogicalType left, LogicalType right) {
 			// use max width/scale of the two types
 			return LogicalType(LogicalTypeId::DECIMAL, MaxValue<uint8_t>(left.width(), right.width()),
 			                   MaxValue<uint8_t>(left.scale(), right.scale()));
+		} else if (left.id() == LogicalTypeId::LIST) {
+			// list: perform max recursively on child type
+			child_list_t<LogicalType> child_types;
+			child_types.push_back(make_pair(left.child_types()[0].first, MaxLogicalType(left.child_types()[0].second, right.child_types()[0].second)));
+			return LogicalType(LogicalTypeId::LIST, move(child_types));
 		} else {
 			// types are equal but no extra specifier: just return the type
 			// FIXME: LIST and STRUCT?

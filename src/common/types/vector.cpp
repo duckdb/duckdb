@@ -764,6 +764,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (type.InternalType() == PhysicalType::STRUCT) {
+		D_ASSERT(type.child_types().size() > 0);
 		if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(children.size() > 0);
@@ -774,6 +775,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (type.InternalType() == PhysicalType::LIST) {
+		D_ASSERT(type.child_types().size() == 1);
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify();
@@ -936,9 +938,7 @@ ChunkCollection &ListVector::GetEntry(const Vector &vector) {
 void ListVector::SetEntry(Vector &vector, unique_ptr<ChunkCollection> cc) {
 	D_ASSERT(vector.type.id() == LogicalTypeId::LIST);
 	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorListBuffer>();
-	}
+	vector.auxiliary = make_buffer<VectorListBuffer>();
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
 	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));

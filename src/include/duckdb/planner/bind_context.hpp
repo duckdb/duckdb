@@ -25,6 +25,11 @@ class Binder;
 class LogicalGet;
 class BoundQueryNode;
 
+struct UsingColumnSet {
+	string primary_binding;
+	unordered_set<string> bindings;
+};
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -71,10 +76,15 @@ public:
 	//! We need this to correctly bind recursive CTEs with multiple references.
 	void AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types);
 
-	//! Hide a binding
-	void HideBinding(const string &binding_name, const string &column_name);
-	//! Returns true if the given column is hidden from the given binding
-	bool BindingIsHidden(const string &binding_name, const string &column_name);
+	//! Add an implicit join condition (e.g. USING (x))
+	void AddUsingBinding(const string &column_name, UsingColumnSet set);
+
+	//! Returns any using column set for the given column name, or nullptr if there is none. On conflict (multiple using column sets with the same name) throw an exception.
+	UsingColumnSet *GetUsingBinding(const string &column_name);
+	//! Returns any using column set for the given column name, or nullptr if there is none
+	UsingColumnSet *GetUsingBinding(const string &column_name, const string &binding_name);
+	//! Erase a using binding from the set of using bindings
+	void RemoveUsingBinding(const string &column_name, UsingColumnSet *set);
 
 	unordered_map<string, std::shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
@@ -96,15 +106,14 @@ private:
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding);
 
 private:
 	//! The set of bindings
 	unordered_map<string, unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
-	//! The set of hidden columns from the result
-	qualified_column_set_t hidden_columns;
+	//! The set of columns used in USING join conditions
+	unordered_map<string, vector<UsingColumnSet>> using_columns;
 
 	//! The set of CTE bindings
 	unordered_map<string, std::shared_ptr<Binding>> cte_bindings;

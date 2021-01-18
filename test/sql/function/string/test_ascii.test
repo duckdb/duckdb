@@ -1,0 +1,77 @@
+# name: test/sql/function/string/test_ascii.test
+# description:  test ascii() and chr() functions
+# group: [string]
+
+#statement ok
+#PRAGMA enable_verification
+
+# Some ascii checks
+query I
+SELECT ascii('x')
+----
+120
+
+
+query I
+SELECT ASCII('a')
+----
+97
+
+query I
+SELECT ASCII('ABC')
+----
+65
+
+query I
+SELECT ASCII('Ω')
+----
+937
+
+query I
+SELECT ASCII('ΩΩ')
+----
+937
+
+query I
+SELECT ASCII('Ä')
+----
+196
+
+query I
+SELECT ASCII(5)
+----
+53
+
+query I
+SELECT ASCII(NULL)
+----
+NULL
+
+statement error
+SELECT ASCII()
+
+query T
+SELECT CHR(97)
+----
+a
+
+query T
+SELECT CHR(196)
+----
+Ä
+
+query T
+SELECT CHR(937)
+----
+Ω
+
+query T
+SELECT CHR(NULL)
+----
+NULL
+
+statement error
+SELECT CHR(-10)
+
+statement error
+SELECT CHR()
