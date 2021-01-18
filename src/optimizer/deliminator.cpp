@@ -96,20 +96,32 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	for (auto &child : op->children) {
 		FindCandidates(&child, candidates);
 	}
-	if ( // Projection/Aggregate
-	    (op->type == LogicalOperatorType::LOGICAL_PROJECTION ||
-	     op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) &&
-	    // followed by a Join
-	    op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-	    // DelimGet as direct child (left or right)
-	    (op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
-	     op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
-	     // Filter + DelimGet as a child (left or right)
-	     (op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_FILTER &&
-	      op->children[0]->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) ||
-	     (op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_FILTER &&
-	      op->children[0]->children[1]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET))) {
+	// search for projection/aggregate
+	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
+	    op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return;
+	}
+	// followed by a join
+	if (op->children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return;
+	}
+	// with a DelimGet as a direct child (left or right)
+	if (op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
+	    op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		candidates.push_back(op_ptr);
+		return;
+	}
+	// or a filter followed by a DelimGet (left)
+	if (op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_FILTER &&
+	    op->children[0]->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		candidates.push_back(op_ptr);
+		return;
+	}
+	// filter followed by a DelimGet (right)
+	if (op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_FILTER &&
+	    op->children[0]->children[1]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		candidates.push_back(op_ptr);
+		return;
 	}
 }
 
