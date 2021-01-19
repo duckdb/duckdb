@@ -120,7 +120,8 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 			BoundAggregateExpression::GetColumnRef(aggr.filter.get(), bound_refs, types);
 			auto f_map = filter_map.find(aggr.filter.get());
 			if (f_map == filter_map.end()){
-				filter_map[aggr.filter.get()] = {true,{}};
+				unordered_map<size_t,size_t> new_map;
+				filter_map[aggr.filter.get()] = std::make_pair (true, new_map);
 				f_map = filter_map.find(aggr.filter.get());
 			}
 			for (auto &bound_ref : bound_refs) {

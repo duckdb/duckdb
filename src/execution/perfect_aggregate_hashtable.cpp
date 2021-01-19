@@ -1,4 +1,5 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
