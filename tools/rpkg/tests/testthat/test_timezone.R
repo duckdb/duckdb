@@ -1,4 +1,13 @@
-test_that("timezone_out works with UTC", {
+test_that("timezone_out works with default", {
+  con <- dbConnect(duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  query <- "SELECT '1970-01-01 12:00:00'::TIMESTAMP AS ts"
+  res <- dbGetQuery(con, query)
+  expect_equal(res[[1]], as.POSIXct("1970-01-01 12:00:00", tz = "UTC"))
+})
+
+test_that("timezone_out works with  UTC specified", {
   con <- dbConnect(duckdb(), timezone_out = "UTC")
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
