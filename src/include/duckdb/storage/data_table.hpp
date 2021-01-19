@@ -139,6 +139,7 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
 
+	void Checkpoint();
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);

@@ -28,9 +28,14 @@ int64_t WriteAheadLog::GetWALSize() {
 void WriteAheadLog::Truncate(int64_t size) {
 	writer->Truncate(size);
 }
+
 //===--------------------------------------------------------------------===//
 // Write Entries
 //===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCheckpoint(block_id_t meta_block) {
+	// FIXME; write checkpoint entry
+}
+
 //===--------------------------------------------------------------------===//
 // CREATE TABLE
 //===--------------------------------------------------------------------===//

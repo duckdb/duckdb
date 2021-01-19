@@ -99,11 +99,11 @@ public:
 	TableFunction() : SimpleNamedParameterFunction("", {}) {
 	}
 
-	//! (Optional) Bind function
+	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
-	//! init function
+	//! (Optional) init function
 	//! Initialize the operator state of the function. The operator state is used to keep track of the progress in the
 	//! table function.
 	table_function_init_t init;

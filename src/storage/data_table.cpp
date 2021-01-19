@@ -1059,4 +1059,14 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	return columns[column_id]->statistics->Copy();
 }
 
+
+//===--------------------------------------------------------------------===//
+// Checkpoint
+//===--------------------------------------------------------------------===//
+void DataTable::Checkpoint() {
+	// checkpoint the table
+
+}
+
+
 } // namespace duckdb

@@ -84,7 +84,6 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	} else {
 		config.maximum_memory = new_config.maximum_memory;
 	}
-	config.checkpoint_only = new_config.checkpoint_only;
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;
 	config.maximum_memory = new_config.maximum_memory;

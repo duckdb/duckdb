@@ -186,7 +186,6 @@ void SingleFileBlockManager::LoadFreeList(BufferManager &manager) {
 }
 
 void SingleFileBlockManager::StartCheckpoint() {
-	used_blocks.clear();
 }
 
 block_id_t SingleFileBlockManager::GetFreeBlockId() {

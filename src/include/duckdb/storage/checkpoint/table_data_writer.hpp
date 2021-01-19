@@ -21,13 +21,13 @@ public:
 	TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table);
 	~TableDataWriter();
 
-	void WriteTableData(ClientContext &context);
+	void WriteTableData();
 
 private:
-	void AppendData(Transaction &transaction, idx_t col_idx, Vector &data, idx_t count);
+	void AppendData(idx_t col_idx, Vector &data, idx_t count);
 
 	void CreateSegment(idx_t col_idx);
-	void FlushSegment(Transaction &transaction, idx_t col_idx);
+	void FlushSegment(idx_t col_idx);
 
 	void WriteDataPointers();
 	void VerifyDataPointers();

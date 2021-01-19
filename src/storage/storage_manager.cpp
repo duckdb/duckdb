@@ -31,9 +31,13 @@ BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
 	return *context.db->storage->buffer_manager;
 }
 
-void StorageManager::Initialize() {
-	bool in_memory = path.empty() || path == ":memory:";
 
+bool StorageManager::InMemory() {
+	return path.empty() || path == ":memory:";
+}
+
+void StorageManager::Initialize() {
+	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
@@ -69,34 +73,6 @@ void StorageManager::Initialize() {
 	}
 }
 
-void StorageManager::Checkpoint(string wal_path) {
-	auto &fs = database.GetFileSystem();
-	if (!fs.FileExists(wal_path)) {
-		// no WAL to checkpoint
-		return;
-	}
-	if (read_only) {
-		// cannot checkpoint in read-only system
-		return;
-	}
-	// check the size of the WAL
-	{
-		BufferedFileReader reader(fs, wal_path.c_str());
-		if (reader.FileSize() <= database.config.checkpoint_wal_size) {
-			// WAL is too small
-			return;
-		}
-	}
-
-	// checkpoint the database
-	// FIXME: we do this now by creating a new database and forcing a checkpoint in that database
-	// then reloading the file again
-	// this should be fixed and turned into an incremental checkpoint
-	DBConfig config;
-	config.checkpoint_only = true;
-	DuckDB db(path, &config);
-}
-
 void StorageManager::LoadDatabase() {
 	string wal_path = path + ".wal";
 	auto &fs = database.GetFileSystem();
@@ -117,9 +93,6 @@ void StorageManager::LoadDatabase() {
 		buffer_manager =
 		    make_unique<BufferManager>(fs, *block_manager, config.temporary_directory, config.maximum_memory);
 	} else {
-		if (!config.checkpoint_only) {
-			Checkpoint(wal_path);
-		}
 		// initialize the block manager while loading the current db file
 		auto sf = make_unique<SingleFileBlockManager>(fs, path, read_only, false, config.use_direct_io);
 		buffer_manager = make_unique<BufferManager>(fs, *sf, config.temporary_directory, config.maximum_memory);
@@ -127,23 +100,16 @@ void StorageManager::LoadDatabase() {
 		block_manager = move(sf);
 
 		//! Load from storage
-		CheckpointManager checkpointer(*this);
+		CheckpointManager checkpointer(*database.catalog, *this);
 		checkpointer.LoadFromStorage();
 		// check if the WAL file exists
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
 			WriteAheadLog::Replay(database, wal_path);
-			if (config.checkpoint_only) {
-				D_ASSERT(!read_only);
-				// checkpoint the database
-				checkpointer.CreateCheckpoint();
-				// remove the WAL
-				fs.RemoveFile(wal_path);
-			}
 		}
 	}
 	// initialize the WAL file
-	if (!config.checkpoint_only && !read_only) {
+	if (!read_only) {
 		wal.Initialize(wal_path);
 	}
 }

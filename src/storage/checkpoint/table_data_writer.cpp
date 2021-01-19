@@ -9,7 +9,6 @@
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -44,8 +43,7 @@ TableDataWriter::TableDataWriter(CheckpointManager &manager, TableCatalogEntry &
 TableDataWriter::~TableDataWriter() {
 }
 
-void TableDataWriter::WriteTableData(ClientContext &context) {
-	auto &transaction = Transaction::GetTransaction(context);
+void TableDataWriter::WriteTableData() {
 	// allocate segments to write the table to
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
@@ -63,9 +61,10 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 	for (auto &column : table.columns) {
 		column_ids.push_back(column.oid);
 	}
+	throw Exception("FIXME: scan table");
 	// initialize scan structures to prepare for the scan
-	TableScanState state;
-	table.storage->InitializeScan(transaction, state, column_ids);
+	// TableScanState state;
+	// table.storage->InitializeScan(transaction, state, column_ids);
 	//! get all types of the table and initialize the chunk
 	auto types = table.GetTypes();
 	DataChunk chunk;
@@ -74,7 +73,7 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
-		table.storage->Scan(transaction, chunk, state, column_ids);
+		// table.storage->Scan(transaction, chunk, state, column_ids);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -82,12 +81,12 @@ void TableDataWriter::WriteTableData(ClientContext &context) {
 		idx_t chunk_size = chunk.size();
 		for (idx_t i = 0; i < table.columns.size(); i++) {
 			D_ASSERT(chunk.data[i].type == table.columns[i].type);
-			AppendData(transaction, i, chunk.data[i], chunk_size);
+			AppendData(i, chunk.data[i], chunk_size);
 		}
 	}
 	// flush any remaining data and write the data pointers to disk
 	for (idx_t i = 0; i < table.columns.size(); i++) {
-		FlushSegment(transaction, i);
+		FlushSegment(i);
 	}
 	VerifyDataPointers();
 	WriteDataPointers();
@@ -104,7 +103,7 @@ void TableDataWriter::CreateSegment(idx_t col_idx) {
 	}
 }
 
-void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector &data, idx_t count) {
+void TableDataWriter::AppendData(idx_t col_idx, Vector &data, idx_t count) {
 	idx_t offset = 0;
 	while (count > 0) {
 		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
@@ -113,7 +112,7 @@ void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector
 			return;
 		}
 		// the segment is full: flush it to disk
-		FlushSegment(transaction, col_idx);
+		FlushSegment(col_idx);
 
 		// now create a new segment and continue appending
 		CreateSegment(col_idx);
@@ -122,7 +121,7 @@ void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector
 	}
 }
 
-void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
+void TableDataWriter::FlushSegment(idx_t col_idx) {
 	auto tuple_count = segments[col_idx]->tuple_count;
 	if (tuple_count == 0) {
 		return;

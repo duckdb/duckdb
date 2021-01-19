@@ -27,6 +27,13 @@ public:
 	StorageManager(DatabaseInstance &database, string path, bool read_only);
 	~StorageManager();
 
+	//! The BlockManager to read/store meta information and data in blocks
+	unique_ptr<BlockManager> block_manager;
+	//! The BufferManager of the database
+	unique_ptr<BufferManager> buffer_manager;
+	//! The database this storagemanager belongs to
+	DatabaseInstance &database;
+public:
 	static StorageManager &GetStorageManager(ClientContext &context);
 
 	//! Initialize a database or load an existing database from the given path
@@ -43,18 +50,11 @@ public:
 	string GetDBPath() {
 		return path;
 	}
-	//! The BlockManager to read/store meta information and data in blocks
-	unique_ptr<BlockManager> block_manager;
-	//! The BufferManager of the database
-	unique_ptr<BufferManager> buffer_manager;
-	//! The database this storagemanager belongs to
-	DatabaseInstance &database;
+	bool InMemory();
 
 private:
 	//! Load the database from a directory
 	void LoadDatabase();
-	//! Create a checkpoint of the database
-	void Checkpoint(string wal_path);
 
 	//! The path of the database
 	string path;

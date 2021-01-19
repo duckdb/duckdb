@@ -54,10 +54,6 @@ public:
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
-
-private:
-	// FIXME: don't set this as a user: used internally (only for now)
-	bool checkpoint_only = false;
 };
 
 } // namespace duckdb

@@ -15,6 +15,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class Catalog;
 class ClientContext;
 class MetaBlockReader;
 class SchemaCatalogEntry;
@@ -37,7 +38,7 @@ public:
 //! CheckpointManager is responsible for checkpointing the database
 class CheckpointManager {
 public:
-	CheckpointManager(StorageManager &manager);
+	CheckpointManager(Catalog &catalog, StorageManager &manager);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connction is available because right now the checkpointing cannot be done online. (TODO)
@@ -45,6 +46,10 @@ public:
 	//! Load from a stored checkpoint
 	void LoadFromStorage();
 
+	//! The catalog
+	Catalog &catalog;
+	//! The storage manager
+	StorageManager &storage;
 	//! The block manager to write the checkpoint to
 	BlockManager &block_manager;
 	//! The buffer manager
@@ -57,8 +62,8 @@ public:
 	unique_ptr<MetaBlockWriter> tabledata_writer;
 
 private:
-	void WriteSchema(ClientContext &context, SchemaCatalogEntry &schema);
-	void WriteTable(ClientContext &context, TableCatalogEntry &table);
+	void WriteSchema(SchemaCatalogEntry &schema);
+	void WriteTable(TableCatalogEntry &table);
 	void WriteView(ViewCatalogEntry &table);
 	void WriteSequence(SequenceCatalogEntry &table);
 	void WriteMacro(MacroCatalogEntry &table);

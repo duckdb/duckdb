@@ -78,6 +78,8 @@ public:
 	void Truncate(int64_t size);
 	void Flush();
 
+	void WriteCheckpoint(block_id_t meta_block);
+
 private:
 	DatabaseInstance &database;
 	unique_ptr<BufferedFileWriter> writer;
