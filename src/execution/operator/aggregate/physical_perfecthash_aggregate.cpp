@@ -38,6 +38,14 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 		for (auto & child : aggr.children) {
 			payload_types.push_back(child->return_type);
 		}
+		if (aggr.filter){
+			vector<LogicalType> types;
+			vector<vector<Expression*>> bound_refs;
+			BoundAggregateExpression::GetColumnRef(aggr.filter.get(),bound_refs,types);
+			for (auto type:types){
+				payload_types.push_back(type);
+			}
+		}
 	}
 	aggregate_objects = AggregateObject::CreateAggregateObjects(move(bindings));
 }
@@ -106,7 +114,21 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
+		if (aggr.filter){
+			vector<LogicalType> types;
+			vector<vector<Expression*>> bound_refs;
+			BoundAggregateExpression::GetColumnRef(aggr.filter.get(),bound_refs,types);
+			for (auto &bound_ref : bound_refs){
+				auto &bound_ref_expr = (BoundReferenceExpression &)*bound_ref[0];
+			    aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
+				for (auto&bound_ref_up : bound_ref){
+					auto &bound_ref_up_expr = (BoundReferenceExpression &)*bound_ref_up;
+					bound_ref_up_expr.index = aggregate_input_idx-1;
+				}
+			}
+		}
 	}
+
 
 	group_chunk.SetCardinality(input.size());
 

@@ -110,17 +110,26 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
-	for (auto & aggregate : aggregates) {
+	for (auto &aggregate : aggregates) {
 		auto input_count = (idx_t)aggregate.child_count;
-		if (aggregate.filter){
+		if (aggregate.filter) {
 			ExpressionExecutor filter_execution(aggregate.filter);
 			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
 			auto count = filter_execution.SelectExpression(payload, true_sel);
-			payload.Slice(true_sel, count);
-		}
+			DataChunk filtered_payload;
+			auto pay_types = payload.GetTypes();
+			filtered_payload.Initialize(pay_types);
+			filtered_payload.Slice(payload, true_sel, count);
+			Vector filtered_addresses;
+			filtered_addresses.Slice(addresses, true_sel, count);
+			filtered_addresses.Normalify(count);
+			aggregate.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
+			                          filtered_addresses, filtered_payload.size());
 
-		aggregate.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
-		                     payload.size());
+		} else {
+			aggregate.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
+			                          payload.size());
+		}
 		// move to the next aggregate
 		payload_idx += input_count;
 		VectorOperations::AddInPlace(addresses, aggregate.payload_size, payload.size());

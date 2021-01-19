@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include <memory>
 
 namespace duckdb {
 class BoundAggregateExpression : public Expression {
@@ -41,7 +42,8 @@ public:
 
 	hash_t Hash() const override;
 	bool Equals(const BaseExpression *other) const override;
-
+	static unique_ptr<Expression> ExtractColumnRef(unique_ptr<Expression> filter, vector<unique_ptr<Expression>> &expressions, vector<LogicalType> &types);
+	static void GetColumnRef(Expression* filter,vector<vector<Expression*>>  &expressions,vector<LogicalType> &types);
 	unique_ptr<Expression> Copy() override;
 };
 } // namespace duckdb

@@ -7,12 +7,11 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 
 #include <cmath>
-
 #include <map>
 
 namespace duckdb {
@@ -276,12 +275,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggr.child_count;
-		if (aggr.filter){
-			ExpressionExecutor filter_execution(aggr.filter);
-			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-			auto count = filter_execution.SelectExpression(payload, true_sel);
-			payload.Slice(true_sel, count);
-		}
+
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(group_types);
@@ -316,10 +310,39 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 				}
 
 				distinct_addresses.Verify(new_group_count);
-
-				aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
-				                     distinct_addresses, new_group_count);
+				if (aggr.filter) {
+					ExpressionExecutor filter_execution(aggr.filter);
+					SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+					auto count = filter_execution.SelectExpression(payload, true_sel);
+					DataChunk filtered_payload;
+					auto pay_types = payload.GetTypes();
+					filtered_payload.Initialize(pay_types);
+					filtered_payload.Slice(payload, true_sel, count);
+					Vector filtered_addresses;
+					filtered_addresses.Slice(distinct_addresses, true_sel, count);
+					filtered_addresses.Normalify(count);
+					aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
+					                     filtered_addresses, filtered_payload.size());
+				} else {
+					aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
+					                     distinct_addresses, new_group_count);
+				}
 			}
+		} else if (aggr.filter) {
+			ExpressionExecutor filter_execution(aggr.filter);
+			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+			auto count = filter_execution.SelectExpression(payload, true_sel);
+			DataChunk filtered_payload;
+			auto pay_types = payload.GetTypes();
+			filtered_payload.Initialize(pay_types);
+			filtered_payload.Slice(payload, true_sel, count);
+			Vector filtered_addresses;
+			filtered_addresses.Slice(addresses, true_sel, count);
+			filtered_addresses.Normalify(count);
+			aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
+			                     filtered_addresses, filtered_payload.size());
+			payload_idx += input_count;
+			VectorOperations::AddInPlace(filtered_addresses, aggr.payload_size, filtered_payload.size());
 		} else {
 			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
 			                     payload.size());

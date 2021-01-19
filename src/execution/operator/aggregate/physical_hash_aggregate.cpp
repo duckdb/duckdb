@@ -48,6 +48,14 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		for (auto & child : aggr.children) {
 			payload_types.push_back(child->return_type);
 		}
+		if (aggr.filter){
+			vector<LogicalType> types;
+			vector<vector<Expression*>> bound_refs;
+			BoundAggregateExpression::GetColumnRef(aggr.filter.get(),bound_refs,types);
+			for (auto type:types){
+				payload_types.push_back(type);
+			}
+		}
 		if (!aggr.function.combine) {
 			all_combinable = false;
 		}
@@ -86,12 +94,12 @@ class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(PhysicalHashAggregate &_op) : op(_op), is_empty(true) {
 		group_chunk.InitializeEmpty(op.group_types);
-		if (op.payload_types.size() > 0) {
+		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
 		}
 
 		// if there are no groups we create a fake group so everything has the same group
-		if (op.groups.size() == 0) {
+		if (op.groups.empty()) {
 			group_chunk.data[0].Reference(Value::TINYINT(42));
 		}
 	}
@@ -136,6 +144,19 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
+		}
+		if (aggr.filter){
+			vector<LogicalType> types;
+			vector<vector<Expression*>> bound_refs;
+			BoundAggregateExpression::GetColumnRef(aggr.filter.get(),bound_refs,types);
+			for (auto &bound_ref : bound_refs){
+				auto &bound_ref_expr = (BoundReferenceExpression &)*bound_ref[0];
+			    aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
+				for (auto&bound_ref_up : bound_ref){
+					auto &bound_ref_up_expr = (BoundReferenceExpression &)*bound_ref_up;
+					bound_ref_up_expr.index = aggregate_input_idx-1;
+				}
+			}
 		}
 	}
 

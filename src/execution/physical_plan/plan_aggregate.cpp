@@ -1,15 +1,15 @@
-#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/execution/operator/projection/physical_projection.hpp"
-#include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 namespace duckdb {
 
 static uint32_t RequiredBitsForValue(uint32_t n) {
@@ -104,7 +104,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			return false;
 		}
 	}
-	for (auto & expression : op.expressions) {
+	for (auto &expression : op.expressions) {
 		auto &aggregate = (BoundAggregateExpression &)*expression;
 		if (aggregate.distinct || !aggregate.function.combine) {
 			// distinct aggregates are not supported in perfect hash aggregates
@@ -119,7 +119,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 	D_ASSERT(op.children.size() == 1);
 
 	bool all_combinable = true;
-	for (auto & expression : op.expressions) {
+	for (auto &expression : op.expressions) {
 		auto &aggregate = (BoundAggregateExpression &)*expression;
 		if (!aggregate.function.combine) {
 			// unsupported aggregate for simple aggregation: use hash aggregation
@@ -136,7 +136,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
 		bool use_simple_aggregation = true;
-		for (auto & expression : op.expressions) {
+		for (auto &expression : op.expressions) {
 			auto &aggregate = (BoundAggregateExpression &)*expression;
 			if (!aggregate.function.simple_update || aggregate.distinct) {
 				// unsupported aggregate for simple aggregation: use hash aggregation
@@ -167,70 +167,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 	return groupby;
 }
 
-void ExtractColumnRef(Expression *filter, vector<unique_ptr<Expression>> & expressions, vector<LogicalType>& types){
-	switch(filter->expression_class) {
-	case ExpressionClass::BOUND_REF:{
-		auto &column_ref = (BoundReferenceExpression &)*filter;
-		auto ref = make_unique<BoundReferenceExpression>(column_ref.return_type, column_ref.index);
-		types.push_back(column_ref.return_type);
-		expressions.push_back(move(ref));
-		break;
-	}
-	case ExpressionClass::BOUND_CONSTANT:
-		break;
-	case ExpressionClass::BOUND_CAST:{
-		auto &cast = (BoundCastExpression &)*filter;
-		ExtractColumnRef(cast.child.get(),expressions,types);
-		break;
-	}
-	case ExpressionClass::BOUND_COMPARISON:{
-		auto &comparison = (BoundComparisonExpression &)*filter;
-		ExtractColumnRef(comparison.left.get(),expressions,types);
-		ExtractColumnRef(comparison.right.get(),expressions,types);
-//		if (comparison.left->type == ExpressionType::BOUND_REF || comparison.left->type == ExpressionType::OPERATOR_CAST){
-//			auto &column_ref = (BoundReferenceExpression &)*comparison.left;
-//			auto ref = make_unique<BoundReferenceExpression>(column_ref.return_type, column_ref.index);
-//			types.push_back(column_ref.return_type);
-//			expressions.push_back(move(comparison.left));
-//			comparison.left = move(ref);
-//		}
-//		if (comparison.right->type == ExpressionType::BOUND_REF || comparison.right->type == ExpressionType::OPERATOR_CAST){
-//			auto &column_ref = (BoundReferenceExpression &)*comparison.right;
-//			auto ref = make_unique<BoundReferenceExpression>(column_ref.return_type, column_ref.index);
-//			types.push_back(column_ref.return_type);
-//			expressions.push_back(move(comparison.right));
-//			comparison.right = move(ref);
-//		}
-//		if (comparison.left->type == ExpressionType::OPERATOR_CAST){
-//			auto &cast_ref = (BoundReferenceExpression &)*comparison.left;
-//			auto ref = make_unique<BoundReferenceExpression>(cast_ref.return_type, cast_ref.index);
-//			types.push_back(cast_ref.return_type);
-//			expressions.push_back(move(comparison.left));
-//			comparison.left = move(ref);
-//		}
-//		if (comparison.right->type == ExpressionType::OPERATOR_CAST){
-//			auto &cast_ref = (BoundReferenceExpression &)*comparison.right;
-//			auto ref = make_unique<BoundReferenceExpression>(cast_ref.return_type, expressions.size());
-//			types.push_back(cast_ref.return_type);
-//			expressions.push_back(move(comparison.right));
-//			comparison.right = move(ref);
-//		}
-		break;
-	}
-	case ExpressionClass::BOUND_CONJUNCTION:{
-		auto &conj = (BoundConjunctionExpression &)*filter;
-		for (auto &child : conj.children){
-			ExtractColumnRef(child.get(),expressions,types);
-		}
-		break;
-	}
-		default:
-			throw NotImplementedException("Filter not implemented within aggregation");
-
-}
-
-}
-
 unique_ptr<PhysicalOperator>
 PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,
                                                    vector<unique_ptr<Expression>> &aggregates,
@@ -238,7 +174,7 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 	vector<unique_ptr<Expression>> expressions;
 	vector<LogicalType> types;
 
-	for (auto & group : groups) {
+	for (auto &group : groups) {
 		auto ref = make_unique<BoundReferenceExpression>(group->return_type, expressions.size());
 		types.push_back(group->return_type);
 		expressions.push_back(move(group));
@@ -247,14 +183,26 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
-		for (auto & child : bound_aggr.children) {
-			auto ref = make_unique<BoundReferenceExpression>(child->return_type, expressions.size());
-			types.push_back(child->return_type);
-			expressions.push_back(move(child));
-			child = move(ref);
+		for (auto &child_ : bound_aggr.children) {
+			bool already_in = false;
+			for (size_t i = 0; i < expressions.size(); i++) {
+				auto *base_expr = (BaseExpression *)expressions[i].get();
+				if (child_->Equals(base_expr)) {
+					auto ref = make_unique<BoundReferenceExpression>(child_->return_type, i);
+					child_ = move(ref);
+					already_in = true;
+					break;
+				}
+			}
+			if (!already_in) {
+				auto ref = make_unique<BoundReferenceExpression>(child_->return_type, expressions.size());
+				types.push_back(child_->return_type);
+				expressions.push_back(move(child_));
+				child_ = move(ref);
+			}
 		}
-		if (bound_aggr.filter){
-			ExtractColumnRef(bound_aggr.filter.get(),expressions,types);
+		if (bound_aggr.filter) {
+			bound_aggr.filter = BoundAggregateExpression::ExtractColumnRef(move(bound_aggr.filter), expressions, types);
 		}
 	}
 
