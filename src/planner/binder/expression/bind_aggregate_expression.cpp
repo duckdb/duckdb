@@ -1,25 +1,33 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
-    unique_ptr<Expression> bound_filter;
+	unique_ptr<Expression> bound_filter;
 	AggregateBinder aggregate_binder(binder, context);
-	string error;
-	for (auto & child : aggr.children) {
+	string error, filter_error;
+
+	// Now we bind the filter (if any)
+	if (aggr.filter) {
+		aggregate_binder.BindChild(aggr.filter, 0, error);
+	}
+//    if (!error.empty()){
+//		throw BinderException("Unimplmented filter expressions on correlated columns");
+//	}
+
+	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
 	}
-
 	if (!error.empty()) {
 		// failed to bind child
 		if (aggregate_binder.BoundColumns()) {
@@ -35,10 +43,27 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 				auto &bound_expr = (BoundExpression &)*aggr.children[i];
 				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 			}
+			if (aggr.filter){
+				bool success = aggregate_binder.BindCorrelatedColumns(aggr.filter);
+				// if there is still an error after this, we could not successfully bind the aggregate
+				if (!success) {
+					throw BinderException(error);
+				}
+				auto &bound_expr = (BoundExpression &)*aggr.filter;
+				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+			}
 		} else {
 			// we didn't bind columns, try again in children
 			return BindResult(error);
 		}
+	}
+    if (!filter_error.empty()){
+		return BindResult(filter_error);
+	}
+
+	if (aggr.filter) {
+		auto &child = (BoundExpression &)*aggr.filter;
+		bound_filter = move(child.expr);
 	}
 	// all children bound successfully
 	// extract the children and types
@@ -52,12 +77,6 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		children.push_back(move(child.expr));
 	}
 
-	// Now we bind the filter (if any)
-	if (aggr.filter){
-		auto bind_res = aggregate_binder.BindExpression(&aggr.filter,0);
-		bound_filter = move(bind_res.expression);
-	}
-
 	// bind the aggregate
 	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error);
 	if (best_function == INVALID_INDEX) {
@@ -65,7 +84,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
-	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),move(bound_filter), aggr.distinct);
+
+	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),
+	                                                          move(bound_filter), aggr.distinct);
 
 	auto return_type = aggregate->return_type;
 

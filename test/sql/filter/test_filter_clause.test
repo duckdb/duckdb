@@ -93,20 +93,6 @@ FROM t;
 ----
 45	10
 
-# use correlated expression inside the filter itself
-query I
-  SELECT
- (select sum(t.i) FILTER (where t.i = t2.i)  from t as t2)
-FROM t
-where i < 5
-----
-0
-1
-2
-3
-4
-
-
 query II
  SELECT
   sum(i) AS unfiltered,
@@ -272,3 +258,16 @@ group by j;
 7	NULL
 8	NULL
 9	NULL
+
+# use correlated expression inside the filter itself
+query I
+    SELECT
+ (select sum(t2.i) FILTER (where t.i = t2.i)  from t as t2)
+FROM t
+where i < 5
+----
+0
+1
+2
+3
+4

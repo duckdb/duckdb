@@ -1,15 +1,14 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/partitionable_hashtable.hpp"
-
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -45,14 +44,14 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 
 		aggregate_return_types.push_back(aggr.return_type);
-		for (auto & child : aggr.children) {
+		for (auto &child : aggr.children) {
 			payload_types.push_back(child->return_type);
 		}
-		if (aggr.filter){
+		if (aggr.filter) {
 			vector<LogicalType> types;
-			vector<vector<Expression*>> bound_refs;
-			BoundAggregateExpression::GetColumnRef(aggr.filter.get(),bound_refs,types);
-			for (auto type:types){
+			vector<vector<Expression *>> bound_refs;
+			BoundAggregateExpression::GetColumnRef(aggr.filter.get(), bound_refs, types);
+			for (auto type : types) {
 				payload_types.push_back(type);
 			}
 		}
@@ -138,25 +137,37 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
-	for (auto & aggregate : aggregates) {
+	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
-		if (aggr.filter){
+		if (aggr.filter) {
 			vector<LogicalType> types;
-			vector<vector<Expression*>> bound_refs;
-			BoundAggregateExpression::GetColumnRef(aggr.filter.get(),bound_refs,types);
-			for (auto &bound_ref : bound_refs){
+			vector<vector<Expression *>> bound_refs;
+			BoundAggregateExpression::GetColumnRef(aggr.filter.get(), bound_refs, types);
+			auto f_map = filter_map.find(aggr.filter.get());
+			if (f_map == filter_map.end()){
+				filter_map[aggr.filter.get()] = {true,{}};
+				f_map = filter_map.find(aggr.filter.get());
+			}
+			for (auto &bound_ref : bound_refs) {
 				auto &bound_ref_expr = (BoundReferenceExpression &)*bound_ref[0];
-			    aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
-				for (auto&bound_ref_up : bound_ref){
-					auto &bound_ref_up_expr = (BoundReferenceExpression &)*bound_ref_up;
-					bound_ref_up_expr.index = aggregate_input_idx-1;
+				if (f_map->second.first) {
+					aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
+					f_map->second.second[aggregate_input_idx - 1] = bound_ref_expr.index;
+					for (auto &bound_ref_up : bound_ref) {
+						auto &bound_ref_up_expr = (BoundReferenceExpression &)*bound_ref_up;
+						bound_ref_up_expr.index = aggregate_input_idx - 1;
+					}
+				} else {
+					aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[f_map->second.second[aggregate_input_idx]]);
+					aggregate_input_idx++;
 				}
 			}
+			f_map->second.first = false;
 		}
 	}
 
@@ -456,12 +467,11 @@ string PhysicalHashAggregate::ParamsToString() const {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
-		if (aggregate.filter){
+		if (aggregate.filter) {
 			result += aggregate.filter->GetName();
 		}
 	}
 	return result;
 }
-
 
 } // namespace duckdb

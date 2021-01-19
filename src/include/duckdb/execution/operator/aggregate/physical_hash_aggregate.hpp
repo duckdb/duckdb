@@ -48,6 +48,9 @@ public:
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
 
+    //! Map between payload index and input index for filters
+	unordered_map<Expression*,std::pair<bool,unordered_map<size_t,size_t>>> filter_map;
+    bool first = true;
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;

@@ -114,18 +114,30 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
-		if (aggr.filter){
+		if (aggr.filter) {
 			vector<LogicalType> types;
-			vector<vector<Expression*>> bound_refs;
-			BoundAggregateExpression::GetColumnRef(aggr.filter.get(),bound_refs,types);
-			for (auto &bound_ref : bound_refs){
+			vector<vector<Expression *>> bound_refs;
+			BoundAggregateExpression::GetColumnRef(aggr.filter.get(), bound_refs, types);
+			auto f_map = filter_map.find(aggr.filter.get());
+			if (f_map == filter_map.end()){
+				filter_map[aggr.filter.get()] = {true,{}};
+				f_map = filter_map.find(aggr.filter.get());
+			}
+			for (auto &bound_ref : bound_refs) {
 				auto &bound_ref_expr = (BoundReferenceExpression &)*bound_ref[0];
-			    aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
-				for (auto&bound_ref_up : bound_ref){
-					auto &bound_ref_up_expr = (BoundReferenceExpression &)*bound_ref_up;
-					bound_ref_up_expr.index = aggregate_input_idx-1;
+				if (f_map->second.first) {
+					aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
+					f_map->second.second[aggregate_input_idx - 1] = bound_ref_expr.index;
+					for (auto &bound_ref_up : bound_ref) {
+						auto &bound_ref_up_expr = (BoundReferenceExpression &)*bound_ref_up;
+						bound_ref_up_expr.index = aggregate_input_idx - 1;
+					}
+				} else {
+					aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[f_map->second.second[aggregate_input_idx]]);
+					aggregate_input_idx++;
 				}
 			}
+			f_map->second.first = false;
 		}
 	}
 

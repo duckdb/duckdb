@@ -27,6 +27,9 @@ public:
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
 
+	//! Map between payload index and input index for filters
+	unordered_map<Expression*,std::pair<bool,unordered_map<size_t,size_t>>> filter_map;
+
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
