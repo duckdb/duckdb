@@ -8,6 +8,7 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -312,7 +313,22 @@ void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state,
 	FetchBaseData(state, vector_index, result);
 	if (versions && versions[vector_index]) {
 		// if there are any versions, check if we need to overwrite the data with the versioned data
-		FetchUpdateData(state, transaction, versions[vector_index], result);
+		FetchUpdateData(state, transaction.start_time, transaction.transaction_id, versions[vector_index], result);
+	}
+}
+
+void UncompressedSegment::ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) {
+	// first fetch the data from the base table
+	FetchBaseData(state, vector_index, result);
+	if (versions && versions[vector_index]) {
+		// if there are any versions, check if we need to overwrite the data with the versioned data
+		// we want to fetch all COMMITTED data
+		// to do that, we set the start time to the highest possible start time (TRANSACTION_ID_START - 1)
+		// and set the transaction id to the highest possible transaction id (INVALID_INDEX)
+		// this way we know we will fetch all committed data, and none of the uncommitted data
+		transaction_t start_time = TRANSACTION_ID_START - 1;
+		transaction_t transaction_id = INVALID_INDEX;
+		FetchUpdateData(state, start_time, transaction_id, versions[vector_index], result);
 	}
 }
 

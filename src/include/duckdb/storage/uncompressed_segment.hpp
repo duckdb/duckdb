@@ -53,6 +53,8 @@ public:
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
 	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
 	          bool get_lock = true);
+	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result);
+
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);
@@ -110,7 +112,7 @@ protected:
 	//! Fetch base table data
 	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Fetch update data from an UpdateInfo version
-	virtual void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
+	virtual void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id, UpdateInfo *version,
 	                             Vector &result) = 0;
 
 	//! Create a new update info for the specified transaction reflecting an update of the specified rows

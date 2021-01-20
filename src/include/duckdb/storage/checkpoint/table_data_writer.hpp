@@ -17,6 +17,7 @@ class SegmentStatistics;
 
 //! The table data writer is responsible for writing the data of a table to the block manager
 class TableDataWriter {
+	friend class ColumnData;
 public:
 	TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table);
 	~TableDataWriter();

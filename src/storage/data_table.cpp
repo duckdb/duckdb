@@ -1063,8 +1063,15 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void DataTable::Checkpoint() {
+void DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint the table
+	// we first checkpoint each individual column
+	for(size_t i = 0; i < columns.size(); i++) {
+		columns[i]->Checkpoint(writer, i);
+	}
+	// then we checkpoint the deleted tuples
+	// FIXME: checkpoint deleted tuples
+	// FIXME: these should be read again on load... (i.e. read into PersistentTableData...)
 
 }
 

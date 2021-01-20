@@ -246,14 +246,14 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 //===--------------------------------------------------------------------===//
 // Fetch update data
 //===--------------------------------------------------------------------===//
-void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *info,
+void StringSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
                                     Vector &result) {
 	// fetch data from updates
 	auto handle = state.primary_handle.get();
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
-	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
+	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
 		auto info_data = (string_location_t *)current->tuple_data;
 		for (idx_t i = 0; i < current->N; i++) {
 			auto string = FetchString(result, handle->node->buffer, info_data[i]);
@@ -376,7 +376,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	bool found_data = false;
 	// first see if there is any updated version of this tuple we must fetch
 	if (versions && versions[vector_index]) {
-		UpdateInfo::UpdatesForTransaction(versions[vector_index], transaction, [&](UpdateInfo *current) {
+		UpdateInfo::UpdatesForTransaction(versions[vector_index], transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
 			auto info_data = (string_location_t *)current->tuple_data;
 			// loop over the tuples in this UpdateInfo
 			for (idx_t i = 0; i < current->N; i++) {

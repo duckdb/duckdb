@@ -299,9 +299,9 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	memcpy(FlatVector::GetData(result), source_data, count * type_size);
 }
 
-void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
+void NumericSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id, UpdateInfo *version,
                                      Vector &result) {
-	fetch_from_update_info(transaction, version, result);
+	fetch_from_update_info(start_time, transaction_id, version, result);
 }
 
 template <class T>
@@ -741,10 +741,10 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 //===--------------------------------------------------------------------===//
 // Update Fetch
 //===--------------------------------------------------------------------===//
-template <class T> static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result) {
+template <class T> static void update_info_fetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
-	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
+	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
 		for (idx_t i = 0; i < current->N; i++) {
 			result_data[current->tuples[i]] = info_data[i];
@@ -785,7 +785,7 @@ static void update_info_append(Transaction &transaction, UpdateInfo *info, idx_t
                                idx_t result_idx) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
-	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
+	UpdateInfo::UpdatesForTransaction(info, transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
 		// loop over the tuples in this UpdateInfo
 		for (idx_t i = 0; i < current->N; i++) {

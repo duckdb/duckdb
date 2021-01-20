@@ -30,6 +30,7 @@ class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 class WriteAheadLog;
+class TableDataWriter;
 
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
@@ -139,7 +140,8 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
 
-	void Checkpoint();
+	//! Checkpoint the table to the specified table data writer
+	void Checkpoint(TableDataWriter &writer);
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);

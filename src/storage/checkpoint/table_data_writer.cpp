@@ -44,7 +44,7 @@ TableDataWriter::~TableDataWriter() {
 }
 
 void TableDataWriter::WriteTableData() {
-	// allocate segments to write the table to
+	// allocate the initial segments
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
 	stats.reserve(table.columns.size());
@@ -57,37 +57,14 @@ void TableDataWriter::WriteTableData() {
 	}
 
 	// now start scanning the table and append the data to the uncompressed segments
-	vector<column_t> column_ids;
-	for (auto &column : table.columns) {
-		column_ids.push_back(column.oid);
-	}
-	throw Exception("FIXME: scan table");
-	// initialize scan structures to prepare for the scan
-	// TableScanState state;
-	// table.storage->InitializeScan(transaction, state, column_ids);
-	//! get all types of the table and initialize the chunk
-	auto types = table.GetTypes();
-	DataChunk chunk;
-	chunk.Initialize(types);
+	table.storage->Checkpoint(*this);
 
-	while (true) {
-		chunk.Reset();
-		// now scan the table to construct the blocks
-		// table.storage->Scan(transaction, chunk, state, column_ids);
-		if (chunk.size() == 0) {
-			break;
-		}
-		// for each column, we append whatever we can fit into the block
-		idx_t chunk_size = chunk.size();
-		for (idx_t i = 0; i < table.columns.size(); i++) {
-			D_ASSERT(chunk.data[i].type == table.columns[i].type);
-			AppendData(i, chunk.data[i], chunk_size);
-		}
-	}
-	// flush any remaining data and write the data pointers to disk
+	// flush all segments to ensure everything is written
 	for (idx_t i = 0; i < table.columns.size(); i++) {
 		FlushSegment(i);
 	}
+
+
 	VerifyDataPointers();
 	WriteDataPointers();
 }

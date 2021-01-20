@@ -15,6 +15,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class TableDataWriter;
 class PersistentSegment;
 class Transaction;
 
@@ -69,6 +70,8 @@ public:
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx);
+
+	void Checkpoint(TableDataWriter &writer, idx_t column_idx);
 
 private:
 	//! Append a transient segment
