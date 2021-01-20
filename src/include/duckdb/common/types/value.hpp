@@ -72,6 +72,14 @@ public:
 	static Value INTEGER(int32_t value);
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
+	//! Create an unsigned tinyint Value from a specified value
+	static Value UTINYINT(uint8_t value);
+	//! Create an unsigned smallint Value from a specified value
+	static Value USMALLINT(uint16_t value);
+	//! Create an unsigned integer Value from a specified value
+	static Value UINTEGER(uint32_t value);
+	//! Create an unsigned bigint Value from a specified value
+	static Value UBIGINT(uint64_t value);
 	//! Create a hugeint Value from a specified value
 	static Value HUGEINT(hugeint_t value);
 	//! Create a hash Value from a specified value
@@ -198,6 +206,10 @@ public:
 		int16_t smallint;
 		int32_t integer;
 		int64_t bigint;
+		uint8_t utinyint;
+		uint16_t usmallint;
+		uint32_t uinteger;
+		uint64_t ubigint;
 		hugeint_t hugeint;
 		float float_;
 		double double_;

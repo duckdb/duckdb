@@ -53,6 +53,14 @@ Value Value::MinimumValue(LogicalType type) {
 		return Value::TIME(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
+	case LogicalTypeId::UTINYINT:
+		return Value::UTINYINT(NumericLimits<uint8_t>::Minimum());
+	case LogicalTypeId::USMALLINT:
+		return Value::USMALLINT(NumericLimits<uint16_t>::Minimum());
+	case LogicalTypeId::UINTEGER:
+		return Value::UINTEGER(NumericLimits<uint32_t>::Minimum());
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::HUGEINT:
@@ -103,6 +111,14 @@ Value Value::MaximumValue(LogicalType type) {
 		return Value::TIME(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
+	case LogicalTypeId::UTINYINT:
+		return Value::UTINYINT(NumericLimits<uint8_t>::Maximum());
+	case LogicalTypeId::USMALLINT:
+		return Value::USMALLINT(NumericLimits<uint16_t>::Maximum());
+	case LogicalTypeId::UINTEGER:
+		return Value::UINTEGER(NumericLimits<uint32_t>::Maximum());
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::HUGEINT:
@@ -178,6 +194,36 @@ Value Value::HUGEINT(hugeint_t value) {
 	result.is_null = false;
 	return result;
 }
+
+Value Value::UTINYINT(uint8_t value) {
+	Value result(LogicalType::UTINYINT);
+	result.value_.utinyint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::USMALLINT(uint16_t value) {
+	Value result(LogicalType::USMALLINT);
+	result.value_.usmallint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::UINTEGER(uint32_t value) {
+	Value result(LogicalType::UINTEGER);
+	result.value_.uinteger = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::UBIGINT(uint64_t value) {
+	Value result(LogicalType::UBIGINT);
+	result.value_.ubigint = value;
+	result.is_null = false;
+	return result;
+}
+
+
 
 bool Value::FloatIsValid(float value) {
 	return !(std::isnan(value) || std::isinf(value));
@@ -580,6 +626,14 @@ string Value::ToString() const {
 		return to_string(value_.integer);
 	case LogicalTypeId::BIGINT:
 		return to_string(value_.bigint);
+	case LogicalTypeId::UTINYINT:
+		return to_string(value_.utinyint);
+	case LogicalTypeId::USMALLINT:
+		return to_string(value_.usmallint);
+	case LogicalTypeId::UINTEGER:
+		return to_string(value_.uinteger);
+	case LogicalTypeId::UBIGINT:
+		return to_string(value_.ubigint);
 	case LogicalTypeId::HUGEINT:
 		return Hugeint::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:

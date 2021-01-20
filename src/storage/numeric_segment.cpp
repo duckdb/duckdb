@@ -509,6 +509,26 @@ template <> inline void update_numeric_statistics<int64_t>(SegmentStatistics &st
 	update_numeric_statistics_internal<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
 }
 
+template <> inline void update_numeric_statistics<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<uint8_t>(new_value, nstats.min.value_.utinyint, nstats.max.value_.utinyint);
+}
+
+template <> inline void update_numeric_statistics<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<uint16_t>(new_value, nstats.min.value_.usmallint, nstats.max.value_.usmallint);
+}
+
+template <> inline void update_numeric_statistics<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<uint32_t>(new_value, nstats.min.value_.uinteger, nstats.max.value_.uinteger);
+}
+
+template <> inline void update_numeric_statistics<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
+	auto &nstats = (NumericStatistics &)*stats.statistics;
+	update_numeric_statistics_internal<uint64_t>(new_value, nstats.min.value_.ubigint, nstats.max.value_.ubigint);
+}
+
 template <> inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
@@ -571,6 +591,14 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 		return append_loop<int32_t>;
 	case PhysicalType::INT64:
 		return append_loop<int64_t>;
+	case PhysicalType::UINT8:
+		return append_loop<uint8_t>;
+	case PhysicalType::UINT16:
+		return append_loop<uint16_t>;
+	case PhysicalType::UINT32:
+		return append_loop<uint32_t>;
+	case PhysicalType::UINT64:
+		return append_loop<uint64_t>;
 	case PhysicalType::INT128:
 		return append_loop<hugeint_t>;
 	case PhysicalType::FLOAT:
@@ -648,6 +676,14 @@ static NumericSegment::update_function_t GetUpdateFunction(PhysicalType type) {
 		return update_loop<int32_t>;
 	case PhysicalType::INT64:
 		return update_loop<int64_t>;
+	case PhysicalType::UINT8:
+		return update_loop<uint8_t>;
+	case PhysicalType::UINT16:
+		return update_loop<uint16_t>;
+	case PhysicalType::UINT32:
+		return update_loop<uint32_t>;
+	case PhysicalType::UINT64:
+		return update_loop<uint64_t>;
 	case PhysicalType::INT128:
 		return update_loop<hugeint_t>;
 	case PhysicalType::FLOAT:
@@ -725,6 +761,14 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 		return merge_update_loop<int32_t>;
 	case PhysicalType::INT64:
 		return merge_update_loop<int64_t>;
+	case PhysicalType::UINT8:
+		return merge_update_loop<uint8_t>;
+	case PhysicalType::UINT16:
+		return merge_update_loop<uint16_t>;
+	case PhysicalType::UINT32:
+		return merge_update_loop<uint32_t>;
+	case PhysicalType::UINT64:
+		return merge_update_loop<uint64_t>;
 	case PhysicalType::INT128:
 		return merge_update_loop<hugeint_t>;
 	case PhysicalType::FLOAT:
@@ -764,6 +808,14 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(P
 		return update_info_fetch<int32_t>;
 	case PhysicalType::INT64:
 		return update_info_fetch<int64_t>;
+	case PhysicalType::UINT8:
+		return update_info_fetch<uint8_t>;
+	case PhysicalType::UINT16:
+		return update_info_fetch<uint16_t>;
+	case PhysicalType::UINT32:
+		return update_info_fetch<uint32_t>;
+	case PhysicalType::UINT64:
+		return update_info_fetch<uint64_t>;
 	case PhysicalType::INT128:
 		return update_info_fetch<hugeint_t>;
 	case PhysicalType::FLOAT:
@@ -813,6 +865,14 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 		return update_info_append<int32_t>;
 	case PhysicalType::INT64:
 		return update_info_append<int64_t>;
+	case PhysicalType::UINT8:
+		return update_info_append<uint8_t>;
+	case PhysicalType::UINT16:
+		return update_info_append<uint16_t>;
+	case PhysicalType::UINT32:
+		return update_info_append<uint32_t>;
+	case PhysicalType::UINT64:
+		return update_info_append<uint64_t>;
 	case PhysicalType::INT128:
 		return update_info_append<hugeint_t>;
 	case PhysicalType::FLOAT:
@@ -851,6 +911,14 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Phys
 		return rollback_update<int32_t>;
 	case PhysicalType::INT64:
 		return rollback_update<int64_t>;
+	case PhysicalType::UINT8:
+		return rollback_update<uint8_t>;
+	case PhysicalType::UINT16:
+		return rollback_update<uint16_t>;
+	case PhysicalType::UINT32:
+		return rollback_update<uint32_t>;
+	case PhysicalType::UINT64:
+		return rollback_update<uint64_t>;
 	case PhysicalType::INT128:
 		return rollback_update<hugeint_t>;
 	case PhysicalType::FLOAT:

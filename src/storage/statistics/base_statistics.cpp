@@ -24,6 +24,10 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:

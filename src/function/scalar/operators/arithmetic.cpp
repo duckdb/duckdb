@@ -31,6 +31,18 @@ template <class OP> static scalar_function_t GetScalarIntegerFunction(PhysicalTy
 	case PhysicalType::INT64:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		break;
+	case PhysicalType::UINT8:
+		function = &ScalarFunction::BinaryFunction<uint8_t, uint8_t, uint8_t, OP>;
+		break;
+	case PhysicalType::UINT16:
+		function = &ScalarFunction::BinaryFunction<uint16_t, uint16_t, uint16_t, OP>;
+		break;
+	case PhysicalType::UINT32:
+		function = &ScalarFunction::BinaryFunction<uint32_t, uint32_t, uint32_t, OP>;
+		break;
+	case PhysicalType::UINT64:
+		function = &ScalarFunction::BinaryFunction<uint64_t, uint64_t, uint64_t, OP>;
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
 	}
@@ -576,6 +588,14 @@ template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(Logical
 		return BinaryScalarFunctionIgnoreZero<int32_t, int32_t, int32_t, OP>;
 	case LogicalTypeId::BIGINT:
 		return BinaryScalarFunctionIgnoreZero<int64_t, int64_t, int64_t, OP>;
+	case LogicalTypeId::UTINYINT:
+		return BinaryScalarFunctionIgnoreZero<uint8_t, uint8_t, uint8_t, OP>;
+	case LogicalTypeId::USMALLINT:
+		return BinaryScalarFunctionIgnoreZero<uint16_t, uint16_t, uint16_t, OP>;
+	case LogicalTypeId::UINTEGER:
+		return BinaryScalarFunctionIgnoreZero<uint32_t, uint32_t, uint32_t, OP>;
+	case LogicalTypeId::UBIGINT:
+		return BinaryScalarFunctionIgnoreZero<uint64_t, uint64_t, uint64_t, OP>;
 	case LogicalTypeId::HUGEINT:
 		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP, BinaryZeroIsNullHugeintWrapper>;
 	case LogicalTypeId::FLOAT:

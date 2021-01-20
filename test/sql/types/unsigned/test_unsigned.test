@@ -1,0 +1,19 @@
+# name: test/sql/types/unsigned/test_unsigned.test
+# description: Test various operations with unsigned
+# group: [unsigned]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unsigned(a UTINYINT,b USMALLINT, c UINTEGER, d UBIGINT);
+
+statement ok
+INSERT INTO unsigned VALUES (1,1,1,1), (2,2,2,2);
+
+query IIII
+select * from unsigned;
+----
+1	1	1	1
+2	2	2	2
+

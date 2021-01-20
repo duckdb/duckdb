@@ -281,6 +281,18 @@ template <class SRC> static void numeric_cast_switch(Vector &source, Vector &res
 	case LogicalTypeId::BIGINT:
 		UnaryExecutor::Execute<SRC, int64_t, duckdb::Cast, true>(source, result, count);
 		break;
+	case LogicalTypeId::UTINYINT:
+		UnaryExecutor::Execute<SRC, uint8_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		UnaryExecutor::Execute<SRC, uint16_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		UnaryExecutor::Execute<SRC, uint32_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		UnaryExecutor::Execute<SRC, uint64_t, duckdb::Cast, true>(source, result, count);
+		break;
 	case LogicalTypeId::HUGEINT:
 		UnaryExecutor::Execute<SRC, hugeint_t, duckdb::Cast, true>(source, result, count);
 		break;
@@ -325,6 +337,18 @@ template <class OP> static void string_cast_numeric_switch(Vector &source, Vecto
 		UnaryExecutor::Execute<string_t, int32_t, OP, true>(source, result, count);
 		break;
 	case LogicalTypeId::BIGINT:
+		UnaryExecutor::Execute<string_t, int64_t, OP, true>(source, result, count);
+		break;
+	case LogicalTypeId::UTINYINT:
+		UnaryExecutor::Execute<string_t, int8_t, OP, true>(source, result, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		UnaryExecutor::Execute<string_t, int16_t, OP, true>(source, result, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		UnaryExecutor::Execute<string_t, int32_t, OP, true>(source, result, count);
+		break;
+	case LogicalTypeId::UBIGINT:
 		UnaryExecutor::Execute<string_t, int64_t, OP, true>(source, result, count);
 		break;
 	case LogicalTypeId::HUGEINT:

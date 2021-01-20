@@ -1,19 +1,19 @@
-#include <cstring> // strlen() on Solaris
-
 #include "duckdb/common/types/vector.hpp"
 
-#include "duckdb/common/assert.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/to_string.hpp"
+
+#include <cstring> // strlen() on Solaris
 
 namespace duckdb {
 
@@ -176,6 +176,18 @@ void Vector::SetValue(idx_t index, Value val) {
 	case LogicalTypeId::BIGINT:
 		((int64_t *)data)[index] = val.value_.bigint;
 		break;
+	case LogicalTypeId::UTINYINT:
+		((uint8_t *)data)[index] = val.value_.utinyint;
+		break;
+	case LogicalTypeId::USMALLINT:
+		((uint16_t *)data)[index] = val.value_.usmallint;
+		break;
+	case LogicalTypeId::UINTEGER:
+		((uint32_t *)data)[index] = val.value_.uinteger;
+		break;
+	case LogicalTypeId::UBIGINT:
+		((uint64_t *)data)[index] = val.value_.ubigint;
+		break;
 	case LogicalTypeId::HUGEINT:
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
@@ -311,6 +323,14 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::TIME(((dtime_t *)data)[index]);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(((int64_t *)data)[index]);
+	case LogicalTypeId::UTINYINT:
+		return Value::UTINYINT(((uint8_t *)data)[index]);
+	case LogicalTypeId::USMALLINT:
+		return Value::USMALLINT(((uint16_t *)data)[index]);
+	case LogicalTypeId::UINTEGER:
+		return Value::UINTEGER(((uint32_t *)data)[index]);
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(((uint64_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
@@ -490,6 +510,18 @@ void Vector::Normalify(idx_t count) {
 			break;
 		case PhysicalType::INT64:
 			flatten_constant_vector_loop<int64_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT8:
+			flatten_constant_vector_loop<uint8_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT16:
+			flatten_constant_vector_loop<uint16_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT32:
+			flatten_constant_vector_loop<uint32_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT64:
+			flatten_constant_vector_loop<uint64_t>(data, old_data, count);
 			break;
 		case PhysicalType::INT128:
 			flatten_constant_vector_loop<hugeint_t>(data, old_data, count);

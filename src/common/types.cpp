@@ -46,16 +46,24 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::BOOL;
 	case LogicalTypeId::TINYINT:
 		return PhysicalType::INT8;
+	case LogicalTypeId::UTINYINT:
+		return PhysicalType::UINT8;
 	case LogicalTypeId::SMALLINT:
 		return PhysicalType::INT16;
+	case LogicalTypeId::USMALLINT:
+		return PhysicalType::UINT16;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTEGER:
 		return PhysicalType::INT32;
+	case LogicalTypeId::UINTEGER:
+		return PhysicalType::UINT32;
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 		return PhysicalType::INT64;
+	case LogicalTypeId::UBIGINT:
+		return PhysicalType::UINT64;
 	case LogicalTypeId::HUGEINT:
 		return PhysicalType::INT128;
 	case LogicalTypeId::FLOAT:
@@ -101,9 +109,13 @@ const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
 const LogicalType LogicalType::SQLNULL = LogicalType(LogicalTypeId::SQLNULL);
 const LogicalType LogicalType::BOOLEAN = LogicalType(LogicalTypeId::BOOLEAN);
 const LogicalType LogicalType::TINYINT = LogicalType(LogicalTypeId::TINYINT);
+const LogicalType LogicalType::UTINYINT = LogicalType(LogicalTypeId::UTINYINT);
 const LogicalType LogicalType::SMALLINT = LogicalType(LogicalTypeId::SMALLINT);
+const LogicalType LogicalType::USMALLINT = LogicalType(LogicalTypeId::USMALLINT);
 const LogicalType LogicalType::INTEGER = LogicalType(LogicalTypeId::INTEGER);
+const LogicalType LogicalType::UINTEGER = LogicalType(LogicalTypeId::UINTEGER);
 const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
+const LogicalType LogicalType::UBIGINT = LogicalType(LogicalTypeId::UBIGINT);
 const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
 const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
 const LogicalType LogicalType::DECIMAL = LogicalType(LogicalTypeId::DECIMAL);
@@ -127,15 +139,18 @@ const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
                                                   LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
-                                                  LogicalType::DOUBLE,  LogicalType::DECIMAL};
+                                                  LogicalType::DOUBLE,  LogicalType::DECIMAL, LogicalType::UTINYINT,
+                                                  LogicalType::USMALLINT,LogicalType::UINTEGER, LogicalType::UBIGINT};
 
 const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
-                                                   LogicalType::BIGINT, LogicalType::HUGEINT};
+                                                   LogicalType::BIGINT, LogicalType::HUGEINT, LogicalType::UTINYINT,
+                                                  LogicalType::USMALLINT,LogicalType::UINTEGER, LogicalType::UBIGINT};
 
 const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BOOLEAN, LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
     LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
-    LogicalType::BLOB,    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL};
+    LogicalType::BLOB,    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL, LogicalType::UTINYINT,
+                                                  LogicalType::USMALLINT,LogicalType::UINTEGER, LogicalType::UBIGINT};
 // TODO add LIST/STRUCT here
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
@@ -153,6 +168,14 @@ string TypeIdToString(PhysicalType type) {
 		return "INT32";
 	case PhysicalType::INT64:
 		return "INT64";
+	case PhysicalType::UINT8:
+		return "UINT8";
+	case PhysicalType::UINT16:
+		return "UINT16";
+	case PhysicalType::UINT32:
+		return "UINT32";
+	case PhysicalType::UINT64:
+		return "UINT64";
 	case PhysicalType::INT128:
 		return "INT128";
 	case PhysicalType::HASH:
@@ -190,6 +213,14 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(int32_t);
 	case PhysicalType::INT64:
 		return sizeof(int64_t);
+	case PhysicalType::UINT8:
+		return sizeof(uint8_t);
+	case PhysicalType::UINT16:
+		return sizeof(uint16_t);
+	case PhysicalType::UINT32:
+		return sizeof(uint32_t);
+	case PhysicalType::UINT64:
+		return sizeof(uint64_t);
 	case PhysicalType::INT128:
 		return sizeof(hugeint_t);
 	case PhysicalType::FLOAT:
@@ -270,6 +301,14 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "BIGINT";
 	case LogicalTypeId::HUGEINT:
 		return "HUGEINT";
+	case LogicalTypeId::UTINYINT:
+		return "UTINYINT";
+	case LogicalTypeId::USMALLINT:
+		return "USMALLINT";
+	case LogicalTypeId::UINTEGER:
+		return "UINTEGER";
+	case LogicalTypeId::UBIGINT:
+		return "UBIGINT";
 	case LogicalTypeId::DATE:
 		return "DATE";
 	case LogicalTypeId::TIME:
@@ -380,7 +419,16 @@ LogicalType TransformStringToLogicalType(string str) {
 		return LogicalType::HUGEINT;
 	} else if (lower_str == "struct" || lower_str == "row") {
 		return LogicalType::STRUCT;
-	} else {
+	} else if (lower_str == "utinyint"){
+		return LogicalType::UTINYINT;
+	} else if (lower_str == "usmallint"){
+		return LogicalType::USMALLINT;
+	} else if (lower_str == "uinteger"){
+		return LogicalType::UINTEGER;
+	} else if (lower_str == "ubigint"){
+		return LogicalType::UBIGINT;
+	}
+	else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
 }
@@ -391,6 +439,10 @@ bool LogicalType::IsIntegral() const {
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::HUGEINT:
 		return true;
 	default:
@@ -408,6 +460,10 @@ bool LogicalType::IsNumeric() const {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
 		return true;
 	default:
 		return false;
