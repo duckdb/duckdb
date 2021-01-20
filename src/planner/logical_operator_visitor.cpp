@@ -117,9 +117,6 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_CONSTANT:
 		result = VisitReplace((BoundConstantExpression &)expr, expression);
 		break;
-	case ExpressionClass::BOUND_FILTER:
-		result = VisitReplace((BoundFilterExpression &)expr, expression);
-		break;
 	case ExpressionClass::BOUND_FUNCTION:
 		result = VisitReplace((BoundFunctionExpression &)expr, expression);
 		break;
@@ -200,11 +197,6 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundConstantExpress
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundDefaultExpression &expr,
-                                                            unique_ptr<Expression> *expr_ptr) {
-	return nullptr;
-}
-
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundFilterExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

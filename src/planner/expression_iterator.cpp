@@ -62,11 +62,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_FILTER: {
-		auto &func_expr = (BoundFilterExpression &)expr;
-		callback(func_expr.filter);
-		break;
-	}
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func_expr = (BoundFunctionExpression &)expr;
 		for (auto &child : func_expr.children) {

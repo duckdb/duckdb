@@ -3,8 +3,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
-#include "duckdb/planner/expression/bound_filter_expression.hpp"
-
 namespace duckdb {
 
 ExpressionExecutor::ExpressionExecutor() {
@@ -87,7 +85,7 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
-	//D_ASSERT(expr.return_type == vector.type);
+	D_ASSERT(expr.return_type == vector.type);
 	vector.Verify(count);
 	if (expr.stats) {
 		expr.stats->Verify(vector, count);
@@ -98,8 +96,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_REF:
 		return InitializeState((BoundReferenceExpression &)expr, state);
-	case ExpressionClass::BOUND_COLUMN_REF:
-		return InitializeState((BoundColumnRefExpression &)expr, state);
 	case ExpressionClass::BOUND_BETWEEN:
 		return InitializeState((BoundBetweenExpression &)expr, state);
 	case ExpressionClass::BOUND_CASE:
@@ -112,8 +108,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr
 		return InitializeState((BoundConjunctionExpression &)expr, state);
 	case ExpressionClass::BOUND_CONSTANT:
 		return InitializeState((BoundConstantExpression &)expr, state);
-	case ExpressionClass::BOUND_FILTER:
-		return InitializeState((BoundFilterExpression &)expr, state);
 	case ExpressionClass::BOUND_FUNCTION:
 		return InitializeState((BoundFunctionExpression &)expr, state);
 	case ExpressionClass::BOUND_OPERATOR:
@@ -137,9 +131,6 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 	case ExpressionClass::BOUND_REF:
 		Execute((BoundReferenceExpression &)expr, state, sel, count, result);
 		break;
-	case ExpressionClass::BOUND_COLUMN_REF:
-		Execute((BoundColumnRefExpression &)expr, state, sel, count, result);
-		break;
 	case ExpressionClass::BOUND_CASE:
 		Execute((BoundCaseExpression &)expr, state, sel, count, result);
 		break;
@@ -157,9 +148,6 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
 		Execute((BoundFunctionExpression &)expr, state, sel, count, result);
-		break;
-	case ExpressionClass::BOUND_FILTER:
-		Execute((BoundFilterExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
 		Execute((BoundOperatorExpression &)expr, state, sel, count, result);

@@ -13,8 +13,6 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 
-#include <duckdb/planner/expression/bound_filter_expression.hpp>
-
 namespace duckdb {
 
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
@@ -79,11 +77,9 @@ protected:
 	static unique_ptr<ExpressionState> InitializeState(BoundConjunctionExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundConstantExpression &expr, ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(BoundColumnRefExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundFunctionExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundOperatorExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundParameterExpression &expr, ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(BoundFilterExpression &expr, ExpressionExecutorState &state);
 
 	void Execute(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result);
 
@@ -93,8 +89,7 @@ protected:
 	             Vector &result);
 	void Execute(BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
-	void Execute(BoundColumnRefExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             Vector &result);
+
 	void Execute(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
@@ -108,8 +103,6 @@ protected:
 	void Execute(BoundParameterExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(BoundReferenceExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             Vector &result);
-	void Execute(BoundFilterExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t& count,
 	             Vector &result);
 
 	//! Execute the (boolean-returning) expression and generate a selection vector with all entries that are "true" in

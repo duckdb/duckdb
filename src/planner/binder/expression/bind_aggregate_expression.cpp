@@ -21,9 +21,6 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	if (aggr.filter) {
 		aggregate_binder.BindChild(aggr.filter, 0, error);
 	}
-//    if (!error.empty()){
-//		throw BinderException("Unimplmented filter expressions on correlated columns");
-//	}
 
 	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);

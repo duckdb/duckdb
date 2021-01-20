@@ -109,7 +109,6 @@ enum class ExpressionType : uint8_t {
 	CASE_EXPR = 150,
 	OPERATOR_NULLIF = 151,
 	OPERATOR_COALESCE = 152,
-	FILTER_EXPR = 153,
 
 
 	// -----------------------------
@@ -161,7 +160,6 @@ enum class ExpressionClass : uint8_t {
 	WINDOW = 14,
 	PARAMETER = 15,
 	COLLATE = 16,
-	FILTER = 17,
 	//===--------------------------------------------------------------------===//
 	// Bound Expressions
 	//===--------------------------------------------------------------------===//
@@ -181,7 +179,6 @@ enum class ExpressionClass : uint8_t {
 	BOUND_WINDOW = 38,
 	BOUND_BETWEEN = 39,
 	BOUND_UNNEST = 40,
-	BOUND_FILTER = 41,
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//
