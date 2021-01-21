@@ -163,7 +163,7 @@ unique_ptr<FunctionData> bind_decimal_add_subtract(ClientContext &context, Scala
 		uint8_t width, scale;
 		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());
+			throw InternalException("Could not convert type %s to a decimal.", arguments[i]->return_type.ToString());
 		}
 		max_width = MaxValue<uint8_t>(width, max_width);
 		max_scale = MaxValue<uint8_t>(scale, max_scale);

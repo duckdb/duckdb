@@ -2,16 +2,16 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "fmt/format.h"
 
 #include <cctype>
@@ -21,11 +21,30 @@
 namespace duckdb {
 
 template <class SRC, class DST> static bool try_cast_with_overflow_check(SRC value, DST &result) {
-	if (value < NumericLimits<DST>::Minimum() || value > NumericLimits<DST>::Maximum()) {
-		return false;
+	if (std::numeric_limits<SRC>::is_signed != std::numeric_limits<DST>::is_signed) {
+		if (std::numeric_limits<SRC>::is_signed) {
+			// signed to unsigned conversion
+			if (value < 0 || value > NumericLimits<DST>::Maximum()) {
+				return false;
+			}
+			result = (DST)value;
+			return true;
+		} else {
+			// unsigned to signed conversion
+			auto max_lim = NumericLimits<DST>::Maximum();
+			if (value <= NumericLimits<DST>::Maximum()) {
+				result = (DST)value;
+				return true;
+			}
+			return false;
+		}
+	} else {
+		if (value < NumericLimits<DST>::Minimum() || value > NumericLimits<DST>::Maximum()) {
+			return false;
+		}
+		result = (DST)value;
+		return true;
 	}
-	result = (DST)value;
-	return true;
 }
 
 template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
@@ -39,16 +58,16 @@ template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 //===--------------------------------------------------------------------===//
 // Numeric -> int8_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(uint8_t input, int8_t &result, bool strict){
+template <> bool TryCast::Operation(uint8_t input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint16_t input, int8_t &result, bool strict){
+template <> bool TryCast::Operation(uint16_t input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint32_t input, int8_t &result, bool strict){
+template <> bool TryCast::Operation(uint32_t input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint64_t input, int8_t &result, bool strict){
+template <> bool TryCast::Operation(uint64_t input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 template <> bool TryCast::Operation(int16_t input, int8_t &result, bool strict) {
@@ -67,16 +86,16 @@ template <> bool TryCast::Operation(double input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 
-template <> int8_t Cast::Operation(uint8_t input){
-	return cast_with_overflow_check<uint8_t , int8_t>(input);
+template <> int8_t Cast::Operation(uint8_t input) {
+	return cast_with_overflow_check<uint8_t, int8_t>(input);
 }
 template <> int8_t Cast::Operation(uint16_t input) {
 	return cast_with_overflow_check<uint16_t, int8_t>(input);
 }
-template <> int8_t Cast::Operation(uint32_t input){
+template <> int8_t Cast::Operation(uint32_t input) {
 	return cast_with_overflow_check<uint32_t, int8_t>(input);
 }
-template <> int8_t Cast::Operation(uint64_t input){
+template <> int8_t Cast::Operation(uint64_t input) {
 	return cast_with_overflow_check<uint64_t, int8_t>(input);
 }
 template <> int8_t Cast::Operation(int16_t input) {
@@ -98,71 +117,71 @@ template <> int8_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Numeric -> uint8_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(uint16_t input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(uint16_t input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint32_t input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(uint32_t input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint64_t input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(uint64_t input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int8_t input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(int8_t input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int16_t input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(int16_t input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int32_t input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(int32_t input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int64_t input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(int64_t input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(float input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(double input, uint8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> uint8_t Cast::Operation(uint16_t input){
-	return cast_with_overflow_check<uint16_t , uint8_t>(input);
+template <> uint8_t Cast::Operation(uint16_t input) {
+	return cast_with_overflow_check<uint16_t, uint8_t>(input);
 }
-template <> uint8_t Cast::Operation(uint32_t input){
-	return cast_with_overflow_check<uint32_t , uint8_t>(input);
+template <> uint8_t Cast::Operation(uint32_t input) {
+	return cast_with_overflow_check<uint32_t, uint8_t>(input);
 }
-template <> uint8_t Cast::Operation(uint64_t input){
-	return cast_with_overflow_check<uint64_t , uint8_t>(input);
+template <> uint8_t Cast::Operation(uint64_t input) {
+	return cast_with_overflow_check<uint64_t, uint8_t>(input);
 }
-template <> uint8_t Cast::Operation(int8_t input){
-	return cast_with_overflow_check<int8_t , uint8_t>(input);
+template <> uint8_t Cast::Operation(int8_t input) {
+	return cast_with_overflow_check<int8_t, uint8_t>(input);
 }
-template <> uint8_t Cast::Operation(int16_t input){
-	return cast_with_overflow_check<int16_t , uint8_t>(input);
+template <> uint8_t Cast::Operation(int16_t input) {
+	return cast_with_overflow_check<int16_t, uint8_t>(input);
 }
-template <> uint8_t Cast::Operation(int32_t input){
-	return cast_with_overflow_check<int32_t , uint8_t>(input);
+template <> uint8_t Cast::Operation(int32_t input) {
+	return cast_with_overflow_check<int32_t, uint8_t>(input);
 }
-template <> uint8_t Cast::Operation(int64_t input){
-	return cast_with_overflow_check<int64_t , uint8_t>(input);
+template <> uint8_t Cast::Operation(int64_t input) {
+	return cast_with_overflow_check<int64_t, uint8_t>(input);
 }
-template <> uint8_t Cast::Operation(float input){
-	return cast_with_overflow_check<float , uint8_t>(input);
+template <> uint8_t Cast::Operation(float input) {
+	return cast_with_overflow_check<float, uint8_t>(input);
 }
-template <> uint8_t Cast::Operation(double input){
-	return cast_with_overflow_check<double , uint8_t>(input);
+template <> uint8_t Cast::Operation(double input) {
+	return cast_with_overflow_check<double, uint8_t>(input);
 }
 
 //===--------------------------------------------------------------------===//
 // Numeric -> int16_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(uint16_t input, int16_t &result, bool strict){
+template <> bool TryCast::Operation(uint16_t input, int16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint32_t input, int16_t &result, bool strict){
+template <> bool TryCast::Operation(uint32_t input, int16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint64_t input, int16_t &result, bool strict){
+template <> bool TryCast::Operation(uint64_t input, int16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 template <> bool TryCast::Operation(int32_t input, int16_t &result, bool strict) {
@@ -178,14 +197,14 @@ template <> bool TryCast::Operation(double input, int16_t &result, bool strict) 
 	return try_cast_with_overflow_check(input, result);
 }
 
-template <> int16_t Cast::Operation(uint16_t input){
-	return cast_with_overflow_check<uint16_t , int16_t>(input);
+template <> int16_t Cast::Operation(uint16_t input) {
+	return cast_with_overflow_check<uint16_t, int16_t>(input);
 }
-template <> int16_t Cast::Operation(uint32_t input){
+template <> int16_t Cast::Operation(uint32_t input) {
 	return cast_with_overflow_check<uint32_t, int16_t>(input);
 }
-template <> int16_t Cast::Operation(uint64_t input){
-	return cast_with_overflow_check<uint64_t , int16_t>(input);
+template <> int16_t Cast::Operation(uint64_t input) {
+	return cast_with_overflow_check<uint64_t, int16_t>(input);
 }
 
 template <> int16_t Cast::Operation(int32_t input) {
@@ -205,13 +224,17 @@ template <> int16_t Cast::Operation(double input) {
 // Numeric -> uint16_t casts
 //===--------------------------------------------------------------------===//
 
-template <> bool TryCast::Operation(uint32_t input, uint16_t &result, bool strict){
+template <> bool TryCast::Operation(uint32_t input, uint16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint64_t input, uint16_t &result, bool strict){
+template <> bool TryCast::Operation(uint64_t input, uint16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int16_t input, uint16_t &result, bool strict){
+template <> bool TryCast::Operation(int8_t input, uint16_t &result, bool strict){
+	return try_cast_with_overflow_check(input, result);
+}
+
+template <> bool TryCast::Operation(int16_t input, uint16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 template <> bool TryCast::Operation(int32_t input, uint16_t &result, bool strict) {
@@ -227,14 +250,19 @@ template <> bool TryCast::Operation(double input, uint16_t &result, bool strict)
 	return try_cast_with_overflow_check(input, result);
 }
 
-template <> uint16_t Cast::Operation(uint32_t input){
+template <> uint16_t Cast::Operation(uint32_t input) {
 	return cast_with_overflow_check<uint32_t, uint16_t>(input);
 }
-template <> uint16_t Cast::Operation(uint64_t input){
-	return cast_with_overflow_check<uint64_t , uint16_t>(input);
+template <> uint16_t Cast::Operation(uint64_t input) {
+	return cast_with_overflow_check<uint64_t, uint16_t>(input);
 }
-template <> uint16_t Cast::Operation(int16_t input){
-	return cast_with_overflow_check<int16_t , uint16_t>(input);
+
+template <> uint16_t Cast::Operation(int8_t input){
+	return cast_with_overflow_check<int8_t, uint16_t>(input);
+}
+
+template <> uint16_t Cast::Operation(int16_t input) {
+	return cast_with_overflow_check<int16_t, uint16_t>(input);
 }
 template <> uint16_t Cast::Operation(int32_t input) {
 	return cast_with_overflow_check<int32_t, uint16_t>(input);
@@ -251,10 +279,10 @@ template <> uint16_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Numeric -> int32_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(uint32_t input, int32_t &result, bool strict){
+template <> bool TryCast::Operation(uint32_t input, int32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(uint64_t input, int32_t &result, bool strict){
+template <> bool TryCast::Operation(uint64_t input, int32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 template <> bool TryCast::Operation(int64_t input, int32_t &result, bool strict) {
@@ -267,11 +295,11 @@ template <> bool TryCast::Operation(double input, int32_t &result, bool strict) 
 	return try_cast_with_overflow_check(input, result);
 }
 
-template <> int32_t Cast::Operation(uint32_t input){
-	return cast_with_overflow_check<uint32_t , int32_t>(input);
+template <> int32_t Cast::Operation(uint32_t input) {
+	return cast_with_overflow_check<uint32_t, int32_t>(input);
 }
-template <> int32_t Cast::Operation(uint64_t input){
-	return cast_with_overflow_check<uint64_t , int32_t>(input);
+template <> int32_t Cast::Operation(uint64_t input) {
+	return cast_with_overflow_check<uint64_t, int32_t>(input);
 }
 
 template <> int32_t Cast::Operation(int64_t input) {
@@ -288,41 +316,54 @@ template <> int32_t Cast::Operation(double input) {
 // Numeric -> uint32_t casts
 //===--------------------------------------------------------------------===//
 
-template <> bool TryCast::Operation(uint64_t input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(uint64_t input, uint32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int32_t input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(int8_t input, uint32_t &result, bool strict){
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int64_t input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(int16_t input, uint32_t &result, bool strict){
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(int32_t input, uint32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(int64_t input, uint32_t &result, bool strict) {
+	return try_cast_with_overflow_check(input, result);
+}
+template <> bool TryCast::Operation(float input, uint32_t &result, bool strict) {
+	return try_cast_with_overflow_check(input, result);
+}
+template <> bool TryCast::Operation(double input, uint32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 
-template <> uint32_t Cast::Operation(uint64_t input){
-	return cast_with_overflow_check<uint64_t , uint32_t>(input);
+template <> uint32_t Cast::Operation(uint64_t input) {
+	return cast_with_overflow_check<uint64_t, uint32_t>(input);
 }
-template <> uint32_t Cast::Operation(int32_t input){
-	return cast_with_overflow_check<int32_t , uint32_t>(input);
+template <> uint32_t Cast::Operation(int8_t input){
+	return cast_with_overflow_check<int8_t, uint32_t>(input);
 }
-template <> uint32_t Cast::Operation(int64_t input){
+template <> uint32_t Cast::Operation(int16_t input){
+	return cast_with_overflow_check<int16_t, uint32_t>(input);
+}
+
+template <> uint32_t Cast::Operation(int32_t input) {
+	return cast_with_overflow_check<int32_t, uint32_t>(input);
+}
+template <> uint32_t Cast::Operation(int64_t input) {
 	return cast_with_overflow_check<int64_t, uint32_t>(input);
 }
-template <> uint32_t Cast::Operation(float input){
+template <> uint32_t Cast::Operation(float input) {
 	return cast_with_overflow_check<float, uint32_t>(input);
 }
-template <> uint32_t Cast::Operation(double input){
+template <> uint32_t Cast::Operation(double input) {
 	return cast_with_overflow_check<double, uint32_t>(input);
 }
 //===--------------------------------------------------------------------===//
 // Numeric -> int64_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(uint64_t input, int64_t &result, bool strict){
+template <> bool TryCast::Operation(uint64_t input, int64_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 template <> bool TryCast::Operation(float input, int64_t &result, bool strict) {
@@ -332,8 +373,8 @@ template <> bool TryCast::Operation(double input, int64_t &result, bool strict) 
 	return try_cast_with_overflow_check(input, result);
 }
 
-template <> int64_t Cast::Operation(uint64_t input){
-	return cast_with_overflow_check<uint64_t , int64_t>(input);
+template <> int64_t Cast::Operation(uint64_t input) {
+	return cast_with_overflow_check<uint64_t, int64_t>(input);
 }
 template <> int64_t Cast::Operation(float input) {
 	return cast_with_overflow_check<float, int64_t>(input);
@@ -345,23 +386,42 @@ template <> int64_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Numeric -> uint64_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int64_t input, uint64_t &result, bool strict){
+template <> bool TryCast::Operation(int8_t input, uint64_t &result, bool strict){
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float input, uint64_t &result, bool strict){
+template <> bool TryCast::Operation(int16_t input, uint64_t &result, bool strict){
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double input, uint64_t &result, bool strict){
+template <> bool TryCast::Operation(int32_t input, uint64_t &result, bool strict){
 	return try_cast_with_overflow_check(input, result);
 }
 
-template <> uint64_t Cast::Operation(int64_t input){
-	return cast_with_overflow_check<int64_t , uint64_t>(input);
+template <> bool TryCast::Operation(int64_t input, uint64_t &result, bool strict) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> uint64_t Cast::Operation(float input){
+template <> bool TryCast::Operation(float input, uint64_t &result, bool strict) {
+	return try_cast_with_overflow_check(input, result);
+}
+template <> bool TryCast::Operation(double input, uint64_t &result, bool strict) {
+	return try_cast_with_overflow_check(input, result);
+}
+template <> uint64_t Cast::Operation(int8_t input){
+	return cast_with_overflow_check<int8_t, uint64_t>(input);
+}
+template <> uint64_t Cast::Operation(int16_t input){
+	return cast_with_overflow_check<int16_t, uint64_t>(input);
+}
+template <> uint64_t Cast::Operation(int32_t input){
+	return cast_with_overflow_check<int32_t, uint64_t>(input);
+}
+
+template <> uint64_t Cast::Operation(int64_t input) {
+	return cast_with_overflow_check<int64_t, uint64_t>(input);
+}
+template <> uint64_t Cast::Operation(float input) {
 	return cast_with_overflow_check<float, uint64_t>(input);
 }
-template <> uint64_t Cast::Operation(double input){
+template <> uint64_t Cast::Operation(double input) {
 	return cast_with_overflow_check<double, uint64_t>(input);
 }
 
@@ -447,6 +507,7 @@ struct IntegerCastOperation {
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	bool is_zero = true;
 	idx_t pos = start_pos;
 	while (pos < len) {
 		if (!StringUtil::CharacterIsDigit(buf[pos])) {
@@ -506,11 +567,18 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			return false;
 		}
 		uint8_t digit = buf[pos++] - '0';
+		if (digit != 0) {
+			is_zero = false;
+		}
 		if (!OP::template HandleDigit<T, NEGATIVE>(result, digit)) {
 			return false;
 		}
 	}
 	if (!OP::template Finalize<T>(result)) {
+		return false;
+	}
+	if (!is_zero && NEGATIVE && !std::numeric_limits<T>::is_signed) {
+		//! Attempting negative conversion to unsigned
 		return false;
 	}
 	return pos > start_pos;
@@ -594,16 +662,16 @@ template <> bool TryCast::Operation(string_t input, int64_t &result, bool strict
 	return TryIntegerCast<int64_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 
-template <> bool TryCast::Operation(string_t input, uint8_t &result, bool strict){
+template <> bool TryCast::Operation(string_t input, uint8_t &result, bool strict) {
 	return TryIntegerCast<uint8_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
-template <> bool TryCast::Operation(string_t input, uint16_t &result, bool strict){
+template <> bool TryCast::Operation(string_t input, uint16_t &result, bool strict) {
 	return TryIntegerCast<uint16_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
-template <> bool TryCast::Operation(string_t input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(string_t input, uint32_t &result, bool strict) {
 	return TryIntegerCast<uint32_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
-template <> bool TryCast::Operation(string_t input, uint64_t &result, bool strict){
+template <> bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
 	return TryIntegerCast<uint64_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 
@@ -737,16 +805,16 @@ template <> int32_t Cast::Operation(string_t input) {
 template <> int64_t Cast::Operation(string_t input) {
 	return try_cast_string<int64_t>(input);
 }
-template <> uint8_t Cast::Operation(string_t input){
+template <> uint8_t Cast::Operation(string_t input) {
 	return try_cast_string<uint8_t>(input);
 }
-template <> uint16_t Cast::Operation(string_t input){
+template <> uint16_t Cast::Operation(string_t input) {
 	return try_cast_string<uint16_t>(input);
 }
-template <> uint32_t Cast::Operation(string_t input){
+template <> uint32_t Cast::Operation(string_t input) {
 	return try_cast_string<uint32_t>(input);
 }
-template <> uint64_t Cast::Operation(string_t input){
+template <> uint64_t Cast::Operation(string_t input) {
 	return try_cast_string<uint64_t>(input);
 }
 
@@ -814,16 +882,16 @@ template <> string Cast::Operation(int32_t input) {
 template <> string Cast::Operation(int64_t input) {
 	return CastToStandardString(input);
 }
-template <> string Cast::Operation(uint8_t input){
+template <> string Cast::Operation(uint8_t input) {
 	return CastToStandardString(input);
 }
-template <> string Cast::Operation(uint16_t input){
+template <> string Cast::Operation(uint16_t input) {
 	return CastToStandardString(input);
 }
-template <> string Cast::Operation(uint32_t input){
+template <> string Cast::Operation(uint32_t input) {
 	return CastToStandardString(input);
 }
-template <> string Cast::Operation(uint64_t input){
+template <> string Cast::Operation(uint64_t input) {
 	return CastToStandardString(input);
 }
 template <> string Cast::Operation(hugeint_t input) {
@@ -861,16 +929,16 @@ template <> string_t StringCast::Operation(int32_t input, Vector &vector) {
 template <> string_t StringCast::Operation(int64_t input, Vector &vector) {
 	return NumericHelper::FormatSigned<int64_t, uint64_t>(input, vector);
 }
-template <> duckdb::string_t StringCast::Operation(uint8_t input, Vector &vector){
+template <> duckdb::string_t StringCast::Operation(uint8_t input, Vector &vector) {
 	return NumericHelper::FormatSigned<uint8_t, uint64_t>(input, vector);
 }
-template <> duckdb::string_t StringCast::Operation(uint16_t input, Vector &vector){
+template <> duckdb::string_t StringCast::Operation(uint16_t input, Vector &vector) {
 	return NumericHelper::FormatSigned<uint16_t, uint64_t>(input, vector);
 }
-template <> duckdb::string_t StringCast::Operation(uint32_t input, Vector &vector){
+template <> duckdb::string_t StringCast::Operation(uint32_t input, Vector &vector) {
 	return NumericHelper::FormatSigned<uint32_t, uint64_t>(input, vector);
 }
-template <> duckdb::string_t StringCast::Operation(uint64_t input, Vector &vector){
+template <> duckdb::string_t StringCast::Operation(uint64_t input, Vector &vector) {
 	return NumericHelper::FormatSigned<uint64_t, uint64_t>(input, vector);
 }
 
@@ -1179,19 +1247,19 @@ template <> bool TryCast::Operation(int64_t input, hugeint_t &result, bool stric
 	return true;
 }
 
-template <>  bool TryCast::Operation(uint8_t input, hugeint_t &result, bool strict){
+template <> bool TryCast::Operation(uint8_t input, hugeint_t &result, bool strict) {
 	result = Cast::Operation<uint8_t, hugeint_t>(input);
 	return true;
 }
-template <> bool TryCast::Operation(uint16_t input, hugeint_t &result, bool strict){
+template <> bool TryCast::Operation(uint16_t input, hugeint_t &result, bool strict) {
 	result = Cast::Operation<uint16_t, hugeint_t>(input);
 	return true;
 }
-template <> bool TryCast::Operation(uint32_t input, hugeint_t &result, bool strict){
+template <> bool TryCast::Operation(uint32_t input, hugeint_t &result, bool strict) {
 	result = Cast::Operation<uint32_t, hugeint_t>(input);
 	return true;
 }
-template <> bool TryCast::Operation(uint64_t input, hugeint_t &result, bool strict){
+template <> bool TryCast::Operation(uint64_t input, hugeint_t &result, bool strict) {
 	result = Cast::Operation<uint64_t, hugeint_t>(input);
 	return true;
 }
@@ -1213,16 +1281,16 @@ template <> hugeint_t Cast::Operation(bool input) {
 	return result;
 }
 
-template <> hugeint_t Cast::Operation(uint8_t input){
+template <> hugeint_t Cast::Operation(uint8_t input) {
 	return Hugeint::Convert<uint8_t>(input);
 }
-template <> hugeint_t Cast::Operation(uint16_t input){
+template <> hugeint_t Cast::Operation(uint16_t input) {
 	return Hugeint::Convert<uint16_t>(input);
 }
-template <> hugeint_t Cast::Operation(uint32_t input){
+template <> hugeint_t Cast::Operation(uint32_t input) {
 	return Hugeint::Convert<uint32_t>(input);
 }
-template <> hugeint_t Cast::Operation(uint64_t input){
+template <> hugeint_t Cast::Operation(uint64_t input) {
 	return Hugeint::Convert<uint64_t>(input);
 }
 
@@ -1270,19 +1338,18 @@ template <> bool TryCast::Operation(hugeint_t input, int64_t &result, bool stric
 	return Hugeint::TryCast<int64_t>(input, result);
 }
 
-template <> bool TryCast::Operation(hugeint_t input,uint8_t &result, bool strict){
+template <> bool TryCast::Operation(hugeint_t input, uint8_t &result, bool strict) {
 	return Hugeint::TryCast<uint8_t>(input, result);
 }
-template <> bool TryCast::Operation(hugeint_t input, uint16_t &result, bool strict){
+template <> bool TryCast::Operation(hugeint_t input, uint16_t &result, bool strict) {
 	return Hugeint::TryCast<uint16_t>(input, result);
 }
-template <> bool TryCast::Operation(hugeint_t input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(hugeint_t input, uint32_t &result, bool strict) {
 	return Hugeint::TryCast<uint32_t>(input, result);
 }
-template <> bool TryCast::Operation(hugeint_t input, uint64_t &result, bool strict){
+template <> bool TryCast::Operation(hugeint_t input, uint64_t &result, bool strict) {
 	return Hugeint::TryCast<uint64_t>(input, result);
 }
-
 
 template <> bool TryCast::Operation(hugeint_t input, float &result, bool strict) {
 	return Hugeint::TryCast<float>(input, result);
@@ -1322,19 +1389,18 @@ template <> int64_t Cast::Operation(hugeint_t input) {
 	return hugeint_cast_to_numeric<int64_t>(input);
 }
 
-template <> uint8_t Cast::Operation(hugeint_t input){
+template <> uint8_t Cast::Operation(hugeint_t input) {
 	return hugeint_cast_to_numeric<uint8_t>(input);
 }
-template <> uint16_t Cast::Operation(hugeint_t input){
+template <> uint16_t Cast::Operation(hugeint_t input) {
 	return hugeint_cast_to_numeric<uint16_t>(input);
 }
-template <> uint32_t Cast::Operation(hugeint_t input){
+template <> uint32_t Cast::Operation(hugeint_t input) {
 	return hugeint_cast_to_numeric<uint32_t>(input);
 }
-template <> uint64_t Cast::Operation(hugeint_t input){
+template <> uint64_t Cast::Operation(hugeint_t input) {
 	return hugeint_cast_to_numeric<uint64_t>(input);
 }
-
 
 template <> float Cast::Operation(hugeint_t input) {
 	return hugeint_cast_to_numeric<float>(input);

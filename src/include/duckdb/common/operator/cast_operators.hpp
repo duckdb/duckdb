@@ -104,6 +104,7 @@ template <> int16_t Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(uint32_t input, uint16_t &result, bool strict);
 template <> bool TryCast::Operation(uint64_t input, uint16_t &result, bool strict);
+template <> bool TryCast::Operation(int8_t input, uint16_t &result, bool strict);
 template <> bool TryCast::Operation(int16_t input, uint16_t &result, bool strict);
 template <> bool TryCast::Operation(int32_t input, uint16_t &result, bool strict);
 template <> bool TryCast::Operation(int64_t input, uint16_t &result, bool strict);
@@ -112,6 +113,7 @@ template <> bool TryCast::Operation(double input, uint16_t &result, bool strict)
 
 template <> uint16_t Cast::Operation(uint32_t input);
 template <> uint16_t Cast::Operation(uint64_t input);
+template <> uint16_t Cast::Operation(int8_t input);
 template <> uint16_t Cast::Operation(int16_t input);
 template <> uint16_t Cast::Operation(int32_t input);
 template <> uint16_t Cast::Operation(int64_t input);
@@ -136,12 +138,16 @@ template <> int32_t Cast::Operation(double input);
 // Numeric -> uint32_t casts
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(uint64_t input, uint32_t &result, bool strict);
+template <> bool TryCast::Operation(int8_t input, uint32_t &result, bool strict);
+template <> bool TryCast::Operation(int16_t input, uint32_t &result, bool strict);
 template <> bool TryCast::Operation(int32_t input, uint32_t &result, bool strict);
 template <> bool TryCast::Operation(int64_t input, uint32_t &result, bool strict);
 template <> bool TryCast::Operation(float input, uint32_t &result, bool strict);
 template <> bool TryCast::Operation(double input, uint32_t &result, bool strict);
 
 template <> uint32_t Cast::Operation(uint64_t input);
+template <> uint32_t Cast::Operation(int8_t input);
+template <> uint32_t Cast::Operation(int16_t input);
 template <> uint32_t Cast::Operation(int32_t input);
 template <> uint32_t Cast::Operation(int64_t input);
 template <> uint32_t Cast::Operation(float input);
@@ -161,10 +167,16 @@ template <> int64_t Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
 // Numeric -> uint64_t casts
 //===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(int8_t input, uint64_t &result, bool strict);
+template <> bool TryCast::Operation(int16_t input, uint64_t &result, bool strict);
+template <> bool TryCast::Operation(int32_t input, uint64_t &result, bool strict);
 template <> bool TryCast::Operation(int64_t input, uint64_t &result, bool strict);
 template <> bool TryCast::Operation(float input, uint64_t &result, bool strict);
 template <> bool TryCast::Operation(double input, uint64_t &result, bool strict);
 
+template <> uint64_t Cast::Operation(int8_t input);
+template <> uint64_t Cast::Operation(int16_t input);
+template <> uint64_t Cast::Operation(int32_t input);
 template <> uint64_t Cast::Operation(int64_t input);
 template <> uint64_t Cast::Operation(float input);
 template <> uint64_t Cast::Operation(double input);

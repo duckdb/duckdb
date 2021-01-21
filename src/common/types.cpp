@@ -500,6 +500,26 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 		width = 19;
 		scale = 0;
 		break;
+	case LogicalTypeId::UTINYINT:
+		// UInt8 — [0 : 255]
+		width = 3;
+		scale = 0;
+		break;
+	case LogicalTypeId::USMALLINT:
+		// UInt16 — [0 : 65535]
+		width = 5;
+		scale = 0;
+		break;
+	case LogicalTypeId::UINTEGER:
+		// UInt32 — [0 : 4294967295]
+		width = 10;
+		scale = 0;
+		break;
+	case LogicalTypeId::UBIGINT:
+		// UInt64 — [0 : 18446744073709551615]
+		width = 20;
+		scale = 0;
+		break;
 	case LogicalTypeId::HUGEINT:
 		// hugeint: max size decimal (38, 0)
 		// note that a hugeint is not guaranteed to fit in this

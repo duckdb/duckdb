@@ -371,6 +371,14 @@ template <class T> PhysicalType GetTypeId() {
 		return PhysicalType::INT32;
 	} else if (std::is_same<T, int64_t>()) {
 		return PhysicalType::INT64;
+	} else if (std::is_same<T, uint8_t>()) {
+		return PhysicalType::UINT8;
+	} else if (std::is_same<T, uint16_t>()) {
+		return PhysicalType::UINT16;
+	} else if (std::is_same<T, uint32_t>()) {
+		return PhysicalType::UINT32;
+	} else if (std::is_same<T, uint64_t>()) {
+		return PhysicalType::UINT64;
 	} else if (std::is_same<T, hugeint_t>()) {
 		return PhysicalType::INT128;
 	} else if (std::is_same<T, uint64_t>()) {
