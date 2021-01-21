@@ -86,6 +86,14 @@ void CheckpointManager::CreateCheckpoint() {
 
 	// truncate the WAL
 	wal->Truncate(0);
+
+	// mark all blocks written as part of the metadata as modified
+	for(auto &block_id : metadata_writer->written_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
+	for(auto &block_id : tabledata_writer->written_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
 }
 
 void CheckpointManager::LoadFromStorage() {

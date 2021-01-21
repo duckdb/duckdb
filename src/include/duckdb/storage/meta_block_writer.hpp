@@ -24,6 +24,7 @@ public:
 
 	DatabaseInstance &db;
 	unique_ptr<Block> block;
+	vector<block_id_t> written_blocks;
 	idx_t offset;
 
 public:
