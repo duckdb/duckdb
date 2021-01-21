@@ -139,6 +139,7 @@ static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<Correla
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(
 		    make_unique<BoundColumnRefExpression>(col.type, col.binding));
+		delim_join->delim_types.push_back(col.type);
 	}
 	return delim_join;
 }

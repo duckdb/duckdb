@@ -114,6 +114,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		if (aggr.groups.size() == correlated_columns.size()) {
 			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
+			// FIXME: this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
+			// NULL or a value
 			auto left_outer_join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
 			auto left_index = binder.GenerateTableIndex();
 			auto delim_scan = make_unique<LogicalDelimGet>(left_index, delim_types);
