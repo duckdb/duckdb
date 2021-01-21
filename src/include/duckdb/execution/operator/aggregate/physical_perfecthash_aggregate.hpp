@@ -27,9 +27,6 @@ public:
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
 
-	//! Map between payload index and input index for filters
-	unordered_map<Expression*,std::pair<bool,unordered_map<size_t,size_t>>> filter_map;
-
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
@@ -56,6 +53,8 @@ public:
 	vector<Value> group_minima;
 	//! The number of bits we need to completely cover each of the groups
 	vector<idx_t> required_bits;
+
+	unordered_map<Expression*,size_t> ht;
 };
 
 } // namespace duckdb

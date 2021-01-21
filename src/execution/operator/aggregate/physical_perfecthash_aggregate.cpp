@@ -1,9 +1,10 @@
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
+
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	}
 
 	vector<BoundAggregateExpression *> bindings;
+	vector<LogicalType> payload_types_filters;
 	for (auto &expr : aggregates) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
@@ -35,17 +37,15 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 
 		D_ASSERT(!aggr.distinct);
 		D_ASSERT(aggr.function.combine);
-		for (auto & child : aggr.children) {
+		for (auto &child : aggr.children) {
 			payload_types.push_back(child->return_type);
 		}
-		if (aggr.filter){
-			vector<LogicalType> types;
-			vector<vector<Expression*>> bound_refs;
-			BoundAggregateExpression::GetColumnRef(aggr.filter.get(),bound_refs,types);
-			for (auto type:types){
-				payload_types.push_back(type);
-			}
+		if (aggr.filter) {
+			payload_types_filters.push_back(aggr.filter->return_type);
 		}
+	}
+		for (const auto &pay_filters : payload_types_filters) {
+		payload_types.push_back(pay_filters);
 	}
 	aggregate_objects = AggregateObject::CreateAggregateObjects(move(bindings));
 }
@@ -107,41 +107,28 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
-	for (auto & aggregate : aggregates) {
+	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
+	}
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		if (aggr.filter) {
-			vector<LogicalType> types;
-			vector<vector<Expression *>> bound_refs;
-			BoundAggregateExpression::GetColumnRef(aggr.filter.get(), bound_refs, types);
-			auto f_map = filter_map.find(aggr.filter.get());
-			if (f_map == filter_map.end()){
-				unordered_map<size_t,size_t> new_map;
-				filter_map[aggr.filter.get()] = std::make_pair (true, new_map);
-				f_map = filter_map.find(aggr.filter.get());
+			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
+			auto it = ht.find(aggr.filter.get());
+			if (it == ht.end()) {
+				aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[bound_ref_expr.index]);
+				ht[aggr.filter.get()] = bound_ref_expr.index;
+				bound_ref_expr.index = aggregate_input_idx++;
+			} else {
+				aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
 			}
-			for (auto &bound_ref : bound_refs) {
-				auto &bound_ref_expr = (BoundReferenceExpression &)*bound_ref[0];
-				if (f_map->second.first) {
-					aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
-					f_map->second.second[aggregate_input_idx - 1] = bound_ref_expr.index;
-					for (auto &bound_ref_up : bound_ref) {
-						auto &bound_ref_up_expr = (BoundReferenceExpression &)*bound_ref_up;
-						bound_ref_up_expr.index = aggregate_input_idx - 1;
-					}
-				} else {
-					aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[f_map->second.second[aggregate_input_idx]]);
-					aggregate_input_idx++;
-				}
-			}
-			f_map->second.first = false;
 		}
 	}
-
 
 	group_chunk.SetCardinality(input.size());
 
@@ -204,8 +191,8 @@ string PhysicalPerfectHashAggregate::ParamsToString() const {
 		}
 		result += aggregates[i]->GetName();
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
-		if (aggregate.filter){
-			result += aggregate.filter->GetName();
+		if (aggregate.filter) {
+			result += " Filter: " + aggregate.filter->GetName();
 		}
 	}
 	return result;

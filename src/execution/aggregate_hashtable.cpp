@@ -248,6 +248,22 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload)
 	return AddChunk(groups, hashes, payload);
 }
 
+void GroupedAggregateHashTable::UpdateAggregate(AggregateObject &aggr, DataChunk &payload, Vector &distinct_addresses,
+                                                idx_t input_count, idx_t payload_idx) {
+	ExpressionExecutor filter_execution(aggr.filter);
+	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+	auto count = filter_execution.SelectExpression(payload, true_sel);
+	DataChunk filtered_payload;
+	auto pay_types = payload.GetTypes();
+	filtered_payload.Initialize(pay_types);
+	filtered_payload.Slice(payload, true_sel, count);
+	Vector filtered_addresses;
+	filtered_addresses.Slice(distinct_addresses, true_sel, count);
+	filtered_addresses.Normalify(count);
+	aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
+	                     filtered_addresses, filtered_payload.size());
+}
+
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
 	D_ASSERT(!is_finalized);
 
@@ -302,47 +318,31 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			// now fix up the payload and addresses accordingly by creating
 			// a selection vector
 			if (new_group_count > 0) {
-				Vector distinct_addresses;
-				distinct_addresses.Slice(addresses, new_groups, new_group_count);
-				for (idx_t i = 0; i < aggr.child_count; i++) {
-					payload.data[payload_idx + i].Slice(new_groups, new_group_count);
-					payload.data[payload_idx + i].Verify(new_group_count);
-				}
-
-				distinct_addresses.Verify(new_group_count);
 				if (aggr.filter) {
-					ExpressionExecutor filter_execution(aggr.filter);
-					SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-					auto count = filter_execution.SelectExpression(payload, true_sel);
-					DataChunk filtered_payload;
+					Vector distinct_addresses;
+					DataChunk distinct_payload;
+					distinct_addresses.Slice(addresses, new_groups, new_group_count);
 					auto pay_types = payload.GetTypes();
-					filtered_payload.Initialize(pay_types);
-					filtered_payload.Slice(payload, true_sel, count);
-					Vector filtered_addresses;
-					filtered_addresses.Slice(distinct_addresses, true_sel, count);
-					filtered_addresses.Normalify(count);
-					aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
-					                     filtered_addresses, filtered_payload.size());
+					distinct_payload.Initialize(pay_types);
+					distinct_payload.Slice(payload, new_groups, new_group_count);
+					distinct_addresses.Verify(new_group_count);
+					distinct_addresses.Normalify(new_group_count);
+					UpdateAggregate(aggr, distinct_payload, distinct_addresses, input_count, payload_idx);
 				} else {
+					Vector distinct_addresses;
+					distinct_addresses.Slice(addresses, new_groups, new_group_count);
+					for (idx_t i = 0; i < aggr.child_count; i++) {
+						payload.data[payload_idx + i].Slice(new_groups, new_group_count);
+						payload.data[payload_idx + i].Verify(new_group_count);
+					}
+					distinct_addresses.Verify(new_group_count);
+
 					aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
 					                     distinct_addresses, new_group_count);
 				}
 			}
 		} else if (aggr.filter) {
-			ExpressionExecutor filter_execution(aggr.filter);
-			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-			auto count = filter_execution.SelectExpression(payload, true_sel);
-			DataChunk filtered_payload;
-			auto pay_types = payload.GetTypes();
-			filtered_payload.Initialize(pay_types);
-			filtered_payload.Slice(payload, true_sel, count);
-			Vector filtered_addresses;
-			filtered_addresses.Slice(addresses, true_sel, count);
-			filtered_addresses.Normalify(count);
-			aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
-			                     filtered_addresses, filtered_payload.size());
-			payload_idx += input_count;
-			VectorOperations::AddInPlace(filtered_addresses, aggr.payload_size, filtered_payload.size());
+			UpdateAggregate(aggr, payload, addresses, input_count, payload_idx);
 		} else {
 			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
 			                     payload.size());

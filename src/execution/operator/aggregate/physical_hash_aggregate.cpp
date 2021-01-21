@@ -32,7 +32,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
-
+	vector<LogicalType> payload_types_filters;
 	for (auto &expr : expressions) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
@@ -48,17 +48,16 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			payload_types.push_back(child->return_type);
 		}
 		if (aggr.filter) {
-			vector<LogicalType> types;
-			vector<vector<Expression *>> bound_refs;
-			BoundAggregateExpression::GetColumnRef(aggr.filter.get(), bound_refs, types);
-			for (auto type : types) {
-				payload_types.push_back(type);
-			}
+			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 		if (!aggr.function.combine) {
 			all_combinable = false;
 		}
 		aggregates.push_back(move(expr));
+	}
+
+	for (const auto &pay_filters : payload_types_filters) {
+		payload_types.push_back(pay_filters);
 	}
 
 	// 10000 seems like a good compromise here
@@ -144,31 +143,19 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
+	}
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		if (aggr.filter) {
-			vector<LogicalType> types;
-			vector<vector<Expression *>> bound_refs;
-			BoundAggregateExpression::GetColumnRef(aggr.filter.get(), bound_refs, types);
-			auto f_map = filter_map.find(aggr.filter.get());
-			if (f_map == filter_map.end()){
-				unordered_map<size_t,size_t> new_map;
-				filter_map[aggr.filter.get()] = std::make_pair (true, new_map);
-				f_map = filter_map.find(aggr.filter.get());
+			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
+			auto it = ht.find(aggr.filter.get());
+			if (it == ht.end()) {
+				aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[bound_ref_expr.index]);
+				ht[aggr.filter.get()] = bound_ref_expr.index;
+				bound_ref_expr.index = aggregate_input_idx++;
+			} else {
+				aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
 			}
-			for (auto &bound_ref : bound_refs) {
-				auto &bound_ref_expr = (BoundReferenceExpression &)*bound_ref[0];
-				if (f_map->second.first) {
-					aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
-					f_map->second.second[aggregate_input_idx - 1] = bound_ref_expr.index;
-					for (auto &bound_ref_up : bound_ref) {
-						auto &bound_ref_up_expr = (BoundReferenceExpression &)*bound_ref_up;
-						bound_ref_up_expr.index = aggregate_input_idx - 1;
-					}
-				} else {
-					aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[f_map->second.second[aggregate_input_idx]]);
-					aggregate_input_idx++;
-				}
-			}
-			f_map->second.first = false;
 		}
 	}
 
@@ -469,7 +456,7 @@ string PhysicalHashAggregate::ParamsToString() const {
 		}
 		result += aggregates[i]->GetName();
 		if (aggregate.filter) {
-			result += aggregate.filter->GetName();
+			result += " Filter: " + aggregate.filter->GetName();
 		}
 	}
 	return result;

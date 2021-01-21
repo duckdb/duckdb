@@ -174,38 +174,31 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 	vector<unique_ptr<Expression>> expressions;
 	vector<LogicalType> types;
 
-	for (auto &group : groups) {
+	for (auto & group_ : groups) {
+		auto &group = group_;
 		auto ref = make_unique<BoundReferenceExpression>(group->return_type, expressions.size());
 		types.push_back(group->return_type);
 		expressions.push_back(move(group));
-		group = move(ref);
+		group_ = move(ref);
 	}
 
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
-		for (auto &child_ : bound_aggr.children) {
-			bool already_in = false;
-			for (size_t i = 0; i < expressions.size(); i++) {
-				auto *base_expr = (BaseExpression *)expressions[i].get();
-				if (child_->Equals(base_expr)) {
-					auto ref = make_unique<BoundReferenceExpression>(child_->return_type, i);
-					child_ = move(ref);
-					already_in = true;
-					break;
-				}
-			}
-			if (!already_in) {
-				auto ref = make_unique<BoundReferenceExpression>(child_->return_type, expressions.size());
-				types.push_back(child_->return_type);
-				expressions.push_back(move(child_));
-				child_ = move(ref);
-			}
+		for (auto & child_ : bound_aggr.children) {
+			auto &child = child_;
+			auto ref = make_unique<BoundReferenceExpression>(child->return_type, expressions.size());
+			types.push_back(child->return_type);
+			expressions.push_back(move(child));
+			child_ = move(ref);
 		}
 		if (bound_aggr.filter) {
-			bound_aggr.filter = BoundAggregateExpression::ExtractColumnRef(move(bound_aggr.filter), expressions, types);
+			auto &filter = bound_aggr.filter;
+			auto ref = make_unique<BoundReferenceExpression>(filter->return_type, expressions.size());
+			types.push_back(filter->return_type);
+			expressions.push_back(move(filter));
+			bound_aggr.filter = move(ref);
 		}
 	}
-
 	if (expressions.empty()) {
 		return child;
 	}

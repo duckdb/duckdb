@@ -1,5 +1,6 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 
 namespace duckdb {
 
@@ -114,19 +115,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	for (auto &aggregate : aggregates) {
 		auto input_count = (idx_t)aggregate.child_count;
 		if (aggregate.filter) {
-			ExpressionExecutor filter_execution(aggregate.filter);
-			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-			auto count = filter_execution.SelectExpression(payload, true_sel);
-			DataChunk filtered_payload;
-			auto pay_types = payload.GetTypes();
-			filtered_payload.Initialize(pay_types);
-			filtered_payload.Slice(payload, true_sel, count);
-			Vector filtered_addresses;
-			filtered_addresses.Slice(addresses, true_sel, count);
-			filtered_addresses.Normalify(count);
-			aggregate.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
-			                          filtered_addresses, filtered_payload.size());
-
+            GroupedAggregateHashTable::UpdateAggregate(aggregate,payload,addresses,input_count,payload_idx);
 		} else {
 			aggregate.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
 			                          payload.size());

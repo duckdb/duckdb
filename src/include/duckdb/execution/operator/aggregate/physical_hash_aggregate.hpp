@@ -48,8 +48,7 @@ public:
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
 
-    //! Map between payload index and input index for filters
-	unordered_map<Expression*,std::pair<bool,unordered_map<size_t,size_t>>> filter_map;
+	unordered_map<Expression*,size_t> ht;
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;

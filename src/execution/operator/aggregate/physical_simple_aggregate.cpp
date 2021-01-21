@@ -109,6 +109,7 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 	sink.child_executor.SetChunk(input);
 	payload_chunk.SetCardinality(input);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		DataChunk filtered_input;
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
@@ -116,9 +117,11 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 			ExpressionExecutor filter_execution (aggregate.filter.get());
 			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
 			auto count = filter_execution.SelectExpression(input,true_sel);
-            input.Slice(true_sel,count);
-			sink.child_executor.SetChunk(input);
-	        payload_chunk.SetCardinality(input);
+			auto input_types = input.GetTypes();
+			filtered_input.Initialize(input_types);
+			filtered_input.Slice(input, true_sel, count);
+			sink.child_executor.SetChunk(filtered_input);
+	        payload_chunk.SetCardinality(count);
 		}
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
@@ -191,7 +194,7 @@ string PhysicalSimpleAggregate::ParamsToString() const {
 		}
 		result += aggregates[i]->GetName();
 		if (aggregate.filter){
-			result += aggregate.filter->GetName();
+			result += " Filter: "+aggregate.filter->GetName();
 		}
 	}
 	return result;
