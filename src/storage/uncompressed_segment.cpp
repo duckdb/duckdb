@@ -12,8 +12,8 @@
 
 namespace duckdb {
 
-UncompressedSegment::UncompressedSegment(BufferManager &manager, PhysicalType type, idx_t row_start)
-    : manager(manager), type(type), max_vector_count(0), tuple_count(0), row_start(row_start), versions(nullptr) {
+UncompressedSegment::UncompressedSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start)
+    : db(db), type(type), max_vector_count(0), tuple_count(0), row_start(row_start), versions(nullptr) {
 }
 
 UncompressedSegment::~UncompressedSegment() {
@@ -287,7 +287,8 @@ void UncompressedSegment::Select(Transaction &transaction, Vector &result, vecto
 		Scan(transaction, state, state.vector_index, result, false);
 		auto vector_index = state.vector_index;
 		// pin the buffer for this segment
-		auto handle = manager.Pin(block);
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
+		auto handle = buffer_manager.Pin(block);
 		auto data = handle->node->buffer;
 		auto offset = vector_index * vector_size;
 		auto source_nullmask = (nullmask_t *)(data + offset);
@@ -385,12 +386,16 @@ void UncompressedSegment::ToTemporary() {
 		// conversion has already been performed by a different thread
 		return;
 	}
+	auto &block_manager = BlockManager::GetBlockManager(db);
+	block_manager.MarkBlockAsModified(block->BlockId());
+
 	// pin the current block
-	auto current = manager.Pin(block);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto current = buffer_manager.Pin(block);
 
 	// now allocate a new block from the buffer manager
-	auto new_block = manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
-	auto handle = manager.Pin(new_block);
+	auto new_block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+	auto handle = buffer_manager.Pin(new_block);
 	// now copy the data over and switch to using the new block id
 	memcpy(handle->node->buffer, current->node->buffer, Storage::BLOCK_SIZE);
 	this->block = move(new_block);

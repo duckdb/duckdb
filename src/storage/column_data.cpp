@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
-    : table_info(table_info), type(move(type)), manager(manager), column_idx(column_idx), persistent_rows(0) {
+ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
+    : table_info(table_info), type(move(type)), db(db), column_idx(column_idx), persistent_rows(0) {
 	statistics = BaseStatistics::CreateEmpty(type);
 }
 
@@ -196,47 +196,8 @@ void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(manager, type, start_row);
+	auto new_segment = make_unique<TransientSegment>(db, type, start_row);
 	data.AppendSegment(move(new_segment));
-}
-
-void ColumnData::Checkpoint(TableDataWriter &writer, idx_t column_idx) {
-	Vector intermediate(type);
-
-	// scan the segments of the column data
-	auto segment = (ColumnSegment *) data.GetRootSegment();
-	DataPointer pointer;
-	while(segment) {
-		switch(segment->segment_type) {
-		case ColumnSegmentType::PERSISTENT: {
-			writer.FlushSegment(column_idx);
-
-			// already persisted: no need to write the data
-			// just set up the pointer directly
-			auto &persistent = (PersistentSegment&) *segment;
-			pointer.block_id = persistent.block_id;
-			pointer.offset = 0;
-			pointer.row_start = segment->start;
-			pointer.tuple_count = persistent.count;
-			pointer.statistics = persistent.stats.statistics->Copy();
-			break;
-		}
-		case ColumnSegmentType::TRANSIENT: {
-			// not persisted yet: scan the segment and write it to disk
-			auto &transient = (TransientSegment &) *segment;
-			ColumnScanState state;
-			transient.InitializeScan(state);
-			for(idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < transient.count; vector_index++) {
-				idx_t count = MinValue<idx_t>(transient.count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
-				transient.ScanCommitted(state, vector_index, intermediate);
-				writer.AppendData(column_idx, intermediate, count);
-			}
-			break;
-		}
-		}
-		// move to the next segment in the list
-		segment = (ColumnSegment *) segment->next.get();
-	}
 }
 
 } // namespace duckdb

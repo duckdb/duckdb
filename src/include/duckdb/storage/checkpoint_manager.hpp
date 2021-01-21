@@ -15,7 +15,7 @@
 #include "duckdb/storage/data_pointer.hpp"
 
 namespace duckdb {
-class Catalog;
+class DatabaseInstance;
 class ClientContext;
 class MetaBlockReader;
 class SchemaCatalogEntry;
@@ -26,7 +26,7 @@ class ViewCatalogEntry;
 //! CheckpointManager is responsible for checkpointing the database
 class CheckpointManager {
 public:
-	CheckpointManager(Catalog &catalog, StorageManager &manager);
+	CheckpointManager(DatabaseInstance &db);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connction is available because right now the checkpointing cannot be done online. (TODO)
@@ -34,16 +34,8 @@ public:
 	//! Load from a stored checkpoint
 	void LoadFromStorage();
 
-	//! The catalog
-	Catalog &catalog;
-	//! The storage manager
-	StorageManager &storage;
-	//! The block manager to write the checkpoint to
-	BlockManager &block_manager;
-	//! The buffer manager
-	BufferManager &buffer_manager;
-	//! The database this storagemanager belongs to
-	DatabaseInstance &database;
+	//! The database
+	DatabaseInstance &db;
 	//! The metadata writer is responsible for writing schema information
 	unique_ptr<MetaBlockWriter> metadata_writer;
 	//! The table data writer is responsible for writing the DataPointers used by the table chunks

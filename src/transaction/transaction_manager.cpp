@@ -11,8 +11,8 @@
 
 namespace duckdb {
 
-TransactionManager::TransactionManager(StorageManager &storage, Catalog &catalog) :
-    storage(storage), catalog(catalog) {
+TransactionManager::TransactionManager(DatabaseInstance &db) :
+    db(db) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
 	// transaction ID starts very high:
@@ -42,6 +42,7 @@ Transaction *TransactionManager::StartTransaction() {
 	timestamp_t start_timestamp = Timestamp::GetCurrentTimestamp();
 
 	// create the actual transaction
+	auto &catalog = Catalog::GetCatalog(db);
 	auto transaction = make_unique<Transaction>(start_time, transaction_id, start_timestamp, catalog.GetCatalogVersion());
 	auto transaction_ptr = transaction.get();
 
@@ -51,13 +52,15 @@ Transaction *TransactionManager::StartTransaction() {
 }
 
 string TransactionManager::CommitTransaction(Transaction *transaction) {
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
 	// commit the UndoBuffer of the transaction
-	string error = transaction->Commit(storage.GetWriteAheadLog(), commit_id);
+	string error = transaction->Commit(storage_manager.GetWriteAheadLog(), commit_id);
 	if (!error.empty()) {
 		// commit unsuccessful: rollback the transaction instead
 		transaction->commit_id = 0;

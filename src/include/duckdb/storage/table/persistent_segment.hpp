@@ -10,18 +10,18 @@
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
 
 class PersistentSegment : public ColumnSegment {
 public:
-	PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, LogicalType type, idx_t start, idx_t count,
+	PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, LogicalType type, idx_t start, idx_t count,
 	                  unique_ptr<BaseStatistics> statistics);
 
-	//! The buffer manager
-	BufferManager &manager;
+	//! The storage manager
+	DatabaseInstance &db;
 	//! The block id that this segment relates to
 	block_id_t block_id;
 	//! The offset into the block

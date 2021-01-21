@@ -15,9 +15,9 @@
 
 namespace duckdb {
 class BlockHandle;
-class BufferManager;
 class ColumnData;
 class Transaction;
+class StorageManager;
 
 struct ColumnAppendState;
 struct UpdateInfo;
@@ -25,11 +25,11 @@ struct UpdateInfo;
 //! An uncompressed segment represents an uncompressed segment of a column residing in a block
 class UncompressedSegment {
 public:
-	UncompressedSegment(BufferManager &manager, PhysicalType type, idx_t row_start);
+	UncompressedSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start);
 	virtual ~UncompressedSegment();
 
-	//! The buffer manager
-	BufferManager &manager;
+	//! The storage manager
+	DatabaseInstance &db;
 	//! Type of the uncompressed segment
 	PhysicalType type;
 	//! The block that this segment relates to

@@ -11,6 +11,7 @@
 #include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
+class StorageManager;
 
 class OverflowStringWriter {
 public:
@@ -50,7 +51,7 @@ typedef unique_ptr<StringUpdateInfo> string_update_info_t;
 
 class StringSegment : public UncompressedSegment {
 public:
-	StringSegment(BufferManager &manager, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
+	StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
 	~StringSegment() override;
 
 	//! The string block holding strings that do not fit in the main block

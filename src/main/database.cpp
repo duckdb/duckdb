@@ -16,6 +16,27 @@ DBConfig::~DBConfig() {
 DatabaseInstance::DatabaseInstance() {
 }
 
+
+BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
+	return *db.GetStorageManager().buffer_manager;
+}
+
+BlockManager &BlockManager::GetBlockManager(DatabaseInstance &db) {
+	return *db.GetStorageManager().block_manager;
+}
+
+StorageManager &StorageManager::GetStorageManager(DatabaseInstance &db) {
+	return db.GetStorageManager();
+}
+
+Catalog &Catalog::GetCatalog(DatabaseInstance &db) {
+	return db.GetCatalog();
+}
+
+FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
+	return db.GetFileSystem();
+}
+
 void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	if (new_config) {
 		// user-supplied configuration
@@ -41,8 +62,8 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 
 	storage =
 	    make_unique<StorageManager>(*this, path ? string(path) : string(), config.access_mode == AccessMode::READ_ONLY);
-	catalog = make_unique<Catalog>(*storage);
-	transaction_manager = make_unique<TransactionManager>(*storage, *catalog);
+	catalog = make_unique<Catalog>(*this);
+	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>();
 	object_cache = make_unique<ObjectCache>();
 
@@ -58,6 +79,26 @@ DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), conf
 }
 
 DuckDB::~DuckDB() {
+}
+
+StorageManager &DatabaseInstance::GetStorageManager() {
+	return *storage;
+}
+
+Catalog &DatabaseInstance::GetCatalog() {
+	return *catalog;
+}
+
+TransactionManager &DatabaseInstance::GetTransactionManager() {
+	return *transaction_manager;
+}
+
+TaskScheduler &DatabaseInstance::GetScheduler() {
+	return *scheduler;
+}
+
+ObjectCache &DatabaseInstance::GetObjectCache() {
+	return *object_cache;
 }
 
 FileSystem &DatabaseInstance::GetFileSystem() {

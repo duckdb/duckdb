@@ -5,22 +5,23 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
 
 namespace duckdb {
 
-PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, LogicalType type, idx_t start,
+PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, LogicalType type, idx_t start,
                                      idx_t count, unique_ptr<BaseStatistics> statistics)
-    : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), manager(manager),
+    : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), db(db),
       block_id(id), offset(offset) {
 	D_ASSERT(offset == 0);
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data = make_unique<StringSegment>(manager, start, id);
+		data = make_unique<StringSegment>(db, start, id);
 		data->max_vector_count = count / STANDARD_VECTOR_SIZE + (count % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);
 	} else {
-		data = make_unique<NumericSegment>(manager, type.InternalType(), start, id);
+		data = make_unique<NumericSegment>(db, type.InternalType(), start, id);
 	}
 	data->tuple_count = count;
 }

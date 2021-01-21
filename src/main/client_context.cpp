@@ -44,8 +44,8 @@ private:
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(database), transaction(*db->transaction_manager), interrupted(false), executor(*this), catalog(*db->catalog),
-      temporary_objects(make_unique<SchemaCatalogEntry>(db->catalog.get(), TEMP_SCHEMA, true)), open_result(nullptr) {
+    : db(database), transaction(db->GetTransactionManager()), interrupted(false), executor(*this),
+      temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
 }
@@ -337,7 +337,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
 	}
-	ActiveTransaction().active_query = db->transaction_manager->GetQueryNumber();
+	ActiveTransaction().active_query = db->GetTransactionManager().GetQueryNumber();
 	if (statement && query_verification_enabled) {
 		// query verification is enabled
 		// create a copy of the statement, and use the copy

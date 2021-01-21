@@ -53,7 +53,6 @@ public:
 	//! The query executor
 	Executor executor;
 
-	Catalog &catalog;
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
 

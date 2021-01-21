@@ -11,10 +11,11 @@
 #include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
 
 class NumericSegment : public UncompressedSegment {
 public:
-	NumericSegment(BufferManager &manager, PhysicalType type, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
+	NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
 
 	//! The size of this type
 	idx_t type_size;

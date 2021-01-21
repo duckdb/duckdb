@@ -1,5 +1,5 @@
 #include "duckdb/function/table/range.hpp"
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 namespace duckdb {
@@ -15,10 +15,7 @@ static unique_ptr<FunctionData> checkpoint_bind(ClientContext &context, vector<V
 static void checkpoint_function(ClientContext &context, const FunctionData *bind_data_,
                             FunctionOperatorData *operator_state, DataChunk &output) {
 	// FIXME: obtain lock on all connections and on connection manager to ensure no queries are running (besides us)
-	auto &catalog = Catalog::GetCatalog(context);
-	auto &storage = StorageManager::GetStorageManager(context);
-
-	CheckpointManager checkpointer(catalog, storage);
+	CheckpointManager checkpointer(*context.db);
 	checkpointer.CreateCheckpoint();
 }
 

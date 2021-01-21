@@ -23,20 +23,19 @@ class TaskScheduler;
 class ObjectCache;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
-	friend class BufferManager;
-	friend class ClientContext;
-	friend class ObjectCache;
-	friend class StorageManager;
 	friend class DuckDB;
-	friend class TaskScheduler;
-
 public:
 	DUCKDB_API DatabaseInstance();
 
 	DBConfig config;
 
 public:
+	StorageManager &GetStorageManager();
+	Catalog &GetCatalog();
 	FileSystem &GetFileSystem();
+	TransactionManager &GetTransactionManager();
+	TaskScheduler &GetScheduler();
+	ObjectCache &GetObjectCache();
 
 	idx_t NumberOfThreads();
 

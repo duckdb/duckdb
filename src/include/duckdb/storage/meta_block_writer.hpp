@@ -14,14 +14,15 @@
 #include "duckdb/storage/block_manager.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
 
 //! This struct is responsible for writing metadata to disk
 class MetaBlockWriter : public Serializer {
 public:
-	MetaBlockWriter(BlockManager &manager);
+	MetaBlockWriter(DatabaseInstance &db);
 	~MetaBlockWriter();
 
-	BlockManager &manager;
+	DatabaseInstance &db;
 	unique_ptr<Block> block;
 	idx_t offset;
 

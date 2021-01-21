@@ -16,8 +16,7 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
-class BufferManager;
-class FileBuffer;
+class DatabaseInstance;
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
 class SingleFileBlockManager : public BlockManager {
@@ -25,13 +24,15 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new, bool use_direct_io);
+	SingleFileBlockManager(DatabaseInstance &db, string path, bool read_only, bool create_new, bool use_direct_io);
 
 	void StartCheckpoint() override;
 	//! Creates a new Block and returns a pointer
 	unique_ptr<Block> CreateBlock() override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
+	//! Register a new block to be used as a meta block
+	void MarkBlockAsModified(block_id_t block_id) override;
 	//! Return the meta block id
 	block_id_t GetMetaBlock() override;
 	//! Read the content of the block from disk
@@ -42,12 +43,13 @@ public:
 	void WriteHeader(DatabaseHeader header) override;
 
 	//! Load the free list from the file
-	void LoadFreeList(BufferManager &manager);
+	void LoadFreeList();
 
 private:
 	void Initialize(DatabaseHeader &header);
 
 private:
+	DatabaseInstance &db;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
 	uint8_t active_header;
 	//! The path where the file is stored
@@ -58,8 +60,8 @@ private:
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
 	vector<block_id_t> free_list;
-	//! The list of blocks that are used by the current block manager
-	unordered_set<block_id_t> used_blocks;
+	//! The list of blocks that will be added to the free list
+	vector<block_id_t> modified_blocks;
 	//! The current meta block id
 	block_id_t meta_block;
 	//! The current maximum block id, this id will be given away first after the free_list runs out

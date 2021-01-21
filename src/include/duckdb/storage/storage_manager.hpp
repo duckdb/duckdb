@@ -24,7 +24,7 @@ class TableCatalogEntry;
 //! database on disk
 class StorageManager {
 public:
-	StorageManager(DatabaseInstance &database, string path, bool read_only);
+	StorageManager(DatabaseInstance &db, string path, bool read_only);
 	~StorageManager();
 
 	//! The BlockManager to read/store meta information and data in blocks
@@ -32,9 +32,10 @@ public:
 	//! The BufferManager of the database
 	unique_ptr<BufferManager> buffer_manager;
 	//! The database this storagemanager belongs to
-	DatabaseInstance &database;
+	DatabaseInstance &db;
 public:
 	static StorageManager &GetStorageManager(ClientContext &context);
+	static StorageManager &GetStorageManager(DatabaseInstance &db);
 
 	//! Initialize a database or load an existing database from the given path
 	void Initialize();
@@ -44,7 +45,7 @@ public:
 	}
 
 	DatabaseInstance &GetDatabase() {
-		return database;
+		return db;
 	}
 
 	string GetDBPath() {

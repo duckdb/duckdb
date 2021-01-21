@@ -15,8 +15,8 @@
 
 namespace duckdb {
 
-TableDataReader::TableDataReader(CheckpointManager &manager, MetaBlockReader &reader, BoundCreateTableInfo &info)
-    : manager(manager), reader(reader), info(info) {
+TableDataReader::TableDataReader(DatabaseInstance &db, MetaBlockReader &reader, BoundCreateTableInfo &info)
+    : db(db), reader(reader), info(info) {
 	info.data = make_unique<PersistentTableData>(info.Base().columns.size());
 }
 
@@ -47,7 +47,7 @@ void TableDataReader::ReadTableData() {
 
 			column_count += data_pointer.tuple_count;
 			// create a persistent segment
-			auto segment = make_unique<PersistentSegment>(manager.buffer_manager, data_pointer.block_id,
+			auto segment = make_unique<PersistentSegment>(db, data_pointer.block_id,
 			                                              data_pointer.offset, column.type, data_pointer.row_start,
 			                                              data_pointer.tuple_count, move(data_pointer.statistics));
 			info.data->table_data[col].push_back(move(segment));

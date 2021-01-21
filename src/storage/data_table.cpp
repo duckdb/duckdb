@@ -19,13 +19,13 @@ namespace duckdb {
 
 using namespace std::chrono;
 
-DataTable::DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types_,
+DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types_,
                      unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage),
+    : info(make_shared<DataTableInfo>(schema, table)), types(types_), db(db),
       versions(make_shared<SegmentTree>()), total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, types[i], i);
+		auto column_data = make_shared<ColumnData>(db, *info, types[i], i);
 		columns.push_back(move(column_data));
 	}
 
@@ -56,7 +56,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
       total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -65,7 +65,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	idx_t new_column_idx = columns.size();
 
 	types.push_back(new_column_type);
-	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, new_column_type, new_column_idx);
+	auto column_data = make_shared<ColumnData>(db, *info, new_column_type, new_column_idx);
 	columns.push_back(move(column_data));
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
@@ -99,7 +99,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
       total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -124,7 +124,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
-    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
       total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
 
 	// prevent any new tuples from being added to the parent
@@ -143,7 +143,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	types[changed_idx] = target_type;
 
 	// construct a new column data for this type
-	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, target_type, changed_idx);
+	auto column_data = make_shared<ColumnData>(db, *info, target_type, changed_idx);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -1067,7 +1067,7 @@ void DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint the table
 	// we first checkpoint each individual column
 	for(size_t i = 0; i < columns.size(); i++) {
-		columns[i]->Checkpoint(writer, i);
+		writer.CheckpointColumn(*columns[i], i);
 	}
 	// then we checkpoint the deleted tuples
 	// FIXME: checkpoint deleted tuples

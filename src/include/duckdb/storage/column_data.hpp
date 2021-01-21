@@ -15,6 +15,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
 class TableDataWriter;
 class PersistentSegment;
 class Transaction;
@@ -23,13 +24,13 @@ struct DataTableInfo;
 
 class ColumnData {
 public:
-	ColumnData(BufferManager &manager, DataTableInfo &table_info, LogicalType type, idx_t column_idx);
+	ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx);
 
 	DataTableInfo &table_info;
 	//! The type of the column
 	LogicalType type;
-	//! The buffer manager
-	BufferManager &manager;
+	//! The database
+	DatabaseInstance &db;
 	//! The column index of the column
 	idx_t column_idx;
 	//! The segments holding the data of the column
@@ -70,8 +71,6 @@ public:
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx);
-
-	void Checkpoint(TableDataWriter &writer, idx_t column_idx);
 
 private:
 	//! Append a transient segment

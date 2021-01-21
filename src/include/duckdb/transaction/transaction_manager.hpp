@@ -19,7 +19,7 @@ namespace duckdb {
 
 class ClientContext;
 class Catalog;
-class StorageManager;
+class DatabaseInstance;
 class Transaction;
 
 struct StoredCatalogSet {
@@ -33,7 +33,7 @@ struct StoredCatalogSet {
 //! transactions
 class TransactionManager {
 public:
-	TransactionManager(StorageManager &storage, Catalog &catalog);
+	TransactionManager(DatabaseInstance &db);
 	~TransactionManager();
 
 	//! Start a new transaction
@@ -53,6 +53,8 @@ private:
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(Transaction *transaction) noexcept;
 
+	//! The database instance
+	DatabaseInstance &db;
 	//! The current query number
 	std::atomic<transaction_t> current_query_number;
 	//! The current start timestamp used by transactions
@@ -69,10 +71,6 @@ private:
 	vector<StoredCatalogSet> old_catalog_sets;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
-	//! The storage manager
-	StorageManager &storage;
-	//! The catalog
-	Catalog &catalog;
 };
 
 } // namespace duckdb

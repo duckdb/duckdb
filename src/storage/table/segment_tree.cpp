@@ -49,4 +49,9 @@ void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
 	}
 }
 
+void SegmentTree::Replace(SegmentTree &other) {
+	root_node = move(other.root_node);
+	nodes = move(other.nodes);
+}
+
 } // namespace duckdb

@@ -42,7 +42,7 @@ public:
 	}
 
 	static ObjectCache &GetObjectCache(duckdb::ClientContext &context) {
-		return *context.db->object_cache;
+		return context.db->GetObjectCache();
 	}
 
 private:

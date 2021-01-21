@@ -10,20 +10,20 @@
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
 struct ColumnAppendState;
+class DatabaseInstance;
 class PersistentSegment;
 
 class TransientSegment : public ColumnSegment {
 public:
-	TransientSegment(BufferManager &manager, LogicalType type, idx_t start);
+	TransientSegment(DatabaseInstance &db, LogicalType type, idx_t start);
 	TransientSegment(PersistentSegment &segment);
 
-	//! The buffer manager
-	BufferManager &manager;
+	//! The storage manager
+	DatabaseInstance &db;
 	//! The uncompressed segment holding the data
 	unique_ptr<UncompressedSegment> data;
 

@@ -17,18 +17,18 @@
 namespace duckdb {
 
 StorageManager::StorageManager(DatabaseInstance &db, string path, bool read_only)
-    : database(db), path(path), wal(db), read_only(read_only) {
+    : db(db), path(path), wal(db), read_only(read_only) {
 }
 
 StorageManager::~StorageManager() {
 }
 
 StorageManager &StorageManager::GetStorageManager(ClientContext &context) {
-	return *context.db->storage;
+	return StorageManager::GetStorageManager(*context.db);
 }
 
 BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
-	return *context.db->storage->buffer_manager;
+	return BufferManager::GetBufferManager(*context.db);
 }
 
 
@@ -44,7 +44,7 @@ void StorageManager::Initialize() {
 
 	// first initialize the base system catalogs
 	// these are never written to the WAL
-	Connection con(database);
+	Connection con(db);
 	con.BeginTransaction();
 
 	auto &catalog = Catalog::GetCatalog(*con.context);
@@ -68,15 +68,14 @@ void StorageManager::Initialize() {
 	} else {
 		auto &config = DBConfig::GetConfig(*con.context);
 		block_manager = make_unique<InMemoryBlockManager>();
-		buffer_manager = make_unique<BufferManager>(database.GetFileSystem(), *block_manager,
-		                                            config.temporary_directory, config.maximum_memory);
+		buffer_manager = make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
 	}
 }
 
 void StorageManager::LoadDatabase() {
 	string wal_path = path + ".wal";
-	auto &fs = database.GetFileSystem();
-	auto &config = database.config;
+	auto &fs = db.GetFileSystem();
+	auto &config = db.config;
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
 		if (read_only) {
@@ -89,23 +88,23 @@ void StorageManager::LoadDatabase() {
 			fs.RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager = make_unique<SingleFileBlockManager>(fs, path, read_only, true, config.use_direct_io);
+		block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, true, config.use_direct_io);
 		buffer_manager =
-		    make_unique<BufferManager>(fs, *block_manager, config.temporary_directory, config.maximum_memory);
+		    make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
 	} else {
 		// initialize the block manager while loading the current db file
-		auto sf = make_unique<SingleFileBlockManager>(fs, path, read_only, false, config.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(fs, *sf, config.temporary_directory, config.maximum_memory);
-		sf->LoadFreeList(*buffer_manager);
+		auto sf = make_unique<SingleFileBlockManager>(db, path, read_only, false, config.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
+		sf->LoadFreeList();
 		block_manager = move(sf);
 
 		//! Load from storage
-		CheckpointManager checkpointer(*database.catalog, *this);
+		CheckpointManager checkpointer(db);
 		checkpointer.LoadFromStorage();
 		// check if the WAL file exists
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
-			WriteAheadLog::Replay(database, wal_path);
+			WriteAheadLog::Replay(db, wal_path);
 		}
 	}
 	// initialize the WAL file

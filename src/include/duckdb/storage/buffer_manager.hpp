@@ -20,6 +20,7 @@
 #include <mutex>
 
 namespace duckdb {
+class DatabaseInstance;
 struct EvictionQueue;
 
 //! The buffer manager is in charge of handling memory management for the database. It hands out memory buffers that can
@@ -30,7 +31,7 @@ class BufferManager {
 	friend class BlockPointer;
 
 public:
-	BufferManager(FileSystem &fs, BlockManager &manager, string temp_directory, idx_t maximum_memory);
+	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
 	~BufferManager();
 
 	//! Register a block with the given block id in the base file
@@ -55,6 +56,7 @@ public:
 	void SetLimit(idx_t limit = (idx_t)-1);
 
 	static BufferManager &GetBufferManager(ClientContext &context);
+	static BufferManager &GetBufferManager(DatabaseInstance &db);
 
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
@@ -71,9 +73,8 @@ private:
 	void DeleteTemporaryFile(block_id_t id);
 
 private:
-	FileSystem &fs;
-	//! The block manager
-	BlockManager &manager;
+	//! The database instance
+	DatabaseInstance &db;
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)
 	std::atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)

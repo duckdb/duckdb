@@ -6,20 +6,21 @@
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
-TransientSegment::TransientSegment(BufferManager &manager, LogicalType type, idx_t start)
-    : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {
+TransientSegment::TransientSegment(DatabaseInstance &db, LogicalType type, idx_t start)
+    : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), db(db) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data = make_unique<StringSegment>(manager, start);
+		data = make_unique<StringSegment>(db, start);
 	} else {
-		data = make_unique<NumericSegment>(manager, type.InternalType(), start);
+		data = make_unique<NumericSegment>(db, type.InternalType(), start);
 	}
 }
 
 TransientSegment::TransientSegment(PersistentSegment &segment)
-    : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), manager(segment.manager) {
+    : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), db(segment.db) {
 	if (segment.block_id == segment.data->block->BlockId()) {
 		segment.data->ToTemporary();
 	}
