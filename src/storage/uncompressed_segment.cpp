@@ -215,7 +215,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 	sel.Initialize(new_sel);
 }
 
-void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, TableFilter filter,
+void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, const TableFilter& filter,
                                           idx_t &approved_tuple_count, nullmask_t &nullmask) {
 	// the inplace loops take the result as the last parameter
 	switch (result.type.InternalType()) {
@@ -271,6 +271,14 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto predicate_vector = Vector(filter.constant.str_value);
 		auto predicate = FlatVector::GetData<string_t>(predicate_vector);
 		filterSelectionType<string_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		                              nullmask);
+		break;
+	}
+	case PhysicalType::BOOL: {
+		auto result_flat = FlatVector::GetData<bool>(result);
+		auto predicate_vector = Vector(filter.constant.value_.boolean);
+		auto predicate = FlatVector::GetData<bool>(predicate_vector);
+		filterSelectionType<bool>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
 		break;
 	}

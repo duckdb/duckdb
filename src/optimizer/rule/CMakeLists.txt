@@ -9,6 +9,7 @@ add_library_unity(duckdb_optimizer_rules
                   distributivity.cpp
                   empty_needle_removal.cpp
                   move_constants.cpp
-                  like_optimizations.cpp)
+                  like_optimizations.cpp
+                  in_clause_simplification_rule.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
                      $<TARGET_OBJECTS:duckdb_optimizer_rules> PARENT_SCOPE)

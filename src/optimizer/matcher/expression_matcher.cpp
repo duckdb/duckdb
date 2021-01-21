@@ -63,6 +63,14 @@ bool ComparisonExpressionMatcher::Match(Expression *expr_, vector<Expression *> 
 	return SetMatcher::Match(matchers, expressions, bindings, policy);
 }
 
+bool InClauseExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_, bindings)) {
+		return false;
+	}
+	auto expr = (BoundOperatorExpression *)expr_;
+	return SetMatcher::Match(matchers, expr->children, bindings, policy);
+}
+
 bool ConjunctionExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
 	if (!ExpressionMatcher::Match(expr_, bindings)) {
 		return false;

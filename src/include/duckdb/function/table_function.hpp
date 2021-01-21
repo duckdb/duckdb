@@ -27,9 +27,8 @@ struct FunctionOperatorData {
 
 struct TableFilterCollection {
 	TableFilterSet *table_filters;
-	TableFilterSet *zonemaps_checks;
-	TableFilterCollection(TableFilterSet *table_filters, TableFilterSet *zonemaps_checks)
-	    : table_filters(table_filters), zonemaps_checks(zonemaps_checks) {
+	TableFilterCollection(TableFilterSet *table_filters)
+	    : table_filters(table_filters) {
 	}
 };
 
