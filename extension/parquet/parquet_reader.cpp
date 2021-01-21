@@ -112,7 +112,7 @@ static unique_ptr<ColumnReader> create_reader_recursive(const FileMetaData *file
 		vector<unique_ptr<ColumnReader>> child_readers;
 
 		idx_t c_idx = 0;
-		while (c_idx < s_ele.num_children) {
+		while (c_idx < (idx_t)s_ele.num_children) {
 			next_schema_idx++;
 
 			auto &child_ele = file_meta_data->schema[next_schema_idx];

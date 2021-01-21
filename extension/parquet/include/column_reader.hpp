@@ -152,19 +152,6 @@ private:
 	ResizeableBuffer dummy_repeat;
 };
 
-template <class T> static bool IsValid(T value) {
-    return true;
-}
-
-// TODO this throws warnings :/
-template <> bool IsValid(float value) {
-    return Value::FloatIsValid(value);
-}
-
-template <> bool IsValid(double value) {
-    return Value::DoubleIsValid(value);
-}
-
 template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
 
 public:
@@ -189,7 +176,7 @@ public:
 			}
 			if (filter[row_idx + result_offset]) {
 				VALUE_TYPE val = DictRead(offsets[offset_idx++]);
-				if (!IsValid(val)) {
+				if (!Value::IsValid(val)) {
 					FlatVector::SetNull(result, row_idx + result_offset, true);
 					continue;
 				}
@@ -210,7 +197,7 @@ public:
 			}
 			if (filter[row_idx + result_offset]) {
 				VALUE_TYPE val = PlainRead(*plain_data);
-				if (!IsValid(val)) {
+				if (!Value::IsValid(val)) {
 					FlatVector::SetNull(result, row_idx + result_offset, true);
 					continue;
 				}
@@ -237,7 +224,6 @@ protected:
 
 	shared_ptr<ByteBuffer> dict;
 	idx_t dict_size;
-
 };
 
 class StringColumnReader : public TemplatedColumnReader<string_t> {

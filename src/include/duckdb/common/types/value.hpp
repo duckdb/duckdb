@@ -173,6 +173,11 @@ public:
 
 	static bool FloatIsValid(float value);
 	static bool DoubleIsValid(double value);
+
+	template <class T> static bool IsValid(T value) {
+		return true;
+	}
+
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
 	static bool ValuesAreEqual(Value result_value, Value value);
@@ -257,5 +262,8 @@ template <> hugeint_t &Value::GetValueUnsafe();
 template <> string &Value::GetValueUnsafe();
 template <> float &Value::GetValueUnsafe();
 template <> double &Value::GetValueUnsafe();
+
+template <> bool Value::IsValid(float value);
+template <> bool Value::IsValid(double value);
 
 } // namespace duckdb
