@@ -54,6 +54,11 @@ void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
 		}
 		break;
 	}
+	case ExpressionClass::LAMBDA: {
+		auto &lambda_expr = (LambdaExpression &)expr;
+		callback(lambda_expr.expression);
+		break;
+	}
 	case ExpressionClass::OPERATOR: {
 		auto &op_expr = (OperatorExpression &)expr;
 		for (auto &child : op_expr.children) {

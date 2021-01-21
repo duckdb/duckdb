@@ -56,6 +56,7 @@ class ConjunctionExpression;
 class ConstantExpression;
 class DefaultExpression;
 class FunctionExpression;
+class LambdaExpression;
 class OperatorExpression;
 class ParameterExpression;
 class StarExpression;
