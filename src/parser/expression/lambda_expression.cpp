@@ -7,9 +7,7 @@ namespace duckdb {
 
 LambdaExpression::LambdaExpression(const string &capture_name, unique_ptr<ParsedExpression> expression) :
 	ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), capture_name(capture_name), expression(move(expression)) {
-
 }
-
 
 string LambdaExpression::ToString() const {
 	return capture_name + " -> " + expression->ToString();
