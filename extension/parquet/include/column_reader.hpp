@@ -2,6 +2,8 @@
 
 #include "parquet_types.h"
 #include "thrift_tools.hpp"
+#include "resizable_buffer.hpp"
+
 #include "parquet_rle_bp_decoder.hpp"
 
 #include "duckdb/storage/statistics/string_statistics.hpp"
@@ -32,6 +34,7 @@ public:
 	    : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), type(type_p),
 	      page_rows_available(0){};
 
+	// FIXME this protocol does not change over the lifetime of a column reader or does it?
 	virtual void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 		D_ASSERT(file_idx < columns.size());
 		chunk = &columns[file_idx];
@@ -317,7 +320,6 @@ public:
 		for (idx_t i = 0; i < Type().child_types().size(); i++) {
 			auto child_read = make_unique<Vector>();
 			child_read->Initialize(Type().child_types()[i].second);
-			// TODO should we only read defines and repeats for the first child? it matters little...
 			auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *child_read);
 			D_ASSERT(child_num_values == num_values);
 			StructVector::AddEntry(result, Type().child_types()[i].first, move(child_read));
@@ -334,7 +336,6 @@ public:
 		return child_readers[0]->GroupRowsAvailable();
 	}
 
-	// TODO this should perhaps be a map
 	vector<unique_ptr<ColumnReader>> child_readers;
 };
 

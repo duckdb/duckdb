@@ -71,7 +71,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 }
 
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {
-
 	dict_decoder.reset();
 	defined_decoder.reset();
 	block.reset();
@@ -98,7 +97,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 }
 
 void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size) {
-	auto trans = (DuckdbFileTransport *)protocol->getTransport().get();
+	auto trans = (ThriftFileTransport *)protocol->getTransport().get();
 
 	block = make_shared<ResizeableBuffer>(compressed_page_size + 1);
 	trans->read((uint8_t *)block->ptr, compressed_page_size);
@@ -216,7 +215,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 
 idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                          Vector &result) {
-	auto trans = (DuckdbFileTransport *)protocol->getTransport().get();
+	// we need to reset the location because multiple column readers share the same protocol
+	auto trans = (ThriftFileTransport *)protocol->getTransport().get();
 	trans->SetLocation(chunk_read_offset);
 
 	idx_t result_offset = 0;
@@ -288,7 +288,6 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 	dict = move(data);
 	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
-		// TODO we can apply filters here already and put a marker into dict
 		uint32_t str_len = dict->read<uint32_t>();
 		dict->available(str_len);
 

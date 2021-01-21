@@ -115,8 +115,6 @@ private:
 	static const uint8_t BITPACK_DLEN;
 
 	template <typename T> uint32_t BitUnpack(T *dest, uint32_t count) {
-		D_ASSERT(bit_width_ < 32);
-
 		auto mask = BITPACK_MASKS[bit_width_];
 
 		for (uint32_t i = 0; i < count; i++) {

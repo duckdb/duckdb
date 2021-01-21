@@ -13,6 +13,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "resizable_buffer.hpp"
+#include "column_reader.hpp"
 
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_types.h"
@@ -30,7 +31,6 @@ namespace duckdb {
 class ClientContext;
 class ChunkCollection;
 class BaseStatistics;
-class ColumnReader;
 struct TableFilterSet;
 
 struct ParquetReaderScanState {
@@ -38,7 +38,8 @@ struct ParquetReaderScanState {
 	int64_t current_group;
 	vector<column_t> column_ids;
 	idx_t group_offset;
-	vector<ColumnReader *> column_readers;
+	unique_ptr<ColumnReader> root_reader;
+	unique_ptr<apache::thrift::protocol::TProtocol> thrift_file_proto;
 
 	bool finished;
 	TableFilterSet *filters;
@@ -55,13 +56,8 @@ public:
 
 	string file_name;
 	vector<LogicalType> return_types;
-	unique_ptr<ColumnReader> root_reader;
 	vector<string> names;
-
 	shared_ptr<ParquetFileMetadataCache> metadata;
-
-	unique_ptr<apache::thrift::protocol::TProtocol> thrift_file_proto;
-	unique_ptr<apache::thrift::protocol::TProtocol> thrift_memory_proto;
 
 public:
 	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
