@@ -154,7 +154,7 @@ static uint8_t bit_width(idx_t val) {
 		return 0;
 	}
 	uint8_t ret = 1;
-	while ((1 << ret) - 1 < val) {
+	while (((idx_t)(1 << ret) - 1) < val) {
 		ret++;
 	}
 	return ret;
