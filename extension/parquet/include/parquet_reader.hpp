@@ -76,7 +76,7 @@ private:
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
-	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx, LogicalType &type);
+	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx);
 
 	template <typename... Args> std::runtime_error FormatException(const string fmt_str, Args... params) {
 		return std::runtime_error("Failed to read Parquet file \"" + file_name +

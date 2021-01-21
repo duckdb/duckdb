@@ -5,6 +5,7 @@
 #include "resizable_buffer.hpp"
 
 #include "parquet_rle_bp_decoder.hpp"
+#include "parquet_statistics.hpp"
 
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
@@ -32,15 +33,25 @@ public:
 	ColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
 	             idx_t max_repeat_p)
 	    : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), type(type_p),
-	      page_rows_available(0){};
+	      page_rows_available(0) {
 
-	// FIXME this protocol does not change over the lifetime of a column reader or does it?
+		// dummies for Skip()
+		dummy_result.Initialize(Type());
+		none_filter.none();
+		dummy_define.resize(STANDARD_VECTOR_SIZE);
+		dummy_repeat.resize(STANDARD_VECTOR_SIZE);
+	};
+
 	virtual void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 		D_ASSERT(file_idx < columns.size());
 		chunk = &columns[file_idx];
 		protocol = &protocol_p;
 		D_ASSERT(chunk);
 		D_ASSERT(chunk->__isset.meta_data);
+
+		if (chunk->__isset.file_path) {
+			throw std::runtime_error("Only inlined data files are supported (no references)");
+		}
 
 		// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
 		chunk_read_offset = chunk->meta_data.data_page_offset;
@@ -56,14 +67,25 @@ public:
 	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	                   Vector &result_out);
 
-	virtual void Skip(idx_t num_values) = 0;
+	virtual void Skip(idx_t num_values);
 
-	LogicalType Type() {
+	const LogicalType Type() {
 		return type;
+	}
+
+	const SchemaElement &Schema() {
+		return schema;
 	}
 
 	virtual idx_t GroupRowsAvailable() {
 		return group_rows_available;
+	}
+
+	unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns) {
+		if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT) {
+			return nullptr;
+		}
+		return parquet_transform_column_statistics(Schema(), Type(), columns[file_idx]);
 	}
 
 protected:
@@ -122,6 +144,12 @@ private:
 	unique_ptr<RleBpDecoder> dict_decoder;
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
+
+	// dummies for Skip()
+	Vector dummy_result;
+	parquet_filter_t none_filter;
+	ResizeableBuffer dummy_define;
+	ResizeableBuffer dummy_repeat;
 };
 
 template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
@@ -180,10 +208,6 @@ public:
 		}
 	}
 
-	void Skip(idx_t num_values) override {
-		D_ASSERT(0);
-	}
-
 protected:
 	virtual VALUE_TYPE DictRead(uint32_t &offset) {
 		D_ASSERT(offset < dict_size);
@@ -223,7 +247,6 @@ public:
 	    : TemplatedColumnReader<string_t>(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p){};
 
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
-	void Skip(idx_t num_values) override;
 
 protected:
 	string_t PlainRead(ByteBuffer &plain_data) override;

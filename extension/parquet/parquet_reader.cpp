@@ -87,11 +87,12 @@ static LogicalType derive_type(const SchemaElement &s_ele) {
 	}
 }
 
-static unique_ptr<ColumnReader> create_reader_recursive(std::vector<SchemaElement> schema, idx_t depth,
+static unique_ptr<ColumnReader> create_reader_recursive(const FileMetaData *file_meta_data, idx_t depth,
                                                         idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
                                                         idx_t &next_file_idx) {
-	D_ASSERT(next_schema_idx < schema.size());
-	auto &s_ele = schema[next_schema_idx];
+	D_ASSERT(file_meta_data);
+	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
+	auto &s_ele = file_meta_data->schema[next_schema_idx];
 	auto this_idx = next_schema_idx;
 
 	if (s_ele.__isset.repetition_type) {
@@ -104,7 +105,9 @@ static unique_ptr<ColumnReader> create_reader_recursive(std::vector<SchemaElemen
 	}
 
 	if (!s_ele.__isset.type) { // inner node
-		D_ASSERT(s_ele.num_children > 0);
+		if (s_ele.num_children == 0) {
+			throw std::runtime_error("Node has no children but should");
+		}
 		child_list_t<LogicalType> child_types;
 		vector<unique_ptr<ColumnReader>> child_readers;
 
@@ -112,10 +115,10 @@ static unique_ptr<ColumnReader> create_reader_recursive(std::vector<SchemaElemen
 		while (c_idx < s_ele.num_children) {
 			next_schema_idx++;
 
-			auto &child_ele = schema[next_schema_idx];
+			auto &child_ele = file_meta_data->schema[next_schema_idx];
 
-			auto child_reader =
-			    create_reader_recursive(schema, depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx);
+			auto child_reader = create_reader_recursive(file_meta_data, depth + 1, max_define, max_repeat,
+			                                            next_schema_idx, next_file_idx);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
 			child_readers.push_back(move(child_reader));
 
@@ -149,7 +152,7 @@ static unique_ptr<ColumnReader> create_reader(const FileMetaData *file_meta_data
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
 
-	auto ret = create_reader_recursive(file_meta_data->schema, 0, 0, 0, next_schema_idx, next_file_idx);
+	auto ret = create_reader_recursive(file_meta_data, 0, 0, 0, next_schema_idx, next_file_idx);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.size() == 0 || next_file_idx == file_meta_data->row_groups[0].columns.size());
 	return ret;
@@ -224,34 +227,23 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		throw FormatException("Need at least one non-root column in the file");
 	}
 
-	//	this->return_types = expected_types;
 	bool has_expected_types = expected_types.size() > 0;
-
 	auto root_reader = create_reader(file_meta_data);
 
-	/*
-
-	               if (initial_filename.empty()) {
-	                   throw FormatException("column \"%s\" in parquet file is of type %s, could not auto cast to "
-	                                         "expected type %s for this column",
-	                                         s_ele.name, type.ToString(), return_types[col_idx - 1].ToString());
-	               } else {
-	                   throw FormatException("schema mismatch in Parquet glob: column \"%s\" in parquet file is of type
-	   "
-	                                         "%s, but in the original file \"%s\" this column is of type \"%s\"",
-	                                         s_ele.name, type.ToString(), initial_filename,
-	                                         return_types[col_idx - 1].ToString());
-	               }
-	           }
-
-	   } */
 	auto root_type = root_reader->Type();
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
 	idx_t col_idx = 0;
 	for (auto &type_pair : root_type.child_types()) {
 		if (has_expected_types && expected_types[col_idx] != type_pair.second) {
-			throw InvalidInputException("eel");
-			// TODO have nice error message again
+			if (initial_filename.empty()) {
+				throw FormatException("column \"%d\" in parquet file is of type %s, could not auto cast to "
+				                      "expected type %s for this column",
+				                      col_idx, type_pair.second, expected_types[col_idx].ToString());
+			} else {
+				throw FormatException("schema mismatch in Parquet glob: column \"%d\" in parquet file is of type "
+				                      "%s, but in the original file \"%s\" this column is of type \"%s\"",
+				                      col_idx, type_pair.second, initial_filename, expected_types[col_idx].ToString());
+			}
 		} else {
 			names.push_back(type_pair.first);
 			return_types.push_back(type_pair.second);
@@ -269,19 +261,15 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 	return metadata->metadata.get();
 }
 
-// FIXME this is not valid for files with nested cols. column_index will be off. we need the reader to export stats?
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, column_t column_index,
+// TODO also somewhat ugly, perhaps this can be moved to the column reader too
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, column_t file_col_idx,
                                                          const FileMetaData *file_meta_data) {
 	unique_ptr<BaseStatistics> column_stats;
+	auto root_reader = create_reader(file_meta_data);
+	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
 
 	for (auto &row_group : file_meta_data->row_groups) {
-
-		D_ASSERT(column_index < row_group.columns.size());
-		auto &column_chunk = row_group.columns[column_index];
-		auto &s_ele = file_meta_data->schema[column_index + 1];
-
-		auto chunk_stats = parquet_transform_column_statistics(s_ele, type, column_chunk);
-
+		auto chunk_stats = column_reader->Stats(row_group.columns);
 		if (!column_stats) {
 			column_stats = move(chunk_stats);
 		} else {
@@ -299,59 +287,53 @@ const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
 }
 
-void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t file_col_idx, LogicalType &type) {
+void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t file_col_idx) {
 	auto &group = GetGroup(state);
-	auto &chunk = group.columns[file_col_idx];
 
-	if (chunk.__isset.file_path) {
-		throw FormatException("Only inlined data files are supported (no references)");
-	}
+	auto column_reader = ((StructColumnReader *)state.root_reader.get())->GetChildReader(file_col_idx);
 
-	/* FIXME
+	// TODO move this to columnreader too
 	if (state.filters) {
-	    auto stats = parquet_transform_column_statistics(schema, type, chunk);
-	    auto filter_entry = state.filters->filters.find(file_col_idx);
-	    if (stats && filter_entry != state.filters->filters.end()) {
-	        bool skip_chunk = false;
-	        switch (type.id()) {
-	        case LogicalTypeId::INTEGER:
-	        case LogicalTypeId::BIGINT:
-	        case LogicalTypeId::FLOAT:
-	        case LogicalTypeId::TIMESTAMP:
-	        case LogicalTypeId::DOUBLE: {
-	            auto num_stats = (NumericStatistics &)*stats;
-	            for (auto &filter : filter_entry->second) {
-	                skip_chunk = !num_stats.CheckZonemap(filter.comparison_type, filter.constant);
-	                if (skip_chunk) {
-	                    break;
-	                }
-	            }
-	            break;
-	        }
-	        case LogicalTypeId::BLOB:
-	        case LogicalTypeId::VARCHAR: {
-	            auto str_stats = (StringStatistics &)*stats;
-	            for (auto &filter : filter_entry->second) {
-	                skip_chunk = !str_stats.CheckZonemap(filter.comparison_type, filter.constant.str_value);
-	                if (skip_chunk) {
-	                    break;
-	                }
-	            }
-	            break;
-	        }
-	        default:
-	            // D_ASSERT(0);
-	            break;
-	            // TODO handle structs and lists here
-	        }
-	        if (skip_chunk) {
-	            state.group_offset = group.num_rows;
-	            return;
-	            // this effectively will skip this chunk
-	        }
-	    }
+		auto stats = column_reader->Stats(group.columns);
+		auto filter_entry = state.filters->filters.find(file_col_idx);
+		if (stats && filter_entry != state.filters->filters.end()) {
+			bool skip_chunk = false;
+			switch (column_reader->Type().id()) {
+			case LogicalTypeId::INTEGER:
+			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::FLOAT:
+			case LogicalTypeId::TIMESTAMP:
+			case LogicalTypeId::DOUBLE: {
+				auto num_stats = (NumericStatistics &)*stats;
+				for (auto &filter : filter_entry->second) {
+					skip_chunk = !num_stats.CheckZonemap(filter.comparison_type, filter.constant);
+					if (skip_chunk) {
+						break;
+					}
+				}
+				break;
+			}
+			case LogicalTypeId::BLOB:
+			case LogicalTypeId::VARCHAR: {
+				auto str_stats = (StringStatistics &)*stats;
+				for (auto &filter : filter_entry->second) {
+					skip_chunk = !str_stats.CheckZonemap(filter.comparison_type, filter.constant.str_value);
+					if (skip_chunk) {
+						break;
+					}
+				}
+				break;
+			}
+			default:
+				break;
+			}
+			if (skip_chunk) {
+				state.group_offset = group.num_rows;
+				return;
+				// this effectively will skip this chunk
+			}
+		}
 	}
-	 */
 
 	state.root_reader->IntializeRead(group.columns, *state.thrift_file_proto);
 
@@ -472,8 +454,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 
-			// TODO we know this type, and dont have to pass it down. but we should verify.
-			PrepareRowGroupBuffer(state, file_col_idx, result.GetTypes()[out_col_idx]);
+			PrepareRowGroupBuffer(state, file_col_idx);
 		}
 		return true;
 	}
@@ -494,8 +475,9 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	// FIXME this allocs every time
 	ResizeableBuffer define_buf;
 	ResizeableBuffer repeat_buf;
-	define_buf.resize(this_output_chunk_rows);
-	repeat_buf.resize(this_output_chunk_rows);
+	define_buf.resize(STANDARD_VECTOR_SIZE);
+	repeat_buf.resize(STANDARD_VECTOR_SIZE);
+
 	define_buf.zero();
 	repeat_buf.zero();
 

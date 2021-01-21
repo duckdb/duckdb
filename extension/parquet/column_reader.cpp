@@ -64,10 +64,9 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	default:
-		throw NotImplementedException(type_p.ToString());
+		break;
 	}
-	D_ASSERT(false);
-	return nullptr;
+	throw NotImplementedException(type_p.ToString());
 }
 
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {
@@ -125,7 +124,7 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	case CompressionCodec::SNAPPY: {
 		auto res = snappy::RawUncompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr);
 		if (!res) {
-			// TODO throw FormatException("Decompression failure");
+			throw std::runtime_error("Decompression failure");
 		}
 		block = move(unpacked_block);
 		break;
@@ -134,7 +133,7 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 		auto res = duckdb_zstd::ZSTD_decompress((char *)unpacked_block->ptr, uncompressed_page_size,
 		                                        (const char *)block->ptr, compressed_page_size);
 		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)uncompressed_page_size) {
-			// throw FormatException("ZSTD Decompression failure");
+			throw std::runtime_error("ZSTD Decompression failure");
 		}
 		block = move(unpacked_block);
 		break;
@@ -143,9 +142,8 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	default: {
 		std::stringstream codec_name;
 		codec_name << chunk->meta_data.codec;
-		D_ASSERT(0);
-		//        throw FormatException("Unsupported compression codec \"" + codec_name.str() +
-		//                              "\". Supported options are uncompressed, gzip or snappy");
+		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
+		                         "\". Supported options are uncompressed, gzip or snappy");
 		break;
 	}
 	}
@@ -164,11 +162,11 @@ static uint8_t bit_width(idx_t val) {
 
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 
-	if (page_hdr.type == PageType::DATA_PAGE) {
-		D_ASSERT(page_hdr.__isset.data_page_header);
+	if (page_hdr.type == PageType::DATA_PAGE && !page_hdr.__isset.data_page_header) {
+		throw std::runtime_error("Missing data page header from data page");
 	}
-	if (page_hdr.type == PageType::DATA_PAGE_V2) {
-		D_ASSERT(page_hdr.__isset.data_page_header_v2);
+	if (page_hdr.type == PageType::DATA_PAGE_V2 && !page_hdr.__isset.data_page_header_v2) {
+		throw std::runtime_error("Missing data page header from data page v2");
 	}
 
 	page_rows_available = page_hdr.type == PageType::DATA_PAGE ? page_hdr.data_page_header.num_values
@@ -208,8 +206,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		break;
 
 	default:
-		D_ASSERT(0);
-		break;
+		throw std::runtime_error("Unsupported page encoding");
 	}
 }
 
@@ -272,6 +269,16 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 	return num_values;
 }
 
+void ColumnReader::Skip(idx_t num_values) {
+	dummy_define.zero();
+	dummy_repeat.zero();
+
+	// TODO this can be optimized, for example we dont actually have to bitunpack offsets
+	auto values_read =
+	    Read(num_values, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
+	D_ASSERT(values_read == num_values);
+}
+
 void StringColumnReader::VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len) {
 	if (id != LogicalTypeId::VARCHAR) {
 		return;
@@ -332,10 +339,6 @@ void StringColumnReader::PlainSkip(ByteBuffer &plain_data) {
 	uint32_t str_len = plain_data.read<uint32_t>();
 	plain_data.available(str_len);
 	plain_data.inc(str_len);
-}
-
-void StringColumnReader::Skip(idx_t num_values) {
-	D_ASSERT(0);
 }
 
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
