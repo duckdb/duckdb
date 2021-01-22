@@ -521,7 +521,6 @@ struct IntegerCastOperation {
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
-	bool is_zero = true;
 	idx_t pos = start_pos;
 	while (pos < len) {
 		if (!StringUtil::CharacterIsDigit(buf[pos])) {
@@ -581,9 +580,6 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			return false;
 		}
 		uint8_t digit = buf[pos++] - '0';
-		if (digit != 0) {
-			is_zero = false;
-		}
 		if (!OP::template HandleDigit<T, NEGATIVE>(result, digit)) {
 			return false;
 		}
@@ -591,15 +587,11 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 	if (!OP::template Finalize<T>(result)) {
 		return false;
 	}
-	if (!is_zero && NEGATIVE && !std::numeric_limits<T>::is_signed) {
-		//! Attempting negative conversion to unsigned
-		return false;
-	}
 	return pos > start_pos;
 }
 
 template <class T, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation, bool ZERO_INITIALIZE = true>
-static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
+static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict, bool unsigned_int=false) {
 	// skip any spaces at the start
 	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
 		buf++;
@@ -616,6 +608,15 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	if (!negative) {
 		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	} else {
+		if (unsigned_int){
+			// Need to check if its not -0
+			idx_t pos = 1;
+			while (pos < len){
+			    if (buf[pos++] !='0'){
+					return false;
+				}
+			}
+		}
 		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	}
 }
@@ -677,16 +678,16 @@ template <> bool TryCast::Operation(string_t input, int64_t &result, bool strict
 }
 
 template <> bool TryCast::Operation(string_t input, uint8_t &result, bool strict) {
-	return TryIntegerCast<uint8_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryIntegerCast<uint8_t>(input.GetDataUnsafe(), input.GetSize(), result, strict,true);
 }
 template <> bool TryCast::Operation(string_t input, uint16_t &result, bool strict) {
-	return TryIntegerCast<uint16_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryIntegerCast<uint16_t>(input.GetDataUnsafe(), input.GetSize(), result, strict,true);
 }
 template <> bool TryCast::Operation(string_t input, uint32_t &result, bool strict) {
-	return TryIntegerCast<uint32_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryIntegerCast<uint32_t>(input.GetDataUnsafe(), input.GetSize(), result, strict,true);
 }
 template <> bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
-	return TryIntegerCast<uint64_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryIntegerCast<uint64_t>(input.GetDataUnsafe(), input.GetSize(), result, strict,true);
 }
 
 template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx_t decimal, idx_t decimal_factor) {
