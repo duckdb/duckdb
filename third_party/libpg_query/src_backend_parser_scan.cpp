@@ -854,7 +854,7 @@ static yyconst flex_int16_t yy_chk[1210] =
 
 /* LCOV_EXCL_START */
 
-/* Avoid exit() on fatal scanner errors (a bit ugly -- see yy_fatal_error) */
+/* Avoid throw std::runtime_error(msg); //) on fatal scanner errors (a bit ugly -- see yy_fatal_error) */
 // #undef fprintf
 // #define fprintf(file, fmt, msg)  fprintf_to_ereport(fmt, msg)
 
@@ -3189,8 +3189,8 @@ YY_BUFFER_STATE core_yy_scan_bytes  (yyconst char * yybytes, yy_size_t  _yybytes
 
 static void yy_fatal_error (yyconst char* msg , yyscan_t yyscanner)
 {
-    	(void) fprintf( stderr, "%s\n", msg );
-	exit( YY_EXIT_FAILURE );
+    	//( stderr, "%s\n", msg );
+	throw std::runtime_error(msg); // YY_EXIT_FAILURE );
 }
 
 /* Redefine yyless() so it works in section 3 code. */
