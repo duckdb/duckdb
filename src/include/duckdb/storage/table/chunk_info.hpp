@@ -16,7 +16,7 @@ class MorselInfo;
 struct SelectionVector;
 class Transaction;
 
-enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO };
+enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
 class ChunkInfo {
 public:
@@ -39,6 +39,9 @@ public:
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(Transaction &transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
+
+	virtual void Serialize(Serializer &serialize) = 0;
+	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
 };
 
 class ChunkConstantInfo : public ChunkInfo {
@@ -52,6 +55,9 @@ public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
+
+	void Serialize(Serializer &serialize) override;
+	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
 };
 
 class ChunkVectorInfo : public ChunkInfo {
@@ -68,6 +74,7 @@ public:
 	bool any_deleted;
 
 public:
+	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
@@ -75,6 +82,9 @@ public:
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 	void Delete(Transaction &transaction, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
+
+	void Serialize(Serializer &serialize) override;
+	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
 };
 
 } // namespace duckdb

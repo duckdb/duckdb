@@ -22,7 +22,7 @@ using namespace std::chrono;
 DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types_,
                      unique_ptr<PersistentTableData> data)
     : info(make_shared<DataTableInfo>(schema, table)), types(types_), db(db),
-      versions(make_shared<SegmentTree>()), total_rows(0), is_root(true) {
+      total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = make_shared<ColumnData>(db, *info, types[i], i);
@@ -42,13 +42,9 @@ DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<L
 			}
 		}
 		total_rows = columns[0]->persistent_rows;
-		// create empty morsel info's
-		// in the future, we should lazily load these from the file as well (once we support deleted flags)
-		for (idx_t i = 0; i < total_rows; i += MorselInfo::MORSEL_SIZE) {
-			auto segment = make_unique<MorselInfo>(i, MorselInfo::MORSEL_SIZE);
-			versions->AppendSegment(move(segment));
-		}
+		versions = move(data->versions);
 	} else {
+		versions = make_shared<SegmentTree>();
 		// append one (empty) morsel to the table
 		auto segment = make_unique<MorselInfo>(0, MorselInfo::MORSEL_SIZE);
 		versions->AppendSegment(move(segment));
@@ -1064,16 +1060,16 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 // Checkpoint
 //===--------------------------------------------------------------------===//
 void DataTable::Checkpoint(TableDataWriter &writer) {
-	// checkpoint the table
-	// we first checkpoint each individual column
+	// checkpoint each individual column
 	for(size_t i = 0; i < columns.size(); i++) {
 		writer.CheckpointColumn(*columns[i], i);
 	}
-	// then we checkpoint the deleted tuples
-	// FIXME: checkpoint deleted tuples
-	// FIXME: these should be read again on load... (i.e. read into PersistentTableData...)
-
 }
 
+void DataTable::CheckpointDeletes(TableDataWriter &writer) {
+	// then we checkpoint the deleted tuples
+	D_ASSERT(versions);
+	writer.CheckpointDeletes(((MorselInfo *) versions->GetRootSegment()));
+}
 
 } // namespace duckdb

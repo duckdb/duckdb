@@ -13,6 +13,7 @@
 namespace duckdb {
 class ColumnData;
 class UncompressedSegment;
+class MorselInfo;
 class BaseStatistics;
 class SegmentStatistics;
 
@@ -26,6 +27,7 @@ public:
 	void WriteTableData();
 
 	void CheckpointColumn(ColumnData &col_data, idx_t col_idx);
+	void CheckpointDeletes(MorselInfo *info);
 private:
 	void AppendData(SegmentTree &new_tree, idx_t col_idx, Vector &data, idx_t count);
 

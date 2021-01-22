@@ -142,6 +142,7 @@ public:
 
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer);
+	void CheckpointDeletes(TableDataWriter &writer);
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
