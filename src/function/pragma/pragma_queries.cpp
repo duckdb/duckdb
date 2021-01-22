@@ -53,6 +53,10 @@ string pragma_import_database(ClientContext &context, FunctionParameters paramet
 	return query;
 }
 
+string pragma_database_size(ClientContext &context, FunctionParameters parameters) {
+	return "SELECT * FROM pragma_database_size()";
+}
+
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("table_info", pragma_table_info, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables", pragma_show_tables));
@@ -60,6 +64,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", pragma_collations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", pragma_show, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", pragma_version));
+	set.AddFunction(PragmaFunction::PragmaStatement("database_size", pragma_database_size));
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", pragma_functions));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", pragma_import_database, {LogicalType::VARCHAR}));
 }

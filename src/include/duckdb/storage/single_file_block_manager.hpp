@@ -42,6 +42,14 @@ public:
 	//! Write the header to disk, this is the final step of the checkpointing process
 	void WriteHeader(DatabaseHeader header) override;
 
+	//! Returns the number of total blocks
+	idx_t TotalBlocks() override {
+		return max_block;
+	}
+	//! Returns the number of free blocks
+	idx_t FreeBlocks() override {
+		return free_list.size();
+	}
 	//! Load the free list from the file
 	void LoadFreeList();
 

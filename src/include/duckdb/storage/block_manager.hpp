@@ -13,6 +13,7 @@
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
+class ClientContext;
 class DatabaseInstance;
 
 //! BlockManager is an abstract representation to manage blocks on DuckDB. When writing or reading blocks, the
@@ -41,6 +42,16 @@ public:
 	//! Write the header; should be the final step of a checkpoint
 	virtual void WriteHeader(DatabaseHeader header) = 0;
 
+	//! Returns the number of total blocks
+	virtual idx_t TotalBlocks() {
+		return 0;
+	}
+	//! Returns the number of free blocks
+	virtual idx_t FreeBlocks() {
+		return 0;
+	}
+
+	static BlockManager &GetBlockManager(ClientContext &context);
 	static BlockManager &GetBlockManager(DatabaseInstance &db);
 };
 } // namespace duckdb

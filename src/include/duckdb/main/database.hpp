@@ -39,6 +39,8 @@ public:
 
 	idx_t NumberOfThreads();
 
+	static DatabaseInstance &GetDatabase(ClientContext &context);
+
 private:
 	void Initialize(const char *path, DBConfig *config);
 

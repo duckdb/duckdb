@@ -25,6 +25,14 @@ BlockManager &BlockManager::GetBlockManager(DatabaseInstance &db) {
 	return *db.GetStorageManager().block_manager;
 }
 
+BlockManager &BlockManager::GetBlockManager(ClientContext &context) {
+	return BlockManager::GetBlockManager(DatabaseInstance::GetDatabase(context));
+}
+
+DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
+	return *context.db;
+}
+
 StorageManager &StorageManager::GetStorageManager(DatabaseInstance &db) {
 	return db.GetStorageManager();
 }
