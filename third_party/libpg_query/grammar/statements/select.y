@@ -1644,7 +1644,8 @@ opt_interval:
  * you expect!  So we use %prec annotations freely to set precedences.
  */
 a_expr:		c_expr									{ $$ = $1; }
-			| a_expr TYPECAST Typename
+			|
+			a_expr TYPECAST Typename
 					{ $$ = makeTypeCast($1, $3, @2); }
 			| a_expr COLLATE any_name
 				{
@@ -1852,6 +1853,22 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @2;
 					$$ = (PGNode *)n;
 				}
+			| row LAMBDA_ARROW a_expr
+			{
+				PGLambdaFunction *n = makeNode(PGLambdaFunction);
+				n->parameters = $1;
+				n->function = $3;
+				n->location = @2;
+				$$ = (PGNode *) n;
+			}
+			| a_expr LAMBDA_ARROW a_expr
+			{
+				PGLambdaFunction *n = makeNode(PGLambdaFunction);
+				n->parameters = list_make1($1);
+				n->function = $3;
+				n->location = @2;
+				$$ = (PGNode *) n;
+			}
 			| row OVERLAPS row
 				{
 					if (list_length($1) != 2)

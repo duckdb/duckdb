@@ -16,6 +16,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth)
 	// if (!error.empty()) {
 	// 	return BindResult(error);
 	// }
+	// expr.Print();
 	return BindResult("FIXME: bind lambda function");
 }
 

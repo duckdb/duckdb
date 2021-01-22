@@ -7,15 +7,29 @@ namespace duckdb {
 
 using namespace duckdb_libpgquery;
 
-unique_ptr<ParsedExpression> Transformer::TransformLambda(unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right) {
-	if (left->type != ExpressionType::COLUMN_REF) {
-		throw ParserException("Left side of a lambda must be a single column");
+static string ExtractColumnFromLambda(ParsedExpression &expr) {
+	if (expr.type != ExpressionType::COLUMN_REF) {
+		throw ParserException("Lambda parameter must be a column name");
 	}
-	auto &colref = (ColumnRefExpression &) *left;
+	auto &colref = (ColumnRefExpression &) expr;
 	if (!colref.table_name.empty()) {
-		throw ParserException("Lambda capture must be an unqualified name (e.g. 'x', not 'a.x')");
+		throw ParserException("Lambda parameter must be an unqualified name (e.g. 'x', not 'a.x')");
 	}
-	return make_unique<LambdaExpression>(colref.column_name, move(right));
+	return colref.column_name;
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGLambdaFunction *node) {
+	vector<unique_ptr<ParsedExpression>> parameter_expressions;
+	if (!TransformExpressionList(node->parameters, parameter_expressions)) {
+		throw ParserException("Failed to transform expression list");
+	}
+	vector<string> parameters;
+	for(auto &expr : parameter_expressions) {
+		parameters.push_back(ExtractColumnFromLambda(*expr));
+	}
+
+	auto lambda_function = TransformExpression(node->function);
+	return make_unique<LambdaExpression>(move(parameters), move(lambda_function));
 }
 
 } // namespace duckdb

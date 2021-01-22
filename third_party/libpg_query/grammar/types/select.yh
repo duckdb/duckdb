@@ -32,8 +32,6 @@
 %type <range>	OptTempTableName
 %type <into>	into_clause
 
-
-
 %type <lockstrength>	for_locking_strength
 %type <node>	for_locking_item
 %type <list>	for_locking_clause opt_for_locking_clause for_locking_items
