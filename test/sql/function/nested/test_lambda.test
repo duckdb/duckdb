@@ -25,6 +25,9 @@ select map(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
 statement error
 select map(i, x -> (1 + 2 * 27) / x) from (values (list_value(1, 2, 3))) tbl(i);
 
+statement error
+select map(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
+
 # nested lambda functions
 statement error
 select map(i, x -> (map(x, y -> y + 1))) from (values (list_value(1, 2, 3))) tbl(i);

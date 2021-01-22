@@ -100,6 +100,7 @@
 %nonassoc	SET				/* see */
 %left		UNION EXCEPT
 %left		INTERSECT
+%left		LAMBDA_ARROW
 %left		OR
 %left		AND
 %right		NOT
@@ -136,7 +137,6 @@
  */
 %nonassoc	UNBOUNDED		/* ideally should have same precedence as IDENT */
 %nonassoc	IDENT GENERATED NULL_P PARTITION RANGE ROWS PRECEDING FOLLOWING CUBE ROLLUP
-%left		LAMBDA_ARROW
 %left		Op OPERATOR		/* multi-character ops and user-defined operators */
 %left		'+' '-'
 %left		'*' '/' '%'
