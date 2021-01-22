@@ -362,6 +362,9 @@ void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> c
 	shared_ptr<ThriftFileTransport> trans(new ThriftFileTransport(move(handle)));
 	state.thrift_file_proto = make_unique<apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
 	state.root_reader = create_reader(GetFileMetadata());
+
+	state.define_buf.resize(STANDARD_VECTOR_SIZE);
+	state.repeat_buf.resize(STANDARD_VECTOR_SIZE);
 }
 
 template <class T, class OP>
@@ -472,17 +475,11 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	parquet_filter_t filter_mask;
 	filter_mask.set();
 
-	// FIXME this allocs every time
-	ResizeableBuffer define_buf;
-	ResizeableBuffer repeat_buf;
-	define_buf.resize(STANDARD_VECTOR_SIZE);
-	repeat_buf.resize(STANDARD_VECTOR_SIZE);
+	state.define_buf.zero();
+	state.repeat_buf.zero();
 
-	define_buf.zero();
-	repeat_buf.zero();
-
-	auto define_ptr = (uint8_t *)define_buf.ptr;
-	auto repeat_ptr = (uint8_t *)repeat_buf.ptr;
+	auto define_ptr = (uint8_t *)state.define_buf.ptr;
+	auto repeat_ptr = (uint8_t *)state.repeat_buf.ptr;
 
 	auto root_reader = ((StructColumnReader *)state.root_reader.get());
 

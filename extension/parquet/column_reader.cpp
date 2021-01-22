@@ -33,13 +33,17 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 	case LogicalTypeId::BOOLEAN:
 		return make_unique<BooleanColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::INTEGER:
-		return make_unique<TemplatedColumnReader<int32_t>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_unique<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(
+		    type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::BIGINT:
-		return make_unique<TemplatedColumnReader<int64_t>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_unique<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(
+		    type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::FLOAT:
-		return make_unique<TemplatedColumnReader<float>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_unique<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(
+		    type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::DOUBLE:
-		return make_unique<TemplatedColumnReader<double>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_unique<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(
+		    type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TIMESTAMP:
 		switch (schema_p.type) {
 		case Type::INT96:
@@ -279,8 +283,8 @@ void ColumnReader::Skip(idx_t num_values) {
 	D_ASSERT(values_read == num_values);
 }
 
-void StringColumnReader::VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len) {
-	if (id != LogicalTypeId::VARCHAR) {
+void StringColumnReader::VerifyString(const char *str_data, idx_t str_len) {
+	if (Type() != LogicalTypeId::VARCHAR) {
 		return;
 	}
 	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
@@ -298,11 +302,10 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 		uint32_t str_len = dict->read<uint32_t>();
 		dict->available(str_len);
 
-		VerifyString(Type().id(), dict->ptr, str_len);
+		VerifyString(dict->ptr, str_len);
 		dict_strings[dict_idx] = string_t(dict->ptr, str_len);
 		dict->inc(str_len);
 	}
-	dict_size = num_entries;
 }
 
 class ParquetStringVectorBuffer : public VectorBuffer {
@@ -322,20 +325,21 @@ void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vecto
 	StringVector::AddBuffer(result, make_unique<ParquetStringVectorBuffer>(move(plain_data)));
 }
 
-string_t StringColumnReader::DictRead(uint32_t &offset) {
+string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
+	auto &dict_strings = ((StringColumnReader &)reader).dict_strings;
 	return dict_strings[offset];
 }
 
-string_t StringColumnReader::PlainRead(ByteBuffer &plain_data) {
+string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 	uint32_t str_len = plain_data.read<uint32_t>();
 	plain_data.available(str_len);
-	VerifyString(Type().id(), plain_data.ptr, str_len);
+	((StringColumnReader &)reader).VerifyString(plain_data.ptr, str_len);
 	auto ret_str = string_t(plain_data.ptr, str_len);
 	plain_data.inc(str_len);
 	return ret_str;
 }
 
-void StringColumnReader::PlainSkip(ByteBuffer &plain_data) {
+void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 	uint32_t str_len = plain_data.read<uint32_t>();
 	plain_data.available(str_len);
 	plain_data.inc(str_len);

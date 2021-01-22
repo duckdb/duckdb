@@ -44,6 +44,9 @@ struct ParquetReaderScanState {
 	bool finished;
 	TableFilterSet *filters;
 	SelectionVector sel;
+
+	ResizeableBuffer define_buf;
+	ResizeableBuffer repeat_buf;
 };
 
 class ParquetReader {

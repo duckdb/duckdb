@@ -152,16 +152,30 @@ private:
 	ResizeableBuffer dummy_repeat;
 };
 
-template <class VALUE_TYPE> class TemplatedColumnReader : public ColumnReader {
+template <class VALUE_TYPE> struct TemplatedParquetValueConversion {
+	static VALUE_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
+		D_ASSERT(offset < dict.len / sizeof(VALUE_TYPE));
+		return ((VALUE_TYPE *)dict.ptr)[offset];
+	}
+
+	static VALUE_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		return plain_data.read<VALUE_TYPE>();
+	}
+
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.inc(sizeof(VALUE_TYPE));
+	}
+};
+
+template <class VALUE_TYPE, class VALUE_CONVERSION> class TemplatedColumnReader : public ColumnReader {
 
 public:
 	TemplatedColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
 	                      idx_t max_repeat_p)
-	    : ColumnReader(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p), dict_size(0){};
+	    : ColumnReader(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p){};
 
 	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override {
 		dict = move(data);
-		dict_size = num_entries;
 	}
 
 	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
@@ -175,7 +189,7 @@ public:
 				continue;
 			}
 			if (filter[row_idx + result_offset]) {
-				VALUE_TYPE val = DictRead(offsets[offset_idx++]);
+				VALUE_TYPE val = VALUE_CONVERSION::DictRead(*dict, offsets[offset_idx++], *this);
 				if (!Value::IsValid(val)) {
 					FlatVector::SetNull(result, row_idx + result_offset, true);
 					continue;
@@ -196,96 +210,103 @@ public:
 				continue;
 			}
 			if (filter[row_idx + result_offset]) {
-				VALUE_TYPE val = PlainRead(*plain_data);
+				VALUE_TYPE val = VALUE_CONVERSION::PlainRead(*plain_data, *this);
 				if (!Value::IsValid(val)) {
 					FlatVector::SetNull(result, row_idx + result_offset, true);
 					continue;
 				}
 				result_ptr[row_idx + result_offset] = val;
 			} else { // there is still some data there that we have to skip over
-				PlainSkip(*plain_data);
+				VALUE_CONVERSION::PlainSkip(*plain_data, *this);
 			}
 		}
 	}
 
-protected:
-	virtual VALUE_TYPE DictRead(uint32_t &offset) {
-		D_ASSERT(offset < dict_size);
-		return ((VALUE_TYPE *)dict->ptr)[offset];
-	}
-
-	virtual VALUE_TYPE PlainRead(ByteBuffer &plain_data) {
-		return plain_data.read<VALUE_TYPE>();
-	}
-
-	virtual void PlainSkip(ByteBuffer &plain_data) {
-		plain_data.inc(sizeof(VALUE_TYPE));
-	}
-
 	shared_ptr<ByteBuffer> dict;
-	idx_t dict_size;
 };
 
-class StringColumnReader : public TemplatedColumnReader<string_t> {
+struct StringParquetValueConversion {
+	static string_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader);
+
+	static string_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader);
+
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader);
+};
+
+class StringColumnReader : public TemplatedColumnReader<string_t, StringParquetValueConversion> {
 
 public:
 	StringColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
 	                   idx_t max_repeat_p)
-	    : TemplatedColumnReader<string_t>(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p){};
+	    : TemplatedColumnReader<string_t, StringParquetValueConversion>(type_p, schema_p, schema_idx_p, max_define_p,
+	                                                                    max_repeat_p){};
 
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 
-protected:
-	string_t PlainRead(ByteBuffer &plain_data) override;
-	void PlainSkip(ByteBuffer &plain_data) override;
-	string_t DictRead(uint32_t &offset) override;
+	unique_ptr<string_t[]> dict_strings;
+	void VerifyString(const char *str_data, idx_t str_len);
 
+protected:
 	void DictReference(Vector &result) override;
 	void PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) override;
-
-private:
-	unique_ptr<string_t[]> dict_strings;
-	void VerifyString(LogicalTypeId id, const char *str_data, idx_t str_len);
 };
 
 template <class PARQUET_PHYSICAL_TYPE, timestamp_t (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
-class TimestampColumnReader : public TemplatedColumnReader<timestamp_t> {
-
-public:
-	TimestampColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
-	                      idx_t max_repeat_p)
-	    : TemplatedColumnReader<timestamp_t>(type_p, schema_p, file_idx_p, max_define_p, max_repeat_p){};
-
-protected:
-	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
-		dict = make_shared<ResizeableBuffer>(num_entries * sizeof(timestamp_t));
-		auto dict_ptr = (timestamp_t *)dict->ptr;
-		for (idx_t i = 0; i < num_entries; i++) {
-			dict_ptr[i] = FUNC(dictionary_data->read<PARQUET_PHYSICAL_TYPE>());
-		}
-		dict_size = num_entries;
+struct TimestampParquetValueConversion {
+	static timestamp_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
+		return TemplatedParquetValueConversion<timestamp_t>::DictRead(dict, offset, reader);
 	}
 
-	void Skip(idx_t num_values) {
-		D_ASSERT(0);
-	}
-
-	timestamp_t PlainRead(ByteBuffer &plain_data) {
+	static timestamp_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		return FUNC(plain_data.read<PARQUET_PHYSICAL_TYPE>());
 	}
 
-	void PlainSkip(ByteBuffer &plain_data) {
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(sizeof(PARQUET_PHYSICAL_TYPE));
 	}
 };
 
-class BooleanColumnReader : public TemplatedColumnReader<bool> {
+template <class PARQUET_PHYSICAL_TYPE, timestamp_t (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
+class TimestampColumnReader
+    : public TemplatedColumnReader<timestamp_t, TimestampParquetValueConversion<PARQUET_PHYSICAL_TYPE, FUNC>> {
+
+public:
+	TimestampColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
+	                      idx_t max_repeat_p)
+	    : TemplatedColumnReader<timestamp_t, TimestampParquetValueConversion<PARQUET_PHYSICAL_TYPE, FUNC>>(
+	          type_p, schema_p, file_idx_p, max_define_p, max_repeat_p){};
+
+protected:
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+		this->dict = make_shared<ResizeableBuffer>(num_entries * sizeof(timestamp_t));
+		auto dict_ptr = (timestamp_t *)this->dict->ptr;
+		for (idx_t i = 0; i < num_entries; i++) {
+			dict_ptr[i] = FUNC(dictionary_data->read<PARQUET_PHYSICAL_TYPE>());
+		}
+	}
+};
+
+struct BooleanParquetValueConversion;
+
+class BooleanColumnReader : public TemplatedColumnReader<bool, BooleanParquetValueConversion> {
 public:
 	BooleanColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
 	                    idx_t max_repeat_p)
-	    : TemplatedColumnReader<bool>(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p), byte_pos(0){};
-	bool PlainRead(ByteBuffer &plain_data) override {
+	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(type_p, schema_p, schema_idx_p, max_define_p,
+	                                                                 max_repeat_p),
+	      byte_pos(0){};
+
+	uint8_t byte_pos;
+};
+
+struct BooleanParquetValueConversion {
+	static bool DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
+		throw std::runtime_error("Dicts for booleans make no sense");
+	}
+
+	static bool PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.available(1);
+		auto &byte_pos = ((BooleanColumnReader &)reader).byte_pos;
 		bool ret = (*plain_data.ptr >> byte_pos) & 1;
 		byte_pos++;
 		if (byte_pos == 8) {
@@ -294,12 +315,10 @@ public:
 		}
 		return ret;
 	}
-	void PlainSkip(ByteBuffer &plain_data) override {
-		PlainRead(plain_data);
-	}
 
-private:
-	uint8_t byte_pos;
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		PlainRead(plain_data, reader);
+	}
 };
 
 class StructColumnReader : public ColumnReader {
