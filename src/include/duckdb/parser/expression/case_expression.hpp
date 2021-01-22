@@ -21,8 +21,6 @@ struct CaseCheck {
 //! The CaseExpression represents a CASE expression in the query
 class CaseExpression : public ParsedExpression {
 public:
-	// this expression has 3 children, (1) the check, (2) the result if the test is true, and (3) the result if the test
-	// is false
 	CaseExpression();
 
 	vector<CaseCheck> case_checks;

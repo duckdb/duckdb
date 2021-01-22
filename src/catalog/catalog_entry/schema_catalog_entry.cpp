@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -36,7 +37,7 @@ namespace duckdb {
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name, bool internal)
     : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name),
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
-      copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog), sequences(*catalog),
+      copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog, name == DEFAULT_SCHEMA ? make_unique<DefaultFunctionGenerator>(*catalog, this) : nullptr), sequences(*catalog),
       collations(*catalog) {
 	this->internal = internal;
 }

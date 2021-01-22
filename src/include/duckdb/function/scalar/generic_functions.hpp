@@ -26,10 +26,6 @@ struct GreatestFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct NullIfFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct StatsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
