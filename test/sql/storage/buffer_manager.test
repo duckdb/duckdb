@@ -4,12 +4,12 @@
 
 statement ok
 PRAGMA memory_limit='1MB'
-#
-## streaming results do not use any memory
-#query II
-#SELECT MIN(i), MAX(i) FROM range(1000001) tbl(i)
-#----
-#0	1000000
+
+# streaming results do not use any memory
+query II
+SELECT MIN(i), MAX(i) FROM range(1000001) tbl(i)
+----
+0	1000000
 
 # we can group by 10K integers (fits into one block of 256KB)
 statement ok

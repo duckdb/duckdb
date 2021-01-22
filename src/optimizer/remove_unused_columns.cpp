@@ -53,11 +53,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			auto &aggr = (LogicalAggregate &)op;
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
-
-			// removed all expressions from the aggregate: push a COUNT(*)
-			auto count_star_fun = CountStarFun::GetFunction();
-			aggr.expressions.push_back(
-			    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, nullptr, false));
+			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
+				// removed all expressions from the aggregate: push a COUNT(*)
+				auto count_star_fun = CountStarFun::GetFunction();
+				aggr.expressions.push_back(
+				    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, nullptr, false));
+			}
 		}
 
 		// then recurse into the children of the aggregate
