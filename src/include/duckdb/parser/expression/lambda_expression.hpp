@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -32,4 +33,5 @@ public:
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 };
+
 } // namespace duckdb
