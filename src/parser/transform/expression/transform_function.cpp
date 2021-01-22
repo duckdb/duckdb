@@ -190,9 +190,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 			throw ParserException("Wrong number of arguments to IF.");
 		}
 		auto expr = make_unique<CaseExpression>();
-		expr->check = move(children[0]);
-		expr->result_if_true = move(children[1]);
-		expr->result_if_false = move(children[2]);
+		CaseCheck check;
+		check.when_expr = move(children[0]);
+		check.then_expr = move(children[1]);
+		expr->case_checks.push_back(move(check));
+		expr->else_expr = move(children[2]);
 		return move(expr);
 	}
 
@@ -202,11 +204,10 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		}
 
 		//  Two-argument COALESCE
-		auto expr = make_unique<CaseExpression>();
-		expr->check = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, children[0]->Copy());
-		expr->result_if_true = move(children[0]);
-		expr->result_if_false = move(children[1]);
-		return move(expr);
+		auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		coalesce_op->children.push_back(move(children[0]));
+		coalesce_op->children.push_back(move(children[1]));
+		return move(coalesce_op);
 	}
 
 	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);

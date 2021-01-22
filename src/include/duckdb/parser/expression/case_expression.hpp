@@ -9,8 +9,14 @@
 #pragma once
 
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+
+struct CaseCheck {
+	unique_ptr<ParsedExpression> when_expr;
+	unique_ptr<ParsedExpression> then_expr;
+};
 
 //! The CaseExpression represents a CASE expression in the query
 class CaseExpression : public ParsedExpression {
@@ -19,9 +25,8 @@ public:
 	// is false
 	CaseExpression();
 
-	unique_ptr<ParsedExpression> check;
-	unique_ptr<ParsedExpression> result_if_true;
-	unique_ptr<ParsedExpression> result_if_false;
+	vector<CaseCheck> case_checks;
+	unique_ptr<ParsedExpression> else_expr;
 
 public:
 	string ToString() const override;
