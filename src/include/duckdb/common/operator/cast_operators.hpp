@@ -402,6 +402,50 @@ template <> int64_t CastFromDecimal::Operation(int32_t input, uint8_t width, uin
 template <> int64_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
 template <> int64_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
 
+// UTINYINT
+template <> int16_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale);
+
+template <> uint8_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> uint8_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> uint8_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> uint8_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// USMALLINT
+template <> int16_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale);
+
+template <> uint16_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> uint16_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> uint16_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> uint16_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// UINTEGER
+template <> int16_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale);
+
+template <> uint32_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> uint32_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> uint32_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> uint32_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
+// BIGINT
+template <> int16_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale);
+template <> int32_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale);
+template <> int64_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale);
+template <> hugeint_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale);
+
+template <> uint64_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
+template <> uint64_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
+template <> uint64_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
+template <> uint64_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+
 // HUGEINT
 template <> int16_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
 template <> int32_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);

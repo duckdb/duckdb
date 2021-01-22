@@ -196,6 +196,18 @@ static void decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
 	case LogicalTypeId::BIGINT:
 		from_decimal_cast<int64_t>(source, result, count);
 		break;
+	case LogicalTypeId::UTINYINT:
+		from_decimal_cast<uint8_t>(source, result, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		from_decimal_cast<uint16_t>(source, result, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		from_decimal_cast<uint32_t>(source, result, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		from_decimal_cast<uint64_t>(source, result, count);
+		break;
 	case LogicalTypeId::HUGEINT:
 		from_decimal_cast<hugeint_t>(source, result, count);
 		break;

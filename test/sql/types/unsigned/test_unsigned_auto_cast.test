@@ -11,18 +11,18 @@ PRAGMA enable_verification
 #----
 #100000100
 
-# test auto cast of HUGEINT -> DOUBLE
+# test auto cast of UTINYINT -> DOUBLE
 query I
-SELECT 100::UTINYINT + 0.5
+SELECT 200::UTINYINT + 0.5
 ----
-100.5
+200.5
 
 query I
 SELECT COS(100::UTINYINT)
 ----
 0.862318872287684
 
-# test auto cast of HUGEINT -> VARCHAR
+# test auto cast of UTINYINT -> VARCHAR
 query I
 SELECT CONCAT('hello number ', 100::UTINYINT)
 ----
@@ -30,13 +30,13 @@ hello number 100
 
 
 
-# test auto cast of all integer types to hugeint
+# test auto cast of integer types to USMALLINT
 query I
 SELECT 100000000::INTEGER + 100::USMALLINT
 ----
 100000100
 
-# test auto cast of HUGEINT -> DOUBLE
+# test auto cast of USMALLINT -> DOUBLE
 query I
 SELECT 100::USMALLINT + 0.5
 ----
@@ -47,32 +47,57 @@ SELECT COS(100::USMALLINT)
 ----
 0.862318872287684
 
-# test auto cast of HUGEINT -> VARCHAR
+# test auto cast of USMALLINT -> VARCHAR
 query I
 SELECT CONCAT('hello number ', 100::USMALLINT)
 ----
 hello number 100
 
 
-# test auto cast of all integer types to hugeint
+# test auto cast of  integer types to UINTEGER
 query I
-SELECT 100000000::INTEGER + 100::USMALLINT
+SELECT 100000000::INTEGER + 100::UINTEGER
 ----
 100000100
 
-# test auto cast of HUGEINT -> DOUBLE
+# test auto cast of UINTEGER -> DOUBLE
 query I
-SELECT 100::USMALLINT + 0.5
+SELECT 100::UINTEGER + 0.5
 ----
 100.5
 
 query I
-SELECT COS(100::USMALLINT)
+SELECT COS(100::UINTEGER)
 ----
 0.862318872287684
 
-# test auto cast of HUGEINT -> VARCHAR
+# test auto cast of UINTEGER -> VARCHAR
 query I
-SELECT CONCAT('hello number ', 100::USMALLINT)
+SELECT CONCAT('hello number ', 100::UINTEGER)
 ----
 hello number 100
+
+
+# test auto cast of  integer types to UBIGINT
+query I
+SELECT 100000000::INTEGER + 100::UBIGINT
+----
+100000100
+
+# test auto cast of UBIGINT -> DOUBLE
+query I
+SELECT 100::UBIGINT + 0.5
+----
+100.5
+
+query I
+SELECT COS(100::UBIGINT)
+----
+0.862318872287684
+
+# test auto cast of UBIGINT -> VARCHAR
+query I
+SELECT CONCAT('hello number ', 100::UBIGINT)
+----
+hello number 100
+

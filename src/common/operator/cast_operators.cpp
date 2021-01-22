@@ -24,18 +24,32 @@ template <class SRC, class DST> static bool try_cast_with_overflow_check(SRC val
 	if (std::numeric_limits<SRC>::is_signed != std::numeric_limits<DST>::is_signed) {
 		if (std::numeric_limits<SRC>::is_signed) {
 			// signed to unsigned conversion
-			if (value < 0 || value > NumericLimits<DST>::Maximum()) {
-				return false;
+			if (std::numeric_limits<SRC>::digits > std::numeric_limits<DST>::digits) {
+				if (value < 0 || value > (SRC)NumericLimits<DST>::Maximum()) {
+					return false;
+				}
+			} else {
+				if (value < 0 || (DST)value > NumericLimits<DST>::Maximum()) {
+					return false;
+				}
 			}
+
 			result = (DST)value;
 			return true;
 		} else {
 			// unsigned to signed conversion
-			auto max_lim = NumericLimits<DST>::Maximum();
-			if (value <= NumericLimits<DST>::Maximum()) {
-				result = (DST)value;
-				return true;
+			if (std::numeric_limits<SRC>::digits > std::numeric_limits<DST>::digits) {
+				if (value <= (SRC) NumericLimits<DST>::Maximum()) {
+					result = (DST)value;
+					return true;
+				}
+			} else {
+				if ((DST)value <= NumericLimits<DST>::Maximum()) {
+					result = (DST)value;
+					return true;
+				}
 			}
+
 			return false;
 		}
 	} else {
@@ -230,7 +244,7 @@ template <> bool TryCast::Operation(uint32_t input, uint16_t &result, bool stric
 template <> bool TryCast::Operation(uint64_t input, uint16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int8_t input, uint16_t &result, bool strict){
+template <> bool TryCast::Operation(int8_t input, uint16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 
@@ -257,7 +271,7 @@ template <> uint16_t Cast::Operation(uint64_t input) {
 	return cast_with_overflow_check<uint64_t, uint16_t>(input);
 }
 
-template <> uint16_t Cast::Operation(int8_t input){
+template <> uint16_t Cast::Operation(int8_t input) {
 	return cast_with_overflow_check<int8_t, uint16_t>(input);
 }
 
@@ -319,10 +333,10 @@ template <> int32_t Cast::Operation(double input) {
 template <> bool TryCast::Operation(uint64_t input, uint32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int8_t input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(int8_t input, uint32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int16_t input, uint32_t &result, bool strict){
+template <> bool TryCast::Operation(int16_t input, uint32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 template <> bool TryCast::Operation(int32_t input, uint32_t &result, bool strict) {
@@ -341,10 +355,10 @@ template <> bool TryCast::Operation(double input, uint32_t &result, bool strict)
 template <> uint32_t Cast::Operation(uint64_t input) {
 	return cast_with_overflow_check<uint64_t, uint32_t>(input);
 }
-template <> uint32_t Cast::Operation(int8_t input){
+template <> uint32_t Cast::Operation(int8_t input) {
 	return cast_with_overflow_check<int8_t, uint32_t>(input);
 }
-template <> uint32_t Cast::Operation(int16_t input){
+template <> uint32_t Cast::Operation(int16_t input) {
 	return cast_with_overflow_check<int16_t, uint32_t>(input);
 }
 
@@ -386,13 +400,13 @@ template <> int64_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Numeric -> uint64_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int8_t input, uint64_t &result, bool strict){
+template <> bool TryCast::Operation(int8_t input, uint64_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int16_t input, uint64_t &result, bool strict){
+template <> bool TryCast::Operation(int16_t input, uint64_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int32_t input, uint64_t &result, bool strict){
+template <> bool TryCast::Operation(int32_t input, uint64_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 
@@ -405,13 +419,13 @@ template <> bool TryCast::Operation(float input, uint64_t &result, bool strict) 
 template <> bool TryCast::Operation(double input, uint64_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> uint64_t Cast::Operation(int8_t input){
+template <> uint64_t Cast::Operation(int8_t input) {
 	return cast_with_overflow_check<int8_t, uint64_t>(input);
 }
-template <> uint64_t Cast::Operation(int16_t input){
+template <> uint64_t Cast::Operation(int16_t input) {
 	return cast_with_overflow_check<int16_t, uint64_t>(input);
 }
-template <> uint64_t Cast::Operation(int32_t input){
+template <> uint64_t Cast::Operation(int32_t input) {
 	return cast_with_overflow_check<int32_t, uint64_t>(input);
 }
 
@@ -1598,6 +1612,20 @@ template <> hugeint_t CastToDecimal::Operation(int8_t input, uint8_t width, uint
 	return NumericToHugeDecimalCast<int8_t>(input, width, scale);
 }
 
+// UTINYINT -> DECIMAL
+template <> int16_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint8_t, int16_t>(input, width, scale);
+}
+template <> int32_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint8_t, int32_t>(input, width, scale);
+}
+template <> int64_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint8_t, int64_t>(input, width, scale);
+}
+template <> hugeint_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale) {
+	return NumericToHugeDecimalCast<uint8_t>(input, width, scale);
+}
+
 // SMALLINT -> DECIMAL
 template <> int16_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
 	return StandardNumericToDecimalCast<int16_t, int16_t>(input, width, scale);
@@ -1613,6 +1641,21 @@ template <> int64_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8
 
 template <> hugeint_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
 	return NumericToHugeDecimalCast<int16_t>(input, width, scale);
+}
+
+// USMALLINT -> DECIMAL
+template <> int16_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint16_t, int16_t>(input, width, scale);
+}
+template <> int32_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint16_t, int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint16_t, int64_t>(input, width, scale);
+}
+template <> hugeint_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale) {
+	return NumericToHugeDecimalCast<uint16_t>(input, width, scale);
 }
 
 // INTEGER -> DECIMAL
@@ -1632,6 +1675,21 @@ template <> hugeint_t CastToDecimal::Operation(int32_t input, uint8_t width, uin
 	return NumericToHugeDecimalCast<int32_t>(input, width, scale);
 }
 
+// UINTEGER -> DECIMAL
+
+template <> int16_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint32_t, int16_t>(input, width, scale);
+}
+template <> int32_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint32_t, int32_t>(input, width, scale);
+}
+template <> int64_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint32_t, int64_t>(input, width, scale);
+}
+template <> hugeint_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale) {
+	return NumericToHugeDecimalCast<uint32_t>(input, width, scale);
+}
+
 // BIGINT -> DECIMAL
 template <> int16_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
 	return StandardNumericToDecimalCast<int64_t, int16_t>(input, width, scale);
@@ -1647,6 +1705,24 @@ template <> int64_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8
 
 template <> hugeint_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
 	return NumericToHugeDecimalCast<int64_t>(input, width, scale);
+}
+
+// BIGINT -> DECIMAL
+
+template <> int16_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint64_t, int16_t>(input, width, scale);
+}
+
+template <> int32_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint64_t, int32_t>(input, width, scale);
+}
+
+template <> int64_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale) {
+	return StandardNumericToDecimalCast<uint64_t, int64_t>(input, width, scale);
+}
+
+template <> hugeint_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale) {
+	return NumericToHugeDecimalCast<uint64_t>(input, width, scale);
 }
 
 template <class DST> DST HugeintToDecimalCast(hugeint_t input, uint8_t width, uint8_t scale) {
@@ -1745,6 +1821,20 @@ template <> int8_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, ui
 	return CastHugeDecimalToNumeric<int8_t>(input, scale);
 }
 
+// DECIMAL -> UTINYINT
+template <> uint8_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, uint8_t>(input, scale);
+}
+template <> uint8_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, uint8_t>(input, scale);
+}
+template <> uint8_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, uint8_t>(input, scale);
+}
+template <> uint8_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<uint8_t>(input, scale);
+}
+
 // DECIMAL -> SMALLINT
 template <> int16_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
 	return CastDecimalToNumeric<int16_t, int16_t>(input, scale);
@@ -1760,6 +1850,23 @@ template <> int16_t CastFromDecimal::Operation(int64_t input, uint8_t width, uin
 
 template <> int16_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
 	return CastHugeDecimalToNumeric<int16_t>(input, scale);
+}
+
+// DECIMAL -> USMALLINT
+template <> uint16_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, uint16_t>(input, scale);
+}
+
+template <> uint16_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, uint16_t>(input, scale);
+}
+
+template <> uint16_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, uint16_t>(input, scale);
+}
+
+template <> uint16_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<uint16_t>(input, scale);
 }
 
 // DECIMAL -> INTEGER
@@ -1779,6 +1886,20 @@ template <> int32_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, u
 	return CastHugeDecimalToNumeric<int32_t>(input, scale);
 }
 
+// DECIMAL -> UINTEGER
+template <> uint32_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, uint32_t>(input, scale);
+}
+template <> uint32_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, uint32_t>(input, scale);
+}
+template <> uint32_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, uint32_t>(input, scale);
+}
+template <> uint32_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<uint32_t>(input, scale);
+}
+
 // DECIMAL -> BIGINT
 template <> int64_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
 	return CastDecimalToNumeric<int16_t, int64_t>(input, scale);
@@ -1794,6 +1915,20 @@ template <> int64_t CastFromDecimal::Operation(int64_t input, uint8_t width, uin
 
 template <> int64_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
 	return CastHugeDecimalToNumeric<int64_t>(input, scale);
+}
+
+// DECIMAL -> UBIGINT
+template <> uint64_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int16_t, uint64_t>(input, scale);
+}
+template <> uint64_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int32_t, uint64_t>(input, scale);
+}
+template <> uint64_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
+	return CastDecimalToNumeric<int64_t, uint64_t>(input, scale);
+}
+template <> uint64_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
+	return CastHugeDecimalToNumeric<uint64_t>(input, scale);
 }
 
 // DECIMAL -> HUGEINT
