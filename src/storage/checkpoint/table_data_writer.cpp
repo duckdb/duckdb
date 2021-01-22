@@ -108,6 +108,8 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 
 			// directly append the current segment to the new tree
 			new_tree.AppendSegment(move(owned_segment));
+
+			data_pointers[col_idx].push_back(move(pointer));
 			break;
 		}
 		case ColumnSegmentType::TRANSIENT: {

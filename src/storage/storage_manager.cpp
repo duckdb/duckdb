@@ -93,10 +93,11 @@ void StorageManager::LoadDatabase() {
 		    make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
 	} else {
 		// initialize the block manager while loading the current db file
-		auto sf = make_unique<SingleFileBlockManager>(db, path, read_only, false, config.use_direct_io);
+		auto sf_bm = make_unique<SingleFileBlockManager>(db, path, read_only, false, config.use_direct_io);
+		auto sf = sf_bm.get();
+		block_manager = move(sf_bm);
 		buffer_manager = make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
 		sf->LoadFreeList();
-		block_manager = move(sf);
 
 		//! Load from storage
 		CheckpointManager checkpointer(db);
