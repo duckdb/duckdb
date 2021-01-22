@@ -91,6 +91,18 @@ public:
 	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
 };
 
+class InClauseExpressionMatcher : public ExpressionMatcher {
+public:
+	InClauseExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
+	}
+	//! The matchers for the child expressions
+	vector<unique_ptr<ExpressionMatcher>> matchers;
+	//! The set matcher matching policy to use
+	SetMatcher::Policy policy;
+
+	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+};
+
 class ConjunctionExpressionMatcher : public ExpressionMatcher {
 public:
 	ConjunctionExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CONJUNCTION) {

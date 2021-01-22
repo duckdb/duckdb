@@ -1154,6 +1154,16 @@ opt_collate_clause:
  *
  *****************************************************************************/
 
+colid_type_list:
+            ColId Typename   {
+             $$ = list_make1(list_make2(makeString($1), $2));
+            }
+            | colid_type_list ',' ColId Typename {
+             $$ = lappend($1, list_make2(makeString($3), $4));
+            }
+
+RowOrStruct: ROW | STRUCT
+
 Typename:	SimpleTypename opt_array_bounds
 				{
 					$$ = $1;
@@ -1188,6 +1198,11 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
+			| RowOrStruct '(' colid_type_list ')' {
+               $$ = SystemTypeName("struct");
+               $$->typmods = $3;
+               $$->location = @1;
+			}
 		;
 
 opt_array_bounds:
@@ -1853,6 +1868,10 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @2;
 					$$ = (PGNode *)n;
 				}
+			| row {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+				$$ = (PGNode *) n;
+			}
 			| row LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
@@ -1861,7 +1880,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}
-			| a_expr LAMBDA_ARROW a_expr
+			| columnref LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
 				n->parameters = list_make1($1);
@@ -2735,8 +2754,11 @@ frame_bound:
  * without conflicting with the parenthesized a_expr production.  Without the
  * ROW keyword, there must be more than one a_expr inside the parens.
  */
-row:		ROW '(' expr_list ')'					{ $$ = $3; }
+qualified_row:	ROW '(' expr_list ')'					{ $$ = $3; }
 			| ROW '(' ')'							{ $$ = NIL; }
+		;
+
+row:		qualified_row							{ $$ = $1;}
 			| '(' expr_list ',' a_expr ')'			{ $$ = lappend($2, $4); }
 		;
 

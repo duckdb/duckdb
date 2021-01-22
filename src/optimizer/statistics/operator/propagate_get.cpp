@@ -20,8 +20,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		}
 	}
 	// push table filters into the statistics
-	for (idx_t i = 0; i < get.tableFilters.size(); i++) {
-		auto &tableFilter = get.tableFilters[i];
+	for (idx_t i = 0; i < get.table_filters.size(); i++) {
+		auto &tableFilter = get.table_filters[i];
 		idx_t column_index;
 		for (column_index = 0; column_index < get.column_ids.size(); column_index++) {
 			if (get.column_ids[column_index] == tableFilter.column_index) {
@@ -45,7 +45,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 			// filter is always true; it is useless to execute it
 			// erase this condition
-			get.tableFilters.erase(get.tableFilters.begin() + i);
+			get.table_filters.erase(get.table_filters.begin() + i);
 			i--;
 			break;
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:

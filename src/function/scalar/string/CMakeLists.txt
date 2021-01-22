@@ -1,6 +1,8 @@
 add_library_unity(
   duckdb_func_string
   OBJECT
+        ascii.cpp
+        chr.cpp
   reverse.cpp
   caseconvert.cpp
   concat.cpp

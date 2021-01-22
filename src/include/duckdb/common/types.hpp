@@ -80,7 +80,7 @@ struct string_t;
 template <class T> using child_list_t = std::vector<std::pair<std::string, T>>;
 template <class T> using buffer_ptr = std::shared_ptr<T>;
 
-template <class T, typename... Args> buffer_ptr<T> make_buffer(Args &&... args) {
+template <class T, typename... Args> buffer_ptr<T> make_buffer(Args &&...args) {
 	return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
@@ -280,7 +280,7 @@ struct LogicalType {
 	}
 
 	bool operator==(const LogicalType &rhs) const {
-		return id_ == rhs.id_ && width_ == rhs.width_ && scale_ == rhs.scale_;
+		return id_ == rhs.id_ && width_ == rhs.width_ && scale_ == rhs.scale_ && child_types_ == rhs.child_types_;
 	}
 	bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);

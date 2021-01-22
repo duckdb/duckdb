@@ -150,7 +150,7 @@ public:
 
 	static unique_ptr<FunctionOperatorData> parquet_scan_init(ClientContext &context, const FunctionData *bind_data_,
 	                                                          vector<column_t> &column_ids,
-	                                                          TableFilterSet *table_filters) {
+	                                                          TableFilterCollection *filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_;
 
 		auto result = make_unique<ParquetReadOperatorData>();
@@ -158,24 +158,24 @@ public:
 
 		result->is_parallel = false;
 		result->file_index = 0;
-		result->table_filters = table_filters;
+		result->table_filters = filters->table_filters;
 		// single-threaded: one thread has to read all groups
 		vector<idx_t> group_ids;
 		for (idx_t i = 0; i < bind_data.initial_reader->NumRowGroups(); i++) {
 			group_ids.push_back(i);
 		}
 		result->reader = bind_data.initial_reader;
-		result->reader->Initialize(result->scan_state, column_ids, move(group_ids), table_filters);
+		result->reader->Initialize(result->scan_state, column_ids, move(group_ids), filters->table_filters);
 		return move(result);
 	}
 
 	static unique_ptr<FunctionOperatorData>
 	parquet_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *parallel_state_,
-	                           vector<column_t> &column_ids, TableFilterSet *table_filters) {
+	                           vector<column_t> &column_ids, TableFilterCollection *filters) {
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;
-		result->table_filters = table_filters;
+		result->table_filters = filters->table_filters;
 		if (!parquet_parallel_state_next(context, bind_data_, result.get(), parallel_state_)) {
 			return nullptr;
 		}

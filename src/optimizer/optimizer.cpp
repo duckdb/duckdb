@@ -5,17 +5,20 @@
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
+#include "duckdb/optimizer/deliminator.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
-#include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
-#include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
+
+#include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 
 namespace duckdb {
 
@@ -27,6 +30,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<ConjunctionSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DatePartSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<InClauseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
 	rewriter.rules.push_back(make_unique<LikeOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<EmptyNeedleRemovalRule>(rewriter));
@@ -73,6 +77,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("join_order");
 	JoinOrderOptimizer optimizer(context);
 	plan = optimizer.Optimize(move(plan));
+	context.profiler.EndPhase();
+
+	// removes any redundant DelimGets/DelimJoins
+	context.profiler.StartPhase("deliminator");
+	Deliminator deliminator;
+	plan = deliminator.Optimize(move(plan));
 	context.profiler.EndPhase();
 
 	context.profiler.StartPhase("unused_columns");

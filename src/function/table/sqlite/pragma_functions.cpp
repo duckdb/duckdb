@@ -46,7 +46,7 @@ static unique_ptr<FunctionData> pragma_functions_bind(ClientContext &context, ve
 }
 
 unique_ptr<FunctionOperatorData> pragma_functions_init(ClientContext &context, const FunctionData *bind_data,
-                                                     vector<column_t> &column_ids, TableFilterSet *table_filters) {
+                                                     vector<column_t> &column_ids,TableFilterCollection* filters) {
 	auto result = make_unique<PragmaFunctionsData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {

@@ -33,7 +33,7 @@ public:
 	//! Bound column IDs
 	vector<column_t> column_ids;
 	//! Filters pushed down for table scan
-	vector<TableFilter> tableFilters;
+	vector<TableFilter> table_filters;
 
 	string GetName() const override;
 	string ParamsToString() const override;

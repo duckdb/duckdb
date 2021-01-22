@@ -1,5 +1,7 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/unordered_set.hpp"
+
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
@@ -11,6 +13,36 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 	auto name = (reinterpret_cast<PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
 	LogicalType base_type = TransformStringToLogicalType(name);
+
+	if (base_type == LogicalTypeId::STRUCT) {
+		D_ASSERT(type_name->typmods && type_name->typmods->length > 0);
+		child_list_t<LogicalType> children;
+		unordered_set<string> name_collision_set;
+
+		for (auto node = type_name->typmods->head; node; node = node->next) {
+			auto &type_val = *((PGList *)node->data.ptr_value);
+			D_ASSERT(type_val.length == 2);
+
+			auto entry_name_node = (PGValue *)(type_val.head->data.ptr_value);
+			D_ASSERT(entry_name_node->type == T_PGString);
+			auto entry_type_node = (PGValue *)(type_val.tail->data.ptr_value);
+			D_ASSERT(entry_type_node->type == T_PGTypeName);
+
+			auto entry_name = string(entry_name_node->val.str);
+			D_ASSERT(!entry_name.empty());
+
+			if (name_collision_set.find(entry_name) != name_collision_set.end()) {
+				throw ParserException("Duplicate struct entry name");
+			}
+			name_collision_set.insert(entry_name);
+
+			auto entry_type = TransformTypeName((PGTypeName *)entry_type_node);
+			children.push_back(make_pair(entry_name, entry_type));
+		}
+		D_ASSERT(!children.empty());
+		return LogicalType(base_type.id(), children);
+	}
+
 	int8_t width = base_type.width(), scale = base_type.scale();
 	// check any modifiers
 	int modifier_idx = 0;

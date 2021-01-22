@@ -20,7 +20,9 @@ void Binder::BindNamedParameters(unordered_map<string, LogicalType> &types, unor
 			throw BinderException(error_context.FormatError("Invalid named parameter \"%s\" for function %s\n%s",
 			                                                kv.first, func_name, named_params));
 		}
-		kv.second = kv.second.CastAs(entry->second);
+		if (entry->second.id() != LogicalTypeId::ANY) {
+			kv.second = kv.second.CastAs(entry->second);
+		}
 	}
 }
 

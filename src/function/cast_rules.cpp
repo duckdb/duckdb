@@ -1,5 +1,4 @@
 #include "duckdb/function/cast_rules.hpp"
-#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 

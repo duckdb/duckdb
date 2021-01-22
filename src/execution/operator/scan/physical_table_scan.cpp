@@ -1,13 +1,12 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
-#include <utility>
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/transaction/transaction.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parallel/task_context.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/transaction/transaction.hpp"
+
+#include <utility>
 
 namespace duckdb {
 
@@ -42,14 +41,15 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			// check if there is any parallel state to fetch
 			state.parallel_state = nullptr;
 			auto task_info = task.task_info.find(this);
+			TableFilterCollection filters (table_filters.get());
 			if (task_info != task.task_info.end()) {
 				// parallel scan init
 				state.parallel_state = task_info->second;
 				state.operator_data = function.parallel_init(context.client, bind_data.get(), state.parallel_state,
-				                                             column_ids, table_filters.get());
+				                                             column_ids, &filters);
 			} else {
 				// sequential scan init
-				state.operator_data = function.init(context.client, bind_data.get(), column_ids, table_filters.get());
+				state.operator_data = function.init(context.client, bind_data.get(), column_ids, &filters);
 			}
 			if (!state.operator_data) {
 				// no operator data returned: nothing to scan
@@ -114,8 +114,8 @@ string PhysicalTableScan::ParamsToString() const {
 			for (auto &filter : f.second) {
 				if (filter.column_index < names.size()) {
 					result += "\n";
-					result += names[column_ids[filter.column_index]] + ExpressionTypeToOperator(filter.comparison_type) +
-					          filter.constant.ToString();
+					result += names[column_ids[filter.column_index]] +
+					          ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
 				}
 			}
 		}

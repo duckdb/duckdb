@@ -200,8 +200,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// * statement, expand to all columns from the FROM clause
 			bind_context.GenerateAllColumnExpressions(new_select_list);
 		} else if (select_element->GetExpressionType() == ExpressionType::TABLE_STAR) {
-			auto table_star =
-			    (TableStarExpression *)select_element.get(); // TODO this cast to explicit class is a bit dirty?
+			auto table_star = (TableStarExpression *)select_element.get();
 			bind_context.GenerateAllColumnExpressions(new_select_list, table_star->relation_name);
 		} else {
 			// regular statement, add it to the list
