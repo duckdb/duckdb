@@ -9,6 +9,7 @@ add_library_unity(duckdb_expression
                   constant_expression.cpp
                   default_expression.cpp
                   function_expression.cpp
+                  lambda_expression.cpp
                   operator_expression.cpp
                   parameter_expression.cpp
                   star_expression.cpp

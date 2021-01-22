@@ -36,5 +36,16 @@ text = text.replace('register ', '')
 
 text = text + "\n} /* duckdb_libpgquery */\n"
 
+text = re.sub('[(]void[)][ ]*fprintf', '//', text)
+text = re.sub('exit[(]', 'throw std::runtime_error(msg); //', text)
+
+if 'fprintf(' in text:
+	print("PRINTF not removed!")
+	# exit(1)
+
+if 'exit(' in text:
+	print("EXIT not removed!")
+	# exit(1)
+
 with open_utf8(target_file, 'w+') as f:
 	f.write(text)
