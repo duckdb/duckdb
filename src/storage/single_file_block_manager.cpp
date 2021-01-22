@@ -247,6 +247,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 			free_list.erase(entry);
 		}
 		header.free_list = writer.block->id;
+		modified_blocks.push_back(writer.block->id);
 
 		writer.Write<uint64_t>(free_list.size());
 		for (auto &block_id : free_list) {
