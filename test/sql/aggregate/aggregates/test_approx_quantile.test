@@ -1,0 +1,90 @@
+# name: test/sql/aggregate/aggregates/test_approx_quantile.test
+# description: Test approx quantile operator
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+query I
+SELECT approx_quantile(r, 0.5) FROM quantile
+----
+4999
+
+query I
+SELECT quantile(r::decimal(10,2), 0.5) FROM quantile
+----
+4999
+
+query I
+SELECT quantile(r, 1.0) FROM quantile
+----
+9999
+
+query I
+SELECT quantile(r, 0.0) FROM quantile
+----
+0
+
+query I
+SELECT quantile(NULL, 0.5) FROM quantile
+----
+NULL
+
+query I
+SELECT quantile(42, 0.5) FROM quantile
+----
+42
+
+query I
+SELECT quantile(NULL, 0.5)
+----
+NULL
+
+query I
+SELECT quantile(42, 0.5)
+----
+42
+
+
+query III
+SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
+----
+999
+4999
+8999
+
+
+statement error
+SELECT quantile(r, -0.1) FROM quantile
+
+statement error
+SELECT quantile(r, 1.1) FROM quantile
+
+statement error
+SELECT quantile(r, NULL) FROM quantile
+
+statement error
+SELECT quantile(r::string, 0.5) FROM quantile
+
+statement error
+SELECT quantile(r) FROM quantile
+
+statement error
+SELECT quantile(r, 0.1, 0.2) FROM quantile
+
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+query III
+SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
+----
+999
+4999
+8999

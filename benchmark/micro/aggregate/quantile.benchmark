@@ -1,0 +1,16 @@
+# name: benchmark/micro/aggregate/quantile.benchmark
+# description: Quantile Function
+# group: [aggregate]
+
+name Integer Sum (Ungrouped)
+group aggregate
+
+load
+create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+run
+SELECT quantile(r, 0.5) FROM quantile
+
+result I
+4999
+

@@ -17,4 +17,8 @@ struct QuantileFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ApproximateQuantileFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
