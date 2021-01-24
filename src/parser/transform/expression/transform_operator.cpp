@@ -63,12 +63,11 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 		if (target_type != ExpressionType::INVALID) {
 			// built-in comparison operator
 			return make_unique<ComparisonExpression>(target_type, move(children[0]), move(children[1]));
-		} else {
-			// built-in operator function
-			auto result = make_unique<FunctionExpression>(schema, op, children);
-			result->is_operator = true;
-			return move(result);
 		}
+		// not a special operator: convert to a function expression
+		auto result = make_unique<FunctionExpression>(schema, op, children);
+		result->is_operator = true;
+		return move(result);
 	}
 }
 

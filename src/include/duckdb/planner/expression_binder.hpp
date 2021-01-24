@@ -81,6 +81,7 @@ protected:
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
+	BindResult BindExpression(LambdaExpression &expr, idx_t depth);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(StarExpression &expr, idx_t depth);
