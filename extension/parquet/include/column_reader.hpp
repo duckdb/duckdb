@@ -69,7 +69,7 @@ public:
 
 	virtual void Skip(idx_t num_values);
 
-	const LogicalType Type() {
+	const LogicalType &Type() {
 		return type;
 	}
 
