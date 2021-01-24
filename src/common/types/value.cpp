@@ -877,4 +877,12 @@ bool Value::ValuesAreEqual(Value result_value, Value value) {
 	}
 }
 
+template <> bool Value::IsValid(float value) {
+	return Value::FloatIsValid(value);
+}
+
+template <> bool Value::IsValid(double value) {
+	return Value::DoubleIsValid(value);
+}
+
 } // namespace duckdb

@@ -866,6 +866,15 @@ void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
 	string_buffer.AddHeapReference(make_unique<ManagedVectorBuffer>(move(handle)));
 }
 
+void StringVector::AddBuffer(Vector &vector, unique_ptr<VectorBuffer> buffer) {
+	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	string_buffer.AddHeapReference(move(buffer));
+}
+
 void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(other.type.InternalType() == PhysicalType::VARCHAR);

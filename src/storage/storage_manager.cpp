@@ -2,6 +2,7 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -11,7 +12,6 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 
 namespace duckdb {
@@ -29,6 +29,14 @@ StorageManager &StorageManager::GetStorageManager(ClientContext &context) {
 
 BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
 	return *context.db->storage->buffer_manager;
+}
+
+ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
+	return *context.db->object_cache;
+}
+
+bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
+	return context.db->config.object_cache_enable;
 }
 
 void StorageManager::Initialize() {
