@@ -51,6 +51,14 @@ static LogicalType derive_type(const SchemaElement &s_ele) {
 	case Type::BOOLEAN:
 		return LogicalType::BOOLEAN;
 	case Type::INT32:
+		if (s_ele.__isset.converted_type) {
+			switch (s_ele.converted_type) {
+			case ConvertedType::DATE:
+				return LogicalType::DATE;
+			default:
+				return LogicalType::INTEGER;
+			}
+		}
 		return LogicalType::INTEGER;
 	case Type::INT64:
 		if (s_ele.__isset.converted_type) {

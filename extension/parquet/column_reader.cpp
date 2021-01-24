@@ -47,15 +47,15 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 	case LogicalTypeId::TIMESTAMP:
 		switch (schema_p.type) {
 		case Type::INT96:
-			return make_unique<TimestampColumnReader<Int96, impala_timestamp_to_timestamp_t>>(
+			return make_unique<CallbackColumnReader<Int96, timestamp_t, impala_timestamp_to_timestamp_t>>(
 			    type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
 			switch (schema_p.converted_type) {
 			case ConvertedType::TIMESTAMP_MICROS:
-				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_micros_to_timestamp>>(
+				return make_unique<CallbackColumnReader<int64_t, timestamp_t, parquet_timestamp_micros_to_timestamp>>(
 				    type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIMESTAMP_MILLIS:
-				return make_unique<TimestampColumnReader<int64_t, parquet_timestamp_ms_to_timestamp>>(
+				return make_unique<CallbackColumnReader<int64_t, timestamp_t, parquet_timestamp_ms_to_timestamp>>(
 				    type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;
@@ -64,6 +64,9 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 			break;
 		}
 		break;
+	case LogicalTypeId::DATE:
+		return make_unique<CallbackColumnReader<int32_t, date_t, parquet_int_to_date>>(type_p, schema_p, file_idx_p,
+		                                                                               max_define, max_repeat);
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
@@ -165,7 +168,6 @@ static uint8_t bit_width(idx_t val) {
 }
 
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
-
 	if (page_hdr.type == PageType::DATA_PAGE && !page_hdr.__isset.data_page_header) {
 		throw std::runtime_error("Missing data page header from data page");
 	}

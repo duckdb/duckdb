@@ -251,13 +251,14 @@ protected:
 	void PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) override;
 };
 
-template <class PARQUET_PHYSICAL_TYPE, timestamp_t (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
-struct TimestampParquetValueConversion {
-	static timestamp_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		return TemplatedParquetValueConversion<timestamp_t>::DictRead(dict, offset, reader);
+template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,
+          DUCKDB_PHYSICAL_TYPE (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
+struct CallbackParquetValueConversion {
+	static DUCKDB_PHYSICAL_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
+		return TemplatedParquetValueConversion<DUCKDB_PHYSICAL_TYPE>::DictRead(dict, offset, reader);
 	}
 
-	static timestamp_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		return FUNC(plain_data.read<PARQUET_PHYSICAL_TYPE>());
 	}
 
@@ -266,20 +267,23 @@ struct TimestampParquetValueConversion {
 	}
 };
 
-template <class PARQUET_PHYSICAL_TYPE, timestamp_t (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
-class TimestampColumnReader
-    : public TemplatedColumnReader<timestamp_t, TimestampParquetValueConversion<PARQUET_PHYSICAL_TYPE, FUNC>> {
+template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,
+          DUCKDB_PHYSICAL_TYPE (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
+class CallbackColumnReader
+    : public TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
+                                   CallbackParquetValueConversion<PARQUET_PHYSICAL_TYPE, DUCKDB_PHYSICAL_TYPE, FUNC>> {
 
 public:
-	TimestampColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
-	                      idx_t max_repeat_p)
-	    : TemplatedColumnReader<timestamp_t, TimestampParquetValueConversion<PARQUET_PHYSICAL_TYPE, FUNC>>(
+	CallbackColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
+	                     idx_t max_repeat_p)
+	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
+	                            CallbackParquetValueConversion<PARQUET_PHYSICAL_TYPE, DUCKDB_PHYSICAL_TYPE, FUNC>>(
 	          type_p, schema_p, file_idx_p, max_define_p, max_repeat_p){};
 
 protected:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
-		this->dict = make_shared<ResizeableBuffer>(num_entries * sizeof(timestamp_t));
-		auto dict_ptr = (timestamp_t *)this->dict->ptr;
+		this->dict = make_shared<ResizeableBuffer>(num_entries * sizeof(DUCKDB_PHYSICAL_TYPE));
+		auto dict_ptr = (DUCKDB_PHYSICAL_TYPE *)this->dict->ptr;
 		for (idx_t i = 0; i < num_entries; i++) {
 			dict_ptr[i] = FUNC(dictionary_data->read<PARQUET_PHYSICAL_TYPE>());
 		}
