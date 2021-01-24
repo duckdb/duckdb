@@ -27,7 +27,23 @@ public:
 	//! Create an empty NULL value of the specified type
 	explicit Value(LogicalType type = LogicalType::SQLNULL) : type_(type), is_null(true) {
 	}
-	//! Create a BIGINT value
+	//! Create a UTINYINT value
+	Value(uint8_t val) : type_(LogicalType::UTINYINT), is_null(false) {
+		value_.utinyint = val;
+	}
+	//! Create a USMALLINT value
+	Value(uint16_t val) : type_(LogicalType::USMALLINT), is_null(false) {
+		value_.usmallint = val;
+	}
+		//! Create a UINTEGER value
+	Value(uint32_t val) : type_(LogicalType::UINTEGER), is_null(false) {
+		value_.uinteger = val;
+	}
+	//! Create a UBIGINT value
+	Value(uint64_t val) : type_(LogicalType::UBIGINT), is_null(false) {
+		value_.ubigint = val;
+	}
+	//! Create an INTEGER value
 	Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 		value_.integer = val;
 	}

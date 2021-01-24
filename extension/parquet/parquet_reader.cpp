@@ -55,6 +55,10 @@ static LogicalType derive_type(const SchemaElement &s_ele) {
 			switch (s_ele.converted_type) {
 			case ConvertedType::DATE:
 				return LogicalType::DATE;
+			case ConvertedType::UINT_8:
+				return LogicalType::UTINYINT;
+			case ConvertedType::UINT_16:
+				return LogicalType::USMALLINT;
 			default:
 				return LogicalType::INTEGER;
 			}
@@ -66,6 +70,10 @@ static LogicalType derive_type(const SchemaElement &s_ele) {
 			case ConvertedType::TIMESTAMP_MICROS:
 			case ConvertedType::TIMESTAMP_MILLIS:
 				return LogicalType::TIMESTAMP;
+			case ConvertedType::UINT_32:
+				return LogicalType::UINTEGER;
+			case ConvertedType::UINT_64:
+				return LogicalType::UBIGINT;
 			default:
 				return LogicalType::BIGINT;
 			}
@@ -132,7 +140,7 @@ static unique_ptr<ColumnReader> create_reader_recursive(const FileMetaData *file
 
 			c_idx++;
 		}
-		D_ASSERT(child_types.size() > 0);
+		D_ASSERT(!child_types.empty());
 		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
 		// if we only have a single child no reason to create a struct ay
@@ -162,7 +170,7 @@ static unique_ptr<ColumnReader> create_reader(const FileMetaData *file_meta_data
 
 	auto ret = create_reader_recursive(file_meta_data, 0, 0, 0, next_schema_idx, next_file_idx);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
-	D_ASSERT(file_meta_data->row_groups.size() == 0 || next_file_idx == file_meta_data->row_groups[0].columns.size());
+	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 	return ret;
 }
 
@@ -235,7 +243,7 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 		throw FormatException("Need at least one non-root column in the file");
 	}
 
-	bool has_expected_types = expected_types.size() > 0;
+	bool has_expected_types = !expected_types.empty();
 	auto root_reader = create_reader(file_meta_data);
 
 	auto root_type = root_reader->Type();
@@ -307,6 +315,10 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 		if (stats && filter_entry != state.filters->filters.end()) {
 			bool skip_chunk = false;
 			switch (column_reader->Type().id()) {
+			case LogicalTypeId::UTINYINT:
+			case LogicalTypeId::USMALLINT:
+			case LogicalTypeId::UINTEGER:
+			case LogicalTypeId::UBIGINT:
 			case LogicalTypeId::INTEGER:
 			case LogicalTypeId::BIGINT:
 			case LogicalTypeId::FLOAT:
@@ -344,8 +356,6 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t f
 	}
 
 	state.root_reader->IntializeRead(group.columns, *state.thrift_file_proto);
-
-	return;
 }
 
 idx_t ParquetReader::NumRows() {
@@ -401,6 +411,22 @@ static void templated_filter_operation(Vector &v, Value &constant, parquet_filte
 	switch (v.type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		templated_filter_operation2<bool, OP>(v, constant.value_.boolean, filter_mask, count);
+		break;
+
+	case LogicalTypeId::UTINYINT:
+		templated_filter_operation2<uint8_t , OP>(v, constant.value_.utinyint, filter_mask, count);
+		break;
+
+	case LogicalTypeId::USMALLINT:
+		templated_filter_operation2<uint16_t , OP>(v, constant.value_.usmallint, filter_mask, count);
+		break;
+
+	case LogicalTypeId::UINTEGER:
+		templated_filter_operation2<uint32_t, OP>(v, constant.value_.uinteger, filter_mask, count);
+		break;
+
+	case LogicalTypeId::UBIGINT:
+		templated_filter_operation2<uint64_t, OP>(v, constant.value_.ubigint, filter_mask, count);
 		break;
 
 	case LogicalTypeId::INTEGER:
