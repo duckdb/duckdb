@@ -34,6 +34,10 @@ void PersistentSegment::Scan(Transaction &transaction, ColumnScanState &state, i
 	data->Scan(transaction, state, vector_index, result);
 }
 
+void PersistentSegment::ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) {
+	data->ScanCommitted(state, vector_index, result);
+}
+
 void PersistentSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
                                    SelectionVector &sel, idx_t &approved_tuple_count) {
 	data->FilterScan(transaction, state, result, sel, approved_tuple_count);
@@ -66,6 +70,10 @@ void PersistentSegment::Update(ColumnData &column_data, Transaction &transaction
 		data->ToTemporary();
 	}
 	data->Update(column_data, stats, transaction, updates, ids, count, this->start);
+}
+
+bool PersistentSegment::HasChanges() {
+	return block_id != data->block->BlockId();
 }
 
 } // namespace duckdb

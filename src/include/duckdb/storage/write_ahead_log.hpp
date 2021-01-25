@@ -13,6 +13,7 @@
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -76,6 +77,8 @@ public:
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
 	void Truncate(int64_t size);
+	//! Delete the WAL file on disk. The WAL should not be used after this point.
+	void Delete();
 	void Flush();
 
 	void WriteCheckpoint(block_id_t meta_block);
@@ -83,6 +86,7 @@ public:
 private:
 	DatabaseInstance &database;
 	unique_ptr<BufferedFileWriter> writer;
+	string wal_path;
 };
 
 } // namespace duckdb

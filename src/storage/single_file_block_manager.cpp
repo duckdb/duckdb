@@ -65,9 +65,8 @@ template <class T> T DeserializeHeaderStructure(data_ptr_t ptr) {
 
 SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path, bool read_only, bool create_new,
                                                bool use_direct_io)
-    : db(db), path(path), header_buffer(FileBufferType::MANAGED_BUFFER, Storage::FILE_HEADER_SIZE), read_only(read_only),
-      use_direct_io(use_direct_io) {
-
+    : db(db), path(path), header_buffer(FileBufferType::MANAGED_BUFFER, Storage::FILE_HEADER_SIZE), iteration_count(0),
+      read_only(read_only), use_direct_io(use_direct_io) {
 	uint8_t flags;
 	FileLockType lock;
 	if (read_only) {
@@ -113,7 +112,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 		header_buffer.Write(*handle, Storage::FILE_HEADER_SIZE);
 		// header 2
-		h2.iteration = 1;
+		h2.iteration = 0;
 		h2.meta_block = INVALID_BLOCK;
 		h2.free_list = INVALID_BLOCK;
 		h2.block_count = 0;
@@ -122,6 +121,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		// ensure that writing to disk is completed before returning
 		handle->Sync();
 		// we start with h2 as active_header, this way our initial write will be in h1
+		iteration_count = 0;
 		active_header = 1;
 		max_block = 0;
 	} else {

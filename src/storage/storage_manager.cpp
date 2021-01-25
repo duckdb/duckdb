@@ -13,6 +13,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/storage/checkpoint_manager.hpp"
 
 namespace duckdb {
 
@@ -111,6 +112,20 @@ void StorageManager::LoadDatabase() {
 	// initialize the WAL file
 	if (!read_only) {
 		wal.Initialize(wal_path);
+	}
+}
+
+void StorageManager::CreateCheckpoint(bool delete_wal) {
+	if (InMemory() || read_only || !wal.initialized) {
+		return;
+	}
+	if (wal.GetWALSize() > 0) {
+		// we only need to checkpoint if there is anything in the WAL
+		CheckpointManager checkpointer(db);
+		checkpointer.CreateCheckpoint();
+	}
+	if (delete_wal) {
+		wal.Delete();
 	}
 }
 

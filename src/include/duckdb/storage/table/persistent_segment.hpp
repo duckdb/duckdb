@@ -30,10 +30,14 @@ public:
 	unique_ptr<UncompressedSegment> data;
 
 public:
+	bool HasChanges();
+
 	void InitializeScan(ColumnScanState &state) override;
-	//! Scan one vector from this transient segment
+	//! Scan one vector from this persistent segment
 	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) override;
-	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
+	//! Scan one vector of committed data from this persistent segment
+	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) override;
+	//! Scan one vector from this persistent segment, throwing an exception if there are any outstanding updates
 	void IndexScan(ColumnScanState &state, Vector &result) override;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,

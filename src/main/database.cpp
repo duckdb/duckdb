@@ -16,6 +16,19 @@ DBConfig::~DBConfig() {
 DatabaseInstance::DatabaseInstance() {
 }
 
+DatabaseInstance::~DatabaseInstance() {
+	// shutting down: attempt to checkpoint the database
+	try {
+		auto &storage = StorageManager::GetStorageManager(*this);
+		if (!storage.InMemory()) {
+			storage.CreateCheckpoint(true);
+		}
+	} catch(...) {
+
+	}
+}
+
+
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return *db.GetStorageManager().buffer_manager;

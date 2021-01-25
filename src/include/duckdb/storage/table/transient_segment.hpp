@@ -32,7 +32,7 @@ public:
 	//! Scan one vector from this transient segment
 	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Scan one vector of committed data from this transient segment
-	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result);
+	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count) override;

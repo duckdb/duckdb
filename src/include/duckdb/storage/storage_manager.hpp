@@ -48,6 +48,8 @@ public:
 		return db;
 	}
 
+	void CreateCheckpoint(bool delete_wal = false);
+
 	string GetDBPath() {
 		return path;
 	}

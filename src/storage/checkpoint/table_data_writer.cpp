@@ -92,42 +92,39 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 	auto segment = (ColumnSegment *) owned_segment.get();
 	DataPointer pointer;
 	while(segment) {
-		switch(segment->segment_type) {
-		case ColumnSegmentType::PERSISTENT: {
-			// already persisted: no need to write the data
-
-			// flush any segments preceding this persistent segment
-			FlushSegment(new_tree, col_idx);
-
-			// set up the data pointer directly using the data from the persistent segment
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment&) *segment;
-			pointer.block_id = persistent.block_id;
-			pointer.offset = 0;
-			pointer.row_start = segment->start;
-			pointer.tuple_count = persistent.count;
-			pointer.statistics = persistent.stats.statistics->Copy();
+			// persistent segment; check if there were changes made to the segment
+			if (!persistent.HasChanges()) {
+				// unchanged persistent segment: no need to write the data
 
-			// merge the persistent stats into the global column stats
-			column_stats[col_idx]->Merge(*persistent.stats.statistics);
+				// flush any segments preceding this persistent segment
+				FlushSegment(new_tree, col_idx);
 
-			// directly append the current segment to the new tree
-			new_tree.AppendSegment(move(owned_segment));
+				// set up the data pointer directly using the data from the persistent segment
+				pointer.block_id = persistent.block_id;
+				pointer.offset = 0;
+				pointer.row_start = segment->start;
+				pointer.tuple_count = persistent.count;
+				pointer.statistics = persistent.stats.statistics->Copy();
 
-			data_pointers[col_idx].push_back(move(pointer));
-			break;
-		}
-		case ColumnSegmentType::TRANSIENT: {
-			// not persisted yet: scan the segment and write it to disk
-			auto &transient = (TransientSegment &) *segment;
-			ColumnScanState state;
-			transient.InitializeScan(state);
-			for(idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < transient.count; vector_index++) {
-				idx_t count = MinValue<idx_t>(transient.count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
-				transient.ScanCommitted(state, vector_index, intermediate);
-				AppendData(new_tree, col_idx, intermediate, count);
+				// merge the persistent stats into the global column stats
+				column_stats[col_idx]->Merge(*persistent.stats.statistics);
+
+				// directly append the current segment to the new tree
+				new_tree.AppendSegment(move(owned_segment));
+
+				data_pointers[col_idx].push_back(move(pointer));
+				continue;
 			}
-			break;
 		}
+		// not persisted yet: scan the segment and write it to disk
+		ColumnScanState state;
+		segment->InitializeScan(state);
+		for(idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < segment->count; vector_index++) {
+			idx_t count = MinValue<idx_t>(segment->count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
+			segment->ScanCommitted(state, vector_index, intermediate);
+			AppendData(new_tree, col_idx, intermediate, count);
 		}
 		// move to the next segment in the list
 		owned_segment = move(segment->next);

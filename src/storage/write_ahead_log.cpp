@@ -15,6 +15,7 @@ WriteAheadLog::WriteAheadLog(DatabaseInstance &database) : initialized(false), d
 }
 
 void WriteAheadLog::Initialize(string &path) {
+	wal_path = path;
 	writer = make_unique<BufferedFileWriter>(database.GetFileSystem(), path.c_str(),
 	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                             FileFlags::FILE_FLAGS_APPEND);
@@ -22,11 +23,23 @@ void WriteAheadLog::Initialize(string &path) {
 }
 
 int64_t WriteAheadLog::GetWALSize() {
+	D_ASSERT(writer);
 	return writer->GetFileSize();
 }
 
 void WriteAheadLog::Truncate(int64_t size) {
 	writer->Truncate(size);
+}
+
+void WriteAheadLog::Delete() {
+	if (!initialized) {
+		return;
+	}
+	initialized = false;
+	writer.reset();
+
+	auto &fs = FileSystem::GetFileSystem(database);
+	fs.RemoveFile(wal_path);
 }
 
 //===--------------------------------------------------------------------===//
