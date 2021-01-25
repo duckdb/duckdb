@@ -10,6 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -80,11 +81,11 @@ struct string_t;
 template <class T>
 using child_list_t = std::vector<std::pair<std::string, T>>;
 template <class T>
-using buffer_ptr = std::shared_ptr<T>;
+using buffer_ptr = single_thread_ptr<T>;
 
 template <class T, typename... Args>
 buffer_ptr<T> make_buffer(Args &&...args) {
-	return std::make_shared<T>(std::forward<Args>(args)...);
+	return single_thread_make_shared<T>(std::forward<Args>(args)...);
 }
 
 struct list_entry_t {
