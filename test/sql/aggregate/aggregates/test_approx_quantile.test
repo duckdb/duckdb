@@ -9,71 +9,115 @@ statement ok
 create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
 
 query I
-SELECT approx_quantile(r, 0.5) FROM quantile
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r, 0.5) as approx_quantile ,quantile(r,0.5) as true_quantile FROM quantile) AS T
 ----
-4999
+1
+
 
 query I
-SELECT quantile(r::decimal(10,2), 0.5) FROM quantile
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r::decimal(10,2), 0.5) as approx_quantile ,quantile(r::decimal(10,2), 0.5) as true_quantile FROM quantile) AS T
 ----
-4999
+1
 
 query I
-SELECT quantile(r, 1.0) FROM quantile
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r, 1.0) as approx_quantile ,quantile(r, 1.0) as true_quantile FROM quantile) AS T
 ----
-9999
+1
 
 query I
-SELECT quantile(r, 0.0) FROM quantile
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r, 0.0) as approx_quantile ,quantile(r, 0.0) as true_quantile from quantile) AS T
 ----
-0
+1
+
+query II
+SELECT approx_quantile(NULL, 0.5)  as approx_quantile ,quantile(NULL, 0.5) as true_quantile
+----
+NULL	NULL
 
 query I
-SELECT quantile(NULL, 0.5) FROM quantile
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(42, 0.5)  as approx_quantile ,quantile(42, 0.5)  as true_quantile) AS T
 ----
-NULL
+1
+
+query II
+SELECT approx_quantile(NULL, 0.5)  as approx_quantile ,quantile(NULL, 0.5)  as true_quantile
+----
+NULL	NULL
 
 query I
-SELECT quantile(42, 0.5) FROM quantile
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(42, 0.5)  as approx_quantile ,quantile(42, 0.5)  as true_quantile) AS T
 ----
-42
+1
 
 query I
-SELECT quantile(NULL, 0.5)
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r, 0.1)  as approx_quantile ,quantile(r, 0.1)  as true_quantile from quantile) AS T
 ----
-NULL
+1
 
 query I
-SELECT quantile(42, 0.5)
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r, 0.9)  as approx_quantile ,quantile(r, 0.9)  as true_quantile from quantile) AS T
 ----
-42
+1
 
-
-query III
-SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
-----
-999
-4999
-8999
 
 
 statement error
-SELECT quantile(r, -0.1) FROM quantile
+SELECT approx_quantile(r, -0.1) FROM quantile
 
 statement error
-SELECT quantile(r, 1.1) FROM quantile
+SELECT approx_quantile(r, 1.1) FROM quantile
 
 statement error
-SELECT quantile(r, NULL) FROM quantile
+SELECT approx_quantile(r, NULL) FROM quantile
 
 statement error
-SELECT quantile(r::string, 0.5) FROM quantile
+SELECT approx_quantile(r::string, 0.5) FROM quantile
 
 statement error
-SELECT quantile(r) FROM quantile
+SELECT approx_quantile(r) FROM quantile
 
 statement error
-SELECT quantile(r, 0.1, 0.2) FROM quantile
+SELECT approx_quantile(r, 0.1, 0.2) FROM quantile
 
 
 statement ok
@@ -82,9 +126,33 @@ pragma threads=4
 statement ok
 PRAGMA force_parallelism
 
-query III
-SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
+query I
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r, 0.1)  as approx_quantile ,quantile(r, 0.1)  as true_quantile from quantile) AS T
 ----
-999
-4999
-8999
+1
+
+query I
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r, 0.9)  as approx_quantile ,quantile(r, 0.9)  as true_quantile from quantile) AS T
+----
+1
+
+
+query I
+SELECT CASE
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+            THEN TRUE
+            ELSE FALSE
+       END
+       FROM (SELECT approx_quantile(r, 0.5)  as approx_quantile ,quantile(r, 0.5)  as true_quantile from quantile) AS T
+----
+1

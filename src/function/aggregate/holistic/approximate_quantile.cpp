@@ -1,62 +1,24 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "approximate_quantile.hpp"
+#include "t_digest.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdlib.h>
 
 namespace duckdb{
 
-struct ApproxQuantileBindData : public FunctionData {
-	ApproxQuantileBindData(float level, float error) : level(level), error(error) {
-	}
-
-	ApproxQuantileBindData(vector<float> &parameters) : ApproxQuantileBindData(parameters[0], parameters[1]) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<ApproxQuantileBindData>(level, error);
-	}
-
-	bool Equals(FunctionData &other_p) override {
-		auto &other = (ApproxQuantileBindData &)other_p;
-		return level == other.level && error == other.error;
-	}
-
-	float level;
-	float error;
-};
-
-
 template <class T> struct approx_quantile_state_t {
-	CSummary<T>* S{};
-//	data_ptr_t v{};
-	idx_t len{};
+	td_histogram<T> *h = nullptr;
 	idx_t pos{};
 };
 
 template <class T> struct ApproxQuantileOperation {
 
 	template <class STATE> static void Initialize(STATE *state) {
-//		state->v = nullptr;
-		state->len = 0;
 		state->pos = 0;
-		state->S = new CSummary<T>();
-		int L = static_cast<int>(floor(log(10000)/log(2))+2);
-		state->S->init(L,0.01);
+		state->h = td_new<T>(8192);
 	}
-
-//	static void resize_state(approx_quantile_state_t<T> *state, idx_t new_len) {
-//		if (new_len <= state->len) {
-//			return;
-//		}
-//		state->v = (data_ptr_t)realloc(state->v, new_len * sizeof(T));
-//		if (!state->v) {
-//			throw InternalException("Memory allocation failure");
-//		}
-//		state->len = new_len;
-//	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
@@ -70,23 +32,17 @@ template <class T> struct ApproxQuantileOperation {
 		if (nullmask[idx]) {
 			return;
 		}
-//		if (state->pos == state->len) {
-//			// growing conservatively here since we could be running this on many small groups
-//			resize_state(state, state->len == 0 ? 1 : state->len * 2);
-//		}
-//		D_ASSERT(state->v);
-		state->S->update(data[idx]);
+		D_ASSERT(state->h);
+        td_add<T>(state->h, data[idx],1);
 		state->pos++;
-//		((T *)state->v)[state->pos++] = data[idx];
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-//		if (source.pos == 0) {
-//			return;
-//		}
-//		resize_state(target, target->pos + source.pos);
-//		memcpy(target->v + target->pos * sizeof(T), source.v, source.pos * sizeof(T));
-//		target->pos += source.pos;
+		if (source.pos == 0) {
+			return;
+		}
+		td_merge(target->h,source.h);
+		target->pos += source.pos;
 	}
 
 
@@ -98,23 +54,16 @@ template <class T> struct ApproxQuantileOperation {
 			nullmask[idx] = true;
 			return;
 		}
-		D_ASSERT(state->v);
+		D_ASSERT(state->h);
 		D_ASSERT(bind_data_);
-		auto bind_data = (ApproxQuantileBindData *)bind_data_;
-		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->level);
-
-		target[idx] = state->S->query(offset) * 10000;
+		auto bind_data = (QuantileBindData *)bind_data_;
+		target[idx] = td_value_at(state->h, bind_data->quantile);
 	}
 
 	template <class STATE> static void Destroy(STATE *state) {
-//		if (state->v) {
-//			free(state->v);
-//			state->v = nullptr;
-//		}
-//		if (state->S) {
-//			delete state->S;
-//			state->S = nullptr;
-//		}
+		if (state->h) {
+			td_free<T>(state->h);
+		}
 	}
 
 	static bool IgnoreNull() {
@@ -138,12 +87,6 @@ AggregateFunction GetApproximateQuantileAggregateFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t<int64_t>, int64_t, int64_t,
 		                                                   ApproxQuantileOperation<int64_t>>(LogicalType::BIGINT,
 		                                                                                     LogicalType::BIGINT);
-
-	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t<hugeint_t>, hugeint_t, hugeint_t,
-		                                                   ApproxQuantileOperation<hugeint_t>>(LogicalType::HUGEINT,
-		                                                                                       LogicalType::HUGEINT);
-
 	case PhysicalType::FLOAT:
 		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t<float>, float, float,
 		                                                   ApproxQuantileOperation<float>>(LogicalType::FLOAT,
@@ -161,22 +104,18 @@ AggregateFunction GetApproximateQuantileAggregateFunction(PhysicalType type) {
 
 unique_ptr<FunctionData> bind_approx_quantile(ClientContext &context, AggregateFunction &function,
                                               vector<unique_ptr<Expression>> &arguments) {
-	vector<float> parameters;
-	for (size_t i = 1; i <= 2; i++) {
-		if (!arguments[i]->IsScalar()) {
-			throw BinderException("APPROX_QUANTILE can only take constant quantile parameters");
-		}
-		Value quantile_level_val = ExpressionExecutor::EvaluateScalar(*arguments[i]);
-		auto quantile_level = quantile_level_val.GetValue<float>();
-
-		if (quantile_level_val.is_null || quantile_level < 0 || quantile_level > 1) {
-			throw BinderException("QUANTILE can only take parameters in range [0, 1]");
-		}
-		parameters.push_back(quantile_level);
-		// remove the quantile argument so we can use the unary aggregate
-		arguments.pop_back();
+	if (!arguments[1]->IsScalar()) {
+		throw BinderException("APPROXIMATE QUANTILE can only take constant quantile parameters");
 	}
-	return make_unique<ApproxQuantileBindData>(parameters);
+	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	auto quantile = quantile_val.GetValue<float>();
+
+	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
+		throw BinderException("APPROXIMATE QUANTILE can only take parameters in range [0, 1]");
+	}
+	// remove the quantile argument so we can use the unary aggregate
+	arguments.pop_back();
+	return make_unique<QuantileBindData>(quantile);
 }
 
 unique_ptr<FunctionData> bind_approx_quantile_decimal(ClientContext &context, AggregateFunction &function,
@@ -197,14 +136,13 @@ AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
 
 void ApproximateQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet approx_quantile("approx_quantile");
-	approx_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT, LogicalType::FLOAT},
+	approx_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT},
 	                                              LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                              nullptr, bind_approx_quantile_decimal));
 
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT16));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT32));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT64));
-	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT128));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::DOUBLE));
 
 	set.AddFunction(approx_quantile);
