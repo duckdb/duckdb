@@ -15,6 +15,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "test_helpers.hpp"
 
+#include "system.hpp"
+
 namespace duckdb {
 
 //! Base class for any state that has to be kept by a Benchmark
@@ -44,6 +46,12 @@ public:
 	//! Run a bunch of queries, only called if GetQuery() returns an empty string
 	virtual void RunBenchmark(DuckDBBenchmarkState *state) {
 	}
+    //! Run a bunch of queries, only called if GetQuery() returns an empty string
+    virtual void RunPerfBenchmark(DuckDBBenchmarkState *state) {
+        System::profile(name, [&]() {
+			RunBenchmark(state);
+        });
+    }
 	//! This function gets called after the GetQuery() method
 	virtual void Cleanup(DuckDBBenchmarkState *state){};
 	//! Verify a result
@@ -82,6 +90,12 @@ public:
 			state->result = state->conn.Query(query);
 		}
 	}
+
+    void Perf(BenchmarkState *state_) override {
+        System::profile(name, [&]() {
+          Run(state_);
+        });
+    }
 
 	void Cleanup(BenchmarkState *state_) override {
 		auto state = (DuckDBBenchmarkState *)state_;

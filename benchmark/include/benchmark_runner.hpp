@@ -46,7 +46,9 @@ public:
 	void LogOutput(string message);
 
 	void RunBenchmark(Benchmark *benchmark);
+	void RunPerf(Benchmark *benchmark);
 	void RunBenchmarks();
+	void RunPerfs();
 
 	vector<Benchmark *> benchmarks;
 	ofstream out_file;

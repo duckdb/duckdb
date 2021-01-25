@@ -21,6 +21,7 @@ struct BenchmarkConfiguration {
 	std::string name_pattern{};
 	BenchmarkMetaType meta = BenchmarkMetaType::NONE;
 	bool print_profile_info = false;
+    bool perf = false;
 };
 
 }

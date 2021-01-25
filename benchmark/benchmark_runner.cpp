@@ -15,6 +15,8 @@
 #include <sstream>
 #include <thread>
 
+#include "system.hpp"
+
 using namespace duckdb;
 
 void BenchmarkRunner::RegisterBenchmark(Benchmark *benchmark) {
@@ -176,11 +178,42 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	benchmark->Finalize();
 }
 
+
+
+void BenchmarkRunner::RunPerf(Benchmark *benchmark) {
+    Profiler profiler;
+    auto display_name = benchmark->DisplayName();
+    LogLine(string(display_name.size() + 6, '-'));
+    LogLine("|| " + display_name + " ||");
+    LogLine(string(display_name.size() + 6, '-'));
+    auto state = benchmark->Initialize(configuration);
+    is_active = true;
+    timeout = false;
+    std::thread interrupt_thread(sleep_thread, benchmark, state.get(), benchmark->Timeout());
+
+    benchmark->Perf(state.get());
+    LogLine(display_name + " is DONE, use perf report -i ./perf/"  + display_name + ".data to check the perf result");
+
+
+    benchmark->Cleanup(state.get());
+
+    is_active = false;
+    interrupt_thread.join();
+    benchmark->Finalize();
+}
+
 void BenchmarkRunner::RunBenchmarks() {
 	LogLine("Starting benchmark run.");
 	for (auto &benchmark : benchmarks) {
 		RunBenchmark(benchmark);
 	}
+}
+
+void BenchmarkRunner::RunPerfs() {
+    LogLine("Starting perf run.");
+    for (auto &benchmark : benchmarks) {
+        RunPerf(benchmark);
+    }
 }
 
 void print_help() {
@@ -230,7 +263,11 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 		} else if (arg == "--query") {
 			// write group of benchmark
 			instance.configuration.meta = BenchmarkMetaType::QUERY;
-		} else if (StringUtil::StartsWith(arg, "--out=") || StringUtil::StartsWith(arg, "--log=")) {
+		} else if (arg == "--perf") {
+			// enable perf
+            system("mkdir -p ./perf");
+			instance.configuration.perf = true;
+        }else if (StringUtil::StartsWith(arg, "--out=") || StringUtil::StartsWith(arg, "--log=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
 				print_help();
@@ -297,7 +334,11 @@ ConfigurationError run_benchmarks() {
 			}
 		} else {
 			for (const auto &benchmark_index : benchmark_indices) {
-				instance.RunBenchmark(benchmarks[benchmark_index]);
+				if(instance.configuration.perf){
+					instance.RunPerf(benchmarks[benchmark_index]);
+				} else {
+                    instance.RunBenchmark(benchmarks[benchmark_index]);
+				}
 			}
 		}
 	} else {
@@ -305,7 +346,11 @@ ConfigurationError run_benchmarks() {
 			return ConfigurationError::InfoWithoutBenchmarkName;
 		}
 		// default: run all benchmarks
-		instance.RunBenchmarks();
+        if(instance.configuration.perf){
+            instance.RunPerfs();
+        } else {
+            instance.RunBenchmarks();
+        }
 	}
 	return ConfigurationError::None;
 }

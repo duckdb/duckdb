@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include "benchmark_configuration.hpp"
+#include "system.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,12 @@ public:
 	}
 	//! Run the benchmark
 	virtual void Run(BenchmarkState *state) = 0;
+    //! Perf the benchmark
+    virtual void Perf(BenchmarkState *state) {
+        System::profile(name, [&]() {
+          Run(state);
+        });
+	};
 	//! Cleanup the benchmark, called after each Run
 	virtual void Cleanup(BenchmarkState *state) = 0;
 	//! Verify that the output of the benchmark was correct
