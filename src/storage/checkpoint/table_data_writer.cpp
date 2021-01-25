@@ -82,6 +82,9 @@ void TableDataWriter::CreateSegment(idx_t col_idx) {
 }
 
 void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
+	if (!col_data.data.root_node) {
+		return;
+	}
 	Vector intermediate(col_data.type);
 
 	// scan the segments of the column data

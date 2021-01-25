@@ -35,6 +35,7 @@ idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
 }
 
 void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
+	D_ASSERT(segment);
 	// add the node to the list of nodes
 	SegmentNode node;
 	node.row_start = segment->start;
