@@ -43,6 +43,8 @@ class TestArrow(object):
             assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
 
     def test_arrow_unsigned(self,duckdb_cursor):
+        if not can_run:
+            return
         parquet_filename = 'unsigned.parquet'
         data = (pyarrow.array([1,2,3,4,5,255], type=pyarrow.uint8()),pyarrow.array([1,2,3,4,5,65535], \
             type=pyarrow.uint16()),pyarrow.array([1,2,3,4,5,4294967295], type=pyarrow.uint32()),\
