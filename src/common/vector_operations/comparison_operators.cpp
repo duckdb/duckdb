@@ -36,6 +36,18 @@ public:
 		case PhysicalType::INT64:
 			TemplatedExecute<int64_t, OP>(left, right, result, count);
 			break;
+		case PhysicalType::UINT8:
+			TemplatedExecute<uint8_t, OP>(left, right, result, count);
+			break;
+		case PhysicalType::UINT16:
+			TemplatedExecute<uint16_t, OP>(left, right, result, count);
+			break;
+		case PhysicalType::UINT32:
+			TemplatedExecute<uint32_t, OP>(left, right, result, count);
+			break;
+		case PhysicalType::UINT64:
+			TemplatedExecute<uint64_t, OP>(left, right, result, count);
+			break;
 		case PhysicalType::INT128:
 			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
 			break;

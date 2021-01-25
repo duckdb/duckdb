@@ -42,24 +42,24 @@ class TestArrow(object):
             assert rel_from_arrow.equals(rel_from_arrow2, check_metadata=True)
             assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
 
-        # Testing Unsigned Data Types
-       # parquet_filename = 'unsigned.parquet'
-        # urllib.request.urlretrieve('https://github.com/cwida/duckdb-data/releases/download/v1.0/userdata1.parquet', parquet_filename)
-
     def test_arrow_unsigned(self,duckdb_cursor):
-        parquet_filename = 'test/sql/copy/parquet/data/unsigned.parquet'
+        parquet_filename = 'unsigned.parquet'
+        data = (pyarrow.array([1,2,3,4,5,255], type=pyarrow.uint8()),pyarrow.array([1,2,3,4,5,65535], \
+            type=pyarrow.uint16()),pyarrow.array([1,2,3,4,5,4294967295], type=pyarrow.uint32()),\
+                pyarrow.array([1,2,3,4,5,18446744073709551615], type=pyarrow.uint64()))
+        tbl = pyarrow.Table.from_arrays([data[0],data[1],data[2],data[3]],['a','b','c','d'])
+        pyarrow.parquet.write_table(tbl, parquet_filename)
+
         cols = 'a, b, c, d'
       
         unsigned_parquet_table = pyarrow.parquet.read_table(parquet_filename)
         unsigned_parquet_table.validate(full=True)
-        print (unsigned_parquet_table['a'])
         rel_from_arrow = duckdb.arrow(unsigned_parquet_table).project(cols).arrow()
         rel_from_arrow.validate(full=True)
 
         rel_from_duckdb = duckdb.from_parquet(parquet_filename).project(cols).arrow()
         rel_from_duckdb.validate(full=True)
         
-        print(rel_from_duckdb)
         assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
 
         con = duckdb.connect()

@@ -20,6 +20,14 @@ hash_t ValueOperations::Hash(const Value &op) {
 		return duckdb::Hash(op.value_.integer);
 	case PhysicalType::INT64:
 		return duckdb::Hash(op.value_.bigint);
+	case PhysicalType::UINT8:
+		return duckdb::Hash(op.value_.utinyint);
+	case PhysicalType::UINT16:
+		return duckdb::Hash(op.value_.usmallint);
+	case PhysicalType::UINT32:
+		return duckdb::Hash(op.value_.uinteger);
+	case PhysicalType::UINT64:
+		return duckdb::Hash(op.value_.ubigint);
 	case PhysicalType::INT128:
 		return duckdb::Hash(op.value_.hugeint);
 	case PhysicalType::FLOAT:

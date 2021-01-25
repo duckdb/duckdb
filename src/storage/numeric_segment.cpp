@@ -117,6 +117,22 @@ static void templated_select_operation(SelectionVector &sel, Vector &result, Phy
                                        nullmask_t *source_mask, Value &constant, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
+	case PhysicalType::UINT8: {
+		Select<uint8_t, OP>(sel, result, source, source_mask, constant.value_.utinyint, approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT16: {
+		Select<uint16_t, OP>(sel, result, source, source_mask, constant.value_.usmallint, approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT32: {
+		Select<uint32_t, OP>(sel, result, source, source_mask, constant.value_.uinteger, approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT64: {
+		Select<uint64_t, OP>(sel, result, source, source_mask, constant.value_.ubigint, approved_tuple_count);
+		break;
+	}
 	case PhysicalType::INT8: {
 		Select<int8_t, OP>(sel, result, source, source_mask, constant.value_.tinyint, approved_tuple_count);
 		break;
@@ -160,6 +176,26 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
                                                Value &constantRight, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
+	case PhysicalType::UINT8: {
+		Select<uint8_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.utinyint,
+		                         constantRight.value_.utinyint, approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT16: {
+		Select<uint16_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.usmallint,
+		                          constantRight.value_.usmallint, approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT32: {
+		Select<uint32_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.uinteger,
+		                          constantRight.value_.uinteger, approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT64: {
+		Select<uint64_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.ubigint,
+		                          constantRight.value_.ubigint, approved_tuple_count);
+		break;
+	}
 	case PhysicalType::INT8: {
 		Select<int8_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.tinyint,
 		                         constantRight.value_.tinyint, approved_tuple_count);
@@ -366,6 +402,26 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	}
 	case PhysicalType::INT64: {
 		templated_assignment<int64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                              approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT8: {
+		templated_assignment<uint8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                             approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT16: {
+		templated_assignment<uint16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                              approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT32: {
+		templated_assignment<uint32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                              approved_tuple_count);
+		break;
+	}
+	case PhysicalType::UINT64: {
+		templated_assignment<uint64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                              approved_tuple_count);
 		break;
 	}

@@ -2,6 +2,7 @@ package org.duckdb;
 
 import java.io.InputStream;
 import java.io.Reader;
+import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URL;
@@ -125,6 +126,14 @@ public class DuckDBResultSet implements ResultSet {
 			return getInt(columnIndex);
 		} else if (column_type.equals("BIGINT")) {
 			return getLong(columnIndex);
+		}else if (column_type.equals("UTINYINT")) {
+			return getShort(columnIndex);
+		} else if (column_type.equals("USMALLINT")) {
+			return getInt(columnIndex);
+		} else if (column_type.equals("UINTEGER")) {
+			return getLong(columnIndex);
+		} else if (column_type.equals("UBIGINT")) {
+			return getHugeint(columnIndex);
 		} else if (column_type.equals("HUGEINT")) {
 			return getHugeint(columnIndex);
 		} else if (column_type.equals("FLOAT")) {
@@ -174,6 +183,13 @@ public class DuckDBResultSet implements ResultSet {
 		if ("VARCHAR".equals(meta.column_types[columnIndex - 1])) {
 			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 		}
+// 		if ("UBIGINT".equals(meta.column_types[columnIndex - 1])) {
+//			try {
+//				String res = new String(getbuf(columnIndex, 8).array(), "ASCII");
+//			} catch (UnsupportedEncodingException e) {
+//				e.printStackTrace();
+//			}
+// 		}
 		Object res = getObject(columnIndex);
 		if (res == null) {
 			return null;
@@ -225,6 +241,14 @@ public class DuckDBResultSet implements ResultSet {
 		if ("SMALLINT".equals(meta.column_types[columnIndex - 1])) {
 			return getbuf(columnIndex, 2).getShort();
 		}
+		else if ("UTINYINT".equals(meta.column_types[columnIndex - 1])){
+			byte[] buf_res = new byte[2];
+			byte[] buf = new byte[1];
+			getbuf(columnIndex, 1).get(buf);
+			buf_res[1] = buf[0];
+			ByteBuffer bb = ByteBuffer.wrap(buf_res);
+			return bb.getShort();
+		}
 		Object o = getObject(columnIndex);
 		if (o instanceof Number) {
 			return ((Number) o).shortValue();
@@ -239,6 +263,15 @@ public class DuckDBResultSet implements ResultSet {
 		if ("INTEGER".equals(meta.column_types[columnIndex - 1])) {
 			return getbuf(columnIndex, 4).getInt();
 		}
+		else if ("USMALLINT".equals(meta.column_types[columnIndex - 1])){
+			byte[] buf_res = new byte[4];
+			byte[] buf = new byte[2];
+			getbuf(columnIndex, 2).get(buf);
+			buf_res[2] = buf[0];
+			buf_res[3] = buf[1];
+			ByteBuffer bb = ByteBuffer.wrap(buf_res);
+			return bb.getInt();
+		}
 		Object o = getObject(columnIndex);
 		if (o instanceof Number) {
 			return ((Number) o).intValue();
@@ -252,6 +285,18 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		if ("BIGINT".equals(meta.column_types[columnIndex - 1])) {
 			return getbuf(columnIndex, 8).getLong();
+		}
+		else if( "UINTEGER".equals(meta.column_types[columnIndex - 1])){
+			byte[] buf_res = new byte[8];
+			byte[] buf = new byte[4];
+			getbuf(columnIndex, 4).get(buf);
+			buf_res[4] = buf[0];
+			buf_res[5] = buf[1];
+			buf_res[6] = buf[2];
+			buf_res[7] = buf[3];
+
+			ByteBuffer bb = ByteBuffer.wrap(buf_res);
+			return bb.getLong();
 		}
 		Object o = getObject(columnIndex);
 		if (o instanceof Number) {
@@ -274,7 +319,20 @@ public class DuckDBResultSet implements ResultSet {
 				buf[15 - i] = keep;
 			}
 			return new BigInteger(buf);
-
+		}
+		else if ("UBIGINT".equals(meta.column_types[columnIndex - 1])) {
+			byte[] buf_res = new byte[16];
+			byte[] buf = new byte[8];
+			getbuf(columnIndex, 8).get(buf);
+			buf_res[8] = buf[0];
+			buf_res[9] = buf[1];
+			buf_res[10] = buf[2];
+			buf_res[11] = buf[3];
+			buf_res[12] = buf[4];
+			buf_res[13] = buf[5];
+			buf_res[14] = buf[6];
+			buf_res[15] = buf[7];
+			return new BigInteger(buf_res);
 		}
 		Object o = getObject(columnIndex);
 		return new BigInteger(o.toString());

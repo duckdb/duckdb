@@ -50,6 +50,18 @@ static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &uppe
 	case PhysicalType::INT128:
 		return TernaryExecutor::Select<hugeint_t, hugeint_t, hugeint_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                                    false_sel);
+	case PhysicalType::UINT8:
+		return TernaryExecutor::Select<uint8_t, uint8_t, uint8_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                           false_sel);
+	case PhysicalType::UINT16:
+		return TernaryExecutor::Select<uint16_t, uint16_t, uint16_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                              false_sel);
+	case PhysicalType::UINT32:
+		return TernaryExecutor::Select<uint32_t, uint32_t, uint32_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                              false_sel);
+	case PhysicalType::UINT64:
+		return TernaryExecutor::Select<uint64_t, uint64_t, uint64_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                              false_sel);
 	case PhysicalType::FLOAT:
 		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:
