@@ -11,7 +11,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-
 namespace duckdb {
 
 //! LogicalAggregate represents an aggregate operation with (optional) GROUP BY
@@ -28,6 +27,7 @@ public:
 	vector<unique_ptr<Expression>> groups;
 	//! Group statistics (optional)
 	vector<unique_ptr<BaseStatistics>> group_stats;
+
 
 public:
 	string ParamsToString() const override;
