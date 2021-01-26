@@ -81,6 +81,12 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		if (encoding != "utf8" && encoding != "utf-8") {
 			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
 		}
+	} else if (loption == "compression") {
+		options.compression = ParseString(set);
+		if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "none" ||
+		      options.compression == "")) {
+			throw BinderException("read_csv currently only supports 'gzip' compression.");
+		}
 	} else {
 		// unrecognized option in base CSV
 		return false;
@@ -317,11 +323,13 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 		}
 
 		// check for delimiter
-		if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.delimiter.c_str(), options.delimiter.size()) != INVALID_INDEX) {
+		if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.delimiter.c_str(),
+		                      options.delimiter.size()) != INVALID_INDEX) {
 			return true;
 		}
 		// check for quote
-		if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.quote.c_str(), options.quote.size()) != INVALID_INDEX) {
+		if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+		                      options.quote.size()) != INVALID_INDEX) {
 			return true;
 		}
 		return false;
@@ -350,9 +358,11 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		} else {
 			// complex CSV
 			// check for quote or escape separately
-			if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.quote.c_str(), options.quote.size()) != INVALID_INDEX) {
+			if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+			                      options.quote.size()) != INVALID_INDEX) {
 				requires_escape = true;
-			} else if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.escape.c_str(), options.escape.size()) != INVALID_INDEX) {
+			} else if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.escape.c_str(),
+			                             options.escape.size()) != INVALID_INDEX) {
 				requires_escape = true;
 			}
 		}
