@@ -101,6 +101,8 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 			if (names.size() == 0) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
+		} else if (kv.first == "compression") {
+			options.compression = kv.second.str_value;
 		} else if (kv.first == "filename") {
 			result->include_file_name = kv.second.value_.boolean;
 		}
@@ -108,6 +110,10 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	if (!options.auto_detect && return_types.size() == 0) {
 		throw BinderException("read_csv requires columns to be specified. Use read_csv_auto or set read_csv(..., "
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+	}
+	if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "none" ||
+	      options.compression == "")) {
+		throw BinderException("read_csv currently only supports 'gzip' compression.");
 	}
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
@@ -135,7 +141,7 @@ struct ReadCSVOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> read_csv_init(ClientContext &context, const FunctionData *bind_data_,
-                                                      vector<column_t> &column_ids, TableFilterCollection* filters) {
+                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto &bind_data = (ReadCSVData &)*bind_data_;
 	auto result = make_unique<ReadCSVOperatorData>();
 	if (bind_data.initial_reader) {
@@ -193,6 +199,7 @@ static void add_named_parameters(TableFunction &table_function) {
 	table_function.named_parameters["all_varchar"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 }
 

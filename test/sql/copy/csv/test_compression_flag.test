@@ -1,0 +1,87 @@
+# name: test/sql/copy/csv/test_compression_flag.test
+# description: Test compression flag for read_csv and copy
+# group: [csv]
+
+statement ok
+CREATE TABLE lineitem(a INT NOT NULL,
+                      b INT NOT NULL,
+                      c INT NOT NULL);
+
+
+statement ok
+COPY lineitem FROM 'test/sql/copy/csv/data/test/test_comp.csv.gzz' (COMPRESSION 'gzip', AUTO_DETECT 1);
+
+query I
+SELECT COUNT(*) FROM lineitem
+----
+2
+
+query III
+SELECT a, b, c FROM lineitem ORDER BY a
+----
+1	2	3
+2	3	4
+
+statement ok
+DROP TABLE lineitem
+
+statement ok
+CREATE TABLE lineitem(a INT NOT NULL,
+                      b INT NOT NULL,
+                      c INT NOT NULL);
+
+
+statement ok
+COPY lineitem FROM 'test/sql/copy/csv/data/test/test_comp.csv.gz' (COMPRESSION 'infer', AUTO_DETECT 1);
+
+query I
+SELECT COUNT(*) FROM lineitem
+----
+2
+
+query III
+SELECT a, b, c FROM lineitem ORDER BY a
+----
+1	2	3
+2	3	4
+
+statement ok
+DROP TABLE lineitem
+
+statement error
+COPY lineitem FROM 'test/sql/copy/csv/data/test/test_comp.csv.gz' COMPRESSION 'none';
+
+
+statement ok
+CREATE TABLE lineitem AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/test_comp.csv.gzz', compression='gzip');
+
+query I
+SELECT COUNT(*) FROM lineitem
+----
+2
+
+query III
+SELECT a, b, c FROM lineitem ORDER BY a
+----
+1	2	3
+2	3	4
+
+statement ok
+DROP TABLE lineitem
+
+statement ok
+CREATE TABLE lineitem AS SELECT * FROM read_csv('test/sql/copy/csv/data/test/test_comp.csv.gzz', compression='gzip', AUTO_DETECT=TRUE);
+
+query I
+SELECT COUNT(*) FROM lineitem
+----
+2
+
+query III
+SELECT a, b, c FROM lineitem ORDER BY a
+----
+1	2	3
+2	3	4
+
+statement ok
+DROP TABLE lineitem
