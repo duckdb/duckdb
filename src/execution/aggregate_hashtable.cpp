@@ -1,13 +1,14 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cmath>
@@ -247,6 +248,22 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload)
 	return AddChunk(groups, hashes, payload);
 }
 
+void GroupedAggregateHashTable::UpdateAggregate(AggregateObject &aggr, DataChunk &payload, Vector &distinct_addresses,
+                                                idx_t input_count, idx_t payload_idx) {
+	ExpressionExecutor filter_execution(aggr.filter);
+	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+	auto count = filter_execution.SelectExpression(payload, true_sel);
+	DataChunk filtered_payload;
+	auto pay_types = payload.GetTypes();
+	filtered_payload.Initialize(pay_types);
+	filtered_payload.Slice(payload, true_sel, count);
+	Vector filtered_addresses;
+	filtered_addresses.Slice(distinct_addresses, true_sel, count);
+	filtered_addresses.Normalify(count);
+	aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
+	                     filtered_addresses, filtered_payload.size());
+}
+
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
 	D_ASSERT(!is_finalized);
 
@@ -274,6 +291,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggr.child_count;
+
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(group_types);
@@ -300,18 +318,31 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			// now fix up the payload and addresses accordingly by creating
 			// a selection vector
 			if (new_group_count > 0) {
-				Vector distinct_addresses;
-				distinct_addresses.Slice(addresses, new_groups, new_group_count);
-				for (idx_t i = 0; i < aggr.child_count; i++) {
-					payload.data[payload_idx + i].Slice(new_groups, new_group_count);
-					payload.data[payload_idx + i].Verify(new_group_count);
+				if (aggr.filter) {
+					Vector distinct_addresses;
+					DataChunk distinct_payload;
+					distinct_addresses.Slice(addresses, new_groups, new_group_count);
+					auto pay_types = payload.GetTypes();
+					distinct_payload.Initialize(pay_types);
+					distinct_payload.Slice(payload, new_groups, new_group_count);
+					distinct_addresses.Verify(new_group_count);
+					distinct_addresses.Normalify(new_group_count);
+					UpdateAggregate(aggr, distinct_payload, distinct_addresses, input_count, payload_idx);
+				} else {
+					Vector distinct_addresses;
+					distinct_addresses.Slice(addresses, new_groups, new_group_count);
+					for (idx_t i = 0; i < aggr.child_count; i++) {
+						payload.data[payload_idx + i].Slice(new_groups, new_group_count);
+						payload.data[payload_idx + i].Verify(new_group_count);
+					}
+					distinct_addresses.Verify(new_group_count);
+
+					aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
+					                     distinct_addresses, new_group_count);
 				}
-
-				distinct_addresses.Verify(new_group_count);
-
-				aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
-				                     distinct_addresses, new_group_count);
 			}
+		} else if (aggr.filter) {
+			UpdateAggregate(aggr, payload, addresses, input_count, payload_idx);
 		} else {
 			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
 			                     payload.size());
