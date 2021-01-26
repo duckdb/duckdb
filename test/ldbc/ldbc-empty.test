@@ -2,57 +2,6 @@
 # description: Run the LDBC benchmark without data
 # group: [ldbc]
 
-# TODO: remove temp tests
-#query I
-#WITH cte1 AS (
-#	WITH cte2 AS (SELECT 1 AS a)
-#	SELECT a FROM cte2
-#)
-#SELECT a FROM cte1;
-#----
-#1
-#
-#query I
-#SELECT 1
-#----
-#2
-
-query I
-select 1 union all (with cte as (select 42) select * from cte);
-----
-1
-42
-
-# with 'c' alias - not working
-query I
-WITH RECURSIVE cte(d) AS (
-		SELECT 1
-	UNION ALL
-		(WITH c(d) AS (SELECT * FROM cte)
-			SELECT d + 1
-			FROM c
-			WHERE FALSE
-		)
-)
-SELECT max(d) FROM cte;
-----
-1
-
-# without 'c' alias - working
-query I
-WITH RECURSIVE cte(d) AS (
-		SELECT 1
-	UNION ALL
-		(WITH cte(d) AS (SELECT * FROM cte)
-			SELECT d + 1
-			FROM cte
-			WHERE FALSE
-		)
-)
-SELECT max(d) FROM cte;
-----
-1
-
 # create the schema
 
 statement ok

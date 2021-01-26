@@ -1,7 +1,6 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
