@@ -173,7 +173,7 @@ private:
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
-	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, SelectStatement &select);
+	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
