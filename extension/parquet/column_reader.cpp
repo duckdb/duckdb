@@ -32,6 +32,18 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 	switch (type_p.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_unique<BooleanColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::UTINYINT:
+		return make_unique<TemplatedColumnReader<uint8_t , TemplatedParquetValueConversion<uint32_t>>>(
+		    type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::USMALLINT:
+		return make_unique<TemplatedColumnReader<uint16_t , TemplatedParquetValueConversion<uint32_t>>>(
+		    type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::UINTEGER:
+		return make_unique<TemplatedColumnReader<uint32_t, TemplatedParquetValueConversion<uint32_t>>>(
+		    type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::UBIGINT:
+		return make_unique<TemplatedColumnReader<uint64_t, TemplatedParquetValueConversion<uint64_t>>>(
+		    type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::INTEGER:
 		return make_unique<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(
 		    type_p, schema_p, file_idx_p, max_define, max_repeat);

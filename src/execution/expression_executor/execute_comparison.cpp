@@ -65,6 +65,14 @@ static idx_t templated_select_operation(Vector &left, Vector &right, const Selec
 		return BinaryExecutor::Select<int32_t, int32_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::INT64:
 		return BinaryExecutor::Select<int64_t, int64_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT8:
+		return BinaryExecutor::Select<uint8_t, uint8_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT16:
+		return BinaryExecutor::Select<uint16_t, uint16_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT32:
+		return BinaryExecutor::Select<uint32_t, uint32_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT64:
+		return BinaryExecutor::Select<uint64_t, uint64_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::INT128:
 		return BinaryExecutor::Select<hugeint_t, hugeint_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::POINTER:
