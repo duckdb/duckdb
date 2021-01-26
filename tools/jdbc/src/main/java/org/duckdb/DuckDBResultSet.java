@@ -183,13 +183,6 @@ public class DuckDBResultSet implements ResultSet {
 		if ("VARCHAR".equals(meta.column_types[columnIndex - 1])) {
 			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 		}
-// 		if ("UBIGINT".equals(meta.column_types[columnIndex - 1])) {
-//			try {
-//				String res = new String(getbuf(columnIndex, 8).array(), "ASCII");
-//			} catch (UnsupportedEncodingException e) {
-//				e.printStackTrace();
-//			}
-// 		}
 		Object res = getObject(columnIndex);
 		if (res == null) {
 			return null;

@@ -819,6 +819,18 @@ void Value::Serialize(Serializer &serializer) {
 		case PhysicalType::INT64:
 			serializer.Write<int64_t>(value_.bigint);
 			break;
+		case PhysicalType::UINT8:
+			serializer.Write<uint8_t>(value_.utinyint);
+			break;
+		case PhysicalType::UINT16:
+			serializer.Write<uint16_t>(value_.usmallint);
+			break;
+		case PhysicalType::UINT32:
+			serializer.Write<uint32_t>(value_.uinteger);
+			break;
+		case PhysicalType::UINT64:
+			serializer.Write<uint64_t>(value_.ubigint);
+			break;
 		case PhysicalType::INT128:
 			serializer.Write<hugeint_t>(value_.hugeint);
 			break;
@@ -866,6 +878,18 @@ Value Value::Deserialize(Deserializer &source) {
 		break;
 	case PhysicalType::INT64:
 		new_value.value_.bigint = source.Read<int64_t>();
+		break;
+	case PhysicalType::UINT8:
+		new_value.value_.utinyint = source.Read<uint8_t>();
+		break;
+	case PhysicalType::UINT16:
+		new_value.value_.usmallint = source.Read<uint16_t>();
+		break;
+	case PhysicalType::UINT32:
+		new_value.value_.uinteger = source.Read<uint32_t>();
+		break;
+	case PhysicalType::UINT64:
+		new_value.value_.ubigint = source.Read<uint64_t>();
 		break;
 	case PhysicalType::INT128:
 		new_value.value_.hugeint = source.Read<hugeint_t>();
