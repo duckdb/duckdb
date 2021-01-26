@@ -537,11 +537,9 @@ jobs:
   sqlancer:
     name: SQLancer
     runs-on: ubuntu-20.04
-    needs: linux-debug
+    # needs: linux-debug
 
     env:
-      CC: gcc-10
-      CXX: g++-10
       BUILD_JDBC: 1
       GEN: ninja
 
@@ -553,8 +551,10 @@ jobs:
     - name: Install
       run: |
         sudo apt-get install ninja-build
-        git clone https://github.com/hannesmuehleisen/sqlancer.git
-        (cd sqlancer && mvn package -q -DskipTests)
+        git clone https://github.com/sqlancer/sqlancer.git
+        cd sqlancer
+        git checkout v1.0.1
+        mvn package -q -DskipTests
 
     - name: Build
       run: make reldebug
@@ -562,7 +562,7 @@ jobs:
     - name: Test
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+        java -jar sqlancer/target/sqlancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
 
 
   jdbc:
