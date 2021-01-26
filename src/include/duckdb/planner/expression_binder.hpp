@@ -14,7 +14,6 @@
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 
-
 namespace duckdb {
 
 class Binder;
