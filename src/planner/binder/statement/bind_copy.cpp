@@ -11,8 +11,8 @@
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 #include <algorithm>
 
@@ -20,7 +20,8 @@ namespace duckdb {
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
-	if (!context.db.config.enable_copy) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_copy) {
 		throw Exception("COPY TO is disabled by configuration");
 	}
 	BoundStatement result;
@@ -49,7 +50,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 }
 
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
-	if (!context.db.config.enable_copy) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_copy) {
 		throw Exception("COPY FROM is disabled by configuration");
 	}
 	BoundStatement result;

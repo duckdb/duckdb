@@ -39,7 +39,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 namespace duckdb {
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return *context.db.config.file_system;
+	return *context.db->config.file_system;
 }
 
 static void AssertValidFileFlags(uint8_t flags) {

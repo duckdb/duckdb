@@ -621,7 +621,7 @@ UTF8PROC_DLLEXPORT utf8proc_bool utf8proc_grapheme_break(
     utf8proc_int32_t codepoint1, utf8proc_int32_t codepoint2);
 
 //! Returns the current UTF8 codepoint in a UTF8 string. Assumes the string is valid UTF8.
-
+UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u_input, int &sz);
 UTF8PROC_DLLEXPORT utf8proc_bool grapheme_break_extended(int lbc, int tbc, utf8proc_int32_t *state);
 UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u_input, int &sz);
 UTF8PROC_DLLEXPORT bool utf8proc_codepoint_to_utf8(int cp, int &sz, char *c);

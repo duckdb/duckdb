@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -14,7 +13,10 @@ namespace duckdb {
 DBConfig::~DBConfig() {
 }
 
-DuckDB::DuckDB(const char *path, DBConfig *new_config) {
+DatabaseInstance::DatabaseInstance() {
+}
+
+void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	if (new_config) {
 		// user-supplied configuration
 		Configure(*new_config);
@@ -40,13 +42,16 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) {
 	storage =
 	    make_unique<StorageManager>(*this, path ? string(path) : string(), config.access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*storage);
-	transaction_manager = make_unique<TransactionManager>(*storage);
+	transaction_manager = make_unique<TransactionManager>(*storage, *catalog);
 	scheduler = make_unique<TaskScheduler>();
-	connection_manager = make_unique<ConnectionManager>();
 	object_cache = make_unique<ObjectCache>();
 
 	// initialize the database
 	storage->Initialize();
+}
+
+DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
+	instance->Initialize(path, new_config);
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
@@ -55,11 +60,15 @@ DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), conf
 DuckDB::~DuckDB() {
 }
 
-FileSystem &DuckDB::GetFileSystem() {
+FileSystem &DatabaseInstance::GetFileSystem() {
 	return *config.file_system;
 }
 
-void DuckDB::Configure(DBConfig &new_config) {
+FileSystem &DuckDB::GetFileSystem() {
+	return instance->GetFileSystem();
+}
+
+void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.access_mode != AccessMode::UNDEFINED) {
 		config.access_mode = new_config.access_mode;
 	} else {
@@ -87,11 +96,15 @@ void DuckDB::Configure(DBConfig &new_config) {
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
-	return context.db.config;
+	return context.db->config;
+}
+
+idx_t DatabaseInstance::NumberOfThreads() {
+	return scheduler->NumberOfThreads();
 }
 
 idx_t DuckDB::NumberOfThreads() {
-	return scheduler->NumberOfThreads();
+	return instance->NumberOfThreads();
 }
 
 } // namespace duckdb

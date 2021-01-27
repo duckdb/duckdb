@@ -178,7 +178,7 @@ protected:
 
 
 /**
- * A memory buffer is a tranpsort that simply reads from and writes to an
+ * A memory buffer is a transport that simply reads from and writes to an
  * in memory buffer. Anytime you call write on it, the data is simply placed
  * into a buffer, and anytime you call read, data is read from that buffer.
  *

@@ -31,5 +31,9 @@ public:
 	idx_t n_param;
 	//! The query text that corresponds to this SQL statement
 	string query;
+
+public:
+	//! Create a copy of this SelectStatement
+	virtual unique_ptr<SQLStatement> Copy() const = 0;
 };
 } // namespace duckdb

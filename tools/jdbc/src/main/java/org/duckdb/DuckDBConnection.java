@@ -34,12 +34,31 @@ public class DuckDBConnection implements java.sql.Connection {
 		DuckDBNative.duckdb_jdbc_set_auto_commit(conn_ref, true);
 		this.db = db;
 	}
-
-	public Statement createStatement() throws SQLException {
+	
+	public Statement createStatement(int resultSetType, int resultSetConcurrency, int resultSetHoldability)
+			throws SQLException {
 		if (isClosed()) {
 			throw new SQLException("Connection was closed");
 		}
-		return new DuckDBPreparedStatement(this);
+		if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
+			return new DuckDBPreparedStatement(this);
+		}
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency,
+			int resultSetHoldability) throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Connection was closed");
+		}
+		if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
+			return new DuckDBPreparedStatement(this, sql);
+		}
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	public Statement createStatement() throws SQLException {
+		return createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
 	}
 
 	public Connection duplicate() throws SQLException {
@@ -146,10 +165,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public PreparedStatement prepareStatement(String sql) throws SQLException {
-		if (isClosed()) {
-			throw new SQLException("Connection was closed");
-		}
-		return new DuckDBPreparedStatement(this, sql);
+		return prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY, 0);
 	}
 
 	public DatabaseMetaData getMetaData() throws SQLException {
@@ -161,7 +177,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public String getCatalog() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return null;
 	}
 
 	public void setSchema(String schema) throws SQLException {
@@ -203,15 +219,12 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public Statement createStatement(int resultSetType, int resultSetConcurrency) throws SQLException {
-		if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
-			return createStatement();
-		}
-		throw new SQLFeatureNotSupportedException();
+		return createStatement(resultSetType, resultSetConcurrency, 0);
 	}
 
 	public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency)
 			throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return prepareStatement(sql, resultSetType, resultSetConcurrency, 0);
 	}
 
 	public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency) throws SQLException {
@@ -247,16 +260,6 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void releaseSavepoint(Savepoint savepoint) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public Statement createStatement(int resultSetType, int resultSetConcurrency, int resultSetHoldability)
-			throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency,
-			int resultSetHoldability) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -317,4 +320,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		throw new SQLFeatureNotSupportedException();
 	}
 
+	public DuckDBAppender createAppender(String schemaName, String tableName) throws SQLException {
+		return new DuckDBAppender(this, schemaName, tableName);
+	}
 }

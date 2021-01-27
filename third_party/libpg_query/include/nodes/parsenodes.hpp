@@ -1478,6 +1478,18 @@ typedef struct PGVariableShowStmt {
 } PGVariableShowStmt;
 
 /* ----------------------
+ * Show Statement with Select Statement
+ * ----------------------
+ */
+typedef struct PGVariableShowSelectStmt
+{
+	PGNodeTag		type;
+	PGNode	*stmt;
+	char	   *name;
+} PGVariableShowSelectStmt;
+
+
+/* ----------------------
  *		Create Table Statement
  *
  * NOTE: in the raw gram.y output, PGColumnDef and PGConstraint nodes are
@@ -1944,5 +1956,17 @@ typedef struct PGSampleOptions {
 	int seed;                 /* seed, or NULL for default; */
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
+
+
+/* ----------------------
+ *		Lambda Function
+ * ----------------------
+ */
+typedef struct PGLambdaFunction {
+	PGNodeTag type;
+	PGList *parameters;          /* list of input parameters */
+	PGNode *function;            /* lambda expression */
+	int location;                /* token location, or -1 if unknown */
+} PGLambdaFunction;
 
 }

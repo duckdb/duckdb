@@ -1,19 +1,19 @@
-#include <cstring> // strlen() on Solaris
-
 #include "duckdb/common/types/vector.hpp"
 
-#include "duckdb/common/assert.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/to_string.hpp"
+
+#include <cstring> // strlen() on Solaris
 
 namespace duckdb {
 
@@ -176,6 +176,18 @@ void Vector::SetValue(idx_t index, Value val) {
 	case LogicalTypeId::BIGINT:
 		((int64_t *)data)[index] = val.value_.bigint;
 		break;
+	case LogicalTypeId::UTINYINT:
+		((uint8_t *)data)[index] = val.value_.utinyint;
+		break;
+	case LogicalTypeId::USMALLINT:
+		((uint16_t *)data)[index] = val.value_.usmallint;
+		break;
+	case LogicalTypeId::UINTEGER:
+		((uint32_t *)data)[index] = val.value_.uinteger;
+		break;
+	case LogicalTypeId::UBIGINT:
+		((uint64_t *)data)[index] = val.value_.ubigint;
+		break;
 	case LogicalTypeId::HUGEINT:
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
@@ -311,6 +323,14 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::TIME(((dtime_t *)data)[index]);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(((int64_t *)data)[index]);
+	case LogicalTypeId::UTINYINT:
+		return Value::UTINYINT(((uint8_t *)data)[index]);
+	case LogicalTypeId::USMALLINT:
+		return Value::USMALLINT(((uint16_t *)data)[index]);
+	case LogicalTypeId::UINTEGER:
+		return Value::UINTEGER(((uint32_t *)data)[index]);
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(((uint64_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
@@ -490,6 +510,18 @@ void Vector::Normalify(idx_t count) {
 			break;
 		case PhysicalType::INT64:
 			flatten_constant_vector_loop<int64_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT8:
+			flatten_constant_vector_loop<uint8_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT16:
+			flatten_constant_vector_loop<uint16_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT32:
+			flatten_constant_vector_loop<uint32_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT64:
+			flatten_constant_vector_loop<uint64_t>(data, old_data, count);
 			break;
 		case PhysicalType::INT128:
 			flatten_constant_vector_loop<hugeint_t>(data, old_data, count);
@@ -764,6 +796,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (type.InternalType() == PhysicalType::STRUCT) {
+		D_ASSERT(type.child_types().size() > 0);
 		if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(children.size() > 0);
@@ -774,6 +807,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (type.InternalType() == PhysicalType::LIST) {
+		D_ASSERT(type.child_types().size() == 1);
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify();
@@ -864,6 +898,15 @@ void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
 	string_buffer.AddHeapReference(make_unique<ManagedVectorBuffer>(move(handle)));
 }
 
+void StringVector::AddBuffer(Vector &vector, unique_ptr<VectorBuffer> buffer) {
+	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	string_buffer.AddHeapReference(move(buffer));
+}
+
 void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(other.type.InternalType() == PhysicalType::VARCHAR);
@@ -936,9 +979,7 @@ ChunkCollection &ListVector::GetEntry(const Vector &vector) {
 void ListVector::SetEntry(Vector &vector, unique_ptr<ChunkCollection> cc) {
 	D_ASSERT(vector.type.id() == LogicalTypeId::LIST);
 	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorListBuffer>();
-	}
+	vector.auxiliary = make_buffer<VectorListBuffer>();
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
 	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));

@@ -4,15 +4,14 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/to_string.hpp"
-
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -166,8 +165,17 @@ unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, Buff
 		throw IOException("File \"%s\" not found", options.file_path.c_str());
 	}
 	unique_ptr<std::istream> result;
-	// decide based on the extension which stream to use
-	if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
+
+	gzip_compressed = false;
+	if (options.compression == "infer") {
+		if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
+			gzip_compressed = true;
+		}
+	} else if (options.compression == "gzip") {
+		gzip_compressed = true;
+	}
+
+	if (gzip_compressed) {
 		result = make_unique<GzipStream>(options.file_path);
 		plain_file_source = false;
 	} else {
@@ -218,7 +226,7 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	if (!plain_file_source && StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
+	if (!plain_file_source && gzip_compressed) {
 		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
 		// so we have to create a new stream source here for now
 		source = make_unique<GzipStream>(options.file_path);
@@ -796,6 +804,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					chunk->Initialize(parse_chunk_types);
 					chunk->Reference(parse_chunk);
 					cached_chunks.push(move(chunk));
+				} else {
+					while (!cached_chunks.empty())
+						cached_chunks.pop();
 				}
 			}
 		}
@@ -1271,6 +1282,12 @@ void BufferedCSVReader::ParseCSV(ParserMode parser_mode, DataChunk &insert_chunk
 }
 
 void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions) {
+	if (length == 0 && column == 0) {
+		row_empty = true;
+	} else {
+		row_empty = false;
+	}
+
 	if (sql_types.size() > 0 && column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter in last column
 		return;
@@ -1325,6 +1342,14 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 
 bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	linenr++;
+
+	if (row_empty) {
+		row_empty = false;
+		if (sql_types.size() != 1) {
+			column = 0;
+			return false;
+		}
+	}
 
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
 		throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
@@ -1412,11 +1437,12 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				}
 
 				if (options.auto_detect) {
-					throw InvalidInputException(
-					    "%s in column %s, between line %llu and %llu. Parser "
-					    "options: %s. Consider either increasing the sample size (using SAMPLE_SIZE=X) "
-					    "or skipping column conversion (ALL_VARCHAR=1)",
-					    e.what(), col_name, linenr - parse_chunk.size() + 1, linenr, options.toString());
+					throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
+					                            "options: %s. Consider either increasing the sample size "
+					                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
+					                            "or skipping column conversion (ALL_VARCHAR=1)",
+					                            e.what(), col_name, linenr - parse_chunk.size() + 1, linenr,
+					                            options.toString());
 				} else {
 					throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
 					                            e.what(), linenr - parse_chunk.size(), linenr, col_name,

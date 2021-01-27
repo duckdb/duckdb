@@ -29,6 +29,14 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return OP::Operation(left.value_.integer, right.value_.integer);
 	case PhysicalType::INT64:
 		return OP::Operation(left.value_.bigint, right.value_.bigint);
+	case PhysicalType::UINT8:
+		return OP::Operation(left.value_.utinyint, right.value_.utinyint);
+	case PhysicalType::UINT16:
+		return OP::Operation(left.value_.usmallint, right.value_.usmallint);
+	case PhysicalType::UINT32:
+		return OP::Operation(left.value_.uinteger, right.value_.uinteger);
+	case PhysicalType::UINT64:
+		return OP::Operation(left.value_.ubigint, right.value_.ubigint);
 	case PhysicalType::INT128:
 		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
 	case PhysicalType::POINTER:

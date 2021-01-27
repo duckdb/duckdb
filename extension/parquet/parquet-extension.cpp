@@ -1,10 +1,7 @@
 #include <string>
 #include <vector>
-#include <bitset>
 #include <fstream>
-#include <cstring>
 #include <iostream>
-#include <sstream>
 
 #include "parquet-extension.hpp"
 #include "parquet_reader.hpp"
@@ -97,16 +94,17 @@ public:
 		}
 
 		// if there is only one file in the glob (quite common case), we are done
+		auto &config = DBConfig::GetConfig(context);
 		if (bind_data.files.size() < 2) {
 			return overall_stats;
-		} else if (context.db.config.object_cache_enable) {
+		} else if (config.object_cache_enable) {
+			auto &cache = ObjectCache::GetObjectCache(context);
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);
 			for (idx_t file_idx = 1; file_idx < bind_data.files.size(); file_idx++) {
 				auto &file_name = bind_data.files[file_idx];
-				auto metadata =
-				    std::dynamic_pointer_cast<ParquetFileMetadataCache>(context.db.object_cache->Get(file_name));
+				auto metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(cache.Get(file_name));
 				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 				// but we need to check if the metadata cache entries are current
 				if (!metadata || (fs.GetLastModifiedTime(*handle) >= metadata->read_time)) {
@@ -149,7 +147,7 @@ public:
 
 	static unique_ptr<FunctionOperatorData> parquet_scan_init(ClientContext &context, const FunctionData *bind_data_,
 	                                                          vector<column_t> &column_ids,
-	                                                          TableFilterSet *table_filters) {
+	                                                          TableFilterCollection *filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_;
 
 		auto result = make_unique<ParquetReadOperatorData>();
@@ -157,24 +155,24 @@ public:
 
 		result->is_parallel = false;
 		result->file_index = 0;
-		result->table_filters = table_filters;
+		result->table_filters = filters->table_filters;
 		// single-threaded: one thread has to read all groups
 		vector<idx_t> group_ids;
 		for (idx_t i = 0; i < bind_data.initial_reader->NumRowGroups(); i++) {
 			group_ids.push_back(i);
 		}
 		result->reader = bind_data.initial_reader;
-		result->reader->Initialize(result->scan_state, column_ids, move(group_ids), table_filters);
+		result->reader->Initialize(result->scan_state, column_ids, move(group_ids), filters->table_filters);
 		return move(result);
 	}
 
 	static unique_ptr<FunctionOperatorData>
 	parquet_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *parallel_state_,
-	                           vector<column_t> &column_ids, TableFilterSet *table_filters) {
+	                           vector<column_t> &column_ids, TableFilterCollection *filters) {
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;
-		result->table_filters = table_filters;
+		result->table_filters = filters->table_filters;
 		if (!parquet_parallel_state_next(context, bind_data_, result.get(), parallel_state_)) {
 			return nullptr;
 		}
@@ -384,13 +382,14 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.extension = "parquet";
 	CreateCopyFunctionInfo info(function);
 
-	Connection conn(db);
-	conn.context->transaction.BeginTransaction();
-	db.catalog->CreateCopyFunction(*conn.context, &info);
-	db.catalog->CreateTableFunction(*conn.context, &cinfo);
-	db.catalog->CreateTableFunction(*conn.context, &pq_scan);
-
-	conn.context->transaction.Commit();
+	Connection con(db);
+	con.BeginTransaction();
+	auto &context = *con.context;
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateCopyFunction(context, &info);
+	catalog.CreateTableFunction(context, &cinfo);
+	catalog.CreateTableFunction(context, &pq_scan);
+	con.Commit();
 }
 
 } // namespace duckdb

@@ -91,15 +91,16 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			// export schema
 			schemas.push_back(schema);
 		}
-		schema->tables.Scan(context.client, [&](CatalogEntry *entry) {
+		schema->Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back(entry);
 			} else {
 				views.push_back(entry);
 			}
 		});
-		schema->sequences.Scan(context.client, [&](CatalogEntry *entry) { sequences.push_back(entry); });
-		schema->indexes.Scan(context.client, [&](CatalogEntry *entry) { indexes.push_back(entry); });
+		schema->Scan(context.client, CatalogType::SEQUENCE_ENTRY,
+		             [&](CatalogEntry *entry) { sequences.push_back(entry); });
+		schema->Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { indexes.push_back(entry); });
 	});
 
 	// write the schema.sql file

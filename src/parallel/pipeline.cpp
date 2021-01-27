@@ -96,9 +96,11 @@ void Pipeline::ScheduleSequentialTask() {
 
 bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	switch (op->type) {
+	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::STREAMING_SAMPLE:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
@@ -113,8 +115,8 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		D_ASSERT(get.function.init_parallel_state);
 		D_ASSERT(get.function.parallel_state_next);
 		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
-		if (max_threads > executor.context.db.NumberOfThreads()) {
-			max_threads = executor.context.db.NumberOfThreads();
+		if (max_threads > executor.context.db->NumberOfThreads()) {
+			max_threads = executor.context.db->NumberOfThreads();
 		}
 		if (max_threads <= 1) {
 			// table is too small to parallelize
@@ -139,6 +141,17 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		// unknown operator: skip parallel task scheduling
 		return false;
 	}
+}
+
+void Pipeline::ClearParents() {
+	for (auto &parent : parents) {
+		parent->dependencies.erase(this);
+	}
+	for (auto &dep : dependencies) {
+		dep->parents.erase(this);
+	}
+	parents.clear();
+	dependencies.clear();
 }
 
 void Pipeline::Reset(ClientContext &context) {
@@ -167,6 +180,7 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::CREATE_TABLE_AS:
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
@@ -189,6 +203,7 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::HASH_JOIN: {
 		// schedule build side of the join
 		if (ScheduleOperator(sink->children[1].get())) {
@@ -219,6 +234,7 @@ void Pipeline::AddDependency(Pipeline *pipeline) {
 
 void Pipeline::CompleteDependency() {
 	idx_t current_finished = ++finished_dependencies;
+	D_ASSERT(current_finished <= dependencies.size());
 	if (current_finished == dependencies.size()) {
 		// all dependencies have been completed: schedule the pipeline
 		Schedule();

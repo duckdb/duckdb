@@ -193,6 +193,7 @@ typedef enum PGNodeTag {
 	T_PGFromExpr,
 	T_PGOnConflictExpr,
 	T_PGIntoClause,
+	T_PGLambdaFunction,
 
 	/*
 	 * TAGS FOR EXPRESSION STATE NODES (execnodes.h)
@@ -347,6 +348,7 @@ typedef enum PGNodeTag {
 	T_PGAlterSeqStmt,
 	T_PGVariableSetStmt,
 	T_PGVariableShowStmt,
+	T_PGVariableShowSelectStmt,
 	T_PGDiscardStmt,
 	T_PGCreateTrigStmt,
 	T_PGCreatePLangStmt,

@@ -1,12 +1,14 @@
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
+
 
 namespace duckdb {
 
@@ -113,9 +115,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 
 	auto lowercase_name = StringUtil::Lower(function_name);
 
-	if (root->agg_filter) {
-		throw ParserException("FILTER is not implemented for aggregates");
-	}
+
 	if (root->agg_order) {
 		throw ParserException("ORDER BY is not implemented for aggregates");
 	}
@@ -143,7 +143,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 					expr->children.push_back(move(child));
 				}
 			} else {
-				if (function_list.size() > 0) {
+				if (!function_list.empty()) {
 					expr->children.push_back(move(function_list[0]));
 				}
 				if (function_list.size() > 1) {
@@ -179,9 +179,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 			children.push_back(move(child_expr));
 		}
 	}
+	unique_ptr<ParsedExpression> filter_expr;
+	if (root->agg_filter) {
+		filter_expr  = TransformExpression(root->agg_filter);
+	}
 
 	// star gets eaten in the parser
-	if (lowercase_name == "count" && children.size() == 0) {
+	if (lowercase_name == "count" && children.empty()) {
 		lowercase_name = "count_star";
 	}
 
@@ -209,7 +213,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		return move(expr);
 	}
 
-	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
+	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children,move(filter_expr), root->agg_distinct);
 	function->query_location = root->location;
 	return move(function);
 }

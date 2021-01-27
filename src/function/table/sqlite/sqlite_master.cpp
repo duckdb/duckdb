@@ -41,14 +41,14 @@ static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vecto
 }
 
 unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, const FunctionData *bind_data,
-                                                    vector<column_t> &column_ids, TableFilterSet *table_filters) {
+                                                    vector<column_t> &column_ids, TableFilterCollection* filters) {
 	auto result = make_unique<SQLiteMasterData>();
 
 	// scan all the schemas for tables and views and collect them
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-		schema->indexes.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	return move(result);

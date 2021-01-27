@@ -141,7 +141,7 @@ SELECT * FROM intest WHERE a IN (42, 43)
 43	42	42
 
 query T
-SELECT a IN (42, 43) FROM intest 
+SELECT a IN (42, 43) FROM intest
 ----
 1
 1

@@ -24,6 +24,10 @@ ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_exp
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 	case PhysicalType::VARCHAR:
@@ -129,6 +133,18 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	case PhysicalType::INT64:
 		generate_keys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
+	case PhysicalType::UINT8:
+		generate_keys<uint8_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
+	case PhysicalType::UINT16:
+		generate_keys<uint16_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
+	case PhysicalType::UINT32:
+		generate_keys<uint32_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
+	case PhysicalType::UINT64:
+		generate_keys<uint64_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
 	case PhysicalType::FLOAT:
 		generate_keys<float>(input.data[0], input.size(), keys, is_little_endian);
 		break;
@@ -158,6 +174,18 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 			break;
 		case PhysicalType::INT64:
 			concatenate_keys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::UINT8:
+			concatenate_keys<uint8_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::UINT16:
+			concatenate_keys<uint16_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::UINT32:
+			concatenate_keys<uint32_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::UINT64:
+			concatenate_keys<uint64_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::FLOAT:
 			concatenate_keys<float>(input.data[i], input.size(), keys, is_little_endian);
@@ -410,6 +438,14 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
 	case PhysicalType::INT64:
 		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
+	case PhysicalType::UINT8:
+		return Key::CreateKey<uint8_t>(value.value_.utinyint, art.is_little_endian);
+	case PhysicalType::UINT16:
+		return Key::CreateKey<uint16_t>(value.value_.usmallint, art.is_little_endian);
+	case PhysicalType::UINT32:
+		return Key::CreateKey<uint32_t>(value.value_.uinteger, art.is_little_endian);
+	case PhysicalType::UINT64:
+		return Key::CreateKey<uint64_t>(value.value_.ubigint, art.is_little_endian);
 	case PhysicalType::FLOAT:
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
 	case PhysicalType::DOUBLE:

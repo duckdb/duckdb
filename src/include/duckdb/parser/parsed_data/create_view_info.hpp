@@ -28,6 +28,16 @@ struct CreateViewInfo : public CreateInfo {
 	vector<LogicalType> types;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		auto result = make_unique<CreateViewInfo>(schema, view_name);
+		CopyProperties(*result);
+		result->aliases = aliases;
+		result->types = types;
+		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+		return move(result);
+	}
 };
 
 } // namespace duckdb

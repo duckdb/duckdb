@@ -1,10 +1,13 @@
 #include "tpch-extension.hpp"
+
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#endif
 
 #include "dbgen/dbgen.hpp"
 
@@ -69,13 +72,15 @@ void TPCHExtension::Load(DuckDB &db) {
 	CreateTableFunctionInfo dbgen_info(dbgen_func);
 
 	// create the dbgen function
-	db.catalog->CreateTableFunction(*con.context, &dbgen_info);
+	auto &catalog = Catalog::GetCatalog(*con.context);
+	;
+	catalog.CreateTableFunction(*con.context, &dbgen_info);
 
 	// create the TPCH pragma that allows us to run the query
 	auto tpch_func = PragmaFunction::PragmaCall("tpch", pragma_tpch_query, {LogicalType::BIGINT});
 
 	CreatePragmaFunctionInfo info(tpch_func);
-	db.catalog->CreatePragmaFunction(*con.context, &info);
+	catalog.CreatePragmaFunction(*con.context, &info);
 
 	con.Commit();
 }

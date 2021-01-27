@@ -1,0 +1,196 @@
+# name: test/sql/types/unsigned/test_unsigned_auto_cast.test
+# description: Test unsigned auto cast
+# group: [unsigned]
+
+statement ok
+PRAGMA enable_verification
+
+## test auto cast of unsigned
+#query I
+#SELECT 100000000::INTEGER + 100::UTINYINT
+#----
+#100000100
+
+# test auto cast of UTINYINT -> DOUBLE
+query I
+SELECT 200::UTINYINT + 0.5
+----
+200.5
+
+query I
+SELECT COS(100::UTINYINT)
+----
+0.862318872287684
+
+# test auto cast of UTINYINT -> VARCHAR
+query I
+SELECT CONCAT('hello number ', 100::UTINYINT)
+----
+hello number 100
+
+
+
+# test auto cast of integer types to USMALLINT
+query I
+SELECT 100000000::INTEGER + 100::USMALLINT
+----
+100000100
+
+# test auto cast of USMALLINT -> DOUBLE
+query I
+SELECT 100::USMALLINT + 0.5
+----
+100.5
+
+query I
+SELECT COS(100::USMALLINT)
+----
+0.862318872287684
+
+# test auto cast of USMALLINT -> VARCHAR
+query I
+SELECT CONCAT('hello number ', 100::USMALLINT)
+----
+hello number 100
+
+
+# test auto cast of  integer types to UINTEGER
+query I
+SELECT 100000000::INTEGER + 100::UINTEGER
+----
+100000100
+
+# test auto cast of UINTEGER -> DOUBLE
+query I
+SELECT 100::UINTEGER + 0.5
+----
+100.5
+
+query I
+SELECT COS(100::UINTEGER)
+----
+0.862318872287684
+
+# test auto cast of UINTEGER -> VARCHAR
+query I
+SELECT CONCAT('hello number ', 100::UINTEGER)
+----
+hello number 100
+
+
+# test auto cast of  integer types to UBIGINT
+query I
+SELECT 100000000::INTEGER + 100::UBIGINT
+----
+100000100
+
+# test auto cast of UBIGINT -> DOUBLE
+query I
+SELECT 100::UBIGINT + 0.5
+----
+100.5
+
+query I
+SELECT COS(100::UBIGINT)
+----
+0.862318872287684
+
+# test auto cast of UBIGINT -> VARCHAR
+query I
+SELECT CONCAT('hello number ', 100::UBIGINT)
+----
+hello number 100
+
+
+# Tests on string -> unsigned
+query I
+SELECT '255'::UTINYINT;
+----
+255
+
+statement error
+SELECT '256'::UTINYINT;
+
+query I
+SELECT '255'::USMALLINT;
+----
+255
+
+statement error
+SELECT '65536'::USMALLINT;
+
+query I
+SELECT '65535'::UINTEGER;
+----
+65535
+
+statement error
+SELECT '4294967296'::UINTEGER;
+
+query I
+SELECT '4294967295'::UBIGINT;
+----
+4294967295
+
+statement error
+SELECT '18446744073709551616'::UBIGINT;
+
+query I
+SELECT '18446744073709551615'::UBIGINT;
+----
+18446744073709551615
+
+
+# More tests with decimals
+query I
+SELECT (100::UTINYINT)::DECIMAL(3,0);
+----
+100
+
+statement error
+SELECT (100::UTINYINT)::DECIMAL(2,0);
+
+query I
+SELECT 100::UTINYINT * 100::DECIMAL(3,0);
+----
+10000
+
+query I
+SELECT (100::USMALLINT)::DECIMAL(3,0);
+----
+100
+
+statement error
+SELECT (100::USMALLINT)::DECIMAL(2,0);
+
+query I
+SELECT 100::USMALLINT * 100::DECIMAL(3,0);
+----
+10000
+
+
+query I
+SELECT (100::UINTEGER)::DECIMAL(3,0);
+----
+100
+
+statement error
+SELECT (100::UINTEGER)::DECIMAL(2,0);
+
+query I
+SELECT 100::UINTEGER * 100::DECIMAL(3,0);
+----
+10000
+
+query I
+SELECT (100::UBIGINT)::DECIMAL(3,0);
+----
+100
+
+statement error
+SELECT (100::UBIGINT)::DECIMAL(2,0);
+
+query I
+SELECT 100::UBIGINT * 100::DECIMAL(3,0);
+----
+10000

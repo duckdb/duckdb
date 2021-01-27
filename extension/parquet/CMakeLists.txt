@@ -38,4 +38,6 @@ add_library(
   parquet-extension.cpp
   parquet_reader.cpp
   parquet_timestamp.cpp
-  parquet_writer.cpp)
+  parquet_writer.cpp
+  parquet_statistics.cpp
+ column_reader.cpp)

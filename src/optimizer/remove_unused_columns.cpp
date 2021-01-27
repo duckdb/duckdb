@@ -1,23 +1,20 @@
-#include <map>
-
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
 
-#include "duckdb/function/aggregate/distributive_functions.hpp"
-
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/binder.hpp"
+#include <map>
 
 namespace duckdb {
 
@@ -56,12 +53,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			auto &aggr = (LogicalAggregate &)op;
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
-
 			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
 				aggr.expressions.push_back(
-				    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, false));
+				    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, nullptr, false));
 			}
 		}
 
@@ -186,7 +182,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			auto &get = (LogicalGet &)op;
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
-			for (auto &filter : get.tableFilters) {
+			for (auto &filter : get.table_filters) {
 				idx_t index = INVALID_INDEX;
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
 					if (get.column_ids[i] == filter.column_index) {
@@ -205,7 +201,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// table scan: figure out which columns are referenced
 			ClearUnusedExpressions(get.column_ids, get.table_index);
 
-			if (get.column_ids.size() == 0) {
+			if (get.column_ids.empty()) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.
 				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 				// need to read any of the columns

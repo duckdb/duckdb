@@ -200,8 +200,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// * statement, expand to all columns from the FROM clause
 			bind_context.GenerateAllColumnExpressions(new_select_list);
 		} else if (select_element->GetExpressionType() == ExpressionType::TABLE_STAR) {
-			auto table_star =
-			    (TableStarExpression *)select_element.get(); // TODO this cast to explicit class is a bit dirty?
+			auto table_star = (TableStarExpression *)select_element.get();
 			bind_context.GenerateAllColumnExpressions(new_select_list, table_star->relation_name);
 		} else {
 			// regular statement, add it to the list
@@ -238,7 +237,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	BoundGroupInformation info;
-	if (statement.groups.size() > 0) {
+	if (!statement.groups.empty()) {
 		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(statement.groups.size());
 		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
@@ -309,7 +308,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
 	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
 	// we choose the former one [CONTROVERSIAL: this is the PostgreSQL behavior]
-	if (result->groups.size() > 0 || result->aggregates.size() > 0 || statement.having) {
+	if (!result->groups.empty() || !result->aggregates.empty() || statement.having) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
 		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {

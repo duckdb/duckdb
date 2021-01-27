@@ -11,7 +11,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	vector<unique_ptr<Expression>> join_conditions;
 	unordered_set<idx_t> left_bindings, right_bindings;
-	if (filters.size() > 0) {
+	if (!filters.empty()) {
 		// check to see into which side we should push the filters
 		// first get the LHS and RHS bindings
 		LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
@@ -32,10 +32,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 			}
 		}
 	}
+
 	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
 
-	if (join_conditions.size() > 0) {
+	if (!join_conditions.empty()) {
 		// join conditions found: turn into inner join
 		return LogicalComparisonJoin::CreateJoin(JoinType::INNER, move(op->children[0]), move(op->children[1]),
 		                                         left_bindings, right_bindings, join_conditions);

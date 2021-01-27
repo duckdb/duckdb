@@ -31,11 +31,6 @@ SELECT * FROM b ORDER BY 1
 4
 5
 
-# cannot drop table now
-statement error
-DROP TABLE b
-
-# but we can with cascade
 statement ok
 DROP TABLE b CASCADE
 

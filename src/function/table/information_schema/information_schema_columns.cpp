@@ -68,17 +68,18 @@ static unique_ptr<FunctionData> information_schema_columns_bind(ClientContext &c
 
 unique_ptr<FunctionOperatorData> information_schema_columns_init(ClientContext &context, const FunctionData *bind_data,
                                                                  vector<column_t> &column_ids,
-                                                                 TableFilterSet *table_filters) {
+                                                                TableFilterCollection* filters) {
 	auto result = make_unique<InformationSchemaColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	// check the temp schema as well
-	context.temporary_objects->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
+	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 

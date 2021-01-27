@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/statement/alter_table_statement.hpp
+// duckdb/parser/statement/alter_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,12 +16,13 @@ namespace duckdb {
 
 class AlterStatement : public SQLStatement {
 public:
-	AlterStatement() : SQLStatement(StatementType::ALTER_STATEMENT) {
-	}
-	AlterStatement(unique_ptr<AlterInfo> info) : SQLStatement(StatementType::ALTER_STATEMENT), info(move(info)) {
-	}
+	AlterStatement();
+	AlterStatement(unique_ptr<AlterInfo> info);
 
 	unique_ptr<AlterInfo> info;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

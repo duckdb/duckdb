@@ -39,11 +39,10 @@ SELECT COUNT(*), MIN(i), MAX(i) FROM c
 ----
 1000	0	999
 
-# can't drop table because we still have a prepared statement on it
-statement error
+statement ok
 DROP TABLE b
 
-statement error
+statement ok
 DROP TABLE c
 
 statement ok
@@ -51,11 +50,3 @@ DEALLOCATE s2
 
 statement ok
 DEALLOCATE s1
-
-# now we can
-statement ok
-DROP TABLE b
-
-statement ok
-DROP TABLE c
-

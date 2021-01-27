@@ -10,9 +10,10 @@ namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   vector<idx_t> left_projection_map, vector<idx_t> right_projection_map)
+                                   vector<idx_t> left_projection_map, vector<idx_t> right_projection_map,
+                                   vector<LogicalType> delim_types)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type),
-      right_projection_map(right_projection_map) {
+      right_projection_map(right_projection_map), delim_types(move(delim_types)) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 
@@ -29,7 +30,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
-    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}) {
+    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {}) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -76,7 +77,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 
 			// jury-rigging the GroupedAggregateHashTable
 			// we need a count_star and a count to get counts with and without NULLs
-			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, false);
+			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, nullptr, false);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
@@ -85,7 +86,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), false);
+			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), nullptr, false);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));

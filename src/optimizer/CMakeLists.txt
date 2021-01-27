@@ -1,6 +1,7 @@
 add_subdirectory(matcher)
 add_subdirectory(join_order)
 add_subdirectory(pushdown)
+add_subdirectory(pullup)
 add_subdirectory(rule)
 add_subdirectory(statistics)
 
@@ -9,10 +10,12 @@ add_library_unity(
   OBJECT
   common_aggregate_optimizer.cpp
   cse_optimizer.cpp
+  deliminator.cpp
   column_lifetime_analyzer.cpp
   expression_heuristics.cpp
   filter_combiner.cpp
   filter_pushdown.cpp
+  filter_pullup.cpp
   in_clause_rewriter.cpp
   join_order_optimizer.cpp
   optimizer.cpp
