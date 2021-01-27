@@ -219,6 +219,38 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
                                           idx_t &approved_tuple_count, nullmask_t &nullmask) {
 	// the inplace loops take the result as the last parameter
 	switch (result.type.InternalType()) {
+	case PhysicalType::UINT8: {
+		auto result_flat = FlatVector::GetData<uint8_t>(result);
+		auto predicate_vector = Vector(filter.constant.value_.utinyint);
+		auto predicate = FlatVector::GetData<uint8_t>(predicate_vector);
+		filterSelectionType<uint8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		                            nullmask);
+		break;
+	}
+	case PhysicalType::UINT16: {
+		auto result_flat = FlatVector::GetData<uint16_t>(result);
+		auto predicate_vector = Vector(filter.constant.value_.usmallint);
+		auto predicate = FlatVector::GetData<uint16_t>(predicate_vector);
+		filterSelectionType<uint16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		                             nullmask);
+		break;
+	}
+	case PhysicalType::UINT32: {
+		auto result_flat = FlatVector::GetData<uint32_t>(result);
+		auto predicate_vector = Vector(filter.constant.value_.uinteger);
+		auto predicate = FlatVector::GetData<uint32_t>(predicate_vector);
+		filterSelectionType<uint32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		                             nullmask);
+		break;
+	}
+	case PhysicalType::UINT64: {
+		auto result_flat = FlatVector::GetData<uint64_t>(result);
+		auto predicate_vector = Vector(filter.constant.value_.ubigint);
+		auto predicate = FlatVector::GetData<uint64_t>(predicate_vector);
+		filterSelectionType<uint64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		                             nullmask);
+		break;
+	}
 	case PhysicalType::INT8: {
 		auto result_flat = FlatVector::GetData<int8_t>(result);
 		auto predicate_vector = Vector(filter.constant.value_.tinyint);

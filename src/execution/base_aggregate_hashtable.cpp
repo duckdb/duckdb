@@ -11,7 +11,7 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 		payload_size = BaseAggregateHashTable::Align(payload_size);
 #endif
 		aggregates.push_back(AggregateObject(binding->function, binding->bind_info.get(), binding->children.size(),
-		                                     payload_size, binding->distinct, binding->return_type.InternalType()));
+		                                     payload_size, binding->distinct, binding->return_type.InternalType(),binding->filter.get()));
 	}
 	return aggregates;
 }

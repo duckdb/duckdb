@@ -103,6 +103,18 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 	case PhysicalType::INT64:
 		case_loop<int64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
+	case PhysicalType::UINT8:
+		case_loop<uint8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
+	case PhysicalType::UINT16:
+		case_loop<uint16_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
+	case PhysicalType::UINT32:
+		case_loop<uint32_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
+	case PhysicalType::UINT64:
+		case_loop<uint64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
 	case PhysicalType::INT128:
 		case_loop<hugeint_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;

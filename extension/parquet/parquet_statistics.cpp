@@ -61,6 +61,22 @@ unique_ptr<BaseStatistics> parquet_transform_column_statistics(const SchemaEleme
 	unique_ptr<BaseStatistics> row_group_stats;
 
 	switch (type.id()) {
+
+	case LogicalTypeId::UTINYINT:
+		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<uint8_t>>(type, parquet_stats);
+		break;
+
+	case LogicalTypeId::USMALLINT:
+		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<uint16_t>>(type, parquet_stats);
+		break;
+
+	case LogicalTypeId::UINTEGER:
+		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<uint32_t>>(type, parquet_stats);
+		break;
+
+	case LogicalTypeId::UBIGINT:
+		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<uint64_t>>(type, parquet_stats);
+		break;
 	case LogicalTypeId::INTEGER:
 		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<int32_t>>(type, parquet_stats);
 		break;

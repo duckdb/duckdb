@@ -1,0 +1,506 @@
+# name: test/sql/types/unsigned/test_unsigned_conversion.test
+# description: Test unsigned conversion
+# group: [unsigned]
+
+statement ok
+PRAGMA enable_verification
+
+# Numbers that fit the unsigned types
+query III
+SELECT '7'::UTINYINT, '130'::UTINYINT, '255'::UTINYINT
+----
+7	130	255
+
+query III
+SELECT '7'::USMALLINT, '130'::USMALLINT, '65535'::USMALLINT
+----
+7	130	65535
+
+query III
+SELECT '7'::UINTEGER, '130'::UINTEGER, '4294967295'::UINTEGER
+----
+7	130	4294967295
+
+query III
+SELECT '7'::UBIGINT, '130'::UBIGINT, '18446744073709551615'::UBIGINT
+----
+7	130	18446744073709551615
+
+# Numbers that do not fit the unsigned type
+statement error
+SELECT '265'::UTINYINT
+
+statement error
+SELECT '65536'::USMALLINT
+
+statement error
+SELECT '4294967296'::UINTEGER
+
+statement error
+SELECT '18446744073709551616'::UBIGINT
+
+# Negative Numbers
+statement error
+SELECT '-1'::UTINYINT
+
+statement error
+SELECT '-1'::USMALLINT
+
+statement error
+SELECT '-1'::UINTEGER
+
+statement error
+SELECT '-1'::UBIGINT
+
+# zero
+query II
+SELECT '0'::UTINYINT, '-0'::UTINYINT
+----
+0	0
+
+
+# cast various types to unsigned
+query IIIIII
+SELECT 42::TINYINT::UTINYINT, 42::SMALLINT::UTINYINT, 42::INTEGER::UTINYINT, 42::BIGINT::UTINYINT, 42::FLOAT::UTINYINT, 42::DOUBLE::UTINYINT;
+----
+42	42	42	42	42	42
+
+query IIIIII
+SELECT 42::TINYINT::USMALLINT, 42::SMALLINT::USMALLINT, 42::INTEGER::USMALLINT, 42::BIGINT::USMALLINT, 42::FLOAT::USMALLINT, 42::DOUBLE::USMALLINT;
+----
+42	42	42	42	42	42
+
+query IIIIII
+SELECT 42::TINYINT::UINTEGER, 42::SMALLINT::UINTEGER, 42::INTEGER::UINTEGER, 42::BIGINT::UINTEGER, 42::FLOAT::UINTEGER, 42::DOUBLE::UINTEGER;
+----
+42	42	42	42	42	42
+
+query IIIIII
+SELECT 42::TINYINT::UBIGINT, 42::SMALLINT::UBIGINT, 42::INTEGER::UBIGINT, 42::BIGINT::UBIGINT, 42::FLOAT::UBIGINT, 42::DOUBLE::UBIGINT;
+----
+42	42	42	42	42	42
+
+# cast various types to unsigned (Larger than they can fit)
+statement error
+SELECT (9223372036854775807)::BIGINT::UTINYINT
+
+statement error
+SELECT (9223372036854775807)::BIGINT::USMALLINT
+
+statement error
+SELECT (9223372036854775807)::BIGINT::UINTEGER
+
+# These should fit though
+query I
+SELECT (9223372036854775807)::BIGINT::UBIGINT
+----
+9223372036854775807
+
+query I
+SELECT (9223372036854775808)::HUGEINT::UBIGINT
+----
+9223372036854775808
+
+# Negative Values
+statement error
+SELECT (-42)::TINYINT::UTINYINT
+
+statement error
+SELECT (-42)::TINYINT::USMALLINT
+
+statement error
+SELECT (-42)::TINYINT::UINTEGER
+
+statement error
+SELECT (-42)::TINYINT::UBIGINT
+
+query I
+SELECT -42::TINYINT::UTINYINT
+----
+214
+
+query I
+SELECT -42::TINYINT::USMALLINT
+----
+65494
+
+query I
+SELECT -42::TINYINT::UINTEGER
+----
+4294967254
+
+query I
+SELECT -42::TINYINT::UBIGINT
+----
+18446744073709551574
+
+statement error
+SELECT (-42)::SMALLINT::UTINYINT
+
+statement error
+SELECT (-42)::SMALLINT::USMALLINT
+
+statement error
+SELECT (-42)::SMALLINT::UINTEGER
+
+statement error
+SELECT (-42)::SMALLINT::UBIGINT
+
+query I
+SELECT -42::SMALLINT::UTINYINT
+----
+214
+
+query I
+SELECT -42::SMALLINT::USMALLINT
+----
+65494
+
+query I
+SELECT -42::SMALLINT::UINTEGER
+----
+4294967254
+
+query I
+SELECT -42::SMALLINT::UBIGINT
+----
+18446744073709551574
+
+statement error
+SELECT (-42)::INTEGER::UTINYINT
+
+statement error
+SELECT (-42)::INTEGER::USMALLINT
+
+statement error
+SELECT (-42)::INTEGER::UINTEGER
+
+statement error
+SELECT (-42)::INTEGER::UBIGINT
+
+query I
+SELECT -42::INTEGER::UTINYINT
+----
+214
+
+query I
+SELECT -42::INTEGER::USMALLINT
+----
+65494
+
+query I
+SELECT -42::INTEGER::UINTEGER
+----
+4294967254
+
+query I
+SELECT -42::INTEGER::UBIGINT
+----
+18446744073709551574
+
+statement error
+SELECT (-42)::BIGINT::UTINYINT
+
+statement error
+SELECT (-42)::BIGINT::USMALLINT
+
+statement error
+SELECT (-42)::BIGINT::UINTEGER
+
+statement error
+SELECT (-42)::BIGINT::UBIGINT
+
+query I
+SELECT -42::BIGINT::UTINYINT
+----
+214
+
+query I
+SELECT -42::BIGINT::USMALLINT
+----
+65494
+
+query I
+SELECT -42::BIGINT::UINTEGER
+----
+4294967254
+
+query I
+SELECT -42::BIGINT::UBIGINT
+----
+18446744073709551574
+
+statement error
+SELECT (-42)::FLOAT::UTINYINT
+
+statement error
+SELECT (-42)::FLOAT::USMALLINT
+
+statement error
+SELECT (-42)::FLOAT::UINTEGER
+
+statement error
+SELECT (-42)::FLOAT::UBIGINT
+
+query I
+SELECT -42::FLOAT::UTINYINT
+----
+214
+
+query I
+SELECT -42::FLOAT::USMALLINT
+----
+65494
+
+query I
+SELECT -42::FLOAT::UINTEGER
+----
+4294967254
+
+query I
+SELECT -42::FLOAT::UBIGINT
+----
+18446744073709551574
+
+statement error
+SELECT (-42)::DOUBLE::UTINYINT
+
+statement error
+SELECT (-42)::DOUBLE::USMALLINT
+
+statement error
+SELECT (-42)::DOUBLE::UINTEGER
+
+statement error
+SELECT (-42)::DOUBLE::UBIGINT
+
+query I
+SELECT -42::DOUBLE::UTINYINT
+----
+214
+
+query I
+SELECT -42::DOUBLE::USMALLINT
+----
+65494
+
+query I
+SELECT -42::DOUBLE::UINTEGER
+----
+4294967254
+
+query I
+SELECT -42::DOUBLE::UBIGINT
+----
+18446744073709551574
+
+# Convert unsigned to signed
+statement error
+SELECT (200)::UTINYINT::TINYINT
+
+query I
+SELECT (10)::UTINYINT::TINYINT
+----
+10
+
+query I
+SELECT (10)::UTINYINT::SMALLINT
+----
+10
+
+query I
+SELECT (10)::UTINYINT::INTEGER
+----
+10
+
+query I
+SELECT (10)::UTINYINT::BIGINT
+----
+10
+
+statement error
+SELECT (200)::USMALLINT::TINYINT
+
+statement error
+SELECT (33000)::USMALLINT::SMALLINT
+
+query I
+SELECT (10)::USMALLINT::TINYINT
+----
+10
+
+query I
+SELECT (10)::USMALLINT::SMALLINT
+----
+10
+
+query I
+SELECT (10)::USMALLINT::INTEGER
+----
+10
+
+query I
+SELECT (10)::USMALLINT::BIGINT
+----
+10
+
+statement error
+SELECT (200)::UINTEGER::TINYINT
+
+statement error
+SELECT (33000)::UINTEGER::SMALLINT
+
+statement error
+SELECT (3147483647)::UINTEGER::INTEGER
+
+query I
+SELECT (10)::UINTEGER::TINYINT
+----
+10
+
+query I
+SELECT (10)::UINTEGER::SMALLINT
+----
+10
+
+query I
+SELECT (10)::UINTEGER::INTEGER
+----
+10
+
+query I
+SELECT (10)::UINTEGER::BIGINT
+----
+10
+
+statement error
+SELECT (200)::UBIGINT::TINYINT
+
+statement error
+SELECT (33000)::UBIGINT::SMALLINT
+
+statement error
+SELECT (3147483647)::UBIGINT::INTEGER
+
+
+statement error
+SELECT (10223372036854775807)::UBIGINT::INTEGER
+
+query I
+SELECT (10)::UBIGINT::TINYINT
+----
+10
+
+query I
+SELECT (10)::UBIGINT::SMALLINT
+----
+10
+
+query I
+SELECT (10)::UBIGINT::INTEGER
+----
+10
+
+query I
+SELECT (10)::UBIGINT::BIGINT
+----
+10
+
+
+statement error
+SELECT (9223372036854775807)::BIGINT::USMALLINT
+
+statement error
+SELECT (9223372036854775807)::BIGINT::UINTEGER
+
+# These should fit though
+query I
+SELECT (9223372036854775807)::BIGINT::UBIGINT
+----
+9223372036854775807
+
+query I
+SELECT (9223372036854775808)::HUGEINT::UBIGINT
+----
+9223372036854775808
+
+
+
+# Cast Decimal to Unsigned Values
+query I
+SELECT (200.32)::DECIMAL::UTINYINT
+----
+200
+
+statement error
+SELECT (260.32)::DECIMAL::UTINYINT
+
+query I
+SELECT (200.32)::DECIMAL::USMALLINT
+----
+200
+
+query I
+SELECT (65535.32)::DECIMAL::USMALLINT
+----
+65535
+
+statement error
+SELECT (65536.32)::DECIMAL::USMALLINT
+
+
+query I
+SELECT (200.32)::DECIMAL::UINTEGER
+----
+200
+
+query I
+SELECT (4294967295.32)::DECIMAL::UINTEGER
+----
+4294967295
+
+statement error
+SELECT (4294967296.32)::DECIMAL::UINTEGER
+
+query I
+SELECT (200.32)::DECIMAL::UBIGINT
+----
+200
+
+# Cast REAL to Unsigned Values
+query I
+SELECT (200.32)::REAL::UTINYINT
+----
+200
+
+statement error
+SELECT (260.32)::REAL::UTINYINT
+
+query I
+SELECT (200.32)::REAL::USMALLINT
+----
+200
+
+query I
+SELECT (65534.32)::REAL::USMALLINT
+----
+65534
+
+statement error
+SELECT (65536.32)::REAL::USMALLINT
+
+
+query I
+SELECT (200.32)::REAL::UINTEGER
+----
+200
+
+query I
+SELECT (200.32)::REAL::UINTEGER
+----
+200
+
+query I
+SELECT (4294967296.32)::REAL::UBIGINT
+----
+4294967296

@@ -45,6 +45,14 @@ static void mark_join_operator(Vector &left, Vector &right, idx_t lcount, idx_t 
 		return mark_join_templated<int32_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::INT64:
 		return mark_join_templated<int64_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::UINT8:
+		return mark_join_templated<uint8_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::UINT16:
+		return mark_join_templated<uint16_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::UINT32:
+		return mark_join_templated<uint32_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::UINT64:
+		return mark_join_templated<uint64_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::FLOAT:
 		return mark_join_templated<float, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::DOUBLE:

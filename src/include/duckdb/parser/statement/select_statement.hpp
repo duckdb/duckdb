@@ -11,18 +11,12 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 
-class SelectStatement;
-
-struct CommonTableExpressionInfo {
-	vector<string> aliases;
-	unique_ptr<SelectStatement> query;
-};
+class QueryNode;
 
 //! SelectStatement is a typical SELECT clause
 class SelectStatement : public SQLStatement {
@@ -30,8 +24,6 @@ public:
 	SelectStatement() : SQLStatement(StatementType::SELECT_STATEMENT) {
 	}
 
-	//! CTEs
-	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> cte_map;
 	//! The main query node
 	unique_ptr<QueryNode> node;
 

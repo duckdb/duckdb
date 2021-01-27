@@ -153,6 +153,18 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 	case PhysicalType::INT64:
 		templated_serialize_vdata<int64_t>(vdata, sel, count, key_locations);
 		break;
+	case PhysicalType::UINT8:
+		templated_serialize_vdata<uint8_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::UINT16:
+		templated_serialize_vdata<uint16_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::UINT32:
+		templated_serialize_vdata<uint32_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::UINT64:
+		templated_serialize_vdata<uint64_t>(vdata, sel, count, key_locations);
+		break;
 	case PhysicalType::INT128:
 		templated_serialize_vdata<hugeint_t>(vdata, sel, count, key_locations);
 		break;
@@ -531,6 +543,18 @@ static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers,
                           idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
                           idx_t &no_match_count) {
 	switch (type) {
+	case PhysicalType::UINT8:
+		return TemplatedGather<NO_MATCH_SEL, uint8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                 no_match_sel, no_match_count);
+	case PhysicalType::UINT16:
+		return TemplatedGather<NO_MATCH_SEL, uint16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
+	case PhysicalType::UINT32:
+		return TemplatedGather<NO_MATCH_SEL, uint32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
+	case PhysicalType::UINT64:
+		return TemplatedGather<NO_MATCH_SEL, uint64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
@@ -698,6 +722,18 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 		break;
 	case PhysicalType::INT64:
 		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedGatherResult<uint8_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedGatherResult<uint16_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedGatherResult<uint32_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedGatherResult<uint64_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
 	case PhysicalType::INT128:
 		TemplatedGatherResult<hugeint_t>(result, ptrs, result_vector, sel_vector, count, offset);

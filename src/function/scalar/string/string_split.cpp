@@ -274,7 +274,7 @@ void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 	    {"string_split", "str_split", "string_to_array"},
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, string_split_function));
 	set.AddFunction(
-	    {"string_split_regex", "str_split_regex"},
+	    {"string_split_regex", "str_split_regex", "regexp_split_to_array"},
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, string_split_regex_function));
 }
 

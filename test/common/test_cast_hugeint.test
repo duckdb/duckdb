@@ -3,6 +3,7 @@
 # group: [common]
 
 # test float -> hugeint casts
+
 statement ok
 CREATE TABLE working_floats(f FLOAT);
 CREATE TABLE broken_floats(f FLOAT);

@@ -8,7 +8,7 @@ namespace duckdb {
 
 using namespace duckdb_libpgquery;
 
-void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &select) {
+void Transformer::TransformCTE(PGWithClause *de_with_clause, QueryNode &select) {
 	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause);
 

@@ -20,11 +20,6 @@ unique_ptr<SelectStatement> Transformer::TransformSelect(PGNode *node, bool isSe
 		}
 	}
 
-	// may contain windows so second
-	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<PGWithClause *>(stmt->withClause), *result);
-	}
-
 	result->node = TransformSelectNode(stmt);
 	return result;
 }

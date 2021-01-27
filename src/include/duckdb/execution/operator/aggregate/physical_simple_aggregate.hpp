@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/execution/physical_sink.hpp"
-
 namespace duckdb {
 
 //! PhysicalSimpleAggregate is an aggregate operator that can only perform aggregates (1) without any groups, and (2)
@@ -23,6 +22,7 @@ public:
 	//! Whether or not all aggregates are trivially combinable. Aggregates that are trivially combinable can be
 	//! parallelized.
 	bool all_combinable;
+
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;

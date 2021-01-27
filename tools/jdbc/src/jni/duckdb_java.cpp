@@ -298,6 +298,18 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::BIGINT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
 			break;
+		case LogicalTypeId::UTINYINT:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint8_t));
+			break;
+		case LogicalTypeId::USMALLINT:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint16_t));
+			break;
+		case LogicalTypeId::UINTEGER:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint32_t));
+			break;
+		case LogicalTypeId::UBIGINT:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint64_t));
+			break;
 		case LogicalTypeId::HUGEINT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
