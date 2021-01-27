@@ -270,3 +270,15 @@ query II
 explain select count(*) from test_date where a in ( '1995-12-01', '1995-12-02')
 ----
 physical_plan	<REGEX>:.* Filters: .*a<=1995-12-02.*
+
+# 5.4) Test with Nulls
+statement ok
+CREATE TABLE t0(c0 boolean);
+
+statement ok
+INSERT INTO t0 VALUES (false), (NULL);
+
+query T
+SELECT t0.c0 FROM t0 WHERE t0.c0 IN (false, NULL);
+----
+0
