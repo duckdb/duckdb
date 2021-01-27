@@ -17,7 +17,9 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	case PG_SETOP_NONE: {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
-
+		if (stmt->withClause) {
+			TransformCTE(reinterpret_cast<PGWithClause *>(stmt->withClause), *node);
+		}
 		if (stmt->windowClause) {
 			for (auto window_ele = stmt->windowClause->head; window_ele != NULL; window_ele = window_ele->next) {
 				auto window_def = reinterpret_cast<PGWindowDef *>(window_ele->data.ptr_value);
@@ -79,6 +81,9 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	case PG_SETOP_INTERSECT: {
 		node = make_unique<SetOperationNode>();
 		auto result = (SetOperationNode *)node.get();
+		if (stmt->withClause) {
+			TransformCTE(reinterpret_cast<PGWithClause *>(stmt->withClause), *node);
+		}
 		result->left = TransformSelectNode(stmt->larg);
 		result->right = TransformSelectNode(stmt->rarg);
 		if (!result->left || !result->right) {

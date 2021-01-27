@@ -14,7 +14,6 @@
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 
-
 namespace duckdb {
 
 class Binder;
@@ -100,7 +99,6 @@ protected:
 	                             unique_ptr<ParsedExpression> *expr_ptr);
 
 	virtual void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
-	void ReplaceMacroParametersRecursive(ParsedExpression &expr, SelectStatement &statement);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref);
 	virtual void CheckForSideEffects(FunctionExpression &function, idx_t depth, string &error);

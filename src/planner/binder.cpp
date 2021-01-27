@@ -1,6 +1,7 @@
 #include "duckdb/planner/binder.hpp"
 
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -54,8 +55,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((ExplainStatement &)statement);
 	case StatementType::VACUUM_STATEMENT:
 		return Bind((VacuumStatement &)statement);
-  case StatementType::SHOW_STATEMENT:
-    return Bind((ShowStatement &)statement);
+	case StatementType::SHOW_STATEMENT:
+		return Bind((ShowStatement &)statement);
 	case StatementType::CALL_STATEMENT:
 		return Bind((CallStatement &)statement);
 	case StatementType::EXPORT_STATEMENT:
@@ -67,6 +68,11 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 }
 
 unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
+	// first we visit the set of CTEs and add them to the bind context
+	for (auto &cte_it : node.cte_map) {
+		AddCTE(cte_it.first, cte_it.second.get());
+	}
+	// now we bind the node
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
@@ -84,10 +90,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 }
 
 BoundStatement Binder::Bind(QueryNode &node) {
-	BoundStatement result;
-	// bind the node
 	auto bound_node = BindNode(node);
 
+	BoundStatement result;
 	result.names = bound_node->names;
 	result.types = bound_node->types;
 
@@ -200,7 +205,7 @@ CommonTableExpressionInfo *Binder::FindCTE(const string &name, bool skip) {
 	return nullptr;
 }
 
-bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo* cte) {
+bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo *cte) {
 	if (bound_ctes.find(cte) != bound_ctes.end()) {
 		return true;
 	}
