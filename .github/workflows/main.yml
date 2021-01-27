@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: ccache gcc-10
+      CXX: ccache g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
 
@@ -29,7 +29,12 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get install ninja-build ccache
+
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1
+      with:
+        key: 1
 
     - name: Build
       run: make debug
