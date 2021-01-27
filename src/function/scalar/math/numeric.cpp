@@ -428,7 +428,7 @@ unique_ptr<FunctionData> bind_decimal_round_precision(ClientContext &context, Sc
 	}
 	Value val = ExpressionExecutor::EvaluateScalar(*arguments[1]).CastAs(LogicalType::INTEGER);
 	if (val.is_null) {
-		throw NotImplementedException("ROUND(DECIMAL, INTEGER) expected a numeric precision field");
+		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}
 	// our new precision becomes the round value
 	// e.g. ROUND(DECIMAL(18,3), 1) -> DECIMAL(18,1)
