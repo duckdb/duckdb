@@ -125,6 +125,17 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	}
 }
 
+static bool OperatorIsDelimGet(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		return true;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_FILTER &&
+	    op.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		return true;
+	}
+	return false;
+}
+
 bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, DeliminatorPlanUpdater &updater) {
 	auto &proj_or_agg = **op_ptr;
 	auto &join = (LogicalComparisonJoin &)*proj_or_agg.children[0];
@@ -132,17 +143,14 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 		return false;
 	}
 	// get the index (left or right) of the DelimGet side of the join
-	idx_t delim_idx = join.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
-	                          (join.children[0]->type == LogicalOperatorType::LOGICAL_FILTER &&
-	                           join.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET)
-	                      ? 0
-	                      : 1;
+	idx_t delim_idx = OperatorIsDelimGet(*join.children[0]) ? 0 : 1;
+	D_ASSERT(OperatorIsDelimGet(*join.children[delim_idx]));
 	// get the filter (if any)
-	auto filter = (LogicalFilter *)(join.children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER
-	                                    ? join.children[delim_idx].get()
-	                                    : nullptr);
-	auto &delim_get =
-	    (LogicalDelimGet &)*(filter != nullptr ? join.children[delim_idx]->children[0] : join.children[delim_idx]);
+	LogicalFilter *filter = nullptr;
+	if (join.children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER) {
+		filter = (LogicalFilter*) join.children[delim_idx].get();
+	}
+	auto &delim_get = (LogicalDelimGet &) *(filter ? filter->children[0].get() : join.children[delim_idx].get());
 	if (join.conditions.size() != delim_get.chunk_types.size()) {
 		// joining with DelimGet adds new information
 		return false;
