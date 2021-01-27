@@ -23,6 +23,14 @@ template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(LogicalTy
 		return AggregateFunction::UnaryAggregate<bit_state_t<uint64_t>, int64_t, int64_t, OP>(type, type);
 	case LogicalTypeId::HUGEINT:
 		return AggregateFunction::UnaryAggregate<bit_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+	case LogicalTypeId::UTINYINT:
+		return AggregateFunction::UnaryAggregate<bit_state_t<uint8_t>, uint8_t, uint8_t, OP>(type, type);
+	case LogicalTypeId::USMALLINT:
+		return AggregateFunction::UnaryAggregate<bit_state_t<uint16_t>, uint16_t, uint16_t, OP>(type, type);
+	case LogicalTypeId::UINTEGER:
+		return AggregateFunction::UnaryAggregate<bit_state_t<uint32_t>, uint32_t, uint32_t, OP>(type, type);
+	case LogicalTypeId::UBIGINT:
+		return AggregateFunction::UnaryAggregate<bit_state_t<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented bitfield type for unary aggregate");
 	}

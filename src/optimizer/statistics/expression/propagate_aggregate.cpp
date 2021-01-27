@@ -7,8 +7,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
                                                                      unique_ptr<Expression> *expr_ptr) {
 	vector<unique_ptr<BaseStatistics>> stats;
 	stats.reserve(aggr.children.size());
-	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		stats.push_back(PropagateExpression(aggr.children[i]));
+	for (auto & child : aggr.children) {
+		stats.push_back(PropagateExpression(child));
 	}
 	if (!aggr.function.statistics){
 		return nullptr;

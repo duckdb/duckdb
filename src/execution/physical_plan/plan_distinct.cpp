@@ -51,7 +51,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 			vector<unique_ptr<Expression>> first_children;
 			first_children.push_back(move(bound));
 			auto first_aggregate = AggregateFunction::BindAggregateFunction(
-			    context, FirstFun::GetFunction(logical_type), move(first_children), false);
+			    context, FirstFun::GetFunction(logical_type), move(first_children), nullptr, false);
 			// add the projection
 			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
 			// push it to the list of aggregates

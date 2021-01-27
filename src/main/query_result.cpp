@@ -153,6 +153,18 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 		case LogicalTypeId::BIGINT:
 			child.format = "l";
 			break;
+		case LogicalTypeId::UTINYINT:
+			child.format = "C";
+			break;
+		case LogicalTypeId::USMALLINT:
+			child.format = "S";
+			break;
+		case LogicalTypeId::UINTEGER:
+			child.format = "I";
+			break;
+		case LogicalTypeId::UBIGINT:
+			child.format = "L";
+			break;
 		case LogicalTypeId::FLOAT:
 			child.format = "f";
 			break;

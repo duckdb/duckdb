@@ -89,7 +89,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 }
 
 void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
-	if (expr.get()) {
+	if (expr) {
 		string bind_error = Bind(&expr, depth);
 		if (error.empty()) {
 			error = bind_error;

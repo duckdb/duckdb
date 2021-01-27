@@ -27,7 +27,23 @@ public:
 	//! Create an empty NULL value of the specified type
 	explicit Value(LogicalType type = LogicalType::SQLNULL) : type_(type), is_null(true) {
 	}
-	//! Create a BIGINT value
+	//! Create a UTINYINT value
+	Value(uint8_t val) : type_(LogicalType::UTINYINT), is_null(false) {
+		value_.utinyint = val;
+	}
+	//! Create a USMALLINT value
+	Value(uint16_t val) : type_(LogicalType::USMALLINT), is_null(false) {
+		value_.usmallint = val;
+	}
+		//! Create a UINTEGER value
+	Value(uint32_t val) : type_(LogicalType::UINTEGER), is_null(false) {
+		value_.uinteger = val;
+	}
+	//! Create a UBIGINT value
+	Value(uint64_t val) : type_(LogicalType::UBIGINT), is_null(false) {
+		value_.ubigint = val;
+	}
+	//! Create an INTEGER value
 	Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 		value_.integer = val;
 	}
@@ -72,6 +88,14 @@ public:
 	static Value INTEGER(int32_t value);
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
+	//! Create an unsigned tinyint Value from a specified value
+	static Value UTINYINT(uint8_t value);
+	//! Create an unsigned smallint Value from a specified value
+	static Value USMALLINT(uint16_t value);
+	//! Create an unsigned integer Value from a specified value
+	static Value UINTEGER(uint32_t value);
+	//! Create an unsigned bigint Value from a specified value
+	static Value UBIGINT(uint64_t value);
 	//! Create a hugeint Value from a specified value
 	static Value HUGEINT(hugeint_t value);
 	//! Create a hash Value from a specified value
@@ -203,6 +227,10 @@ public:
 		int16_t smallint;
 		int32_t integer;
 		int64_t bigint;
+		uint8_t utinyint;
+		uint16_t usmallint;
+		uint32_t uinteger;
+		uint64_t ubigint;
 		hugeint_t hugeint;
 		float float_;
 		double double_;

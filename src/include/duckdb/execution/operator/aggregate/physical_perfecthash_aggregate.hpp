@@ -53,6 +53,8 @@ public:
 	vector<Value> group_minima;
 	//! The number of bits we need to completely cover each of the groups
 	vector<idx_t> required_bits;
+
+	unordered_map<Expression*,size_t> ht;
 };
 
 } // namespace duckdb
