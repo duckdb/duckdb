@@ -537,7 +537,7 @@ jobs:
   sqlancer:
     name: SQLancer
     runs-on: ubuntu-20.04
-    # needs: linux-debug
+    needs: linux-debug
 
     env:
       BUILD_JDBC: 1
