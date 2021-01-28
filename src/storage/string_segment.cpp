@@ -865,7 +865,8 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 }
 
 void StringSegment::ToTemporary() {
-	UncompressedSegment::ToTemporary();
+	auto write_lock = lock.GetExclusiveLock();
+	ToTemporaryInternal();
 	this->max_vector_count = (this->tuple_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 }
 

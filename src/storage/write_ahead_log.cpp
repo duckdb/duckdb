@@ -28,6 +28,11 @@ int64_t WriteAheadLog::GetWALSize() {
 	return writer->GetFileSize();
 }
 
+idx_t WriteAheadLog::GetTotalWritten() {
+	D_ASSERT(writer);
+	return writer->GetTotalWritten();
+}
+
 void WriteAheadLog::Truncate(int64_t size) {
 	writer->Truncate(size);
 }

@@ -72,8 +72,10 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
 	int64_t initial_wal_size;
+	idx_t initial_written;
 	if (log) {
 		initial_wal_size = log->GetWALSize();
+		initial_written = log->GetTotalWritten();
 	}
 	try {
 		// commit the undo buffer
@@ -85,14 +87,14 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 				log->WriteSequenceValue(entry.first, entry.second);
 			}
 			// flush the WAL if any changes were made
-			if (log->GetWALSize() > initial_wal_size) {
+			if (log->GetTotalWritten() > initial_written) {
 				log->Flush();
 			}
 		}
 		return string();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
-		if (log && log->GetWALSize() > initial_wal_size) {
+		if (log && log->GetTotalWritten() > initial_written) {
 			// remove any entries written into the WAL by truncating it
 			log->Truncate(initial_wal_size);
 		}

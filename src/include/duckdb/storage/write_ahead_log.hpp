@@ -49,6 +49,8 @@ public:
 	void Initialize(string &path);
 	//! Returns the current size of the WAL in bytes
 	int64_t GetWALSize();
+	//! Gets the total bytes written to the WAL since startup
+	idx_t GetTotalWritten();
 
 	void WriteCreateTable(TableCatalogEntry *entry);
 	void WriteDropTable(TableCatalogEntry *entry);

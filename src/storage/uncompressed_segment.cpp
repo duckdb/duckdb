@@ -381,7 +381,10 @@ void UncompressedSegment::CleanupUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 void UncompressedSegment::ToTemporary() {
 	auto write_lock = lock.GetExclusiveLock();
+	ToTemporaryInternal();
+}
 
+void UncompressedSegment::ToTemporaryInternal() {
 	if (block->BlockId() >= MAXIMUM_BLOCK) {
 		// conversion has already been performed by a different thread
 		return;
