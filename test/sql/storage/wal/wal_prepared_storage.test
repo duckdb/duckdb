@@ -1,0 +1,106 @@
+# name: test/sql/storage/catalog/test_prepared_storage.test
+# description: PREPARE and WAL
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/prepared_storage.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+# insert values in a database using prepared statements
+statement ok
+CREATE TABLE t (a INTEGER)
+
+statement ok
+PREPARE p1 AS INSERT INTO t VALUES ($1)
+
+statement ok
+EXECUTE p1(42)
+
+statement ok
+EXECUTE p1(43)
+
+statement ok
+DEALLOCATE p1
+
+query I
+SELECT a FROM t
+----
+42
+43
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+# now restart and verify that the data is still there
+query I
+SELECT a FROM t
+----
+42
+43
+
+# unhelpfully use the same statement name again, it should be available, but do nothing with it
+statement ok
+PREPARE p1 AS DELETE FROM t WHERE a=$1
+
+restart
+
+# do the same with delete
+statement ok
+PREPARE p1 AS DELETE FROM t WHERE a=$1
+
+statement ok
+EXECUTE p1(43)
+
+query I
+SELECT a FROM t
+----
+42
+
+# restart again
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+# data is still gone
+query I
+SELECT a FROM t
+----
+42
+
+# now with update
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+query I
+SELECT a FROM t
+----
+42
+
+statement ok
+PREPARE p1 AS UPDATE t SET a = $1
+
+statement ok
+EXECUTE p1(43)
+
+query I
+SELECT a FROM t
+----
+43
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+query I
+SELECT a FROM t
+----
+43
+

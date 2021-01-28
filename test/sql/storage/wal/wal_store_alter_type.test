@@ -1,8 +1,11 @@
-# name: test/sql/storage/catalog/test_store_remove_column.test
+# name: test/sql/storage/catalog/test_store_alter_type.test
 # description: Remove column from persistent table
 # group: [catalog]
 
 load __TEST_DIR__/test_store_alter_type.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
 
 # create a table and add a column to it
 statement ok
@@ -12,6 +15,9 @@ statement ok
 INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 
 restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
 
 statement ok
 ALTER TABLE test ALTER b TYPE VARCHAR
@@ -34,7 +40,20 @@ SELECT * FROM test ORDER BY 1
 12	21
 13	22
 
+statement ok
+DELETE FROM test WHERE b='hello'
+
 restart
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+11	22
+12	21
+13	22
+
+statement ok
+INSERT INTO test VALUES (10, 'hello')
 
 query IT
 SELECT * FROM test ORDER BY 1

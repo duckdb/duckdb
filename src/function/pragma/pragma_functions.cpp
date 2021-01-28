@@ -130,6 +130,14 @@ static void pragma_disable_object_cache(ClientContext &context, FunctionParamete
 	DBConfig::GetConfig(context).object_cache_enable = false;
 }
 
+static void pragma_enable_checkpoint_on_shutdown(ClientContext &context, FunctionParameters parameters) {
+	DBConfig::GetConfig(context).checkpoint_on_shutdown = true;
+}
+
+static void pragma_disable_checkpoint_on_shutdown(ClientContext &context, FunctionParameters parameters) {
+	DBConfig::GetConfig(context).checkpoint_on_shutdown = false;
+}
+
 static void pragma_log_query_path(ClientContext &context, FunctionParameters parameters) {
 	auto str_val = parameters.values[0].ToString();
 	if (str_val.empty()) {
@@ -211,6 +219,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", pragma_enable_force_index_join));
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", pragma_force_checkpoint));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", pragma_enable_checkpoint_on_shutdown));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", pragma_disable_checkpoint_on_shutdown));
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("perfect_ht_threshold", pragma_perfect_ht_threshold, LogicalType::INTEGER));

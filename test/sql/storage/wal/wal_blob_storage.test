@@ -1,9 +1,12 @@
-# name: test/sql/storage/types/test_blob_storage.test
-# description: Test BLOB with persistent storage
-# group: [types]
+# name: test/sql/storage/wal/wal_blob_storage.test
+# description: Test BLOB with persistent storage with WAL
+# group: [wal]
 
 # load the DB from disk
 load __TEST_DIR__/blob_storage_test.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
 
 # create a table with hugeints
 statement ok
@@ -16,6 +19,9 @@ INSERT INTO blobs VALUES('a'), ('\xAA'), ('\xAA\xFF\xAA'),  (''), (NULL), ('\x55
 loop i 0 2
 
 restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
 
 query I
 SELECT * FROM blobs
