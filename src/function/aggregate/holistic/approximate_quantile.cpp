@@ -1,7 +1,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
+#include "duckdb/function/aggregate/t_digest.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "t_digest.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <stdlib.h>
@@ -9,7 +10,7 @@
 namespace duckdb{
 
 template <class T> struct approx_quantile_state_t {
-	td_histogram<T> *h = nullptr;
+	 tdigest::TDigest *h = nullptr;
 	idx_t pos{};
 };
 
@@ -17,7 +18,7 @@ template <class T> struct ApproxQuantileOperation {
 
 	template <class STATE> static void Initialize(STATE *state) {
 		state->pos = 0;
-		state->h = td_new<T>(8192);
+		state->h = new tdigest::TDigest(100);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -33,7 +34,7 @@ template <class T> struct ApproxQuantileOperation {
 			return;
 		}
 		D_ASSERT(state->h);
-        td_add<T>(state->h, data[idx],1);
+		state->h->add(data[idx]);
 		state->pos++;
 	}
 
@@ -41,7 +42,7 @@ template <class T> struct ApproxQuantileOperation {
 		if (source.pos == 0) {
 			return;
 		}
-		td_merge(target->h,source.h);
+		target->h->merge(source.h);
 		target->pos += source.pos;
 	}
 
@@ -56,13 +57,14 @@ template <class T> struct ApproxQuantileOperation {
 		}
 		D_ASSERT(state->h);
 		D_ASSERT(bind_data_);
+		state->h->compress();
 		auto bind_data = (QuantileBindData *)bind_data_;
-		target[idx] = td_value_at(state->h, bind_data->quantile);
+		target[idx] = state->h->quantile(bind_data->quantile);
 	}
 
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->h) {
-			td_free<T>(state->h);
+			delete state->h;
 		}
 	}
 
