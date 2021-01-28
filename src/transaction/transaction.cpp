@@ -75,7 +75,6 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 	if (log) {
 		initial_wal_size = log->GetWALSize();
 	}
-	bool changes_made = undo_buffer.ChangesMade() || storage.ChangesMade() || sequence_usage.size() > 0;
 	try {
 		// commit the undo buffer
 		storage.Commit(commit_state, *this, log, commit_id);
@@ -85,15 +84,15 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 			for (auto &entry : sequence_usage) {
 				log->WriteSequenceValue(entry.first, entry.second);
 			}
-			// flush the WAL
-			if (changes_made) {
+			// flush the WAL if any changes were made
+			if (log->GetWALSize() > initial_wal_size) {
 				log->Flush();
 			}
 		}
 		return string();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
-		if (log && changes_made) {
+		if (log && log->GetWALSize() > initial_wal_size) {
 			// remove any entries written into the WAL by truncating it
 			log->Truncate(initial_wal_size);
 		}

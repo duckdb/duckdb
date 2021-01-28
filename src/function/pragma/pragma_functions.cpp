@@ -114,6 +114,10 @@ static void pragma_enable_force_index_join(ClientContext &context, FunctionParam
 	context.force_index_join = true;
 }
 
+static void pragma_force_checkpoint(ClientContext &context, FunctionParameters parameters) {
+	DBConfig::GetConfig(context).force_checkpoint = true;
+}
+
 static void pragma_disable_force_parallelism(ClientContext &context, FunctionParameters parameters) {
 	context.force_parallelism = false;
 }
@@ -206,6 +210,7 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", pragma_explain_output, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", pragma_enable_force_index_join));
+	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", pragma_force_checkpoint));
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("perfect_ht_threshold", pragma_perfect_ht_threshold, LogicalType::INTEGER));

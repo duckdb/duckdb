@@ -118,6 +118,10 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 				new_tree.AppendSegment(move(owned_segment));
 
 				data_pointers[col_idx].push_back(move(pointer));
+
+				// move to the next segment in the list
+				owned_segment = move(segment->next);
+				segment = (ColumnSegment *) owned_segment.get();
 				continue;
 			}
 		}

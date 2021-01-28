@@ -180,9 +180,8 @@ void SingleFileBlockManager::LoadFreeList() {
 	MetaBlockReader reader(db, free_list_id);
 	auto free_list_count = reader.Read<uint64_t>();
 	free_list.clear();
-	free_list.reserve(free_list_count);
 	for (idx_t i = 0; i < free_list_count; i++) {
-		free_list.push_back(reader.Read<block_id_t>());
+		free_list.insert(reader.Read<block_id_t>());
 	}
 }
 
@@ -194,9 +193,9 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	if (free_list.size() > 0) {
 		// free list is non empty
 		// take an entry from the free list
-		block = free_list.back();
+		block = *free_list.begin();
 		// erase the entry from the free list again
-		free_list.pop_back();
+		free_list.erase(block);
 	} else {
 		block = max_block++;
 	}
@@ -204,7 +203,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 }
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
-	modified_blocks.push_back(block_id);
+	modified_blocks.insert(block_id);
 }
 
 block_id_t SingleFileBlockManager::GetMetaBlock() {
@@ -234,7 +233,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	// now handle the free list
 	// add all modified blocks to the free list: they can now be written to again
 	for(auto &block : modified_blocks) {
-		free_list.push_back(block);
+		free_list.insert(block);
 	}
 	modified_blocks.clear();
 
@@ -242,12 +241,10 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		// there are blocks in the free list
 		// write them to the file
 		MetaBlockWriter writer(db);
-		auto entry = std::find(free_list.begin(), free_list.end(), writer.block->id);
-		if (entry != free_list.end()) {
-			free_list.erase(entry);
-		}
+		free_list.erase(writer.block->id);
+
 		header.free_list = writer.block->id;
-		modified_blocks.push_back(writer.block->id);
+		modified_blocks.insert(writer.block->id);
 
 		writer.Write<uint64_t>(free_list.size());
 		for (auto &block_id : free_list) {

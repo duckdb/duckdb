@@ -51,6 +51,8 @@ public:
 	bool enable_copy = true;
 	//! Wether or not object cache is used
 	bool object_cache_enable = false;
+	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
+	bool force_checkpoint = false;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

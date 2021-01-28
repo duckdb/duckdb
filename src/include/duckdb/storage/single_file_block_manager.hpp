@@ -13,6 +13,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -67,9 +68,9 @@ private:
 	//! The buffer used to read/write to the headers
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
-	vector<block_id_t> free_list;
+	set<block_id_t> free_list;
 	//! The list of blocks that will be added to the free list
-	vector<block_id_t> modified_blocks;
+	unordered_set<block_id_t> modified_blocks;
 	//! The current meta block id
 	block_id_t meta_block;
 	//! The current maximum block id, this id will be given away first after the free_list runs out
