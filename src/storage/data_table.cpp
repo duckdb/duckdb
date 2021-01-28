@@ -1073,21 +1073,24 @@ void DataTable::CheckpointDeletes(TableDataWriter &writer) {
 	writer.CheckpointDeletes(((MorselInfo *) versions->GetRootSegment()));
 }
 
-void DataTable::CommitDropTable() {
+void DataTable::CommitDropColumn(idx_t index) {
 	auto &block_manager = BlockManager::GetBlockManager(db);
+	auto segment = (ColumnSegment*) columns[index]->data.GetRootSegment();
+	while(segment) {
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			auto &persistent = (PersistentSegment &) *segment;
+			if (!persistent.HasChanges()) {
+				block_manager.MarkBlockAsModified(persistent.block_id);
+			}
+		}
+		segment = (ColumnSegment*) segment->next.get();
+	}
+}
 
+void DataTable::CommitDropTable() {
 	// commit a drop of this table: mark all blocks as modified so they can be reclaimed later on
 	for(size_t i = 0; i < columns.size(); i++) {
-		auto segment = (ColumnSegment*) columns[i]->data.GetRootSegment();
-		while(segment) {
-			if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-				auto &persistent = (PersistentSegment &) *segment;
-				if (!persistent.HasChanges()) {
-					block_manager.MarkBlockAsModified(persistent.block_id);
-				}
-			}
-			segment = (ColumnSegment*) segment->next.get();
-		}
+		CommitDropColumn(i);
 	}
 }
 

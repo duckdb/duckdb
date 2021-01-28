@@ -541,4 +541,31 @@ void TableCatalogEntry::SetAsRoot() {
 	storage->SetAsRoot();
 }
 
+void TableCatalogEntry::CommitAlter(AlterInfo &info) {
+	D_ASSERT(info.type == AlterType::ALTER_TABLE);
+	auto &alter_table = (AlterTableInfo &) info;
+	switch (alter_table.alter_table_type) {
+	case AlterTableType::REMOVE_COLUMN: {
+		auto remove_info = (RemoveColumnInfo &)alter_table;
+		idx_t removed_index = INVALID_INDEX;
+		for (idx_t i = 0; i < columns.size(); i++) {
+			if (columns[i].name == remove_info.removed_column) {
+				D_ASSERT(removed_index == INVALID_INDEX);
+				removed_index = i;
+				continue;
+			}
+		}
+		D_ASSERT(removed_index != INVALID_INDEX);
+		storage->CommitDropColumn(removed_index);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void TableCatalogEntry::CommitDrop() {
+	storage->CommitDropTable();
+}
+
 } // namespace duckdb

@@ -144,6 +144,7 @@ public:
 	void Checkpoint(TableDataWriter &writer);
 	void CheckpointDeletes(TableDataWriter &writer);
 	void CommitDropTable();
+	void CommitDropColumn(idx_t index);
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
