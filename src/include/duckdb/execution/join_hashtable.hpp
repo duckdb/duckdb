@@ -119,8 +119,6 @@ public:
 		return row_chunk.count;
 	}
 
-	//! BufferManager
-	BufferManager &buffer_manager;
 	//! RowChunk
 	RowChunk row_chunk;
 	//! The types of the keys used in equality comparison

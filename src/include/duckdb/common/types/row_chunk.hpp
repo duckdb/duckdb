@@ -52,8 +52,8 @@ public:
 
 public:
 	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
-	                         data_ptr_t *key_locations);
-	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t *key_locations);
+	                         data_ptr_t key_locations[]);
+	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining);
     void Build(idx_t added_count, data_ptr_t *key_locations);

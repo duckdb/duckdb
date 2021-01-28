@@ -13,7 +13,7 @@ using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
-    : buffer_manager(buffer_manager), row_chunk(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
+    : row_chunk(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
       tuple_size(0), join_type(type), finalized(false), has_null(false) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
@@ -265,7 +265,7 @@ void JoinHashTable::Finalize() {
 	bitmask = capacity - 1;
 
 	// allocate the HT and initialize it with all-zero entries
-	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
+	hash_map = row_chunk.buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
 	Vector hashes(LogicalType::HASH);
@@ -276,7 +276,7 @@ void JoinHashTable::Finalize() {
 	// this is so that we can keep pointers around to the blocks
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : row_chunk.blocks) {
-		auto handle = buffer_manager.Pin(block.block);
+		auto handle = row_chunk.buffer_manager.Pin(block.block);
 		data_ptr_t dataptr = handle->node->buffer;
 		idx_t entry = 0;
 		while (entry < block.count) {

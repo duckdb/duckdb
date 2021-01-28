@@ -23,11 +23,6 @@ public:
 
 	//! Input data
 	vector<BoundOrderByNode> orders;
-	//! Sorting columns that were computed from 'orders'
-    ExpressionExecutor executor;
-    vector<LogicalType> sort_types;
-    vector<OrderType> order_types;
-    vector<OrderByNullType> null_order_types;
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
