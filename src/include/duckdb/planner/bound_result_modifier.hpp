@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
 
@@ -43,6 +44,8 @@ public:
 	int64_t limit = -1;
 	//! OFFSET
 	int64_t offset = -1;
+	//! Expression in case limit is not constant
+	unique_ptr<Expression> limit_expr{};
 };
 
 class BoundOrderModifier : public BoundResultModifier {

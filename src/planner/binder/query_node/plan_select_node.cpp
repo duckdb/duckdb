@@ -84,6 +84,17 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		PlanSubqueries(&expr, &root);
 	}
 
+	for (auto &modifier : statement.modifiers) {
+		if (modifier->type != ResultModifierType::LIMIT_MODIFIER){
+			continue;
+		}
+		auto& limit_modifier = (BoundLimitModifier&)*modifier;
+		if (limit_modifier.limit_expr){
+			PlanSubqueries(&limit_modifier.limit_expr, &root);
+		}
+
+	}
+
 	// create the projection
 	auto proj = make_unique<LogicalProjection>(statement.projection_index, move(statement.select_list));
 	auto &projection = *proj;
