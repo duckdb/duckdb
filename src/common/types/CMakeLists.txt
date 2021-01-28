@@ -11,6 +11,7 @@ add_library_unity(
   hugeint.cpp
   interval.cpp
   null_value.cpp
+  row_chunk.cpp
   selection_vector.cpp
   string_heap.cpp
   string_type.cpp

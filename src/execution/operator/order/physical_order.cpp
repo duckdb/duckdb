@@ -3,22 +3,43 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/common/types/row_chunk.hpp"
+
 namespace duckdb {
+
+PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders)
+    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types)), orders(move(orders)) {
+    // compute the sorting columns from the input data
+    for (idx_t i = 0; i < orders.size(); i++) {
+        auto &expr = orders[i].expression;
+        sort_types.push_back(expr->return_type);
+        order_types.push_back(orders[i].type);
+        null_order_types.push_back(orders[i].null_order);
+        executor.AddExpression(*expr);
+    }
+}
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
 class OrderByGlobalState : public GlobalOperatorState {
 public:
+	OrderByGlobalState(BufferManager &buffer_manager) : sort_cols(buffer_manager) {
+	}
+	// TODO: old
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! The sorted data
 	ChunkCollection sorted_data;
 	//! The sorted vector
 	unique_ptr<idx_t[]> sorted_vector;
+
+	// TODO: new
+	//! Columns to be sorted
+	RowChunk sort_cols;
 };
 
 class OrderByLocalState : public LocalSinkState{
@@ -28,7 +49,12 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
-	return make_unique<OrderByGlobalState>();
+    auto state = make_unique<OrderByGlobalState>(BufferManager::GetBufferManager(context));
+    for (auto type : sort_types) {
+		state->sort_cols.entry_size += GetTypeIdSize(type.InternalType());
+	}
+    state->sort_cols.block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / state->sort_cols.entry_size) + 1);
+	return state;
 }
 
 unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) {
@@ -39,8 +65,13 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
                          DataChunk &input) {
 	// concatenate all the data of the child chunks
 	auto &gstate = (OrderByGlobalState &)state;
+
+    // TODO: old
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.sorted_data.Append(input);
+
+    // TODO: new
+
 }
 
 //===--------------------------------------------------------------------===//
@@ -50,19 +81,6 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	// finalize: perform the actual sorting
 	auto &sink = (OrderByGlobalState &)*state;
 	ChunkCollection &big_data = sink.sorted_data;
-
-	// compute the sorting columns from the input data
-	ExpressionExecutor executor;
-	vector<LogicalType> sort_types;
-	vector<OrderType> order_types;
-	vector<OrderByNullType> null_order_types;
-	for (idx_t i = 0; i < orders.size(); i++) {
-		auto &expr = orders[i].expression;
-		sort_types.push_back(expr->return_type);
-		order_types.push_back(orders[i].type);
-		null_order_types.push_back(orders[i].null_order);
-		executor.AddExpression(*expr);
-	}
 
 	ChunkCollection sort_collection;
 	for (idx_t i = 0; i < big_data.ChunkCount(); i++) {

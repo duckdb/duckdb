@@ -5,7 +5,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
@@ -14,8 +13,8 @@ using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
-    : buffer_manager(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
-      entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
+    : buffer_manager(buffer_manager), row_chunk(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
+      tuple_size(0), join_type(type), finalized(false), has_null(false) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -45,15 +44,15 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	tuple_size = condition_size + build_size;
 	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
-	entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
+	row_chunk.entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 	if (IsRightOuterJoin(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
-		entry_size += sizeof(bool);
+		row_chunk.entry_size += sizeof(bool);
 		pointer_offset += sizeof(bool);
 	}
 	// compute the per-block capacity of this HT
-	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
+	row_chunk.block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / row_chunk.entry_size) + 1);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -137,93 +136,6 @@ static void initialize_outer_join(idx_t count, data_ptr_t key_locations[]) {
 	}
 }
 
-void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
-                                        data_ptr_t key_locations[]) {
-	switch (type) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		templated_serialize_vdata<int8_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::INT16:
-		templated_serialize_vdata<int16_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::INT32:
-		templated_serialize_vdata<int32_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::INT64:
-		templated_serialize_vdata<int64_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::UINT8:
-		templated_serialize_vdata<uint8_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::UINT16:
-		templated_serialize_vdata<uint16_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::UINT32:
-		templated_serialize_vdata<uint32_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::UINT64:
-		templated_serialize_vdata<uint64_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::INT128:
-		templated_serialize_vdata<hugeint_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::FLOAT:
-		templated_serialize_vdata<float>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::DOUBLE:
-		templated_serialize_vdata<double>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::HASH:
-		templated_serialize_vdata<hash_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::INTERVAL:
-		templated_serialize_vdata<interval_t>(vdata, sel, count, key_locations);
-		break;
-	case PhysicalType::VARCHAR: {
-		StringHeap local_heap;
-		auto source = (string_t *)vdata.data;
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx);
-
-			string_t new_val;
-			if ((*vdata.nullmask)[source_idx]) {
-				new_val = NullValue<string_t>();
-			} else if (source[source_idx].IsInlined()) {
-				new_val = source[source_idx];
-			} else {
-				new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
-			}
-			Store<string_t>(new_val, key_locations[i]);
-			key_locations[i] += sizeof(string_t);
-		}
-		lock_guard<mutex> append_lock(ht_lock);
-		string_heap.MergeHeap(local_heap);
-		break;
-	}
-	default:
-		throw NotImplementedException("FIXME: unimplemented serialize");
-	}
-}
-
-void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                    data_ptr_t key_locations[]) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
-
-	SerializeVectorData(vdata, v.type.InternalType(), sel, count, key_locations);
-}
-
-idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
-                                   idx_t remaining) {
-	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
-	auto dataptr = handle.node->buffer + block.count * entry_size;
-	append_entries.push_back(BlockAppendEntry(dataptr, append_count));
-	block.count += append_count;
-	return append_count;
-}
-
 static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx_t count, SelectionVector &result) {
 	auto &nullmask = *vdata.nullmask;
 	idx_t result_count = 0;
@@ -295,52 +207,9 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	if (added_count == 0) {
 		return;
 	}
-	count += added_count;
 
-	vector<unique_ptr<BufferHandle>> handles;
-	vector<BlockAppendEntry> append_entries;
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	// first allocate space of where to serialize the keys and payload columns
-	idx_t remaining = added_count;
-	{
-		// first append to the last block (if any)
-		lock_guard<mutex> append_lock(ht_lock);
-		if (blocks.size() != 0) {
-			auto &last_block = blocks.back();
-			if (last_block.count < last_block.capacity) {
-				// last block has space: pin the buffer of this block
-				auto handle = buffer_manager.Pin(last_block.block);
-				// now append to the block
-				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
-				remaining -= append_count;
-				handles.push_back(move(handle));
-			}
-		}
-		while (remaining > 0) {
-			// now for the remaining data, allocate new buffers to store the data and append there
-			auto block = buffer_manager.RegisterMemory(block_capacity * entry_size, false);
-			auto handle = buffer_manager.Pin(block);
-
-			HTDataBlock new_block;
-			new_block.count = 0;
-			new_block.capacity = block_capacity;
-			new_block.block = move(block);
-
-			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
-			remaining -= append_count;
-			handles.push_back(move(handle));
-			blocks.push_back(move(new_block));
-		}
-	}
-	// now set up the key_locations based on the append entries
-	idx_t append_idx = 0;
-	for (auto &append_entry : append_entries) {
-		idx_t next = append_idx + append_entry.count;
-		for (; append_idx < next; append_idx++) {
-			key_locations[append_idx] = append_entry.baseptr;
-			append_entry.baseptr += entry_size;
-		}
-	}
+    data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	row_chunk.Build(added_count, key_locations);
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
@@ -349,19 +218,19 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
-		SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, key_locations);
+		row_chunk.SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, key_locations);
 	}
 	// now serialize the payload
 	if (build_types.size() > 0) {
 		for (idx_t i = 0; i < payload.ColumnCount(); i++) {
-			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
+			row_chunk.SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		initialize_outer_join(added_count, key_locations);
 	}
-	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
+	row_chunk.SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
@@ -390,7 +259,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
-	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
+	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(size() * 2, (Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
@@ -406,7 +275,7 @@ void JoinHashTable::Finalize() {
 	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
 	// this is so that we can keep pointers around to the blocks
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
-	for (auto &block : blocks) {
+	for (auto &block : row_chunk.blocks) {
 		auto handle = buffer_manager.Pin(block.block);
 		data_ptr_t dataptr = handle->node->buffer;
 		idx_t entry = 0;
@@ -416,7 +285,7 @@ void JoinHashTable::Finalize() {
 			for (idx_t i = 0; i < next; i++) {
 				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
-				dataptr += entry_size;
+				dataptr += row_chunk.entry_size;
 			}
 			// now insert into the hash table
 			InsertHashes(hashes, next, key_locations);
@@ -430,7 +299,7 @@ void JoinHashTable::Finalize() {
 }
 
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
-	D_ASSERT(count > 0); // should be handled before
+	D_ASSERT(size() > 0); // should be handled before
 	D_ASSERT(finalized);
 
 	// set up the scan structure
@@ -911,7 +780,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 	D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
 	D_ASSERT(result.data.back().type == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
-	D_ASSERT(ht.count > 0);
+	D_ASSERT(ht.size() > 0);
 
 	ScanKeyMatches(keys);
 	if (ht.correlated_mark_join_info.correlated_types.size() == 0) {
@@ -1060,12 +929,12 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
-	for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
-		auto &block = blocks[state.block_position];
+	for (; state.block_position < row_chunk.blocks.size(); state.block_position++, state.position = 0) {
+		auto &block = row_chunk.blocks[state.block_position];
 		auto &handle = pinned_handles[state.block_position];
 		auto baseptr = handle->node->buffer;
 		for (; state.position < block.count; state.position++) {
-			auto tuple_base = baseptr + state.position * entry_size;
+			auto tuple_base = baseptr + state.position * row_chunk.entry_size;
 			auto found_match = (bool *)(tuple_base + tuple_size);
 			if (!*found_match) {
 				key_locations[found_entries++] = tuple_base;

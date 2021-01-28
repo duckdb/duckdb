@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
@@ -18,11 +19,15 @@ namespace duckdb {
 //! the data but only add a selection vector.
 class PhysicalOrder : public PhysicalSink {
 public:
-	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders)
-	    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types)), orders(move(orders)) {
-	}
+	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders);
 
+	//! Input data
 	vector<BoundOrderByNode> orders;
+	//! Sorting columns that were computed from 'orders'
+    ExpressionExecutor executor;
+    vector<LogicalType> sort_types;
+    vector<OrderType> order_types;
+    vector<OrderByNullType> null_order_types;
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
