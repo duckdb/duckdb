@@ -78,7 +78,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		break;
 	case CatalogType::DELETED_ENTRY:
 		if (entry->type == CatalogType::TABLE_ENTRY) {
-			log->WriteDropTable((TableCatalogEntry *)entry);
+			auto table_entry = (TableCatalogEntry *)entry;
+			table_entry->storage->CommitDropTable();
+			log->WriteDropTable(table_entry);
 		} else if (entry->type == CatalogType::SCHEMA_ENTRY) {
 			log->WriteDropSchema((SchemaCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
