@@ -37,6 +37,7 @@ public:
 	TransactionManager &GetTransactionManager();
 	TaskScheduler &GetScheduler();
 	ObjectCache &GetObjectCache();
+	ConnectionManager &GetConnectionManager();
 
 	idx_t NumberOfThreads();
 
@@ -53,6 +54,7 @@ private:
 	unique_ptr<TransactionManager> transaction_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
+	unique_ptr<ConnectionManager> connection_manager;
 };
 
 //! The database object. This object holds the catalog and all the

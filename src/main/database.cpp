@@ -7,6 +7,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/connection_manager.hpp"
 
 namespace duckdb {
 
@@ -72,6 +73,15 @@ TransactionManager& TransactionManager::Get(DatabaseInstance &db) {
 	return db.GetTransactionManager();
 }
 
+ConnectionManager &ConnectionManager::Get(DatabaseInstance &db) {
+	return db.GetConnectionManager();
+}
+
+ConnectionManager &ConnectionManager::Get(ClientContext &context) {
+	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
+}
+
+
 void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	if (new_config) {
 		// user-supplied configuration
@@ -101,6 +111,7 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>();
 	object_cache = make_unique<ObjectCache>();
+	connection_manager = make_unique<ConnectionManager>();
 
 	// initialize the database
 	storage->Initialize();
@@ -138,6 +149,10 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 
 FileSystem &DatabaseInstance::GetFileSystem() {
 	return *config.file_system;
+}
+
+ConnectionManager &DatabaseInstance::GetConnectionManager() {
+	return *connection_manager;
 }
 
 FileSystem &DuckDB::GetFileSystem() {

@@ -9,6 +9,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection_manager.hpp"
 
 namespace duckdb {
 
@@ -52,9 +53,24 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ptr;
 }
 
+void TransactionManager::LockClients(vector<unique_ptr<lock_guard<mutex>>> &client_locks, ClientContext &context) {
+	auto &connection_manager = ConnectionManager::Get(context);
+	client_locks.push_back(make_unique<lock_guard<mutex>>(connection_manager.connections_lock));
+	connection_manager.Scan([&](ClientContext *con) {
+		if (con != &context) {
+			client_locks.push_back(make_unique<lock_guard<mutex>>(con->context_lock));
+		}
+	});
+}
+
 void TransactionManager::Checkpoint(ClientContext &context, bool force) {
-	// FIXME: lock all clients
+	// lock all the clients AND the connection manager before doing anything else
+	// this ensures no new queries can be started, and no new connections to the database can be made
+	vector<unique_ptr<lock_guard<mutex>>> client_locks;
+	LockClients(client_locks, context);
+
 	lock_guard<mutex> lock(transaction_lock);
+
 	if (!force) {
 		if (!CanCheckpoint(nullptr)) {
 			throw TransactionException("Cannot CHECKPOINT: there are transactions with transaction-local changes. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint");
@@ -91,6 +107,10 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 }
 
 bool TransactionManager::CanCheckpoint(Transaction *current) {
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+	if (storage_manager.InMemory()) {
+		return false;
+	}
 	if (!recently_committed_transactions.empty() || !old_transactions.empty()) {
 		return false;
 	}
@@ -104,20 +124,32 @@ bool TransactionManager::CanCheckpoint(Transaction *current) {
 	return true;
 }
 
-string TransactionManager::CommitTransaction(Transaction *transaction) {
-
-	// obtain the transaction lock during this function
-	lock_guard<mutex> lock(transaction_lock);
-
+string TransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
+	vector<unique_ptr<lock_guard<mutex>>> client_locks;
+	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	// check if we can checkpoint
 	bool can_checkpoint = CanCheckpoint();
+	if (can_checkpoint) {
+		// we might be able to checkpoint: lock all clients
+		lock.reset();
+
+		LockClients(client_locks, context);
+
+		lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
 	// commit the UndoBuffer of the transaction
 	string error = transaction->Commit(db, commit_id, can_checkpoint);
 	if (!error.empty()) {
 		// commit unsuccessful: rollback the transaction instead
+		can_checkpoint = false;
 		transaction->commit_id = 0;
 		transaction->Rollback();
+	}
+	if (!can_checkpoint) {
+		// we won't checkpoint after all: unlock the clients again
+		client_locks.clear();
 	}
 
 	// commit successful: remove the transaction id from the list of active transactions
@@ -126,6 +158,7 @@ string TransactionManager::CommitTransaction(Transaction *transaction) {
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to checkpoint
 	if (can_checkpoint) {
 		// checkpoint the database to disk
+		// FIXME: lock all clients
 		auto &storage_manager = StorageManager::GetStorageManager(db);
 		storage_manager.CreateCheckpoint(false, true);
 	}

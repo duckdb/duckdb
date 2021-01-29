@@ -39,7 +39,7 @@ public:
 	//! Start a new transaction
 	Transaction *StartTransaction(ClientContext &context);
 	//! Commit the given transaction
-	string CommitTransaction(Transaction *transaction);
+	string CommitTransaction(ClientContext &context, Transaction *transaction);
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
 	//! Add the catalog set
@@ -57,6 +57,7 @@ private:
 	bool CanCheckpoint(Transaction *current = nullptr);
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(Transaction *transaction) noexcept;
+	void LockClients(vector<unique_ptr<lock_guard<mutex>>> &client_locks, ClientContext &context);
 
 	//! The database instance
 	DatabaseInstance &db;
