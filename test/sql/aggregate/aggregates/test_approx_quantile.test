@@ -19,15 +19,16 @@ SELECT CASE
 1
 
 
-query I
-SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r::decimal(10,2), 0.5) as approx_quantile ,quantile(r::decimal(10,2), 0.5) as true_quantile FROM quantile) AS T
-----
-1
+#query I
+#SELECT CASE
+#       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+#            THEN TRUE
+#            ELSE FALSE
+#       END
+#       FROM (SELECT approx_quantile(r::decimal(10,2), 0.5) as approx_quantile ,quantile(r::decimal(10,2), 0.5) as true_quantile FROM quantile) AS T
+#----
+#1
+
 
 query I
 SELECT CASE

@@ -9,9 +9,25 @@
 
 namespace duckdb{
 
-template <class T> struct approx_quantile_state_t {
+struct approx_quantile_state_t {
 	 tdigest::TDigest *h = nullptr;
 	idx_t pos{};
+};
+
+struct ApproximateQuantileBindData : public FunctionData {
+	explicit ApproximateQuantileBindData(float quantile_) : quantile(quantile_) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		return make_unique<ApproximateQuantileBindData>(quantile);
+	}
+
+	bool Equals(FunctionData &other_p) override {
+		auto &other = (ApproximateQuantileBindData &)other_p;
+		return quantile == other.quantile;
+	}
+
+	float quantile;
 };
 
 template <class T> struct ApproxQuantileOperation {
@@ -58,7 +74,7 @@ template <class T> struct ApproxQuantileOperation {
 		D_ASSERT(state->h);
 		D_ASSERT(bind_data_);
 		state->h->compress();
-		auto bind_data = (QuantileBindData *)bind_data_;
+		auto bind_data = (ApproximateQuantileBindData *)bind_data_;
 		target[idx] = state->h->quantile(bind_data->quantile);
 	}
 
@@ -76,26 +92,26 @@ template <class T> struct ApproxQuantileOperation {
 AggregateFunction GetApproximateQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t<int16_t>, int16_t, int16_t,
+		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t, int16_t, int16_t,
 		                                                   ApproxQuantileOperation<int16_t>>(LogicalType::SMALLINT,
 		                                                                                     LogicalType::SMALLINT);
 
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t<int32_t>, int32_t, int32_t,
+		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t, int32_t, int32_t,
 		                                                   ApproxQuantileOperation<int32_t>>(LogicalType::INTEGER,
 		                                                                                     LogicalType::INTEGER);
 
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t<int64_t>, int64_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t, int64_t, int64_t,
 		                                                   ApproxQuantileOperation<int64_t>>(LogicalType::BIGINT,
 		                                                                                     LogicalType::BIGINT);
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t<float>, float, float,
+		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t, float, float,
 		                                                   ApproxQuantileOperation<float>>(LogicalType::FLOAT,
 		                                                                                   LogicalType::FLOAT);
 
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t<double>, double, double,
+		return AggregateFunction::UnaryAggregateDestructor<approx_quantile_state_t, double, double,
 		                                                   ApproxQuantileOperation<double>>(LogicalType::DOUBLE,
 		                                                                                    LogicalType::DOUBLE);
 
@@ -117,7 +133,7 @@ unique_ptr<FunctionData> bind_approx_quantile(ClientContext &context, AggregateF
 	}
 	// remove the quantile argument so we can use the unary aggregate
 	arguments.pop_back();
-	return make_unique<QuantileBindData>(quantile);
+	return make_unique<ApproximateQuantileBindData>(quantile);
 }
 
 unique_ptr<FunctionData> bind_approx_quantile_decimal(ClientContext &context, AggregateFunction &function,
@@ -130,7 +146,7 @@ unique_ptr<FunctionData> bind_approx_quantile_decimal(ClientContext &context, Ag
 
 AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
 	auto fun = GetApproximateQuantileAggregateFunction(type);
-	fun.bind = bind_quantile;
+	fun.bind = bind_approx_quantile;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.push_back(LogicalType::FLOAT);
 	return fun;

@@ -33,7 +33,7 @@ using Weight = double;
 using Index = size_t;
 
 const size_t kHighWater = 40000;
-
+const double pi = 3.14159265358979323846;
 class Centroid {
  public:
   Centroid() : Centroid(0.0, 0.0) {}
@@ -538,11 +538,11 @@ class TDigest {
    * @return The centroid scale value corresponding to q.
    */
   inline Value integratedLocation(Value q) const {
-    return compression_ * (std::asin(2.0 * q - 1.0) + M_PI / 2) / M_PI;
+    return compression_ * (std::asin(2.0 * q - 1.0) + pi / 2) / pi;
   }
 
   inline Value integratedQ(Value k) const {
-    return (std::sin(std::min(k, compression_) * M_PI / compression_ - M_PI / 2) + 1) / 2;
+    return (std::sin(std::min(k, compression_) * pi / compression_ - pi / 2) + 1) / 2;
   }
 
   /**

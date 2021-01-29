@@ -1,14 +1,14 @@
 # name: benchmark/micro/aggregate/quantile/quantile_sampling.benchmark
-# description: Approximate Quantile Function
-# group: [aggregate]
+# description: Quantile Function With Sampling
+# group: [quantile]
 
-name Integer Sum (Ungrouped)
+name Quantile With Sampling
 group aggregate
 
 load
 create table quantile as select range r, random() from range(10000000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
 
 run
-SELECT approx_quantile(r, 0.5) FROM quantile USING SAMPLE reservoir(8192 ROWS) REPEATABLE (100)
+SELECT quantile(r, 0.5,100) FROM quantile
 
 

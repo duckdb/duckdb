@@ -1,9 +1,10 @@
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+
 #include <algorithm>
-#include <stdlib.h>
 #include <cmath>
+#include <stdlib.h>
 
 namespace duckdb {
 
@@ -14,11 +15,11 @@ struct quantile_state_t {
 };
 
 struct QuantileBindData : public FunctionData {
-	QuantileBindData(float quantile_) : quantile(quantile_) {
+	QuantileBindData(float quantile_, double percentage_) : quantile(quantile_), percentage(percentage_) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<QuantileBindData>(quantile);
+		return make_unique<QuantileBindData>(quantile, percentage);
 	}
 
 	bool Equals(FunctionData &other_p) override {
@@ -27,6 +28,7 @@ struct QuantileBindData : public FunctionData {
 	}
 
 	float quantile;
+	double percentage;
 };
 
 template <class T> struct QuantileOperation {
@@ -64,7 +66,12 @@ template <class T> struct QuantileOperation {
 			resize_state(state, state->len == 0 ? 1 : state->len * 2);
 		}
 		D_ASSERT(state->v);
+//		bool add_value = rand()%100 == 1;
+//		if (add_value){
+//			((T *)state->v)[state->pos++] = data[idx];
+//		}
 		((T *)state->v)[state->pos++] = data[idx];
+
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
@@ -86,10 +93,44 @@ template <class T> struct QuantileOperation {
 		D_ASSERT(state->v);
 		D_ASSERT(bind_data_);
 		auto bind_data = (QuantileBindData *)bind_data_;
-		idx_t offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
 		auto v_t = (T *)state->v;
+		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		target[idx] = v_t[offset];
+//		if (bind_data->percentage < 100) {
+//			size_t sample_size = bind_data->percentage/100 * state->pos;
+//			for (size_t i = 0; i < sample_size; i++){
+//				std::swap(v_t[i],v_t[i+rand()%(state->pos-i)]);
+//			}
+
+//			auto sample_ptr = (data_ptr_t)malloc(sample_size * sizeof(T));
+//			auto sample = (T *)sample_ptr;
+//
+//			for (size_t i = 0; i < sample_size; i++){
+//				sample[i] = v_t[i];
+//			}
+//			srand(time(nullptr));
+//			for (; i < state->pos; i++) {
+//				// Pick a random index from 0 to i.
+//				size_t j = rand() % (i + 1);
+//
+//				// If the randomly picked index is smaller than k,
+//				// then replace the element present at the index
+//				// with new element from stream
+//				if (j < sample_size)
+//					sample[j] = v_t[i];
+//			}
+//			auto offset = (idx_t)((double)(sample_size - 1) * bind_data->quantile);
+//			std::nth_element(v_t, v_t + offset, v_t + sample_size);
+//		    target[idx] = v_t[offset];
+//			free(sample_ptr);
+//		}
+//		else{
+//			auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
+//			std::nth_element(v_t, v_t + offset, v_t + state->pos);
+//		    target[idx] = v_t[offset];
+//		}
+
 	}
 
 	template <class STATE> static void Destroy(STATE *state) {
@@ -125,7 +166,6 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, hugeint_t, hugeint_t,
 		                                                   QuantileOperation<hugeint_t>>(LogicalType::HUGEINT,
 		                                                                                 LogicalType::HUGEINT);
-
 	case PhysicalType::FLOAT:
 		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, float, float, QuantileOperation<float>>(
 		    LogicalType::FLOAT, LogicalType::FLOAT);
@@ -141,7 +181,7 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 
 unique_ptr<FunctionData> bind_median(ClientContext &context, AggregateFunction &function,
                                      vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<QuantileBindData>(0.5);
+	return make_unique<QuantileBindData>(0.5, 100);
 }
 
 unique_ptr<FunctionData> bind_median_decimal(ClientContext &context, AggregateFunction &function,
@@ -164,9 +204,24 @@ unique_ptr<FunctionData> bind_quantile(ClientContext &context, AggregateFunction
 	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
 	}
+	if (arguments.size() <= 2) {
+		arguments.pop_back();
+		return make_unique<QuantileBindData>(quantile, 100);
+	}
+	if (!arguments[2]->IsScalar()) {
+		throw BinderException("QUANTILE can only take constant quantile parameters");
+	}
+	Value percent_val = ExpressionExecutor::EvaluateScalar(*arguments[2]);
+	auto percent_sample = percent_val.GetValue<double>();
+
+	if (percent_val.is_null || percent_sample < 0 || percent_sample > 100) {
+		throw BinderException("Percentage of the sample must be in range [0.00, 100]");
+	}
+
 	// remove the quantile argument so we can use the unary aggregate
 	arguments.pop_back();
-	return make_unique<QuantileBindData>(quantile);
+	arguments.pop_back();
+	return make_unique<QuantileBindData>(quantile, percent_sample);
 }
 
 unique_ptr<FunctionData> bind_quantile_decimal(ClientContext &context, AggregateFunction &function,
@@ -204,8 +259,9 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(median);
 
 	AggregateFunctionSet quantile("quantile");
-	quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL, nullptr,
-	                                       nullptr, nullptr, nullptr, nullptr, nullptr, bind_quantile_decimal));
+	quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT, LogicalType::FLOAT},
+	                                       LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                                       bind_quantile_decimal));
 
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT16));
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT32));
