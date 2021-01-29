@@ -176,7 +176,6 @@ private:
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
-
 	//! Pinned handles, these are pinned during finalization only
 	vector<unique_ptr<BufferHandle>> pinned_handles;
 	//! The hash map of the HT, created after finalization

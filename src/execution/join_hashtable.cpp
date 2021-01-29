@@ -52,7 +52,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		pointer_offset += sizeof(bool);
 	}
 	// compute the per-block capacity of this HT
-	row_chunk.block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / row_chunk.entry_size) + 1);
+	row_chunk.block_capacity =
+	    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / row_chunk.entry_size) + 1);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -99,31 +100,6 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 		VectorOperations::Hash(keys.data[0], hashes, sel, count);
 		for (idx_t i = 1; i < equality_types.size(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
-		}
-	}
-}
-template <class T>
-static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &sel, idx_t count,
-                                      data_ptr_t key_locations[]) {
-	auto source = (T *)vdata.data;
-	if (vdata.nullmask->any()) {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx);
-
-			auto target = (T *)key_locations[i];
-			T value = (*vdata.nullmask)[source_idx] ? NullValue<T>() : source[source_idx];
-			Store<T>(value, (data_ptr_t)target);
-			key_locations[i] += sizeof(T);
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx);
-
-			auto target = (T *)key_locations[i];
-			Store<T>(source[source_idx], (data_ptr_t)target);
-			key_locations[i] += sizeof(T);
 		}
 	}
 }
@@ -208,7 +184,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		return;
 	}
 
-    data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	row_chunk.Build(added_count, key_locations);
 
 	// hash the keys and obtain an entry in the list
@@ -218,7 +194,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
-		row_chunk.SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, key_locations);
+		row_chunk.SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count,
+		                              key_locations);
 	}
 	// now serialize the payload
 	if (build_types.size() > 0) {
@@ -414,16 +391,16 @@ static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers,
 	switch (type) {
 	case PhysicalType::UINT8:
 		return TemplatedGather<NO_MATCH_SEL, uint8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                 no_match_sel, no_match_count);
+		                                                  no_match_sel, no_match_count);
 	case PhysicalType::UINT16:
 		return TemplatedGather<NO_MATCH_SEL, uint16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
+		                                                   no_match_sel, no_match_count);
 	case PhysicalType::UINT32:
 		return TemplatedGather<NO_MATCH_SEL, uint32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
+		                                                   no_match_sel, no_match_count);
 	case PhysicalType::UINT64:
 		return TemplatedGather<NO_MATCH_SEL, uint64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
+		                                                   no_match_sel, no_match_count);
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
