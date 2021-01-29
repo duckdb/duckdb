@@ -1,17 +1,22 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "pcg_random.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <random>
 #include <stdlib.h>
 
 namespace duckdb {
 
 struct quantile_state_t {
 	data_ptr_t v;
+	pcg32 *rng;
+	std::uniform_int_distribution<int> *uniform_dist;
 	idx_t len;
 	idx_t pos;
+	idx_t next_pos;
 };
 
 struct QuantileBindData : public FunctionData {
@@ -34,8 +39,11 @@ struct QuantileBindData : public FunctionData {
 template <class T> struct QuantileOperation {
 	template <class STATE> static void Initialize(STATE *state) {
 		state->v = nullptr;
+		state->rng = nullptr;
+		state->uniform_dist = nullptr;
 		state->len = 0;
 		state->pos = 0;
+		state->next_pos = -1;
 	}
 
 	static void resize_state(quantile_state_t *state, idx_t new_len) {
@@ -61,17 +69,28 @@ template <class T> struct QuantileOperation {
 		if (nullmask[idx]) {
 			return;
 		}
-		if (state->pos == state->len) {
-			// growing conservatively here since we could be running this on many small groups
-			resize_state(state, state->len == 0 ? 1 : state->len * 2);
-		}
-		D_ASSERT(state->v);
-//		bool add_value = rand()%100 == 1;
-//		if (add_value){
-//			((T *)state->v)[state->pos++] = data[idx];
+//		if (false) {
+//			if (state->pos == state->len) {
+//				// growing conservatively here since we could be running this on many small groups
+//				resize_state(state, state->len == 0 ? 1 : state->len * 2);
+//			}
+//			D_ASSERT(state->v);
+//			if (state->next_pos == -1) {
+//				//! Seed with a real random value, if available
+//				pcg_extras::seed_seq_from<std::random_device> seed_source;
+//				//! Make a random number engine
+//				state->rng = new pcg32(seed_source);
+//				state->uniform_dist = new std::uniform_int_distribution<int>(0, 100);
+//				state->next_pos = (*state->uniform_dist)(*state->rng);
+//			}
+//			if (state->next_pos == idx) {
+//				//! We materialize this guy
+//				((T *)state->v)[state->pos++] = data[idx];
+//				//! We get a new next position
+//				state->next_pos = (*state->uniform_dist)(*state->rng) + state->pos * 100;
+//			}
 //		}
 		((T *)state->v)[state->pos++] = data[idx];
-
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
@@ -97,46 +116,20 @@ template <class T> struct QuantileOperation {
 		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		target[idx] = v_t[offset];
-//		if (bind_data->percentage < 100) {
-//			size_t sample_size = bind_data->percentage/100 * state->pos;
-//			for (size_t i = 0; i < sample_size; i++){
-//				std::swap(v_t[i],v_t[i+rand()%(state->pos-i)]);
-//			}
-
-//			auto sample_ptr = (data_ptr_t)malloc(sample_size * sizeof(T));
-//			auto sample = (T *)sample_ptr;
-//
-//			for (size_t i = 0; i < sample_size; i++){
-//				sample[i] = v_t[i];
-//			}
-//			srand(time(nullptr));
-//			for (; i < state->pos; i++) {
-//				// Pick a random index from 0 to i.
-//				size_t j = rand() % (i + 1);
-//
-//				// If the randomly picked index is smaller than k,
-//				// then replace the element present at the index
-//				// with new element from stream
-//				if (j < sample_size)
-//					sample[j] = v_t[i];
-//			}
-//			auto offset = (idx_t)((double)(sample_size - 1) * bind_data->quantile);
-//			std::nth_element(v_t, v_t + offset, v_t + sample_size);
-//		    target[idx] = v_t[offset];
-//			free(sample_ptr);
-//		}
-//		else{
-//			auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
-//			std::nth_element(v_t, v_t + offset, v_t + state->pos);
-//		    target[idx] = v_t[offset];
-//		}
-
 	}
 
 	template <class STATE> static void Destroy(STATE *state) {
 		if (state->v) {
 			free(state->v);
 			state->v = nullptr;
+		}
+		if (state->rng) {
+			free(state->rng);
+			state->rng = nullptr;
+		}
+		if (state->uniform_dist) {
+			free(state->uniform_dist);
+			state->uniform_dist = nullptr;
 		}
 	}
 
