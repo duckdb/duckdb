@@ -40,6 +40,8 @@ public:
 
 	//! Whether or not the WAL has been initialized
 	bool initialized;
+	//! Skip writing to the WAL
+	bool skip_writing;
 
 public:
 	//! Replay the WAL

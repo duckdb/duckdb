@@ -115,14 +115,11 @@ void StorageManager::LoadDatabase() {
 	}
 }
 
-void StorageManager::CreateCheckpoint(bool delete_wal) {
+void StorageManager::CreateCheckpoint(bool delete_wal, bool force_checkpoint) {
 	if (InMemory() || read_only || !wal.initialized) {
 		return;
 	}
-	if (!db.config.checkpoint_on_shutdown) {
-		return;
-	}
-	if (wal.GetWALSize() > 0 || db.config.force_checkpoint) {
+	if (wal.GetWALSize() > 0 || db.config.force_checkpoint || force_checkpoint) {
 		// we only need to checkpoint if there is anything in the WAL
 		CheckpointManager checkpointer(db);
 		checkpointer.CreateCheckpoint();

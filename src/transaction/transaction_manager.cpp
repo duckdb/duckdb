@@ -8,6 +8,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ TransactionManager::TransactionManager(DatabaseInstance &db) :
 TransactionManager::~TransactionManager() {
 }
 
-Transaction *TransactionManager::StartTransaction() {
+Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
@@ -43,7 +44,7 @@ Transaction *TransactionManager::StartTransaction() {
 
 	// create the actual transaction
 	auto &catalog = Catalog::GetCatalog(db);
-	auto transaction = make_unique<Transaction>(start_time, transaction_id, start_timestamp, catalog.GetCatalogVersion());
+	auto transaction = make_unique<Transaction>(weak_ptr<ClientContext>(context.shared_from_this()), start_time, transaction_id, start_timestamp, catalog.GetCatalogVersion());
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions
@@ -51,16 +52,68 @@ Transaction *TransactionManager::StartTransaction() {
 	return transaction_ptr;
 }
 
+void TransactionManager::Checkpoint(ClientContext &context, bool force) {
+	// FIXME: lock all clients
+	lock_guard<mutex> lock(transaction_lock);
+	if (!force) {
+		if (!CanCheckpoint(nullptr)) {
+			throw TransactionException("Cannot CHECKPOINT: there are transactions with transaction-local changes. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint");
+		}
+	} else {
+		if (!CanCheckpoint(nullptr)) {
+			auto current = &Transaction::GetTransaction(context);
+			if (current->ChangesMade()) {
+				throw TransactionException("Cannot FORCE CHECKPOINT: the current transaction has transaction local changes");
+			}
+			for(size_t i = 0; i < active_transactions.size(); i++) {
+				auto &transaction = active_transactions[i];
+				if (transaction.get() != current && transaction->ChangesMade()) {
+					// rollback the transaction
+					transaction->Rollback();
+					auto transaction_context = transaction->context.lock();
+
+					// remove the transaction id from the list of active transactions
+					// potentially resulting in garbage collection
+					RemoveTransaction(transaction.get());
+					if (transaction_context) {
+						transaction_context->transaction.ClearTransaction();
+					}
+					i--;
+				}
+			}
+			if (!CanCheckpoint(current)) {
+				throw TransactionException("Cannot FORCE CHECKPOINT: the current transaction relies on other transactions' committed changes");
+			}
+		}
+	}
+	auto &storage = StorageManager::GetStorageManager(context);
+	storage.CreateCheckpoint();
+}
+
+bool TransactionManager::CanCheckpoint(Transaction *current) {
+	if (!recently_committed_transactions.empty() || !old_transactions.empty()) {
+		return false;
+	}
+	for(auto &transaction : active_transactions) {
+		if (transaction.get() != current) {
+			if (transaction->ChangesMade()) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 string TransactionManager::CommitTransaction(Transaction *transaction) {
-	auto &storage_manager = StorageManager::GetStorageManager(db);
 
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
+	bool can_checkpoint = CanCheckpoint();
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
 	// commit the UndoBuffer of the transaction
-	string error = transaction->Commit(storage_manager.GetWriteAheadLog(), commit_id);
+	string error = transaction->Commit(db, commit_id, can_checkpoint);
 	if (!error.empty()) {
 		// commit unsuccessful: rollback the transaction instead
 		transaction->commit_id = 0;
@@ -70,6 +123,12 @@ string TransactionManager::CommitTransaction(Transaction *transaction) {
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
+	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to checkpoint
+	if (can_checkpoint) {
+		// checkpoint the database to disk
+		auto &storage_manager = StorageManager::GetStorageManager(db);
+		storage_manager.CreateCheckpoint(false, true);
+	}
 	return error;
 }
 

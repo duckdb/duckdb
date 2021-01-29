@@ -28,8 +28,8 @@ public:
 
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
-	// Checkpoint when WAL reaches this size
-	idx_t checkpoint_wal_size = 1 << 20;
+	// Checkpoint when WAL reaches this size (default: 16MB)
+	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
@@ -58,6 +58,7 @@ public:
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
+	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);
 };
 
 } // namespace duckdb

@@ -5,10 +5,12 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> Transformer::TransformCheckpoint(duckdb_libpgquery::PGNode *node) {
+	auto checkpoint = (duckdb_libpgquery::PGCheckPointStmt *) node;
+
 	vector<unique_ptr<ParsedExpression>> children;
-	// transform into "CALL checkpoint()"
+	// transform into "CALL checkpoint()" or "CALL force_checkpoint()"
 	auto result = make_unique<CallStatement>();
-	result->function = make_unique<FunctionExpression>("checkpoint", children);
+	result->function = make_unique<FunctionExpression>(checkpoint->force ? "force_checkpoint" : "checkpoint", children);
 	return result;
 }
 

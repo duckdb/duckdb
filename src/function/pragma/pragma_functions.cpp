@@ -179,6 +179,11 @@ static void pragma_perfect_ht_threshold(ClientContext &context, FunctionParamete
 	context.perfect_ht_threshold = bits;
 }
 
+static void pragma_wal_autocheckpoint(ClientContext &context, FunctionParameters parameters) {
+	idx_t new_limit = ParseMemoryLimit(parameters.values[0].ToString());
+	DBConfig::GetConfig(context).checkpoint_wal_size = new_limit;
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	register_enable_profiling(set);
 
@@ -225,6 +230,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("perfect_ht_threshold", pragma_perfect_ht_threshold, LogicalType::INTEGER));
+
+	set.AddFunction(PragmaFunction::PragmaAssignment("wal_autocheckpoint", pragma_wal_autocheckpoint, LogicalType::VARCHAR));
+	set.AddFunction(PragmaFunction::PragmaAssignment("checkpoint_threshold", pragma_wal_autocheckpoint, LogicalType::VARCHAR));
 }
 
 idx_t ParseMemoryLimit(string arg) {

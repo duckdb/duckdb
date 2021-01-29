@@ -21,14 +21,16 @@ DatabaseInstance::~DatabaseInstance() {
 	try {
 		auto &storage = StorageManager::GetStorageManager(*this);
 		if (!storage.InMemory()) {
+			auto &config = storage.db.config;
+			if (!config.checkpoint_on_shutdown) {
+				return;
+			}
 			storage.CreateCheckpoint(true);
 		}
 	} catch(...) {
 
 	}
 }
-
-
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return *db.GetStorageManager().buffer_manager;
@@ -56,6 +58,18 @@ Catalog &Catalog::GetCatalog(DatabaseInstance &db) {
 
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
+}
+
+DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
+	return db.config;
+}
+
+TransactionManager& TransactionManager::Get(ClientContext &context) {
+	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
+}
+
+TransactionManager& TransactionManager::Get(DatabaseInstance &db) {
+	return db.GetTransactionManager();
 }
 
 void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {

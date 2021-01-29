@@ -37,7 +37,7 @@ public:
 	~TransactionManager();
 
 	//! Start a new transaction
-	Transaction *StartTransaction();
+	Transaction *StartTransaction(ClientContext &context);
 	//! Commit the given transaction
 	string CommitTransaction(Transaction *transaction);
 	//! Rollback the given transaction
@@ -49,7 +49,12 @@ public:
 		return current_query_number++;
 	}
 
+	void Checkpoint(ClientContext &context, bool force = false);
+
+	static TransactionManager& Get(ClientContext &context);
+	static TransactionManager& Get(DatabaseInstance &db);
 private:
+	bool CanCheckpoint(Transaction *current = nullptr);
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(Transaction *transaction) noexcept;
 

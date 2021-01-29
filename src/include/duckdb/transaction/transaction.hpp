@@ -20,6 +20,7 @@ class SequenceCatalogEntry;
 class ClientContext;
 class CatalogEntry;
 class DataTable;
+class DatabaseInstance;
 class WriteAheadLog;
 
 class ChunkVectorInfo;
@@ -32,12 +33,13 @@ struct UpdateInfo;
 
 class Transaction {
 public:
-	Transaction(transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp, idx_t catalog_version)
-	    : start_time(start_time), transaction_id(transaction_id), commit_id(0), highest_active_query(0),
-	      active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp), catalog_version(catalog_version),
-		  storage(*this), is_invalidated(false) {
+	Transaction(weak_ptr<ClientContext> context, transaction_t start_time, transaction_t transaction_id, timestamp_t start_timestamp, idx_t catalog_version)
+	    : context(move(context)), start_time(start_time), transaction_id(transaction_id), commit_id(0),
+	      highest_active_query(0), active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp),
+	      catalog_version(catalog_version), storage(*this), is_invalidated(false) {
 	}
 
+	weak_ptr<ClientContext> context;
 	//! The start timestamp of this transaction
 	transaction_t start_time;
 	//! The transaction id of this transaction
@@ -67,7 +69,7 @@ public:
 
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
-	string Commit(WriteAheadLog *log, transaction_t commit_id) noexcept;
+	string Commit(DatabaseInstance &db, transaction_t commit_id, bool &can_checkpoint) noexcept;
 	//! Rollback
 	void Rollback() noexcept {
 		undo_buffer.Rollback();
@@ -83,6 +85,7 @@ public:
 	bool IsInvalidated() {
 		return is_invalidated;
 	}
+	bool ChangesMade();
 
 	timestamp_t GetCurrentTransactionStartTimestamp() {
 		return start_timestamp;

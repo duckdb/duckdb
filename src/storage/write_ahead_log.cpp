@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-WriteAheadLog::WriteAheadLog(DatabaseInstance &database) : initialized(false), database(database) {
+WriteAheadLog::WriteAheadLog(DatabaseInstance &database) : initialized(false), skip_writing(false), database(database) {
 }
 
 void WriteAheadLog::Initialize(string &path) {
@@ -52,6 +52,9 @@ void WriteAheadLog::Delete() {
 // Write Entries
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCheckpoint(block_id_t meta_block) {
+	if (skip_writing) {
+		return;
+	}
 	// FIXME; write checkpoint entry
 }
 
@@ -59,6 +62,9 @@ void WriteAheadLog::WriteCheckpoint(block_id_t meta_block) {
 // CREATE TABLE
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::CREATE_TABLE);
 	entry->Serialize(*writer);
 }
@@ -67,6 +73,9 @@ void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
 // DROP TABLE
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::DROP_TABLE);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
@@ -76,6 +85,9 @@ void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
 // CREATE SCHEMA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::CREATE_SCHEMA);
 	writer->WriteString(entry->name);
 }
@@ -84,17 +96,26 @@ void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
 // SEQUENCES
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSequence(SequenceCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::CREATE_SEQUENCE);
 	entry->Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropSequence(SequenceCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::DROP_SEQUENCE);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
 }
 
 void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValue val) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::SEQUENCE_VALUE);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
@@ -106,11 +127,17 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 // MACRO'S
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMacro(MacroCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::CREATE_MACRO);
 	entry->Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::DROP_MACRO);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
@@ -120,11 +147,17 @@ void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
 // VIEWS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(ViewCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::CREATE_VIEW);
 	entry->Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::DROP_VIEW);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
@@ -134,6 +167,9 @@ void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
 // DROP SCHEMA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::DROP_SCHEMA);
 	writer->WriteString(entry->name);
 }
@@ -142,12 +178,18 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 // DATA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteSetTable(string &schema, string &table) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::USE_TABLE);
 	writer->WriteString(schema);
 	writer->WriteString(table);
 }
 
 void WriteAheadLog::WriteInsert(DataChunk &chunk) {
+	if (skip_writing) {
+		return;
+	}
 	D_ASSERT(chunk.size() > 0);
 	chunk.Verify();
 
@@ -156,6 +198,9 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
+	if (skip_writing) {
+		return;
+	}
 	D_ASSERT(chunk.size() > 0);
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
 	chunk.Verify();
@@ -165,6 +210,9 @@ void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 }
 
 void WriteAheadLog::WriteUpdate(DataChunk &chunk, column_t col_idx) {
+	if (skip_writing) {
+		return;
+	}
 	D_ASSERT(chunk.size() > 0);
 	chunk.Verify();
 
@@ -177,6 +225,9 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, column_t col_idx) {
 // Write ALTER Statement
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteAlter(AlterInfo &info) {
+	if (skip_writing) {
+		return;
+	}
 	writer->Write<WALType>(WALType::ALTER_INFO);
 	info.Serialize(*writer);
 }
@@ -185,6 +236,9 @@ void WriteAheadLog::WriteAlter(AlterInfo &info) {
 // FLUSH
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::Flush() {
+	if (skip_writing) {
+		return;
+	}
 	// write an empty entry
 	writer->Write<WALType>(WALType::WAL_FLUSH);
 	// flushes all changes made to the WAL to disk
