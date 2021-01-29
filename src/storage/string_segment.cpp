@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
