@@ -69,12 +69,13 @@ template <class T> struct QuantileOperation {
 		if (nullmask[idx]) {
 			return;
 		}
-//		if (false) {
-//			if (state->pos == state->len) {
-//				// growing conservatively here since we could be running this on many small groups
-//				resize_state(state, state->len == 0 ? 1 : state->len * 2);
-//			}
-//			D_ASSERT(state->v);
+		if (state->pos == state->len) {
+			// growing conservatively here since we could be running this on many small groups
+			resize_state(state, state->len == 0 ? 1 : state->len * 2);
+		}
+		D_ASSERT(state->v);
+		//		if (false) {
+
 //			if (state->next_pos == -1) {
 //				//! Seed with a real random value, if available
 //				pcg_extras::seed_seq_from<std::random_device> seed_source;
