@@ -1,0 +1,117 @@
+# name: test/sql/storage/multiple_clients_checkpoint_pending_updates.test
+# description: Test checkpoint with pending updates from simultaneously running clients
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/pending_updates.db
+
+statement ok
+CREATE TABLE test (i INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000);
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE test SET i=i+1;
+
+statement error con2
+CHECKPOINT
+
+statement ok con2
+FORCE CHECKPOINT
+
+# force checkpoint rolled back the transaction of con1
+query III con1
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+restart
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test (i INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000);
+
+# now do the same, but with a whole mess of transactions that all depend on each other
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE test SET i=i+1 WHERE i < 1000
+
+statement ok con3
+BEGIN TRANSACTION
+
+statement ok con3
+UPDATE test SET i=i+1 WHERE i > 1000 AND i < 2000
+
+statement ok con4
+BEGIN TRANSACTION
+
+statement ok con4
+UPDATE test SET i=i+1 WHERE i > 2000 AND i < 3000
+
+statement ok con5
+BEGIN TRANSACTION
+
+statement ok con5
+UPDATE test SET i=i+1 WHERE i > 3000 AND i < 4000
+
+statement error
+CHECKPOINT
+
+statement ok
+FORCE CHECKPOINT
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+query III con1
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+query III con2
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+query III con3
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+query III con4
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+query III con5
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+restart
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
