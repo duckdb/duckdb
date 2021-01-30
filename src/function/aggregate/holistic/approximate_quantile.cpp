@@ -139,7 +139,7 @@ unique_ptr<FunctionData> bind_approx_quantile(ClientContext &context, AggregateF
 unique_ptr<FunctionData> bind_approx_quantile_decimal(ClientContext &context, AggregateFunction &function,
                                                       vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = bind_approx_quantile(context, function, arguments);
-	function = GetQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function = GetApproximateQuantileAggregateFunction(arguments[0]->return_type.InternalType());
 	function.name = "approx_quantile";
 	return bind_data;
 }
