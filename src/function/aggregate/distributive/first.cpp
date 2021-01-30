@@ -24,7 +24,7 @@ struct FirstFunctionBase {
 
 struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			if (nullmask[idx]) {
@@ -37,8 +37,8 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
@@ -77,15 +77,15 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			SetValue(state, input[idx], nullmask[idx]);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+	static void ConstantOperation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {

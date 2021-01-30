@@ -74,7 +74,7 @@ private:
 	idx_t current_count;
 };
 
-//! The reservoir sample percentage class maintains a streaming sample of variable size
+//! The reservoir sample sample_size class maintains a streaming sample of variable size
 class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 
@@ -92,7 +92,7 @@ private:
 	void Finalize();
 
 private:
-	//! The percentage to sample
+	//! The sample_size to sample
 	double sample_percentage;
 	//! The fixed sample size of the sub-reservoirs
 	idx_t reservoir_sample_size;

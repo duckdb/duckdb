@@ -120,7 +120,7 @@ select * from range(100) using sample 10% (system, 250)
 
 endloop
 
-# specify as percentage, with reservoir sampling this should give us an exact count (i.e. always 10)
+# specify as sample_size, with reservoir sampling this should give us an exact count (i.e. always 10)
 loop i 0 10
 
 query I
@@ -134,7 +134,7 @@ endloop
 statement ok
 create table integers as select i from range(200) tbl(i);
 
-# default is percentage, which follows postgres syntax rules
+# default is sample_size, which follows postgres syntax rules
 query I
 select count(*) from integers tablesample reservoir(10);
 ----
@@ -223,6 +223,6 @@ select * from integers using sample bernoulli(5 rows);
 statement error
 select * from integers using sample system(5 rows);
 
-# percentage is out of range
+# sample_size is out of range
 statement error
 select * from integers using sample 10000%;

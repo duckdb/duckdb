@@ -309,11 +309,11 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 				distinct_addresses.Verify(new_group_count);
 
-				aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
+				aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count,
 				                     distinct_addresses, new_group_count);
 			}
 		} else {
-			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
+			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count, addresses,
 			                     payload.size());
 		}
 

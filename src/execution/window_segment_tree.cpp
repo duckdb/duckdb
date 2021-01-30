@@ -97,7 +97,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 				VectorOperations::Copy(chunk_b.data[i], v, chunk_b_count, 0, chunk_a_count);
 			}
 		}
-		aggregate.update(&inputs.data[0], input_count, s, inputs.size());
+		aggregate.update(&inputs.data[0], nullptr, input_count, s, inputs.size());
 	} else {
 		D_ASSERT(end - begin <= STANDARD_VECTOR_SIZE);
 		// find out where the states begin

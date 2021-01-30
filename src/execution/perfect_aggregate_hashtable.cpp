@@ -113,7 +113,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggr.child_count;
-		aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
+		aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count, addresses,
 		                     payload.size());
 
 		// move to the next aggregate

@@ -170,7 +170,7 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 	if (!is_finalized) {
 		Finalize();
 	}
-	while (finished_samples.size() > 0) {
+	while (!finished_samples.empty()) {
 		auto &front = finished_samples.front();
 		auto chunk = front->GetChunk();
 		if (chunk && chunk->size() > 0) {
@@ -186,7 +186,7 @@ void ReservoirSamplePercentage::Finalize() {
 	// need to finalize the current sample, if any
 	if (current_count > 0) {
 		// create a new sample
-		idx_t new_sample_size = idx_t(round(sample_percentage * current_count));
+		auto new_sample_size = idx_t(round(sample_percentage * current_count));
 		auto new_sample = make_unique<ReservoirSample>(new_sample_size, random.NextRandomInteger());
 		while (true) {
 			auto chunk = current_sample->GetChunk();

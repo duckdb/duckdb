@@ -3,12 +3,12 @@
 # group: [quantile]
 
 name Quantile With Sampling
-group aggregate
+group quantile
 
 load
 create table quantile as select range r, random() from range(10000000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
 
 run
-SELECT quantile(r, 0.5,100) FROM quantile
+SELECT reservoir_quantile(r, 0.5,100) FROM quantile
 
 
