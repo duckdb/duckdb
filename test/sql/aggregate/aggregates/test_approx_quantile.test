@@ -10,7 +10,7 @@ create table quantile as select range r, random() from range(10000) union all va
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -21,7 +21,7 @@ SELECT CASE
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -31,7 +31,7 @@ SELECT CASE
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -46,7 +46,7 @@ NULL	NULL
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -61,7 +61,7 @@ NULL	NULL
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -71,7 +71,7 @@ SELECT CASE
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -81,7 +81,7 @@ SELECT CASE
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -118,7 +118,7 @@ PRAGMA force_parallelism
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -128,7 +128,7 @@ SELECT CASE
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END
@@ -139,7 +139,7 @@ SELECT CASE
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.01)) and (true_quantile + (true_quantile *0.01)) )
+       WHEN ( approx_quantile between (true_quantile - (true_quantile *0.02)) and (true_quantile + (true_quantile *0.02)) )
             THEN TRUE
             ELSE FALSE
        END

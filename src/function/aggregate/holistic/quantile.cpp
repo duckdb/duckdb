@@ -5,8 +5,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <queue>
 #include <random>
 #include <stdlib.h>
+#include <utility>
 
 namespace duckdb {
 
@@ -14,38 +16,14 @@ struct quantile_state_t {
 	data_ptr_t v;
 	idx_t len;
 	idx_t pos;
-	idx_t input_pos;
 };
 
-typedef struct {
-  uint64_t state;
-  uint64_t inc;
-} pcg32_random_t;
-
-pcg32_random_t gstate = {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL};
-
-uint32_t pcg32_random_r(pcg32_random_t *rng) {
-  uint64_t oldstate = rng->state;
-  // Advance internal state
-  rng->state = oldstate * 6364136223846793005ULL + (rng->inc | 1);
-  // Calculate output function (XSH RR), uses old state for max ILP
-  uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
-  uint32_t rot = oldstate >> 59u;
-  return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
-}
-
-uint32_t random_bounded(uint32_t range) {
-  uint64_t random32bit = pcg32_random_r(&gstate);
-  uint64_t result = random32bit * range;
-  return result >> 32;
-}
-
 struct QuantileBindData : public FunctionData {
-	QuantileBindData(float quantile_, int32_t sample_size_) : quantile(quantile_), sample_size(sample_size_) {
+	QuantileBindData(float quantile_) : quantile(quantile_) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<QuantileBindData>(quantile, sample_size);
+		return make_unique<QuantileBindData>(quantile);
 	}
 
 	bool Equals(FunctionData &other_p) override {
@@ -54,7 +32,6 @@ struct QuantileBindData : public FunctionData {
 	}
 
 	float quantile;
-	int32_t sample_size;
 };
 
 template <class T> struct QuantileOperation {
@@ -62,7 +39,6 @@ template <class T> struct QuantileOperation {
 		state->v = nullptr;
 		state->len = 0;
 		state->pos = 0;
-		state->input_pos = 0;
 	}
 
 	static void resize_state(quantile_state_t *state, idx_t new_len) {
@@ -84,9 +60,9 @@ template <class T> struct QuantileOperation {
 		}
 	}
 
+
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
-		auto bind_data = (QuantileBindData *)bind_data_;
 		if (nullmask[idx]) {
 			return;
 		}
@@ -95,22 +71,7 @@ template <class T> struct QuantileOperation {
 			resize_state(state, state->len == 0 ? 1 : state->len * 2);
 		}
 		D_ASSERT(state->v);
-		if (bind_data->sample_size != -1) {
-            //! We gotta do some sampling
-            if (state->pos < bind_data->sample_size) {
-				((T *)state->v)[state->pos++] = data[idx];
-			} else {
-				size_t nextpos = random_bounded(state->input_pos);
-				if (nextpos < bind_data->sample_size){
-					((T *)state->v)[nextpos] = data[idx];
-				}
-			}
-		state->input_pos++;
-		}
-		else{
-			((T *)state->v)[state->pos++] = data[idx];
-		}
-
+		((T *)state->v)[state->pos++] = data[idx];
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
@@ -186,7 +147,7 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 
 unique_ptr<FunctionData> bind_median(ClientContext &context, AggregateFunction &function,
                                      vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<QuantileBindData>(0.5, 100);
+	return make_unique<QuantileBindData>(0.5);
 }
 
 unique_ptr<FunctionData> bind_median_decimal(ClientContext &context, AggregateFunction &function,
@@ -210,40 +171,8 @@ unique_ptr<FunctionData> bind_quantile(ClientContext &context, AggregateFunction
 		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
 	}
 	arguments.pop_back();
-	return make_unique<QuantileBindData>(quantile, -1);
+	return make_unique<QuantileBindData>(quantile);
 }
-
-unique_ptr<FunctionData> bind_reservoir_quantile(ClientContext &context, AggregateFunction &function,
-                                       vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
-		throw BinderException("QUANTILE can only take constant quantile parameters");
-	}
-	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-	auto quantile = quantile_val.GetValue<float>();
-
-	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
-		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
-	}
-	if (arguments.size() <= 2) {
-		arguments.pop_back();
-		return make_unique<QuantileBindData>(quantile, 8192);
-	}
-	if (!arguments[2]->IsScalar()) {
-		throw BinderException("QUANTILE can only take constant quantile parameters");
-	}
-	Value sample_size_val = ExpressionExecutor::EvaluateScalar(*arguments[2]);
-	auto sample_size = sample_size_val.GetValue<int32_t>();
-
-	if (sample_size_val.is_null || sample_size <= 0 ) {
-		throw BinderException("Percentage of the sample must be bigger than 0");
-	}
-
-	// remove the quantile argument so we can use the unary aggregate
-	arguments.pop_back();
-	arguments.pop_back();
-	return make_unique<QuantileBindData>(quantile, sample_size);
-}
-
 unique_ptr<FunctionData> bind_quantile_decimal(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = bind_quantile(context, function, arguments);
@@ -252,13 +181,6 @@ unique_ptr<FunctionData> bind_quantile_decimal(ClientContext &context, Aggregate
 	return bind_data;
 }
 
-unique_ptr<FunctionData> bind_reservoir_quantile_decimal(ClientContext &context, AggregateFunction &function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = bind_reservoir_quantile(context, function, arguments);
-	function = GetQuantileAggregateFunction(arguments[0]->return_type.InternalType());
-	function.name = "reservoir_quantile";
-	return bind_data;
-}
 
 AggregateFunction GetMedianAggregate(PhysicalType type) {
 	auto fun = GetQuantileAggregateFunction(type);
@@ -269,14 +191,6 @@ AggregateFunction GetMedianAggregate(PhysicalType type) {
 AggregateFunction GetQuantileAggregate(PhysicalType type) {
 	auto fun = GetQuantileAggregateFunction(type);
 	fun.bind = bind_quantile;
-	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::FLOAT);
-	return fun;
-}
-
-AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
-	auto fun = GetQuantileAggregateFunction(type);
-	fun.bind = bind_reservoir_quantile;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.push_back(LogicalType::FLOAT);
 	return fun;
@@ -306,21 +220,6 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::DOUBLE));
 
 	set.AddFunction(quantile);
-
-	AggregateFunctionSet reservoir_quantile("reservoir_quantile");
-	reservoir_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT, LogicalType::INTEGER},
-	                                       LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                       bind_reservoir_quantile_decimal));
-    reservoir_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT},
-	                                       LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                       bind_reservoir_quantile_decimal));
-	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT16));
-	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT32));
-	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT64));
-	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT128));
-	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::DOUBLE));
-
-	set.AddFunction(reservoir_quantile);
 }
 
 } // namespace duckdb
