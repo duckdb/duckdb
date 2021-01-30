@@ -124,18 +124,18 @@ template <class T> struct ReservoirQuantileOperation {
 	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
 		auto bind_data = (ReservoirQuantileBindData *)bind_data_;
 		D_ASSERT(state->v);
-		D_ASSERT(state->bind_data);
+		D_ASSERT(bind_data);
 		if (nullmask[idx]) {
 			return;
 		}
 		if (state->pos == 0) {
 			resize_state(state, bind_data->sample_size);
 		}
-		if (state->pos < bind_data->sample_size) {
+		if (state->pos < (idx_t)bind_data->sample_size) {
 			//! 1: The first m items of V are inserted into R
 			//! first we need to check if the reservoir already has "m" elements
 			((T *)state->v)[state->pos++] = data[idx];
-			if (state->pos == bind_data->sample_size) {
+			if (state->pos == (idx_t) bind_data->sample_size) {
 				//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
 				//! we then define the threshold to enter the reservoir T_w as the minimum key of R
 				//! we use a priority queue to extract the minimum key in O(1) time
@@ -177,7 +177,6 @@ template <class T> struct ReservoirQuantileOperation {
 				} else {
 					//! now that we have the sample, we start our replacement strategy
 					//! 3. Repeat Steps 5–10 until the population is exhausted
-					D_ASSERT(state->next_index >= state->current_count);
 					if (target->next_index == target->current_count) {
 						ReplaceElement<STATE, T>(((T *)source.v)[src_idx], target);
 					}
