@@ -123,7 +123,6 @@ template <class T> struct ReservoirQuantileOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
 		auto bind_data = (ReservoirQuantileBindData *)bind_data_;
-		D_ASSERT(state->v);
 		D_ASSERT(bind_data);
 		if (nullmask[idx]) {
 			return;
@@ -131,6 +130,7 @@ template <class T> struct ReservoirQuantileOperation {
 		if (state->pos == 0) {
 			resize_state(state, bind_data->sample_size);
 		}
+		D_ASSERT(state->v);
 		if (state->pos < (idx_t)bind_data->sample_size) {
 			//! 1: The first m items of V are inserted into R
 			//! first we need to check if the reservoir already has "m" elements
