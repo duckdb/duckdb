@@ -136,6 +136,10 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 		LockClients(client_locks, context);
 
 		lock = make_unique<lock_guard<mutex>>(transaction_lock);
+		can_checkpoint = CanCheckpoint();
+		if (!can_checkpoint) {
+			client_locks.clear();
+		}
 	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
@@ -158,7 +162,6 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to checkpoint
 	if (can_checkpoint) {
 		// checkpoint the database to disk
-		// FIXME: lock all clients
 		auto &storage_manager = StorageManager::GetStorageManager(db);
 		storage_manager.CreateCheckpoint(false, true);
 	}
