@@ -100,7 +100,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 			root = move(limit);
 			// Delete from modifiers
 			std::swap(statement.modifiers[i], statement.modifiers.back());
-			statement.modifiers.erase(statement.modifiers.end());
+			statement.modifiers.erase(statement.modifiers.end()-1);
 			i--;
 		}
 	}
