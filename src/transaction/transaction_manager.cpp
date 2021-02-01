@@ -133,23 +133,19 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 		if (!CanCheckpoint(current)) {
 			for(size_t i = 0; i < active_transactions.size(); i++) {
 				auto &transaction = active_transactions[i];
-				if (transaction.get() != current && transaction->ChangesMade()) {
-					// rollback the transaction
-					transaction->Rollback();
-					auto transaction_context = transaction->context.lock();
+				// rollback the transaction
+				transaction->Rollback();
+				auto transaction_context = transaction->context.lock();
 
-					// remove the transaction id from the list of active transactions
-					// potentially resulting in garbage collection
-					RemoveTransaction(transaction.get());
-					if (transaction_context) {
-						transaction_context->transaction.ClearTransaction();
-					}
-					i--;
+				// remove the transaction id from the list of active transactions
+				// potentially resulting in garbage collection
+				RemoveTransaction(transaction.get());
+				if (transaction_context) {
+					transaction_context->transaction.ClearTransaction();
 				}
+				i--;
 			}
-			if (!CanCheckpoint(current)) {
-				throw TransactionException("Cannot FORCE CHECKPOINT: the current transaction relies on other transactions' committed changes, we could not abort the other transactions.");
-			}
+			D_ASSERT(CanCheckpoint(nullptr));
 		}
 	}
 	auto &storage = StorageManager::GetStorageManager(context);
