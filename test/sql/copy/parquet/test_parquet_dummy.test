@@ -1,6 +1,0 @@
-# name: test/sql/copy/parquet/test_parquet_dummy.test
-# description: Test basic parquet reading
-# group: [parquet]
-
-require parquet
-
