@@ -170,29 +170,7 @@ void RowChunk::Build(idx_t added_count, data_ptr_t *key_locations) {
 }
 
 template <class T>
-static void templated_deserialize_rowblock(data_ptr_t key_locations[], VectorData &vdata, idx_t count) {
-    auto source = (T *)vdata.data;
-    if (vdata.nullmask->any()) {
-        for (idx_t i = 0; i < count; i++) {
-            auto idx = sel.get_index(i);
-            auto source_idx = vdata.sel->get_index(idx);
-
-            auto target = (T *)key_locations[i];
-            T value = (*vdata.nullmask)[source_idx] ? NullValue<T>() : source[source_idx];
-            Store<T>(value, (data_ptr_t)target);
-            key_locations[i] += sizeof(T);
-        }
-    } else {
-        for (idx_t i = 0; i < count; i++) {
-            auto idx = sel.get_index(i);
-            auto source_idx = vdata.sel->get_index(idx);
-
-            auto target = (T *)key_locations[i];
-            Store<T>(source[source_idx], (data_ptr_t)target);
-            key_locations[i] += sizeof(T);
-        }
-    }
-
+static void templated_deserialize_vector(data_ptr_t key_locations[], VectorData &vdata, idx_t count) {
 	auto target = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto source = (T *)key_locations[i];
@@ -200,8 +178,9 @@ static void templated_deserialize_rowblock(data_ptr_t key_locations[], VectorDat
 	}
 }
 
-void RowChunk::DeserializeRowBlock(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
-                                   data_ptr_t key_locations[]) {
+
+
+void RowChunk::DeserializeVector(data_ptr_t key_locations[], VectorData &vdata, PhysicalType type, idx_t count) {
     switch (type) {
     case PhysicalType::BOOL:
     case PhysicalType::INT8:
@@ -268,6 +247,42 @@ void RowChunk::DeserializeRowBlock(VectorData &vdata, PhysicalType type, const S
     default:
         throw NotImplementedException("FIXME: unimplemented deserialize");
     }
+}
+
+// TODO: DeserializeVectorData ??
+
+void RowChunk::DeserializeRowBlock(ChunkCollection &collection, RowDataBlock &block) {
+    auto block_handle = buffer_manager.Pin(block.block);
+	auto data_ptr = block_handle->node->buffer;
+    data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+
+    idx_t offset = 0;
+	idx_t chunk_size = MinValue<idx_t>(block.count - offset, STANDARD_VECTOR_SIZE);
+    while (offset < block.count) {
+        chunk_size = MinValue<idx_t>(block.count - offset, STANDARD_VECTOR_SIZE);
+        DataChunk chunk;
+		chunk.Initialize(types);
+
+		idx_t type_offset = 0;
+		for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
+			// fill pointer array with pointers to column data
+            for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+                key_locations[i] = data_ptr + i * entry_size + type_offset;
+            }
+
+			// FIXME: perhaps FlatVector::GetData instead?
+            VectorData vdata;
+            chunk.data[col_idx].Orrify(chunk_size, vdata);
+
+			// deserialize row data to vector
+            DeserializeVector(key_locations, vdata, types[col_idx].InternalType(), chunk_size);
+
+
+            idx_t col_size = GetTypeIdSize(types[col_idx].InternalType());
+			type_offset += col_size;
+            offset += chunk_size;
+		}
+	}
 }
 
 } // namespace duckdb
