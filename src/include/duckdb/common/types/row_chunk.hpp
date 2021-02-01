@@ -59,9 +59,9 @@ public:
 	                    idx_t remaining);
 	void Build(idx_t added_count, data_ptr_t *key_locations);
 
-    void DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, idx_t count, data_ptr_t key_locations[]);
-    void DeserializeIntoVector(Vector &v, idx_t count, data_ptr_t key_locations[]);
-    void DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t entry);
+	void DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, idx_t count, data_ptr_t key_locations[]);
+	void DeserializeIntoVector(Vector &v, idx_t count, data_ptr_t key_locations[]);
+	void DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t entry);
 };
 
 } // namespace duckdb

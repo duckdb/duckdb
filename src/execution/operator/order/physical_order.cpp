@@ -53,7 +53,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		state->null_order_types.push_back(orders[i].null_order);
 		state->executor.AddExpression(*expr);
 	}
-    // compute entry size
+	// compute entry size
 	for (auto type : children[0]->types) {
 		state->row_chunk.types.push_back(type);
 		state->row_chunk.entry_size += GetTypeIdSize(type.InternalType());
@@ -103,17 +103,17 @@ public:
 
 	void Execute() {
 		// get data from the buffer manager
-//		auto handle = state.row_chunk.buffer_manager.Pin(block.block);
-//		auto dataptr = handle->node->buffer;
+		//		auto handle = state.row_chunk.buffer_manager.Pin(block.block);
+		//		auto dataptr = handle->node->buffer;
 
 		// sort the pointers pointing into the block of rows partition
-//		Sort(dataptr);
+		//		Sort(dataptr);
 
 		// re-order data
-//		ReOrder(dataptr);
+		//		ReOrder(dataptr);
 
 		// give data back to BufferManager
-//		state.row_chunk.buffer_manager.Unpin(block.block);
+		//		state.row_chunk.buffer_manager.Unpin(block.block);
 
 		// finish task
 		lock_guard<mutex> glock(state.lock);
@@ -123,14 +123,14 @@ public:
 private:
 	void Sort(data_ptr_t &dataptr) {
 		// TODO:
-//		idx_t entry_size = entry_size;
-//		std::sort(dataptr, dataptr + count * entry_size, [&entry_size](const_data_ptr_t &lhs, const_data_ptr_t &rhs) {
-//			return memcmp((data_ptr_t *)lhs, (data_ptr_t *)rhs, entry_size) < 0;
-//		});
+		//		idx_t entry_size = entry_size;
+		//		std::sort(dataptr, dataptr + count * entry_size, [&entry_size](const_data_ptr_t &lhs, const_data_ptr_t
+		//&rhs) { 			return memcmp((data_ptr_t *)lhs, (data_ptr_t *)rhs, entry_size) < 0;
+		//		});
 	}
 
 	void ReOrder(data_ptr_t &dataptr) {
-        // TODO:
+		// TODO:
 	}
 
 	Pipeline &parent;
