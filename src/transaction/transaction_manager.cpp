@@ -141,7 +141,7 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
 	// check if we can checkpoint
-	bool checkpoint = CanCheckpoint();
+	bool checkpoint = CanCheckpoint(transaction);
 	if (checkpoint) {
 		if (transaction->AutomaticCheckpoint(db)) {
 			// we might be able to checkpoint: lock all clients
@@ -150,7 +150,7 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 			LockClients(client_locks, context);
 
 			lock = make_unique<lock_guard<mutex>>(transaction_lock);
-			checkpoint = CanCheckpoint();
+			checkpoint = CanCheckpoint(transaction);
 			if (!checkpoint) {
 				client_locks.clear();
 			}

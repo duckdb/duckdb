@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/appender.hpp"
 
 #include <atomic>
 #include <random>
@@ -253,10 +254,18 @@ TEST_CASE("Concurrent commits on persistent database with automatic checkpoints"
 	// initialize the database
 	con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
+	Appender appender(con, "accounts");
 	for (size_t i = 0; i < ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
+		appender.AppendRow(int(i), int(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT));
 	}
+	appender.Close();
 	con.Query("COMMIT");
+
+	REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money"));
+	result = con.Query("SELECT SUM(money) FROM accounts");
+	REQUIRE(CHECK_COLUMN(result, 0, {ACCOUNTS * ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT}));
 
 	std::thread write_threads[ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS];
 	// launch several threads for updating the table
@@ -266,7 +275,9 @@ TEST_CASE("Concurrent commits on persistent database with automatic checkpoints"
 	for (size_t i = 0; i < ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
 		write_threads[i].join();
 	}
-
+	result = con.Query("SELECT SUM(money) FROM accounts");
+	REQUIRE(CHECK_COLUMN(result, 0, {ACCOUNTS * ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT}));
+	REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money"));
 	result = con.Query("SELECT SUM(money) FROM accounts");
 	REQUIRE(CHECK_COLUMN(result, 0, {ACCOUNTS * ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT}));
 }
