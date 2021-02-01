@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -57,6 +58,10 @@ public:
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining);
 	void Build(idx_t added_count, data_ptr_t *key_locations);
+
+    void DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, idx_t count, data_ptr_t key_locations[]);
+    void DeserializeIntoVector(Vector &v, idx_t count, data_ptr_t key_locations[]);
+    void DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t entry);
 };
 
 } // namespace duckdb

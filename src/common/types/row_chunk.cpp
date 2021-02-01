@@ -170,119 +170,108 @@ void RowChunk::Build(idx_t added_count, data_ptr_t *key_locations) {
 }
 
 template <class T>
-static void templated_deserialize_vector(data_ptr_t key_locations[], VectorData &vdata, idx_t count) {
+static void templated_deserialize_into_vector(VectorData &vdata, idx_t count, data_ptr_t key_locations[]) {
 	auto target = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		auto source = (T *)key_locations[i];
-		memcpy(target[i * sizeof(T)], source, sizeof(T));
+        target[i * sizeof(T)] = Load<T>(key_locations[i]);
 	}
 }
 
-
-
-void RowChunk::DeserializeVector(data_ptr_t key_locations[], VectorData &vdata, PhysicalType type, idx_t count) {
+void RowChunk::DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, idx_t count, data_ptr_t key_locations[]) {
     switch (type) {
     case PhysicalType::BOOL:
     case PhysicalType::INT8:
-        templated_deserialize_rowblock<int8_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<int8_t>(vdata, count, key_locations);
         break;
     case PhysicalType::INT16:
-        templated_deserialize_rowblock<int16_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<int16_t>(vdata, count, key_locations);
         break;
     case PhysicalType::INT32:
-        templated_deserialize_rowblock<int32_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<int32_t>(vdata, count, key_locations);
         break;
     case PhysicalType::INT64:
-        templated_deserialize_rowblock<int64_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<int64_t>(vdata, count, key_locations);
         break;
     case PhysicalType::UINT8:
-        templated_deserialize_rowblock<uint8_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<uint8_t>(vdata, count, key_locations);
         break;
     case PhysicalType::UINT16:
-        templated_deserialize_rowblock<uint16_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<uint16_t>(vdata, count, key_locations);
         break;
     case PhysicalType::UINT32:
-        templated_deserialize_rowblock<uint32_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<uint32_t>(vdata, count, key_locations);
         break;
     case PhysicalType::UINT64:
-        templated_deserialize_rowblock<uint64_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<uint64_t>(vdata, count, key_locations);
         break;
     case PhysicalType::INT128:
-        templated_deserialize_rowblock<hugeint_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<hugeint_t>(vdata, count, key_locations);
         break;
     case PhysicalType::FLOAT:
-        templated_deserialize_rowblock<float>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<float>(vdata, count, key_locations);
         break;
     case PhysicalType::DOUBLE:
-        templated_deserialize_rowblock<double>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<double>(vdata, count, key_locations);
         break;
     case PhysicalType::HASH:
-        templated_deserialize_rowblock<hash_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<hash_t>(vdata, count, key_locations);
         break;
     case PhysicalType::INTERVAL:
-        templated_deserialize_rowblock<interval_t>(vdata, sel, count, key_locations);
+        templated_deserialize_into_vector<interval_t>(vdata, count, key_locations);
         break;
     case PhysicalType::VARCHAR: {
-        StringHeap local_heap;
-        auto source = (string_t *)vdata.data;
-        for (idx_t i = 0; i < count; i++) {
-            auto idx = sel.get_index(i);
-            auto source_idx = vdata.sel->get_index(idx);
+		// TODO:
 
-            string_t new_val;
-            if ((*vdata.nullmask)[source_idx]) {
-                new_val = NullValue<string_t>();
-            } else if (source[source_idx].IsInlined()) {
-                new_val = source[source_idx];
-            } else {
-                new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
-            }
-            Store<string_t>(new_val, key_locations[i]);
-            key_locations[i] += sizeof(string_t);
-        }
-        lock_guard<mutex> append_lock(rc_lock);
-        string_heap.MergeHeap(local_heap);
-        break;
+//        StringHeap local_heap;
+//        auto source = (string_t *)vdata.data;
+//        for (idx_t i = 0; i < count; i++) {
+//            auto idx = sel.get_index(i);
+//            auto source_idx = vdata.sel->get_index(idx);
+//
+//            string_t new_val;
+//            if ((*vdata.nullmask)[source_idx]) {
+//                new_val = NullValue<string_t>();
+//            } else if (source[source_idx].IsInlined()) {
+//                new_val = source[source_idx];
+//            } else {
+//                new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
+//            }
+//            Store<string_t>(new_val, key_locations[i]);
+//            key_locations[i] += sizeof(string_t);
+//        }
+//        lock_guard<mutex> append_lock(rc_lock);
+//        string_heap.MergeHeap(local_heap);
+//        break;
     }
     default:
         throw NotImplementedException("FIXME: unimplemented deserialize");
     }
 }
 
-// TODO: DeserializeVectorData ??
+void RowChunk::DeserializeIntoVector(Vector &v, idx_t count, data_ptr_t key_locations[]) {
+    VectorData vdata;
+	v.Orrify(count, vdata);
 
-void RowChunk::DeserializeRowBlock(ChunkCollection &collection, RowDataBlock &block) {
-    auto block_handle = buffer_manager.Pin(block.block);
-	auto data_ptr = block_handle->node->buffer;
+	DeserializeIntoVectorData(vdata, v.type.InternalType(), count, key_locations);
+}
+
+void RowChunk::DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t entry) {
     data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	
+    auto handle = buffer_manager.Pin(block.block);
+    auto dataptr = handle->node->buffer;
 
-    idx_t offset = 0;
-	idx_t chunk_size = MinValue<idx_t>(block.count - offset, STANDARD_VECTOR_SIZE);
-    while (offset < block.count) {
-        chunk_size = MinValue<idx_t>(block.count - offset, STANDARD_VECTOR_SIZE);
-        DataChunk chunk;
-		chunk.Initialize(types);
-
-		idx_t type_offset = 0;
-		for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-			// fill pointer array with pointers to column data
-            for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-                key_locations[i] = data_ptr + i * entry_size + type_offset;
-            }
-
-			// FIXME: perhaps FlatVector::GetData instead?
-            VectorData vdata;
-            chunk.data[col_idx].Orrify(chunk_size, vdata);
-
-			// deserialize row data to vector
-            DeserializeVector(key_locations, vdata, types[col_idx].InternalType(), chunk_size);
-
-
-            idx_t col_size = GetTypeIdSize(types[col_idx].InternalType());
-			type_offset += col_size;
-            offset += chunk_size;
-		}
-	}
+    // fetch the next vector of entries from the blocks
+    idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
+    for (idx_t i = 0; i < next; i++) {
+        key_locations[i] = dataptr;
+        dataptr += entry_size;
+    }
+    // now insert into the data chunk
+	chunk.SetCardinality(next);
+    for (idx_t i = 0; i < types.size(); i++) {
+        DeserializeIntoVector(chunk.data[i], next, key_locations);
+    }
 }
 
 } // namespace duckdb

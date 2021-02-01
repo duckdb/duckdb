@@ -20,15 +20,11 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	OrderGlobalState(BufferManager &buffer_manager) : sort_cols(buffer_manager), all_cols(buffer_manager) {
+	OrderGlobalState(BufferManager &buffer_manager) : row_chunk(buffer_manager) {
 	}
 	// TODO: old
 	//! The lock for updating the global aggregate state
 	mutex lock;
-	//! The sorted data
-	ChunkCollection sorted_data;
-	//! The sorted vector
-	unique_ptr<idx_t[]> sorted_vector;
 
 	// TODO: new
 	//! Sorting columns that were computed from PhysicalOrder::Orders
@@ -37,12 +33,8 @@ public:
 	vector<OrderType> order_types;
 	vector<OrderByNullType> null_order_types;
 
-	//! Columns to be sorted
-	RowChunk sort_cols;
-	//! All columns
-	RowChunk all_cols;
-	//! Min-max of every block
-	std::unordered_map<block_id_t, std::pair<unique_ptr<data_ptr_t[]>, unique_ptr<data_ptr_t[]>>> min_max;
+	//! Data in row format
+	RowChunk row_chunk;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -60,16 +52,14 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		state->order_types.push_back(orders[i].type);
 		state->null_order_types.push_back(orders[i].null_order);
 		state->executor.AddExpression(*expr);
-		state->sort_cols.entry_size += GetTypeIdSize(expr->return_type.InternalType());
 	}
-	state->sort_cols.block_capacity =
-	    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / state->sort_cols.entry_size) + 1);
-
+    // compute entry size
 	for (auto type : children[0]->types) {
-		state->all_cols.entry_size += GetTypeIdSize(type.InternalType());
+		state->row_chunk.types.push_back(type);
+		state->row_chunk.entry_size += GetTypeIdSize(type.InternalType());
 	}
-	state->all_cols.block_capacity =
-	    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / state->all_cols.entry_size) + 1);
+	state->row_chunk.block_capacity =
+	    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / state->row_chunk.entry_size) + 1);
 
 	return state;
 }
@@ -93,15 +83,10 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 	// convert columns to row-wise format
 	const SelectionVector *sel_ptr = &FlatVector::IncrementalSelectionVector;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	// sorting columns
-	gstate.sort_cols.Build(input.size(), key_locations);
-	for (auto &v : sort_chunk.data) {
-		gstate.sort_cols.SerializeVector(v, input.size(), *sel_ptr, input.size(), key_locations);
-	}
 	// all columns
-	gstate.all_cols.Build(input.size(), key_locations);
+	gstate.row_chunk.Build(input.size(), key_locations);
 	for (auto &v : input.data) {
-		gstate.all_cols.SerializeVector(v, input.size(), *sel_ptr, input.size(), key_locations);
+		gstate.row_chunk.SerializeVector(v, input.size(), *sel_ptr, input.size(), key_locations);
 	}
 }
 
@@ -112,36 +97,23 @@ class PhysicalOrderSortTask : public Task {
 public:
 	PhysicalOrderSortTask(Pipeline &parent_, OrderGlobalState &state_, idx_t block_idx_)
 	    : parent(parent_), state(state_), block_idx(block_idx_) {
-		sort_entry_size = state.sort_cols.entry_size;
-		all_entry_size = state.all_cols.entry_size;
-		sort_block = state.sort_cols.blocks[block_idx];
-		all_block = state.all_cols.blocks[block_idx];
+		entry_size = state.row_chunk.entry_size;
+		block = state.row_chunk.blocks[block_idx];
 	}
 
 	void Execute() {
 		// get data from the buffer manager
-		auto sort_handle = state.sort_cols.buffer_manager.Pin(sort_block.block);
-		auto all_handle = state.all_cols.buffer_manager.Pin(sort_block.block);
-		auto sort_dataptr = sort_handle->node->buffer;
-		auto all_dataptr = sort_handle->node->buffer;
+//		auto handle = state.row_chunk.buffer_manager.Pin(block.block);
+//		auto dataptr = handle->node->buffer;
 
-		// sort the indices
-		auto sorted_indices = unique_ptr<idx_t[]>(new idx_t[count]);
-		Sort(sorted_indices.get(), sort_dataptr);
+		// sort the pointers pointing into the block of rows partition
+//		Sort(dataptr);
 
-		// re-order data in-place in O(2N)
-		ReOrder(sorted_indices.get(), sort_dataptr, all_dataptr);
-
-		// store the min-max of this block
-        auto min = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort_entry_size]);
-        auto max = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort_entry_size]);
-		memcpy(min.get(), sort_dataptr, sort_entry_size);
-        memcpy(max.get(), sort_dataptr + (count - 1) * sort_entry_size, sort_entry_size);
-		state.min_max[sort_handle->handle->BlockId()] = std::make_pair<unique_ptr<data_ptr_t[]>, unique_ptr<data_ptr_t[]>>(move(min), move(max));
+		// re-order data
+//		ReOrder(dataptr);
 
 		// give data back to BufferManager
-		state.sort_cols.buffer_manager.Unpin(sort_block.block);
-		state.all_cols.buffer_manager.Unpin(all_block.block);
+//		state.row_chunk.buffer_manager.Unpin(block.block);
 
 		// finish task
 		lock_guard<mutex> glock(state.lock);
@@ -149,44 +121,16 @@ public:
 	}
 
 private:
-	void Sort(idx_t *indices, data_ptr_t &dataptr) {
-		// initialize indices array
-		for (idx_t i = 0; i < count; i++) {
-			indices[i] = i;
-		}
-		// sort the indices TODO: implement a compare method
-		auto &entry_size = sort_entry_size;
-		std::sort(indices, indices + count, [&dataptr, &entry_size](const idx_t &lhs, const idx_t &rhs) {
-			return memcmp(dataptr + lhs * entry_size, dataptr + rhs * entry_size, entry_size) < 0;
-		});
+	void Sort(data_ptr_t &dataptr) {
+		// TODO:
+//		idx_t entry_size = entry_size;
+//		std::sort(dataptr, dataptr + count * entry_size, [&entry_size](const_data_ptr_t &lhs, const_data_ptr_t &rhs) {
+//			return memcmp((data_ptr_t *)lhs, (data_ptr_t *)rhs, entry_size) < 0;
+//		});
 	}
 
-	//! In-place array re-ordering, taken from StackOverflow
-	//! https://stackoverflow.com/questions/7365814/in-place-array-reordering
-	void ReOrder(idx_t *indices, data_ptr_t &sort_dataptr, data_ptr_t &all_dataptr) {
-		// use unique pointers so we can define variable length arrays
-		auto sort_temp_ptr = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort_entry_size]);
-		auto all_temp_ptr = unique_ptr<data_ptr_t[]>(new data_ptr_t[all_entry_size]);
-		// initialize everything outside of the loop
-		auto sort_temp = sort_temp_ptr.get();
-		auto all_temp = all_temp_ptr.get();
-		idx_t j;
-		idx_t k;
-		for (idx_t i = 0; i < count; i++) {
-			memcpy(sort_temp, sort_dataptr + i * sort_entry_size, sort_entry_size);
-			memcpy(all_temp, all_dataptr + i * all_entry_size, all_entry_size);
-			for (j = i;; j = k) {
-				k = indices[j];
-				indices[j] = j;
-				if (k == i) {
-					break;
-				}
-				memcpy(sort_dataptr + j * sort_entry_size, sort_dataptr + k * sort_entry_size, sort_entry_size);
-				memcpy(all_dataptr + j * all_entry_size, all_dataptr + k * all_entry_size, all_entry_size);
-			}
-			memcpy(sort_dataptr + j * sort_entry_size, sort_temp, sort_entry_size);
-			memcpy(all_dataptr + j * all_entry_size, all_temp, all_entry_size);
-		}
+	void ReOrder(data_ptr_t &dataptr) {
+        // TODO:
 	}
 
 	Pipeline &parent;
@@ -195,11 +139,8 @@ private:
 	idx_t block_idx;
 	idx_t count;
 
-	RowDataBlock sort_block;
-	idx_t sort_entry_size;
-
-	RowDataBlock all_block;
-	idx_t all_entry_size;
+	RowDataBlock block;
+	idx_t entry_size;
 };
 
 class PhysicalOrderMergeTask : public Task {
@@ -227,13 +168,15 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	auto &sink = (OrderGlobalState &)*state;
 
 	// schedule sorting tasks for each block
-	for (idx_t block_idx = 0; block_idx < sink.sort_cols.blocks.size(); block_idx++) {
-		// TODO: sort_cols and all_cols have different block indices
+	for (idx_t block_idx = 0; block_idx < sink.row_chunk.blocks.size(); block_idx++) {
+		// TODO: sort_cols and row_chunk have different block indices
 		auto new_task = make_unique<PhysicalOrderSortTask>(pipeline, sink, block_idx);
 		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
 	}
 
 	// FIXME: schedule ?? merging tasks
+
+	// TODO: deserialize
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 }
@@ -247,6 +190,7 @@ public:
 	    : PhysicalOperatorState(op, child), position(0) {
 	}
 
+	idx_t current_block;
 	idx_t position;
 };
 
@@ -257,13 +201,17 @@ unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	auto &sink = (OrderGlobalState &)*this->sink_state;
-	ChunkCollection &big_data = sink.sorted_data;
-	if (state->position >= big_data.Count()) {
+
+	if (state->current_block >= sink.row_chunk.blocks.size()) {
 		return;
 	}
 
-	big_data.MaterializeSortedChunk(chunk, sink.sorted_vector.get(), state->position);
+	sink.row_chunk.DeserializeRowBlock(chunk, sink.row_chunk.blocks[state->current_block], state->position);
+
 	state->position += STANDARD_VECTOR_SIZE;
+	if (state->position >= sink.row_chunk.blocks[state->current_block].count) {
+		state->current_block++;
+	}
 }
 
 string PhysicalOrder::ParamsToString() const {
