@@ -501,7 +501,7 @@ struct IntegerCastOperation {
 	}
 
 	template <class T> static bool HandleExponent(T &result, int64_t exponent) {
-		double dbl_res = result * pow(10, exponent);
+		double dbl_res = result * pow((int64_t) 10, exponent);
 		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
 			return false;
 		}
