@@ -735,7 +735,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
-				if (result > NumericLimits<T>::Maximum() / pow(10, exponent)) {
+				if (result > NumericLimits<T>::Maximum() / pow((int64_t) 10, exponent)) {
 					return false;
 				}
 				result = result * pow(10, exponent);
@@ -1189,7 +1189,7 @@ struct HugeIntegerCastOperation {
 		result.Flush();
 		if (exponent < -38 || exponent > 38) {
 			// out of range for exact exponent: use double and convert
-			double dbl_res = Hugeint::Cast<double>(result.hugeint) * pow(10, exponent);
+			double dbl_res = Hugeint::Cast<double>(result.hugeint) * pow((int64_t) 10, exponent);
 			if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) ||
 			    dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
 				return false;
