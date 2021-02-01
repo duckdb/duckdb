@@ -17,8 +17,8 @@ BEGIN TRANSACTION;
 statement ok con1
 UPDATE test SET i=i+1;
 
-# con2 now refers back to the undo buffer of con1
-statement error con2
+# con2 now refers back to the undo buffer of con1, but we can still checkpoint
+statement ok
 FORCE CHECKPOINT
 
 statement ok con2
