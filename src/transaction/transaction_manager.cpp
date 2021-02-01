@@ -121,16 +121,16 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 	LockClients(client_locks, context);
 
 	lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	auto current = &Transaction::GetTransaction(context);
+	if (current->ChangesMade()) {
+		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
+	}
 	if (!force) {
-		if (!CanCheckpoint(nullptr)) {
-			throw TransactionException("Cannot CHECKPOINT: there are transactions with transaction-local changes. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint");
+		if (!CanCheckpoint(current)) {
+			throw TransactionException("Cannot CHECKPOINT: there are other transactions. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint");
 		}
 	} else {
-		if (!CanCheckpoint(nullptr)) {
-			auto current = &Transaction::GetTransaction(context);
-			if (current->ChangesMade()) {
-				throw TransactionException("Cannot FORCE CHECKPOINT: the current transaction has transaction local changes");
-			}
+		if (!CanCheckpoint(current)) {
 			for(size_t i = 0; i < active_transactions.size(); i++) {
 				auto &transaction = active_transactions[i];
 				if (transaction.get() != current && transaction->ChangesMade()) {
@@ -142,14 +142,13 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 					// potentially resulting in garbage collection
 					RemoveTransaction(transaction.get());
 					if (transaction_context) {
-						// we clear the current transaction and record that we cleared it
 						transaction_context->transaction.ClearTransaction();
 					}
 					i--;
 				}
 			}
 			if (!CanCheckpoint(current)) {
-				throw TransactionException("Cannot FORCE CHECKPOINT: the current transaction relies on other transactions' committed changes");
+				throw TransactionException("Cannot FORCE CHECKPOINT: the current transaction relies on other transactions' committed changes, we could not abort the other transactions.");
 			}
 		}
 	}
@@ -167,9 +166,7 @@ bool TransactionManager::CanCheckpoint(Transaction *current) {
 	}
 	for(auto &transaction : active_transactions) {
 		if (transaction.get() != current) {
-			if (transaction->ChangesMade()) {
-				return false;
-			}
+			return false;
 		}
 	}
 	return true;
