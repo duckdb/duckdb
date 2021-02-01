@@ -32,7 +32,6 @@ TransactionManager::~TransactionManager() {
 Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
-
 	if (current_start_timestamp >= TRANSACTION_ID_START) {
 		throw Exception("Cannot start more transactions, ran out of "
 		                "transaction identifiers!");
@@ -84,7 +83,6 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 	LockClients(client_locks, context);
 
 	lock_guard<mutex> lock(transaction_lock);
-
 	if (!force) {
 		if (!CanCheckpoint(nullptr)) {
 			throw TransactionException("Cannot CHECKPOINT: there are transactions with transaction-local changes. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint");
@@ -106,6 +104,7 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 					// potentially resulting in garbage collection
 					RemoveTransaction(transaction.get());
 					if (transaction_context) {
+						// we clear the current transaction and record that we cleared it
 						transaction_context->transaction.ClearTransaction();
 					}
 					i--;
@@ -142,30 +141,34 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
 	// check if we can checkpoint
-	bool can_checkpoint = CanCheckpoint();
-	if (can_checkpoint) {
-		// we might be able to checkpoint: lock all clients
-		lock.reset();
+	bool checkpoint = CanCheckpoint();
+	if (checkpoint) {
+		if (transaction->AutomaticCheckpoint(db)) {
+			// we might be able to checkpoint: lock all clients
+			lock.reset();
 
-		LockClients(client_locks, context);
+			LockClients(client_locks, context);
 
-		lock = make_unique<lock_guard<mutex>>(transaction_lock);
-		can_checkpoint = CanCheckpoint();
-		if (!can_checkpoint) {
-			client_locks.clear();
+			lock = make_unique<lock_guard<mutex>>(transaction_lock);
+			checkpoint = CanCheckpoint();
+			if (!checkpoint) {
+				client_locks.clear();
+			}
+		} else {
+			checkpoint = false;
 		}
 	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
 	// commit the UndoBuffer of the transaction
-	string error = transaction->Commit(db, commit_id, can_checkpoint);
+	string error = transaction->Commit(db, commit_id, checkpoint);
 	if (!error.empty()) {
 		// commit unsuccessful: rollback the transaction instead
-		can_checkpoint = false;
+		checkpoint = false;
 		transaction->commit_id = 0;
 		transaction->Rollback();
 	}
-	if (!can_checkpoint) {
+	if (!checkpoint) {
 		// we won't checkpoint after all: unlock the clients again
 		client_locks.clear();
 	}
@@ -174,7 +177,7 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to checkpoint
-	if (can_checkpoint) {
+	if (checkpoint) {
 		// checkpoint the database to disk
 		auto &storage_manager = StorageManager::GetStorageManager(db);
 		storage_manager.CreateCheckpoint(false, true);

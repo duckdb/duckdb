@@ -72,9 +72,21 @@ bool Transaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage.ChangesMade();
 }
 
-string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool &can_checkpoint) noexcept {
-	this->commit_id = commit_id;
+bool Transaction::AutomaticCheckpoint(DatabaseInstance &db) {
 	auto &config = DBConfig::GetConfig(db);
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+	auto log = storage_manager.GetWriteAheadLog();
+	if (!log) {
+		return false;
+	}
+
+	auto initial_size = log->GetWALSize();
+	idx_t expected_wal_size = initial_size + storage.EstimatedSize() + undo_buffer.EstimatedSize();
+	return expected_wal_size > config.checkpoint_wal_size;
+}
+
+string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool checkpoint) noexcept {
+	this->commit_id = commit_id;
 	auto &storage_manager = StorageManager::GetStorageManager(db);
 	auto log = storage_manager.GetWriteAheadLog();
 
@@ -84,17 +96,13 @@ string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool &
 	idx_t initial_written = 0;
 	if (log) {
 		auto initial_size = log->GetWALSize();
-		initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
 		initial_written = log->GetTotalWritten();
-		idx_t expected_wal_size = initial_wal_size + storage.EstimatedSize() + undo_buffer.EstimatedSize();
-		if (!can_checkpoint || expected_wal_size <= config.checkpoint_wal_size) {
-			can_checkpoint = false;
-		}
+		initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
 	} else {
-		can_checkpoint = false;
+		D_ASSERT(!checkpoint);
 	}
 	try {
-		if (can_checkpoint) {
+		if (checkpoint) {
 			// check if we are checkpointing after this commit
 			// if we are checkpointing, we don't need to write anything to the WAL
 			// this saves us a lot of unnecessary writes to disk in the case of large commits
@@ -109,7 +117,7 @@ string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool &
 			}
 			// flush the WAL if any changes were made
 			if (log->GetTotalWritten() > initial_written) {
-				D_ASSERT(!can_checkpoint);
+				D_ASSERT(!checkpoint);
 				D_ASSERT(!log->skip_writing);
 				log->Flush();
 			}
