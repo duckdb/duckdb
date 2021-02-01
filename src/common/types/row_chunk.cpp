@@ -169,4 +169,105 @@ void RowChunk::Build(idx_t added_count, data_ptr_t *key_locations) {
 	}
 }
 
+template <class T>
+static void templated_deserialize_rowblock(data_ptr_t key_locations[], VectorData &vdata, idx_t count) {
+    auto source = (T *)vdata.data;
+    if (vdata.nullmask->any()) {
+        for (idx_t i = 0; i < count; i++) {
+            auto idx = sel.get_index(i);
+            auto source_idx = vdata.sel->get_index(idx);
+
+            auto target = (T *)key_locations[i];
+            T value = (*vdata.nullmask)[source_idx] ? NullValue<T>() : source[source_idx];
+            Store<T>(value, (data_ptr_t)target);
+            key_locations[i] += sizeof(T);
+        }
+    } else {
+        for (idx_t i = 0; i < count; i++) {
+            auto idx = sel.get_index(i);
+            auto source_idx = vdata.sel->get_index(idx);
+
+            auto target = (T *)key_locations[i];
+            Store<T>(source[source_idx], (data_ptr_t)target);
+            key_locations[i] += sizeof(T);
+        }
+    }
+
+	auto target = (T *)vdata.data;
+	for (idx_t i = 0; i < count; i++) {
+		auto source = (T *)key_locations[i];
+		memcpy(target[i * sizeof(T)], source, sizeof(T));
+	}
+}
+
+void RowChunk::DeserializeRowBlock(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
+                                   data_ptr_t key_locations[]) {
+    switch (type) {
+    case PhysicalType::BOOL:
+    case PhysicalType::INT8:
+        templated_deserialize_rowblock<int8_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::INT16:
+        templated_deserialize_rowblock<int16_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::INT32:
+        templated_deserialize_rowblock<int32_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::INT64:
+        templated_deserialize_rowblock<int64_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::UINT8:
+        templated_deserialize_rowblock<uint8_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::UINT16:
+        templated_deserialize_rowblock<uint16_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::UINT32:
+        templated_deserialize_rowblock<uint32_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::UINT64:
+        templated_deserialize_rowblock<uint64_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::INT128:
+        templated_deserialize_rowblock<hugeint_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::FLOAT:
+        templated_deserialize_rowblock<float>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::DOUBLE:
+        templated_deserialize_rowblock<double>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::HASH:
+        templated_deserialize_rowblock<hash_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::INTERVAL:
+        templated_deserialize_rowblock<interval_t>(vdata, sel, count, key_locations);
+        break;
+    case PhysicalType::VARCHAR: {
+        StringHeap local_heap;
+        auto source = (string_t *)vdata.data;
+        for (idx_t i = 0; i < count; i++) {
+            auto idx = sel.get_index(i);
+            auto source_idx = vdata.sel->get_index(idx);
+
+            string_t new_val;
+            if ((*vdata.nullmask)[source_idx]) {
+                new_val = NullValue<string_t>();
+            } else if (source[source_idx].IsInlined()) {
+                new_val = source[source_idx];
+            } else {
+                new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
+            }
+            Store<string_t>(new_val, key_locations[i]);
+            key_locations[i] += sizeof(string_t);
+        }
+        lock_guard<mutex> append_lock(rc_lock);
+        string_heap.MergeHeap(local_heap);
+        break;
+    }
+    default:
+        throw NotImplementedException("FIXME: unimplemented deserialize");
+    }
+}
+
 } // namespace duckdb

@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
-#include "duckdb/common/assert.hpp"
+//#include "duckdb/common/assert.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -41,6 +41,8 @@ public:
 	RowChunk sort_cols;
 	//! All columns
 	RowChunk all_cols;
+	//! Min-max of every block
+	std::unordered_map<block_id_t, std::pair<unique_ptr<data_ptr_t[]>, unique_ptr<data_ptr_t[]>>> min_max;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -130,6 +132,13 @@ public:
 		// re-order data in-place in O(2N)
 		ReOrder(sorted_indices.get(), sort_dataptr, all_dataptr);
 
+		// store the min-max of this block
+        auto min = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort_entry_size]);
+        auto max = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort_entry_size]);
+		memcpy(min.get(), sort_dataptr, sort_entry_size);
+        memcpy(max.get(), sort_dataptr + (count - 1) * sort_entry_size, sort_entry_size);
+		state.min_max[sort_handle->handle->BlockId()] = std::make_pair<unique_ptr<data_ptr_t[]>, unique_ptr<data_ptr_t[]>>(move(min), move(max));
+
 		// give data back to BufferManager
 		state.sort_cols.buffer_manager.Unpin(sort_block.block);
 		state.all_cols.buffer_manager.Unpin(all_block.block);
@@ -145,7 +154,7 @@ private:
 		for (idx_t i = 0; i < count; i++) {
 			indices[i] = i;
 		}
-		// sort the indices TODO: use a better compare method
+		// sort the indices TODO: implement a compare method
 		auto &entry_size = sort_entry_size;
 		std::sort(indices, indices + count, [&dataptr, &entry_size](const idx_t &lhs, const idx_t &rhs) {
 			return memcmp(dataptr + lhs * entry_size, dataptr + rhs * entry_size, entry_size) < 0;
@@ -219,6 +228,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 	// schedule sorting tasks for each block
 	for (idx_t block_idx = 0; block_idx < sink.sort_cols.blocks.size(); block_idx++) {
+		// TODO: sort_cols and all_cols have different block indices
 		auto new_task = make_unique<PhysicalOrderSortTask>(pipeline, sink, block_idx);
 		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
 	}
