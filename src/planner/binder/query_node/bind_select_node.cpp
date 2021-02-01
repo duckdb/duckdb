@@ -64,19 +64,27 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	if (limit_mod.limit) {
 		auto limit_copy = limit_mod.limit->Copy();
 		if (!BindConstant(*this, context, "LIMIT clause", limit_copy,result->limit_val)){
-						ExpressionBinder expr_binder(*this, context);
-			string error, filter_error;
+			Binder new_binder(context);
+			ExpressionBinder expr_binder(new_binder, context);
+			string error;
 			expr_binder.BindChild(limit_mod.limit, 0, error);
+			if (!error.empty()){
+				throw BinderException(error);
+			}
 			auto &child = (BoundExpression &)*limit_mod.limit;
 			result->limit = move(child.expr);
 		}
 	}
 	if (limit_mod.offset) {
 		auto offset_copy = limit_mod.offset->Copy();
-		if (!BindConstant(*this, context, "LIMIT clause", offset_copy,result->offset_val)){
-			ExpressionBinder expr_binder(*this, context);
-			string error, filter_error;
+		if (!BindConstant(*this, context, "OFFSET clause", offset_copy,result->offset_val)){
+			Binder new_binder(context);
+			ExpressionBinder expr_binder(new_binder, context);
+			string error;
 			expr_binder.BindChild(limit_mod.offset, 0, error);
+			if (!error.empty()){
+				throw BinderException(error);
+			}
 			auto &child = (BoundExpression &)*limit_mod.offset;
 			result->offset = move(child.expr);
 		}

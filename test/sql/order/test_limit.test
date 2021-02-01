@@ -11,35 +11,35 @@ CREATE TABLE test (a INTEGER, b INTEGER);
 statement ok
 INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
 
-## constant limit
-#query I
-#SELECT a FROM test LIMIT 1
-#----
-#11
-#
-## decimal limit
-#query I
-#SELECT a FROM test LIMIT 1.5
-#----
-#11
-#
-## LIMIT with operation
-#query I
-#SELECT a FROM test LIMIT 2-1
-#----
-#11
+# constant limit
+query I
+SELECT a FROM test LIMIT 1
+----
+11
+
+# decimal limit
+query I
+SELECT a FROM test LIMIT 1.5
+----
+11
+
+# LIMIT with operation
+query I
+SELECT a FROM test LIMIT 2-1
+----
+11
 
 # LIMIT with non-scalar should fail
 statement error
 SELECT a FROM test LIMIT a
 
 # LIMIT with non-scalar operation should also fail
-#statement error
-#SELECT a FROM test LIMIT a+1
+statement error
+SELECT a FROM test LIMIT a+1
 
 # aggregate in limit
-#statement error
-#SELECT a FROM test LIMIT SUM(42)
+statement error
+SELECT a FROM test LIMIT SUM(42)
 
 # window function in limit
 statement error
