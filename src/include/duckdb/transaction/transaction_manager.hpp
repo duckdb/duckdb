@@ -19,6 +19,7 @@ namespace duckdb {
 
 class ClientContext;
 class Catalog;
+struct ClientLockWrapper;
 class DatabaseInstance;
 class Transaction;
 
@@ -57,7 +58,7 @@ private:
 	bool CanCheckpoint(Transaction *current = nullptr);
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(Transaction *transaction) noexcept;
-	void LockClients(vector<unique_ptr<lock_guard<mutex>>> &client_locks, ClientContext &context);
+	void LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context);
 
 	//! The database instance
 	DatabaseInstance &db;

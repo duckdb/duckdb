@@ -11,15 +11,23 @@ using namespace std;
 
 class ConcurrentCheckpoint {
 public:
-	static constexpr int CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT = 1000;
+	static constexpr int CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT = 200;
 	static constexpr int CONCURRENT_UPDATE_TOTAL_ACCOUNTS = 20;
 	static constexpr int CONCURRENT_UPDATE_MONEY_PER_ACCOUNT = 10;
 
 	static atomic<bool> finished;
+	static atomic<size_t> finished_threads;
 
 	static void CheckpointThread(DuckDB *db, bool *read_correct) {
 		Connection con(*db);
 		while (!finished) {
+			{
+				// the total balance should remain constant regardless of updates and checkpoints
+				auto result = con.Query("SELECT SUM(money) FROM accounts");
+				if (!CHECK_COLUMN(result, 0, {CONCURRENT_UPDATE_TOTAL_ACCOUNTS * CONCURRENT_UPDATE_MONEY_PER_ACCOUNT})) {
+					*read_correct = false;
+				}
+			}
 			while(true) {
 				auto result = con.Query("CHECKPOINT");
 				if (result->success) {
@@ -35,9 +43,48 @@ public:
 			}
 		}
 	}
+
+	static void WriteRandomNumbers(DuckDB *db, bool *correct, size_t nr) {
+		correct[nr] = true;
+		Connection con(*db);
+		for (size_t i = 0; i < CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT; i++) {
+			// just make some changes to the total
+			// the total amount of money after the commit is the same
+			if (!con.Query("BEGIN TRANSACTION")->success) {
+				correct[nr] = false;
+			}
+			if (!con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr))
+					->success) {
+				correct[nr] = false;
+			}
+			if (!con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr))
+					->success) {
+				correct[nr] = false;
+			}
+			if (!con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr))
+					->success) {
+				correct[nr] = false;
+			}
+			if (!con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr))
+					->success) {
+				correct[nr] = false;
+			}
+			// we test both commit and rollback
+			// the result of both should be the same since the updates have a
+			// net-zero effect
+			if (!con.Query(nr % 2 == 0 ? "COMMIT" : "ROLLBACK")->success) {
+				correct[nr] = false;
+			}
+		}
+		finished_threads++;
+		if (finished_threads == CONCURRENT_UPDATE_TOTAL_ACCOUNTS) {
+			finished = true;
+		}
+	}
 };
 
 atomic<bool> ConcurrentCheckpoint::finished;
+atomic<size_t> ConcurrentCheckpoint::finished_threads;
 
 TEST_CASE("Concurrent checkpoint with single updater", "[interquery][.]") {
 	auto config = GetTestConfig();
@@ -107,3 +154,34 @@ TEST_CASE("Concurrent checkpoint with single updater", "[interquery][.]") {
 	REQUIRE(read_correct);
 }
 
+TEST_CASE("Concurrent checkpoint with multiple updaters", "[interquery][.]") {
+	auto config = GetTestConfig();
+	auto storage_database = TestCreatePath("concurrent_checkpoint");
+	DeleteDatabase(storage_database);
+	unique_ptr<MaterializedQueryResult> result;
+	DuckDB db(storage_database, config.get());
+	Connection con(db);
+
+	ConcurrentCheckpoint::finished = false;
+	ConcurrentCheckpoint::finished_threads = 0;
+	// initialize the database
+	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
+	for (size_t i = 0; i < ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
+	}
+
+	bool correct[ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS];
+	bool read_correct;
+	std::thread write_threads[ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS];
+	// launch a thread for reading and checkpointing the table
+	thread read_thread(ConcurrentCheckpoint::CheckpointThread, &db, &read_correct);
+	// launch several threads for updating the table
+	for (size_t i = 0; i < ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
+		write_threads[i] = thread(ConcurrentCheckpoint::WriteRandomNumbers, &db, correct, i);
+	}
+	read_thread.join();
+	for (size_t i = 0; i < ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
+		write_threads[i].join();
+		REQUIRE(correct[i]);
+	}
+}

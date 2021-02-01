@@ -53,20 +53,34 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ptr;
 }
 
-void TransactionManager::LockClients(vector<unique_ptr<lock_guard<mutex>>> &client_locks, ClientContext &context) {
+struct ClientLockWrapper {
+	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection) : connection(move(connection)), connection_lock(make_unique<lock_guard<mutex>>(client_lock)) {}
+
+	shared_ptr<ClientContext> connection;
+	unique_ptr<lock_guard<mutex>> connection_lock;
+};
+
+void TransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context) {
 	auto &connection_manager = ConnectionManager::Get(context);
-	client_locks.push_back(make_unique<lock_guard<mutex>>(connection_manager.connections_lock));
-	connection_manager.Scan([&](ClientContext *con) {
-		if (con != &context) {
-			client_locks.push_back(make_unique<lock_guard<mutex>>(con->context_lock));
+	client_locks.emplace_back(connection_manager.connections_lock, nullptr);
+	auto connection_list = connection_manager.GetConnectionList();
+	for(auto &con : connection_list) {
+		if (con.get() == &context) {
+			continue;
 		}
-	});
+		auto &context_lock = con->context_lock;
+		client_locks.emplace_back(context_lock, move(con));
+	}
 }
 
 void TransactionManager::Checkpoint(ClientContext &context, bool force) {
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+	if (storage_manager.InMemory()) {
+		return;
+	}
 	// lock all the clients AND the connection manager before doing anything else
 	// this ensures no new queries can be started, and no new connections to the database can be made
-	vector<unique_ptr<lock_guard<mutex>>> client_locks;
+	vector<ClientLockWrapper> client_locks;
 	LockClients(client_locks, context);
 
 	lock_guard<mutex> lock(transaction_lock);
@@ -125,7 +139,7 @@ bool TransactionManager::CanCheckpoint(Transaction *current) {
 }
 
 string TransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
-	vector<unique_ptr<lock_guard<mutex>>> client_locks;
+	vector<ClientLockWrapper> client_locks;
 	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
 	// check if we can checkpoint
 	bool can_checkpoint = CanCheckpoint();
