@@ -4,13 +4,13 @@
 
 statement ok
 PRAGMA enable_verification
-#
-#statement ok
-#CREATE TABLE test (a INTEGER, b INTEGER);
-#
-#statement ok
-#INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
-#
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
+
 ## constant limit
 #query I
 #SELECT a FROM test LIMIT 1
@@ -28,45 +28,42 @@ PRAGMA enable_verification
 #SELECT a FROM test LIMIT 2-1
 #----
 #11
-#
-## LIMIT with non-scalar should fail
-#statement error
-#SELECT a FROM test LIMIT a
-#
-## LIMIT with non-scalar operation should also fail
+
+# LIMIT with non-scalar should fail
+statement error
+SELECT a FROM test LIMIT a
+
+# LIMIT with non-scalar operation should also fail
 #statement error
 #SELECT a FROM test LIMIT a+1
-#
-## aggregate in limit
+
+# aggregate in limit
 #statement error
 #SELECT a FROM test LIMIT SUM(42)
-#
-## window function in limit
-#statement error
-#SELECT a FROM test LIMIT row_number() OVER ()
-#
-## subquery in limit
-#statement error
-#SELECT a FROM test LIMIT (SELECT MIN(a) FROM test)
-#
-## LIMIT Bug #321 Crazy Result
-#statement ok
-#CREATE TABLE test2 (a STRING);
-#
-#statement ok
-#INSERT INTO test2 VALUES ('Hello World')
-#
-#statement ok
-#PREPARE v1 AS SELECT * FROM test2 LIMIT 3
-#
-#query I
-#EXECUTE v1
-#----
-#Hello World
-#
-## can only limit by integers
-#statement error
-#select 1 limit date '1992-01-01';
+
+# window function in limit
+statement error
+SELECT a FROM test LIMIT row_number() OVER ()
+
+# LIMIT Bug #321 Crazy Result
+statement ok
+CREATE TABLE test2 (a STRING);
+
+statement ok
+INSERT INTO test2 VALUES ('Hello World')
+
+statement ok
+PREPARE v1 AS SELECT * FROM test2 LIMIT 3
+
+query I
+EXECUTE v1
+----
+Hello World
+
+# can only limit by integers
+statement error
+select 1 limit date '1992-01-01';
+
 
 # Test limits with no constants
 statement ok
@@ -75,22 +72,65 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (4), (5);
 
-# sequence in limit
-#query I
-#SELECT * FROM integers LIMIT nextval('seq');
-#----
-#1
-# non-foldable expression in limit
-#SELECT * FROM integers LIMIT RANDOM();
+statement ok
+CREATE SEQUENCE seq START 3;
 
-# subquery in limit
-
-#query I
-#explain SELECT SUM (i) filter( where i > (select min(i) from integers)) from integers;
-#----
-#1
+statement ok
+PRAGMA disable_verification;
 
 query I
-explain SELECT * FROM integers as int LIMIT (SELECT MIN(integers.i) FROM integers);
+SELECT * FROM integers LIMIT nextval('seq');
 ----
 1
+2
+3
+
+query I
+SELECT * FROM integers LIMIT nextval('seq');
+----
+1
+2
+3
+4
+
+
+# non-foldable expression in limit
+statement ok
+SELECT * FROM integers LIMIT RANDOM();
+
+# subquery in limit
+query I
+SELECT * FROM integers as int LIMIT (SELECT MIN(integers.i) FROM integers);
+----
+1
+
+statement ok
+CREATE SEQUENCE of_seq START 1;
+
+query I
+SELECT * FROM integers OFFSET nextval('of_seq');
+----
+2
+3
+4
+5
+
+query I
+SELECT * FROM integers OFFSET nextval('of_seq');
+----
+3
+4
+5
+
+# non-foldable expression in limit
+statement ok
+SELECT * FROM integers OFFSET RANDOM();
+
+# subquery in limit
+query I
+SELECT * FROM integers as int OFFSET (SELECT MIN(integers.i) FROM integers);
+----
+2
+3
+4
+5

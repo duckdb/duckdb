@@ -73,7 +73,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	active_binders.pop_back();
 	idx_t depth = 1;
 	bool success = false;
-	while (active_binders.size() > 0) {
+	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back();
 		ExpressionBinder::BindTableNames(next_binder->binder, *expr);
 		auto bind_result = next_binder->Bind(&expr, depth);

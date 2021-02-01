@@ -22,20 +22,24 @@
 
 namespace duckdb {
 
-static int64_t BindConstant(Binder &binder, ClientContext &context, string clause, unique_ptr<ParsedExpression> &expr) {
+static bool BindConstant(Binder &binder, ClientContext &context, const string& clause, unique_ptr<ParsedExpression> &expr, int64_t& delimiter) {
 	ConstantBinder constant_binder(binder, context, clause);
-	auto bound_expr = constant_binder.Bind(expr);
+	unique_ptr<Expression> bound_expr;
+	try {
+		bound_expr = constant_binder.Bind(expr);
+	} catch (const BinderException& e) {
+		return false;
+    }
 	if (!bound_expr->IsFoldable()) {
-		throw BinderException(
-		    "cannot use the expression \"%s\" in a %s, the expression has side-effects and is not foldable",
-		    bound_expr->ToString(), clause);
+		return false;
 	}
 	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr).CastAs(LogicalType::BIGINT);
 	int64_t limit_value = value.GetValue<int64_t>();
 	if (limit_value < 0) {
 		throw BinderException("LIMIT must not be negative");
 	}
-	return limit_value;
+	delimiter =  limit_value;
+	return true;
 }
 
 unique_ptr<Expression> Binder::BindFilter(unique_ptr<ParsedExpression> condition) {
@@ -58,48 +62,23 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	auto result = make_unique<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		if (limit_mod.limit->expression_class == ExpressionClass::BOUND_CONSTANT){
-			result->limit = BindConstant(*this, context, "LIMIT clause", limit_mod.limit);
-		    result->offset = 0;
+		auto limit_copy = limit_mod.limit->Copy();
+		if (!BindConstant(*this, context, "LIMIT clause", limit_copy,result->limit_val)){
+						ExpressionBinder expr_binder(*this, context);
+			string error, filter_error;
+			expr_binder.BindChild(limit_mod.limit, 0, error);
+			auto &child = (BoundExpression &)*limit_mod.limit;
+			result->limit = move(child.expr);
 		}
-		else if (limit_mod.limit->expression_class == ExpressionClass::FUNCTION){
-			ExpressionBinder expr_binder(*this, context);
-	        string error, filter_error;
-            expr_binder.BindChild(limit_mod.limit, 0, error);
-//				bool success = expr_binder.BindCorrelatedColumns(limit_mod.limit);
-//				// if there is still an error after this, we could not successfully bind the aggregate
-//				if (!success) {
-//					throw BinderException(error);
-//				}
-//				auto &bound_expr = (BoundExpression &)*limit_mod.limit;
-//				ExpressionBinder::ExtractCorrelatedExpressions(*this, *bound_expr.expr);
-//
-//
-            auto &child = (BoundExpression &)*limit_mod.limit;
-		    result->limit_expr = move(child.expr);
-		}
-		else if (limit_mod.limit->expression_class == ExpressionClass::SUBQUERY){
-			ExpressionBinder expr_binder(*this, context);
-	        string error, filter_error;
-            expr_binder.BindChild(limit_mod.limit, 0, error);
-//				bool success = expr_binder.BindCorrelatedColumns(limit_mod.limit);
-//				// if there is still an error after this, we could not successfully bind the aggregate
-//				if (!success) {
-//					throw BinderException(error);
-//				}
-//				auto &bound_expr = (BoundExpression &)*limit_mod.limit;
-//				ExpressionBinder::ExtractCorrelatedExpressions(*this, *bound_expr.expr);
-//
-//
-            auto &child = (BoundExpression &)*limit_mod.limit;
-		    result->limit_expr = move(child.expr);
-		}
-
 	}
 	if (limit_mod.offset) {
-		result->offset = BindConstant(*this, context, "OFFSET clause", limit_mod.offset);
-		if (!limit_mod.limit) {
-			result->limit = NumericLimits<int64_t>::Maximum();
+		auto offset_copy = limit_mod.offset->Copy();
+		if (!BindConstant(*this, context, "LIMIT clause", offset_copy,result->offset_val)){
+			ExpressionBinder expr_binder(*this, context);
+			string error, filter_error;
+			expr_binder.BindChild(limit_mod.offset, 0, error);
+			auto &child = (BoundExpression &)*limit_mod.offset;
+			result->offset = move(child.expr);
 		}
 	}
 	return move(result);
@@ -112,7 +91,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = (DistinctModifier &)*mod;
 			auto bound_distinct = make_unique<BoundDistinctModifier>();
-			for (auto & distinct_on_target : distinct.distinct_on_targets) {
+			for (auto &distinct_on_target : distinct.distinct_on_targets) {
 				auto expr = BindOrderExpression(order_binder, move(distinct_on_target));
 				if (!expr) {
 					continue;
@@ -133,9 +112,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				}
 				auto type = order_.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order_.type;
 				auto null_order =
-				    order_.null_order == OrderByNullType::ORDER_DEFAULT
-				                      ? config.default_null_order
-				                      : order_.null_order;
+				    order_.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order_.null_order;
 				bound_order->orders.emplace_back(type, null_order, move(order_expression));
 			}
 			if (!bound_order->orders.empty()) {
@@ -168,8 +145,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				}
 			} else {
 				// DISTINCT with target list: set types
-				for (auto & expr : distinct.target_distincts) {
-						D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
+				for (auto &expr : distinct.target_distincts) {
+					D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
 					auto &bound_colref = (BoundColumnRefExpression &)*expr;
 					if (bound_colref.binding.column_index == INVALID_INDEX) {
 						throw BinderException("Ambiguous name in DISTINCT ON!");
@@ -178,12 +155,12 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 					bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				}
 			}
-			for (auto & target_distinct : distinct.target_distincts) {
+			for (auto &target_distinct : distinct.target_distincts) {
 				auto &bound_colref = (BoundColumnRefExpression &)*target_distinct;
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					target_distinct = ExpressionBinder::PushCollation(
-					    context, move(target_distinct), sql_type.collation(), true);
+					target_distinct =
+					    ExpressionBinder::PushCollation(context, move(target_distinct), sql_type.collation(), true);
 				}
 			}
 			break;
@@ -201,8 +178,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					order_.expression = ExpressionBinder::PushCollation(
-					    context, move(order_.expression), sql_type.collation());
+					order_.expression =
+					    ExpressionBinder::PushCollation(context, move(order_.expression), sql_type.collation());
 				}
 			}
 			break;
