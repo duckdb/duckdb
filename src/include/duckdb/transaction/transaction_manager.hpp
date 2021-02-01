@@ -33,6 +33,7 @@ struct StoredCatalogSet {
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
 class TransactionManager {
+	friend struct CheckpointLock;
 public:
 	TransactionManager(DatabaseInstance &db);
 	~TransactionManager();
@@ -78,6 +79,8 @@ private:
 	vector<StoredCatalogSet> old_catalog_sets;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
+
+	bool thread_is_checkpointing;
 };
 
 } // namespace duckdb

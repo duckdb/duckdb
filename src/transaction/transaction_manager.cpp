@@ -13,8 +13,35 @@
 
 namespace duckdb {
 
+struct CheckpointLock {
+	CheckpointLock(TransactionManager &manager) :
+		manager(manager), is_locked(false) {
+
+	}
+	~CheckpointLock() {
+		Unlock();
+	}
+
+	TransactionManager &manager;
+	bool is_locked;
+
+	void Lock() {
+		D_ASSERT(!manager.thread_is_checkpointing);
+		manager.thread_is_checkpointing = true;
+		is_locked = true;
+	}
+	void Unlock() {
+		if (!is_locked) {
+			return;
+		}
+		D_ASSERT(manager.thread_is_checkpointing);
+		manager.thread_is_checkpointing = false;
+		is_locked = false;
+	}
+};
+
 TransactionManager::TransactionManager(DatabaseInstance &db) :
-    db(db) {
+    db(db), thread_is_checkpointing(false) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
 	// transaction ID starts very high:
@@ -77,12 +104,23 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 	if (storage_manager.InMemory()) {
 		return;
 	}
-	// lock all the clients AND the connection manager before doing anything else
+
+	// first check if no other thread is checkpointing right now
+	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	if (thread_is_checkpointing) {
+		throw TransactionException("Cannot CHECKPOINT: another thread is checkpointing right now");
+	}
+	CheckpointLock checkpoint_lock(*this);
+	checkpoint_lock.Lock();
+	lock.reset();
+
+	// lock all the clients AND the connection manager now
 	// this ensures no new queries can be started, and no new connections to the database can be made
+	// to avoid deadlock we release the transaction lock while locking the clients
 	vector<ClientLockWrapper> client_locks;
 	LockClients(client_locks, context);
 
-	lock_guard<mutex> lock(transaction_lock);
+	lock = make_unique<lock_guard<mutex>>(transaction_lock);
 	if (!force) {
 		if (!CanCheckpoint(nullptr)) {
 			throw TransactionException("Cannot CHECKPOINT: there are transactions with transaction-local changes. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint");
@@ -140,11 +178,14 @@ bool TransactionManager::CanCheckpoint(Transaction *current) {
 string TransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	CheckpointLock checkpoint_lock(*this);
 	// check if we can checkpoint
-	bool checkpoint = CanCheckpoint(transaction);
+	bool checkpoint = thread_is_checkpointing ? false : CanCheckpoint(transaction);
 	if (checkpoint) {
 		if (transaction->AutomaticCheckpoint(db)) {
+			checkpoint_lock.Lock();
 			// we might be able to checkpoint: lock all clients
+			// to avoid deadlock we release the transaction lock while locking the clients
 			lock.reset();
 
 			LockClients(client_locks, context);
@@ -152,6 +193,7 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 			lock = make_unique<lock_guard<mutex>>(transaction_lock);
 			checkpoint = CanCheckpoint(transaction);
 			if (!checkpoint) {
+				checkpoint_lock.Unlock();
 				client_locks.clear();
 			}
 		} else {
@@ -170,6 +212,7 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 	}
 	if (!checkpoint) {
 		// we won't checkpoint after all: unlock the clients again
+		checkpoint_lock.Unlock();
 		client_locks.clear();
 	}
 
