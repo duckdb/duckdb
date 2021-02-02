@@ -265,10 +265,20 @@ template <class DUCKDB_PHYSICAL_TYPE> struct DecimalParquetValueConversion {
 		D_ASSERT(byte_len <= sizeof(DUCKDB_PHYSICAL_TYPE));
 		plain_data.available(byte_len);
 		auto res_ptr = (uint8_t *)&res;
-		for (idx_t i = 0; i < byte_len; i++) {
-			res_ptr[i] = *(plain_data.ptr + (byte_len - i - 1));
+		idx_t i;
+
+		// numbers are stored as two's complement so some muckery is required
+		bool positive = (*plain_data.ptr & 0x80) == 0;
+
+		for (i = 0; i < byte_len; i++) {
+			auto byte = *(plain_data.ptr + (byte_len - i - 1));
+			res_ptr[i] = positive ? byte : byte ^ 0xFF;
 		}
 		plain_data.inc(byte_len);
+		if (!positive) {
+			res += 1;
+			return -res;
+		}
 		return res;
 	}
 

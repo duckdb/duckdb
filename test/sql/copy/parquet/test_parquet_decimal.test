@@ -1,11 +1,15 @@
-# name: test/sql/copy/parquet/test_parquet_scan.test
+# name: test/sql/copy/parquet/test_parquet_decimal.test
 # description: Test basic parquet reading
 # group: [parquet]
 
 require parquet
 
+
 statement ok
 PRAGMA enable_verification
+
+
+
 
 query I
 SELECT * FROM parquet_scan('test/sql/copy/parquet/data/decimal/fixed_length_decimal.parquet')
@@ -63,6 +67,7 @@ SELECT * FROM parquet_scan('test/sql/copy/parquet/data/decimal/fixed_length_deci
 23.00
 24.00
 
+
 # yay NULLs
 query I
 SELECT * FROM parquet_scan('test/sql/copy/parquet/data/decimal/decimal_dc.parquet') limit 10
@@ -78,19 +83,14 @@ NULL
 NULL
 NULL
 
-query II
+
+query IIIII
 SELECT * FROM parquet_scan('test/sql/copy/parquet/data/decimal/pandas_decimal.parquet') limit 10
 ----
-0.100000	0.1
-0.000000	0.0
-1.000000	1.0
-1.100000	1.1
-NULL	NULL
+1234.0	12.34	12345.6789	123456789.98765433	922337203685477580700.92230685477500000
+-1234.0	-12.34	-9765.4321	-987654321.1234568	-922337236854775807.92233720306854775
+1.0	1.0	1.0	1.0	1.0
+-1.0	-1.0	-1.0	-1.0	-1.0
+0.0	0.0	0.0	0.0	0.0
+NULL	NULL	NULL	NULL	0.0
 
-
-
-
-#byte_array_decimal.parquet
-#
-#int32_decimal.parquet
-#int64_decimal.parquet
