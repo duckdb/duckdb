@@ -140,7 +140,7 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 		}
 
 		// perform the actual aggregation
-		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], payload_cnt,
+		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], aggregate.bind_info.get(), payload_cnt,
 		                                 sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
 		payload_idx += payload_cnt;
 	}

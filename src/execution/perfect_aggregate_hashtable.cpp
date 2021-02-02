@@ -117,7 +117,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		if (aggregate.filter) {
             GroupedAggregateHashTable::UpdateAggregate(aggregate,payload,addresses,input_count,payload_idx);
 		} else {
-			aggregate.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
+			aggregate.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr,input_count, addresses,
 			                          payload.size());
 		}
 		// move to the next aggregate
