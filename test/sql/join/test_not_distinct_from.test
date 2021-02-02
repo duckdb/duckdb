@@ -1,0 +1,37 @@
+# name: test/sql/join/test_not_distinct_from.test
+# description: Test join on is not distinct from query
+# group: [join]
+
+
+statement ok
+create table tbl_1 (a integer)
+
+statement ok
+insert into tbl_1 values (1),(2),(NULL)
+
+statement ok
+create table tbl_2 (b integer)
+
+statement ok
+insert into tbl_2 values (1),(2),(NULL)
+
+query II
+explain select a,b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM b)
+----
+1	1
+2	2
+NULL	NULL
+
+#
+#query I
+#explain select a.a, b.b, a.a IS NOT DISTINCT FROM b.b AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b);
+#----
+#1	1	True
+#1	2	False
+#1	NULL	False
+#2	1	False
+#2	2	True
+#2	NULL	False
+#NULL	1	False
+#NULL	2	False
+#NULL	NULL	True

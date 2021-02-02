@@ -49,8 +49,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 	vector<JoinCondition> conditions;
 	vector<unique_ptr<Expression>> arbitrary_expressions;
 	// first check if we can create
-	for (idx_t i = 0; i < expressions.size(); i++) {
-		auto &expr = expressions[i];
+	for (auto & expr : expressions) {
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
 			// join condition does not reference both sides, add it as filter under the join
@@ -88,8 +87,8 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		// because pushing a filter will lead to an incorrect result, as non-matching tuples cannot be filtered out
 		need_to_consider_arbitrary_expressions = false;
 	}
-	if ((need_to_consider_arbitrary_expressions && arbitrary_expressions.size() > 0) || conditions.size() == 0) {
-		if (arbitrary_expressions.size() == 0) {
+	if ((need_to_consider_arbitrary_expressions && !arbitrary_expressions.empty()) || conditions.empty()) {
+		if (arbitrary_expressions.empty()) {
 			// all conditions were pushed down, add TRUE predicate
 			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
@@ -169,8 +168,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 
 		auto filter = make_unique<LogicalFilter>(move(ref.condition));
 		// visit the expressions in the filter
-		for (idx_t i = 0; i < filter->expressions.size(); i++) {
-			PlanSubqueries(&filter->expressions[i], &root);
+		for (auto & expression : filter->expressions) {
+			PlanSubqueries(&expression, &root);
 		}
 		filter->AddChild(move(root));
 		return move(filter);
