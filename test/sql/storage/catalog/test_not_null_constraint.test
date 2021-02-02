@@ -1,4 +1,4 @@
-# name: test/sql/storage/catalog/test_not_null_constraints.test
+# name: test/sql/storage/catalog/test_not_null_constraint.test
 # description: Test serialization of NOT NULL constraint
 # group: [catalog]
 

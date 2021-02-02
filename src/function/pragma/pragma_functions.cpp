@@ -194,7 +194,8 @@ static void pragma_debug_checkpoint_abort(ClientContext &context, FunctionParame
 	} else if (checkpoint_abort == "before_header") {
 		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
 	} else {
-		throw ParserException("Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
+		throw ParserException(
+		    "Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
 	}
 }
 
@@ -239,16 +240,21 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", pragma_enable_force_index_join));
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", pragma_force_checkpoint));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", pragma_enable_checkpoint_on_shutdown));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", pragma_disable_checkpoint_on_shutdown));
+	set.AddFunction(
+	    PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", pragma_enable_checkpoint_on_shutdown));
+	set.AddFunction(
+	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", pragma_disable_checkpoint_on_shutdown));
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("perfect_ht_threshold", pragma_perfect_ht_threshold, LogicalType::INTEGER));
 
-	set.AddFunction(PragmaFunction::PragmaAssignment("wal_autocheckpoint", pragma_wal_autocheckpoint, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("checkpoint_threshold", pragma_wal_autocheckpoint, LogicalType::VARCHAR));
+	set.AddFunction(
+	    PragmaFunction::PragmaAssignment("wal_autocheckpoint", pragma_wal_autocheckpoint, LogicalType::VARCHAR));
+	set.AddFunction(
+	    PragmaFunction::PragmaAssignment("checkpoint_threshold", pragma_wal_autocheckpoint, LogicalType::VARCHAR));
 
-	set.AddFunction(PragmaFunction::PragmaAssignment("debug_checkpoint_abort", pragma_debug_checkpoint_abort, LogicalType::VARCHAR));
+	set.AddFunction(PragmaFunction::PragmaAssignment("debug_checkpoint_abort", pragma_debug_checkpoint_abort,
+	                                                 LogicalType::VARCHAR));
 }
 
 idx_t ParseMemoryLimit(string arg) {

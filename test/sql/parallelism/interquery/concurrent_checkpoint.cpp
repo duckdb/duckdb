@@ -19,18 +19,18 @@ public:
 	static atomic<bool> finished;
 	static atomic<size_t> finished_threads;
 
-	template<bool FORCE_CHECKPOINT>
-	static void CheckpointThread(DuckDB *db, bool *read_correct) {
+	template <bool FORCE_CHECKPOINT> static void CheckpointThread(DuckDB *db, bool *read_correct) {
 		Connection con(*db);
 		while (!finished) {
 			{
 				// the total balance should remain constant regardless of updates and checkpoints
 				auto result = con.Query("SELECT SUM(money) FROM accounts");
-				if (!CHECK_COLUMN(result, 0, {CONCURRENT_UPDATE_TOTAL_ACCOUNTS * CONCURRENT_UPDATE_MONEY_PER_ACCOUNT})) {
+				if (!CHECK_COLUMN(result, 0,
+				                  {CONCURRENT_UPDATE_TOTAL_ACCOUNTS * CONCURRENT_UPDATE_MONEY_PER_ACCOUNT})) {
 					*read_correct = false;
 				}
 			}
-			while(true) {
+			while (true) {
 				auto result = con.Query(FORCE_CHECKPOINT ? "FORCE CHECKPOINT" : "CHECKPOINT");
 				if (result->success) {
 					break;
@@ -39,7 +39,8 @@ public:
 			{
 				// the total balance should remain constant regardless of updates and checkpoints
 				auto result = con.Query("SELECT SUM(money) FROM accounts");
-				if (!CHECK_COLUMN(result, 0, {CONCURRENT_UPDATE_TOTAL_ACCOUNTS * CONCURRENT_UPDATE_MONEY_PER_ACCOUNT})) {
+				if (!CHECK_COLUMN(result, 0,
+				                  {CONCURRENT_UPDATE_TOTAL_ACCOUNTS * CONCURRENT_UPDATE_MONEY_PER_ACCOUNT})) {
 					*read_correct = false;
 				}
 			}
@@ -56,19 +57,19 @@ public:
 				correct[nr] = false;
 			}
 			if (!con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr))
-					->success) {
+			         ->success) {
 				correct[nr] = false;
 			}
 			if (!con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr))
-					->success) {
+			         ->success) {
 				correct[nr] = false;
 			}
 			if (!con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr))
-					->success) {
+			         ->success) {
 				correct[nr] = false;
 			}
 			if (!con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr))
-					->success) {
+			         ->success) {
 				correct[nr] = false;
 			}
 			// we test both commit and rollback
@@ -123,7 +124,8 @@ TEST_CASE("Concurrent checkpoint with single updater", "[interquery][.]") {
 	con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
 	for (size_t i = 0; i < ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " +
+		          to_string(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
 	}
 	con.Query("COMMIT");
 
@@ -185,7 +187,8 @@ TEST_CASE("Concurrent checkpoint with multiple updaters", "[interquery][.]") {
 	con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
 	for (size_t i = 0; i < ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " +
+		          to_string(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
 	}
 	con.Query("COMMIT");
 
@@ -218,7 +221,8 @@ TEST_CASE("Force concurrent checkpoint with single updater", "[interquery][.]") 
 	con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
 	for (size_t i = 0; i < ConcurrentCheckpoint::CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " +
+		          to_string(ConcurrentCheckpoint::CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
 	}
 	con.Query("COMMIT");
 

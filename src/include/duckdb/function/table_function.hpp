@@ -27,8 +27,7 @@ struct FunctionOperatorData {
 
 struct TableFilterCollection {
 	TableFilterSet *table_filters;
-	TableFilterCollection(TableFilterSet *table_filters)
-	    : table_filters(table_filters) {
+	TableFilterCollection(TableFilterSet *table_filters) : table_filters(table_filters) {
 	}
 };
 

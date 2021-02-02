@@ -92,11 +92,11 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 	SegmentTree new_tree;
 
 	auto owned_segment = move(col_data.data.root_node);
-	auto segment = (ColumnSegment *) owned_segment.get();
+	auto segment = (ColumnSegment *)owned_segment.get();
 	DataPointer pointer;
-	while(segment) {
+	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-			auto &persistent = (PersistentSegment&) *segment;
+			auto &persistent = (PersistentSegment &)*segment;
 			// persistent segment; check if there were changes made to the segment
 			if (!persistent.HasChanges()) {
 				// unchanged persistent segment: no need to write the data
@@ -121,21 +121,21 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 
 				// move to the next segment in the list
 				owned_segment = move(segment->next);
-				segment = (ColumnSegment *) owned_segment.get();
+				segment = (ColumnSegment *)owned_segment.get();
 				continue;
 			}
 		}
 		// not persisted yet: scan the segment and write it to disk
 		ColumnScanState state;
 		segment->InitializeScan(state);
-		for(idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < segment->count; vector_index++) {
+		for (idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < segment->count; vector_index++) {
 			idx_t count = MinValue<idx_t>(segment->count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
 			segment->ScanCommitted(state, vector_index, intermediate);
 			AppendData(new_tree, col_idx, intermediate, count);
 		}
 		// move to the next segment in the list
 		owned_segment = move(segment->next);
-		segment = (ColumnSegment *) owned_segment.get();
+		segment = (ColumnSegment *)owned_segment.get();
 	}
 	// flush the final segment
 	FlushSegment(new_tree, col_idx);
@@ -145,7 +145,7 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 
 void TableDataWriter::CheckpointDeletes(MorselInfo *morsel_info) {
 	// deletes! write them after the data pointers
-	while(morsel_info) {
+	while (morsel_info) {
 		if (morsel_info->root) {
 			// first count how many ChunkInfo's we need to deserialize
 			idx_t chunk_info_count = 0;
@@ -168,7 +168,7 @@ void TableDataWriter::CheckpointDeletes(MorselInfo *morsel_info) {
 		} else {
 			meta_writer.Write<idx_t>(0);
 		}
-		morsel_info = (MorselInfo *) morsel_info->next.get();
+		morsel_info = (MorselInfo *)morsel_info->next.get();
 	}
 }
 
@@ -220,7 +220,9 @@ void TableDataWriter::FlushSegment(SegmentTree &new_tree, idx_t col_idx) {
 	data_pointer.statistics = stats[col_idx]->statistics->Copy();
 
 	// construct a persistent segment that points to this block, and append it to the new segment tree
-	auto persistent_segment = make_unique<PersistentSegment>(db, block_id, offset_in_block, table.columns[col_idx].type, data_pointer.row_start, data_pointer.tuple_count, stats[col_idx]->statistics->Copy());
+	auto persistent_segment = make_unique<PersistentSegment>(db, block_id, offset_in_block, table.columns[col_idx].type,
+	                                                         data_pointer.row_start, data_pointer.tuple_count,
+	                                                         stats[col_idx]->statistics->Copy());
 	new_tree.AppendSegment(move(persistent_segment));
 
 	data_pointers[col_idx].push_back(move(data_pointer));

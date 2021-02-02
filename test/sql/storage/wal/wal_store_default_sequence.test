@@ -1,6 +1,6 @@
-# name: test/sql/storage/catalog/test_store_default_sequence.test
+# name: test/sql/storage/wal/wal_store_default_sequence.test
 # description: Test storage of default values with sequences
-# group: [catalog]
+# group: [wal]
 
 load __TEST_DIR__/test_store_defaults.db
 

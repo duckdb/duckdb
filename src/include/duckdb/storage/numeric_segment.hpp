@@ -43,14 +43,15 @@ protected:
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                         idx_t &approved_tuple_count) override;
-	void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id, UpdateInfo *versions,
-	                     Vector &result) override;
+	void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
+	                     UpdateInfo *versions, Vector &result) override;
 
 public:
 	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source,
 	                                  idx_t offset, idx_t count);
 	typedef void (*update_function_t)(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base_data, Vector &update);
-	typedef void (*update_info_fetch_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result);
+	typedef void (*update_info_fetch_function_t)(transaction_t start_time, transaction_t transaction_id,
+	                                             UpdateInfo *info, Vector &result);
 	typedef void (*update_info_append_function_t)(Transaction &transaction, UpdateInfo *info, idx_t idx, Vector &result,
 	                                              idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *info, data_ptr_t base_data);

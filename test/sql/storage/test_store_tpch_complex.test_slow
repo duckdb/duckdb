@@ -1,6 +1,6 @@
 # name: test/sql/storage/test_store_tpch_complex.test_slow
 # description: Test storing TPC-H with several complex operations
-# group: [types]
+# group: [storage]
 
 require tpch
 

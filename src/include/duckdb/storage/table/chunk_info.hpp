@@ -74,7 +74,8 @@ public:
 	bool any_deleted;
 
 public:
-	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector, idx_t max_count);
+	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
+	                   idx_t max_count);
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;

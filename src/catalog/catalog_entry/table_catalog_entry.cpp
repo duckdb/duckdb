@@ -543,7 +543,7 @@ void TableCatalogEntry::SetAsRoot() {
 
 void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 	D_ASSERT(info.type == AlterType::ALTER_TABLE);
-	auto &alter_table = (AlterTableInfo &) info;
+	auto &alter_table = (AlterTableInfo &)info;
 	string column_name;
 	switch (alter_table.alter_table_type) {
 	case AlterTableType::REMOVE_COLUMN: {

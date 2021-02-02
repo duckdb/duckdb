@@ -24,6 +24,7 @@ class ObjectCache;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
+
 public:
 	DUCKDB_API DatabaseInstance();
 	DUCKDB_API ~DatabaseInstance();

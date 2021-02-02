@@ -1,6 +1,6 @@
-# name: test/sql/storage/catalog/test_store_add_column.test
+# name: test/sql/storage/wal/wal_store_add_column.test
 # description: Test storage of alter table add column
-# group: [catalog]
+# group: [wal]
 
 load __TEST_DIR__/test_store_add_column.db
 

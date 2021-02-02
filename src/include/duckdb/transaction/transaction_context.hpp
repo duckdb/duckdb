@@ -22,8 +22,7 @@ class TransactionManager;
 class TransactionContext {
 public:
 	TransactionContext(TransactionManager &transaction_manager, ClientContext &context)
-	    : transaction_manager(transaction_manager), context(context), auto_commit(true),
-	      current_transaction(nullptr) {
+	    : transaction_manager(transaction_manager), context(context), auto_commit(true), current_transaction(nullptr) {
 	}
 	~TransactionContext();
 

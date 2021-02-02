@@ -11,7 +11,6 @@ MetaBlockReader::MetaBlockReader(DatabaseInstance &db, block_id_t block_id)
 }
 
 MetaBlockReader::~MetaBlockReader() {
-
 }
 
 void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {

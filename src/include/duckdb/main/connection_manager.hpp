@@ -19,7 +19,8 @@ class DatabaseInstance;
 
 class ConnectionManager {
 public:
-	ConnectionManager(){}
+	ConnectionManager() {
+	}
 
 	void AddConnection(ClientContext &context) {
 		lock_guard<mutex> lock(connections_lock);
@@ -28,7 +29,7 @@ public:
 
 	vector<shared_ptr<ClientContext>> GetConnectionList() {
 		vector<shared_ptr<ClientContext>> result;
-		for(size_t i = 0; i < connections.size(); i++) {
+		for (size_t i = 0; i < connections.size(); i++) {
 			auto connection = connections[i].lock();
 			if (!connection) {
 				connections.erase(connections.begin() + i);

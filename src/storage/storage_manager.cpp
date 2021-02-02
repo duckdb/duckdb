@@ -98,8 +98,7 @@ void StorageManager::LoadDatabase() {
 		}
 		// initialize the block manager while creating a new db file
 		block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, true, config.use_direct_io);
-		buffer_manager =
-		    make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
+		buffer_manager = make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
 	} else {
 		// initialize the block manager while loading the current db file
 		auto sf_bm = make_unique<SingleFileBlockManager>(db, path, read_only, false, config.use_direct_io);

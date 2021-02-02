@@ -1,6 +1,6 @@
-# name: test/sql/storage/catalog/test_store_temporary.test
+# name: test/sql/storage/wal/wal_store_temporary.test
 # description: Temporary tables are not written to disk
-# group: [catalog]
+# group: [wal]
 
 # load the DB from disk
 load __TEST_DIR__/test_store_temporary.db

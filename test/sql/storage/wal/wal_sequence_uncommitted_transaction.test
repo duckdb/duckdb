@@ -1,6 +1,6 @@
-# name: test/sql/storage/catalog/test_sequence_uncommitted_transaction.test
+# name: test/sql/storage/wal/wal_sequence_uncommitted_transaction.test
 # description: Use sequences with uncommited transaction
-# group: [catalog]
+# group: [wal]
 
 load __TEST_DIR__/store_sequences.db
 

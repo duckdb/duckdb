@@ -3,8 +3,7 @@
 
 namespace duckdb {
 
-BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node)
-    : handle(move(handle)), node(node) {
+BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node) : handle(move(handle)), node(node) {
 }
 
 BufferHandle::~BufferHandle() {

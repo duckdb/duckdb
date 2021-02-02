@@ -1,6 +1,6 @@
-# name: test/sql/storage/catalog/test_store_remove_column.test
+# name: test/sql/storage/wal/wal_store_remove_column.test
 # description: Remove column from persistent table
-# group: [catalog]
+# group: [wal]
 
 load __TEST_DIR__/test_store_add_column.db
 

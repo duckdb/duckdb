@@ -249,8 +249,8 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 //===--------------------------------------------------------------------===//
 // Fetch update data
 //===--------------------------------------------------------------------===//
-void StringSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
-                                    Vector &result) {
+void StringSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
+                                    UpdateInfo *info, Vector &result) {
 	// fetch data from updates
 	auto handle = state.primary_handle.get();
 
@@ -380,22 +380,23 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	bool found_data = false;
 	// first see if there is any updated version of this tuple we must fetch
 	if (versions && versions[vector_index]) {
-		UpdateInfo::UpdatesForTransaction(versions[vector_index], transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
-			auto info_data = (string_location_t *)current->tuple_data;
-			// loop over the tuples in this UpdateInfo
-			for (idx_t i = 0; i < current->N; i++) {
-				if (current->tuples[i] == row_id) {
-					// found the relevant tuple
-					found_data = true;
-					result_data[result_idx] = FetchString(result, baseptr, info_data[i]);
-					result_mask[result_idx] = current->nullmask[current->tuples[i]];
-					break;
-				} else if (current->tuples[i] > row_id) {
-					// tuples are sorted: so if the current tuple is > row_id we will not find it anymore
-					break;
-				}
-			}
-		});
+		UpdateInfo::UpdatesForTransaction(
+		    versions[vector_index], transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
+			    auto info_data = (string_location_t *)current->tuple_data;
+			    // loop over the tuples in this UpdateInfo
+			    for (idx_t i = 0; i < current->N; i++) {
+				    if (current->tuples[i] == row_id) {
+					    // found the relevant tuple
+					    found_data = true;
+					    result_data[result_idx] = FetchString(result, baseptr, info_data[i]);
+					    result_mask[result_idx] = current->nullmask[current->tuples[i]];
+					    break;
+				    } else if (current->tuples[i] > row_id) {
+					    // tuples are sorted: so if the current tuple is > row_id we will not find it anymore
+					    break;
+				    }
+			    }
+		    });
 	}
 	if (!found_data && string_updates && string_updates[vector_index]) {
 		// there are updates: check if we should use them

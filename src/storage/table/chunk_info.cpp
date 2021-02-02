@@ -14,7 +14,7 @@ static bool UseVersion(Transaction &transaction, transaction_t id) {
 
 unique_ptr<ChunkInfo> ChunkInfo::Deserialize(MorselInfo &morsel, Deserializer &source) {
 	auto type = source.Read<ChunkInfoType>();
-	switch(type) {
+	switch (type) {
 	case ChunkInfoType::EMPTY_INFO:
 		return nullptr;
 	case ChunkInfoType::CONSTANT_INFO:
@@ -84,7 +84,8 @@ idx_t ChunkVectorInfo::GetSelVector(Transaction &transaction, SelectionVector &s
 	return GetSelVector(transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 }
 
-idx_t ChunkVectorInfo::GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector, idx_t max_count) {
+idx_t ChunkVectorInfo::GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
+                                    idx_t max_count) {
 	idx_t count = 0;
 	if (same_inserted_id && !any_deleted) {
 		// all tuples have the same inserted id: and no tuples were deleted
@@ -113,7 +114,8 @@ idx_t ChunkVectorInfo::GetSelVector(transaction_t start_time, transaction_t tran
 	} else {
 		// have to check both flags
 		for (idx_t i = 0; i < max_count; i++) {
-			if (UseVersion(start_time, transaction_id, inserted[i]) && !UseVersion(start_time, transaction_id, deleted[i])) {
+			if (UseVersion(start_time, transaction_id, inserted[i]) &&
+			    !UseVersion(start_time, transaction_id, deleted[i])) {
 				sel_vector.set_index(count++, i);
 			}
 		}
@@ -191,13 +193,13 @@ void ChunkVectorInfo::Serialize(Serializer &serializer) {
 	serializer.Write<ChunkInfoType>(ChunkInfoType::VECTOR_INFO);
 	serializer.Write<idx_t>(start);
 	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	for(idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		deleted_tuples[i] = true;
 	}
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		deleted_tuples[sel.get_index(i)] = false;
 	}
-	serializer.WriteData((data_ptr_t) deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	serializer.WriteData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
 }
 
 unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(MorselInfo &morsel, Deserializer &source) {
@@ -206,8 +208,8 @@ unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(MorselInfo &morsel, Deseriali
 	auto result = make_unique<ChunkVectorInfo>(start, morsel);
 	result->any_deleted = true;
 	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	source.ReadData((data_ptr_t) deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
-	for(idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+	source.ReadData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		if (deleted_tuples[i]) {
 			result->deleted[i] = 0;
 		}

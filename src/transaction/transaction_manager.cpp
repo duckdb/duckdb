@@ -14,9 +14,7 @@
 namespace duckdb {
 
 struct CheckpointLock {
-	CheckpointLock(TransactionManager &manager) :
-		manager(manager), is_locked(false) {
-
+	CheckpointLock(TransactionManager &manager) : manager(manager), is_locked(false) {
 	}
 	~CheckpointLock() {
 		Unlock();
@@ -40,8 +38,7 @@ struct CheckpointLock {
 	}
 };
 
-TransactionManager::TransactionManager(DatabaseInstance &db) :
-    db(db), thread_is_checkpointing(false) {
+TransactionManager::TransactionManager(DatabaseInstance &db) : db(db), thread_is_checkpointing(false) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
 	// transaction ID starts very high:
@@ -71,7 +68,8 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 
 	// create the actual transaction
 	auto &catalog = Catalog::GetCatalog(db);
-	auto transaction = make_unique<Transaction>(weak_ptr<ClientContext>(context.shared_from_this()), start_time, transaction_id, start_timestamp, catalog.GetCatalogVersion());
+	auto transaction = make_unique<Transaction>(weak_ptr<ClientContext>(context.shared_from_this()), start_time,
+	                                            transaction_id, start_timestamp, catalog.GetCatalogVersion());
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions
@@ -80,7 +78,9 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 }
 
 struct ClientLockWrapper {
-	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection) : connection(move(connection)), connection_lock(make_unique<lock_guard<mutex>>(client_lock)) {}
+	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection)
+	    : connection(move(connection)), connection_lock(make_unique<lock_guard<mutex>>(client_lock)) {
+	}
 
 	shared_ptr<ClientContext> connection;
 	unique_ptr<lock_guard<mutex>> connection_lock;
@@ -90,7 +90,7 @@ void TransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, Cl
 	auto &connection_manager = ConnectionManager::Get(context);
 	client_locks.emplace_back(connection_manager.connections_lock, nullptr);
 	auto connection_list = connection_manager.GetConnectionList();
-	for(auto &con : connection_list) {
+	for (auto &con : connection_list) {
 		if (con.get() == &context) {
 			continue;
 		}
@@ -127,11 +127,12 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 	}
 	if (!force) {
 		if (!CanCheckpoint(current)) {
-			throw TransactionException("Cannot CHECKPOINT: there are other transactions. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint");
+			throw TransactionException("Cannot CHECKPOINT: there are other transactions. Use FORCE CHECKPOINT to abort "
+			                           "the other transactions and force a checkpoint");
 		}
 	} else {
 		if (!CanCheckpoint(current)) {
-			for(size_t i = 0; i < active_transactions.size(); i++) {
+			for (size_t i = 0; i < active_transactions.size(); i++) {
 				auto &transaction = active_transactions[i];
 				// rollback the transaction
 				transaction->Rollback();
@@ -160,7 +161,7 @@ bool TransactionManager::CanCheckpoint(Transaction *current) {
 	if (!recently_committed_transactions.empty() || !old_transactions.empty()) {
 		return false;
 	}
-	for(auto &transaction : active_transactions) {
+	for (auto &transaction : active_transactions) {
 		if (transaction.get() != current) {
 			return false;
 		}
@@ -212,7 +213,8 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
-	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to checkpoint
+	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
+	// checkpoint
 	if (checkpoint) {
 		// checkpoint the database to disk
 		auto &storage_manager = StorageManager::GetStorageManager(db);

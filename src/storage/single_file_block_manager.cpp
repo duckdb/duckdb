@@ -236,7 +236,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 
 	// now handle the free list
 	// add all modified blocks to the free list: they can now be written to again
-	for(auto &block : modified_blocks) {
+	for (auto &block : modified_blocks) {
 		free_list.insert(block);
 	}
 	modified_blocks.clear();

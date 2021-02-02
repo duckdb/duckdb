@@ -28,8 +28,7 @@ DatabaseInstance::~DatabaseInstance() {
 			}
 			storage.CreateCheckpoint(true);
 		}
-	} catch(...) {
-
+	} catch (...) {
 	}
 }
 
@@ -65,11 +64,11 @@ DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
 	return db.config;
 }
 
-TransactionManager& TransactionManager::Get(ClientContext &context) {
+TransactionManager &TransactionManager::Get(ClientContext &context) {
 	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-TransactionManager& TransactionManager::Get(DatabaseInstance &db) {
+TransactionManager &TransactionManager::Get(DatabaseInstance &db) {
 	return db.GetTransactionManager();
 }
 
@@ -80,7 +79,6 @@ ConnectionManager &ConnectionManager::Get(DatabaseInstance &db) {
 ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
-
 
 void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	if (new_config) {

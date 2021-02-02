@@ -22,8 +22,7 @@ using namespace std::chrono;
 
 DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types_,
                      unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(schema, table)), types(types_), db(db),
-      total_rows(0), is_root(true) {
+    : info(make_shared<DataTableInfo>(schema, table)), types(types_), db(db), total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = make_shared<ColumnData>(db, *info, types[i], i);
@@ -53,8 +52,8 @@ DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<L
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
-      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
+      columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
@@ -96,8 +95,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
-      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
+      columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// first check if there are any indexes that exist that point to the removed column
@@ -121,8 +120,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
-    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
-      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
+      columns(parent.columns), is_root(true) {
 
 	// prevent any new tuples from being added to the parent
 	CreateIndexScanState scan_state;
@@ -1053,13 +1052,12 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	return columns[column_id]->statistics->Copy();
 }
 
-
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
 void DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint each individual column
-	for(size_t i = 0; i < columns.size(); i++) {
+	for (size_t i = 0; i < columns.size(); i++) {
 		writer.CheckpointColumn(*columns[i], i);
 	}
 }
@@ -1067,26 +1065,26 @@ void DataTable::Checkpoint(TableDataWriter &writer) {
 void DataTable::CheckpointDeletes(TableDataWriter &writer) {
 	// then we checkpoint the deleted tuples
 	D_ASSERT(versions);
-	writer.CheckpointDeletes(((MorselInfo *) versions->GetRootSegment()));
+	writer.CheckpointDeletes(((MorselInfo *)versions->GetRootSegment()));
 }
 
 void DataTable::CommitDropColumn(idx_t index) {
 	auto &block_manager = BlockManager::GetBlockManager(db);
-	auto segment = (ColumnSegment*) columns[index]->data.GetRootSegment();
-	while(segment) {
+	auto segment = (ColumnSegment *)columns[index]->data.GetRootSegment();
+	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-			auto &persistent = (PersistentSegment &) *segment;
+			auto &persistent = (PersistentSegment &)*segment;
 			if (!persistent.HasChanges()) {
 				block_manager.MarkBlockAsModified(persistent.block_id);
 			}
 		}
-		segment = (ColumnSegment*) segment->next.get();
+		segment = (ColumnSegment *)segment->next.get();
 	}
 }
 
 void DataTable::CommitDropTable() {
 	// commit a drop of this table: mark all blocks as modified so they can be reclaimed later on
-	for(size_t i = 0; i < columns.size(); i++) {
+	for (size_t i = 0; i < columns.size(); i++) {
 		CommitDropColumn(i);
 	}
 }

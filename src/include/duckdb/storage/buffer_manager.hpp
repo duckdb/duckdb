@@ -64,6 +64,7 @@ public:
 	idx_t GetMaxMemory() {
 		return maximum_memory;
 	}
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)

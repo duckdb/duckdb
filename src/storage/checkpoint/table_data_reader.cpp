@@ -49,9 +49,9 @@ void TableDataReader::ReadTableData() {
 
 			column_count += data_pointer.tuple_count;
 			// create a persistent segment
-			auto segment = make_unique<PersistentSegment>(db, data_pointer.block_id,
-			                                              data_pointer.offset, column.type, data_pointer.row_start,
-			                                              data_pointer.tuple_count, move(data_pointer.statistics));
+			auto segment = make_unique<PersistentSegment>(db, data_pointer.block_id, data_pointer.offset, column.type,
+			                                              data_pointer.row_start, data_pointer.tuple_count,
+			                                              move(data_pointer.statistics));
 			info.data->table_data[col].push_back(move(segment));
 		}
 		if (col == 0) {
@@ -72,7 +72,7 @@ void TableDataReader::ReadTableData() {
 		auto chunk_info_count = reader.Read<idx_t>();
 		if (chunk_info_count > 0) {
 			segment->root = make_unique<VersionNode>();
-			for(idx_t i = 0; i < chunk_info_count; i++) {
+			for (idx_t i = 0; i < chunk_info_count; i++) {
 				idx_t vector_index = reader.Read<idx_t>();
 				segment->root->info[vector_index] = ChunkInfo::Deserialize(*segment, reader);
 			}

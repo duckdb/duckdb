@@ -20,6 +20,7 @@ class SegmentStatistics;
 //! The table data writer is responsible for writing the data of a table to the block manager
 class TableDataWriter {
 	friend class ColumnData;
+
 public:
 	TableDataWriter(DatabaseInstance &db, TableCatalogEntry &table, MetaBlockWriter &meta_writer);
 	~TableDataWriter();
@@ -28,6 +29,7 @@ public:
 
 	void CheckpointColumn(ColumnData &col_data, idx_t col_idx);
 	void CheckpointDeletes(MorselInfo *info);
+
 private:
 	void AppendData(SegmentTree &new_tree, idx_t col_idx, Vector &data, idx_t count);
 

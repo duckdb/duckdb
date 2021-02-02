@@ -1,6 +1,6 @@
-# name: test/sql/storage/catalog/test_store_sequences.test
+# name: test/sql/storage/wal/wal_store_sequences.test
 # description: Use sequences over different runs
-# group: [catalog]
+# group: [wal]
 
 load __TEST_DIR__/store_sequences.db
 

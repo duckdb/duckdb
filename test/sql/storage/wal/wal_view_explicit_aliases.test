@@ -1,6 +1,6 @@
-# name: test/sql/storage/catalog/test_view_explicit_aliases.test
+# name: test/sql/storage/wal/wal_view_explicit_aliases.test
 # description: Test views with explicit column aliases
-# group: [catalog]
+# group: [wal]
 
 # load the DB from disk
 load __TEST_DIR__/view_explicit_aliases_storage.db

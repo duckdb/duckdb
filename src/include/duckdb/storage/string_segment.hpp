@@ -89,8 +89,8 @@ protected:
 	            vector<TableFilter> &tableFilter) override;
 
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
-	void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id, UpdateInfo *versions,
-	                     Vector &result) override;
+	void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
+	                     UpdateInfo *versions, Vector &result) override;
 
 	void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                         idx_t &approved_tuple_count) override;

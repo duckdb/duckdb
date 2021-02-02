@@ -34,6 +34,7 @@ struct StoredCatalogSet {
 //! transactions
 class TransactionManager {
 	friend struct CheckpointLock;
+
 public:
 	TransactionManager(DatabaseInstance &db);
 	~TransactionManager();
@@ -53,8 +54,9 @@ public:
 
 	void Checkpoint(ClientContext &context, bool force = false);
 
-	static TransactionManager& Get(ClientContext &context);
-	static TransactionManager& Get(DatabaseInstance &db);
+	static TransactionManager &Get(ClientContext &context);
+	static TransactionManager &Get(DatabaseInstance &db);
+
 private:
 	bool CanCheckpoint(Transaction *current = nullptr);
 	//! Remove the given transaction from the list of active transactions

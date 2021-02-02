@@ -140,7 +140,7 @@ bool UndoBuffer::ChangesMade() {
 idx_t UndoBuffer::EstimatedSize() {
 	idx_t estimated_size = 0;
 	auto node = head.get();
-	while(node) {
+	while (node) {
 		estimated_size += node->current_position;
 		node = node->next.get();
 	}

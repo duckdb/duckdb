@@ -21,7 +21,8 @@ namespace duckdb {
 class ReplayState {
 public:
 	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), source(source), current_table(nullptr), deserialize_only(false), checkpoint_id(INVALID_BLOCK) {
+	    : db(db), context(context), source(source), current_table(nullptr), deserialize_only(false),
+	      checkpoint_id(INVALID_BLOCK) {
 	}
 
 	DatabaseInstance &db;

@@ -32,8 +32,7 @@
 
 namespace duckdb {
 
-CheckpointManager::CheckpointManager(DatabaseInstance &db)
-    : db(db) {
+CheckpointManager::CheckpointManager(DatabaseInstance &db) : db(db) {
 }
 
 void CheckpointManager::CreateCheckpoint() {
@@ -70,11 +69,10 @@ void CheckpointManager::CreateCheckpoint() {
 	tabledata_writer->Flush();
 
 	// write a checkpoint flag to the WAL
-	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the WAL
-	// we write an entry CHECKPOINT "meta_block_id" into the WAL
-	// upon loading, if we see there is an entry CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file
-	// we know that the database was successfully checkpointed, so we know that we should avoid replaying the WAL
-	// to avoid duplicating data
+	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the
+	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
+	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
+	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
 	auto wal = storage_manager.GetWriteAheadLog();
 	wal->WriteCheckpoint(meta_block);
 	wal->Flush();
@@ -96,10 +94,10 @@ void CheckpointManager::CreateCheckpoint() {
 	wal->Truncate(0);
 
 	// mark all blocks written as part of the metadata as modified
-	for(auto &block_id : metadata_writer->written_blocks) {
+	for (auto &block_id : metadata_writer->written_blocks) {
 		block_manager.MarkBlockAsModified(block_id);
 	}
-	for(auto &block_id : tabledata_writer->written_blocks) {
+	for (auto &block_id : tabledata_writer->written_blocks) {
 		block_manager.MarkBlockAsModified(block_id);
 	}
 }

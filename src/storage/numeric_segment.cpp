@@ -179,22 +179,22 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 	switch (type) {
 	case PhysicalType::UINT8: {
 		Select<uint8_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.utinyint,
-		                         constantRight.value_.utinyint, approved_tuple_count);
+		                          constantRight.value_.utinyint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT16: {
 		Select<uint16_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.usmallint,
-		                          constantRight.value_.usmallint, approved_tuple_count);
+		                           constantRight.value_.usmallint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT32: {
 		Select<uint32_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.uinteger,
-		                          constantRight.value_.uinteger, approved_tuple_count);
+		                           constantRight.value_.uinteger, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT64: {
 		Select<uint64_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.ubigint,
-		                          constantRight.value_.ubigint, approved_tuple_count);
+		                           constantRight.value_.ubigint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT8: {
@@ -234,7 +234,7 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 	}
 	case PhysicalType::BOOL: {
 		Select<bool, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.boolean,
-		                         constantRight.value_.boolean, approved_tuple_count);
+		                       constantRight.value_.boolean, approved_tuple_count);
 		break;
 	}
 	default:
@@ -346,8 +346,8 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	memcpy(FlatVector::GetData(result), source_data, count * type_size);
 }
 
-void NumericSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id, UpdateInfo *version,
-                                     Vector &result) {
+void NumericSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
+                                     UpdateInfo *version, Vector &result) {
 	fetch_from_update_info(start_time, transaction_id, version, result);
 }
 
@@ -410,22 +410,22 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	}
 	case PhysicalType::UINT8: {
 		templated_assignment<uint8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                             approved_tuple_count);
+		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT16: {
 		templated_assignment<uint16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT32: {
 		templated_assignment<uint32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT64: {
 		templated_assignment<uint64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT128: {
@@ -856,7 +856,9 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 //===--------------------------------------------------------------------===//
 // Update Fetch
 //===--------------------------------------------------------------------===//
-template <class T> static void update_info_fetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result) {
+template <class T>
+static void update_info_fetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
+                              Vector &result) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
@@ -908,21 +910,23 @@ static void update_info_append(Transaction &transaction, UpdateInfo *info, idx_t
                                idx_t result_idx) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
-	UpdateInfo::UpdatesForTransaction(info, transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
-		auto info_data = (T *)current->tuple_data;
-		// loop over the tuples in this UpdateInfo
-		for (idx_t i = 0; i < current->N; i++) {
-			if (current->tuples[i] == row_id) {
-				// found the relevant tuple
-				result_data[result_idx] = info_data[i];
-				result_mask[result_idx] = current->nullmask[current->tuples[i]];
-				break;
-			} else if (current->tuples[i] > row_id) {
-				// tuples are sorted: so if the current tuple is > row_id we will not find it anymore
-				break;
-			}
-		}
-	});
+	UpdateInfo::UpdatesForTransaction(info, transaction.start_time, transaction.transaction_id,
+	                                  [&](UpdateInfo *current) {
+		                                  auto info_data = (T *)current->tuple_data;
+		                                  // loop over the tuples in this UpdateInfo
+		                                  for (idx_t i = 0; i < current->N; i++) {
+			                                  if (current->tuples[i] == row_id) {
+				                                  // found the relevant tuple
+				                                  result_data[result_idx] = info_data[i];
+				                                  result_mask[result_idx] = current->nullmask[current->tuples[i]];
+				                                  break;
+			                                  } else if (current->tuples[i] > row_id) {
+				                                  // tuples are sorted: so if the current tuple is > row_id we will not
+				                                  // find it anymore
+				                                  break;
+			                                  }
+		                                  }
+	                                  });
 }
 
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(PhysicalType type) {

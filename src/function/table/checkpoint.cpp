@@ -6,16 +6,16 @@
 namespace duckdb {
 
 static unique_ptr<FunctionData> checkpoint_bind(ClientContext &context, vector<Value> &inputs,
-                                            unordered_map<string, Value> &named_parameters,
-                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                                unordered_map<string, Value> &named_parameters,
+                                                vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.push_back(LogicalType::BOOLEAN);
 	names.push_back("Success");
 	return nullptr;
 }
 
-template<bool FORCE>
+template <bool FORCE>
 static void checkpoint_function(ClientContext &context, const FunctionData *bind_data_,
-                            FunctionOperatorData *operator_state, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &transaction_manager = TransactionManager::Get(context);
 	transaction_manager.Checkpoint(context, FORCE);
 }

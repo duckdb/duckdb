@@ -46,7 +46,7 @@ static unique_ptr<FunctionData> pragma_database_size_bind(ClientContext &context
 
 unique_ptr<FunctionOperatorData> pragma_database_size_init(ClientContext &context, const FunctionData *bind_data,
                                                            vector<column_t> &column_ids,
-                                                           TableFilterCollection* filters) {
+                                                           TableFilterCollection *filters) {
 	return make_unique<PragmaDatabaseSizeData>();
 }
 
@@ -106,13 +106,15 @@ void pragma_database_size(ClientContext &context, const FunctionData *bind_data,
 	}
 	output.data[6].SetValue(0, Value(bytes_to_human_readable_string(buffer_manager.GetUsedMemory())));
 	auto max_memory = buffer_manager.GetMaxMemory();
-	output.data[7].SetValue(0, max_memory == (idx_t)-1 ? Value("Unlimited") : Value(bytes_to_human_readable_string(max_memory)));
+	output.data[7].SetValue(0, max_memory == (idx_t)-1 ? Value("Unlimited")
+	                                                   : Value(bytes_to_human_readable_string(max_memory)));
 
 	data.finished = true;
 }
 
 void PragmaDatabaseSize::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_database_size", {}, pragma_database_size, pragma_database_size_bind, pragma_database_size_init));
+	set.AddFunction(TableFunction("pragma_database_size", {}, pragma_database_size, pragma_database_size_bind,
+	                              pragma_database_size_init));
 }
 
 } // namespace duckdb

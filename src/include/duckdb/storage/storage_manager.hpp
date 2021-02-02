@@ -33,6 +33,7 @@ public:
 	unique_ptr<BufferManager> buffer_manager;
 	//! The database this storagemanager belongs to
 	DatabaseInstance &db;
+
 public:
 	static StorageManager &GetStorageManager(ClientContext &context);
 	static StorageManager &GetStorageManager(DatabaseInstance &db);

@@ -33,8 +33,7 @@ namespace duckdb {
 
 class ClientContextLock {
 public:
-	ClientContextLock(mutex &context_lock) :
-		client_guard(context_lock) {
+	ClientContextLock(mutex &context_lock) : client_guard(context_lock) {
 	}
 	~ClientContextLock() {
 	}
@@ -261,13 +260,14 @@ void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 	handler.HandlePragmaStatements(*lock, statements);
 }
 
-unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement) {
+unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
+                                                             unique_ptr<SQLStatement> statement) {
 	auto n_param = statement->n_param;
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
-	RunFunctionInTransactionInternal(lock,
-	    [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, move(statement)); }, false);
+	RunFunctionInTransactionInternal(
+	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, move(statement)); }, false);
 	prepared_data->unbound_statement = move(unbound_statement);
 	return make_unique<PreparedStatement>(shared_from_this(), move(prepared_data), move(statement_query), n_param);
 }
@@ -314,7 +314,8 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	return RunStatementOrPreparedStatement(*lock, query, nullptr, prepared, &values, allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
+                                                            unique_ptr<SQLStatement> statement,
                                                             bool allow_stream_result) {
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(lock, query, move(statement));
@@ -324,8 +325,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
 	return ExecutePreparedStatement(lock, query, move(prepared), move(bound_values), allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientContextLock &lock,
-                                                                       const string &query,
+unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
                                                                        unique_ptr<SQLStatement> statement,
                                                                        shared_ptr<PreparedStatementData> &prepared,
                                                                        vector<Value> *values,
@@ -406,13 +406,14 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                                    bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::RunStatement(ClientContextLock &lock, const string &query,
+                                                    unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	shared_ptr<PreparedStatementData> prepared;
 	return RunStatementOrPreparedStatement(lock, query, move(statement), prepared, nullptr, allow_stream_result);
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &statements,
+unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, const string &query,
+                                                     vector<unique_ptr<SQLStatement>> &statements,
                                                      bool allow_stream_result) {
 	// now we have a list of statements
 	// iterate over them and execute them one by one
@@ -654,7 +655,8 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	});
 }
 
-void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, std::function<void(void)> fun, bool requires_valid_transaction) {
+void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, std::function<void(void)> fun,
+                                                     bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    transaction.ActiveTransaction().IsInvalidated()) {
 		throw Exception("Failed: transaction has been invalidated!");

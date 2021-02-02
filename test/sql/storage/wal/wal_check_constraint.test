@@ -1,6 +1,6 @@
-# name: test/sql/storage/catalog/test_check_constraints.test
+# name: test/sql/storage/wal/wal_check_constraint.test
 # description: Test serialization of CHECK constraint
-# group: [catalog]
+# group: [wal]
 
 # load the DB from disk
 load __TEST_DIR__/check_storage_test.db

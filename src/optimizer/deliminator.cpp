@@ -149,9 +149,9 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 	// get the filter (if any)
 	LogicalFilter *filter = nullptr;
 	if (join.children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER) {
-		filter = (LogicalFilter*) join.children[delim_idx].get();
+		filter = (LogicalFilter *)join.children[delim_idx].get();
 	}
-	auto &delim_get = (LogicalDelimGet &) *(filter ? filter->children[0].get() : join.children[delim_idx].get());
+	auto &delim_get = (LogicalDelimGet &)*(filter ? filter->children[0].get() : join.children[delim_idx].get());
 	if (join.conditions.size() != delim_get.chunk_types.size()) {
 		// joining with DelimGet adds new information
 		return false;

@@ -24,4 +24,4 @@ public:
 	unique_ptr<BaseStatistics> statistics;
 };
 
-}
+} // namespace duckdb
