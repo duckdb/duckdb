@@ -1,11 +1,11 @@
 #include "duckdb/common/operator/multiply.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/value.hpp"
 
-#include "duckdb/common/types/hugeint.hpp"
-
 #include <limits>
+#include <algorithm>
 
 namespace duckdb {
 
@@ -52,6 +52,36 @@ struct OverflowCheckedMultiply {
 		return true;
 	}
 };
+
+template <> bool TryMultiplyOperator::Operation(uint8_t left, uint8_t right, uint8_t &result) {
+	return OverflowCheckedMultiply::Operation<uint8_t, uint16_t>(left, right, result);
+}
+template <> bool TryMultiplyOperator::Operation(uint16_t left, uint16_t right, uint16_t &result) {
+	return OverflowCheckedMultiply::Operation<uint16_t, uint32_t>(left, right, result);
+}
+template <> bool TryMultiplyOperator::Operation(uint32_t left, uint32_t right, uint32_t &result) {
+	return OverflowCheckedMultiply::Operation<uint32_t, uint64_t>(left, right, result);
+}
+template <> bool TryMultiplyOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) {
+	if (left > right){
+		std::swap(left,right);
+	}
+	if (left > NumericLimits<uint32_t>::Maximum()){
+		return false;
+	}
+	uint32_t c = right >> 32;
+	uint32_t d = NumericLimits<uint32_t>::Maximum() & right;
+	uint64_t r = left * c;
+	uint64_t s = left * d;
+	if (r > NumericLimits<uint32_t>::Maximum()){
+		return false;
+	}
+	r <<= 32;
+	if (NumericLimits<uint64_t>::Maximum() - s < r){
+		return false;
+	}
+	return OverflowCheckedMultiply::Operation<uint64_t, uint64_t>(left, right, result);
+}
 
 template <> bool TryMultiplyOperator::Operation(int8_t left, int8_t right, int8_t &result) {
 	return OverflowCheckedMultiply::Operation<int8_t, int16_t>(left, right, result);

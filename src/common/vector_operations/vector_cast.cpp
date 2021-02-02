@@ -1,9 +1,9 @@
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -196,6 +196,18 @@ static void decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
 	case LogicalTypeId::BIGINT:
 		from_decimal_cast<int64_t>(source, result, count);
 		break;
+	case LogicalTypeId::UTINYINT:
+		from_decimal_cast<uint8_t>(source, result, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		from_decimal_cast<uint16_t>(source, result, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		from_decimal_cast<uint32_t>(source, result, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		from_decimal_cast<uint64_t>(source, result, count);
+		break;
 	case LogicalTypeId::HUGEINT:
 		from_decimal_cast<hugeint_t>(source, result, count);
 		break;
@@ -281,6 +293,18 @@ template <class SRC> static void numeric_cast_switch(Vector &source, Vector &res
 	case LogicalTypeId::BIGINT:
 		UnaryExecutor::Execute<SRC, int64_t, duckdb::Cast, true>(source, result, count);
 		break;
+	case LogicalTypeId::UTINYINT:
+		UnaryExecutor::Execute<SRC, uint8_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		UnaryExecutor::Execute<SRC, uint16_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		UnaryExecutor::Execute<SRC, uint32_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		UnaryExecutor::Execute<SRC, uint64_t, duckdb::Cast, true>(source, result, count);
+		break;
 	case LogicalTypeId::HUGEINT:
 		UnaryExecutor::Execute<SRC, hugeint_t, duckdb::Cast, true>(source, result, count);
 		break;
@@ -326,6 +350,18 @@ template <class OP> static void string_cast_numeric_switch(Vector &source, Vecto
 		break;
 	case LogicalTypeId::BIGINT:
 		UnaryExecutor::Execute<string_t, int64_t, OP, true>(source, result, count);
+		break;
+	case LogicalTypeId::UTINYINT:
+		UnaryExecutor::Execute<string_t, uint8_t, OP, true>(source, result, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		UnaryExecutor::Execute<string_t, uint16_t, OP, true>(source, result, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		UnaryExecutor::Execute<string_t, uint32_t, OP, true>(source, result, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		UnaryExecutor::Execute<string_t, uint64_t, OP, true>(source, result, count);
 		break;
 	case LogicalTypeId::HUGEINT:
 		UnaryExecutor::Execute<string_t, hugeint_t, OP, true>(source, result, count);
@@ -499,7 +535,7 @@ static void list_cast_switch(Vector &source, Vector &result, idx_t count) {
 			result_types.push_back(result.type.child_types()[0].second);
 			DataChunk append_chunk;
 			append_chunk.Initialize(result_types);
-			for(auto &chunk : source_cc.Chunks()) {
+			for (auto &chunk : source_cc.Chunks()) {
 				VectorOperations::Cast(chunk->data[0], append_chunk.data[0], chunk->size());
 				append_chunk.SetCardinality(chunk->size());
 				target_cc.Append(append_chunk);
@@ -586,6 +622,18 @@ void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool st
 		break;
 	case LogicalTypeId::BIGINT:
 		numeric_cast_switch<int64_t>(source, result, count);
+		break;
+	case LogicalTypeId::UTINYINT:
+		numeric_cast_switch<uint8_t>(source, result, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		numeric_cast_switch<uint16_t>(source, result, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		numeric_cast_switch<uint32_t>(source, result, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		numeric_cast_switch<uint64_t>(source, result, count);
 		break;
 	case LogicalTypeId::HUGEINT:
 		numeric_cast_switch<hugeint_t>(source, result, count);

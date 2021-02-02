@@ -1659,7 +1659,8 @@ opt_interval:
  * you expect!  So we use %prec annotations freely to set precedences.
  */
 a_expr:		c_expr									{ $$ = $1; }
-			| a_expr TYPECAST Typename
+			|
+			a_expr TYPECAST Typename
 					{ $$ = makeTypeCast($1, $3, @2); }
 			| a_expr COLLATE any_name
 				{
@@ -1867,6 +1868,26 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @2;
 					$$ = (PGNode *)n;
 				}
+			| row {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+				$$ = (PGNode *) n;
+			}
+			| row LAMBDA_ARROW a_expr
+			{
+				PGLambdaFunction *n = makeNode(PGLambdaFunction);
+				n->parameters = $1;
+				n->function = $3;
+				n->location = @2;
+				$$ = (PGNode *) n;
+			}
+			| columnref LAMBDA_ARROW a_expr
+			{
+				PGLambdaFunction *n = makeNode(PGLambdaFunction);
+				n->parameters = list_make1($1);
+				n->function = $3;
+				n->location = @2;
+				$$ = (PGNode *) n;
+			}
 			| row OVERLAPS row
 				{
 					if (list_length($1) != 2)
@@ -1883,10 +1904,6 @@ a_expr:		c_expr									{ $$ = $1; }
 											   list_concat($1, $3),
 											   @2);
 				}
-		    | row {
-					PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
-					$$ = (PGNode *) n;
-		    }
 			| a_expr IS TRUE_P							%prec IS
 				{
 					PGBooleanTest *b = makeNode(PGBooleanTest);
@@ -2737,8 +2754,11 @@ frame_bound:
  * without conflicting with the parenthesized a_expr production.  Without the
  * ROW keyword, there must be more than one a_expr inside the parens.
  */
-row:		ROW '(' expr_list ')'					{ $$ = $3; }
+qualified_row:	ROW '(' expr_list ')'					{ $$ = $3; }
 			| ROW '(' ')'							{ $$ = NIL; }
+		;
+
+row:		qualified_row							{ $$ = $1;}
 			| '(' expr_list ',' a_expr ')'			{ $$ = lappend($2, $4); }
 		;
 

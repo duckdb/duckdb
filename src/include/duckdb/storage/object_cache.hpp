@@ -41,9 +41,8 @@ public:
 		cache[key] = move(value);
 	}
 
-	static ObjectCache &GetObjectCache(duckdb::ClientContext &context) {
-		return context.db->GetObjectCache();
-	}
+	static ObjectCache &GetObjectCache(ClientContext &context);
+	static bool ObjectCacheEnabled(ClientContext &context);
 
 private:
 	//! Object Cache

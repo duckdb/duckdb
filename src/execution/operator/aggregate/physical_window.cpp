@@ -62,7 +62,7 @@ static idx_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, id
 		return r - 1;
 	}
 	while (l < r) {
-		idx_t m = floor((l + r) / 2);
+		idx_t m = std::floor((l + r) / 2);
 		bool less_than_equals = true;
 		for (idx_t i = 0; i < comp_cols; i++) {
 			if (input.GetRow(m)[i] > row[i]) {

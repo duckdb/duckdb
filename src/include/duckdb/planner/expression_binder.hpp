@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -81,6 +81,7 @@ protected:
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
+	BindResult BindExpression(LambdaExpression &expr, idx_t depth);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(StarExpression &expr, idx_t depth);
@@ -98,7 +99,6 @@ protected:
 	                             unique_ptr<ParsedExpression> *expr_ptr);
 
 	virtual void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
-	void ReplaceMacroParametersRecursive(ParsedExpression &expr, SelectStatement &statement);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref);
 	virtual void CheckForSideEffects(FunctionExpression &function, idx_t depth, string &error);

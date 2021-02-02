@@ -1958,4 +1958,16 @@ typedef struct PGSampleOptions {
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
 
+
+/* ----------------------
+ *		Lambda Function
+ * ----------------------
+ */
+typedef struct PGLambdaFunction {
+	PGNodeTag type;
+	PGList *parameters;          /* list of input parameters */
+	PGNode *function;            /* lambda expression */
+	int location;                /* token location, or -1 if unknown */
+} PGLambdaFunction;
+
 }

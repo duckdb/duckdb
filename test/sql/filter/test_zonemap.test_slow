@@ -16,7 +16,7 @@ select count(*) from t where a > 500 or a <= 700
 query II
 explain select count(*) from t where (a > 500 and b = 3) or (a > 7000 and b = 2)
 ----
-physical_plan	<REGEX>:.* Zonemaps Checks: .*b>=2.*b<=3.*
+physical_plan	<REGEX>:.* Filters: .*b>=2.*b<=3.*
 
 query I
 select count(*) from t where (a > 500 and b = 3) or (a > 7000 and b = 2)
@@ -26,7 +26,7 @@ select count(*) from t where (a > 500 and b = 3) or (a > 7000 and b = 2)
 query II
 explain select count(*) from t where (a > 500 AND b = 3) OR (a > 400) OR (a > 300 AND b=4) OR (a > 600 AND a > 300)
 ----
-physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=300.*
+physical_plan	<REGEX>:.* Filters: .*a>=300.*
 
 
 query I
@@ -37,7 +37,7 @@ select count(*) from t where (a > 500 AND b = 3) OR (a > 400) OR (a > 300 AND b=
 query II
 explain select count(*) from t where (a > 500 AND b = 3) OR (a > 400) OR (a > 300 AND b=4) OR (a > 600 AND a > 300)
 ----
-physical_plan	<REGEX>:.* Zonemaps Checks: .*a>=300.*
+physical_plan	<REGEX>:.* Filters: .*a>=300.*
 
 
 query I
@@ -49,7 +49,7 @@ select count(*) from t where (a > 500 AND b = 3) OR (a > 400) OR (a > 300 AND b=
 query II
 explain select count(*) from t where (a > 500 AND b = 3) OR (c = 400) OR (a > 300 AND b=4) OR (a > 600 AND a > 300) or (d < 10)
 ----
-physical_plan	<!REGEX>:.* Zonemaps Checks: .*a>=300.*
+physical_plan	<!REGEX>:.* Filters: .*a>=300.*
 
 
 query I
@@ -61,7 +61,7 @@ select count(*) from t where (a > 500 AND b = 3) OR (a > 400) OR (a > 300 AND b=
 query II
 explain select count(*) from t where (a > 500 AND b = 1) OR b < 2
 ----
-physical_plan	<REGEX>:.* Zonemaps Checks: .*b<=2.*
+physical_plan	<REGEX>:.* Filters: .*b<=2.*
 
 
 query I

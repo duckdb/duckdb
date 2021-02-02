@@ -79,7 +79,6 @@ public:
 	unique_ptr<ColumnScanState[]> column_scans;
 	idx_t column_count;
 	TableFilterSet *table_filters = nullptr;
-	TableFilterSet *zonemaps_checks = nullptr;
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	LocalScanState local_state;
 	MorselInfo *version_info;

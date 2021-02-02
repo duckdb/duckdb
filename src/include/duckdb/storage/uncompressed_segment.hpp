@@ -61,7 +61,7 @@ public:
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any
 	//! outstanding updates
 	void IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result);
-	static void filterSelection(SelectionVector &sel, Vector &result, TableFilter filter, idx_t &approved_tuple_count,
+	static void filterSelection(SelectionVector &sel, Vector &result, const TableFilter& filter, idx_t &approved_tuple_count,
 	                            nullmask_t &nullmask);
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, Vector &result, vector<TableFilter> &tableFilters, SelectionVector &sel,

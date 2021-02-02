@@ -29,7 +29,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
       run: make debug
@@ -234,7 +234,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -292,7 +292,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
 
     - name: Build
       run: |
@@ -334,7 +334,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install ninja-build
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
 
     - name: Build
@@ -380,7 +380,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install g++-4.8 binutils
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
 
     - name: Build
       run: make release
@@ -408,7 +408,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
       run: make relassert
@@ -434,7 +434,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build valgrind
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
 
     - name: Build
       run: make debug
@@ -528,7 +528,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
       run: make debug
@@ -540,8 +540,6 @@ jobs:
     needs: linux-debug
 
     env:
-      CC: gcc-10
-      CXX: g++-10
       BUILD_JDBC: 1
       GEN: ninja
 
@@ -552,9 +550,11 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install ninja-build
-        git clone https://github.com/hannesmuehleisen/sqlancer.git
-        (cd sqlancer && mvn package -q -DskipTests)
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        git clone https://github.com/sqlancer/sqlancer.git
+        cd sqlancer
+        git checkout v1.0.1
+        mvn package -q -DskipTests
 
     - name: Build
       run: make reldebug
@@ -562,7 +562,7 @@ jobs:
     - name: Test
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+        java -jar sqlancer/target/sqlancer-*.jar --num-threads 2 --random-seed 0 --timeout-seconds 600 duckdb
 
 
   jdbc:
@@ -583,7 +583,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install ninja-build
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/cwida/jdbccts.git
 
     - name: Build
@@ -768,7 +768,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install -y texlive-latex-base texlive-fonts-extra
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 

@@ -341,6 +341,7 @@ identifier		{ident_start}{ident_cont}*
 typecast		"::"
 dot_dot			\.\.
 colon_equals	":="
+lambda_arrow	"->"
 
 /* " */
 
@@ -829,6 +830,11 @@ other			.
 {colon_equals}	{
 					SET_YYLLOC();
 					return COLON_EQUALS;
+				}
+
+{lambda_arrow}	{
+					SET_YYLLOC();
+					return LAMBDA_ARROW;
 				}
 
 {equals_greater} {

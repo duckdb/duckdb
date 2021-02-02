@@ -351,9 +351,6 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	if (!CheckZonemap(state, state.table_filters, current_row)) {
 		return true;
 	}
-	if (!CheckZonemap(state, state.zonemaps_checks, current_row)) {
-		return true;
-	}
 	// second, scan the version chunk manager to figure out which tuples to load for this transaction
 	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 	if (vector_offset >= MorselInfo::MORSEL_VECTOR_COUNT) {

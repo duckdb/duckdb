@@ -12,6 +12,8 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
+#include <duckdb/common/operator/cast_operators.hpp>
+
 namespace duckdb {
 
 using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
@@ -265,6 +267,9 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 					break;
 				} else {
 					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
+					if (const_value_expr.value.is_null){
+						return checks;
+					}
 					if (!min && !max) {
 						min = &const_value_expr.value;
 						max = min;
@@ -337,7 +342,6 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 	default:
 		return checks;
 	}
-	return checks;
 }
 
 vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_ids,

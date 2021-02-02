@@ -105,21 +105,22 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	if (op->children[0]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return;
 	}
+	auto &join = *op->children[0];
 	// with a DelimGet as a direct child (left or right)
-	if (op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
-	    op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+	if (join.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
+	    join.children[1]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		candidates.push_back(op_ptr);
 		return;
 	}
 	// or a filter followed by a DelimGet (left)
-	if (op->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_FILTER &&
-	    op->children[0]->children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+	if (join.children[0]->type == LogicalOperatorType::LOGICAL_FILTER &&
+	    join.children[0]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		candidates.push_back(op_ptr);
 		return;
 	}
 	// filter followed by a DelimGet (right)
-	if (op->children[0]->children[1]->type == LogicalOperatorType::LOGICAL_FILTER &&
-	    op->children[0]->children[1]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+	if (join.children[1]->type == LogicalOperatorType::LOGICAL_FILTER &&
+	    join.children[1]->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		candidates.push_back(op_ptr);
 		return;
 	}

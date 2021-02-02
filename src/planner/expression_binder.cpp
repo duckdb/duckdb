@@ -52,6 +52,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 	case ExpressionClass::FUNCTION:
 		// binding function expression has extra parameter needed for macro's
 		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
+	case ExpressionClass::LAMBDA:
+		return BindExpression((LambdaExpression &)expr_ref, depth);
 	case ExpressionClass::OPERATOR:
 		return BindExpression((OperatorExpression &)expr_ref, depth);
 	case ExpressionClass::SUBQUERY:
@@ -87,7 +89,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 }
 
 void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
-	if (expr.get()) {
+	if (expr) {
 		string bind_error = Bind(&expr, depth);
 		if (error.empty()) {
 			error = bind_error;
