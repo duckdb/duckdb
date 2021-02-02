@@ -1,9 +1,14 @@
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+#include "pcg_random.hpp"
+
 #include <algorithm>
-#include <stdlib.h>
 #include <cmath>
+#include <queue>
+#include <random>
+#include <stdlib.h>
+#include <utility>
 
 namespace duckdb {
 
@@ -48,14 +53,16 @@ template <class T> struct QuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 		}
 	}
 
+
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
 		if (nullmask[idx]) {
 			return;
 		}
@@ -86,8 +93,8 @@ template <class T> struct QuantileOperation {
 		D_ASSERT(state->v);
 		D_ASSERT(bind_data_);
 		auto bind_data = (QuantileBindData *)bind_data_;
-		idx_t offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
 		auto v_t = (T *)state->v;
+		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		target[idx] = v_t[offset];
 	}
@@ -125,7 +132,6 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, hugeint_t, hugeint_t,
 		                                                   QuantileOperation<hugeint_t>>(LogicalType::HUGEINT,
 		                                                                                 LogicalType::HUGEINT);
-
 	case PhysicalType::FLOAT:
 		return AggregateFunction::UnaryAggregateDestructor<quantile_state_t, float, float, QuantileOperation<float>>(
 		    LogicalType::FLOAT, LogicalType::FLOAT);
@@ -164,11 +170,9 @@ unique_ptr<FunctionData> bind_quantile(ClientContext &context, AggregateFunction
 	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
 	}
-	// remove the quantile argument so we can use the unary aggregate
 	arguments.pop_back();
 	return make_unique<QuantileBindData>(quantile);
 }
-
 unique_ptr<FunctionData> bind_quantile_decimal(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = bind_quantile(context, function, arguments);
@@ -176,6 +180,7 @@ unique_ptr<FunctionData> bind_quantile_decimal(ClientContext &context, Aggregate
 	function.name = "quantile";
 	return bind_data;
 }
+
 
 AggregateFunction GetMedianAggregate(PhysicalType type) {
 	auto fun = GetQuantileAggregateFunction(type);
@@ -204,8 +209,9 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(median);
 
 	AggregateFunctionSet quantile("quantile");
-	quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL, nullptr,
-	                                       nullptr, nullptr, nullptr, nullptr, nullptr, bind_quantile_decimal));
+	quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT},
+	                                       LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                                       bind_quantile_decimal));
 
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT16));
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT32));

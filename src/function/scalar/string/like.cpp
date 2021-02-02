@@ -82,7 +82,7 @@ struct LikeMatcher : public FunctionData {
 		idx_t segment_idx = 0;
 		idx_t end_idx = segments.size() - 1;
 		if (!has_start_percentage) {
-			// no start percentage: match the first part of the string directly
+			// no start sample_size: match the first part of the string directly
 			auto &segment = segments[0];
 			if (str_len < segment.pattern.size()) {
 				return false;
@@ -95,7 +95,7 @@ struct LikeMatcher : public FunctionData {
 			segment_idx++;
 			if (segments.size() == 1) {
 				// only one segment, and it matches
-				// we have a match if there is an end percentage, OR if the memcmp was an exact match (remaining str is
+				// we have a match if there is an end sample_size, OR if the memcmp was an exact match (remaining str is
 				// empty)
 				return has_end_percentage || str_len == 0;
 			}
@@ -116,7 +116,7 @@ struct LikeMatcher : public FunctionData {
 		}
 		if (!has_end_percentage) {
 			end_idx--;
-			// no end percentage: match the final segment now
+			// no end sample_size: match the final segment now
 			auto &segment = segments.back();
 			if (str_len < segment.pattern.size()) {
 				return false;
@@ -153,7 +153,7 @@ struct LikeMatcher : public FunctionData {
 					// FIXME: we could handle escaped percentages here
 					return nullptr;
 				} else {
-					// percentage
+					// sample_size
 					if (i == 0) {
 						has_start_percentage = true;
 					}

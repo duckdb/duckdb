@@ -4,6 +4,9 @@ namespace duckdb {
 
 void BuiltinFunctions::RegisterHolisticAggregates() {
 	Register<QuantileFun>();
+	Register<ApproximateQuantileFun>();
+	Register<ReservoirQuantileFun>();
 }
+
 
 } // namespace duckdb

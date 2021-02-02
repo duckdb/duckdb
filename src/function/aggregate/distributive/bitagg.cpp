@@ -43,7 +43,7 @@ struct BitAndOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -53,9 +53,9 @@ struct BitAndOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
 	}
 
 	template <class T, class STATE>
@@ -100,7 +100,7 @@ struct BitOrOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -110,9 +110,9 @@ struct BitOrOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 	}
 
 	template <class T, class STATE>
@@ -157,7 +157,7 @@ struct BitXorOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -167,9 +167,9 @@ struct BitXorOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
 	}
 
 	template <class T, class STATE>

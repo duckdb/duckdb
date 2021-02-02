@@ -19,7 +19,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 	case SampleMethod::BERNOULLI_SAMPLE:
 		if (!op.sample_options->is_percentage) {
 			throw ParserException("Sample method %s cannot be used with a discrete sample count, either switch to "
-			                      "reservoir sampling or use a percentage",
+			                      "reservoir sampling or use a sample_size",
 			                      SampleMethodToString(op.sample_options->method));
 		}
 		sample = make_unique<PhysicalStreamingSample>(op.types, op.sample_options->method,

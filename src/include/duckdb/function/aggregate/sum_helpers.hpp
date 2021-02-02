@@ -86,13 +86,13 @@ template <class STATEOP, class ADDOP> struct BaseSumOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		STATEOP::template AddValues<STATE>(state, 1);
 		ADDOP::template AddNumber<STATE, INPUT_TYPE>(*state, input[idx]);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state,FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		STATEOP::template AddValues<STATE>(state, count);
 		ADDOP::template AddConstant<STATE, INPUT_TYPE>(*state, *input, count);
 	}
