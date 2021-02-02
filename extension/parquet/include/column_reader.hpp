@@ -261,16 +261,15 @@ template <class DUCKDB_PHYSICAL_TYPE> struct DecimalParquetValueConversion {
 
 	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		DUCKDB_PHYSICAL_TYPE res = 0;
-		auto byte_len = reader.Schema().type_length;
+		auto byte_len = (idx_t)reader.Schema().type_length; /* sure, type length needs to be a signed int */
 		D_ASSERT(byte_len <= sizeof(DUCKDB_PHYSICAL_TYPE));
 		plain_data.available(byte_len);
 		auto res_ptr = (uint8_t *)&res;
-		idx_t i;
 
 		// numbers are stored as two's complement so some muckery is required
 		bool positive = (*plain_data.ptr & 0x80) == 0;
 
-		for (i = 0; i < byte_len; i++) {
+		for (idx_t i = 0; i < byte_len; i++) {
 			auto byte = *(plain_data.ptr + (byte_len - i - 1));
 			res_ptr[i] = positive ? byte : byte ^ 0xFF;
 		}
