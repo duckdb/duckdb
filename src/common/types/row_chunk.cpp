@@ -173,7 +173,7 @@ template <class T>
 static void templated_deserialize_into_vector(VectorData &vdata, idx_t count, data_ptr_t key_locations[]) {
 	auto target = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		target[i * sizeof(T)] = Load<T>(key_locations[i]);
+		target[i] = Load<T>(key_locations[i]);
 	}
 }
 
@@ -221,29 +221,8 @@ void RowChunk::DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, i
 		templated_deserialize_into_vector<interval_t>(vdata, count, key_locations);
 		break;
 	case PhysicalType::VARCHAR: {
-		// TODO:
-
-		//        StringHeap local_heap;
-		//        auto source = (string_t *)vdata.data;
-		//        for (idx_t i = 0; i < count; i++) {
-		//            auto idx = sel.get_index(i);
-		//            auto source_idx = vdata.sel->get_index(idx);
-		//
-		//            string_t new_val;
-		//            if ((*vdata.nullmask)[source_idx]) {
-		//                new_val = NullValue<string_t>();
-		//            } else if (source[source_idx].IsInlined()) {
-		//                new_val = source[source_idx];
-		//            } else {
-		//                new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(),
-		//                source[source_idx].GetSize());
-		//            }
-		//            Store<string_t>(new_val, key_locations[i]);
-		//            key_locations[i] += sizeof(string_t);
-		//        }
-		//        lock_guard<mutex> append_lock(rc_lock);
-		//        string_heap.MergeHeap(local_heap);
-		//        break;
+        templated_deserialize_into_vector<string_t>(vdata, count, key_locations);
+        break;
 	}
 	default:
 		throw NotImplementedException("FIXME: unimplemented deserialize");
