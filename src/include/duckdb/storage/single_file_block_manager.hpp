@@ -32,6 +32,8 @@ public:
 	unique_ptr<Block> CreateBlock() override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
+		//! Returns whether or not a specified block is the root block
+	bool IsRootBlock(block_id_t root) override;
 	//! Register a new block to be used as a meta block
 	void MarkBlockAsModified(block_id_t block_id) override;
 	//! Return the meta block id

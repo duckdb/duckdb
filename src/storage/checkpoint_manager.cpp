@@ -28,16 +28,16 @@
 
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
-
-// constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
 
 CheckpointManager::CheckpointManager(DatabaseInstance &db)
     : db(db) {
 }
 
 void CheckpointManager::CreateCheckpoint() {
+	auto &config = DBConfig::GetConfig(db);
 	auto &storage_manager = StorageManager::GetStorageManager(db);
 	if (storage_manager.InMemory()) {
 		return;
@@ -79,10 +79,18 @@ void CheckpointManager::CreateCheckpoint() {
 	wal->WriteCheckpoint(meta_block);
 	wal->Flush();
 
+	if (config.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
+		throw IOException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
+	}
+
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block;
 	block_manager.WriteHeader(header);
+
+	if (config.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
+		throw IOException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
+	}
 
 	// truncate the WAL
 	wal->Truncate(0);

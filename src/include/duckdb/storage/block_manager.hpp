@@ -27,6 +27,8 @@ public:
 	virtual unique_ptr<Block> CreateBlock() = 0;
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;
+	//! Returns whether or not a specified block is the root block
+	virtual bool IsRootBlock(block_id_t root) { return false; };
 	//! Mark a block as "modified"; modified blocks are added to the free list after a checkpoint (i.e. their data is assumed to be rewritten)
 	virtual void MarkBlockAsModified(block_id_t block_id) {}
 	//! Get the first meta block id

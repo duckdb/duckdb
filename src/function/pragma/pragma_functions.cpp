@@ -184,6 +184,20 @@ static void pragma_wal_autocheckpoint(ClientContext &context, FunctionParameters
 	DBConfig::GetConfig(context).checkpoint_wal_size = new_limit;
 }
 
+static void pragma_debug_checkpoint_abort(ClientContext &context, FunctionParameters parameters) {
+	auto checkpoint_abort = StringUtil::Lower(parameters.values[0].ToString());
+	auto &config = DBConfig::GetConfig(context);
+	if (checkpoint_abort == "none") {
+		config.checkpoint_abort = CheckpointAbort::NO_ABORT;
+	} else if (checkpoint_abort == "before_truncate") {
+		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
+	} else if (checkpoint_abort == "before_header") {
+		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
+	} else {
+		throw ParserException("Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
+	}
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	register_enable_profiling(set);
 
@@ -233,6 +247,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaAssignment("wal_autocheckpoint", pragma_wal_autocheckpoint, LogicalType::VARCHAR));
 	set.AddFunction(PragmaFunction::PragmaAssignment("checkpoint_threshold", pragma_wal_autocheckpoint, LogicalType::VARCHAR));
+
+	set.AddFunction(PragmaFunction::PragmaAssignment("debug_checkpoint_abort", pragma_debug_checkpoint_abort, LogicalType::VARCHAR));
 }
 
 idx_t ParseMemoryLimit(string arg) {

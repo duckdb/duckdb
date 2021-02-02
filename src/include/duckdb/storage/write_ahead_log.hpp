@@ -45,7 +45,7 @@ public:
 
 public:
 	//! Replay the WAL
-	static void Replay(DatabaseInstance &database, string &path);
+	static bool Replay(DatabaseInstance &database, string &path);
 
 	//! Initialize the WAL in the specified directory
 	void Initialize(string &path);

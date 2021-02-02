@@ -188,6 +188,10 @@ void SingleFileBlockManager::LoadFreeList() {
 void SingleFileBlockManager::StartCheckpoint() {
 }
 
+bool SingleFileBlockManager::IsRootBlock(block_id_t root) {
+	return root == meta_block;
+}
+
 block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	block_id_t block;
 	if (free_list.size() > 0) {

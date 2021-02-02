@@ -52,10 +52,8 @@ void WriteAheadLog::Delete() {
 // Write Entries
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCheckpoint(block_id_t meta_block) {
-	if (skip_writing) {
-		return;
-	}
-	// FIXME; write checkpoint entry
+	writer->Write<WALType>(WALType::CHECKPOINT);
+	writer->Write<block_id_t>(meta_block);
 }
 
 //===--------------------------------------------------------------------===//

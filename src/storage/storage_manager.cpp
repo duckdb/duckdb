@@ -77,6 +77,7 @@ void StorageManager::LoadDatabase() {
 	string wal_path = path + ".wal";
 	auto &fs = db.GetFileSystem();
 	auto &config = db.config;
+	bool truncate_wal = false;
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
 		if (read_only) {
@@ -106,12 +107,15 @@ void StorageManager::LoadDatabase() {
 		// check if the WAL file exists
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
-			WriteAheadLog::Replay(db, wal_path);
+			truncate_wal = WriteAheadLog::Replay(db, wal_path);
 		}
 	}
 	// initialize the WAL file
 	if (!read_only) {
 		wal.Initialize(wal_path);
+		if (truncate_wal) {
+			wal.Truncate(0);
+		}
 	}
 }
 
