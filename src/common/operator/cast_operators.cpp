@@ -501,7 +501,7 @@ struct IntegerCastOperation {
 	}
 
 	template <class T> static bool HandleExponent(T &result, int64_t exponent) {
-		double dbl_res = result * pow(10, exponent);
+		double dbl_res = result * std::pow(10.0L, exponent);
 		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
 			return false;
 		}
@@ -735,10 +735,10 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
-				if (result > NumericLimits<T>::Maximum() / pow(10, exponent)) {
+				if (result > NumericLimits<T>::Maximum() / std::pow(10.0L, exponent)) {
 					return false;
 				}
-				result = result * pow(10, exponent);
+				result = result * std::pow(10.0L, exponent);
 
 				return true;
 			} else {
@@ -1189,7 +1189,7 @@ struct HugeIntegerCastOperation {
 		result.Flush();
 		if (exponent < -38 || exponent > 38) {
 			// out of range for exact exponent: use double and convert
-			double dbl_res = Hugeint::Cast<double>(result.hugeint) * pow(10, exponent);
+			double dbl_res = Hugeint::Cast<double>(result.hugeint) * std::pow(10.0L, exponent);
 			if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) ||
 			    dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
 				return false;

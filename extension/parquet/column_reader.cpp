@@ -33,10 +33,10 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 	case LogicalTypeId::BOOLEAN:
 		return make_unique<BooleanColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::UTINYINT:
-		return make_unique<TemplatedColumnReader<uint8_t , TemplatedParquetValueConversion<uint32_t>>>(
+		return make_unique<TemplatedColumnReader<uint8_t, TemplatedParquetValueConversion<uint32_t>>>(
 		    type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::USMALLINT:
-		return make_unique<TemplatedColumnReader<uint16_t , TemplatedParquetValueConversion<uint32_t>>>(
+		return make_unique<TemplatedColumnReader<uint16_t, TemplatedParquetValueConversion<uint32_t>>>(
 		    type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::UINTEGER:
 		return make_unique<TemplatedColumnReader<uint32_t, TemplatedParquetValueConversion<uint32_t>>>(
@@ -411,7 +411,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 			if (result_offset >= num_values) { // we ran out of output space
 				break;
 			}
-			if (child_defines_ptr[child_idx] >
+			if (child_defines_ptr[child_idx] >=
 			    max_define) { // value has been defined down the stack, hence its NOT NULL
 				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
 				result_ptr[result_offset].length = 1;
