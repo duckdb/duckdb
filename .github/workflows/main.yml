@@ -565,7 +565,7 @@ jobs:
         java -jar sqlancer/target/sqlancer-*.jar --num-threads 2 --random-seed 0 --timeout-seconds 600 duckdb
 
 
-  sqlancer:
+  sqlancer_persistent:
     name: SQLancer (Persistent)
     runs-on: ubuntu-20.04
     needs: linux-debug
