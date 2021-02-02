@@ -45,9 +45,9 @@ public:
 	//! OFFSET
 	int64_t offset_val = 0;
 	//! Expression in case limit is not constant
-	unique_ptr<Expression> limit{};
+	unique_ptr<Expression> limit;
 	//! Expression in case limit is not constant
-	unique_ptr<Expression> offset{};
+	unique_ptr<Expression> offset;
 };
 
 class BoundOrderModifier : public BoundResultModifier {

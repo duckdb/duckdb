@@ -134,3 +134,51 @@ SELECT * FROM integers as int OFFSET (SELECT MIN(integers.i) FROM integers);
 3
 4
 5
+
+#Both LIMIT and OFFSET together with subqueries
+query I
+SELECT * FROM integers as int LIMIT (SELECT MAX(integers.i) FROM integers) OFFSET (SELECT MIN(integers.i) FROM integers);
+----
+2
+3
+4
+5
+
+#Subqueries that return zero rows = Same as ommiting limit clause
+query I
+SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5)
+----
+1
+2
+3
+4
+5
+
+#Limit of NULL, offset of NULL
+query I
+SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5)
+----
+1
+2
+3
+4
+5
+
+#Subqueries that return NULL
+query I
+SELECT * FROM integers as int LIMIT (SELECT NULL)
+----
+1
+2
+3
+4
+5
+
+
+#Subqueries that return negative values
+statement error
+SELECT * FROM integers as int LIMIT (SELECT -1);
+
+#Subqueries that return strings that can't be converted to integers
+statement error
+SELECT * FROM integers as int LIMIT (SELECT 'ab');

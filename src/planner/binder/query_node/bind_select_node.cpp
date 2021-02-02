@@ -21,27 +21,6 @@
 #include <duckdb/planner/expression_binder/aggregate_binder.hpp>
 
 namespace duckdb {
-
-static bool BindConstant(Binder &binder, ClientContext &context, const string& clause, unique_ptr<ParsedExpression> &expr, int64_t& delimiter) {
-	ConstantBinder constant_binder(binder, context, clause);
-	unique_ptr<Expression> bound_expr;
-	try {
-		bound_expr = constant_binder.Bind(expr);
-	} catch (const BinderException& e) {
-		return false;
-    }
-	if (!bound_expr->IsFoldable()) {
-		return false;
-	}
-	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr).CastAs(LogicalType::BIGINT);
-	int64_t limit_value = value.GetValue<int64_t>();
-	if (limit_value < 0) {
-		throw BinderException("LIMIT must not be negative");
-	}
-	delimiter =  limit_value;
-	return true;
-}
-
 unique_ptr<Expression> Binder::BindFilter(unique_ptr<ParsedExpression> condition) {
 	WhereBinder where_binder(*this, context);
 	return where_binder.Bind(condition);
@@ -59,35 +38,27 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 	return bound_expr;
 }
 
+unique_ptr<Expression> bind_delimiter(ClientContext& context, unique_ptr<ParsedExpression> delimiter, int64_t & delimiter_value ) {
+	Binder new_binder(context);
+	ExpressionBinder expr_binder(new_binder, context);
+	expr_binder.target_type = LogicalType::UBIGINT;
+	auto expr = expr_binder.Bind(delimiter);
+	if (expr->IsFoldable()){
+		//! this is a constant
+		Value value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BIGINT);
+	    delimiter_value = value.GetValue<int64_t>();
+		return nullptr;
+	}
+	return expr;
+}
+
 unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	auto result = make_unique<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		auto limit_copy = limit_mod.limit->Copy();
-		if (!BindConstant(*this, context, "LIMIT clause", limit_copy,result->limit_val)){
-			Binder new_binder(context);
-			ExpressionBinder expr_binder(new_binder, context);
-			string error;
-			expr_binder.BindChild(limit_mod.limit, 0, error);
-			if (!error.empty()){
-				throw BinderException(error);
-			}
-			auto &child = (BoundExpression &)*limit_mod.limit;
-			result->limit = move(child.expr);
-		}
+		result->limit = bind_delimiter(context,move(limit_mod.limit),result->limit_val);
 	}
 	if (limit_mod.offset) {
-		auto offset_copy = limit_mod.offset->Copy();
-		if (!BindConstant(*this, context, "OFFSET clause", offset_copy,result->offset_val)){
-			Binder new_binder(context);
-			ExpressionBinder expr_binder(new_binder, context);
-			string error;
-			expr_binder.BindChild(limit_mod.offset, 0, error);
-			if (!error.empty()){
-				throw BinderException(error);
-			}
-			auto &child = (BoundExpression &)*limit_mod.offset;
-			result->offset = move(child.expr);
-		}
+		result->offset = bind_delimiter(context,move(limit_mod.offset),result->offset_val);
 	}
 	return move(result);
 }

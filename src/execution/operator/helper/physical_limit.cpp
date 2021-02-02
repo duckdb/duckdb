@@ -2,7 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 
-#include <duckdb/execution/expression_executor.hpp>
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -15,26 +15,20 @@ public:
 	idx_t current_offset;
 };
 
-uint64_t get_delimiter(DataChunk &input, Expression *expr) {
+uint64_t get_delimiter(DataChunk &input, Expression *expr, uint64_t original_value) {
 	DataChunk limit_chunk;
 	vector<LogicalType> types{expr->return_type};
 	limit_chunk.Initialize(types);
 	ExpressionExecutor limit_executor(expr);
-	if (expr->type == ExpressionType::BOUND_FUNCTION) {
-		limit_executor.Execute(limit_chunk);
-	} else {
-		limit_executor.Execute(input, limit_chunk);
-	}
+	auto input_size = input.size();
+	input.SetCardinality(1);
+	limit_executor.Execute(input, limit_chunk);
+	input.SetCardinality(input_size);
 	auto limit_value = limit_chunk.GetValue(0, 0);
-	if ((limit_chunk.data[0].vector_type != VectorType::CONSTANT_VECTOR && limit_chunk.size() != 1) || limit_chunk.ColumnCount() != 1){
-		throw Exception("Value for Limit returns number of rows/columns different than 1");
+	if(limit_value.is_null){
+		return original_value;
 	}
-	bool success_cast = limit_value.TryCastAs(LogicalType::UBIGINT);
-	if (success_cast) {
-		return limit_value.value_.ubigint;
-	} else {
-		throw Exception("Limit expression can't be converted to unsigned integer");
-	}
+	return limit_value.value_.ubigint;
 }
 
 void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -49,20 +43,20 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (limit_expression) {
-			limit = get_delimiter(state->child_chunk,limit_expression.get());
+			limit = get_delimiter(state->child_chunk, limit_expression.get(),limit);
 			limit_expression.reset();
 		}
 		if (offset_expression) {
-			offset = get_delimiter(state->child_chunk,offset_expression.get());
+			offset = get_delimiter(state->child_chunk, offset_expression.get(),offset);
 			offset_expression.reset();
 		}
 		max_element = limit + offset;
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
-		if ((limit == 0 || state->current_offset >= max_element) && !(limit_expression || offset_expression)) {
-		    return;
-	    }
+		if (limit == 0 || state->current_offset >= max_element) {
+			return;
+		}
 		if (state->current_offset < offset) {
 			// we are not yet at the offset point
 			if (state->current_offset + state->child_chunk.size() > offset) {
