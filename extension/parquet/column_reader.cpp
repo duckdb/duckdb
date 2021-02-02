@@ -82,6 +82,22 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::DECIMAL:
+		// we have to figure out what kind of int we need
+		switch (type_p.InternalType()) {
+		case PhysicalType::INT16:
+			return make_unique<DecimalColumnReader<int16_t>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+		case PhysicalType::INT32:
+			return make_unique<DecimalColumnReader<int32_t>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+		case PhysicalType::INT64:
+			return make_unique<DecimalColumnReader<int64_t>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+		case PhysicalType::INT128:
+			return make_unique<DecimalColumnReader<hugeint_t>>(type_p, schema_p, file_idx_p, max_define, max_repeat);
+
+		default:
+			break;
+		}
+		break;
 	default:
 		break;
 	}
