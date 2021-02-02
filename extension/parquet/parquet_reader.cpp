@@ -112,7 +112,7 @@ static unique_ptr<ColumnReader> create_reader_recursive(const FileMetaData *file
 	auto this_idx = next_schema_idx;
 
 	if (s_ele.__isset.repetition_type) {
-		if (s_ele.repetition_type == FieldRepetitionType::OPTIONAL /*|| max_define > 0*/) {
+		if (s_ele.repetition_type != FieldRepetitionType::REQUIRED) {
 			max_define = depth;
 		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
@@ -414,11 +414,11 @@ static void templated_filter_operation(Vector &v, Value &constant, parquet_filte
 		break;
 
 	case LogicalTypeId::UTINYINT:
-		templated_filter_operation2<uint8_t , OP>(v, constant.value_.utinyint, filter_mask, count);
+		templated_filter_operation2<uint8_t, OP>(v, constant.value_.utinyint, filter_mask, count);
 		break;
 
 	case LogicalTypeId::USMALLINT:
-		templated_filter_operation2<uint16_t , OP>(v, constant.value_.usmallint, filter_mask, count);
+		templated_filter_operation2<uint16_t, OP>(v, constant.value_.usmallint, filter_mask, count);
 		break;
 
 	case LogicalTypeId::UINTEGER:
