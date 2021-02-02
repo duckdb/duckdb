@@ -551,9 +551,9 @@ jobs:
     - name: Install
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/sqlancer/sqlancer.git
+        git clone https://github.com/hannesmuehleisen/sqlancer
         cd sqlancer
-        git checkout v1.0.1
+        git checkout persistent
         mvn package -q -DskipTests
 
     - name: Build
