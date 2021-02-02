@@ -1,4 +1,5 @@
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "pcg_random.hpp"
@@ -14,56 +15,28 @@ namespace duckdb {
 
 struct reservoir_quantile_state_t {
 	data_ptr_t v;
-
 	idx_t len;
 	idx_t pos;
-	//! These are only for the Reservoir Sampling
-	pcg32 *rng;
-	std::uniform_real_distribution<double> *uniform_dist;
-	//! The next element to sample
-	idx_t next_index;
-	//! The reservoir threshold of the current min entry
-	double min_threshold;
-	//! The reservoir index of the current min entry
-	idx_t min_entry;
-	//! The current count towards next index (i.e. we will replace an entry in next_index - current_count tuples)
-	idx_t current_count;
-	idx_t input_pos;
-	//! Priority queue of [random element, index] for each of the elements in the sample
-	std::priority_queue<std::pair<double, idx_t>> *reservoir_weights;
+	BaseReservoirSampling *r_samp;
 };
 
-template <class STATE> void SetNextEntry(STATE *state) {
-	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
-	auto &min_key = state->reservoir_weights->top();
-	double T_w = -min_key.first;
-	double r = (*state->uniform_dist)(*state->rng);
-	double X_w = log(r) / log(T_w);
-	//! 5. From the current item vc skip items until item vi , such that:
-	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
-	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
-	state->min_threshold = T_w;
-	state->min_entry = min_key.second;
-	state->next_index = MaxValue<idx_t>(1, idx_t(round(X_w)));
-	state->current_count = 0;
-}
+
 
 template <class STATE, class T> void ReplaceElement(T &input, STATE *state) {
-	//! replace the entry in the reservoir
-	//! 7. The item in R with the minimum key is replaced by item vi
-	((T *)state->v)[state->min_entry] = input;
-	//! pop the minimum entry
-	state->reservoir_weights->pop();
-	//! now update the reservoir
-	//! 8. Let tw = Tw i , r2 = random(tw,1) and vi’s key: ki = (r2)1/wi
-	//! 9. The new threshold Tw is the new minimum key of R
-	//! we generate a random number between (min_threshold, 1)
-	std::uniform_real_distribution<double> dist(state->min_threshold, 1);
-	double r2 = dist(*state->rng);
-	//! now we insert the new weight into the reservoir
-	state->reservoir_weights->push(std::make_pair(-r2, state->min_entry));
-	//! we update the min entry with the new min entry in the reservoir
-	SetNextEntry<STATE>(state);
+	((T *)state->v)[state->r_samp->min_entry] = input;
+	state->r_samp->ReplaceElement();
+}
+
+template <class STATE, class T> void FillReservoir(STATE *state, idx_t sample_size, T element) {
+	if (state->pos < sample_size) {
+		((T *)state->v)[state->pos++] = element;
+		state->r_samp->InitializeReservoir(state->pos,state->len);
+	} else {
+		D_ASSERT(state->r_samp->next_index >= state->r_samp->current_count);
+		if (state->r_samp->next_index == state->r_samp->current_count) {
+			ReplaceElement<STATE,T>(element, state);
+		}
+	}
 }
 
 struct ReservoirQuantileBindData : public FunctionData {
@@ -88,17 +61,7 @@ template <class T> struct ReservoirQuantileOperation {
 		state->v = nullptr;
 		state->len = 0;
 		state->pos = 0;
-		state->input_pos = 0;
-		state->next_index = 0;
-		state->min_threshold = 0;
-		state->min_entry = 0;
-		state->current_count = 0;
-		//! Seed with a real random value, if available
-		pcg_extras::seed_seq_from<std::random_device> seed_source;
-		//! Make a random number engine
-		state->rng = new pcg32(seed_source);
-		state->uniform_dist = new std::uniform_real_distribution<double>(0, 1);
-		state->reservoir_weights = new std::priority_queue<std::pair<double, idx_t>>();
+		state->r_samp = new BaseReservoirSampling();
 	}
 
 	static void resize_state(reservoir_quantile_state_t *state, idx_t new_len) {
@@ -131,58 +94,18 @@ template <class T> struct ReservoirQuantileOperation {
 			resize_state(state, bind_data->sample_size);
 		}
 		D_ASSERT(state->v);
-		if (state->pos < (idx_t)bind_data->sample_size) {
-			//! 1: The first m items of V are inserted into R
-			//! first we need to check if the reservoir already has "m" elements
-			((T *)state->v)[state->pos++] = data[idx];
-			if (state->pos == (idx_t) bind_data->sample_size) {
-				//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
-				//! we then define the threshold to enter the reservoir T_w as the minimum key of R
-				//! we use a priority queue to extract the minimum key in O(1) time
-				for (idx_t i = 0; i < (idx_t)bind_data->sample_size; i++) {
-					double k_i = (*state->uniform_dist)(*state->rng);
-					state->reservoir_weights->push(std::make_pair(-k_i, i));
-				}
-				SetNextEntry<STATE>(state);
-			}
-		} else {
-			//! now that we have the sample, we start our replacement strategy
-			//! 3. Repeat Steps 5–10 until the population is exhausted
-			D_ASSERT(state->next_index >= state->current_count);
-			if (state->next_index == state->current_count) {
-				ReplaceElement<STATE, T>(data[idx], state);
-			}
-		}
-		state->current_count++;
+		FillReservoir<STATE,T>(state, bind_data->sample_size, data[idx]);
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
 		if (source.pos == 0) {
 			return;
 		}
+		if (target->pos == 0) {
+			resize_state(target, source.len);
+		}
 		for (idx_t src_idx = 0; src_idx < source.pos; src_idx++) {
-			if (target->pos < target->len) {
-				//! 1: The first m items of V are inserted into R
-				//! first we need to check if the reservoir already has "m" elements
-				((T *)target->v)[target->pos++] = ((T *)source.v)[src_idx];
-				if (target->pos == target->len) {
-					//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
-					//! we then define the threshold to enter the reservoir T_w as the minimum key of R
-					//! we use a priority queue to extract the minimum key in O(1) time
-					for (idx_t i = 0; i < (idx_t)target->len; i++) {
-						double k_i = (*target->uniform_dist)(*target->rng);
-						target->reservoir_weights->push(std::make_pair(-k_i, i));
-					}
-					SetNextEntry<STATE>(target);
-				} else {
-					//! now that we have the sample, we start our replacement strategy
-					//! 3. Repeat Steps 5–10 until the population is exhausted
-					if (target->next_index == target->current_count) {
-						ReplaceElement<STATE, T>(((T *)source.v)[src_idx], target);
-					}
-				}
-				target->current_count++;
-			}
+			FillReservoir<STATE,T>(target, target->len, ((T *)source.v)[src_idx]);
 		}
 	}
 
@@ -207,17 +130,9 @@ template <class T> struct ReservoirQuantileOperation {
 			free(state->v);
 			state->v = nullptr;
 		}
-		if (state->rng) {
-			delete state->rng;
-			state->rng = nullptr;
-		}
-		if (state->uniform_dist) {
-			delete state->uniform_dist;
-			state->uniform_dist = nullptr;
-		}
-		if (state->reservoir_weights) {
-			delete state->reservoir_weights;
-			state->reservoir_weights = nullptr;
+		if (state->r_samp) {
+			delete state->r_samp;
+			state->r_samp = nullptr;
 		}
 	}
 

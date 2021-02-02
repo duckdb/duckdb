@@ -10,8 +10,8 @@
 namespace duckdb{
 
 struct approx_quantile_state_t {
-	 tdigest::TDigest *h = nullptr;
-	idx_t pos{};
+	 tdigest::TDigest *h;
+	idx_t pos;
 };
 
 struct ApproximateQuantileBindData : public FunctionData {
