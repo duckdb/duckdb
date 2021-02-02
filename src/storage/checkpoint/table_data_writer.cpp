@@ -102,7 +102,10 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 				// unchanged persistent segment: no need to write the data
 
 				// flush any segments preceding this persistent segment
-				FlushSegment(new_tree, col_idx);
+				if (segments[col_idx]->tuple_count > 0) {
+					FlushSegment(new_tree, col_idx);
+					CreateSegment(col_idx);
+				}
 
 				// set up the data pointer directly using the data from the persistent segment
 				pointer.block_id = persistent.block_id;
