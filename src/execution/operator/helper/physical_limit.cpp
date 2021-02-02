@@ -60,6 +60,9 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
+		if ((limit == 0 || state->current_offset >= max_element) && !(limit_expression || offset_expression)) {
+		    return;
+	    }
 		if (state->current_offset < offset) {
 			// we are not yet at the offset point
 			if (state->current_offset + state->child_chunk.size() > offset) {
