@@ -985,8 +985,9 @@ SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	CreateTableFunctionInfo info(scan_fun);
 	Connection conn(*dbaddr);
 	auto &context = *conn.context;
+	auto &catalog = Catalog::GetCatalog(context);
 	context.transaction.BeginTransaction();
-	context.catalog.CreateTableFunction(context, &info);
+	catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();
 
 	RProtector r;
