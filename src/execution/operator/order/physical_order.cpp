@@ -53,7 +53,10 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		state->null_order_types.push_back(orders[i].null_order);
 		state->executor.AddExpression(*expr);
 	}
-	// compute entry size
+    // nullmask bitset, one bit for each column
+    state->row_chunk.nullmask_size = (children[0]->types.size() + 7) / 8;
+	state->row_chunk.entry_size += state->row_chunk.nullmask_size;
+	// size of each column
 	for (auto type : children[0]->types) {
 		state->row_chunk.types.push_back(type);
 		state->row_chunk.entry_size += GetTypeIdSize(type.InternalType());
@@ -83,10 +86,11 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 	// convert columns to row-wise format
 	const SelectionVector *sel_ptr = &FlatVector::IncrementalSelectionVector;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+    data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
 	// all columns
-	gstate.row_chunk.Build(input.size(), key_locations);
-	for (auto &v : input.data) {
-		gstate.row_chunk.SerializeVector(v, input.size(), *sel_ptr, input.size(), key_locations);
+	gstate.row_chunk.Build(input.size(), key_locations, nullmask_locations);
+	for (idx_t i = 0; i < input.data.size(); i++) {
+		gstate.row_chunk.SerializeVector(input.data[i], input.size(), *sel_ptr, input.size(), i, key_locations, nullmask_locations);
 	}
 }
 

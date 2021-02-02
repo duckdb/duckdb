@@ -37,14 +37,17 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	}
 	// at least one equality is necessary
 	D_ASSERT(equality_types.size() > 0);
-
+	// the columns
 	for (idx_t i = 0; i < build_types.size(); i++) {
+		row_chunk.types.push_back(build_types[i]);
 		build_size += GetTypeIdSize(build_types[i].InternalType());
 	}
 	tuple_size = condition_size + build_size;
 	pointer_offset = tuple_size;
-	// entry size is the tuple size and the size of the hash/next pointer
-	row_chunk.entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
+    // size of nullmask bitset for each column that is pushed in
+    row_chunk.nullmask_size = (build_types.size() + 7) / 8;
+    // entry size is the tuple size and the size of the hash/next pointer
+	row_chunk.entry_size = row_chunk.nullmask_size + tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 	if (IsRightOuterJoin(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
@@ -185,7 +188,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	row_chunk.Build(added_count, key_locations);
+    data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
+	row_chunk.Build(added_count, key_locations, nullmask_locations);
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
@@ -194,20 +198,20 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
-		row_chunk.SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count,
-		                              key_locations);
+		row_chunk.SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, i,
+		                              key_locations, nullmask_locations);
 	}
 	// now serialize the payload
 	if (build_types.size() > 0) {
 		for (idx_t i = 0; i < payload.ColumnCount(); i++) {
-			row_chunk.SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
+			row_chunk.SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, keys.ColumnCount() + i, key_locations, nullmask_locations);
 		}
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		initialize_outer_join(added_count, key_locations);
 	}
-	row_chunk.SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
+	row_chunk.SerializeVector(hash_values, payload.size(), *current_sel, added_count, keys.ColumnCount() + build_types.size() - 1, key_locations, nullmask_locations);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
@@ -261,7 +265,7 @@ void JoinHashTable::Finalize() {
 			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
 			for (idx_t i = 0; i < next; i++) {
 				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
-				key_locations[i] = dataptr;
+				key_locations[i] = dataptr + row_chunk.nullmask_size;
 				dataptr += row_chunk.entry_size;
 			}
 			// now insert into the hash table
