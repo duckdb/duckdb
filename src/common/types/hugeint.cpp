@@ -412,6 +412,22 @@ template <> bool Hugeint::TryCast(hugeint_t input, int64_t &result) {
 	return hugeint_try_cast_integer<int64_t>(input, result);
 }
 
+template <> bool Hugeint::TryCast(hugeint_t input, uint8_t &result) {
+	return hugeint_try_cast_integer<uint8_t>(input, result);
+}
+
+template <> bool Hugeint::TryCast(hugeint_t input, uint16_t &result) {
+	return hugeint_try_cast_integer<uint16_t>(input, result);
+}
+
+template <> bool Hugeint::TryCast(hugeint_t input, uint32_t &result) {
+	return hugeint_try_cast_integer<uint32_t>(input, result);
+}
+
+template <> bool Hugeint::TryCast(hugeint_t input, uint64_t &result) {
+	return hugeint_try_cast_integer<uint64_t>(input, result);
+}
+
 template <> bool Hugeint::TryCast(hugeint_t input, hugeint_t &result) {
 	result = input;
 	return true;
@@ -458,6 +474,18 @@ template <> hugeint_t Hugeint::Convert(int32_t value) {
 
 template <> hugeint_t Hugeint::Convert(int64_t value) {
 	return hugeint_convert_integer<int64_t>(value);
+}
+template <> hugeint_t Hugeint::Convert(uint8_t value){
+	return hugeint_convert_integer<uint8_t>(value);
+}
+template <> hugeint_t Hugeint::Convert(uint16_t value){
+	return hugeint_convert_integer<uint16_t>(value);
+}
+template <> hugeint_t Hugeint::Convert(uint32_t value){
+	return hugeint_convert_integer<uint32_t>(value);
+}
+template <> hugeint_t Hugeint::Convert(uint64_t value){
+	return hugeint_convert_integer<uint64_t>(value);
 }
 
 template <> hugeint_t Hugeint::Convert(float value) {

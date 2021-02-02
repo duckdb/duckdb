@@ -97,6 +97,25 @@ struct OverflowCheckedAddition {
 	}
 };
 
+
+template <> bool TryAddOperator::Operation(uint8_t left, uint8_t right, uint8_t &result){
+	return OverflowCheckedAddition::Operation<uint8_t, uint16_t>(left, right, result);
+}
+template <> bool TryAddOperator::Operation(uint16_t left, uint16_t right, uint16_t &result){
+	return OverflowCheckedAddition::Operation<uint16_t, uint32_t>(left, right, result);
+}
+template <> bool TryAddOperator::Operation(uint32_t left, uint32_t right, uint32_t &result){
+	return OverflowCheckedAddition::Operation<uint32_t, uint64_t>(left, right, result);
+}
+
+template <> bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result){
+	if (NumericLimits<uint64_t>::Maximum() - left < right){
+		return false;
+	}
+	return OverflowCheckedAddition::Operation<uint64_t, uint64_t>(left, right, result);
+}
+
+
 template <> bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result) {
 	return OverflowCheckedAddition::Operation<int8_t, int16_t>(left, right, result);
 }

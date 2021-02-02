@@ -5,7 +5,8 @@ public:
 	/// Create a decoder object. buffer/buffer_len is the decoded data.
 	/// bit_width is the width of each value (before encoding).
 	RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint32_t bit_width)
-	    : buffer(buffer), bit_width_(bit_width), current_value_(0), repeat_count_(0), literal_count_(0) {
+	    : buffer_((char *)buffer, buffer_len), bit_width_(bit_width), current_value_(0), repeat_count_(0),
+	      literal_count_(0) {
 		if (bit_width >= 64) {
 			throw std::runtime_error("Decode bit width too large");
 		}
@@ -13,7 +14,6 @@ public:
 		max_val = (1 << bit_width_) - 1;
 	}
 
-	/// Gets a batch of values.  Returns the number of decoded elements.
 	template <typename T> void GetBatch(char *values_target_ptr, uint32_t batch_size) {
 		auto values = (T *)values_target_ptr;
 		uint32_t values_read = 0;
@@ -47,7 +47,7 @@ public:
 	}
 
 private:
-	const uint8_t *buffer;
+	ByteBuffer buffer_;
 
 	/// Number of bits needed to encode the value. Must be between 0 and 64.
 	int bit_width_;
@@ -60,12 +60,12 @@ private:
 	int8_t bitpack_pos = 0;
 
 	// this is slow but whatever, calls are rare
-	static uint8_t VarintDecode(const uint8_t *source, uint32_t *result_out) {
+	uint32_t VarintDecode() {
 		uint32_t result = 0;
 		uint8_t shift = 0;
 		uint8_t len = 0;
 		while (true) {
-			auto byte = *source++;
+			auto byte = buffer_.read<uint8_t>();
 			len++;
 			result |= (byte & 127) << shift;
 			if ((byte & 128) == 0)
@@ -75,8 +75,7 @@ private:
 				throw std::runtime_error("Varint-decoding found too large number");
 			}
 		}
-		*result_out = result;
-		return len;
+		return result;
 	}
 
 	/// Fills literal_count_ and repeat_count_ with next values. Returns false if there
@@ -84,12 +83,11 @@ private:
 	template <typename T> bool NextCounts() {
 		// Read the next run's indicator int, it could be a literal or repeated run.
 		// The int is encoded as a vlq-encoded value.
-		uint32_t indicator_value;
 		if (bitpack_pos != 0) {
-			buffer++;
+			buffer_.inc(1);
 			bitpack_pos = 0;
 		}
-		buffer += VarintDecode(buffer, &indicator_value);
+		auto indicator_value = VarintDecode();
 
 		// lsb indicates if it is a literal run or repeated run
 		bool is_literal = indicator_value & 1;
@@ -100,7 +98,7 @@ private:
 			// (ARROW-4018) this is not big-endian compatible, lol
 			current_value_ = 0;
 			for (auto i = 0; i < byte_encoded_len; i++) {
-				current_value_ |= ((uint8_t)*buffer++) << (i * 8);
+				current_value_ |= (buffer_.read<uint8_t>() << (i * 8));
 			}
 			// sanity check
 			if (repeat_count_ > 0 && current_value_ > max_val) {
@@ -117,16 +115,14 @@ private:
 	static const uint8_t BITPACK_DLEN;
 
 	template <typename T> uint32_t BitUnpack(T *dest, uint32_t count) {
-		D_ASSERT(bit_width_ < 32);
-
-		// auto source = buffer;
 		auto mask = BITPACK_MASKS[bit_width_];
 
 		for (uint32_t i = 0; i < count; i++) {
-			T val = (*buffer >> bitpack_pos) & mask;
+			T val = (buffer_.get<uint8_t>() >> bitpack_pos) & mask;
 			bitpack_pos += bit_width_;
 			while (bitpack_pos > BITPACK_DLEN) {
-				val |= (*++buffer << (BITPACK_DLEN - (bitpack_pos - bit_width_))) & mask;
+				buffer_.inc(1);
+				val |= (buffer_.get<uint8_t>() << (BITPACK_DLEN - (bitpack_pos - bit_width_))) & mask;
 				bitpack_pos -= BITPACK_DLEN;
 			}
 			dest[i] = val;

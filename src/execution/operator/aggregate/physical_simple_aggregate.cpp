@@ -10,7 +10,7 @@ namespace duckdb {
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                                  bool all_combinable)
     : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)),
-      all_combinable(all_combinable) {
+      all_combinable(all_combinable){
 }
 
 //===--------------------------------------------------------------------===//
@@ -71,10 +71,10 @@ public:
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			// initialize the payload chunk
-			if (aggr.children.size()) {
-				for (idx_t i = 0; i < aggr.children.size(); ++i) {
-					payload_types.push_back(aggr.children[i]->return_type);
-					child_executor.AddExpression(*aggr.children[i]);
+			if (!aggr.children.empty()) {
+				for (auto & child : aggr.children) {
+					payload_types.push_back(child->return_type);
+					child_executor.AddExpression(*child);
 				}
 			}
 		}
@@ -116,8 +116,20 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 	sink.child_executor.SetChunk(input);
 	payload_chunk.SetCardinality(input);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		DataChunk filtered_input;
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 		idx_t payload_cnt = 0;
+		// resolve the filter (if any)
+		if (aggregate.filter) {
+			ExpressionExecutor filter_execution (aggregate.filter.get());
+			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+			auto count = filter_execution.SelectExpression(input,true_sel);
+			auto input_types = input.GetTypes();
+			filtered_input.Initialize(input_types);
+			filtered_input.Slice(input, true_sel, count);
+			sink.child_executor.SetChunk(filtered_input);
+	        payload_chunk.SetCardinality(count);
+		}
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
@@ -183,10 +195,14 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 string PhysicalSimpleAggregate::ParamsToString() const {
 	string result;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 		if (i > 0) {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
+		if (aggregate.filter){
+			result += " Filter: "+aggregate.filter->GetName();
+		}
 	}
 	return result;
 }

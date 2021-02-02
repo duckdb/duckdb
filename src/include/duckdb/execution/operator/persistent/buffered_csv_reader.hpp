@@ -50,6 +50,9 @@ struct TextSearchShiftArray {
 struct BufferedCSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
+	//! Whether file is compressed or not, and if so which compression type
+	//! ("infer" (default; infer from file extention), "gzip", "none")
+	string compression = "infer";
 	//! Whether or not to automatically detect dialect and datatypes
 	bool auto_detect = false;
 	//! Whether or not a delimiter was defined by the user
@@ -134,6 +137,7 @@ public:
 	vector<string> col_names;
 	unique_ptr<std::istream> source;
 	bool plain_file_source = false;
+	bool gzip_compressed = false;
 	idx_t file_size = 0;
 
 	unique_ptr<char[]> buffer;

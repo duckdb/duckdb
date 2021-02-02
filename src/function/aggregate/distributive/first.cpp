@@ -143,6 +143,14 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 		return GetFirstAggregateTemplated<int64_t>(type);
+	case LogicalTypeId::UTINYINT:
+		return GetFirstAggregateTemplated<uint8_t>(type);
+	case LogicalTypeId::USMALLINT:
+		return GetFirstAggregateTemplated<uint16_t>(type);
+	case LogicalTypeId::UINTEGER:
+		return GetFirstAggregateTemplated<uint32_t>(type);
+	case LogicalTypeId::UBIGINT:
+		return GetFirstAggregateTemplated<uint64_t>(type);
 	case LogicalTypeId::HUGEINT:
 		return GetFirstAggregateTemplated<hugeint_t>(type);
 	case LogicalTypeId::FLOAT:

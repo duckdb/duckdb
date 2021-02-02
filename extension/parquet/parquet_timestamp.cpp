@@ -34,4 +34,15 @@ Int96 timestamp_t_to_impala_timestamp(timestamp_t &ts) {
 	return impala_ts;
 }
 
+timestamp_t parquet_timestamp_micros_to_timestamp(const int64_t &raw_ts) {
+	return Timestamp::FromEpochMicroSeconds(raw_ts);
+}
+timestamp_t parquet_timestamp_ms_to_timestamp(const int64_t &raw_ts) {
+	return Timestamp::FromEpochMs(raw_ts);
+}
+
+date_t parquet_int_to_date(const int32_t &raw_date) {
+	return raw_date;
+}
+
 } // namespace duckdb

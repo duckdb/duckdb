@@ -99,6 +99,14 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 			return_types.push_back(LogicalType::INTEGER);
 		} else if (format == "l") {
 			return_types.push_back(LogicalType::BIGINT);
+		} else if (format == "C") {
+			return_types.push_back(LogicalType::UTINYINT);
+		} else if (format == "S") {
+			return_types.push_back(LogicalType::USMALLINT);
+		} else if (format == "I") {
+			return_types.push_back(LogicalType::UINTEGER);
+		} else if (format == "L") {
+			return_types.push_back(LogicalType::UBIGINT);
 		} else if (format == "f") {
 			return_types.push_back(LogicalType::FLOAT);
 		} else if (format == "g") {
@@ -114,7 +122,7 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 		} else if (format == "ttm") {
 			return_types.push_back(LogicalType::TIME);
 		} else {
-			throw NotImplementedException("Unsupported Arrow type %s", format);
+			throw NotImplementedException("1 Unsupported Arrow type %s", format);
 		}
 		auto name = string(schema.name);
 		if (name.empty()) {
@@ -207,6 +215,10 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
 		case LogicalTypeId::DOUBLE:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:

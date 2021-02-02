@@ -1,10 +1,7 @@
 #include <string>
 #include <vector>
-#include <bitset>
 #include <fstream>
-#include <cstring>
 #include <iostream>
-#include <sstream>
 
 #include "parquet-extension.hpp"
 #include "parquet_reader.hpp"

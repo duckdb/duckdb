@@ -1,11 +1,10 @@
 #include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/operator/add.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/value.hpp"
-
-#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/value.hpp"
 
 #include <limits>
 
@@ -69,6 +68,34 @@ struct OverflowCheckedSubtract {
 		return true;
 	}
 };
+
+template <> bool TrySubtractOperator::Operation(uint8_t left, uint8_t right, uint8_t &result) {
+	if (right > left) {
+		return false;
+	}
+	return OverflowCheckedSubtract::Operation<uint8_t, uint16_t>(left, right, result);
+}
+
+template <> bool TrySubtractOperator::Operation(uint16_t left, uint16_t right, uint16_t &result) {
+	if (right > left) {
+		return false;
+	}
+	return OverflowCheckedSubtract::Operation<uint16_t, uint32_t>(left, right, result);
+}
+
+template <> bool TrySubtractOperator::Operation(uint32_t left, uint32_t right, uint32_t &result) {
+	if (right > left) {
+		return false;
+	}
+	return OverflowCheckedSubtract::Operation<uint32_t, uint64_t>(left, right, result);
+}
+
+template <> bool TrySubtractOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) {
+	if (right > left) {
+		return false;
+	}
+	return OverflowCheckedSubtract::Operation<uint64_t, uint64_t>(left, right, result);
+}
 
 template <> bool TrySubtractOperator::Operation(int8_t left, int8_t right, int8_t &result) {
 	return OverflowCheckedSubtract::Operation<int8_t, int16_t>(left, right, result);

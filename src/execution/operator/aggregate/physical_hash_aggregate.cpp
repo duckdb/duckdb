@@ -1,15 +1,14 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/partitionable_hashtable.hpp"
-
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -24,7 +23,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
     : PhysicalSink(type, types), groups(move(groups_p)), all_combinable(true), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
-	if (this->groups.size() == 0) {
+	if (this->groups.empty()) {
 		group_types.push_back(LogicalType::TINYINT);
 		is_implicit_aggr = true;
 	} else {
@@ -33,7 +32,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
-
+	vector<LogicalType> payload_types_filters;
 	for (auto &expr : expressions) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
@@ -45,13 +44,20 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 
 		aggregate_return_types.push_back(aggr.return_type);
-		for (idx_t i = 0; i < aggr.children.size(); ++i) {
-			payload_types.push_back(aggr.children[i]->return_type);
+		for (auto &child : aggr.children) {
+			payload_types.push_back(child->return_type);
+		}
+		if (aggr.filter) {
+			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 		if (!aggr.function.combine) {
 			all_combinable = false;
 		}
 		aggregates.push_back(move(expr));
+	}
+
+	for (const auto &pay_filters : payload_types_filters) {
+		payload_types.push_back(pay_filters);
 	}
 
 	// 10000 seems like a good compromise here
@@ -86,12 +92,12 @@ class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(PhysicalHashAggregate &_op) : op(_op), is_empty(true) {
 		group_chunk.InitializeEmpty(op.group_types);
-		if (op.payload_types.size() > 0) {
+		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
 		}
 
 		// if there are no groups we create a fake group so everything has the same group
-		if (op.groups.size() == 0) {
+		if (op.groups.empty()) {
 			group_chunk.data[0].Reference(Value::TINYINT(42));
 		}
 	}
@@ -130,12 +136,26 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggr = (BoundAggregateExpression &)*aggregates[i];
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
+		}
+	}
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		if (aggr.filter) {
+			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
+			auto it = ht.find(aggr.filter.get());
+			if (it == ht.end()) {
+				aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[bound_ref_expr.index]);
+				ht[aggr.filter.get()] = bound_ref_expr.index;
+				bound_ref_expr.index = aggregate_input_idx++;
+			} else {
+				aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
+			}
 		}
 	}
 
@@ -151,7 +171,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	if (ForceSingleHT(state)) {
 		lock_guard<mutex> glock(gstate.lock);
 		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
-		if (gstate.finalized_hts.size() == 0) {
+		if (gstate.finalized_hts.empty()) {
 			gstate.finalized_hts.push_back(
 			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client), group_types,
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64));
@@ -430,10 +450,14 @@ string PhysicalHashAggregate::ParamsToString() const {
 		result += groups[i]->GetName();
 	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		if (i > 0 || groups.size() > 0) {
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		if (i > 0 || !groups.empty()) {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
+		if (aggregate.filter) {
+			result += " Filter: " + aggregate.filter->GetName();
+		}
 	}
 	return result;
 }
