@@ -20,21 +20,19 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	OrderGlobalState(BufferManager &buffer_manager) : row_chunk(buffer_manager) {
+	OrderGlobalState(BufferManager &buffer_manager, vector<BoundOrderByNode> orders) : row_chunk(buffer_manager), orders(orders) {
 	}
 	// TODO: old
 	//! The lock for updating the global aggregate state
 	mutex lock;
 
 	// TODO: new
-	//! Sorting columns that were computed from PhysicalOrder::Orders
-	ExpressionExecutor executor;
-	vector<LogicalType> sort_types;
-	vector<OrderType> order_types;
-	vector<OrderByNullType> null_order_types;
+    //! Data in row format
+    RowChunk row_chunk;
 
-	//! Data in row format
-	RowChunk row_chunk;
+    vector<BoundOrderByNode> &orders;
+	vector<idx_t> sort_indices;
+	vector<idx_t> sort_offsets;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -44,25 +42,28 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
-	auto state = make_unique<OrderGlobalState>(BufferManager::GetBufferManager(context));
-	// compute the sorting columns from the input data
-	for (idx_t i = 0; i < orders.size(); i++) {
-		auto &expr = orders[i].expression;
-		state->sort_types.push_back(expr->return_type);
-		state->order_types.push_back(orders[i].type);
-		state->null_order_types.push_back(orders[i].null_order);
-		state->executor.AddExpression(*expr);
-	}
-    // nullmask bitset, one bit for each column
-    state->row_chunk.nullmask_size = (children[0]->types.size() + 7) / 8;
-	state->row_chunk.entry_size += state->row_chunk.nullmask_size;
-	// size of each column
+	auto state = make_unique<OrderGlobalState>(BufferManager::GetBufferManager(context), orders);
+	auto &row_chunk = state->row_chunk;
+
+	// nullmask bitset, one bit for each column
+	row_chunk.nullmask_size = (children[0]->types.size() + 7) / 8;
+	row_chunk.entry_size += row_chunk.nullmask_size;
+
+	// size of each column and total block capacity
+	vector<idx_t> column_offsets;
 	for (auto type : children[0]->types) {
-		state->row_chunk.types.push_back(type);
-		state->row_chunk.entry_size += GetTypeIdSize(type.InternalType());
+		column_offsets.push_back(row_chunk.entry_size);
+		row_chunk.entry_size += GetTypeIdSize(type.InternalType());
 	}
-	state->row_chunk.block_capacity =
-	    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / state->row_chunk.entry_size) + 1);
+	row_chunk.block_capacity =
+	    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / row_chunk.entry_size) + 1);
+
+    // store offsets of the columns that are sorted
+    for (idx_t i = 0; i < orders.size(); i++) {
+        auto &ref = (BoundReferenceExpression &)*orders[i].expression;
+		state->sort_indices.push_back(ref.index);
+        state->sort_offsets.push_back(column_offsets[ref.index]);
+    }
 
 	return state;
 }
@@ -75,22 +76,18 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
                          DataChunk &input) {
 	auto &gstate = (OrderGlobalState &)state;
 
-	// get the columns that we sort on
-	DataChunk sort_chunk;
-	sort_chunk.Initialize(gstate.sort_types);
-	gstate.executor.Execute(input, sort_chunk);
-
 	// TODO: think about how we can prevent locking
 	lock_guard<mutex> glock(gstate.lock);
 
-	// convert columns to row-wise format
+	// initialize pointers
 	const SelectionVector *sel_ptr = &FlatVector::IncrementalSelectionVector;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-    data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
-	// all columns
+	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
+	// now convert to row-wise format
 	gstate.row_chunk.Build(input.size(), key_locations, nullmask_locations);
 	for (idx_t i = 0; i < input.data.size(); i++) {
-		gstate.row_chunk.SerializeVector(input.data[i], input.size(), *sel_ptr, input.size(), i, key_locations, nullmask_locations);
+		gstate.row_chunk.SerializeVector(input.data[i], input.size(), *sel_ptr, input.size(), i, key_locations,
+		                                 nullmask_locations);
 	}
 }
 
@@ -101,17 +98,22 @@ class PhysicalOrderSortTask : public Task {
 public:
 	PhysicalOrderSortTask(Pipeline &parent_, OrderGlobalState &state_, idx_t block_idx_)
 	    : parent(parent_), state(state_), block_idx(block_idx_) {
-		entry_size = state.row_chunk.entry_size;
 		block = state.row_chunk.blocks[block_idx];
 	}
 
 	void Execute() {
 		// get data from the buffer manager
-		//		auto handle = state.row_chunk.buffer_manager.Pin(block.block);
-		//		auto dataptr = handle->node->buffer;
+		auto handle = state.row_chunk.buffer_manager.Pin(block.block);
+		auto dataptr = handle->node->buffer;
 
-		// sort the pointers pointing into the block of rows partition
-		//		Sort(dataptr);
+		// fetch a batch of pointers to entries in the blocks
+        data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+		for (idx_t i = 0; i < count; i++) {
+			key_locations[i] = dataptr;
+			dataptr += state.row_chunk.entry_size;
+		}
+        // sort the pointers
+		Sort(key_locations);
 
 		// re-order data
 		//		ReOrder(dataptr);
@@ -125,12 +127,39 @@ public:
 	}
 
 private:
-	void Sort(data_ptr_t &dataptr) {
+	void Sort(data_ptr_t key_locations[]) {
 		// TODO:
-		//		idx_t entry_size = entry_size;
-		//		std::sort(dataptr, dataptr + count * entry_size, [&entry_size](const_data_ptr_t &lhs, const_data_ptr_t
-		//&rhs) { 			return memcmp((data_ptr_t *)lhs, (data_ptr_t *)rhs, entry_size) < 0;
-		//		});
+		// create references so they can be used in the lambda function
+		std::sort(key_locations, key_locations + count, [](const_data_ptr_t &lhs, const_data_ptr_t &rhs) {
+          CompareTuple(lhs, rhs);
+		});
+	}
+
+	bool CompareTuple(const_data_ptr_t &lhs, const_data_ptr_t &rhs) {
+        for (idx_t i = 0; i < state.orders.size(); i++) {
+			auto comp_res = CompareValue(lhs + state.sort_offsets[i], rhs + state.sort_offsets[i], i);
+            if (comp_res == 0) {
+                continue;
+            }
+            return comp_res < 0 ? (state.orders[i].type == OrderType::ASCENDING ? -1 : 1)
+                                : (state.orders[i].type == OrderType::ASCENDING ? 1 : -1);
+		}
+		return 0;
+	}
+
+    int32_t CompareValue(const_data_ptr_t lhs, const_data_ptr_t rhs, idx_t sort_idx) {
+        bool left_null = *lhs & (1 << state.sort_indices[sort_idx]);
+        bool right_null = *rhs & (1 << state.sort_indices[sort_idx]);
+
+        if (left_null && right_null) {
+            return 0;
+        } else if (right_null) {
+            return state.orders[sort_idx].null_order == OrderByNullType::NULLS_FIRST ? 1 : -1;
+        } else if (left_null) {
+            return state.orders[sort_idx].null_order == OrderByNullType::NULLS_FIRST ? -1 : 1;
+        }
+
+		return memcmp(lhs, rhs, GetTypeIdSize(state.orders[sort_idx].expression->return_type.InternalType()));
 	}
 
 	void ReOrder(data_ptr_t &dataptr) {
@@ -144,7 +173,6 @@ private:
 	idx_t count;
 
 	RowDataBlock block;
-	idx_t entry_size;
 };
 
 class PhysicalOrderMergeTask : public Task {

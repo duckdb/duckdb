@@ -39,14 +39,13 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	D_ASSERT(equality_types.size() > 0);
 	// the columns
 	for (idx_t i = 0; i < build_types.size(); i++) {
-		row_chunk.types.push_back(build_types[i]);
 		build_size += GetTypeIdSize(build_types[i].InternalType());
 	}
 	tuple_size = condition_size + build_size;
 	pointer_offset = tuple_size;
-    // size of nullmask bitset for each column that is pushed in
-    row_chunk.nullmask_size = (build_types.size() + 7) / 8;
-    // entry size is the tuple size and the size of the hash/next pointer
+	// size of nullmask bitset for each column that is pushed in
+	row_chunk.nullmask_size = (build_types.size() + 7) / 8;
+	// entry size is the tuple size and the size of the hash/next pointer
 	row_chunk.entry_size = row_chunk.nullmask_size + tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 	if (IsRightOuterJoin(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
@@ -188,7 +187,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-    data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
 	row_chunk.Build(added_count, key_locations, nullmask_locations);
 
 	// hash the keys and obtain an entry in the list
@@ -204,14 +203,16 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// now serialize the payload
 	if (build_types.size() > 0) {
 		for (idx_t i = 0; i < payload.ColumnCount(); i++) {
-			row_chunk.SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, keys.ColumnCount() + i, key_locations, nullmask_locations);
+			row_chunk.SerializeVector(payload.data[i], payload.size(), *current_sel, added_count,
+			                          keys.ColumnCount() + i, key_locations, nullmask_locations);
 		}
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		initialize_outer_join(added_count, key_locations);
 	}
-	row_chunk.SerializeVector(hash_values, payload.size(), *current_sel, added_count, keys.ColumnCount() + build_types.size() - 1, key_locations, nullmask_locations);
+	row_chunk.SerializeVector(hash_values, payload.size(), *current_sel, added_count,
+	                          keys.ColumnCount() + build_types.size() - 1, key_locations, nullmask_locations);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {

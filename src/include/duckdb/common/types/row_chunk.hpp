@@ -40,8 +40,6 @@ public:
 	StringHeap string_heap;
 	//! BufferManager
 	BufferManager &buffer_manager;
-	//! The types
-	vector<LogicalType> types;
 	//! Size of the nullmask bitset
 	idx_t nullmask_size;
 	//! The size of an entry as stored in the HashTable
@@ -54,15 +52,18 @@ public:
 	vector<RowDataBlock> blocks;
 
 public:
-	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count, idx_t col_idx,
-	                         data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
-	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, idx_t col_idx, data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
+	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
+	                         idx_t col_idx, data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
+	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, idx_t col_idx,
+	                     data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining);
 	void Build(idx_t added_count, data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
 
-	void DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, idx_t count, idx_t col_idx, data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
-	void DeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
+	void DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, idx_t count, idx_t col_idx,
+	                               data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
+	void DeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t key_locations[],
+	                           data_ptr_t nullmask_locations[]);
 	void DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t entry);
 };
 
