@@ -65,7 +65,10 @@ struct VectorOperations {
 	static void LessThan(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A <= B
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
-
+	// result = A != B with nulls being equal
+    static void DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result = A == B with nulls being equal
+	static void NotDistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//

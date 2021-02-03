@@ -41,6 +41,20 @@ struct GreaterThanEquals {
 		return left >= right;
 	}
 };
+
+struct DistinctFrom {
+	template <class T> static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return ((left != right) && !left_null && !right_null) || (left_null != right_null);
+	}
+};
+
+struct NotDistinctFrom {
+	template <class T> static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return ((left == right) && !left_null && !right_null) || (left_null && right_null);
+	}
+};
+
+
 struct LessThan {
 	template <class T> static inline bool Operation(T left, T right) {
 		return left < right;

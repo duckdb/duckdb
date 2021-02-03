@@ -66,8 +66,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 				filter.expressions.push_back(move(expr));
 				continue;
 			}
-		} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
-		           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+		} else if ((expr->type >= ExpressionType::COMPARE_EQUAL &&
+		           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) || expr->type == ExpressionType::COMPARE_DISTINCT_FROM ||
+		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// comparison, check if we can create a comparison JoinCondition
 			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				// successfully created the join condition
@@ -116,7 +117,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		comp_join->conditions = move(conditions);
 		comp_join->children.push_back(move(left_child));
 		comp_join->children.push_back(move(right_child));
-		if (arbitrary_expressions.size() > 0) {
+		if (!arbitrary_expressions.empty()) {
 			// we have some arbitrary expressions as well
 			// add them to a filter
 			auto filter = make_unique<LogicalFilter>();

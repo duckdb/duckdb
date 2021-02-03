@@ -30,6 +30,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "IN";
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return "DISTINCT_FROM";
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return "NOT_DISTINCT_FROM";
 	case ExpressionType::CONJUNCTION_AND:
 		return "AND";
 	case ExpressionType::CONJUNCTION_OR:

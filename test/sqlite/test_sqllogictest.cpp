@@ -473,6 +473,26 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 			print_line_sep();
 			return false;
 		}
+	} else if(sql_type == LogicalType::BOOLEAN){
+		transform(rvalue_str.begin(), rvalue_str.end(), rvalue_str.begin(), ::tolower);
+		transform(lvalue_str.begin(), lvalue_str.end(), lvalue_str.begin(), ::tolower);
+
+		string true_str = "true";
+		string false_str = "false";
+		if (lvalue_str == true_str || lvalue_str == "1"){
+			lvalue = Value(1);
+		}
+		else if (lvalue_str == false_str || lvalue_str == "0"){
+			lvalue = Value(0);
+		}
+		if (rvalue_str == true_str || rvalue_str == "1"){
+			rvalue = Value(1);
+		}
+		else if (rvalue_str == false_str || rvalue_str == "0"){
+			rvalue = Value(0);
+		}
+		error = !Value::ValuesAreEqual(lvalue, rvalue);
+
 	} else {
 		// for other types we just mark the result as incorrect
 		error = true;

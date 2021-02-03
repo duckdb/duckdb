@@ -61,7 +61,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 		}
 		to_apply_rules.push_back(rule.get());
 	}
-	if (to_apply_rules.size() == 0) {
+	if (to_apply_rules.empty()) {
 		// no rules to apply on this node
 		return;
 	}

@@ -78,8 +78,6 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 	auto name = string((reinterpret_cast<PGValue *>(root->name->head->data.ptr_value))->val.str);
 
 	switch (root->kind) {
-	case PG_AEXPR_DISTINCT:
-		break;
 	case PG_AEXPR_IN: {
 		auto left_expr = TransformExpression(root->lexpr);
 		ExpressionType operator_type;
@@ -94,7 +92,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 		auto result = make_unique<OperatorExpression>(operator_type, move(left_expr));
 		TransformExpressionList((PGList *)root->rexpr, result->children);
 		return move(result);
-	} break;
+	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case PG_AEXPR_NULLIF: {
 		auto case_expr = make_unique<CaseExpression>();
@@ -107,7 +105,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 		// else A
 		case_expr->result_if_false = move(value);
 		return move(case_expr);
-	} break;
+	}
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
 	// A), LESSTHANOREQUALTO(X, B))
 	case PG_AEXPR_BETWEEN:
@@ -132,7 +130,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 		} else {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(compare_between));
 		}
-	} break;
+	}
 	// rewrite SIMILAR TO into regexp_full_match('asdf', '.*sd.*')
 	case PG_AEXPR_SIMILAR: {
 		auto left_expr = TransformExpression(root->lexpr);
@@ -169,7 +167,21 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 		} else {
 			return move(result);
 		}
-	} break;
+	}
+	case PG_AEXPR_NOT_DISTINCT:{
+		auto left_expr = TransformExpression(root->lexpr);
+		auto right_expr = TransformExpression(root->rexpr);
+		auto comp_expression =  make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(left_expr), move(right_expr));
+	    return comp_expression;
+	}
+	case PG_AEXPR_DISTINCT:{
+		auto left_expr = TransformExpression(root->lexpr);
+		auto right_expr = TransformExpression(root->rexpr);
+		auto comp_expression =  make_unique<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, move(left_expr), move(right_expr));
+	    return comp_expression;
+	}
+
+
 	default:
 		break;
 	}

@@ -45,7 +45,11 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 		VectorOperations::GreaterThanEquals(left, right, result, count);
 		break;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
+		VectorOperations::DistinctFrom(left, right, result, count);
+		break;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		VectorOperations::NotDistinctFrom(left, right, result, count);
+		break;
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}
@@ -90,6 +94,41 @@ static idx_t templated_select_operation(Vector &left, Vector &right, const Selec
 	}
 }
 
+template <class OP>
+static idx_t templated_distinct_select_operation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                        SelectionVector *true_sel, SelectionVector *false_sel) {
+	// the inplace loops take the result as the last parameter
+	switch (left.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return BinaryExecutor::DistinctSelect<int8_t, int8_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::INT16:
+		return BinaryExecutor::DistinctSelect<int16_t, int16_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::INT32:
+		return BinaryExecutor::DistinctSelect<int32_t, int32_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::INT64:
+		return BinaryExecutor::DistinctSelect<int64_t, int64_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT8:
+		return BinaryExecutor::DistinctSelect<uint8_t, uint8_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT16:
+		return BinaryExecutor::DistinctSelect<uint16_t, uint16_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT32:
+		return BinaryExecutor::DistinctSelect<uint32_t, uint32_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT64:
+		return BinaryExecutor::DistinctSelect<uint64_t, uint64_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::INT128:
+		return BinaryExecutor::DistinctSelect<hugeint_t, hugeint_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::POINTER:
+		return BinaryExecutor::DistinctSelect<uintptr_t, uintptr_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::FLOAT:
+		return BinaryExecutor::DistinctSelect<float, float, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::DOUBLE:
+		return BinaryExecutor::DistinctSelect<double, double, OP>(left, right, sel, count, true_sel, false_sel);
+	default:
+		throw InvalidTypeException(left.type, "Invalid type for comparison");
+	}
+}
+
 idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
@@ -114,7 +153,9 @@ idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionStat
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return templated_select_operation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
+		return templated_distinct_select_operation<duckdb::DistinctFrom>(left, right, sel, count, true_sel, false_sel);
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return templated_distinct_select_operation<duckdb::NotDistinctFrom>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}
