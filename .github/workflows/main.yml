@@ -12,7 +12,6 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
-
   linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
@@ -37,6 +36,25 @@ jobs:
     - name: Test
       run: make unit
 
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format cmake-format
+
+    - name: Format Check
+      run: make format-check
 
   win-release-64:
     name: Windows (64 Bit)
