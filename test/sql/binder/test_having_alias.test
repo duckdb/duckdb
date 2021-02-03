@@ -1,0 +1,81 @@
+# name: test/sql/binder/test_having_alias.test
+# description: Test that aliases can be used in the HAVING clause
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(5) tbl(i);
+
+# use an alias to an aggregate in the having clause
+query II
+SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING k=1 ORDER BY i;
+----
+0	1
+1	1
+2	1
+3	1
+4	1
+
+# alias cannot be qualified
+statement error
+SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING integers.k=1 ORDER BY i;
+
+# aliases take priority
+query II
+SELECT i AS j, COUNT(*) AS i FROM integers GROUP BY j HAVING i=1 ORDER BY 1;
+----
+0	1
+1	1
+2	1
+3	1
+4	1
+
+# unless qualified
+query II
+SELECT i AS j, COUNT(*) AS i FROM integers GROUP BY j HAVING integers.i=1 ORDER BY i;
+----
+1	1
+
+# or we use the group by alias
+query II
+SELECT i AS j, COUNT(*) AS i FROM integers GROUP BY j HAVING j=1 ORDER BY i;
+----
+1	1
+
+query I
+SELECT COUNT(i) AS j FROM integers HAVING j=5;
+----
+5
+
+# potentially recursive alias
+query I
+SELECT COUNT(i) AS i FROM integers HAVING i=5;
+----
+5
+
+query I
+SELECT COUNT(i) AS i FROM integers HAVING i=5 ORDER BY i;
+----
+5
+
+# use the same alias multiple times
+query I
+SELECT COUNT(i) AS i FROM integers HAVING i=i;
+----
+5
+
+# multiple alias in HAVING to expression with side-effects
+query I
+SELECT COUNT(*) FROM (SELECT i, SUM(RANDOM()) AS k FROM integers GROUP BY i HAVING k=k) tbl(i, k);
+----
+5
+
+# if this is qualified we get an error
+statement error
+SELECT COUNT(i) AS i FROM integers HAVING integers.i=5 ORDER BY i;
+
+# recursive alias without aggregate
+statement error
+SELECT i + i AS i FROM integers HAVING i=5 ORDER BY i;
