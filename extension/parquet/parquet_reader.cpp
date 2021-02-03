@@ -98,6 +98,12 @@ static LogicalType derive_type(const SchemaElement &s_ele) {
 			}
 		}
 		return LogicalType::BLOB;
+	case Type::FIXED_LEN_BYTE_ARRAY:
+		if (s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::DECIMAL && s_ele.__isset.scale &&
+		    s_ele.__isset.scale && s_ele.__isset.type_length) {
+			// habemus decimal
+			return LogicalType(LogicalTypeId::DECIMAL, s_ele.precision, s_ele.scale);
+		}
 	default:
 		return LogicalType::INVALID;
 	}

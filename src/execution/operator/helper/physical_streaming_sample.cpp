@@ -27,7 +27,7 @@ void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, 
 	auto &state = (StreamingSampleOperatorState &)*state_p;
 	double rand = state.random.NextRandom();
 	if (rand <= percentage) {
-		// rand is smaller than percentage: output chunk
+		// rand is smaller than sample_size: output chunk
 		result.Reference(input);
 	}
 }
