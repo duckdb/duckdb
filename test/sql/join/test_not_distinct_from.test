@@ -46,14 +46,14 @@ explain select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_
 physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
 
 query II
-select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b)
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
 ----
-2	1
 NULL	1
-1	2
 NULL	2
 1	NULL
+1	2
 2	NULL
+2	1
 
 
 #Vector with vector

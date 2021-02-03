@@ -171,14 +171,12 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 	case PG_AEXPR_NOT_DISTINCT:{
 		auto left_expr = TransformExpression(root->lexpr);
 		auto right_expr = TransformExpression(root->rexpr);
-		auto comp_expression =  make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(left_expr), move(right_expr));
-	    return comp_expression;
+	    return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(left_expr), move(right_expr));
 	}
 	case PG_AEXPR_DISTINCT:{
 		auto left_expr = TransformExpression(root->lexpr);
 		auto right_expr = TransformExpression(root->rexpr);
-		auto comp_expression =  make_unique<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, move(left_expr), move(right_expr));
-	    return comp_expression;
+	    return make_unique<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, move(left_expr), move(right_expr));
 	}
 
 
