@@ -15,14 +15,18 @@ namespace duckdb {
 //! LogicalLimit represents a LIMIT clause
 class LogicalLimit : public LogicalOperator {
 public:
-	LogicalLimit(int64_t limit, int64_t offset)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit(limit), offset(offset) {
+	LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit ,unique_ptr<Expression> offset )
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT),limit_val(limit_val),offset_val(offset_val), limit(move(limit)),
+	      offset(move(offset)){
 	}
 
+    //! Limit and offset values in case they are constants, used in optimizations.
+	int64_t limit_val;
+	int64_t offset_val;
 	//! The maximum amount of elements to emit
-	int64_t limit;
+	unique_ptr<Expression> limit;
 	//! The offset from the start to begin emitting elements
-	int64_t offset;
+	unique_ptr<Expression> offset;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

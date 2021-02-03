@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -38,11 +40,14 @@ class BoundLimitModifier : public BoundResultModifier {
 public:
 	BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {
 	}
-
-	//! LIMIT count
-	int64_t limit = -1;
+	//! LIMIT
+	int64_t limit_val = NumericLimits<int64_t>::Maximum();
 	//! OFFSET
-	int64_t offset = -1;
+	int64_t offset_val = 0;
+	//! Expression in case limit is not constant
+	unique_ptr<Expression> limit;
+	//! Expression in case limit is not constant
+	unique_ptr<Expression> offset;
 };
 
 class BoundOrderModifier : public BoundResultModifier {

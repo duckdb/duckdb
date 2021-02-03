@@ -26,7 +26,7 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &bound = (BoundLimitModifier &)*mod;
-			auto limit = make_unique<LogicalLimit>(bound.limit, bound.offset);
+			auto limit = make_unique<LogicalLimit>(bound.limit_val, bound.offset_val, move(bound.limit), move (bound.offset));
 			limit->AddChild(move(root));
 			root = move(limit);
 			break;
